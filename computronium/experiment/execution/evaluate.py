@@ -275,6 +275,52 @@ def compute_stability_metrics(
     return metrics
 
 
+def _energy_family(dynamics_type: str) -> str:
+    """Map a dynamics type to its energy family for metric naming.
+
+    Energy is not one quantity across dynamics: energy-based (Hopfield),
+    PC-family (variational free energy, augmented Lagrangian), and others
+    report proxies. The metric name must reflect this.
+    """
+    if dynamics_type in {"energy_minimization", "lazy", "diffusion"}:
+        return "hopfield"
+    if dynamics_type in {"predictive_settling", "error_predictive_coding"}:
+        return "pc"  # metric will be pc_free_energy
+    if dynamics_type == "pc_alm":
+        return "augmented_lagrangian"  # metric will be augmented_lagrangian (no _energy suffix)
+    if dynamics_type == "spike_integration":
+        return "spike_proxy"
+    if dynamics_type == "instantaneous":
+        return "instantaneous_proxy"
+    return "unknown"
+
+
+def _record_family_energy(
+    metrics: dict[str, float],
+    dynamics: Any,
+    settled: Any,
+    geometry: Any,
+    family: str,
+) -> None:
+    """Record the energy metric under the dynamics-family-specific key."""
+    try:
+        energy = dynamics.compute_energy(settled, geometry)
+    except Exception as exc:  # ruff: ignore[blind-except] - a proxy energy is optional
+        logger.debug("free energy unavailable: %s", exc)
+        return
+    if energy is None:
+        return
+    energy_val = float(energy.item() if hasattr(energy, "item") else energy)
+    if family == "pc":
+        metrics["pc_free_energy"] = energy_val
+    elif family == "augmented_lagrangian":
+        metrics["augmented_lagrangian"] = energy_val
+    else:
+        metrics[f"{family}_energy"] = energy_val
+    if family == "hopfield":
+        metrics["free_energy"] = energy_val
+
+
 def _free_settle_metrics(system: Any, x: torch.Tensor) -> dict[str, float]:
     """The free phase's own telemetry: horizon used, convergence, energy.
 
@@ -282,12 +328,19 @@ def _free_settle_metrics(system: Any, x: torch.Tensor) -> dict[str, float]:
     are reset by the settle that runs next, so a caller reading them after its
     own settle reads the counters of whichever settle ran last — which is why
     ``settle_converged`` was ``0`` on cells that converged within the budget.
+
+    Energy is reported under a family-specific key (e.g., ``hopfield_energy``,
+    ``pc_free_energy``, ``augmented_lagrangian``) because these are different
+    quantities; ``free_energy`` is retained as an alias for the energy-based
+    family for backward compatibility.
     """
     from computronium.core.pipeline import forward_pass
     from computronium.ontology import SystemState
 
     metrics: dict[str, float] = {}
     device = _param_device(system)
+    dynamics_type = getattr(system.dynamics.config, "dynamics_type", "unknown")
+    family = _energy_family(dynamics_type)
     try:  # ruff: ignore[too-many-statements-in-try-clause]
         with torch.no_grad():
             state = SystemState(x=x.to(device), y=None)
@@ -306,14 +359,9 @@ def _free_settle_metrics(system: Any, x: torch.Tensor) -> dict[str, float]:
             metrics["settle_horizon"] = float(
                 getattr(system.dynamics, "_settle_horizon", 0)
             )
-            try:
-                energy = system.dynamics.compute_energy(settled, system.geometry)
-                if energy is not None:
-                    metrics["free_energy"] = float(
-                        energy.item() if hasattr(energy, "item") else energy
-                    )
-            except Exception as exc:  # ruff: ignore[blind-except] - a proxy energy is optional
-                logger.debug("free energy unavailable: %s", exc)
+            _record_family_energy(
+                metrics, system.dynamics, settled, system.geometry, family
+            )
     except Exception as exc:  # ruff: ignore[blind-except] - a metric must not fail the cell
         logger.warning("free settle telemetry failed: %s", exc)
     return metrics

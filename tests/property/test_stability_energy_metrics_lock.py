@@ -26,6 +26,7 @@ registry can name, or an objective a run declares resolves to nothing.
 from __future__ import annotations
 
 import inspect
+import math
 from typing import cast
 
 import pytest
@@ -321,3 +322,128 @@ def test_drift_and_relaxation_are_different_operators() -> None:
         "so the drift operator is the one that carries the gain"
     )
     assert metrics["drift_max_singular_value"] >= metrics["drift_spectral_radius"]
+
+
+# ============================================================
+# Dynamics coverage: stability metrics must work across all legal
+# dynamics primitives, not just the one the campaign pinned.
+# ============================================================
+
+# Each dynamics with a credit/geometry the framework accepts for it.
+# Probing an illegal pairing measures the validity check, not the metric:
+# diffusion demands recurrent geometry and non-gradient credit, spike
+# integration demands temporal-trace or target-inversion credit, and
+# thermodynamic contrast demands an energy-based or PC-family dynamics.
+_LEGAL_DYNAMICS = {
+    "energy_minimization": ("thermodynamic_contrast", "feedforward"),
+    "error_predictive_coding": ("thermodynamic_contrast", "feedforward"),
+    "pc_alm": ("thermodynamic_contrast", "feedforward"),
+    "predictive_settling": ("thermodynamic_contrast", "feedforward"),
+    "instantaneous": ("gradient", "feedforward"),
+    "diffusion": ("random_projections", "recurrent"),
+    "lazy": ("gradient", "feedforward"),
+    "spike_integration": ("temporal_trace", "feedforward"),
+}
+
+_STABILITY_METRICS = (
+    "spectral_radius",
+    "max_singular_value",
+    "min_singular_value",
+    "lyapunov_exponent",
+    "drift_spectral_radius",
+    "drift_max_singular_value",
+    "contraction_rate",
+)
+
+
+def _system_for_dynamics(dynamics: str, geometry: str, credit: str):
+    from computronium.experiment.execution.compose import compose_cell_system
+    from computronium.experiment.schema.coordinate import Coordinate
+
+    return compose_cell_system(
+        coordinate=Coordinate(
+            substrate="digital",
+            geometry=geometry,
+            dynamics=dynamics,
+            plasticity="null",
+            credit=credit,
+            update="euclidean",
+            params={"hidden_dim": 64, "num_layers": 3},
+        ),
+        geometry={},
+        input_shape=(64,),
+        output_dim=10,
+        param_budget=2_000_000,
+    ).system
+
+
+@pytest.mark.parametrize("dynamics", sorted(_LEGAL_DYNAMICS.keys()))
+def test_stability_metrics_cover_dynamics_family(dynamics: str) -> None:
+    """Every legal dynamics produces the core stability metrics.
+
+    The stability-plasticity campaign pinned energy_minimization +
+    thermodynamic_contrast, so every number in TODO51 §2 came from one
+    dynamics primitive out of eight. This test ensures a regression that
+    made compute_stability_metrics energy-only again would fail.
+    """
+    credit, geometry = _LEGAL_DYNAMICS[dynamics]
+    torch.manual_seed(0)
+    system = _system_for_dynamics(dynamics, geometry, credit)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    for key in _STABILITY_METRICS:
+        assert key in metrics, f"{dynamics}: missing stability metric {key}"
+        assert math.isfinite(metrics[key]), f"{dynamics}: {key} is not finite"
+
+
+# Energy metrics must also be produced per dynamics family
+_ENERGY_METRICS = (
+    "hopfield_energy",
+    "pc_free_energy",
+    "augmented_lagrangian",
+    "spike_proxy_energy",
+    "instantaneous_proxy_energy",
+    "free_energy",  # alias for hopfield_energy
+)
+
+
+def _expected_energy_key(dynamics: str) -> str:
+    if dynamics in {"energy_minimization", "lazy", "diffusion"}:
+        return "hopfield_energy"
+    if dynamics in {"predictive_settling", "error_predictive_coding"}:
+        return "pc_free_energy"
+    if dynamics == "pc_alm":
+        return "augmented_lagrangian"
+    if dynamics == "spike_integration":
+        return "spike_proxy_energy"
+    if dynamics == "instantaneous":
+        return "instantaneous_proxy_energy"
+    return "unknown"
+
+
+@pytest.mark.parametrize("dynamics", sorted(_LEGAL_DYNAMICS.keys()))
+def test_energy_metrics_cover_dynamics_family(dynamics: str) -> None:
+    """Every legal dynamics produces its family-specific energy metric.
+
+    The free_energy metric was a single name for different quantities across
+    families (Hopfield energy, variational free energy, augmented Lagrangian,
+    proxies). Now each family has its own metric name; free_energy remains
+    as an alias for the hopfield family only.
+    """
+    credit, geometry = _LEGAL_DYNAMICS[dynamics]
+    torch.manual_seed(0)
+    system = _system_for_dynamics(dynamics, geometry, credit)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    expected = _expected_energy_key(dynamics)
+    assert expected in metrics, f"{dynamics}: missing energy metric {expected}"
+    assert math.isfinite(metrics[expected]), f"{dynamics}: {expected} is not finite"
+
+    # free_energy alias only for hopfield family
+    if expected == "hopfield_energy":
+        assert "free_energy" in metrics
+        assert metrics["free_energy"] == pytest.approx(metrics["hopfield_energy"])
+    else:
+        assert "free_energy" not in metrics, (
+            f"{dynamics}: free_energy alias should not appear for non-hopfield family"
+        )

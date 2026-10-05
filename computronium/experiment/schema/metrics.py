@@ -67,7 +67,13 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "drift_nonnormality",
     "settle_step_size",
     "contraction_rate",
-    "free_energy",
+    # Family-specific energy metrics (free_energy is an alias for hopfield_energy)
+    "hopfield_energy",
+    "pc_free_energy",
+    "augmented_lagrangian",
+    "spike_proxy_energy",
+    "instantaneous_proxy_energy",
+    "free_energy",  # backward compatibility alias for hopfield_energy
     "energy_per_batch",
     "energy_per_sample",
     "energy_per_mac",
@@ -78,6 +84,8 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
 }
 
 # Objective name -> the payload key that satisfies it.
+# free_energy maps to hopfield_energy (energy-based family only).
+# Other families have their own objectives: pc_free_energy, augmented_lagrangian, etc.
 MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "validation_accuracy": "val_acc",
     "validation_loss": "val_loss",
@@ -87,7 +95,12 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "spectral_radius": "spectral_radius",
     "max_singular_value": "max_singular_value",
     "lyapunov_exponent": "lyapunov_exponent",
-    "free_energy": "free_energy",
+    "free_energy": "hopfield_energy",
+    "hopfield_energy": "hopfield_energy",
+    "pc_free_energy": "pc_free_energy",
+    "augmented_lagrangian": "augmented_lagrangian",
+    "spike_proxy_energy": "spike_proxy_energy",
+    "instantaneous_proxy_energy": "instantaneous_proxy_energy",
     "energy_per_step": "energy_per_sample",
     "energy_per_mac": "energy_per_mac",
     "macs_per_step": "macs_per_step",
