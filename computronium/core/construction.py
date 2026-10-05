@@ -280,9 +280,13 @@ def build_model_config(
     """
     cfg = _normalize(config)
     hidden_dim_raw = cfg.get("hidden_dim")
-    hidden_dim: int | None = int(hidden_dim_raw) if isinstance(hidden_dim_raw, int | float | str) else None
+    hidden_dim: int | None = (
+        int(hidden_dim_raw) if isinstance(hidden_dim_raw, int | float | str) else None
+    )
     num_layers_raw = cfg.get("num_layers", 1)
-    num_layers = int(num_layers_raw) if isinstance(num_layers_raw, int | float | str) else 1
+    num_layers = (
+        int(num_layers_raw) if isinstance(num_layers_raw, int | float | str) else 1
+    )
     return ExperimentModelConfig(
         name=model_name,
         input_dim=input_dim,

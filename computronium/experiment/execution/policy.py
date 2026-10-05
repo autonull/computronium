@@ -449,8 +449,10 @@ class ModelBasedPolicy:
         objectives: tuple[str, ...] = ("validation_accuracy",),
         axis_objectives: dict[str, tuple[str, ...]] | None = None,
         spec: RunSpec | None = None,
-        icu_model: ICUPredictor | None = None,  # I(C,U) metamodel for guided initialization
-        icu_credit_update_pairs: list[tuple[str, str]] | None = None,  # List of (credit, update) to try
+        icu_model: ICUPredictor
+        | None = None,  # I(C,U) metamodel for guided initialization
+        icu_credit_update_pairs: list[tuple[str, str]]
+        | None = None,  # List of (credit, update) to try
     ) -> None:
         """Declare the study.
 
@@ -493,7 +495,9 @@ class ModelBasedPolicy:
         # Resolve objectives: use axis_objectives if set, otherwise global objectives
         if self._axis_objectives:
             # Flatten all axis objectives for validation
-            all_objs = tuple(obj for objs in self._axis_objectives.values() for obj in objs)
+            all_objs = tuple(
+                obj for objs in self._axis_objectives.values() for obj in objs
+            )
             self._objectives, self._directions = resolve_objectives(all_objs)
         else:
             self._objectives, self._directions = resolve_objectives(objectives)
@@ -607,7 +611,9 @@ class ModelBasedPolicy:
         """Get or rebuild the study for a specific axis."""
         if axis not in self._axis_studies or self._run_id != run_id:
             self._run_id = run_id
-            self._axis_studies[axis] = self._rebuild_axis_study_from_records(run_id, axis, records)
+            self._axis_studies[axis] = self._rebuild_axis_study_from_records(
+                run_id, axis, records
+            )
         return self._axis_studies[axis]
 
     def _rebuild_axis_study_from_records(
@@ -1217,14 +1223,19 @@ def policy_context(
     }
 
 
-def _create_icu_model_from_spec(spec: RunSpec) -> tuple[object | None, list[tuple[str, str]]]:
+def _create_icu_model_from_spec(
+    spec: RunSpec,
+) -> tuple[object | None, list[tuple[str, str]]]:
     """Create an I(C,U) model from the run spec if applicable.
 
     Returns:
         Tuple of (icu_model, credit_update_pairs) or (None, []) if not applicable.
     """
     try:
-        from computronium.experiment.learning.icu import ICUModel, create_icu_prior_surrogate
+        from computronium.experiment.learning.icu import (
+            ICUModel,
+            create_icu_prior_surrogate,
+        )
         from computronium.experiment.evidence.store import RecordStore, StoreConfig
         from pathlib import Path
 

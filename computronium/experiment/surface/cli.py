@@ -1167,7 +1167,10 @@ def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:
     for substrate in substrates:
         for plasticity in plasticity_types:
             # Skip invalid combinations
-            if substrate == "neuromorphic" and plasticity not in neuromorphic_plasticity:
+            if (
+                substrate == "neuromorphic"
+                and plasticity not in neuromorphic_plasticity
+            ):
                 continue  # Neuromorphic only supports null and routing
             if substrate in no_substrate_coupled and plasticity == "substrate_coupled":
                 continue  # Substrate coupled not implemented for these yet

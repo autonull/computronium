@@ -220,8 +220,13 @@ class RunSpec(BaseModel):
             raise ValueError(msg)
 
         # Validate axis_objectives
-        from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY as OBJ_REG
-        axis_tags = sorted({spec.axis_tag for spec in OBJ_REG.values() if spec.axis_tag is not None})
+        from computronium.experiment.schema.registries import (
+            OBJECTIVES_REGISTRY as OBJ_REG,
+        )
+
+        axis_tags = sorted({
+            spec.axis_tag for spec in OBJ_REG.values() if spec.axis_tag is not None
+        })
         for axis_name, obj_names in self.axis_objectives.items():
             for obj_name in obj_names:
                 if obj_name not in OBJ_REG:

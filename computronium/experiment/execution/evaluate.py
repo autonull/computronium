@@ -11,6 +11,7 @@ concrete ``DomainTask`` and reads its own ``input_dim``/``output_dim``.
 from __future__ import annotations
 
 import math
+import pathlib
 import threading
 import time
 import uuid
@@ -21,7 +22,6 @@ from typing import TYPE_CHECKING, Any, Final
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.core.pipeline import run_forward
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.schema.metrics import HISTORY_METRICS
@@ -44,11 +44,11 @@ __all__ = [
     "CellEvaluation",
     "TaskShape",
     "cell_record",
+    "compute_energy_metrics",
+    "compute_stability_metrics",
     "evaluate_cell",
     "history_metrics",
     "task_shape",
-    "compute_stability_metrics",
-    "compute_energy_metrics",
 ]
 
 logger = get_logger(__name__)
@@ -223,11 +223,10 @@ def compute_stability_metrics(
 
     try:
         with torch.no_grad():
-            # Resolve device
-            device = x.device
-            if device.type == "meta" or str(device) == "auto":
-                device = torch.device(_resolve_device("auto"))
-            
+            # Determine device from system parameters (where training happened)
+            # This ensures x is on the same device as model weights
+            device = next(system.geometry.parameters()).device
+
             # Get the settled state from a free-phase forward pass
             state = SystemState(x=x.to(device), y=None)
             initial_acts = forward_pass(system.substrate, system.geometry, x.to(device))
@@ -246,7 +245,11 @@ def compute_stability_metrics(
             try:
                 free_energy = system.dynamics.compute_energy(settled, system.geometry)
                 if free_energy is not None:
-                    metrics["free_energy"] = float(free_energy.item() if hasattr(free_energy, 'item') else free_energy)
+                    metrics["free_energy"] = float(
+                        free_energy.item()
+                        if hasattr(free_energy, "item")
+                        else free_energy
+                    )
             except Exception as e:
                 logger.debug(f"Free energy computation failed: {e}")
 
@@ -258,12 +261,18 @@ def compute_stability_metrics(
 
                 def settle_fn(x_input):
                     state_jac = SystemState(x=x_input, y=None)
-                    initial_acts_jac = forward_pass(system.substrate, system.geometry, x_input)
+                    initial_acts_jac = forward_pass(
+                        system.substrate, system.geometry, x_input
+                    )
                     state_jac.activations = initial_acts_jac
                     settled_jac = system.dynamics.settle(
                         state_jac, system.geometry, system.substrate, target=None
                     )
-                    return settled_jac.activations[-1] if isinstance(settled_jac.activations, list) else settled_jac.activations
+                    return (
+                        settled_jac.activations[-1]
+                        if isinstance(settled_jac.activations, list)
+                        else settled_jac.activations
+                    )
 
                 # Compute Jacobian: [1, out_dim, 1, in_dim] -> [out_dim, in_dim]
                 J_full = jacobian(settle_fn, x_single)
@@ -286,19 +295,23 @@ def compute_stability_metrics(
                     metrics["spectral_radius"] = float(spectral_radius)
 
                     # Lyapunov exponent approximation
-                    metrics["lyapunov_exponent"] = float(math.log(max(spectral_radius, 1e-10)))
+                    metrics["lyapunov_exponent"] = float(
+                        math.log(max(spectral_radius, 1e-10))
+                    )
                 else:
                     # Non-square: use max singular value as bound
                     metrics["spectral_radius"] = float(S.max().item())
-                    metrics["lyapunov_exponent"] = float(math.log(max(S.max().item(), 1e-10)))
+                    metrics["lyapunov_exponent"] = float(
+                        math.log(max(S.max().item(), 1e-10))
+                    )
 
             except Exception as e:
-                import traceback
                 import os
-                import sys
-                log_path = os.path.join(os.getcwd(), 'stability_error.log')
+                import traceback
+
+                log_path = os.path.join(os.getcwd(), "stability_error.log")
                 try:
-                    with open(log_path, 'w') as f:
+                    with pathlib.Path(log_path).open("w") as f:
                         f.write(f"Jacobian computation failed: {e}\n")
                         traceback.print_exc(file=f)
                         f.flush()
@@ -308,13 +321,13 @@ def compute_stability_metrics(
                     logger.debug(f"Failed to write Jacobian log: {write_e}")
 
     except Exception as e:
-        import traceback
         import os
-        import sys
+        import traceback
+
         logger.debug(f"OUTER EXCEPT BLOCK REACHED: {e}")
-        log_path = os.path.join(os.getcwd(), 'stability_error.log')
+        log_path = os.path.join(os.getcwd(), "stability_error.log")
         try:
-            with open(log_path, 'w') as f:
+            with pathlib.Path(log_path).open("w") as f:
                 f.write(f"Stability metrics computation failed: {e}\n")
                 traceback.print_exc(file=f)
                 f.flush()
@@ -347,8 +360,12 @@ def compute_energy_metrics(
             metrics.update({
                 "energy_per_batch": energy_est.get("total_energy_per_step", 0.0),
                 "energy_per_sample": energy_est.get("energy_per_sample", 0.0),
-                "forward_energy_per_batch": energy_est.get("forward_energy_per_batch", 0.0),
-                "update_energy_per_batch": energy_est.get("update_energy_per_batch", 0.0),
+                "forward_energy_per_batch": energy_est.get(
+                    "forward_energy_per_batch", 0.0
+                ),
+                "update_energy_per_batch": energy_est.get(
+                    "update_energy_per_batch", 0.0
+                ),
             })
     except Exception as e:
         logger.debug(f"Energy metrics computation failed: {e}")
@@ -418,6 +435,10 @@ def evaluate_cell(
     import numpy as np
     import torch
 
+    # Resolve device early so "auto" becomes "cuda" or "cpu" before any PyTorch ops
+    # This is critical when called from thread pools where device context may differ
+    resolved_device = _resolve_device(schedule.device)
+
     # Set all seeds BEFORE model creation for reproducible initialization
     torch.manual_seed(schedule.seed)
     if schedule.deterministic:
@@ -439,7 +460,7 @@ def evaluate_cell(
     limit = schedule.batch_limit or None
     config = SystemTrainerConfig(
         max_epochs=schedule.epochs,
-        device=schedule.device,
+        device=resolved_device,
         seed=schedule.seed,
         limit_train_batches=limit,
         limit_val_batches=limit,
@@ -488,7 +509,11 @@ def evaluate_cell(
         # For a typical MLP: input_dim * hidden + hidden * hidden * (depth-1) + hidden * output
         # We approximate weight_shape as (output_dim, input_dim) for energy estimation
         weight_shape = (output_dim, input_dim)
-        batch_size = config.limit_train_batches or sample_x.size(0) if 'sample_x' in locals() else 64
+        batch_size = (
+            config.limit_train_batches or sample_x.size(0)
+            if "sample_x" in locals()
+            else 64
+        )
         energy_metrics = compute_energy_metrics(
             cell.system,
             batch_size=batch_size,

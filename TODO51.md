@@ -169,7 +169,7 @@ TODO50 completed all infrastructure and validation work. The pipeline runs end-t
 All infrastructure is in place. These are pure research execution campaigns leveraging the validated TODO50 foundation.
 The "outside scope" condition has been removed - all 5 campaigns are now in scope with infrastructure complete.
 
-**Known Issue**: Stability metrics computation (spectral_radius, max_singular_value, settle_steps, lyapunov_exponent, free_energy) fails silently in LocalBackend thread pool due to PyTorch device error ("Expected one of cpu, cuda... device string: auto"). Works correctly when `evaluate_cell()` is called directly. Energy metrics (energy_per_sample, etc.) work in the pipeline. Root cause: thread pool environment passes "auto" device string to PyTorch. Workaround: compute stability metrics post-hoc or use direct evaluation for stability-focused campaigns.
+**Known Issue (FIXED)**: Stability metrics computation (spectral_radius, max_singular_value, settle_steps, lyapunov_exponent, free_energy) was failing silently in LocalBackend thread pool due to PyTorch device mismatch. The training ran on CUDA (device='auto' resolved to 'cuda'), but the stability metrics computation created tensors on CPU, causing "Expected all tensors to be on the same device" errors. **Fix applied**: Modified `compute_stability_metrics()` in `evaluate.py` to determine the device from the system's parameters (`next(system.geometry.parameters()).device`) rather than from the input tensor. Also added early device resolution in `evaluate_cell()` using `_resolve_device()` before any PyTorch operations. Both energy and stability metrics now work correctly in the thread pool.
 
 ---
 
@@ -180,14 +180,14 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 - Created RunSpec with axis_objectives for task (validation_accuracy, validation_loss), cost (walltime_total, param_count, energy_per_step), stability (spectral_radius, max_singular_value, settle_steps, free_energy, lyapunov_exponent)
 - Test campaign ran on `digits` task with 6-axis space (digital substrate, feedforward/recurrent geometry, 3 dynamics, 5 credit, 3 update)
 - Energy metrics (energy_per_sample, energy_per_batch, forward_energy_per_batch, update_energy_per_batch) recorded successfully in pipeline
-- Stability metrics (settle_steps, spectral_radius, max_singular_value, lyapunov_exponent, free_energy) computed correctly in direct `evaluate_cell()` calls but not in LocalBackend thread pool due to device string issue
-- **Next**: Resume campaign with larger budget, use direct evaluation for stability metrics, or fix thread pool device resolution
+- Stability metrics (settle_steps, spectral_radius, max_singular_value, lyapunov_exponent, free_energy) now computed correctly in LocalBackend thread pool after device resolution fix
+- **Next**: Resume campaign with larger budget
 
 ### 2. Full Stability-Plasticity Frontier Campaign
 **Status**: 🟡 RUNNING (10 records collected)
 - CLI command working with full parameterization (rho, feedback_scale, precision, noise_level, convergence_start)
 - Campaign running at L1 fidelity, 1 seed, 3 epochs
-- 10 records collected so far (energy metrics available, stability metrics pending thread pool fix)
+- 10 records collected so far (energy metrics available, stability metrics now working after thread pool fix)
 - **Remaining**: Complete full 648-cell campaign at L1/L2 fidelity with stability objectives
 
 ### 3. Frozen-θ ψ Benchmarks at Scale
@@ -231,12 +231,13 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
    - Added `compute_stability_metrics()` and `compute_energy_metrics()` functions
    - Integrated into `evaluate_cell()` for automatic metric collection
    - Added `_resolve_device()` helper for device string resolution
+   - **Fixed thread pool device resolution for stability metrics**: Modified `compute_stability_metrics()` to get device from system parameters (`next(system.geometry.parameters()).device`) instead of input tensor. Added early device resolution in `evaluate_cell()` using `_resolve_device(schedule.device)` before config creation. Both fixes ensure all tensors are on the same device (CUDA when available) when running in LocalBackend thread pool.
 
 ---
 
 ## Next Steps
 
-1. **Fix thread pool device resolution** for stability metrics in LocalBackend (high priority)
+1. ✅ **Fix thread pool device resolution** for stability metrics in LocalBackend (high priority) — **DONE**
 2. **Complete Stability-Plasticity 648-cell campaign** at L1/L2 fidelity
 3. **Run Frozen-θ ψ at L3 fidelity** (10 seeds, 20 epochs) for claim-grade validation
 4. **Run Axis-Aligned Pareto campaign** with full axis objectives at scale
@@ -252,7 +253,7 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 - `computronium/experiment/surface/cli.py` - stability-plasticity, frozen-theta-psi commands
 - `computronium/cli/__main__.py` - CLI command registration
 - `computronium/ontology/substrate/_substrate.py` - estimate_energy for all 11 substrates
-- `computronium/experiment/execution/evaluate.py` - compute_stability_metrics, compute_energy_metrics
+- `computronium/experiment/execution/evaluate.py` - compute_stability_metrics, compute_energy_metrics, **thread pool device resolution fix for stability metrics**
 - `computronium/experiment/schema/metrics.py` - MEASURED_OBJECTIVES and MEASURED_METRICS updated
 - `computronium/experiment/schema/axis.py` - Domain.members type fix
 - `computronium/core/construction.py` - _as_int/_as_float fixes

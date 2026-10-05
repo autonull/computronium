@@ -641,7 +641,9 @@ class NeuromorphicSubstrate:
         sparsity = self.config.sparsity if self.config.sparsity else 0.5
         effective_macs_per_forward = batch * in_features * out_features * (1 - sparsity)
         effective_macs_per_update = effective_macs_per_forward
-        total_macs = (effective_macs_per_forward + effective_macs_per_update) * num_layers
+        total_macs = (
+            effective_macs_per_forward + effective_macs_per_update
+        ) * num_layers
 
         # Neuromorphic energy: ~0.01 pJ per synaptic event
         energy_per_event = 1e-14  # 0.01 pJ
@@ -953,15 +955,21 @@ class SparseSubstrate:
         sparsity = self.config.sparsity if self.config.sparsity else 0.9
         effective_macs_per_forward = batch * in_features * out_features * (1 - sparsity)
         effective_macs_per_update = effective_macs_per_forward
-        total_macs = (effective_macs_per_forward + effective_macs_per_update) * num_layers
+        total_macs = (
+            effective_macs_per_forward + effective_macs_per_update
+        ) * num_layers
 
         # Sparse MAC: ~0.5 pJ (indexing overhead)
         # Indexing overhead: ~10% of dense
         energy_per_mac = 5e-13  # 0.5 pJ
         indexing_overhead = 0.1
 
-        forward_energy = effective_macs_per_forward * energy_per_mac * (1 + indexing_overhead)
-        update_energy = effective_macs_per_update * energy_per_mac * (1 + indexing_overhead)
+        forward_energy = (
+            effective_macs_per_forward * energy_per_mac * (1 + indexing_overhead)
+        )
+        update_energy = (
+            effective_macs_per_update * energy_per_mac * (1 + indexing_overhead)
+        )
         total_energy = (forward_energy + update_energy) * num_layers
 
         return {
@@ -1108,9 +1116,7 @@ class NoisySubstrate(DigitalSubstrate):
         )
         # Add small overhead for noise generation
         noise_overhead = 1.05  # 5% overhead
-        return {
-            k: v * noise_overhead for k, v in base_estimate.items()
-        }
+        return {k: v * noise_overhead for k, v in base_estimate.items()}
 
 
 class QuantizedSubstrate(DigitalSubstrate):

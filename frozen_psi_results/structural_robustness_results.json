@@ -1,0 +1,682 @@
+[
+  {
+    "coordinate": "digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+    "seeds": [
+      {
+        "claims_scope": "psi_wired_uncontrolled",
+        "coordinate": "digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+        "pre_damage_accuracy": 0.68,
+        "damage_severity": 0.3,
+        "damage_results": {
+          "zero_weights": {
+            "initial_accuracy": 0.577,
+            "final_accuracy": 0.964,
+            "recovery_ratio": 1.6707105719237436,
+            "recovery_losses": [
+              1.1924973540008068,
+              0.6087265163660049,
+              0.4187699630856514,
+              0.2530731149017811,
+              0.1496606240980327
+            ],
+            "recovery_accuracies": [
+              0.542,
+              0.806,
+              0.898,
+              0.927,
+              0.964
+            ]
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.614,
+            "final_accuracy": 0.977,
+            "recovery_ratio": 1.5912052117263844,
+            "recovery_losses": [
+              1.1519234627485275,
+              0.5867990851402283,
+              0.36118769831955433,
+              0.19549740850925446,
+              0.11372153041884303
+            ],
+            "recovery_accuracies": [
+              0.631,
+              0.835,
+              0.919,
+              0.956,
+              0.977
+            ]
+          },
+          "noise": {
+            "initial_accuracy": 0.56,
+            "final_accuracy": 0.981,
+            "recovery_ratio": 1.751785714285714,
+            "recovery_losses": [
+              0.7781083732843399,
+              0.4438104834407568,
+              0.26294487807899714,
+              0.15021371049806476,
+              0.08678399585187435
+            ],
+            "recovery_accuracies": [
+              0.7,
+              0.878,
+              0.935,
+              0.969,
+              0.981
+            ]
+          }
+        },
+        "psi_only_recovery": {
+          "zero_weights": {
+            "initial_accuracy": 0.577,
+            "final_accuracy": 0.577,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              1.7526088953018188,
+              1.752596102654934,
+              1.7524244636297226,
+              1.7525968924164772,
+              1.7518205866217613
+            ],
+            "recovery_accuracies": [
+              0.577,
+              0.577,
+              0.577,
+              0.577,
+              0.577
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": false
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.614,
+            "final_accuracy": 0.614,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              1.6335666105151176,
+              1.6333797350525856,
+              1.632149949669838,
+              1.6331193819642067,
+              1.631981685757637
+            ],
+            "recovery_accuracies": [
+              0.614,
+              0.614,
+              0.614,
+              0.614,
+              0.614
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": false
+          },
+          "noise": {
+            "initial_accuracy": 0.56,
+            "final_accuracy": 0.56,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              1.1367948204278946,
+              1.1349476352334023,
+              1.1351720616221428,
+              1.135725773870945,
+              1.1358541026711464
+            ],
+            "recovery_accuracies": [
+              0.56,
+              0.56,
+              0.56,
+              0.56,
+              0.56
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": false
+          }
+        },
+        "avg_recovery_ratio": 1.6712338326452807,
+        "avg_final_accuracy": 0.9739999999999999,
+        "avg_psi_only_recovery_ratio": 1.0,
+        "resources": {
+          "compute": 10030848.0,
+          "memory_mb": 0.0,
+          "state_energy_j": 0.0,
+          "consumed_energy_estimate_j": 0.010030848,
+          "latency_s": 1.0091406619176269,
+          "plastic_state_capacity_bytes": 0.0,
+          "coordinate": "digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+          "device": "cpu",
+          "batch_size": 64,
+          "forward_flops": 3343616,
+          "backward_flops": 6687232,
+          "param_count": 26122,
+          "peak_memory_mb": 0.0,
+          "peak_activation_bytes": 0,
+          "wall_time_ms": 1009.1406619176269,
+          "energy_proxy": 0.0,
+          "substrate_overhead": 0.0,
+          "effective_flops": 0.0
+        }
+      }
+    ],
+    "mean_recovery_ratio": 1.6712338326452807,
+    "std_recovery_ratio": 0,
+    "mean_final_accuracy": 0.9739999999999999
+  },
+  {
+    "coordinate": "digital/recurrent/energy_minimization/routing/thermodynamic_contrast/euclidean",
+    "seeds": [
+      {
+        "claims_scope": "psi_engaged",
+        "coordinate": "digital/recurrent/energy_minimization/routing/thermodynamic_contrast/euclidean",
+        "pre_damage_accuracy": 0.707,
+        "damage_severity": 0.3,
+        "damage_results": {
+          "zero_weights": {
+            "initial_accuracy": 0.566,
+            "final_accuracy": 0.885,
+            "recovery_ratio": 1.5636042402826857,
+            "recovery_losses": [
+              1.8508273586630821,
+              1.1000658832490444,
+              0.7007835395634174,
+              0.5969634503126144,
+              0.47812942415475845
+            ],
+            "recovery_accuracies": [
+              0.555,
+              0.589,
+              0.815,
+              0.845,
+              0.885
+            ]
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.5,
+            "final_accuracy": 0.568,
+            "recovery_ratio": 1.136,
+            "recovery_losses": [
+              2.0500879511237144,
+              1.3767687380313873,
+              0.8141890726983547,
+              0.7095160745084286,
+              0.6962855309247971
+            ],
+            "recovery_accuracies": [
+              0.5,
+              0.5,
+              0.508,
+              0.502,
+              0.568
+            ]
+          },
+          "noise": {
+            "initial_accuracy": 0.566,
+            "final_accuracy": 0.923,
+            "recovery_ratio": 1.630742049469965,
+            "recovery_losses": [
+              1.554990641772747,
+              0.8850739598274231,
+              0.6279724165797234,
+              0.49299838952720165,
+              0.34039110969752073
+            ],
+            "recovery_accuracies": [
+              0.589,
+              0.577,
+              0.828,
+              0.886,
+              0.923
+            ]
+          }
+        },
+        "psi_only_recovery": {
+          "zero_weights": {
+            "initial_accuracy": 0.567,
+            "final_accuracy": 0.551,
+            "recovery_ratio": 0.9717813051146387,
+            "recovery_losses": [
+              2.1154506653547287,
+              2.1153718382120132,
+              2.115311175584793,
+              2.1151582151651382,
+              2.11523699760437
+            ],
+            "recovery_accuracies": [
+              0.551,
+              0.553,
+              0.551,
+              0.549,
+              0.551
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": true
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.5,
+            "final_accuracy": 0.5,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              2.233862817287445,
+              2.2338371127843857,
+              2.233898863196373,
+              2.2338940650224686,
+              2.233780637383461
+            ],
+            "recovery_accuracies": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": true
+          },
+          "noise": {
+            "initial_accuracy": 0.565,
+            "final_accuracy": 0.617,
+            "recovery_ratio": 1.0920353982300885,
+            "recovery_losses": [
+              1.8937332332134247,
+              1.8939904794096947,
+              1.8940232396125793,
+              1.8942761570215225,
+              1.8943640515208244
+            ],
+            "recovery_accuracies": [
+              0.616,
+              0.611,
+              0.614,
+              0.616,
+              0.617
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": true
+          }
+        },
+        "avg_recovery_ratio": 1.4434487632508837,
+        "avg_final_accuracy": 0.7919999999999999,
+        "avg_psi_only_recovery_ratio": 1.0212722344482426,
+        "resources": {
+          "compute": 10030848.0,
+          "memory_mb": 0.0,
+          "state_energy_j": 0.0,
+          "consumed_energy_estimate_j": 0.010030848,
+          "latency_s": 0.8826932809315622,
+          "plastic_state_capacity_bytes": 0.0,
+          "coordinate": "digital/recurrent/energy_minimization/routing/thermodynamic_contrast/euclidean",
+          "device": "cpu",
+          "batch_size": 64,
+          "forward_flops": 3343616,
+          "backward_flops": 6687232,
+          "param_count": 26122,
+          "peak_memory_mb": 0.0,
+          "peak_activation_bytes": 0,
+          "wall_time_ms": 882.6932809315622,
+          "energy_proxy": 0.0,
+          "substrate_overhead": 0.0,
+          "effective_flops": 0.0
+        }
+      }
+    ],
+    "mean_recovery_ratio": 1.4434487632508837,
+    "std_recovery_ratio": 0,
+    "mean_final_accuracy": 0.7919999999999999
+  },
+  {
+    "coordinate": "memristive/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+    "seeds": [
+      {
+        "claims_scope": "psi_wired_uncontrolled",
+        "coordinate": "memristive/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+        "pre_damage_accuracy": 0.68,
+        "damage_severity": 0.3,
+        "damage_results": {
+          "zero_weights": {
+            "initial_accuracy": 0.577,
+            "final_accuracy": 0.964,
+            "recovery_ratio": 1.6707105719237436,
+            "recovery_losses": [
+              1.1924973540008068,
+              0.6087265163660049,
+              0.4187699630856514,
+              0.2530731149017811,
+              0.1496606240980327
+            ],
+            "recovery_accuracies": [
+              0.542,
+              0.806,
+              0.898,
+              0.927,
+              0.964
+            ]
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.614,
+            "final_accuracy": 0.977,
+            "recovery_ratio": 1.5912052117263844,
+            "recovery_losses": [
+              1.1519234627485275,
+              0.5867990851402283,
+              0.36118769831955433,
+              0.19549740850925446,
+              0.11372153041884303
+            ],
+            "recovery_accuracies": [
+              0.631,
+              0.835,
+              0.919,
+              0.956,
+              0.977
+            ]
+          },
+          "noise": {
+            "initial_accuracy": 0.56,
+            "final_accuracy": 0.981,
+            "recovery_ratio": 1.751785714285714,
+            "recovery_losses": [
+              0.7781083732843399,
+              0.4438104834407568,
+              0.26294487807899714,
+              0.15021371049806476,
+              0.08678399585187435
+            ],
+            "recovery_accuracies": [
+              0.7,
+              0.878,
+              0.935,
+              0.969,
+              0.981
+            ]
+          }
+        },
+        "psi_only_recovery": {
+          "zero_weights": {
+            "initial_accuracy": 0.577,
+            "final_accuracy": 0.577,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              1.7526088953018188,
+              1.752596102654934,
+              1.7524244636297226,
+              1.7525968924164772,
+              1.7518205866217613
+            ],
+            "recovery_accuracies": [
+              0.577,
+              0.577,
+              0.577,
+              0.577,
+              0.577
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": false
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.614,
+            "final_accuracy": 0.614,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              1.6335666105151176,
+              1.6333797350525856,
+              1.632149949669838,
+              1.6331193819642067,
+              1.631981685757637
+            ],
+            "recovery_accuracies": [
+              0.614,
+              0.614,
+              0.614,
+              0.614,
+              0.614
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": false
+          },
+          "noise": {
+            "initial_accuracy": 0.56,
+            "final_accuracy": 0.56,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              1.1367948204278946,
+              1.1349476352334023,
+              1.1351720616221428,
+              1.135725773870945,
+              1.1358541026711464
+            ],
+            "recovery_accuracies": [
+              0.56,
+              0.56,
+              0.56,
+              0.56,
+              0.56
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": false
+          }
+        },
+        "avg_recovery_ratio": 1.6712338326452807,
+        "avg_final_accuracy": 0.9739999999999999,
+        "avg_psi_only_recovery_ratio": 1.0,
+        "resources": {
+          "compute": 10030848.0,
+          "memory_mb": 0.0,
+          "state_energy_j": 0.0,
+          "consumed_energy_estimate_j": 0.010030848,
+          "latency_s": 0.7740838369354606,
+          "plastic_state_capacity_bytes": 0.0,
+          "coordinate": "memristive/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+          "device": "cpu",
+          "batch_size": 64,
+          "forward_flops": 3343616,
+          "backward_flops": 6687232,
+          "param_count": 26122,
+          "peak_memory_mb": 0.0,
+          "peak_activation_bytes": 0,
+          "wall_time_ms": 774.0838369354606,
+          "energy_proxy": 0.0,
+          "substrate_overhead": 0.0,
+          "effective_flops": 0.0
+        }
+      }
+    ],
+    "mean_recovery_ratio": 1.6712338326452807,
+    "std_recovery_ratio": 0,
+    "mean_final_accuracy": 0.9739999999999999
+  },
+  {
+    "coordinate": "memristive/recurrent/energy_minimization/routing/thermodynamic_contrast/euclidean",
+    "seeds": [
+      {
+        "claims_scope": "psi_engaged",
+        "coordinate": "memristive/recurrent/energy_minimization/routing/thermodynamic_contrast/euclidean",
+        "pre_damage_accuracy": 0.707,
+        "damage_severity": 0.3,
+        "damage_results": {
+          "zero_weights": {
+            "initial_accuracy": 0.566,
+            "final_accuracy": 0.885,
+            "recovery_ratio": 1.5636042402826857,
+            "recovery_losses": [
+              1.8508273586630821,
+              1.1000658832490444,
+              0.7007835395634174,
+              0.5969634503126144,
+              0.47812942415475845
+            ],
+            "recovery_accuracies": [
+              0.555,
+              0.589,
+              0.815,
+              0.845,
+              0.885
+            ]
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.5,
+            "final_accuracy": 0.568,
+            "recovery_ratio": 1.136,
+            "recovery_losses": [
+              2.0500879511237144,
+              1.3767687380313873,
+              0.8141890726983547,
+              0.7095160745084286,
+              0.6962855309247971
+            ],
+            "recovery_accuracies": [
+              0.5,
+              0.5,
+              0.508,
+              0.502,
+              0.568
+            ]
+          },
+          "noise": {
+            "initial_accuracy": 0.566,
+            "final_accuracy": 0.923,
+            "recovery_ratio": 1.630742049469965,
+            "recovery_losses": [
+              1.554990641772747,
+              0.8850739598274231,
+              0.6279724165797234,
+              0.49299838952720165,
+              0.34039110969752073
+            ],
+            "recovery_accuracies": [
+              0.589,
+              0.577,
+              0.828,
+              0.886,
+              0.923
+            ]
+          }
+        },
+        "psi_only_recovery": {
+          "zero_weights": {
+            "initial_accuracy": 0.567,
+            "final_accuracy": 0.551,
+            "recovery_ratio": 0.9717813051146387,
+            "recovery_losses": [
+              2.1154506653547287,
+              2.1153718382120132,
+              2.115311175584793,
+              2.1151582151651382,
+              2.11523699760437
+            ],
+            "recovery_accuracies": [
+              0.551,
+              0.553,
+              0.551,
+              0.549,
+              0.551
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": true
+          },
+          "remove_nodes": {
+            "initial_accuracy": 0.5,
+            "final_accuracy": 0.5,
+            "recovery_ratio": 1.0,
+            "recovery_losses": [
+              2.233862817287445,
+              2.2338371127843857,
+              2.233898863196373,
+              2.2338940650224686,
+              2.233780637383461
+            ],
+            "recovery_accuracies": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": true
+          },
+          "noise": {
+            "initial_accuracy": 0.565,
+            "final_accuracy": 0.617,
+            "recovery_ratio": 1.0920353982300885,
+            "recovery_losses": [
+              1.8937332332134247,
+              1.8939904794096947,
+              1.8940232396125793,
+              1.8942761570215225,
+              1.8943640515208244
+            ],
+            "recovery_accuracies": [
+              0.616,
+              0.611,
+              0.614,
+              0.616,
+              0.617
+            ],
+            "theta_audit": {
+              "invariant": true,
+              "max_abs_change": 0.0
+            },
+            "psi_moved": true
+          }
+        },
+        "avg_recovery_ratio": 1.4434487632508837,
+        "avg_final_accuracy": 0.7919999999999999,
+        "avg_psi_only_recovery_ratio": 1.0212722344482426,
+        "resources": {
+          "compute": 10030848.0,
+          "memory_mb": 0.0,
+          "state_energy_j": 0.0,
+          "consumed_energy_estimate_j": 0.010030848,
+          "latency_s": 0.9169416769873351,
+          "plastic_state_capacity_bytes": 0.0,
+          "coordinate": "memristive/recurrent/energy_minimization/routing/thermodynamic_contrast/euclidean",
+          "device": "cpu",
+          "batch_size": 64,
+          "forward_flops": 3343616,
+          "backward_flops": 6687232,
+          "param_count": 26122,
+          "peak_memory_mb": 0.0,
+          "peak_activation_bytes": 0,
+          "wall_time_ms": 916.9416769873351,
+          "energy_proxy": 0.0,
+          "substrate_overhead": 0.0,
+          "effective_flops": 0.0
+        }
+      }
+    ],
+    "mean_recovery_ratio": 1.4434487632508837,
+    "std_recovery_ratio": 0,
+    "mean_final_accuracy": 0.7919999999999999
+  }
+]

@@ -4,7 +4,6 @@ Uses Triton-accelerated DFAKernelBackend when available.
 Provides uniform `step(case)` interface.
 """
 
-
 import torch
 
 from computronium.acceleration.backends import kernel_available

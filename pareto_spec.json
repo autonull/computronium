@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "profile": "axis-aligned-pareto",
+  "task": "digits",
+  "objectives": ["validation_accuracy", "walltime_total", "param_count"],
+  "fidelity": "L1",
+  "n_seeds": 1,
+  "epochs": 1,
+  "budget_seconds": 300,
+  "param_budget": 50000,
+  "policy": "model_based",
+  "axes": [
+    {"axis": "substrate", "primitives": ["digital"]},
+    {"axis": "geometry", "primitives": ["feedforward", "recurrent"]},
+    {"axis": "dynamics", "primitives": ["energy_minimization", "instantaneous", "lazy"]},
+    {"axis": "plasticity", "primitives": ["null"]},
+    {"axis": "credit", "primitives": ["gradient", "thermodynamic_contrast", "random_projections", "pepita", "local_goodness"]},
+    {"axis": "update", "primitives": ["euclidean", "adam", "muon"]}
+  ],
+  "hyperparameters": {
+    "hidden_dim": {"lo": 32, "hi": 512, "scale": "log"},
+    "num_layers": {"lo": 1, "hi": 4, "scale": "linear"},
+    "settle_step": {"lo": 0.01, "hi": 0.1, "scale": "log"},
+    "feedback_scale": {"lo": 0.1, "hi": 1.0, "scale": "log"},
+    "update_lr": {"lo": 0.001, "hi": 0.1, "scale": "log"}
+  },
+  "operating_points": {},
+  "axis_objectives": {
+    "task": ["validation_accuracy"],
+    "cost": ["walltime_total", "param_count"]
+  },
+  "deterministic": true,
+  "num_workers": 0
+}

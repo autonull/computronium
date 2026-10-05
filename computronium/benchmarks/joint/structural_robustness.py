@@ -296,7 +296,9 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     train_x = torch.randn(1000, input_dim, device=device)
     train_y = (train_x.sum(dim=-1) > 0).long() % output_dim
     train_dataset = TensorDataset(train_x, train_y)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+    )
 
     # Pre-train: the damage/recovery premise requires a trained model —
     # pre_damage_accuracy on an untrained net made recovery_ratio meaningless.

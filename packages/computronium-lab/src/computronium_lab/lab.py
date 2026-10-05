@@ -84,7 +84,6 @@ except ImportError:
     LedgerRole = None
 
 if TYPE_CHECKING:
-
     from computronium_lab.adaptation import (
         AdaptationMode,
         AdaptationResult,
