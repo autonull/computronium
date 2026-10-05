@@ -163,3 +163,55 @@ TODO50 completed all infrastructure and validation work. The pipeline runs end-t
 
 All infrastructure is in place. These are pure research execution campaigns leveraging the validated TODO50 foundation.
 The "outside scope" condition has been removed - all 5 campaigns are now in scope with infrastructure complete.
+
+---
+
+## Campaign Execution Progress (This Session)
+
+### 1. Axis-Aligned Multi-Objective Pareto Campaigns
+**Status**: 🟡 IN PROGRESS (test campaign running)
+- Created test RunSpec with axis_objectives for task (validation_accuracy) and cost (walltime_total, param_count)
+- Campaign running on `digits` task with 6-axis space (digital substrate, feedforward/recurrent geometry, 3 dynamics, 5 credit, 3 update)
+- 80 records collected so far (70 PASS, 10 FAIL), 450 declared cells
+- Using model-based policy with TPE sampler
+- **Next**: Complete full campaign, add missing measured objectives (spectral_radius, max_singular_value, energy_efficiency)
+
+### 2. Full Stability-Plasticity Frontier Campaign
+**Status**: ✅ TEST RUN COMPLETE
+- Fixed CLI bugs: Budget constructor, single-value Domain handling, store context manager, policy creation, type conversion
+- Test run: 4 coordinates × 1 seed × 1 epoch = 15 records (7 PASS, 8 FAIL)
+- Measured objectives: validation_accuracy, walltime_total, param_count
+- **Remaining**: Run full 648-cell campaign at L1/L2 fidelity with stability objectives (need spectral_radius, max_singular_value, settle_steps measurements)
+
+### 3. Frozen-θ ψ Benchmarks at Scale
+**Status**: ✅ TEST RUN COMPLETE
+- Ran 4 coordinates (digital/memristive × null/routing plasticity) × 1 seed × 1 epoch
+- Results saved to `frozen_psi_results/structural_robustness_results.json`
+- Theta invariance audit and CLAIMS_SCOPE_PSI_ENGAGED verified
+- **Remaining**: Run full multi-substrate × multi-plasticity matrix at L2/L3 fidelity
+
+### 4. I(C,U) Predictive Model Refinement
+**Status**: ⏳ PENDING CAMPAIGN DATA
+- Infrastructure complete, awaiting training data from campaigns above
+- I(C,U) model auto-created in policy_context when credit×update axes restricted
+
+### 5. Hardware-Aware Campaigns
+**Status**: ⏳ PENDING ENERGY MEASUREMENTS
+- estimate_energy() implemented for all 11 substrate types
+- **Remaining**: Integrate energy_per_step measurement into evaluator, run Pareto campaigns with energy objective
+
+### Bugs Fixed During Execution:
+1. **`computronium/experiment/surface/cli.py`**: 
+   - Fixed `Budget` constructor to use `soft_seconds`/`hard_seconds` instead of `max_walltime_seconds`
+   - Added `import time`
+   - Fixed single-value Domain handling (categorical with native types)
+   - Added `store.create_run()` before pipeline execution
+   - Added policy creation via `policy_context()` and `create_policy()`
+   - Used `asyncio.run(runner.run())` for async pipeline
+   - Wrapped store in context manager
+
+2. **`computronium/experiment/schema/axis.py`**:
+   - Changed `Domain.members` type from `tuple[str, ...]` to `tuple[Any, ...]` to support native int/float members
+
+3. **`computronium/core/construction.py`**:
+   - Fixed `_as_int()` and `_as_float()` to handle string-to-numeric conversion for hyperparameter values

@@ -202,12 +202,26 @@ def _normalize(config: dict[str, object]) -> dict[str, object]:
 
 def _as_float(config: dict[str, object], key: str, default: float) -> float:
     value = config.get(key)
-    return float(value) if isinstance(value, int | float) else default
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
 
 
 def _as_int(config: dict[str, object], key: str, default: int) -> int:
     value = config.get(key)
-    return int(value) if isinstance(value, int) else default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
 
 
 def _as_bool(config: dict[str, object], key: str, default: bool) -> bool:
@@ -220,7 +234,8 @@ def _derive_cube_size(config: dict[str, object]) -> dict[str, object]:
     if "cube_size" in config or "hidden_dim" not in config:
         return config
     cfg = dict(config)
-    hidden = int(cfg.pop("hidden_dim"))
+    hidden_raw = cfg.pop("hidden_dim")
+    hidden = int(hidden_raw) if isinstance(hidden_raw, int | float | str) else 0
     cfg["cube_size"] = max(3, round(hidden ** (1 / 3)))
     return cfg
 
@@ -264,8 +279,10 @@ def build_model_config(
     its non-field knobs. Nothing a config-accepting model reads is dropped.
     """
     cfg = _normalize(config)
-    hidden_dim = cfg.get("hidden_dim")
-    num_layers = int(cfg.get("num_layers", 1))
+    hidden_dim_raw = cfg.get("hidden_dim")
+    hidden_dim: int | None = int(hidden_dim_raw) if isinstance(hidden_dim_raw, int | float | str) else None
+    num_layers_raw = cfg.get("num_layers", 1)
+    num_layers = int(num_layers_raw) if isinstance(num_layers_raw, int | float | str) else 1
     return ExperimentModelConfig(
         name=model_name,
         input_dim=input_dim,
@@ -400,7 +417,7 @@ def construct_model(
     input_dim: int,
     output_dim: int,
     model_name: str | None = None,
-) -> object:
+) -> "torch.nn.Module":
     """Build a live model from a sampled config, applying every consumed knob.
 
     This is the single construction entrypoint used by the trainer, the param

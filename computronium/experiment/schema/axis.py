@@ -51,7 +51,7 @@ class Scale(StrEnum):
 class Domain:
     """Domain specification for a hyperparameter parameter."""
 
-    members: tuple[str, ...] | None = None  # For Enumerated/CATEGORICAL
+    members: tuple[Any, ...] | None = None  # For Enumerated/CATEGORICAL
     lo: float | None = None  # For Range/CONTINUOUS/INTEGER
     hi: float | None = None  # For Range/CONTINUOUS/INTEGER
     scale: Scale = Scale.LINEAR  # For Range/CONTINUOUS/INTEGER

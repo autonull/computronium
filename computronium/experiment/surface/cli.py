@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import json
 import sys
+import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -216,7 +217,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
 }
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-statements]
     parser = argparse.ArgumentParser(
         prog="comp-surface",
         description="Computronium Surface CLI — experiment orchestration and reporting",
@@ -353,30 +354,36 @@ def _build_parser() -> argparse.ArgumentParser:
         "stability-plasticity",
         help="Generate and run stability-plasticity frontier campaign",
     )
-    p_sta.add_argument(
-        "--store", default="sta.duckdb", help="DuckDB store path"
-    )
+    p_sta.add_argument("--store", default="sta.duckdb", help="DuckDB store path")
     p_sta.add_argument(
         "--output-spec", default=None, help="Output path for generated RunSpec (JSON)"
     )
     p_sta.add_argument(
-        "--rho", default="0.5,0.9,1.05", help="Rho (contraction) values (comma-separated)"
+        "--rho",
+        default="0.5,0.9,1.05",
+        help="Rho (contraction) values (comma-separated)",
     )
     p_sta.add_argument(
-        "--feedback-scale", default="0.1,0.5,1.0", help="Feedback scale (coupling) values (comma-separated)"
+        "--feedback-scale",
+        default="0.1,0.5,1.0",
+        help="Feedback scale (coupling) values (comma-separated)",
     )
     p_sta.add_argument(
-        "--precision", default="float32,float16,bfloat16", help="Precision levels (comma-separated)"
+        "--precision",
+        default="float32,float16,bfloat16",
+        help="Precision levels (comma-separated)",
     )
     p_sta.add_argument(
-        "--noise-level", default="0.0,0.01,0.1", help="Noise level values (comma-separated)"
+        "--noise-level",
+        default="0.0,0.01,0.1",
+        help="Noise level values (comma-separated)",
     )
     p_sta.add_argument(
-        "--convergence-start", default="1,5,10", help="Convergence start (delay proxy) values (comma-separated)"
+        "--convergence-start",
+        default="1,5,10",
+        help="Convergence start (delay proxy) values (comma-separated)",
     )
-    p_sta.add_argument(
-        "--seeds", type=int, default=3, help="Seeds per coordinate"
-    )
+    p_sta.add_argument("--seeds", type=int, default=3, help="Seeds per coordinate")
     p_sta.add_argument(
         "--epochs", type=int, default=3, help="Epochs per run (L1 fidelity)"
     )
@@ -444,9 +451,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_frozen.add_argument("--seeds", type=int, default=3, help="Number of seeds")
     p_frozen.add_argument("--device", default="auto", help="Device (auto, cpu, cuda)")
-    p_frozen.add_argument(
-        "--run", action="store_true", help="Run the benchmark"
-    )
+    p_frozen.add_argument("--run", action="store_true", help="Run the benchmark")
     p_frozen.add_argument(
         "--dry-run", action="store_true", help="Show plan without running"
     )
@@ -944,18 +949,26 @@ def _cmd_gallery(args: argparse.Namespace) -> int:
         return 0
 
 
-def _cmd_stability_plasticity(args: argparse.Namespace) -> int:
+def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-statements, too-many-locals]
     """Generate and optionally run a stability-plasticity frontier campaign."""
     import json
     from pathlib import Path
 
-    from computronium.experiment.schema.run_spec import RunSpec, AxisSelection, Domain, Scale
-    from computronium.experiment.schema.axis import StructuralAxis
-    from computronium.experiment.execution.policy import create_policy, policy_context
-    from computronium.experiment.execution.budget import Budget, SimpleCostModel
-    from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
     from computronium.experiment.evidence.store import RecordStore, StoreConfig
     from computronium.experiment.execution.backends import LocalBackend
+    from computronium.experiment.execution.budget import Budget, SimpleCostModel
+    from computronium.experiment.execution.pipeline import (
+        PipelineConfig,
+        PipelineRunner,
+    )
+    from computronium.experiment.execution.policy import create_policy, policy_context
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.run_spec import (
+        AxisSelection,
+        Domain,
+        RunSpec,
+        Scale,
+    )
 
     # Parse sweep parameters (using valid hyperparameter names)
     rho_vals = tuple(float(x) for x in args.rho.split(","))
@@ -975,7 +988,7 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:
         * len(convergence_start_vals)
     )
 
-    print(f"Stability-Plasticity Campaign")
+    print("Stability-Plasticity Campaign")
     print(f"  Rho (contraction): {rho_vals}")
     print(f"  Feedback scale (coupling): {feedback_scale_vals}")
     print(f"  Precision: {precision_vals}")
@@ -992,20 +1005,37 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:
     axes = (
         AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
         AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("recurrent",)),
-        AxisSelection(axis=StructuralAxis.DYNAMICS, primitives=("energy_minimization",)),
-        AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null",)),  # No plasticity for stability test
-        AxisSelection(axis=StructuralAxis.CREDIT, primitives=("thermodynamic_contrast",)),
+        AxisSelection(
+            axis=StructuralAxis.DYNAMICS, primitives=("energy_minimization",)
+        ),
+        AxisSelection(
+            axis=StructuralAxis.PLASTICITY, primitives=("null",)
+        ),  # No plasticity for stability test
+        AxisSelection(
+            axis=StructuralAxis.CREDIT, primitives=("thermodynamic_contrast",)
+        ),
         AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean",)),
     )
 
     # Hyperparameters for the stability-plasticity sweep
     # Map to valid hyperparameter names from harvest
+    def _make_domain(vals, scale=Scale.LINEAR, is_int=False):
+        """Create Domain from values - categorical if single value, range otherwise."""
+        if len(vals) == 1:
+            # Keep native type for categorical domains
+            return Domain(members=(vals[0],))
+        if is_int:
+            return Domain(lo=min(vals), hi=max(vals), scale=scale)
+        return Domain(lo=min(vals), hi=max(vals), scale=scale)
+
     hyperparameters = {
-        "rho": Domain(lo=min(rho_vals), hi=max(rho_vals), scale=Scale.LOG),
-        "feedback_scale": Domain(lo=min(feedback_scale_vals), hi=max(feedback_scale_vals), scale=Scale.LOG),
+        "rho": _make_domain(rho_vals, Scale.LOG),
+        "feedback_scale": _make_domain(feedback_scale_vals, Scale.LOG),
         "precision": Domain(members=precision_vals),
-        "noise_level": Domain(lo=min(noise_level_vals), hi=max(noise_level_vals), scale=Scale.LOG),
-        "convergence_start": Domain(lo=min(convergence_start_vals), hi=max(convergence_start_vals), scale=Scale.LINEAR),
+        "noise_level": _make_domain(noise_level_vals, Scale.LOG),
+        "convergence_start": _make_domain(
+            convergence_start_vals, Scale.LINEAR, is_int=True
+        ),
     }
 
     # Gate is a categorical sweep - we'll handle it via the grid
@@ -1018,20 +1048,17 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:
         "convergence_start_sweep": list(convergence_start_vals),
     }
 
-    # Objectives for stability-plasticity
+    # Objectives for stability-plasticity - use only measured objectives for now
     objectives = (
         "validation_accuracy",
-        "spectral_radius",
-        "max_singular_value",
-        "settle_steps",
         "walltime_total",
+        "param_count",
     )
 
-    # Axis-aligned objectives
+    # Axis-aligned objectives - only measured objectives
     axis_objectives = {
-        "stability": ("spectral_radius", "max_singular_value", "settle_steps"),
         "task": ("validation_accuracy",),
-        "cost": ("walltime_total",),
+        "cost": ("walltime_total", "param_count"),
     }
 
     # Create RunSpec
@@ -1062,15 +1089,16 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:
 
     # Dry run or run
     if args.dry_run:
-        from computronium.experiment.execution.search_space import iter_candidates, search_space_from_spec
+        from computronium.experiment.execution.search_space import (
+            iter_candidates,
+            search_space_from_spec,
+        )
 
         print("\nDry run - first 5 candidates:")
         search_space = search_space_from_spec(spec)
-        count = 0
-        for coord, sched in iter_candidates(spec, search_space):
+        for count, (coord, sched) in enumerate(iter_candidates(spec, search_space)):
             print(f"  {coord}")
-            count += 1
-            if count >= 5:
+            if count >= 4:
                 break
         print(f"... (total {total_cells} coordinates)")
         return 0
@@ -1082,11 +1110,25 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:
     # Run the campaign
     print("Running campaign...")
     import uuid
+
     run_id = str(uuid.uuid4())
     store = RecordStore(StoreConfig(path=Path(args.store)))
     backend = LocalBackend()
     cost_model = SimpleCostModel()
-    budget = Budget(max_walltime_seconds=args.budget_seconds)
+    budget = Budget(
+        started_at=time.monotonic(),
+        soft_seconds=args.budget_seconds,
+        hard_seconds=args.budget_seconds,
+    )
+
+    # Create policy from spec
+    from computronium.experiment.execution.evaluate import task_shape
+
+    policy_name = spec.policy
+    if policy_name is None:
+        raise ValueError("RunSpec.policy must be set for campaign execution")
+    policy_kwargs = policy_context(spec, policy_name, shape=task_shape)
+    policy = create_policy(policy_name, **policy_kwargs)
 
     # Create pipeline config
     pipeline_config = PipelineConfig(
@@ -1095,11 +1137,13 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:
         budget=budget,
         cost_model=cost_model,
         backend=backend,
-        policy=None,  # Will be created from spec
+        policy=policy,
     )
 
-    runner = PipelineRunner(pipeline_config)
-    runner.run()
+    with store:
+        store.create_run(run_id, spec)
+        runner = PipelineRunner(pipeline_config, store)
+        asyncio.run(runner.run())
 
     print("Campaign complete.")
     return 0
@@ -1112,25 +1156,26 @@ def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:
     from computronium.benchmarks.joint.structural_robustness import (
         run_structural_robustness_suite,
     )
-    from computronium.core.utils.device import get_device
 
     substrates = tuple(args.substrates.split(","))
     plasticity_types = tuple(args.plasticity_types.split(","))
 
     # Generate coordinates for all combinations
     coordinates = []
+    neuromorphic_plasticity = {"null", "routing"}
+    no_substrate_coupled = {"photonic", "quantum"}
     for substrate in substrates:
         for plasticity in plasticity_types:
             # Skip invalid combinations
-            if substrate == "neuromorphic" and plasticity not in ("null", "routing"):
+            if substrate == "neuromorphic" and plasticity not in neuromorphic_plasticity:
                 continue  # Neuromorphic only supports null and routing
-            if substrate in ("photonic", "quantum") and plasticity == "substrate_coupled":
+            if substrate in no_substrate_coupled and plasticity == "substrate_coupled":
                 continue  # Substrate coupled not implemented for these yet
 
             coord = f"{substrate}/{args.geometry}/{args.dynamics}/{plasticity}/{args.credit}/{args.update}"
             coordinates.append(coord)
 
-    print(f"Frozen-θ ψ Benchmark Campaign")
+    print("Frozen-θ ψ Benchmark Campaign")
     print(f"  Substrates: {substrates}")
     print(f"  Plasticity types: {plasticity_types}")
     print(f"  Geometry: {args.geometry}")
