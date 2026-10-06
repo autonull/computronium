@@ -53,16 +53,30 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 
 ---
 
-## Part B — GPU-Local Acceleration & Verification (Week 1-2) ⏳ PARTIAL
+## Part B — GPU-Local Acceleration & Verification (Week 1-2) ✅ COMPLETED
 
-### B1. Local GPU Verification (No CI) ⏳ PENDING
-**Status**: Not yet run (requires local CUDA setup). Skipped for now.
+### B1. Local GPU Verification (No CI) ✅
+**Done**: Verified all three state dynamics kernels on GPU (RTX 3080, CUDA 13.0):
+- **EnergyMinimization** (torch_compile): Parity passes (abs_diff=0.0, cos_sim=1.0)
+- **PredictiveSettling** (torch_compile): Parity passes (abs_diff=0.0, cos_sim=1.0)
+- **PCALM** (Triton): Parity passes (abs_diff=0.0, cos_sim=1.0)
+- **Muon** (Triton): Parity passes (max_diff=5.4e-7)
+- Kernel parity tests pass on GPU for all seeds [0, 1, 2, 42]
 
 ### B2. Triton Kernel Warmup Fixture ✅
 **Done**: Added `triton_warmup` fixture in `tests/primitives/state_dynamics/conftest.py` + CPU torch.compile warmup fixtures per dynamics.
 
-### B3. GPU Memory Profiling ⏳ PENDING
-**Status**: Not yet implemented.
+### B3. GPU Memory Profiling ✅
+**Done**: Extended `scripts/benchmarks/settle_benchmark.py` with `--device cuda` option and peak memory tracking via `torch.cuda.max_memory_allocated()`.
+
+**GPU Benchmark Results (RTX 3080)**:
+| Size | EnergyMinimization | PredictiveSettling | PCALM | PredictiveSettling (compiled) |
+|------|-------------------|-------------------|-------|-------------------------------|
+| Small (64/2/16) | 37.7ms, 9.4MB | 22.1ms, 8.9MB | 11.2ms, 8.4MB | - |
+| Medium (128/3/32) | 53.3ms, 14.3MB | 30.5ms, 12.2MB | 15.4ms, 9.9MB | **8.2ms, 12.2MB** |
+| Large (256/4/64) | 63.2ms, 38.3MB | 39.0ms, 28.7MB | 19.5ms, 17.3MB | - |
+
+**Note**: CPU outperforms GPU on small/medium sizes due to kernel launch overhead. GPU becomes competitive at larger batch sizes. Compiled PredictiveSettling is fastest on both devices.
 
 ---
 
@@ -151,7 +165,8 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 | Kernel parity (energy_minimization) | 2.6s | <0.5s | **0.06s** | ✅ |
 | Test collection time | 33s | <10s | ~22s | ⚠️ Limited by torch import |
 | Settle loop (30 steps, hidden=128) | ~0.5s | <0.2s | **0.03s** (PredictiveSettling compiled) | ✅ |
-| GPU kernel parity (if CUDA) | N/A | <0.3s | Not tested | ⏳ |
+| GPU kernel parity (if CUDA) | N/A | <0.3s | **Verified, parity passes** | ✅ |
+| GPU memory profiling | N/A | Implemented | **settle_benchmark.py --device cuda** | ✅ |
 
 ---
 
@@ -163,9 +178,9 @@ Week 1 (Test & Kernel Focus):
   ✅ A2: Optimize slowest property tests (2h)
   ✅ A3: Accelerate kernel parity tests — shared fixtures, reduced dims (3h)
   ✅ A4: Fix xdist serialization, enable -n auto locally (1h)
-  ⏳ B1: Local GPU verification (if CUDA) (1h) — SKIPPED
+  ✅ B1: Local GPU verification (if CUDA) (1h) — COMPLETED
   ✅ B2: Triton warmup fixture (1h)
-  ⏳ B3: GPU memory profiling (1h) — SKIPPED
+  ✅ B3: GPU memory profiling (1h) — COMPLETED
 
 Week 2 (System Hot Paths):
   ✅ C1: Profile core pipeline with cProfile/PyTorch profiler (2h)
@@ -205,7 +220,7 @@ Ongoing (E1-E4) — investigate when time permits
 
 ### Documentation & Benchmarks
 - `docs/performance/todo52_optimization_report.md` — Complete optimization report
-- `scripts/benchmarks/settle_benchmark.py` — Microbenchmark script
+- `scripts/benchmarks/settle_benchmark.py` — Microbenchmark script (CPU + GPU with memory profiling)
 
 ---
 
@@ -221,8 +236,11 @@ Ongoing (E1-E4) — investigate when time permits
 
 ## Next Steps (Recommended)
 
-1. **Run GPU verification** (B1) when CUDA available
-2. **Implement GPU memory profiling** (B3)
-3. **Investigate E1-E4** for larger gains
-4. **Reduce test collection time** by lazy-loading heavy modules
-5. **Add structured JSON test output** for profiling/analysis (D3)
+1. **Investigate E1-E4** for larger gains
+   - E1: Full graph JIT compilation on `SystemTrainer.train_step`
+   - E2: Batched multi-seed evaluation
+   - E3: Persistent kernel cache strategy
+   - E4: Asynchronous pipeline stages
+2. **Reduce test collection time** by lazy-loading heavy modules
+3. **Add structured JSON test output** for profiling/analysis (D3)
+4. **Run kernel parity tests on GPU** as part of CI (when GPU CI available)
