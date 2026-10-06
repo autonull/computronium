@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, Self, TypeVar, cast, runtime_checkable
@@ -797,13 +798,13 @@ class SystemConfig:
             self.update.step_semantics == "per_element_displacement"
             and self.update.step_size > 0.05
         ):
-            logger.debug(
-                "update_type=%s uses per-element-displacement "
-                "step semantics (step_size IS the displacement); "
-                "step_size=%s is in the gradient-relative lr range "
-                "and likely an overshoot mislabel.",
-                self.update.update_type,
-                self.update.step_size,
+            warnings.warn(
+                f"update_type={self.update.update_type} uses per-element-displacement "
+                f"step semantics (step_size IS the displacement); "
+                f"step_size={self.update.step_size} is in the gradient-relative lr range "
+                f"and likely an overshoot mislabel.",
+                UserWarning,
+                stacklevel=2,
             )
 
     def _validate_energy_minimization_momentum_update(self) -> None:

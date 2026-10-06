@@ -205,6 +205,9 @@ def run_benchmarks(device: str = "cpu") -> list[BenchmarkResult]:
     # Compiled path benchmark (PredictiveSettling)
     results.append(_benchmark_compiled_predictive_settling(device))
 
+    # Compiled path benchmark (PCALM)
+    results.append(_benchmark_compiled_pcalm(device))
+
     return results
 
 
@@ -253,6 +256,60 @@ def _benchmark_compiled_predictive_settling(device: str) -> BenchmarkResult:
     )
     return BenchmarkResult(
         name="  PredictiveSettling (compiled)",
+        device=device,
+        mean_ms=mean_time * 1000,
+        stdev_ms=stdev_time * 1000,
+        num_runs=5,
+        peak_memory_mb=peak_mb,
+    )
+
+
+def _benchmark_compiled_pcalm(device: str) -> BenchmarkResult:
+    """Benchmark compiled PCALM."""
+    print("\n\nCompiled Path (PCALM):")
+    geometry, substrate, x = _make_test_system(128, 3, 32, device)
+    config_compiled = StateDynamicsConfig.pc_alm(
+        max_steps=30,
+        step_size=0.1,
+        beta=0.5,
+        rho=1.0,
+        compiled=True,
+    )
+
+    # Warmup compilation
+    dynamics = PCALMDynamics(config_compiled)
+    state = SystemState(x=x, y=None)
+    dynamics.settle(state, geometry, substrate)
+
+    if device == "cuda":
+        torch.cuda.synchronize()
+        _reset_memory(device)
+
+    # Benchmark compiled
+    times = []
+    peak_mem = 0.0
+    for _ in range(5):
+        dynamics = PCALMDynamics(config_compiled)
+        state = SystemState(x=x, y=None)
+        start = time.perf_counter()
+        dynamics.settle(state, geometry, substrate)
+        if device == "cuda":
+            torch.cuda.synchronize()
+        end = time.perf_counter()
+        times.append(end - start)
+        mem = _measure_memory(device)
+        if mem is not None:
+            peak_mem = max(peak_mem, mem)
+
+    mean_time = statistics.mean(times)
+    stdev_time = statistics.stdev(times)
+    peak_mb = peak_mem if peak_mem > 0 else None
+    mem_str = f", peak_mem={peak_mb:.1f}MB" if peak_mb else ""
+    print(
+        f"  PCALM (compiled): {mean_time * 1000:.2f}ms ± {stdev_time * 1000:.2f}ms{mem_str}"
+    )
+    return BenchmarkResult(
+        name="  PCALM (compiled)",
         device=device,
         mean_ms=mean_time * 1000,
         stdev_ms=stdev_time * 1000,

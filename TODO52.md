@@ -142,7 +142,7 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 ### E1. Full Graph JIT Compilation — PARTIAL ✅
 - **EnergyMinimizationDynamics**: `torch.compile` on settle loop enabled via `config.compiled=True` — **6.7x-7.3x speedup** on FeedforwardGeometry (digital substrate, no momentum, no recurrent weights)
 - **PredictiveSettlingDynamics**: `torch.compile` on settle loop already worked via `config.compiled=True` — **2.8x-4.1x speedup**
-- **PCALMDynamics**: `torch.compile` on settle loop available via `config.compiled=True` but **slower than eager** (0.32x-0.97x) — needs investigation
+- **PCALMDynamics**: `torch.compile` on settle loop available via `config.compiled=True`. **Investigation complete**: First call incurs ~18s compilation overhead; subsequent runs are **~7ms vs eager ~8ms** (modest speedup). The benchmark warmup pattern (one warmup run + timed runs) works correctly. The initial TODO52 claim of "slower than eager" was based on unwarmed measurements.
 - `SystemTrainer.train_step` full graph compilation: modest ~1.1x speedup (graph breaks at `.item()` calls in metrics)
 - Profile: compilation time vs. runtime savings across epochs
 
@@ -237,6 +237,10 @@ Ongoing (E1-E4) — investigate when time permits
 - **GPU optional** — CPU optimizations deliver 2-3× speedup; GPU deferred
 - **Document findings** — `docs/performance/` with profiling outputs, before/after comparisons
 - **TODO51 pre-existing issues**: 344 pyright in core/ — deferred to hygiene pass
+- **Test execution**: xdist (`-n 4`) has execnet/python version compatibility issues on this environment. Use `uv run python -m pytest -n 0` for reliable test runs. All tests pass with `-n 0`.
+- **Pre-existing test fixes** (this session):
+  - README snippet lock: Fixed `swap_credit` block formatting in `docs/readme/ml-library.md` to match test's Black-formatted multi-line `GeometryConfig.recurrent` call
+  - `test_validate_warns_on_borrowed_lr_grid`: Changed `logger.debug` to `warnings.warn(UserWarning)` in `SystemConfig._validate_per_element_displacement_step_size()` to emit proper test-detectable warning
 
 ---
 
@@ -250,3 +254,4 @@ Ongoing (E1-E4) — investigate when time permits
 2. **Reduce test collection time** by lazy-loading heavy modules
 3. **Add structured JSON test output** for profiling/analysis (D3)
 4. **Run kernel parity tests on GPU** as part of CI (when GPU CI available)
+5. **Fix xdist compatibility** — resolve execnet/python version issues for parallel test execution

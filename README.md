@@ -351,7 +351,9 @@ for name, credit in CREDIT_ARMS:
     system = compose_joint_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
         geometry=RecurrentGeometry(
-            GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
+            GeometryConfig.recurrent(
+                input_dim=784, output_dim=10, hidden_dims=(32,)
+            )
         ),
         dynamics=EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
@@ -997,6 +999,10 @@ six-axis systems and assert real accuracies.
 | `export` | Export store data for round-trip |
 | `conformance` | Check capability conformance |
 | `status` | Show run/store status |
+| `gallery` | Render gallery figures from demo records |
+| `hypothesis-campaign` | Run hypothesis templates over campaign records |
+| `stability-plasticity` | Generate and run stability-plasticity frontier campaign |
+| `frozen-theta-psi` | Run frozen-θ ψ benchmarks at scale (multi-substrate, multi-plasticity) |
 | `parity` | Check library-vs-kernel parity for an axis |
 | `repro` | Replay a recorded run and diff it |
 | `validate` | Validate a config or record against the schema |
