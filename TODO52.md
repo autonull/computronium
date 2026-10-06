@@ -610,3 +610,34 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 |--------|--------|-------|
 | Run ledger lock tests | 1 failing | 9 passing |
 | Test fixture legal cells | 15 | 30 |
+
+---
+
+## Session Summary (2026-10-06) — Schema Package Lazy Loading Complete
+
+**Completed this session:**
+
+### Schema Package Lazy Loading ✅
+- Added `metrics` submodule and all its symbols to lazy loading in `computronium/experiment/schema/__init__.py`
+- Added missing symbols from `harvest`, `registries`, `run_spec`, `seed_registries`, `versioning` modules
+- Updated `__all__` and `_symbol_to_module` mappings for all new symbols
+- Package-level imports now work for all symbols used in tests
+
+**Verification:**
+- All property lock tests pass (ontology: 15/15, capability evidence: 9/9, kernel isolation: 6/6, layering: 6/6, run ledger: 9/9)
+- Collection time for property tests: **~4.8s** (was ~12s) — **2.5× faster**
+- Test files still import submodules directly; full benefit requires test migration
+
+**Files Modified:**
+- `computronium/experiment/schema/__init__.py` — Extended lazy loading with all missing symbols
+
+**Key Metrics:**
+| Metric | Before | After | Speedup |
+|--------|--------|-------|---------|
+| Property test collection | ~12s | ~4.8s | 2.5× |
+| Schema base import | 0.12s | ~0.12s | — |
+| Experiment base import | 0.04s | ~0.04s | — |
+
+**Next Steps (for full benefit):**
+1. Migrate test files from `from computronium.experiment.schema.axis import ...` to `from computronium.experiment.schema import ...`
+2. This would reduce collection time toward torch import floor (~1.4s)
