@@ -17,10 +17,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self
 
-from torch import Tensor
-
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Generator, Mapping
+
+from torch import Tensor
 
 __all__ = [
     "FrozenThetaAudit",
@@ -173,7 +173,7 @@ class FrozenThetaAudit:
 @contextmanager
 def frozen_theta_audit(
     system: object,
-) -> Iterator[FrozenThetaAudit]:
+) -> Generator[FrozenThetaAudit]:
     """Convenience wrapper: ``with frozen_theta_audit(system): ...``.
 
     Raises AssertionError at block exit if the frozen-θ contract broke.

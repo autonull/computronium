@@ -11,7 +11,7 @@ promises ‖θ_after − θ_before‖ = 0 gets audited, not trusted.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
@@ -104,7 +104,7 @@ def theta_audit(
     *,
     label: str = "",
     seed: int | None = None,
-) -> Iterator[ThetaAuditSession]:
+) -> Generator[ThetaAuditSession]:
     """Audit θ invariance across the ``with`` body: snapshot, run, exact-diff.
 
     Accepts a composed System (audits ``system.geometry.params``) or a plain

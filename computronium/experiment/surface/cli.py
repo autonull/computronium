@@ -1034,7 +1034,7 @@ def _cmd_gallery(args: argparse.Namespace) -> int:
         return 0
 
 
-def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-statements, too-many-locals]
+def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-statements, too-many-locals, complex-structure]
     """Generate and optionally run a stability-plasticity frontier campaign."""
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.run_spec import (

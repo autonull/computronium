@@ -1105,7 +1105,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         self._free_energy_history: list[float] | None = None
         self._settle_steps_used: int = 0
 
-    def settle(  # noqa: PLR0915
+    def settle(  # ruff: ignore[too-many-statements]
         self,
         state: SettableState,
         geometry: Geometry,
@@ -1225,7 +1225,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         if use_checkpointing and device.type == "cpu":
             return False  # Never checkpoint on CPU
         if use_checkpointing is False and device.type == "cuda":
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 free_vram, _ = torch.cuda.mem_get_info(device)
                 total_params = sum(
                     p.numel() for p in geometry.params.values() if p.requires_grad
@@ -1242,7 +1242,8 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
                 est_total = total_params * 4 * 3 + est_activation_mem
                 if est_total > free_vram * 0.8:
                     return True
-            except Exception:
+            except Exception:  # ruff: ignore[try-except-pass]
+                # VRAM query failed; fall back to configured value
                 pass
         return use_checkpointing
 

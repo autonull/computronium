@@ -15,13 +15,13 @@ import zipfile
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
 import torch
 from torch import Tensor
 
 from computronium.core.logging import get_logger
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 logger = get_logger()
 
@@ -160,7 +160,7 @@ def _zip_artifact(
 @contextmanager
 def find_trial_artifact(
     trial_id: int, artifact_dir: str | pathlib.Path = "artifacts"
-) -> Iterator[str | None]:
+) -> Generator[str | None]:
     """Yield the path to a trial's saved ``model.pt`` (dir or zipped artifact).
 
     Scans ``artifact_dir`` for a ``trial_{trial_id}_*`` entry, preferring an

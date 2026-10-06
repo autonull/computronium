@@ -392,7 +392,8 @@ class DigitalSubstrate:
         # FLOPs for matrix multiply: 2 * M * N * K (multiply-add = 2 ops)
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         flops_per_forward = 2 * batch * in_features * out_features
         flops_per_update = flops_per_forward  # Backward pass similar cost
@@ -458,11 +459,11 @@ class AnalogSubstrate:
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward
-        total_macs = (macs_per_forward + macs_per_update) * num_layers
 
         # Analog MAC energy: ~0.1 pJ, ADC/DAC overhead ~1 pJ per output
         energy_per_mac = 1e-13  # 0.1 pJ
@@ -558,11 +559,11 @@ class MemristiveSubstrate:
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward
-        total_macs = (macs_per_forward + macs_per_update) * num_layers
 
         # Memristive MAC energy: ~1 fJ (0.001 pJ)
         # Programming energy: ~10 fJ per device
@@ -635,15 +636,13 @@ class NeuromorphicSubstrate:
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         # Effective MACs reduced by sparsity
         sparsity = self.config.sparsity if self.config.sparsity else 0.5
         effective_macs_per_forward = batch * in_features * out_features * (1 - sparsity)
         effective_macs_per_update = effective_macs_per_forward
-        total_macs = (
-            effective_macs_per_forward + effective_macs_per_update
-        ) * num_layers
 
         # Neuromorphic energy: ~0.01 pJ per synaptic event
         energy_per_event = 1e-14  # 0.01 pJ
@@ -710,13 +709,10 @@ class OpticalSubstrate:
         Phase shifter tuning energy: ~10 fJ per phase shifter
         Laser power overhead.
         """
-        batch, in_features = input_shape[0], input_shape[-1]
+        in_features = input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
-
-        macs_per_forward = batch * in_features * out_features
-        macs_per_update = macs_per_forward
-        total_macs = (macs_per_forward + macs_per_update) * num_layers
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         # Optical interference is passive (~0 energy for MAC)
         # Phase shifter tuning: ~10 fJ per phase shifter
@@ -788,7 +784,8 @@ class QuantumSubstrate:
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         # Quantum circuit depth proportional to matrix size
         num_qubits = max(in_features, out_features)
@@ -882,7 +879,8 @@ class ComplexSubstrate:
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         # Complex MAC = 4 real MACs
         real_macs_per_forward = 4 * batch * in_features * out_features
@@ -950,14 +948,12 @@ class SparseSubstrate:
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         sparsity = self.config.sparsity if self.config.sparsity else 0.9
         effective_macs_per_forward = batch * in_features * out_features * (1 - sparsity)
         effective_macs_per_update = effective_macs_per_forward
-        total_macs = (
-            effective_macs_per_forward + effective_macs_per_update
-        ) * num_layers
 
         # Sparse MAC: ~0.5 pJ (indexing overhead)
         # Indexing overhead: ~10% of dense
@@ -1034,11 +1030,11 @@ class TernarySubstrate:
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward
-        total_macs = (macs_per_forward + macs_per_update) * num_layers
 
         # Ternary MAC: addition only, ~0.1 pJ
         energy_per_mac = 1e-13  # 0.1 pJ
@@ -1142,11 +1138,11 @@ class QuantizedSubstrate(DigitalSubstrate):
         """
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
-        assert in_features == in_features_w
+        if in_features != in_features_w:
+            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward
-        total_macs = (macs_per_forward + macs_per_update) * num_layers
 
         # INT8 MAC energy: ~0.2 pJ
         energy_per_mac = 2e-13  # 0.2 pJ

@@ -89,7 +89,7 @@ def capture_environment_snapshot(
     architecture = platform.machine()
 
     # PyTorch info
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         import torch
 
         pytorch_version = torch.__version__

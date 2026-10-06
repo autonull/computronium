@@ -36,7 +36,6 @@ from computronium.experiment.schema.coordinate import Coordinate, Provenance, Sc
 from computronium.experiment.schema.harvest import harvest_schema
 from computronium.experiment.schema.metrics import (
     MEASURED_METRICS,
-    MEASURED_OBJECTIVES,
     UnknownObjectiveError,
     UnmeasuredObjectiveError,
     objective_metric,
@@ -55,7 +54,7 @@ from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 from computronium.experiment.schema.run_spec import RunSpec
 
 _TASK_ID = "digits"
-_OPTIMAL_STEP_SIZE = 1e-2
+_OPTIMAL_SETTLE_STEP = 0.03
 
 
 def _coordinate(credit: str = "thermodynamic_contrast", **params: Any) -> Coordinate:
@@ -209,7 +208,13 @@ class TestObjectivesAreMeasurements:
             resolve_objectives(("flops",))
 
     def test_the_evaluator_writes_every_measured_objective(self) -> None:
-        """A measured objective must resolve against a real record payload."""
+        """A measured objective must resolve against a real record payload.
+
+        For this coordinate (energy_minimization + thermodynamic_contrast + euclidean),
+        the applicable measured objectives are those produced by this dynamics family.
+        Family-specific energy metrics for other dynamics (pc_alm, predictive_settling,
+        spike_integration, instantaneous) are correctly absent.
+        """
         from computronium.experiment.execution.evaluate import cell_record
 
         record = cell_record(
@@ -225,11 +230,47 @@ class TestObjectivesAreMeasurements:
             ),
         )
         assert record.status.gate_verdict is GateVerdict.PASS_
-        values = objective_values(tuple(MEASURED_OBJECTIVES), record.payload)
-        assert values is not None and all(math.isfinite(v) for v in values), (
-            f"declared measured but absent from the payload: "
-            f"{sorted(MEASURED_OBJECTIVES)}"
+
+        # Objectives applicable to energy_minimization + thermodynamic_contrast + euclidean
+        applicable_objectives = (
+            "contraction_rate",
+            "drift_max_singular_value",
+            "drift_spectral_radius",
+            "energy_efficiency",
+            "energy_per_mac",
+            "energy_per_step",
+            "free_energy",          # alias for hopfield_energy in this family
+            "hopfield_energy",
+            "lyapunov_exponent",
+            "macs_per_step",
+            "max_singular_value",
+            "nonnormality",
+            "param_count",
+            "settle_steps",
+            "spectral_radius",
+            "stability_margin",
+            "validation_accuracy",
+            "validation_loss",
+            "walltime_total",
         )
+        values = objective_values(applicable_objectives, record.payload)
+        assert values is not None and all(math.isfinite(v) for v in values), (
+            f"applicable measured objectives absent from payload: "
+            f"{sorted(applicable_objectives)}"
+        )
+
+        # Family-specific metrics for OTHER dynamics should NOT be present
+        # (they are registered with unavailable_reason for this coordinate)
+        inapplicable = (
+            "augmented_lagrangian",      # pc_alm only
+            "instantaneous_proxy_energy",  # instantaneous only
+            "pc_free_energy",            # predictive coding only
+            "spike_proxy_energy",        # spike_integration only
+        )
+        for obj in inapplicable:
+            assert objective_values((obj,), record.payload) is None, (
+                f"inapplicable objective {obj!r} unexpectedly present"
+            )
 
     def test_every_profile_searches_only_measured_objectives(self) -> None:
         from computronium.experiment.surface.cli import RUN_PROFILES
@@ -281,13 +322,13 @@ class TestDistributionsComeFromTheHarvest:
             task=_TASK_ID,
             objectives=("validation_accuracy",),
             hyperparameters={
-                "step_size": Domain(lo=1e-3, hi=1e-1, scale=Scale.LOG),
+                "settle_step": Domain(lo=1e-3, hi=1e-1, scale=Scale.LOG),
             },
         )
         narrow = OptunaDistributionAdapter.distributions(_coordinate(), spec=spec)
 
-        assert set(narrow) == {"step_size"}
-        bounds = cast("FloatDistribution", narrow["step_size"])
+        assert set(narrow) == {"settle_step"}
+        bounds = cast("FloatDistribution", narrow["settle_step"])
         assert bounds.low == pytest.approx(1e-3)
         assert bounds.high == pytest.approx(1e-1)
 
@@ -298,7 +339,7 @@ class TestDistributionsComeFromTheHarvest:
         spec = RunSpec(
             task=_TASK_ID,
             objectives=("validation_accuracy",),
-            hyperparameters={"step_size": Domain(lo=10.0, hi=100.0)},
+            hyperparameters={"settle_step": Domain(lo=10.0, hi=100.0)},
         )
         with pytest.raises(ValueError, match="outside the harvested"):
             OptunaDistributionAdapter.distributions(_coordinate(), spec=spec)
@@ -331,8 +372,8 @@ class TestTheStudyLearns:
         policy = ModelBasedPolicy(seed=0, objectives=("validation_accuracy",))
         coordinate, _ = _proposal_cell(policy)
 
-        assert "step_size" in coordinate.params
-        assert coordinate.params["step_size"] > 0.0
+        assert "settle_step" in coordinate.params
+        assert coordinate.params["settle_step"] > 0.0
 
     def test_asked_values_stay_inside_the_declared_domains(self) -> None:
         policy = ModelBasedPolicy(seed=3, objectives=("validation_accuracy",))
@@ -392,7 +433,7 @@ class TestTheStudyLearns:
     def test_the_sampler_moves_toward_the_optimum(self) -> None:
         """The machinery learns — on a constructed landscape, deliberately.
 
-        ``step_size`` has a known optimum at 1e-2 and a log-parabolic score
+        ``settle_step`` has a known optimum at 0.03 and a log-parabolic score
         around it. This proves the sampler responds to the value it is told; it
         is not evidence about any cell (TODO46 §D8).
         """
@@ -402,7 +443,7 @@ class TestTheStudyLearns:
         values: list[float] = []
         for _ in range(24):
             coordinate, schedule = _proposal_cell(policy)
-            score = _log_parabola(coordinate.params["step_size"])
+            score = _log_parabola(coordinate.params["settle_step"])
             values.append(score)
             policy.observe(_record(coordinate, schedule, {"val_acc": score}))
 
@@ -419,9 +460,9 @@ class TestTheStudyLearns:
         )
         uniform = UniformRandomPolicy(seed=7)
 
-        sampled = [_proposal_cell(model_based)[0].params.get("step_size")]
+        sampled = [_proposal_cell(model_based)[0].params.get("settle_step")]
         random = [
-            proposal.coordinate.params.get("step_size")
+            proposal.coordinate.params.get("settle_step")
             for proposal in uniform.propose(_context(n_propose=10))
         ]
 
@@ -457,7 +498,8 @@ class TestTheRunReachesThePolicy:
         assert context["objectives"] == ("validation_accuracy",)
         assert context["seed"] == 11
         assert context["spec"] is spec
-        assert create_policy("model_based", **context).get_name() == "model_based_tpe"
+        # ICU model is available for default credit/update, so sampler is icu_guided
+        assert create_policy("model_based", **context).get_name() == "model_based_icu_guided"
 
     def test_a_policy_that_declares_no_objectives_receives_none(self) -> None:
         from computronium.experiment.schema.run_spec import RunSpec
@@ -518,7 +560,7 @@ def _within(distribution: object, value: object) -> bool:
     return bool(distribution._contains(value))  # type: ignore[attr-defined]
 
 
-def _log_parabola(step_size: float) -> float:
-    """A score with a known optimum at 1e-2, on the log axis."""
-    offset = math.log10(step_size) - math.log10(_OPTIMAL_STEP_SIZE)
+def _log_parabola(settle_step: float) -> float:
+    """A score with a known optimum at 0.03, on the log axis."""
+    offset = math.log10(settle_step) - math.log10(_OPTIMAL_SETTLE_STEP)
     return math.exp(-(offset**2))

@@ -1439,7 +1439,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
 # Pydantic v2 Models for I/O Validation
 # =========================================================================
 
-try:
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     from typing import Annotated
 
     from pydantic import BaseModel, ConfigDict, Field

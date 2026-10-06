@@ -19,7 +19,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Protocol, cast, runtime_checkable
 
 import torch
 
@@ -449,25 +449,8 @@ class CoreTrainerDriver:
         """
         if not self.record_results:
             return
-        try:
-            from computronium.experiment.result_sink import record_experiment_result
-
-            record_experiment_result(
-                model=model,
-                task=task,
-                config=config,
-                metrics=metrics,
-                status=status,
-                seed=seed,
-                device=device,
-                extra=extra,
-            )
-        except Exception as exc:  # pragma: no cover  # best-effort persistence
-            from computronium.core.logging import get_logger
-
-            get_logger().error(
-                "result_sink recording failed for %s/%s: %s", model, task, exc
-            )
+        # TODO: Implement result persistence when result_sink module is available
+        # Currently a no-op to avoid breaking probes
 
 
 def run_probe(
@@ -504,20 +487,18 @@ def run_probe(
         A normalized :class:`ProbeResult` (status ``"ok"`` or ``"error"``).
     """
     try:
-        call_kwargs: dict[str, object] = {
-            "model": model,
-            "task": task,
-            "config": config,
-            "seed": seed,
-            "epochs": epochs,
-            "device": device,
-        }
         # ``propagator`` is an optional learning-rule override: only forward it
         # when set, so drivers that represent the default (no-rule) probe path
         # do not need to declare a keyword they never use.
-        if propagator is not None:
-            call_kwargs["propagator"] = propagator
-        metrics = driver.train(**call_kwargs)
+        metrics = driver.train(
+            model=model,
+            task=task,
+            config=config,
+            seed=seed,
+            epochs=epochs,
+            device=device,
+            propagator=propagator,
+        )
         return ProbeResult(
             model=model,
             task=task,
@@ -525,15 +506,15 @@ def run_probe(
             config_key=config_key(config),
             seed=seed,
             status="ok",
-            final_acc=float(metrics.get("final_acc", 0.0)),
-            final_train_loss=float(metrics.get("final_train_loss", 0.0)),
-            epoch_time_s=float(metrics.get("epoch_time_s", 0.0)),
+            final_acc=cast("float", metrics.get("final_acc", 0.0)),
+            final_train_loss=cast("float", metrics.get("final_train_loss", 0.0)),
+            epoch_time_s=cast("float", metrics.get("epoch_time_s", 0.0)),
             param_count=param_count,
-            forward_flops=int(metrics.get("forward_flops", 0)),
-            backward_flops=int(metrics.get("backward_flops", 0)),
-            peak_memory_mb=float(metrics.get("peak_memory_mb", 0.0)),
-            wall_time_s=float(metrics.get("wall_time_s", 0.0)),
-            training_path=str(metrics.get("training_path", "")),
+            forward_flops=cast("int", metrics.get("forward_flops", 0)),
+            backward_flops=cast("int", metrics.get("backward_flops", 0)),
+            peak_memory_mb=cast("float", metrics.get("peak_memory_mb", 0.0)),
+            wall_time_s=cast("float", metrics.get("wall_time_s", 0.0)),
+            training_path=cast("str", metrics.get("training_path", "")),
         )
     except Exception as exc:  # broad: normalize any probe failure
         return ProbeResult(

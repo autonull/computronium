@@ -134,17 +134,19 @@ def run_verifying_test(
             text=True,
             timeout=timeout_seconds,
             cwd=Path.cwd(),
+            check=False,
         )
-        duration = time.monotonic() - start
-        passed = result.returncode == 0
-        output = result.stdout + result.stderr
-        return passed, output, duration
     except subprocess.TimeoutExpired:
         duration = time.monotonic() - start
         return False, f"Test timed out after {timeout_seconds}s", duration
     except Exception as e:
         duration = time.monotonic() - start
         return False, f"Test execution error: {e}", duration
+    else:
+        duration = time.monotonic() - start
+        passed = result.returncode == 0
+        output = result.stdout + result.stderr
+        return passed, output, duration
 
 
 class ConformanceHarness:
@@ -189,13 +191,15 @@ class ConformanceHarness:
 
         return results
 
-    def _check_capability(
+    def _check_capability(  # ruff: ignore[too-many-return-statements]
         self,
         spec: CapabilitySpec,
         run_id: str | None,
         execute_verifying_tests: bool,
     ) -> ConformanceResult:
         """Check a single capability."""
+        checked_at = datetime.now()
+
         if not spec.required:
             return ConformanceResult(
                 capability_id=spec.capability_id,
@@ -204,10 +208,9 @@ class ConformanceHarness:
                 status=ConformanceStatus.SKIPPED,
                 evidence_count=0,
                 message=f"Optional capability ({spec.kind.value})",
-                checked_at=datetime.now(),
+                checked_at=checked_at,
             )
 
-        # Check for retirement record
         if spec.status == CapabilityStatus.RETIRED:
             return ConformanceResult(
                 capability_id=spec.capability_id,
@@ -216,10 +219,9 @@ class ConformanceHarness:
                 status=ConformanceStatus.RETIRED,
                 evidence_count=0,
                 message=f"Retired: {spec.retirement_record or 'no record'}",
-                checked_at=datetime.now(),
+                checked_at=checked_at,
             )
 
-        # Check for unverified status - report reason instead of running test
         if spec.status == CapabilityStatus.UNVERIFIED:
             return ConformanceResult(
                 capability_id=spec.capability_id,
@@ -228,12 +230,12 @@ class ConformanceHarness:
                 status=ConformanceStatus.NO_EVIDENCE,
                 evidence_count=0,
                 message=f"UNVERIFIED: {spec.unverified_reason or 'no reason recorded'}",
-                checked_at=datetime.now(),
+                checked_at=checked_at,
             )
 
         # Run verifying test if available
         if execute_verifying_tests and spec.verifying_test:
-            passed, output, duration = run_verifying_test(spec.verifying_test)
+            passed, _, duration = run_verifying_test(spec.verifying_test)
             if passed:
                 return ConformanceResult(
                     capability_id=spec.capability_id,
@@ -242,22 +244,21 @@ class ConformanceHarness:
                     status=ConformanceStatus.PASS_,
                     evidence_count=1,
                     message=f"Verifying test passed: {spec.verifying_test}",
-                    checked_at=datetime.now(),
+                    checked_at=checked_at,
                     verifying_test_result=spec.verifying_test,
                     test_duration_seconds=duration,
                 )
-            else:
-                return ConformanceResult(
-                    capability_id=spec.capability_id,
-                    capability_name=spec.name,
-                    kind=spec.kind,
-                    status=ConformanceStatus.FAIL,
-                    evidence_count=0,
-                    message=f"Verifying test failed: {spec.verifying_test}",
-                    checked_at=datetime.now(),
-                    verifying_test_result=f"FAILED: {spec.verifying_test}",
-                    test_duration_seconds=duration,
-                )
+            return ConformanceResult(
+                capability_id=spec.capability_id,
+                capability_name=spec.name,
+                kind=spec.kind,
+                status=ConformanceStatus.FAIL,
+                evidence_count=0,
+                message=f"Verifying test failed: {spec.verifying_test}",
+                checked_at=checked_at,
+                verifying_test_result=f"FAILED: {spec.verifying_test}",
+                test_duration_seconds=duration,
+            )
 
         # Fallback to store evidence query
         evidence_count = self._count_evidence(spec, run_id)
@@ -270,7 +271,7 @@ class ConformanceHarness:
                 status=ConformanceStatus.PASS_,
                 evidence_count=evidence_count,
                 message=f"{evidence_count} passing record(s) found",
-                checked_at=datetime.now(),
+                checked_at=checked_at,
             )
 
         return ConformanceResult(
@@ -280,7 +281,7 @@ class ConformanceHarness:
             status=ConformanceStatus.NO_EVIDENCE,
             evidence_count=0,
             message="Required capability has no verifying test or passing evidence",
-            checked_at=datetime.now(),
+            checked_at=checked_at,
         )
 
     def _count_evidence(self, spec: CapabilitySpec, run_id: str | None) -> int:

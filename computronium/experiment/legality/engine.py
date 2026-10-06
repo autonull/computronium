@@ -280,7 +280,7 @@ class LegalityEngine:
             }:
                 continue
 
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 result = evaluate(constraint.expr, ctx)
                 if not result:
                     violation = ConstraintViolation(

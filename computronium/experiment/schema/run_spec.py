@@ -187,7 +187,7 @@ class RunSpec(BaseModel):
     sweep_steps: _POSITIVE = 5
 
     @model_validator(mode="after")
-    def _check(self) -> Self:
+    def _check(self) -> Self:  # ruff: ignore[too-many-statements, too-many-branches, complex-structure]
         from computronium.domains.registry import SUPPORTED_TASKS
         from computronium.experiment.execution.policy import POLICY_CATALOG
         from computronium.experiment.execution.stage import StageId

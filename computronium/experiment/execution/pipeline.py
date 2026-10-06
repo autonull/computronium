@@ -41,6 +41,8 @@ from computronium.experiment.schema.coordinate import (
 )
 
 if TYPE_CHECKING:
+    from tqdm.std import tqdm
+
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
     from computronium.experiment.execution.backends import (
@@ -756,7 +758,7 @@ class PipelineRunner:
     async def _execute_batch_with_isolation(
         self,
         proposals: list[Proposal],
-        progress_bar: tqdm | None = None,
+        progress_bar: tqdm | None = None,  # type: ignore[reportInvalidTypeForm]
     ) -> list[Record]:
         """Execute a batch of proposals with failure isolation (WP19).
 

@@ -213,7 +213,7 @@ class RunController:
         self._run_task = asyncio.create_task(runner.run())
         steering_task: asyncio.Task[OperatorIntent] | None = None
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Monitor for steering intents
             while not self._run_task.done():
                 # Ensure steering task is running
@@ -387,7 +387,7 @@ class ServiceManager:
     async def start(self, runner_factory: Callable[[], PipelineRunner]) -> list[Any]:
         """Start the service with automatic restart."""
         while self._restart_count <= self._config.max_restarts:
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 store_config = StoreConfig(path=self._config.store_path)
                 with RecordStore(store_config) as store:
                     self._run_controller = RunController(self._config.run_id, store)

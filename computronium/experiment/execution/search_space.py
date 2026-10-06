@@ -147,7 +147,7 @@ def search_space_from_spec(
     return space
 
 
-def _filter_axes_for_validity(
+def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     axes_snapshot: list[AxisSpec],
     spec: RunSpec,
 ) -> list[AxisSpec]:
@@ -643,7 +643,7 @@ def declared_cell_count(spec: RunSpec, space: SearchSpace) -> int:
     return math.prod(per_axis) * len(space.tasks) * steps
 
 
-def _walk(
+def _walk(  # ruff: ignore[complex-structure]
     spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None
 ) -> Iterator[tuple[Coordinate, str]]:
     """Every cell the spec declares, as ``(coordinate, task)``.
@@ -717,7 +717,7 @@ def _walk(
                 active_count -= 1
 
 
-def iter_candidates(
+def iter_candidates(  # ruff: ignore[complex-structure]
     spec: RunSpec,
     search_space: SearchSpace,
     *,

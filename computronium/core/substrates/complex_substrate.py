@@ -183,7 +183,7 @@ class ComplexSubstrate(DigitalSubstrate):
 # Triton kernels for hot paths (if available)
 # =========================================================================
 
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice

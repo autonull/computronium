@@ -730,7 +730,7 @@ class ModelBasedPolicy:
             self._pending[proposed.measurement_key(sched)] = trial.number
             yield Proposal(proposed, sched, self._name)
 
-    def _propose_icu_guided(
+    def _propose_icu_guided(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
         self, ctx: ProposalContext, study: optuna.Study
     ) -> Iterator[Proposal]:
         """Propose initial points using I(C,U) metamodel predictions.
@@ -741,9 +741,8 @@ class ModelBasedPolicy:
         """
         from computronium.experiment.learning.icu import ICUFeatureVector
 
-        assert self._icu_model is not None, (
-            "ICU model must be set for icu_guided sampler"
-        )
+        if self._icu_model is None:
+            raise ValueError("ICU model must be set for icu_guided sampler")
         # Get all available coordinates from context
         all_coords = list(ctx.cells())
 
@@ -765,10 +764,11 @@ class ModelBasedPolicy:
                 fv = ICUFeatureVector.from_coordinate(rep_coord)
                 try:
                     mean_pred, uncertainty = self._icu_model.predict(fv)
-                    scored_pairs.append(((credit, update), mean_pred, uncertainty))
-                except Exception:
+                except Exception as e:  # ruff: ignore[try-except-continue]
                     # If prediction fails, skip this pair
+                    logger.debug("I(C,U) prediction failed for %s/%s: %s", credit, update, e)
                     continue
+                scored_pairs.append(((credit, update), mean_pred, uncertainty))
 
         # Sort by predicted performance (lower is better for val_loss)
         scored_pairs.sort(key=lambda x: x[1])
@@ -1239,26 +1239,26 @@ def _create_icu_model_from_spec(
             ICUModel,
             create_icu_prior_surrogate,
         )
-
-        # Get credit and update primitives from spec
-        credit_primitives = spec.selected_primitives(StructuralAxis.CREDIT)
-        update_primitives = spec.selected_primitives(StructuralAxis.UPDATE)
-
-        if not credit_primitives or not update_primitives:
-            return None, []
-
-        # Generate all credit×update pairs
-        credit_update_pairs = [
-            (c, u) for c in credit_primitives for u in update_primitives
-        ]
-
-        # Try to load existing I(C,U) model from store
-        # For now, create a fresh prior surrogate
-        icu_model = ICUModel(surrogate=create_icu_prior_surrogate())
-        return icu_model, credit_update_pairs
     except Exception:
-        # If anything fails, fall back to no I(C,U) guidance
+        # If import fails, fall back to no I(C,U) guidance
         return None, []
+
+    # Get credit and update primitives from spec
+    credit_primitives = spec.selected_primitives(StructuralAxis.CREDIT)
+    update_primitives = spec.selected_primitives(StructuralAxis.UPDATE)
+
+    if not credit_primitives or not update_primitives:
+        return None, []
+
+    # Generate all credit×update pairs
+    credit_update_pairs = [
+        (c, u) for c in credit_primitives for u in update_primitives
+    ]
+
+    # Try to load existing I(C,U) model from store
+    # For now, create a fresh prior surrogate
+    icu_model = ICUModel(surrogate=create_icu_prior_surrogate())
+    return icu_model, credit_update_pairs
 
 
 def _accepted_kwargs(policy_cls: type[Policy]) -> set[str]:

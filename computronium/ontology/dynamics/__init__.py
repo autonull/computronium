@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def dynamics_from_config(config: StateDynamicsConfig) -> StateDynamics:
+def dynamics_from_config(config: StateDynamicsConfig) -> StateDynamics:  # ruff: ignore[non-empty-init-module]
     """Instantiate the registered StateDynamics for a config's ``dynamics_type``."""
     cls = DYNAMICS_REGISTRY.get(config.dynamics_type.lower())
     if cls is None:

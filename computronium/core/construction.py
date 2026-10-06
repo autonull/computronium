@@ -47,6 +47,8 @@ from computronium.models.deployments.config import compute_hidden_dims
 if typing.TYPE_CHECKING:
     from collections.abc import Callable
 
+    import torch
+
 __all__ = [
     "KNOBS",
     "Consumption",
@@ -421,7 +423,7 @@ def construct_model(
     input_dim: int,
     output_dim: int,
     model_name: str | None = None,
-) -> "torch.nn.Module":
+) -> torch.nn.Module:
     """Build a live model from a sampled config, applying every consumed knob.
 
     This is the single construction entrypoint used by the trainer, the param
