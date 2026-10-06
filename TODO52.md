@@ -533,3 +533,47 @@ Lazy Loading & Test Infrastructure (This Session):
 | Kernel isolation lock tests | 1 failing | 6 passing |
 | Lint count baseline | 423 | 412 |
 | Pipeline resume logic | Broken (accumulated proposals) | Fixed (replaces proposals) |
+
+---
+
+## Future Session Action Items (Known Issues to Address)
+
+### 1. Test Fixture Space Exhaustion (Pre-existing)
+**Issue**: `test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement` fails because the test fixture declares a search space with only ~15 legal cells, all measured in the first run (2 rounds). The resume run finds 0 fresh cells.
+
+**Root Cause**: The fixture comment says "More legal cells than a round proposes (10) is the requirement" but void constraints reduce the actual legal cells below what a round proposes.
+
+**Fix Options** (for future session):
+- Expand fixture's axis primitives to create more legal cells (e.g., add more dynamics/credit primitives)
+- Reduce `n_propose` in the pipeline config to ensure fresh cells remain
+- Add a dedicated "resume fixture" with a larger space specifically for resume testing
+
+**Files**: `tests/property/test_run_ledger_lock.py` (function `_run_spec`)
+
+### 2. Test Import Migration for Full Lazy Loading Benefit
+**Issue**: Test files still import submodules directly (e.g., `from computronium.experiment.schema.axis import ...`), bypassing lazy `__getattr__` in package `__init__.py`
+
+**Fix**: Migrate test imports to package-level access:
+```python
+# Before
+from computronium.experiment.schema.axis import StructuralAxis, AXES_REGISTRIES
+
+# After  
+from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
+```
+
+**Impact**: Would reduce collection time from ~12s toward torch import floor (~1.4s)
+
+**Files**: ~100 test files (see grep output in session logs)
+
+### 3. GPU CI Integration
+**Status**: Local GPU verification complete (all 3 dynamics + Muon pass on RTX 3080)
+**Needed**: Configure CI to run kernel parity tests on GPU when infrastructure available
+
+### 4. Pre-existing Pyright Errors (Hygiene Pass)
+**Status**: 344 pyright errors in `core/` — deferred to dedicated hygiene pass
+**Scope**: Register C, not blocking functionality
+
+### 5. xdist Environment Issues (Partial)
+**Status**: Works with `-n 4` but had execnet/python version issues earlier
+**Monitor**: Ensure reliability across environments
