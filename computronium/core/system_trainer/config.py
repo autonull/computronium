@@ -48,6 +48,9 @@ class SystemTrainerConfig:
             unlimited. An epoch that overruns it stops early and is flagged
             ``epoch_time_budget_stopped``, so a consumer of that epoch's
             resource metrics knows they describe a partial epoch.
+        async_dataloading: Enable CUDA stream double-buffering to overlap
+            host->device data transfer with forward/backward computation.
+            Only effective on CUDA devices. Default: False.
     """
 
     max_epochs: int = 10
@@ -68,6 +71,7 @@ class SystemTrainerConfig:
     harvest_decay: float = 0.99
     harvest_every_n: int = 10
     max_epoch_time: float = 0.0
+    async_dataloading: bool = False
 
 
 class _DataProvider(Protocol):

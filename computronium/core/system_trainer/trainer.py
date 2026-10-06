@@ -162,7 +162,12 @@ class SystemTrainer:
             torch.use_deterministic_algorithms(True)
 
     def train_epoch(self) -> dict[str, float]:
-        """Run one training epoch."""
+        """Run one training epoch.
+
+        When ``config.async_dataloading`` is True and CUDA is available,
+        overlaps host->device data transfer with the previous batch's
+        forward/backward using CUDA streams (double-buffering).
+        """
         self.system.geometry.train()
         self._begin_epoch()
 
@@ -173,18 +178,60 @@ class SystemTrainer:
         budget = self.config.max_epoch_time
         self._resources.start()
 
-        for batch_idx, (x, y) in enumerate(self.train_data):
-            if (
-                self.config.limit_train_batches is not None
-                and batch_idx >= self.config.limit_train_batches
-            ):
-                break
+        # Async data loading setup (CUDA streams double-buffering)
+        use_async = (
+            self.config.async_dataloading
+            and self.device.type == "cuda"
+            and torch.cuda.is_available()
+        )
+
+        # Create iterator from train_data (handles both iterables and iterators)
+        train_iter = iter(self.train_data)
+
+        limit = self.config.limit_train_batches
+        max_batches = limit if limit is not None else 10**9
+
+        if use_async:
+            compute_stream = torch.cuda.Stream()
+            load_stream = torch.cuda.Stream()
+            # Pre-fetch first batch on load stream
+            first_batch = next(train_iter, None)
+
+        for batch_idx in range(max_batches):
+            if use_async:
+                # Wait for previous compute to finish, then swap buffers
+                if batch_idx > 0:
+                    torch.cuda.current_stream().wait_stream(compute_stream)
+                    x, y = next_batch
+                else:
+                    x, y = first_batch
+
+                # Launch next batch load on load stream (non-blocking)
+                try:
+                    next_batch = next(train_iter)
+                except StopIteration:
+                    next_batch = None
+                if next_batch is not None:
+                    with torch.cuda.stream(load_stream):
+                        next_batch = (
+                            next_batch[0].to(self.device, non_blocking=True),
+                            next_batch[1].to(self.device, non_blocking=True),
+                        )
+            else:
+                try:
+                    x, y = next(train_iter)
+                except StopIteration:
+                    break
+
             if self.config.resumable:
                 torch.manual_seed(
                     fold_in(self.config.seed, self.current_epoch, batch_idx)
                 )
-            x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
-            y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
+
+            # For async path, x/y are already on device from load stream
+            if not use_async:
+                x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
+                y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
 
             # Canonical flat input: systems compose against a flat
             # input_dim (e.g. vision (B, C, H, W) -> (B, C*H*W)); the
@@ -192,7 +239,15 @@ class SystemTrainer:
             if x.dim() > 2:
                 x = x.reshape(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
 
-            metrics = self.system.train_step(x, y)
+            # Run train_step on compute stream for async path
+            if use_async:
+                with torch.cuda.stream(compute_stream):
+                    metrics = self.system.train_step(x, y)
+                # Sync to get metrics for logging/accumulation
+                torch.cuda.current_stream().wait_stream(compute_stream)
+            else:
+                metrics = self.system.train_step(x, y)
+
             batch = x.size(0)
             self._resources.note_step(batch)
             epoch_loss += metrics.get("loss", 0.0) * batch
@@ -226,6 +281,10 @@ class SystemTrainer:
                     budget,
                 )
                 break
+
+        # Final sync for async path
+        if use_async:
+            torch.cuda.current_stream().wait_stream(compute_stream)
 
         self._resources.stop()
         denom = max(num_samples, 1)
