@@ -194,6 +194,8 @@ markers = [
     "demo: gallery demo — trains networks and re-pins docs/figures; run with -m demo",
     "filterwarnings: builtin, registered for --strict-markers compat",
     "timeout: marks tests with a timeout (requires pytest-timeout)",
+    "full_multi_axis: run full multi-axis execute_spec (slow)",
+    "probe: probe measurement script converted to test; run with -m probe",
 ]
 addopts = "-n 4 --strict-markers --durations=25 -m 'not slow and not benchmark and not llm and not demo' -p no:warnings"
 # pytest-timeout is the kill, and its signal method already dumps the stack of

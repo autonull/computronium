@@ -335,23 +335,29 @@ class DigitalSubstrate:
 
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.digital()
+        # Pre-compute precision dtype for forward operator (C5: move validation/conversion out of hot path)
+        self._forward_dtype = self._dtype_from_precision(self.config.precision)
 
-    def _to_precision(self, tensor: Tensor) -> Tensor:  # ruff: ignore[too-many-return-statements]
-        """Convert tensor to the configured precision."""
-        precision = self.config.precision
-        if precision == "float32":
-            return tensor.to(torch.float32)
-        elif precision == "float16":
-            return tensor.to(torch.float16)
-        elif precision == "bfloat16":
-            return tensor.to(torch.bfloat16)
-        elif precision == "int8":
-            return tensor.to(torch.int8)
-        elif precision == "int4":
-            # int4 not natively supported, use int8
-            return tensor.to(torch.int8)
-        elif precision == "binary":
-            return tensor.to(torch.bool)
+    def _dtype_from_precision(self, precision: str) -> torch.dtype:
+        """Convert precision string to torch dtype."""
+        return {
+            "float32": torch.float32,
+            "float16": torch.float16,
+            "bfloat16": torch.bfloat16,
+            "int8": torch.int8,
+            "int4": torch.int8,
+            "binary": torch.bool,
+        }.get(precision, torch.get_default_dtype())
+
+    def _to_precision(self, tensor: Tensor) -> Tensor:
+        """Convert tensor to the configured precision (for weight quantization).
+
+        Preserves complex dtypes - only converts real dtypes.
+        """
+        if tensor.is_complex():
+            return tensor
+        if tensor.dtype != self._forward_dtype:
+            return tensor.to(self._forward_dtype)
         return tensor
 
     def quantize_weights(self, w: Tensor) -> Tensor:
@@ -361,10 +367,18 @@ class DigitalSubstrate:
         return self._to_precision(s)
 
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+        """Return the substrate's forward operator with pre-bound dtype (C5)."""
+        dtype = self._forward_dtype
+
         def forward(x: Tensor, w: Tensor) -> Tensor:
-            x = self._to_precision(x)
-            w = self._to_precision(w)
-            return self._to_precision(x @ w.T)
+            # Preserve complex dtypes
+            if x.is_complex() or w.is_complex():
+                return x @ w.T
+            if x.dtype != dtype:
+                x = x.to(dtype)
+            if w.dtype != dtype:
+                w = w.to(dtype)
+            return (x @ w.T).to(dtype)
 
         return forward
 
@@ -393,7 +407,9 @@ class DigitalSubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         flops_per_forward = 2 * batch * in_features * out_features
         flops_per_update = flops_per_forward  # Backward pass similar cost
@@ -460,7 +476,9 @@ class AnalogSubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward
@@ -560,7 +578,9 @@ class MemristiveSubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward
@@ -637,7 +657,9 @@ class NeuromorphicSubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         # Effective MACs reduced by sparsity
         sparsity = self.config.sparsity if self.config.sparsity else 0.5
@@ -712,7 +734,9 @@ class OpticalSubstrate:
         in_features = input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         # Optical interference is passive (~0 energy for MAC)
         # Phase shifter tuning: ~10 fJ per phase shifter
@@ -785,7 +809,9 @@ class QuantumSubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         # Quantum circuit depth proportional to matrix size
         num_qubits = max(in_features, out_features)
@@ -880,7 +906,9 @@ class ComplexSubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         # Complex MAC = 4 real MACs
         real_macs_per_forward = 4 * batch * in_features * out_features
@@ -949,7 +977,9 @@ class SparseSubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         sparsity = self.config.sparsity if self.config.sparsity else 0.9
         effective_macs_per_forward = batch * in_features * out_features * (1 - sparsity)
@@ -1031,7 +1061,9 @@ class TernarySubstrate:
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward
@@ -1090,9 +1122,18 @@ class NoisySubstrate(DigitalSubstrate):
 
     def __init__(self, config: SubstrateConfig | None = None):
         super().__init__(config or SubstrateConfig.digital(noise_level=0.05))
+        # Pre-allocate noise buffer for efficiency (C5)
+        self._noise_buffer: dict[tuple[int, ...], Tensor] = {}
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
-        noise = torch.randn_like(s) * self.config.noise_level
+        # Reuse pre-allocated buffer if shape matches
+        shape = s.shape
+        if shape not in self._noise_buffer:
+            self._noise_buffer[shape] = torch.empty(
+                shape, dtype=s.dtype, device=s.device
+            )
+        noise = self._noise_buffer[shape]
+        noise.normal_(0, self.config.noise_level)
         return s + noise
 
     def estimate_energy(
@@ -1139,7 +1180,9 @@ class QuantizedSubstrate(DigitalSubstrate):
         batch, in_features = input_shape[0], input_shape[-1]
         out_features, in_features_w = weight_shape[0], weight_shape[1]
         if in_features != in_features_w:
-            raise ValueError(f"Input feature mismatch: {in_features} != {in_features_w}")
+            raise ValueError(
+                f"Input feature mismatch: {in_features} != {in_features_w}"
+            )
 
         macs_per_forward = batch * in_features * out_features
         macs_per_update = macs_per_forward

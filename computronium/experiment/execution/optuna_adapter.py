@@ -17,12 +17,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from optuna.distributions import (
-    BaseDistribution,
-    CategoricalDistribution,
-    FloatDistribution,
-    IntDistribution,
-)
+if TYPE_CHECKING:
+    from optuna.distributions import BaseDistribution
 
 from computronium.experiment.schema.axis import AxisKind, Scale
 
@@ -46,6 +42,13 @@ class OptunaDistributionAdapter:
             domain this kind cannot express (an open range), which are not
             samplable dimensions.
         """
+        # Lazy import optuna.distributions (D4: avoid heavy import at module level)
+        from optuna.distributions import (
+            CategoricalDistribution,
+            FloatDistribution,
+            IntDistribution,
+        )
+
         domain = spec.domain
         match spec.axis_kind:
             case AxisKind.CONTINUOUS:

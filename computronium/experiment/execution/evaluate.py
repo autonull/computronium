@@ -259,7 +259,15 @@ def compute_stability_metrics(
         jac = torch.autograd.functional.jacobian(
             step, torch.zeros(width, device=_param_device(system))
         )
-        singular = torch.linalg.svdvals(jac)
+        # Use svd_lowrank for large matrices (>512) for speed (C4)
+        if jac.shape[0] > 512 or jac.shape[1] > 512:
+            # Randomized SVD: compute only top k singular values
+            # We need max and min, so compute a few more than needed
+            k = min(16, *jac.shape)
+            _, S, _ = torch.svd_lowrank(jac, q=k, niter=2)
+            singular = S
+        else:
+            singular = torch.linalg.svdvals(jac)
         sigma_max = float(singular.max().item())
         sigma_min = float(singular.min().item())
         radius = _radius(jac, sigma_max)

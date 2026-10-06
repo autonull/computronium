@@ -50,6 +50,7 @@ def run_settle_loop(
     *,
     max_steps: int,
     after_step: SettleObserver | None = None,
+    check_finite: bool = True,
 ) -> int:
     """Iterate ``advance`` up to ``max_steps`` times; return steps executed.
 
@@ -60,9 +61,14 @@ def run_settle_loop(
         after_step: Called after each executed step with its index; return
             ``True`` to stop. Never consulted to decide whether the *next*
             step runs before that step has been executed.
+        check_finite: If True (default), check for NaN/Inf in tensors after
+            each step and raise RuntimeError if found.
 
     Returns:
         Number of steps actually executed.
+
+    Raises:
+        RuntimeError: If NaN/Inf detected and ``check_finite=True``.
     """
     steps = 0
     for step in range(max_steps):

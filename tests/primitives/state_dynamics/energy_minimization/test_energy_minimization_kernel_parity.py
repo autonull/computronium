@@ -1,13 +1,9 @@
-"""Kernel parity tests for Energy Minimization primitive."""
+"""Tests for Energy Minimization kernel parity."""
 
 import pytest
 
 from computronium.acceleration.parity import assert_parity
-from computronium.primitives.state_dynamics.energy_minimization import (
-    SPEC,
-    make_case,
-    reference_step,
-)
+from computronium.acceleration.registry import get
 from computronium.primitives.state_dynamics.energy_minimization.kernel import (
     is_available,
 )
@@ -15,29 +11,33 @@ from computronium.primitives.state_dynamics.energy_minimization.kernel import (
     step as kernel_step,
 )
 
+spec = get("primitive.state_dynamics.energy_minimization")
 
-def test_kernel_parity():
+
+@pytest.mark.skipif(not is_available(), reason="kernel not available")
+def test_kernel_parity(
+    energy_minimization_kernel_warmup: None,
+    energy_minimization_cases: dict,
+    energy_minimization_ref_outputs: dict,
+):
     """Test that kernel output matches reference within tolerance."""
-    if not is_available():
-        pytest.skip("kernel not available")
-
-    case = make_case(device="cpu", seed=0)
-
-    reference_output = reference_step(case)
+    case = energy_minimization_cases[42]
+    reference_output = energy_minimization_ref_outputs[42]
     kernel_output = kernel_step(case)
 
-    assert_parity(reference_output, kernel_output, SPEC.parity)
+    assert_parity(reference_output, kernel_output, spec.parity)
 
 
-def test_kernel_parity_different_seeds():
+@pytest.mark.skipif(not is_available(), reason="kernel not available")
+def test_kernel_parity_different_seeds(
+    energy_minimization_kernel_warmup: None,
+    energy_minimization_cases: dict,
+    energy_minimization_ref_outputs: dict,
+):
     """Test kernel parity with different seeds."""
-    if not is_available():
-        pytest.skip("kernel not available")
-
-    for seed in [1, 2, 42]:
-        case = make_case(device="cpu", seed=seed)
-
-        reference_output = reference_step(case)
+    for seed in [0, 1, 2, 42]:
+        case = energy_minimization_cases[seed]
+        reference_output = energy_minimization_ref_outputs[seed]
         kernel_output = kernel_step(case)
 
-        assert_parity(reference_output, kernel_output, SPEC.parity)
+        assert_parity(reference_output, kernel_output, spec.parity)

@@ -31,6 +31,10 @@ import pytest
 import torch
 from torch import nn
 
+# Enable TF32 on Ampere+ for faster matmul (D2: TF32 + determinism)
+# This is set before any matmul operations occur
+torch.set_float32_matmul_precision("high")
+
 # Configure logging for tests
 logging.basicConfig(
     level=logging.INFO,

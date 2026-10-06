@@ -1315,6 +1315,13 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             self._velocity = iterate.value[1]
 
         def _observe(step: int) -> bool:
+            # NaN/Inf guard (D2)
+            for a in iterate.value[0]:
+                if not torch.isfinite(a).all():
+                    raise RuntimeError(
+                        f"NaN/Inf detected in activations at step {step} "
+                        f"(energy_minimization settle)"
+                    )
             self._track_free_energy_and_check_convergence(
                 iterate.value[0], geometry, step, previous.value, on_step
             )
@@ -1369,6 +1376,21 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             iterate.value = new_acts
 
         def _observe(step: int) -> bool:
+            # NaN/Inf guard (D2)
+            acts = iterate.value
+            if isinstance(acts, list):
+                for a in acts:
+                    if not torch.isfinite(a).all():
+                        raise RuntimeError(
+                            f"NaN/Inf detected in activations at step {step} "
+                            f"(energy_minimization eager settle)"
+                        )
+            else:
+                if not torch.isfinite(acts).all():
+                    raise RuntimeError(
+                        f"NaN/Inf detected in activations at step {step} "
+                        f"(energy_minimization eager settle)"
+                    )
             self._track_free_energy_and_check_convergence(
                 iterate.value, geometry, step, previous.value, on_step
             )
@@ -1540,6 +1562,12 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                     "weight", torch.eye(iterate.value.shape[-1], device=h.device)
                 ),
             )
+            # NaN/Inf guard (D2)
+            if not torch.isfinite(iterate.value).all():
+                raise RuntimeError(
+                    f"NaN/Inf detected in activations at step {step} "
+                    f"(predictive_settling recurrent settle)"
+                )
             self._track_free_energy_recurrent(error, step, on_step)
 
         self._settle_steps_used = run_settle_loop(
@@ -1714,6 +1742,13 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
             if on_step is not None:
                 on_step(step, step_energy)
+            # NaN/Inf guard (D2)
+            for a in new_acts:
+                if not torch.isfinite(a).all():
+                    raise RuntimeError(
+                        f"NaN/Inf detected in activations at step {step} "
+                        f"(predictive_settling layered settle)"
+                    )
             iterate.value = new_acts
 
         self._settle_steps_used = run_settle_loop(
@@ -1748,6 +1783,13 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
         def _observe(step: int) -> bool:
             new_acts = iterate.value
+            # NaN/Inf guard (D2)
+            for a in new_acts:
+                if not torch.isfinite(a).all():
+                    raise RuntimeError(
+                        f"NaN/Inf detected in activations at step {step} "
+                        f"(predictive_settling tile settle)"
+                    )
             if self._free_energy_history is not None or on_step is not None:
                 # Free energy in predictive coding = squared prediction errors
                 fe = 0.0
@@ -2437,6 +2479,19 @@ class PCALMDynamics(_SettleTelemetry):
 
         def _observe(step: int) -> bool:
             acts_, dual_vars_, constraints = iterate.value
+            # NaN/Inf guard (D2)
+            for a in acts_:
+                if not torch.isfinite(a).all():
+                    raise RuntimeError(
+                        f"NaN/Inf detected in activations at step {step} "
+                        f"(pc_alm settle)"
+                    )
+            for lam in dual_vars_:
+                if not torch.isfinite(lam).all():
+                    raise RuntimeError(
+                        f"NaN/Inf detected in dual variables at step {step} "
+                        f"(pc_alm settle)"
+                    )
             self._track_augmented_lagrangian_and_check_convergence(
                 acts_, dual_vars_, constraints, layered, op, current_rho, step, on_step
             )

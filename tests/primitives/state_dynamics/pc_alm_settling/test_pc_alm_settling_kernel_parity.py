@@ -4,48 +4,38 @@ import pytest
 
 from computronium.acceleration.parity import assert_parity
 from computronium.acceleration.registry import get
-from computronium.primitives.state_dynamics.pc_alm_settling import (
-    kernel_step,
-    make_case,
-    reference_step,
-)
+from computronium.primitives.state_dynamics.pc_alm_settling import kernel
 
 
-def test_kernel_parity():
+@pytest.mark.skipif("kernel" not in get("primitive.state_dynamics.pc_alm_settling").supported_backends, reason="no kernel backend")
+@pytest.mark.skipif(not kernel.is_available(), reason="kernel not available")
+def test_kernel_parity(
+    pc_alm_kernel_warmup: None,
+    pc_alm_cases: dict,
+    pc_alm_ref_outputs: dict,
+):
     """Test that kernel output matches reference within tolerance."""
     spec = get("primitive.state_dynamics.pc_alm_settling")
-
-    if "kernel" not in spec.supported_backends:
-        pytest.skip("no kernel backend")
-
-    # Import kernel module to check availability
-    from computronium.primitives.state_dynamics.pc_alm_settling import kernel
-
-    if not kernel.is_available():
-        pytest.skip("kernel not available")
-
-    case = make_case(device="cpu", seed=0)
-    reference_output = reference_step(case)
-    kernel_output = kernel_step(case)
+    case = pc_alm_cases[0]
+    reference_output = pc_alm_ref_outputs[0]
+    kernel_output = kernel.step(case)
 
     assert_parity(reference_output, kernel_output, spec.parity)
 
 
-def test_kernel_parity_different_seeds():
+@pytest.mark.skipif("kernel" not in get("primitive.state_dynamics.pc_alm_settling").supported_backends, reason="no kernel backend")
+@pytest.mark.skipif(not kernel.is_available(), reason="kernel not available")
+def test_kernel_parity_different_seeds(
+    pc_alm_kernel_warmup: None,
+    pc_alm_cases: dict,
+    pc_alm_ref_outputs: dict,
+):
     """Test kernel parity with multiple seeds."""
     spec = get("primitive.state_dynamics.pc_alm_settling")
 
-    if "kernel" not in spec.supported_backends:
-        pytest.skip("no kernel backend")
-
-    from computronium.primitives.state_dynamics.pc_alm_settling import kernel
-
-    if not kernel.is_available():
-        pytest.skip("kernel not available")
-
     for seed in [0, 1, 2, 42]:
-        case = make_case(device="cpu", seed=seed)
-        reference_output = reference_step(case)
-        kernel_output = kernel_step(case)
+        case = pc_alm_cases[seed]
+        reference_output = pc_alm_ref_outputs[seed]
+        kernel_output = kernel.step(case)
 
         assert_parity(reference_output, kernel_output, spec.parity)
