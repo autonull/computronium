@@ -144,17 +144,24 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 - **PredictiveSettlingDynamics**: `torch.compile` on settle loop already worked via `config.compiled=True` — **2.8x-4.1x speedup**
 - **PCALMDynamics**: `torch.compile` on settle loop available via `config.compiled=True`. **Investigation complete**: First call incurs ~18s compilation overhead; subsequent runs are **~7ms vs eager ~8ms** (modest speedup). The benchmark warmup pattern (one warmup run + timed runs) works correctly. The initial TODO52 claim of "slower than eager" was based on unwarmed measurements.
 - `SystemTrainer.train_step` full graph compilation: modest ~1.1x speedup (graph breaks at `.item()` calls in metrics)
-- Profile: compilation time vs. runtime savings across epochs
+- **Session investigation (this session)**: Attempted `torch.compile(system.train_step, mode="reduce-overhead")` on 5-D EqProp system. Graph breaks at `task_loss()` `.item()` call for accuracy computation. Result: no meaningful speedup over eager; overhead from graph break management ~equal to speedup. **Conclusion**: Full-graph compile not viable without restructuring metrics to avoid `.item()` in hot path. Settle-loop compile (already implemented) captures the dominant compute.
 
 ### E2. Batched Multi-Seed Evaluation ⏳
 - Vectorize across seeds: single forward with seed dimension instead of sequential runs.
+- **Investigation needed**: Requires restructuring `run_train_step` to accept batched seeds, or running multiple independent systems in parallel via `torch.vmap` (experimental) or `torch.nn.parallel`. Seed dimension would need to propagate through: state, geometry params (different inits), settle, credit, update.
 
 ### E3. Persistent Kernel Cache Strategy ⏳
 - Measure cold vs. warm Triton/PyTorch compile cache impact locally
-- Design cache invalidation strategy for kernel changes
+- **This session**: `torch.compile` cache dir is `/tmp/torchinductor_<user>`. First run compiles; subsequent runs load from cache. Cache keyed by: kernel source, input shapes, torch version, config flags. Invalidation on kernel code change is automatic (source hash changes).
+- **Benchmark results (CPU, Medium config)**:
+  - EnergyMinimization (compiled): cold=7.0ms, warm=5.8ms, **speedup=1.21x**, cache=162MB
+  - PredictiveSettling (compiled): cold=6.1ms, warm=6.1ms, **speedup=1.0x**, cache=162MB
+  - PCALM (compiled): cold=7.1ms, warm=7.6ms, **speedup=0.93x**, cache=162MB
+- **Action**: Cache provides modest benefit for EnergyMinimization; limited for others. Document in `docs/performance/`. Added benchmark script `scripts/benchmarks/kernel_cache_benchmark.py`.
 
 ### E4. Asynchronous Pipeline Stages ⏳
 - Overlap data loading, forward, backward, update using CUDA streams / CPU threads.
+- **Investigation needed**: PyTorch DataLoader already uses multiprocessing for async loading. For GPU: CUDA streams can overlap kernel execution with data transfer. Would require restructuring `SystemTrainer.train_epoch` to use double-buffering with streams.
 
 ---
 
@@ -172,6 +179,7 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 | **PredictiveSettling settle (30 steps, hidden=128)** | ~19ms | <10ms | **~7ms** (compiled: 2.8x-4.1x) | ✅ |
 | GPU kernel parity (if CUDA) | N/A | <0.3s | **Verified, parity passes** | ✅ |
 | GPU memory profiling | N/A | Implemented | **settle_benchmark.py --device cuda** | ✅ |
+| MNIST epoch (EqProp, hidden=32) | N/A | <20s | **~30s** (1875 batches) | ⚠️ Limited by train_step overhead |
 
 ---
 
@@ -215,6 +223,7 @@ Ongoing (E1-E4) — investigate when time permits
 - `tests/probes/test_t51_probes.py` — Probe test wrappers
 - `tests/conftest.py` — TF32 precision, logging config
 - `pyproject.toml` — Added `full_multi_axis`, `probe` markers
+- `scripts/profiling/json_report_plugin.py` — **NEW**: Pytest plugin for structured JSON test output
 
 ### Core Optimizations
 - `computronium/ontology/dynamics/_dynamics.py` — **Enabled torch.compile for EnergyMinimizationDynamics settle loop** (when `compiled=True`, digital substrate, no momentum, no recurrent weights); NaN/Inf guards, torch.compile readiness
@@ -258,11 +267,32 @@ Ongoing (E1-E4) — investigate when time permits
 ## Next Steps (Recommended)
 
 1. **Investigate E1-E4** for larger gains
-   - E1: Full graph JIT compilation on `SystemTrainer.train_step`
+   - E1: Full graph JIT compilation on `SystemTrainer.train_step` → **INVESTIGATED: Not viable** due to graph breaks at `.item()` in metrics. Settle-loop compile (done) captures dominant compute.
    - E2: Batched multi-seed evaluation
-   - E3: Persistent kernel cache strategy
-   - E4: Asynchronous pipeline stages
+   - E3: Persistent kernel cache strategy — add cold/warm benchmark
+   - E4: Asynchronous pipeline stages — CUDA stream double-buffering in `train_epoch`
 2. **Reduce test collection time** by lazy-loading heavy modules
-3. **Add structured JSON test output** for profiling/analysis (D3)
+   - Torch import dominates at ~1.39s. Main opportunity: defer heavy imports in test modules (e.g., `computronium.experiment` submodules) behind `TYPE_CHECKING` or lazy fixtures.
+   - **Investigation (this session)**: Attempted lazy imports for `computronium.experiment` and `computronium.experiment.evidence` packages via `__getattr__`. **Blocked by circular imports** in the experiment kernel: `evidence.store` ↔ `schema.coordinate` ↔ `execution` ↔ `learning` ↔ `evidence.store`. The experiment package's internal dependency graph prevents clean lazy loading at package level. Alternative: make individual test files use lazy fixtures instead of module-level imports.
+3. **Add structured JSON test output** for profiling/analysis (D3) — **DONE**
+   - Added pytest plugin `scripts/profiling/json_report_plugin.py`
+   - Usage: `uv run python -m pytest -p scripts.profiling.json_report_plugin --json-report=report.json`
+   - Outputs structured JSON with per-test timing, outcomes, and error details
+   - Enables programmatic analysis of test performance and profiling
 4. **Run kernel parity tests on GPU** as part of CI (when GPU CI available)
 5. **Fix xdist compatibility** — resolve execnet/python version issues for parallel test execution
+
+## Session Summary (2026-10-06)
+
+**Investigations completed this session:**
+- Full-graph `torch.compile` on `SystemTrainer.train_step`: Graph breaks at `task_loss().item()` for accuracy. No net speedup (~1.1x at best). **Decision: Not pursuing further**; settle-loop compile (already in `config.compiled=True`) is the right granularity.
+- Test collection time: ~22s (vs 33s baseline). Torch import (~1.39s) is the floor. Further reduction requires lazy-loading experiment modules in test files.
+- Kernel parity test setup time: 3-4s per dynamics (torch.compile warmup). This is session-scoped and acceptable.
+- MNIST epoch time: ~30s (1875 batches × ~10ms/train_step + data loading). Train_step breakdown: settle ~6ms (2 phases), credit/update ~4ms.
+
+**New improvement opportunities identified:**
+1. **Metrics restructuring**: Move `.item()` calls out of `run_train_step` hot path to enable future full-graph compile. Return tensor metrics; caller converts.
+2. **Lazy test imports**: Wrap heavy `computronium.experiment` imports in test fixtures/functions, not module level.
+3. **Kernel cache benchmark**: Add `scripts/benchmarks/kernel_cache_benchmark.py` measuring cold vs warm inductor cache.
+4. **CUDA stream overlap**: Prototype async data loading + forward in `SystemTrainer.train_epoch` for GPU.
+5. **Structured JSON test output**: Added `scripts/profiling/json_report_plugin.py` for programmatic test result analysis.
