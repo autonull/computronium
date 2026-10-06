@@ -137,23 +137,124 @@ class AxisPrimitive(Protocol):
                 registry.register(cls)  # type: ignore[arg-type]
 
 
-# Global axis registries - one per structural axis
-AXES_REGISTRIES: dict[StructuralAxis, Registry[AxisSpec]] = {
+class _LazyRegistryDict(dict):
+    """Lazy dict that seeds registries on first access."""
+
+    _seeded = False
+    _seeding = False
+
+    def _ensure_seeded(self) -> None:
+        if not self._seeded and not self._seeding:
+            self._seeding = True
+            try:
+                from computronium.experiment.schema.seed_registries import seed_all_registries
+                seed_all_registries()
+                self._seeded = True
+            finally:
+                self._seeding = False
+
+    def __getitem__(self, key):
+        self._ensure_seeded()
+        return super().__getitem__(key)
+
+    def __contains__(self, key):
+        self._ensure_seeded()
+        return super().__contains__(key)
+
+    def get(self, key, default=None):
+        self._ensure_seeded()
+        return super().get(key, default)
+
+    def keys(self):
+        self._ensure_seeded()
+        return super().keys()
+
+    def values(self):
+        self._ensure_seeded()
+        return super().values()
+
+    def items(self):
+        self._ensure_seeded()
+        return super().items()
+
+    def __iter__(self):
+        self._ensure_seeded()
+        return super().__iter__()
+
+    def __len__(self):
+        self._ensure_seeded()
+        return super().__len__()
+
+    def __bool__(self):
+        self._ensure_seeded()
+        return super().__bool__()
+
+
+# Global axis registries - one per structural axis (lazy seeding)
+_axes_registries = _LazyRegistryDict({
     StructuralAxis.SUBSTRATE: Registry[AxisSpec](),
     StructuralAxis.GEOMETRY: Registry[AxisSpec](),
     StructuralAxis.DYNAMICS: Registry[AxisSpec](),
     StructuralAxis.PLASTICITY: Registry[AxisSpec](),
     StructuralAxis.CREDIT: Registry[AxisSpec](),
     StructuralAxis.UPDATE: Registry[AxisSpec](),
-}
+})
 
-# Convenience access
-SUBSTRATE_REGISTRY = AXES_REGISTRIES[StructuralAxis.SUBSTRATE]
-GEOMETRY_REGISTRY = AXES_REGISTRIES[StructuralAxis.GEOMETRY]
-DYNAMICS_REGISTRY = AXES_REGISTRIES[StructuralAxis.DYNAMICS]
-PLASTICITY_REGISTRY = AXES_REGISTRIES[StructuralAxis.PLASTICITY]
-CREDIT_REGISTRY = AXES_REGISTRIES[StructuralAxis.CREDIT]
-UPDATE_REGISTRY = AXES_REGISTRIES[StructuralAxis.UPDATE]
+AXES_REGISTRIES = _axes_registries
+
+# Convenience access - lazy proxies to avoid triggering seeding at module level
+class _LazyRegistryProxy:
+    """Lazy proxy for a registry that resolves on first attribute access."""
+
+    def __init__(self, axis: StructuralAxis):
+        self._axis = axis
+        self._registry: Registry[AxisSpec] | None = None
+
+    def _resolve(self) -> Registry[AxisSpec]:
+        if self._registry is None:
+            self._registry = AXES_REGISTRIES[self._axis]
+        return self._registry
+
+    def __getattr__(self, name: str):
+        return getattr(self._resolve(), name)
+
+    def __call__(self):
+        return self._resolve()
+
+    def __contains__(self, key):
+        return key in self._resolve()
+
+    def __getitem__(self, key):
+        return self._resolve()[key]
+
+    def get(self, key, default=None):
+        return self._resolve().get(key, default)
+
+    def keys(self):
+        return self._resolve().keys()
+
+    def values(self):
+        return self._resolve().values()
+
+    def items(self):
+        return self._resolve().items()
+
+    def __iter__(self):
+        return iter(self._resolve())
+
+    def __len__(self):
+        return len(self._resolve())
+
+    def __bool__(self):
+        return bool(self._resolve())
+
+
+SUBSTRATE_REGISTRY = _LazyRegistryProxy(StructuralAxis.SUBSTRATE)
+GEOMETRY_REGISTRY = _LazyRegistryProxy(StructuralAxis.GEOMETRY)
+DYNAMICS_REGISTRY = _LazyRegistryProxy(StructuralAxis.DYNAMICS)
+PLASTICITY_REGISTRY = _LazyRegistryProxy(StructuralAxis.PLASTICITY)
+CREDIT_REGISTRY = _LazyRegistryProxy(StructuralAxis.CREDIT)
+UPDATE_REGISTRY = _LazyRegistryProxy(StructuralAxis.UPDATE)
 
 
 def get_registry(kind: StructuralAxis) -> Registry[AxisSpec]:

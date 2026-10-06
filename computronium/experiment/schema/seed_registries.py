@@ -2999,9 +2999,6 @@ def seed_all_registries() -> None:
         register_capability(cap)
 
 
-seed_all_registries()
-
-
 def verify_registry_completeness() -> dict[str, int]:
     """Verify all registries have expected counts.
 
