@@ -49,7 +49,6 @@ from computronium.experiment.surface.report import (
     export_to_parquet,
     generate_run_report,
 )
-from computronium.visualization.gallery import render_gallery
 
 logger = get_logger()
 
@@ -1014,6 +1013,8 @@ def _print_detailed_status(summary: RunSummary) -> None:
 
 def _cmd_gallery(args: argparse.Namespace) -> int:
     """Render gallery figures from demo records."""
+    from computronium.visualization.gallery import render_gallery
+
     records_dir = Path(args.records_dir)
     output_dir = Path(args.output_dir)
 

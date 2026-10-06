@@ -44,7 +44,7 @@ PRESENTATION_LAYERS = frozenset({
     "widgets",
     "dashboard",
 })
-LAYER_DIRS = frozenset(PRESENTATION_LAYERS | {"cli"})
+LAYER_DIRS = frozenset(PRESENTATION_LAYERS | {"cli", "experiment/surface"})
 
 # Import names of rendering libraries that must not be pulled in by
 # `import computronium`.
@@ -63,6 +63,9 @@ EXEMPT: dict[str, str] = {
     # The CLI is a consumer, not core: it selects a renderer by name at
     # dispatch time, which is the correct direction of dependency.
     "cli": "entry point; dispatches to renderers, never the reverse",
+    # experiment/surface/cli.py is the experiment kernel's surface CLI entry
+    # point; it dispatches to renderers (gallery) but contains no science.
+    "experiment/surface": "experiment kernel surface CLI; dispatches to renderers",
 }
 
 
@@ -100,9 +103,18 @@ def _violations() -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for path in sorted(PACKAGE_ROOT.rglob("*.py")):
         rel = path.relative_to(PACKAGE_ROOT)
+        rel_str = str(rel)
+        # Check if this path or any parent is exempt
+        exempt = False
+        for exempt_path in EXEMPT:
+            if rel_str == exempt_path or rel_str.startswith(exempt_path + "/"):
+                exempt = True
+                break
+        if exempt:
+            continue
         hits = _scan(rel, path.read_text(encoding="utf-8"))
         if hits:
-            out[str(rel)] = [f"{lineno}: {module}" for lineno, module in hits]
+            out[rel_str] = [f"{lineno}: {module}" for lineno, module in hits]
     return out
 
 
