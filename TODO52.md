@@ -139,8 +139,11 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 
 ## Part E — Larger Optimizations (Investigate, Deferred) ⏳
 
-### E1. Full Graph JIT Compilation ⏳
-- `torch.compile` on `SystemTrainer.train_step` (full graph capture)
+### E1. Full Graph JIT Compilation — PARTIAL ✅
+- **EnergyMinimizationDynamics**: `torch.compile` on settle loop enabled via `config.compiled=True` — **6.7x-7.3x speedup** on FeedforwardGeometry (digital substrate, no momentum, no recurrent weights)
+- **PredictiveSettlingDynamics**: `torch.compile` on settle loop already worked via `config.compiled=True` — **2.8x-4.1x speedup**
+- **PCALMDynamics**: `torch.compile` on settle loop available via `config.compiled=True` but **slower than eager** (0.32x-0.97x) — needs investigation
+- `SystemTrainer.train_step` full graph compilation: modest ~1.1x speedup (graph breaks at `.item()` calls in metrics)
 - Profile: compilation time vs. runtime savings across epochs
 
 ### E2. Batched Multi-Seed Evaluation ⏳
@@ -165,6 +168,8 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 | Kernel parity (energy_minimization) | 2.6s | <0.5s | **0.06s** | ✅ |
 | Test collection time | 33s | <10s | ~22s | ⚠️ Limited by torch import |
 | Settle loop (30 steps, hidden=128) | ~0.5s | <0.2s | **0.03s** (PredictiveSettling compiled) | ✅ |
+| **EnergyMinimization settle (30 steps, hidden=128)** | ~30ms | <10ms | **~4-7ms** (compiled: 6.7x-7.3x) | ✅ |
+| **PredictiveSettling settle (30 steps, hidden=128)** | ~19ms | <10ms | **~7ms** (compiled: 2.8x-4.1x) | ✅ |
 | GPU kernel parity (if CUDA) | N/A | <0.3s | **Verified, parity passes** | ✅ |
 | GPU memory profiling | N/A | Implemented | **settle_benchmark.py --device cuda** | ✅ |
 
@@ -212,7 +217,7 @@ Ongoing (E1-E4) — investigate when time permits
 - `pyproject.toml` — Added `full_multi_axis`, `probe` markers
 
 ### Core Optimizations
-- `computronium/ontology/dynamics/_dynamics.py` — NaN/Inf guards, torch.compile readiness
+- `computronium/ontology/dynamics/_dynamics.py` — **Enabled torch.compile for EnergyMinimizationDynamics settle loop** (when `compiled=True`, digital substrate, no momentum, no recurrent weights); NaN/Inf guards, torch.compile readiness
 - `computronium/ontology/dynamics/_settle_driver.py` — check_finite parameter
 - `computronium/experiment/execution/evaluate.py` — svd_lowrank for large matrices
 - `computronium/ontology/substrate/_substrate.py` — Pre-computed dtype, noise buffers
@@ -221,6 +226,7 @@ Ongoing (E1-E4) — investigate when time permits
 ### Documentation & Benchmarks
 - `docs/performance/todo52_optimization_report.md` — Complete optimization report
 - `scripts/benchmarks/settle_benchmark.py` — Microbenchmark script (CPU + GPU with memory profiling)
+- `scripts/benchmarks/settle_benchmark_compiled.py` — Comprehensive compiled vs eager benchmark
 
 ---
 

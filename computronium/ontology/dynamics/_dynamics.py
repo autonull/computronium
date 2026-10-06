@@ -1207,12 +1207,21 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         use_checkpointing = self._determine_checkpointing(all_acts, geometry)
 
         # Determine if compiled path can be used
-        # Disabled for EnergyMinimizationDynamics: torch.compile introduces
-        # numerical differences (non-bitwise-equal to eager) due to fused
-        # matmul+activation+add reordering. The compiled path was never
-        # validated to match eager (test added in 9bbb043c but failed there).
-        # PredictiveSettlingDynamics compiled path works (purely linear loop).
-        use_compiled = False
+        # Enabled for EnergyMinimizationDynamics when:
+        # - config.compiled is True
+        # - No momentum (compiled loop doesn't support momentum)
+        # - No recurrent weights (compiled loop doesn't support them)
+        # - Digital substrate (compiled loop uses raw matmul, not substrate operator)
+        # - Not using gradient checkpointing (mutually exclusive)
+        # - Not tracking free energy per iter (compiled loop runs full horizon)
+        use_compiled = (
+            self.config.compiled
+            and self.config.momentum == 0.0
+            and kernel.params.recurrent_weight is None
+            and type(substrate).__name__ == "DigitalSubstrate"
+            and not use_checkpointing
+            and not self.config.track_free_energy_per_iter
+        )
 
         return all_acts, kernel, beta, use_checkpointing, use_compiled
 
