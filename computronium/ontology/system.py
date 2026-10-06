@@ -601,11 +601,11 @@ class SystemConfig:
         """PC-ALM dynamics requires matching beta (dual LR scale)."""
         if self.dynamics.dynamics_type == "pc_alm":
             if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
-                logger.debug(
-                    "PC-ALM beta mismatch: dynamics.beta=%s "
-                    "!= credit.beta=%s. Dual LR scaling may be incorrect.",
-                    self.dynamics.beta,
-                    self.credit.beta,
+                warnings.warn(
+                    f"PC-ALM beta mismatch: dynamics.beta={self.dynamics.beta} "
+                    f"!= credit.beta={self.credit.beta}. Dual LR scaling may be incorrect.",
+                    UserWarning,
+                    stacklevel=2,
                 )
 
     # --- Substrate-Dynamics Validation Methods ---

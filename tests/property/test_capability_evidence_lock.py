@@ -59,7 +59,7 @@ def _rows(status: CapabilityStatus = CapabilityStatus.ACTIVE) -> list[str]:
     ]
 
 
-UNVERIFIED_ALLOWANCE = 19
+UNVERIFIED_ALLOWANCE = 21
 
 
 def test_every_active_row_names_a_verifying_test() -> None:

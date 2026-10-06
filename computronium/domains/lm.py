@@ -97,7 +97,8 @@ class LMTask(DomainTask):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Get a batch of (inputs, targets) for LM training.
 
-        Randomly samples subsequences from the data tensor.
+        Returns inputs [B, seq_len] and targets [B, seq_len] for autoregressive
+        next-token prediction at each position.
         """
         if not self._setup_done:
             self.setup()
@@ -110,7 +111,7 @@ class LMTask(DomainTask):
 
         idx = torch.randint(0, len(data) - self.seq_len - 1, (bsz,))
         x = torch.stack([data[i : i + self.seq_len] for i in idx]).to(self.device)
-        y = torch.stack([data[i + self.seq_len] for i in idx]).to(self.device)
+        y = torch.stack([data[i + 1 : i + 1 + self.seq_len] for i in idx]).to(self.device)
         return x, y
 
     def evaluate(
@@ -162,4 +163,8 @@ class LMTask(DomainTask):
     def compute_loss(
         self, outputs: torch.Tensor, targets: torch.Tensor
     ) -> torch.Tensor:
+        # For autoregressive LM: outputs (B, T, V) -> (B*T, V), targets (B, T) -> (B*T)
+        if outputs.dim() == 3:
+            outputs = outputs.reshape(-1, outputs.size(-1))
+            targets = targets.reshape(-1)
         return torch.nn.functional.cross_entropy(outputs, targets)

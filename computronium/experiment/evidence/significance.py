@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from computronium.validation.statistics import (
+from .statistics import (
     bootstrap_percentile_ci,
     cohens_dz,
     permutation_test_p,

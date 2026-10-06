@@ -114,8 +114,18 @@ class TestMEPKernelsEquivalence:
 
         from computronium.core.optimization.strategies.update import newton_schulz5
 
+        # Disable TF32 for reference to match Triton kernel precision (FP32)
+        old_tf32 = torch.backends.cuda.matmul.allow_tf32
+        old_cudnn_tf32 = torch.backends.cudnn.allow_tf32
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        try:
+            ref_out = newton_schulz5(W.clone(), steps=5)
+        finally:
+            torch.backends.cuda.matmul.allow_tf32 = old_tf32
+            torch.backends.cudnn.allow_tf32 = old_cudnn_tf32
+
         triton_out = MEP_TritonOps.muon_orthogonalize(W.clone(), ns_steps=5)
-        ref_out = newton_schulz5(W.clone(), steps=5)
 
         max_diff = (triton_out - ref_out).abs().max().item()
         rel_diff = max_diff / (ref_out.abs().max().item() + 1e-8)

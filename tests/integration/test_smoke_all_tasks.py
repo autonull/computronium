@@ -75,7 +75,27 @@ class TestSmokeAllTasks(unittest.TestCase):
             model = nn.Sequential(
                 nn.Linear(input_dim, 16), nn.ReLU(), nn.Linear(16, output_dim)
             )
-        else:  # LM
+        elif task_name == "char_ngram":
+            # CharNGramTask: single-step prediction (B, context_len) -> (B, vocab)
+            class SimpleNGram(nn.Module):
+                def __init__(self, vocab_size, context_len):
+                    super().__init__()
+                    self.emb = nn.Embedding(vocab_size, 16)
+                    self.head = nn.Linear(16 * context_len, vocab_size)
+
+                def forward(self, x):
+                    if x.dtype in [  # ruff: ignore[literal-membership]
+                        torch.float32,
+                        torch.float64,
+                        torch.float16,
+                        torch.bfloat16,
+                    ]:
+                        x = x.long()
+                    x = self.emb(x).flatten(1)  # (B, context_len * emb_dim)
+                    return self.head(x)  # (B, V)
+
+            model = SimpleNGram(output_dim, task.context_len)
+        else:  # LM (autoregressive: tiny_shakespeare)
             # LMTask input_dim is None (uses embeddings).
             # output_dim is vocab size.
             # Model expects (B, T).

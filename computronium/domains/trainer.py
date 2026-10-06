@@ -79,6 +79,18 @@ def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
     return nn.CrossEntropyLoss()
 
 
+def _compute_task_loss(task: TaskProtocol, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Compute loss using task's custom logic if available, otherwise use resolved loss.
+
+    LM tasks need special handling: they output (B, T, V) and target is (B, T),
+    requiring reshape before cross_entropy.
+    """
+    if hasattr(task, "compute_loss"):
+        return task.compute_loss(logits, targets)
+    loss_fn = _resolve_task_loss(task)
+    return loss_fn(logits, targets)
+
+
 def _accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
     """Classification accuracy; 0.0 for non-index targets (regression)."""
     if y.dtype not in (torch.long, torch.int, torch.int32, torch.int64):  # ruff: ignore[literal-membership]
@@ -215,7 +227,7 @@ class _TaskTrainer:
 
                 self.optimizer.zero_grad()
                 logits = self.model(x)
-                loss = self._loss(logits, y)
+                loss = _compute_task_loss(self.task, logits, y)
                 loss = self.safety_wrapper.check_loss(loss)
                 loss.backward()
                 self.safety_wrapper.clip_grad_norm(
@@ -247,6 +259,47 @@ class _TaskTrainer:
 
         return history
 
+    def train_epoch(self) -> dict[str, float]:
+        """Run a single training epoch and return metrics."""
+        self.task.setup()
+        self.model.train()
+        epoch_metrics: dict[str, float] = {}
+
+        for _ in range(self.batches_per_epoch):
+            x, y = self.task.get_batch("train", self.batch_size)
+            x, y = x.to(self.device), y.to(self.device)
+
+            self.optimizer.zero_grad()
+            logits = self.model(x)
+            loss = _compute_task_loss(self.task, logits, y)
+            loss = self.safety_wrapper.check_loss(loss)
+            loss.backward()
+            self.safety_wrapper.clip_grad_norm(
+                self.model.parameters(), self.grad_clip
+            )
+            self.optimizer.step()
+
+            # Accumulate metrics
+            epoch_metrics.setdefault("train_loss", 0.0)
+            epoch_metrics["train_loss"] += loss.item()
+
+        # Average training metrics
+        for k in list(epoch_metrics):
+            if k.startswith("train_"):
+                epoch_metrics[k] /= self.batches_per_epoch
+
+        # Compatibility: also expose as "loss" for tests expecting that key
+        if "train_loss" in epoch_metrics:
+            epoch_metrics["loss"] = epoch_metrics["train_loss"]
+
+        if self.scheduler:
+            self.scheduler.step()
+
+        if self.tracker:
+            self.tracker.log_metrics(epoch_metrics)
+
+        return epoch_metrics
+
     def _validate(self) -> dict[str, float]:
         """Run validation batches."""
         self.model.eval()
@@ -260,7 +313,7 @@ class _TaskTrainer:
                 x, y = self.task.get_batch("val", self.batch_size)
                 x, y = x.to(self.device), y.to(self.device)
                 logits = self.model(x)
-                loss = self._loss(logits, y)
+                loss = _compute_task_loss(self.task, logits, y)
                 total_loss += loss.item()
                 metrics.setdefault("val_acc", 0.0)
                 metrics["val_acc"] += _accuracy(logits, y)
