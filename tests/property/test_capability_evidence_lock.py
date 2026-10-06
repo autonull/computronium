@@ -28,9 +28,9 @@ from computronium.experiment.schema.registries import (
 from computronium.experiment.surface.evidence import (
     INDEX,
     SourceIndex,
-    TestEvidence,
     evidence_for,
 )
+from computronium.experiment.surface.evidence import _TestEvidence as TestEvidence
 
 # Shape-only rows today: each names a test that asserts without calling a kernel
 # entry point (an enum membership check, a protocol-shape declaration). They are

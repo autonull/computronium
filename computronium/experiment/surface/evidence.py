@@ -41,7 +41,7 @@ _SKIP = frozenset({
 
 
 @dataclass(frozen=True, slots=True)
-class TestEvidence:
+class _TestEvidence:
     """What one verifying test proves about the capability it backs."""
 
     exists: bool
@@ -105,16 +105,25 @@ class SourceIndex:
             )
         return frozenset(roots)
 
+    @cached_property
+    def _caller_index(self) -> dict[str, set[str]]:
+        """Inverted index: callee name -> set of modules that call it."""
+        from collections import defaultdict
+
+        caller_index: dict[str, set[str]] = defaultdict(set)
+        name_pattern = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(")
+        for _, module, text in self._sources:
+            for match in name_pattern.finditer(text):
+                callee = match.group(1)
+                caller_index[callee].add(module)
+        return dict(caller_index)
+
     def external_call_sites(self, qualified: str) -> int:
         """Files outside the defining module that call ``qualified``."""
         name = qualified.rsplit(".", 1)[-1]
         defining = qualified.removesuffix(f".{name}")
-        pattern = re.compile(rf"\b{re.escape(name)}\s*\(")
-        return sum(
-            1
-            for _, module, text in self._sources
-            if module != defining and pattern.search(text)
-        )
+        callers = self._caller_index.get(name, set())
+        return sum(1 for module in callers if module != defining)
 
 
 INDEX = SourceIndex()
@@ -236,16 +245,16 @@ def _definition(tree: ast.Module, name: str) -> ast.AST | None:
 
 def evidence_for(
     verifying_test: str | None, index: SourceIndex = INDEX
-) -> TestEvidence:
+) -> _TestEvidence:
     """Judge one ``verifying_test`` node id: mechanism evidence or a name check."""
     located = _locate(verifying_test or "")
     if located is None:
-        return TestEvidence(False, False, None, 0)
+        return _TestEvidence(False, False, None, 0)
     path, name = located
     tree = ast.parse(path.read_text())
     bodies = _definitions(tree, name)
     if not bodies:
-        return TestEvidence(False, False, None, 0)
+        return _TestEvidence(False, False, None, 0)
     aliases = _kernel_aliases(tree, index.kernel_roots, path)
     fixtures = _fixtures(tree)
     best: tuple[int, str] | None = None
@@ -266,7 +275,7 @@ def evidence_for(
                 sites = index.external_call_sites(callee)
                 if best is None or sites > best[0]:
                     best = (sites, callee)
-    return TestEvidence(
+    return _TestEvidence(
         exists=True,
         asserts=asserts,
         entry_point=best[1] if best else None,
@@ -274,4 +283,4 @@ def evidence_for(
     )
 
 
-__all__ = ["INDEX", "SourceIndex", "TestEvidence", "evidence_for"]
+__all__ = ["INDEX", "SourceIndex", "evidence_for"]
