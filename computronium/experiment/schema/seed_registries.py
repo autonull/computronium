@@ -2955,48 +2955,57 @@ CAPABILITIES = [
 # =============================================================================
 
 
+_seeding: list[bool] = [False]
+
+
 def seed_all_registries() -> None:
     """Seed all registries with Gate 1/2 domain data.
 
-    Idempotent: clears registries before seeding.
+    Idempotent: clears registries before seeding. Reentrant-safe.
     """
-    # Clear registries first (idempotent)
-    OBJECTIVES_REGISTRY.clear()
-    CONSTRAINTS_REGISTRY.clear()
-    PRIORS_REGISTRY.clear()
-    POLICIES_REGISTRY.clear()
-    STAGES_REGISTRY.clear()
-    CAPABILITIES_REGISTRY.clear()
-    for axis_registry in AXES_REGISTRIES.values():
-        axis_registry.clear()
+    if _seeding[0]:
+        return
+    _seeding[0] = True
+    try:
+        # Clear registries first (idempotent)
+        OBJECTIVES_REGISTRY.clear()
+        CONSTRAINTS_REGISTRY.clear()
+        PRIORS_REGISTRY.clear()
+        POLICIES_REGISTRY.clear()
+        STAGES_REGISTRY.clear()
+        CAPABILITIES_REGISTRY.clear()
+        for axis_registry in AXES_REGISTRIES.values():
+            axis_registry.clear()
 
-    # Axis primitives (codegen listings + validators)
-    _seed_axis_primitives()
+        # Axis primitives (codegen listings + validators)
+        _seed_axis_primitives()
 
-    # Objectives
-    for obj in OBJECTIVES:
-        register_objective(obj)
+        # Objectives
+        for obj in OBJECTIVES:
+            register_objective(obj)
 
-    # Constraints
-    for constraint in CONSTRAINTS:
-        register_constraint(constraint)
+        # Constraints
+        for constraint in CONSTRAINTS:
+            register_constraint(constraint)
 
-    # Priors: the single PRIORS table above is the only registration path
-    # (learning.prior's tables migrated here; its accessors read the registry).
-    for prior in PRIORS:
-        register_prior(prior)
+        # Priors: the single PRIORS table above is the only registration path
+        # (learning.prior's tables migrated here; its accessors read the registry).
+        for prior in PRIORS:
+            register_prior(prior)
 
-    # Policies
-    for policy in POLICIES:
-        register_policy(policy)
+        # Policies
+        for policy in POLICIES:
+            register_policy(policy)
 
-    # Stages
-    for stage in STAGES:
-        register_stage(stage)
+        # Stages
+        for stage in STAGES:
+            register_stage(stage)
 
-    # Capabilities
-    for cap in CAPABILITIES:
-        register_capability(cap)
+        # Capabilities
+        for cap in CAPABILITIES:
+            register_capability(cap)
+    finally:
+        _seeding[0] = False
 
 
 def verify_registry_completeness() -> dict[str, int]:

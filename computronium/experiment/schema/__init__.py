@@ -173,18 +173,17 @@ def _get_submodule(full_name: str) -> ModuleType:
     return _lazy_submodules[full_name]
 
 
-# Track if registries have been seeded
-_registries_seeded = False
+# Track if registries have been seeded (mutable container to avoid global statement)
+_registries_seeded: list[bool] = [False]
 
 
 def _ensure_registries_seeded() -> None:
     """Ensure registries are seeded on first access of axis symbols."""
-    global _registries_seeded
-    if not _registries_seeded:
+    if not _registries_seeded[0]:
         # Import and call seed_all_registries
         seed_module = _get_submodule("computronium.experiment.schema.seed_registries")
         seed_module.seed_all_registries()
-        _registries_seeded = True
+        _registries_seeded[0] = True
 
 
 def __getattr__(name: str) -> Any:

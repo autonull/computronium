@@ -312,6 +312,9 @@ class PipelineRunner:
             self._stages,
         )
 
+        # Load already-measured keys for resume support
+        self._resume_completed_measurements()
+
         # Build SearchSpace from RunSpec
         self._state.search_space = self._build_search_space()
 
@@ -451,9 +454,9 @@ class PipelineRunner:
         """
         match stage_id:
             case StageId.S3_SCHEDULE:
-                self._state.pending_proposals.extend(fragment.proposals)
+                self._state.pending_proposals = fragment.proposals
             case StageId.S10_DECIDE:
-                self._state.pending_proposals.extend(fragment.proposals)
+                self._state.pending_proposals = fragment.proposals
                 if fragment.decisions:
                     self._state.last_decision = fragment.decisions[-1]
             case StageId.S4_GATE:
