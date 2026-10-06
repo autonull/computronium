@@ -356,3 +356,29 @@ Ongoing (E1-E4) — investigate when time permits
 2. **Lazy test imports**: Migrate test files to use package-level lazy access
 3. **True multiprocessing multi-seed**: Requires top-level factory functions for pickling
 4. **torch.vmap vectorization**: Requires vmap-compatible credit/settle/update implementations
+
+---
+
+## Test Failure Fix Plan (Future Session)
+
+### 1. `test_gallery_provenance_lock.py::test_env_sha256_is_a_digest_of_this_environment`
+**Issue**: Gallery demo records have stale `env_sha256` values from a different environment.
+- Records: `d1_compose_6axis`, `d2_swap_credit`, `d6_substrate_swap`, `d8_geometry_swap`
+- Current env SHA: `20f99b925206...`, Record SHA: `35980a6179eb...`
+**Fix Options**:
+- Regenerate gallery records with current environment: `uv run pytest tests/integration/ -k demo --regenerate`
+- Or update `docs/figures/manifest.json` with current env SHA
+- Or relax the lock to warn instead of fail for env SHA drift
+
+### 2. `test_layering_lock.py::test_no_core_module_imports_a_renderer`
+**Issue**: `experiment/surface/cli.py:52` imports `computronium.visualization.gallery` (presentation layer)
+- Violation: Domain/experiment code must not import presentation/rendering code
+**Fix Options**:
+- Move gallery import inside the CLI command function that needs it (lazy import)
+- Extract the gallery-dependent logic to a separate presentation-layer module
+- Use `TYPE_CHECKING` guard if only used for type hints
+- File: `computronium/experiment/surface/cli.py` line 52
+
+### 3. Other Pre-existing Issues (from TODO51)
+- 344 pyright errors in core/ — deferred to hygiene pass
+- xdist execnet/python version compatibility issues — use `-n 0` for now
