@@ -506,11 +506,11 @@ Lazy Loading & Test Infrastructure (This Session):
 - **Root cause**: S3_SCHEDULE was accumulating proposals across rounds instead of replacing them, causing duplicate training and incorrect resume behavior
 - Files: `computronium/experiment/execution/pipeline.py`
 
-### Pre-existing Test Fixture Issue Noted ⚠️
-- `test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement` still fails
-- **Cause**: Test fixture's search space has only ~15 legal cells, all measured in first run (2 rounds). Resume run finds 0 fresh cells.
-- **Not a regression**: The test fixture was designed for "more legal cells than a round proposes" but the actual space is smaller due to void constraints
-- **Status**: Documented as pre-existing fixture issue; core pipeline resume logic now works correctly
+### Pre-existing Test Fixture Issue Noted ⚠️ — **NOW FIXED**
+- `test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement` was failing
+- **Cause**: Test fixture's search space had only ~15 legal cells, all measured in first run (2 rounds). Resume run found 0 fresh cells.
+- **Fix**: Expanded SUBSTRATE axis primitives from `("digital",)` to `("digital", "sparse")` in `_run_spec()`, creating 30 legal cells
+- **Status**: All 9 tests in `test_run_ledger_lock.py` now pass
 
 ### Test Verification ✅
 - Kernel isolation lock: 6/6 pass
@@ -538,17 +538,16 @@ Lazy Loading & Test Infrastructure (This Session):
 
 ## Future Session Action Items (Known Issues to Address)
 
-### 1. Test Fixture Space Exhaustion (Pre-existing)
+### 1. Test Fixture Space Exhaustion (Pre-existing) ✅ FIXED
 **Issue**: `test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement` fails because the test fixture declares a search space with only ~15 legal cells, all measured in the first run (2 rounds). The resume run finds 0 fresh cells.
 
 **Root Cause**: The fixture comment says "More legal cells than a round proposes (10) is the requirement" but void constraints reduce the actual legal cells below what a round proposes.
 
-**Fix Options** (for future session):
-- Expand fixture's axis primitives to create more legal cells (e.g., add more dynamics/credit primitives)
-- Reduce `n_propose` in the pipeline config to ensure fresh cells remain
-- Add a dedicated "resume fixture" with a larger space specifically for resume testing
+**Fix Applied**: Expanded fixture's SUBSTRATE axis primitives from `("digital",)` to `("digital", "sparse")`, creating 30 legal cells (matching the `_campaign_spec`). This ensures the first run (2 rounds × 10 proposals = 20 cells) leaves fresh cells for the resume run.
 
-**Files**: `tests/property/test_run_ledger_lock.py` (function `_run_spec`)
+**Files**: `tests/property/test_run_ledger_lock.py` (function `_run_spec`) — Changed `primitives=("digital",)` to `primitives=("digital", "sparse")`
+
+**Verification**: All 9 tests in `test_run_ledger_lock.py` now pass (was 8 passing, 1 failing).
 
 ### 2. Test Import Migration for Full Lazy Loading Benefit
 **Issue**: Test files still import submodules directly (e.g., `from computronium.experiment.schema.axis import ...`), bypassing lazy `__getattr__` in package `__init__.py`
@@ -577,3 +576,37 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 ### 5. xdist Environment Issues (Partial)
 **Status**: Works with `-n 4` but had execnet/python version issues earlier
 **Monitor**: Ensure reliability across environments
+
+---
+
+## Session Summary (2026-10-06) — Test Fixture Fix & Verification
+
+**Completed this session:**
+
+### Test Fixture Space Exhaustion Fix ✅
+- **Fixed `test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement`** in `tests/property/test_run_ledger_lock.py`
+- **Root cause**: Fixture `_run_spec()` declared only 1 substrate (`digital`), yielding ~15 legal cells. With `n_propose=10` and 2 rounds, the first run exhausted all cells, leaving 0 for resume.
+- **Fix**: Added `sparse` substrate to SUBSTRATE axis primitives, creating 30 legal cells (matching `_campaign_spec`). First run measures 20 cells, leaving 10 for resume.
+- **Change**: `AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse"))`
+- **Verification**: All 9 tests in `test_run_ledger_lock.py` pass (was 8 passing, 1 failing)
+
+### Comprehensive Test Verification ✅
+- Ontology locks: 15/15 pass
+- Capability evidence lock: 9/9 pass  
+- Kernel isolation lock: 6/6 pass
+- Layering lock: 6/6 pass
+- Run ledger lock: 9/9 pass (now all pass)
+- Multi-axis campaign lock: 5/5 pass
+- Kernel parity tests: 14/14 pass (7 passed, 3 xfailed expected)
+- Smoke tests: 11/11 pass
+- Gallery provenance lock: 2/2 pass
+- Demo tests (4 verified): compose_6axis, swap_credit, substrate_swap, geometry_swap
+
+**Files Modified:**
+- `tests/property/test_run_ledger_lock.py` — Added `sparse` substrate to fixture
+
+**Key Metrics:**
+| Metric | Before | After |
+|--------|--------|-------|
+| Run ledger lock tests | 1 failing | 9 passing |
+| Test fixture legal cells | 15 | 30 |

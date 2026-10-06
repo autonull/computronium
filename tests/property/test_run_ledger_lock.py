@@ -84,7 +84,7 @@ def _run_spec() -> RunSpec:
         param_budget=MEASURED_PARAM_BUDGET,
         batch_limit=MEASURED_BATCH_LIMIT,
         axes=(
-            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
+            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse")),
             AxisSelection(
                 axis=StructuralAxis.GEOMETRY,
                 primitives=("feedforward", "recurrent"),
