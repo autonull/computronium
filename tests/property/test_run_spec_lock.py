@@ -18,9 +18,13 @@ from pydantic import ValidationError
 from computronium.experiment.evidence.store import RecordStore, StoreConfig, StoreError
 from computronium.experiment.execution.pipeline import PipelineConfig
 from computronium.experiment.execution.stage import StageId
-from computronium.experiment.schema.axis import Domain, StructuralAxis
-from computronium.experiment.schema.run_spec import RUN_SPEC_VERSION, RunSpec
-from computronium.experiment.schema.seed_registries import seed_all_registries
+from computronium.experiment.schema import (
+    Domain,
+    StructuralAxis,
+    RUN_SPEC_VERSION,
+    RunSpec,
+    seed_all_registries,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -37,14 +37,14 @@ from computronium.experiment.execution.policy import (
     Policy,
     StratifiedRandomPolicy,
 )
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.run_spec import (
+from computronium.experiment.schema import (
+    StructuralAxis,
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
     RunSpec,
+    seed_all_registries,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 if TYPE_CHECKING:
     from pathlib import Path

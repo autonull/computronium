@@ -32,16 +32,16 @@ from computronium.experiment.execution.policy import (
     resolve_objectives,
 )
 from computronium.experiment.execution.search_space import search_space_from_spec
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.harvest import harvest_schema
-from computronium.experiment.schema.metrics import (
+from computronium.experiment.schema import (
+    Coordinate,
+    Provenance,
+    Schedule,
+    harvest_schema,
     MEASURED_METRICS,
     UnknownObjectiveError,
     UnmeasuredObjectiveError,
     objective_metric,
     objective_values,
-)
-from computronium.experiment.schema.record import (
     FailureCause,
     GateVerdict,
     Maturity,
@@ -49,11 +49,17 @@ from computronium.experiment.schema.record import (
     ReproducibilityClass,
     Severity,
     Status,
+    OBJECTIVES_REGISTRY,
+    RunSpec,
+    seed_all_registries,
 )
-from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
-from computronium.experiment.schema.run_spec import RunSpec
 
 _TASK_ID = "digits"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _seed_registries() -> None:
+    seed_all_registries()
 _OPTIMAL_SETTLE_STEP = 0.03
 
 

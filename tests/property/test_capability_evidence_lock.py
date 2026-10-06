@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.schema.registries import (
+from computronium.experiment.schema import (
     CAPABILITIES_REGISTRY,
     CapabilityKind,
     CapabilityStatus,

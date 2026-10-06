@@ -41,18 +41,18 @@ from computronium.experiment.execution.stages_impl import (
     _match_design,
     _origins_for_design,
 )
-from computronium.experiment.schema.axis import Domain, StructuralAxis
-from computronium.experiment.schema.coordinate import (
+from computronium.experiment.schema import (
+    Domain,
+    StructuralAxis,
     Coordinate,
     DataOrigin,
     Schedule,
-)
-from computronium.experiment.schema.registries import (
     RATE_PARAMETERS,
     validate_rate_value,
+    AxisSelection,
+    RunSpec,
+    seed_all_registries,
 )
-from computronium.experiment.schema.run_spec import AxisSelection, RunSpec
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 pytestmark = pytest.mark.timeout(120)
 

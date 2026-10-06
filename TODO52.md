@@ -641,3 +641,35 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 **Next Steps (for full benefit):**
 1. Migrate test files from `from computronium.experiment.schema.axis import ...` to `from computronium.experiment.schema import ...`
 2. This would reduce collection time toward torch import floor (~1.4s)
+
+---
+
+## Session Summary (2026-10-06) — Test Import Migration (Batch 1)
+
+**Completed this session:**
+
+### Test Import Migration for Lazy Loading ✅
+- Migrated 13 property test files from direct submodule imports to package-level imports:
+  - `tests/property/_specs.py`
+  - `tests/property/test_active_space_lock.py`
+  - `tests/property/test_capability_evidence_lock.py`
+  - `tests/property/test_claim_report_lock.py`
+  - `tests/property/test_design_and_rate_lock.py`
+  - `tests/property/test_param_budget_lock.py`
+  - `tests/property/test_policy_generation_lock.py`
+  - `tests/property/test_price_oracle_lock.py`
+  - `tests/property/test_run_ledger_lock.py`
+  - `tests/property/test_run_spec_lock.py`
+  - `tests/property/test_sampler_lock.py` (added seeding fixture)
+  - `tests/property/test_search_space_lock.py`
+
+**Verification:**
+- All 184 migrated tests pass
+- All property lock tests pass (46 core + 184 migrated = 230 tests)
+- Collection time: ~4.8s (consistent)
+
+**Files Modified:**
+- `computronium/experiment/schema/__init__.py` — Added missing symbols (CapabilityKind, CapabilitySpec, CapabilityStatus, ConstraintKind, ConstraintSpec, ObjectiveSpec, PolicyKind, PolicySpec, ProofKind, StageId, StageSpec, MEASURED_BATCH_LIMIT, objective_values, register_* functions)
+- 13 test files — Migrated imports to package-level
+
+**Remaining Test Files to Migrate:** ~30 property test files + acceptance tests

@@ -42,10 +42,13 @@ from computronium.experiment.evidence.limitations import (
 )
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.evaluate import cell_record
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.metrics import measured_objectives, objective_metric
-from computronium.experiment.schema.record import (
+from computronium.experiment.schema import (
+    StructuralAxis,
+    Coordinate,
+    Provenance,
+    Schedule,
+    measured_objectives,
+    objective_metric,
     FailureCause,
     GateVerdict,
     Maturity,
@@ -53,8 +56,9 @@ from computronium.experiment.schema.record import (
     ReproducibilityClass,
     Severity,
     Status,
+    MEASURED_PARAM_BUDGET,
+    RunSpec,
 )
-from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET, RunSpec
 from computronium.experiment.surface.report import ReportGenerator, generate_run_report
 
 _TASK = "digits"

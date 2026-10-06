@@ -24,15 +24,16 @@ from computronium.experiment.execution.search_space import (
     iter_candidates,
     search_space_from_spec,
 )
-from computronium.experiment.schema.axis import (
+from computronium.experiment.schema import (
     AXES_REGISTRIES,
     Domain,
     Scale,
     StructuralAxis,
+    Coordinate,
+    harvest_schema,
+    AxisSelection,
+    RunSpec,
 )
-from computronium.experiment.schema.coordinate import Coordinate
-from computronium.experiment.schema.harvest import harvest_schema
-from computronium.experiment.schema.run_spec import AxisSelection, RunSpec
 
 _DIGITS_WIDTH = 64  # 8x8 flattened: the shape `digits` must reach geometry as
 

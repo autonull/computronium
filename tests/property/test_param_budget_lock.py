@@ -30,11 +30,18 @@ from computronium.experiment.execution.search_space import (
     generate_candidates,
     search_space_from_spec,
 )
-from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.record import FailureCause, GateVerdict
-from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
-from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET, RunSpec
+from computronium.experiment.schema import (
+    AXES_REGISTRIES,
+    StructuralAxis,
+    Coordinate,
+    Provenance,
+    Schedule,
+    FailureCause,
+    GateVerdict,
+    PARAM_BUDGET_TOLERANCE,
+    MEASURED_PARAM_BUDGET,
+    RunSpec,
+)
 
 _TRAINABLE_TOPOLOGIES = (
     "feedforward",

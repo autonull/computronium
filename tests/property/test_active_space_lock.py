@@ -22,23 +22,22 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.schema.axis import (
+from computronium.experiment.schema import (
     AXES_REGISTRIES,
     AxisKind,
     Domain,
     HyperparameterSpec,
     Scale,
     StructuralAxis,
-)
-from computronium.experiment.schema.coordinate import Coordinate
-from computronium.experiment.schema.harvest import (
+    Coordinate,
     InactiveHyperparameterError,
     UnresolvedHyperparameterError,
     config_field_name,
     harvest_schema,
     load_axis_config,
+    PRIORS_REGISTRY,
+    prior_value,
 )
-from computronium.experiment.schema.registries import PRIORS_REGISTRY, prior_value
 from computronium.ontology.credit import CreditAssignmentConfig
 from computronium.ontology.dynamics import StateDynamicsConfig
 from computronium.ontology.geometry import GeometryConfig

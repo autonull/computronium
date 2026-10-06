@@ -39,8 +39,13 @@ from computronium.experiment.execution.policy import (
     UniformRandomPolicy,
 )
 from computronium.experiment.execution.search_space import search_space_from_spec
-from computronium.experiment.schema.axis import Domain, Scale, StructuralAxis
-from computronium.experiment.schema.run_spec import AxisSelection, RunSpec
+from computronium.experiment.schema import (
+    Domain,
+    Scale,
+    StructuralAxis,
+    AxisSelection,
+    RunSpec,
+)
 
 _TASK = "digits"
 

@@ -30,12 +30,12 @@ from computronium.experiment.execution.pipeline import PipelineConfig, PipelineR
 from computronium.experiment.execution.policy import StratifiedRandomPolicy
 from computronium.experiment.execution.pricing import price_plan
 from computronium.experiment.execution.search_space import search_space_from_spec
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.registries import (
+from computronium.experiment.schema import (
+    StructuralAxis,
     FIXED_RUN_COST_SECONDS,
     MEASURED_CELL_SECONDS,
+    seed_all_registries,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 from ._specs import mechanism_spec, unreachable_spec
 
