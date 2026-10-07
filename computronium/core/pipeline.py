@@ -79,6 +79,7 @@ __all__ = [
     "phase_states",
     "run_forward",
     "run_train_step",
+    "run_train_step_tensor",
     "task_loss",
 ]
 
@@ -124,7 +125,7 @@ def task_loss(state: SettableState, y: Tensor) -> Tensor:
     """
     acts = state.activations
     if acts is None:
-        return torch.tensor(0.0)
+        return torch.tensor(0.0, device=y.device)
     logits = acts[-1] if isinstance(acts, list) else acts
     loss = torch.nn.functional.cross_entropy(logits, y)
     with torch.no_grad():
@@ -133,7 +134,25 @@ def task_loss(state: SettableState, y: Tensor) -> Tensor:
     return loss
 
 
-def _scalar(value: Tensor | float) -> float:
+def _task_loss_tensor(state: SettableState, y: Tensor) -> tuple[Tensor, Tensor]:
+    """Cross-entropy on the state's output activations (tensor-returning variant).
+
+    Returns (loss, accuracy_tensor) where accuracy_tensor is a scalar tensor.
+    Writes accuracy tensor into ``state.metrics`` for downstream use.
+    """
+    acts = state.activations
+    if acts is None:
+        zero = torch.tensor(0.0, device=y.device)
+        return zero, zero
+    logits = acts[-1] if isinstance(acts, list) else acts
+    loss = torch.nn.functional.cross_entropy(logits, y)
+    with torch.no_grad():
+        acc = (logits.argmax(dim=-1) == y).float().mean()
+    set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
+    return loss, acc
+
+
+def _to_float(value: Tensor | float) -> float:
     return value.item() if isinstance(value, Tensor) else float(value)
 
 
@@ -176,6 +195,113 @@ def _step_psi(
     return new_psi
 
 
+def run_train_step_tensor(
+    substrate: Substrate,
+    geometry: Geometry,
+    dynamics: StateDynamics,
+    credit: CreditAssignment,
+    update: ParameterUpdate,
+    x: Tensor,
+    y: Tensor,
+    *,
+    plasticity: object | None = None,
+    psi: dict[str, Tensor] | None = None,
+    context: object | None = None,
+) -> dict[str, Tensor]:
+    """Execute one training step through the 5/6-layer pipeline, returning tensor metrics.
+
+    This variant returns tensor metrics (no .item() calls) to enable torch.compile.
+    Use run_train_step() for the float-returning public API.
+    """
+    grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
+    with grad_ctx:
+        states: dict[Phase, SettableState] = {}
+        initial_activations = forward_pass(substrate, geometry, x)
+
+        for phase in credit.phases:
+            state = SystemState(x=x, y=y)
+            state.activations = initial_activations
+            target = y if phase is Phase.NUDGED else None
+            settled = dynamics.settle(state, geometry, substrate, target=target)
+
+            # P-axis: ψ steps ONCE per episode. Default phase is the credit's
+            # first phase (target-free settled activity); a primitive may
+            # declare ``psi_phase = "nudged"`` to step on the NUDGED settle
+            # instead — the z state then also carries the target (D22's
+            # missing-supervised-term: no ψ law can consume a loss term it
+            # never sees). Modulation applies to every phase after the step.
+            if psi is not None and _is_plasticity(plasticity):
+                psi = _step_psi(plasticity, psi, settled, x, y, phase, credit, context)
+                modulate = getattr(plasticity, "modulate", None)
+                if modulate is not None:
+                    set_state_field(
+                        settled, "activations", modulate(settled.activations, psi)
+                    )
+
+            if phase is Phase.NUDGED:
+                loss_tensor, _ = _task_loss_tensor(settled, y)
+                set_state_field(settled, "loss", loss_tensor)
+            set_state_field(
+                settled, "energy", dynamics.compute_energy(settled, geometry)
+            )
+            states[phase] = settled
+
+        output = states.get(Phase.NUDGED, states.get(Phase.FREE))
+        if output is None:
+            # No declared phases: activity comes from the bare forward pass.
+            output = SystemState(x=x, y=y)
+            output.activations = initial_activations
+        loss = output.loss
+        if loss is None:
+            loss, _ = _task_loss_tensor(output, y)
+            set_state_field(output, "loss", loss)
+        elif not isinstance(loss, Tensor):
+            loss = torch.as_tensor(loss)
+        energy = state_energy(output)
+        if energy is None:
+            energy = dynamics.compute_energy(output, geometry)
+            set_state_field(output, "energy", energy)
+
+        pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
+        bias_grads = (
+            credit.compute_bias_pseudo_gradients(states, loss, geometry)
+            if _is_bias_gradient_source(credit)
+            else None
+        )
+        geometry.update_params(
+            update.step(geometry.params, pseudo_grads, geometry, bias_grads)
+        )
+
+        # Post-update, target-free forward+settle for honest learning metrics.
+        # This is the "free" readout: what the model actually predicts without
+        # supervision leakage. Legacy "accuracy" = nudged-settle fit (may be leaked).
+        with torch.no_grad():
+            free_state = SystemState(x=x, y=y)
+            free_state.activations = forward_pass(substrate, geometry, x)
+            free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
+            free_loss, _ = _task_loss_tensor(free_settled, y)
+            free_energy = dynamics.compute_energy(free_settled, geometry)
+            free_accuracy = (free_settled.metrics or {}).get("accuracy", torch.tensor(0.0))
+
+        metrics: dict[str, Tensor] = {
+            "loss": loss,
+            "energy": energy,
+            "nudged_fit_accuracy": (output.metrics or {}).get(
+                "accuracy", torch.tensor(0.0)
+            ),
+            "free_loss": free_loss,
+            "free_energy": free_energy,
+            "free_accuracy": free_accuracy,
+        }
+        metrics.update({
+            k: v
+            for k, v in (output.metrics or {}).items()
+            if isinstance(v, Tensor)
+            and k not in {"accuracy", "free_accuracy", "nudged_fit_accuracy"}
+        })
+        return metrics
+
+
 def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
     substrate: Substrate,
     geometry: Geometry,
@@ -208,92 +334,19 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         diagnostics only) plus ``free_loss``/``free_energy``/``free_accuracy``
         (post-update target-free settle — the only claim-grade metrics, imp-20/imp-46).
     """
-    grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
-    with grad_ctx:
-        states: dict[Phase, SettableState] = {}
-        initial_activations = forward_pass(substrate, geometry, x)
-
-        for phase in credit.phases:
-            state = SystemState(x=x, y=y)
-            state.activations = initial_activations
-            target = y if phase is Phase.NUDGED else None
-            settled = dynamics.settle(state, geometry, substrate, target=target)
-
-            # P-axis: ψ steps ONCE per episode. Default phase is the credit's
-            # first phase (target-free settled activity); a primitive may
-            # declare ``psi_phase = "nudged"`` to step on the NUDGED settle
-            # instead — the z state then also carries the target (D22's
-            # missing-supervised-term: no ψ law can consume a loss term it
-            # never sees). Modulation applies to every phase after the step.
-            if psi is not None and _is_plasticity(plasticity):
-                psi = _step_psi(plasticity, psi, settled, x, y, phase, credit, context)
-                modulate = getattr(plasticity, "modulate", None)
-                if modulate is not None:
-                    set_state_field(
-                        settled, "activations", modulate(settled.activations, psi)
-                    )
-
-            if phase is Phase.NUDGED:
-                set_state_field(settled, "loss", task_loss(settled, y))
-            set_state_field(
-                settled, "energy", dynamics.compute_energy(settled, geometry)
-            )
-            states[phase] = settled
-
-        output = states.get(Phase.NUDGED, states.get(Phase.FREE))
-        if output is None:
-            # No declared phases: activity comes from the bare forward pass.
-            output = SystemState(x=x, y=y)
-            output.activations = initial_activations
-        loss = output.loss
-        if loss is None:
-            loss = task_loss(output, y)
-            set_state_field(output, "loss", loss)
-        elif not isinstance(loss, Tensor):
-            loss = torch.as_tensor(loss)
-        energy = state_energy(output)
-        if energy is None:
-            energy = dynamics.compute_energy(output, geometry)
-            set_state_field(output, "energy", energy)
-
-        pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
-        bias_grads = (
-            credit.compute_bias_pseudo_gradients(states, loss, geometry)
-            if _is_bias_gradient_source(credit)
-            else None
-        )
-        geometry.update_params(
-            update.step(geometry.params, pseudo_grads, geometry, bias_grads)
-        )
-
-        # Post-update, target-free forward+settle for honest learning metrics.
-        # This is the "free" readout: what the model actually predicts without
-        # supervision leakage. Legacy "accuracy" = nudged-settle fit (may be leaked).
-        with torch.no_grad():
-            free_state = SystemState(x=x, y=y)
-            free_state.activations = forward_pass(substrate, geometry, x)
-            free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
-            free_loss = task_loss(free_settled, y)
-            free_energy = dynamics.compute_energy(free_settled, geometry)
-            free_accuracy = (free_settled.metrics or {}).get("accuracy", 0.0)
-
-        metrics = {
-            "loss": _scalar(loss),
-            "energy": _scalar(energy),
-            "nudged_fit_accuracy": (output.metrics or {}).get(
-                "accuracy", 0.0
-            ),  # output-phase fit; target-conditioned when a NUDGED phase ran
-            "free_loss": _scalar(free_loss),
-            "free_energy": _scalar(free_energy),
-            "free_accuracy": free_accuracy,
-        }
-        metrics.update({
-            k: v
-            for k, v in (output.metrics or {}).items()
-            if isinstance(v, (int, float))
-            and k not in {"accuracy", "free_accuracy", "nudged_fit_accuracy"}
-        })
-        return metrics
+    tensor_metrics = run_train_step_tensor(
+        substrate,
+        geometry,
+        dynamics,
+        credit,
+        update,
+        x,
+        y,
+        plasticity=plasticity,
+        psi=psi,
+        context=context,
+    )
+    return {k: _to_float(v) for k, v in tensor_metrics.items()}
 
 
 def run_forward(

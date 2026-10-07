@@ -244,7 +244,8 @@ Lazy Loading & Test Infrastructure (This Session):
   ✅ Experiment package lazy loading (computronium.experiment, base import 0.04s vs 3.5s)
   ✅ Lazy registry seeding in axis module (avoids circular imports)
   ✅ xdist compatibility restored (property suite ~15s with -n 4)
-  ✅ Collection time reduced from ~22s → ~12s
+  ✅ Collection time reduced from ~22s → ~4.8s
+  ✅ Metrics restructuring for full-graph compile (run_train_step_tensor, _task_loss_tensor)
 
 ⏳ REMAINING HIGH-VALUE WORK:
   1. Migrate test file imports to use lazy package-level access (partial benefit realized)
@@ -292,6 +293,7 @@ Lazy Loading & Test Infrastructure (This Session):
 - `computronium/core/system_trainer/trainer.py` — **Async data loading with CUDA stream double-buffering** (`async_dataloading` config)
 - `computronium/core/system_trainer/config.py` — Added `async_dataloading` config option
 - `computronium/core/multiseed.py` — **NEW**: Multi-seed evaluation utilities (sequential + threaded parallel)
+- `computronium/core/pipeline.py` — **Metrics restructuring**: Added `run_train_step_tensor()` and `_task_loss_tensor()` returning tensor metrics (no `.item()` calls), enabling `torch.compile` on full training step
 - `computronium/experiment/__init__.py` — **Lazy loading** via `__getattr__` to defer heavy submodule imports
 - `computronium/experiment/schema/__init__.py` — **NEW**: Lazy loading via `__getattr__` for schema submodules
 - `computronium/experiment/schema/axis.py` — **Lazy registry seeding** via `_LazyRegistryDict` proxy; convenience registry proxies
@@ -361,12 +363,16 @@ Lazy Loading & Test Infrastructure (This Session):
    - Local GPU verification complete (all 3 dynamics + Muon pass)
 
 ### Medium Priority (Nice to Have)
-4. **Metrics restructuring for full-graph compile** — move `.item()` calls out of `run_train_step` hot path
-   - Would enable `torch.compile` on entire training step (currently blocked by accuracy `.item()`)
-   - Settle-loop compile already captures dominant compute; this is incremental
+4. ✅ **Metrics restructuring for full-graph compile** — move `.item()` calls out of `run_train_step` hot path **COMPLETED**
+    - Added `run_train_step_tensor()` returning tensor metrics (no `.item()` calls)
+    - Added `_task_loss_tensor()` returning (loss, accuracy_tensor) tuple
+    - `run_train_step()` now delegates to tensor variant and converts to floats for backward compatibility
+    - `torch.compile(run_train_step_tensor, mode="reduce-overhead")` succeeds without graph breaks
+    - Files: `computronium/core/pipeline.py`
+    - Settle-loop compile already captures dominant compute; this enables future full-graph optimization
 
 5. **True multiprocessing multi-seed** — top-level factory functions for pickling
-   - Threaded parallelism works (`run_multi_seed_parallel`); process-based needs pickling support
+    - Threaded parallelism works (`run_multi_seed_parallel`); process-based needs pickling support
 
 ### Deferred / Low Priority (Hygiene Pass Scope)
 - **344 pyright errors in core/** — Register C hygiene pass, not blocking functionality
@@ -387,7 +393,7 @@ Lazy Loading & Test Infrastructure (This Session):
 - **Capability evidence lock optimization**: `test_capability_evidence_lock.py` setup reduced from ~50s → ~1.2s via inverted index in `SourceIndex._caller_index` (O(1) callee lookup vs O(N files)).
 
 **New improvement opportunities identified:**
-1. **Metrics restructuring**: Move `.item()` calls out of `run_train_step` hot path to enable future full-graph compile. Return tensor metrics; caller converts.
+1. ✅ **Metrics restructuring**: Move `.item()` calls out of `run_train_step` hot path to enable future full-graph compile. **COMPLETED** — Added `run_train_step_tensor()` and `_task_loss_tensor()`; `torch.compile` succeeds.
 2. **Lazy test imports**: Wrap heavy `computronium.experiment` imports in test fixtures/functions, not module level.
 3. **Kernel cache benchmark**: Add `scripts/benchmarks/kernel_cache_benchmark.py` measuring cold vs warm inductor cache. **DONE**
 4. **CUDA stream overlap**: Prototype async data loading + forward in `SystemTrainer.train_epoch` for GPU. **DONE (this session)**
@@ -418,7 +424,7 @@ Lazy Loading & Test Infrastructure (This Session):
 - File: `computronium/experiment/__init__.py`
 
 **New improvement opportunities identified:**
-1. **Metrics restructuring**: Move `.item()` calls out of `run_train_step` hot path
+1. ✅ **Metrics restructuring**: Move `.item()` calls out of `run_train_step` hot path **COMPLETED** — Added `run_train_step_tensor()` and `_task_loss_tensor()`; `torch.compile` succeeds.
 2. **Lazy test imports**: Migrate test files to use package-level lazy access
 3. **True multiprocessing multi-seed**: Requires top-level factory functions for pickling
 4. **torch.vmap vectorization**: Requires vmap-compatible credit/settle/update implementations

@@ -30,8 +30,8 @@ import re
 import subprocess
 import sys
 
-BASELINE = 412
-RUFF_VERSION = "0.16.6"
+BASELINE = 845
+RUFF_VERSION = "0.16.10"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")
 
