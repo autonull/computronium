@@ -860,10 +860,10 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 | evidence base import | ~3s | 0.26s | ~12× |
 
 **Next Steps (Updated):**
-1. **GPU CI integration** — run kernel parity tests on GPU when CI infrastructure available (High Priority)
+1. **GPU CI integration** — *deprioritized* (CI disabled; local GPU verification complete)
 2. **Metrics restructuring** — move `.item()` calls out of `run_train_step` hot path (Medium Priority) ✅ **COMPLETED** (run_train_step_tensor, _task_loss_tensor)
 3. **True multiprocessing multi-seed** — top-level factory functions for pickling (Medium Priority) ✅ **COMPLETED** (run_multi_seed_multiprocess)
-4. **Remaining test import migration** — ~10 property test files + acceptance tests still use direct submodule imports (Low Priority / Hygiene Pass)
+4. **Remaining test import migration** — ~16 property test files + acceptance tests still use direct submodule imports (Low Priority / Hygiene Pass)
 
 ---
 
