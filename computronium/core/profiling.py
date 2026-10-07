@@ -13,6 +13,7 @@ from torch import nn
 from computronium.stability.resources import MAC_ENERGY_J, ResourceUsage
 
 # Suppress fvcore/torch.jit warnings (torch.jit.script deprecated in Python 3.14+)
+# These must be applied early, before fvcore imports
 warnings.filterwarnings(
     "ignore",
     message=".*torch.jit.script.*",
@@ -20,13 +21,18 @@ warnings.filterwarnings(
 )
 warnings.filterwarnings(
     "ignore",
-    message="Unsupported operator aten::",
+    message="Unsupported operator aten::.*",
     category=UserWarning,
 )
 warnings.filterwarnings(
     "ignore",
-    message="The following submodules of the model were never called",
+    message="The following submodules of the model were never called.*",
     category=UserWarning,
+)
+# Also suppress fvcore's specific warnings
+warnings.filterwarnings(
+    "ignore",
+    module="fvcore.nn.jit_analysis",
 )
 
 if TYPE_CHECKING:
@@ -99,7 +105,6 @@ def count_flops_fvcore(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     Returns:
         Total FLOPs for one forward pass.
     """
-    import warnings
 
     try:
         from fvcore.nn import FlopCountAnalysis
@@ -115,11 +120,8 @@ def count_flops_fvcore(model: nn.Module, input_shape: tuple[int, ...]) -> int:
         dummy_input = _build_spatial_dummy(model, torch.device(device))
 
     try:
-        # Suppress warnings from torch.jit.script (deprecated in Python 3.14+)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            flops = FlopCountAnalysis(model, dummy_input).total()
-            return int(flops)
+        flops = FlopCountAnalysis(model, dummy_input).total()
+        return int(flops)
     except Exception:
         # Fallback on any analysis error
         return count_flops(model, input_shape)
@@ -552,92 +554,3 @@ def profile_run(
         energy_proxy=energy_proxy,
         requires_backward=requires_backward,
     )
-
-
-class EnergyTracker:
-    """Per-step energy/power measurement with throttled heavy metrics.
-
-    The activation-sparsity forward and the GPU weight-sparsity reduction are
-    expensive relative to one train step. Inside a probe (``global_step`` is
-    not ``None``) they are computed **once**, on the first measured step, and
-    cached on the model for reuse on every later step. Standalone use
-    (``global_step=None``) always measures, preserving the original eager
-    behaviour. The probe driver passes the step counter so the whole run is
-    monitored without paying the heavy cost per batch.
-    """
-
-    def __init__(
-        self,
-        model: nn.Module,
-        requires_backward: bool = True,
-        global_step: int | None = None,
-    ) -> None:
-        self.model = model
-        self.requires_backward = requires_backward
-        self.global_step = global_step
-        self.start_time = 0.0
-        self.wall_time_ms = 0.0
-        self.profile = None
-
-    def __enter__(self):
-        self.start_time = time.time()
-        if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.wall_time_ms = (time.time() - self.start_time) * 1000
-
-        peak_mem = 0.0
-        if torch.cuda.is_available():
-            peak_mem = torch.cuda.max_memory_allocated() / (1024 * 1024)
-
-        if exc_type is not None:
-            return False
-
-        params = sum(p.numel() for p in self.model.parameters())
-
-        # Heavy metrics are throttled to the first step of a probe and cached on
-        # the model; standalone trackers (global_step=None) always measure.
-        heavy_cached = hasattr(self.model, "_biopl_activation_sparsity")
-        compute_heavy = self.global_step is None or not heavy_cached
-
-        if compute_heavy:
-            zero_weights = sum(
-                (p.abs() < 1e-5).sum().item() for p in self.model.parameters()
-            )
-            weight_sparsity = zero_weights / max(params, 1)
-
-            # Pass None so _estimate_activation_sparsity builds a proper
-            # spatial/flat dummy matching the model's input format.
-            activation_sparsity = _estimate_activation_sparsity(self.model, None)
-
-            if self.global_step is not None:
-                setattr(self.model, "_biopl_activation_sparsity", activation_sparsity)
-                setattr(self.model, "_biopl_weight_sparsity", weight_sparsity)
-        else:
-            activation_sparsity = float(
-                getattr(self.model, "_biopl_activation_sparsity")
-            )
-            weight_sparsity = float(getattr(self.model, "_biopl_weight_sparsity"))
-
-        batch_size = 64
-        fwd_flops = 2 * params * batch_size
-        bwd_flops = 2 * fwd_flops if self.requires_backward else 0
-
-        energy_proxy = (
-            (fwd_flops + bwd_flops) * (1 - activation_sparsity) / max(params, 1)
-        )
-
-        self.profile = EnergyProfile(
-            forward_flops=fwd_flops,
-            backward_flops=bwd_flops,
-            param_count=params,
-            activation_sparsity=activation_sparsity,
-            weight_sparsity=weight_sparsity,
-            wall_time_ms=self.wall_time_ms,
-            peak_memory_mb=peak_mem,
-            energy_proxy=energy_proxy,
-            requires_backward=self.requires_backward,
-        )
-        return False

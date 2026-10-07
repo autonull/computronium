@@ -159,10 +159,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
     def _assert_identity_recomputable(self) -> None:
         """Refuse a store that cannot reproduce a record's ``measurement_key``.
 
-        ``param_budget`` is part of the key and was not persisted, so a store
-        written before it was reads every schedule back with ``param_budget=0``
-        and no stored key recomputes from its own record. Appending to such a
-        store fails deep in DuckDB instead, so it is refused here.
+        ``param_budget`` and ``checkpoint_every_n`` are part of the key and were
+        not persisted in older stores, so a store written before they were added
+        reads every schedule back with defaults and no stored key recomputes from
+        its own record. Appending to such a store fails deep in DuckDB instead,
+        so it is refused here.
         """
         if self._conn is None:
             return
@@ -170,9 +171,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             "SELECT data_type FROM information_schema.columns "
             "WHERE table_name = 'records' AND column_name = 'schedule'"
         ).fetchone()
-        if row is not None and "param_budget" not in str(row[0]):
+        if row is not None and (
+            "param_budget" not in str(row[0]) or "checkpoint_every_n" not in str(row[0])
+        ):
             msg = (
-                f"store {self._config.path} has no schedule.param_budget; its "
+                f"store {self._config.path} has missing schedule fields; its "
                 "measurement_key cannot be recomputed from a stored record. "
                 "Write a new store."
             )
@@ -246,7 +249,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                                         epochs INTEGER, batch_limit INTEGER, budget_id TEXT,
                                         task_id TEXT, param_budget INTEGER, device TEXT,
                                         deterministic BOOLEAN, num_workers INTEGER,
-                                        precision TEXT) NOT NULL,
+                                        precision TEXT, checkpoint_every_n INTEGER) NOT NULL,
                 provenance      JSON NOT NULL,
                 status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                                         quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
@@ -1088,6 +1091,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             deterministic=schedule_struct.get("deterministic", False) or False,
             num_workers=schedule_struct.get("num_workers", 0) or 0,
             precision=schedule_struct.get("precision", "fp32") or "fp32",
+            checkpoint_every_n=schedule_struct.get("checkpoint_every_n", 0) or 0,
         )
 
     def _parse_provenance(self, provenance_json: str) -> Provenance:

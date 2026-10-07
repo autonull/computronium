@@ -19,10 +19,11 @@ metric that could not be measured is ``None``, not zero, so "unmeasured" and
 recorded on the epoch it truncated, because a partial epoch's time and memory
 are not comparable with a full epoch's.
 """
-
 from __future__ import annotations
 
+import logging
 import time
+import warnings
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -30,6 +31,32 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
+
+# Suppress fvcore/torch.jit warnings (torch.jit.script deprecated in Python 3.14+)
+# These must be applied early, before fvcore imports
+logging.getLogger("fvcore").setLevel(logging.ERROR)
+logging.getLogger("fvcore.nn.jit_analysis").setLevel(logging.ERROR)
+
+warnings.filterwarnings(
+    "ignore",
+    message=".*torch.jit.script.*",
+    category=FutureWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="Unsupported operator aten::.*",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="The following submodules of the model were never called.*",
+    category=UserWarning,
+)
+# Also suppress fvcore's specific warnings
+warnings.filterwarnings(
+    "ignore",
+    module="fvcore.nn.jit_analysis",
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -131,6 +158,7 @@ class EpochResources:
             # Sample initial power for energy estimation
             try:
                 from computronium.core.profiling import get_gpu_power_watts
+
                 self._start_power_w = get_gpu_power_watts()
             except Exception:
                 self._start_power_w = 0.0
@@ -152,6 +180,7 @@ class EpochResources:
             # Estimate energy: average power × time
             try:
                 from computronium.core.profiling import get_gpu_power_watts
+
                 end_power_w = get_gpu_power_watts()
                 avg_power_w = (self._start_power_w + end_power_w) / 2
                 self._energy_j = avg_power_w * self._elapsed

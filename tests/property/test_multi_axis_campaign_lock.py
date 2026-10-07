@@ -67,10 +67,10 @@ def _multi_axis_spec(fast: bool = True) -> RunSpec:
             param_budget=MEASURED_PARAM_BUDGET,
             batch_limit=MEASURED_BATCH_LIMIT,
             axes=(
+                AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
                 AxisSelection(
-                    axis=StructuralAxis.SUBSTRATE, primitives=("digital",)
+                    axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)
                 ),
-                AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)),
                 AxisSelection(
                     axis=StructuralAxis.DYNAMICS,
                     primitives=("instantaneous",),
@@ -107,7 +107,9 @@ def _multi_axis_spec(fast: bool = True) -> RunSpec:
                 AxisSelection(
                     axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse")
                 ),
-                AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)),
+                AxisSelection(
+                    axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)
+                ),
                 AxisSelection(
                     axis=StructuralAxis.DYNAMICS,
                     primitives=("instantaneous", "energy_minimization"),
@@ -141,7 +143,9 @@ def full_multi_axis_spec() -> RunSpec:
     return _multi_axis_spec(fast=False)
 
 
-def test_multi_axis_campaign_sweeps_declared_axes(fast_multi_axis_spec: RunSpec) -> None:
+def test_multi_axis_campaign_sweeps_declared_axes(
+    fast_multi_axis_spec: RunSpec,
+) -> None:
     """The search space includes all declared axis combinations."""
     spec = fast_multi_axis_spec
 
@@ -164,9 +168,7 @@ def test_multi_axis_campaign_sweeps_declared_axes(fast_multi_axis_spec: RunSpec)
 
     # Count candidates - should be substrate(1) * dynamics(1) * credit(1) = 1 base cell
     candidates = list(iter_candidates(spec, space, shape=task_shape))
-    assert len(candidates) >= 1, (
-        f"expected at least 1 candidate, got {len(candidates)}"
-    )
+    assert len(candidates) >= 1, f"expected at least 1 candidate, got {len(candidates)}"
 
     # Verify each candidate carries the axis coordinates
     axis_values: dict[StructuralAxis, set[str]] = {}
@@ -182,7 +184,9 @@ def test_multi_axis_campaign_sweeps_declared_axes(fast_multi_axis_spec: RunSpec)
 @pytest.mark.slow
 @pytest.mark.slow
 @pytest.mark.full_multi_axis
-def test_multi_axis_campaign_sweeps_declared_axes_full(full_multi_axis_spec: RunSpec) -> None:
+def test_multi_axis_campaign_sweeps_declared_axes_full(
+    full_multi_axis_spec: RunSpec,
+) -> None:
     """Full version: The search space includes all declared axis combinations."""
     spec = full_multi_axis_spec
 
@@ -224,7 +228,9 @@ def test_multi_axis_campaign_sweeps_declared_axes_full(full_multi_axis_spec: Run
     assert axis_values[StructuralAxis.CREDIT] == {"gradient", "random_projections"}
 
 
-def test_multi_axis_campaign_objectives_resolve_to_measurements(fast_multi_axis_spec: RunSpec) -> None:
+def test_multi_axis_campaign_objectives_resolve_to_measurements(
+    fast_multi_axis_spec: RunSpec,
+) -> None:
     """Every declared objective has a measurement behind it."""
     spec = fast_multi_axis_spec
 
@@ -239,7 +245,9 @@ def test_multi_axis_campaign_objectives_resolve_to_measurements(fast_multi_axis_
 
 @pytest.mark.slow
 @pytest.mark.full_multi_axis
-def test_multi_axis_campaign_objectives_resolve_to_measurements_full(full_multi_axis_spec: RunSpec) -> None:
+def test_multi_axis_campaign_objectives_resolve_to_measurements_full(
+    full_multi_axis_spec: RunSpec,
+) -> None:
     """Full version: Every declared objective has a measurement behind it."""
     spec = full_multi_axis_spec
 
@@ -252,7 +260,9 @@ def test_multi_axis_campaign_objectives_resolve_to_measurements_full(full_multi_
         )
 
 
-def test_multi_axis_campaign_run_completes_and_closes(fast_multi_axis_spec: RunSpec, tmp_path: Path) -> None:
+def test_multi_axis_campaign_run_completes_and_closes(
+    fast_multi_axis_spec: RunSpec, tmp_path: Path
+) -> None:
     """A small multi-axis run completes and closes the run row."""
     spec = fast_multi_axis_spec
     store_path = tmp_path / "multi_axis_test.duckdb"
@@ -303,7 +313,9 @@ def test_multi_axis_campaign_run_completes_and_closes(fast_multi_axis_spec: RunS
 
 @pytest.mark.slow
 @pytest.mark.full_multi_axis
-def test_multi_axis_campaign_run_completes_and_closes_full(full_multi_axis_spec: RunSpec, tmp_path: Path) -> None:
+def test_multi_axis_campaign_run_completes_and_closes_full(
+    full_multi_axis_spec: RunSpec, tmp_path: Path
+) -> None:
     """Full version: A small multi-axis run completes and closes the run row."""
     spec = full_multi_axis_spec
     store_path = tmp_path / "multi_axis_test_full.duckdb"
@@ -352,7 +364,9 @@ def test_multi_axis_campaign_run_completes_and_closes_full(full_multi_axis_spec:
                 )
 
 
-def test_axis_frontiers_resolve_per_axis_objectives(fast_multi_axis_spec: RunSpec) -> None:
+def test_axis_frontiers_resolve_per_axis_objectives(
+    fast_multi_axis_spec: RunSpec,
+) -> None:
     """ReportGenerator.axis_frontiers reads per-axis objective sets from the spec."""
     spec = fast_multi_axis_spec
 
@@ -391,7 +405,9 @@ def test_axis_frontiers_resolve_per_axis_objectives(fast_multi_axis_spec: RunSpe
 
 @pytest.mark.slow
 @pytest.mark.full_multi_axis
-def test_axis_frontiers_resolve_per_axis_objectives_full(full_multi_axis_spec: RunSpec) -> None:
+def test_axis_frontiers_resolve_per_axis_objectives_full(
+    full_multi_axis_spec: RunSpec,
+) -> None:
     """Full version: ReportGenerator.axis_frontiers reads per-axis objective sets from the spec."""
     spec = full_multi_axis_spec
 
@@ -439,9 +455,15 @@ def test_axis_frontiers_resolve_per_axis_objectives_full(full_multi_axis_spec: R
 def test_multi_axis_campaign_unmeasured_objectives_fail_at_use() -> None:
     """A spec with unmeasured objectives is accepted but fails when used."""
 
-    # These three objectives are registered but unmeasured (A4)
-    # energy_efficiency is now measured
-    unmeasured = ("latency_ms", "spike_rate", "ir_drop_variance")
+    # These objectives are registered but unmeasured
+    unmeasured = (
+        "test_accuracy",
+        "test_loss",
+        "f1_score",
+        "perplexity",
+        "bleu_score",
+        "training_time",
+    )
 
     for obj in unmeasured:
         assert obj in OBJECTIVES_REGISTRY, f"{obj} should be registered"
@@ -454,14 +476,14 @@ def test_multi_axis_campaign_unmeasured_objectives_fail_at_use() -> None:
     # A spec declaring an unmeasured objective should fail validation at spec creation
     spec = _multi_axis_spec(fast=True)
     spec_dict = spec.model_dump()
-    spec_dict["objectives"] = (*spec.objectives, "latency_ms")
+    spec_dict["objectives"] = (*spec.objectives, "test_accuracy")
     with pytest.raises(ValueError, match="have no measurement"):
         RunSpec(**spec_dict)
 
-    # But energy_efficiency is now measured and should work
-    spec_dict["objectives"] = (*spec.objectives, "energy_efficiency")
+    # But latency_ms is now measured and should work
+    spec_dict["objectives"] = (*spec.objectives, "latency_ms")
     spec_with_measured = RunSpec(**spec_dict)
-    assert "energy_efficiency" in spec_with_measured.objectives
+    assert "latency_ms" in spec_with_measured.objectives
 
 
 __all__ = [
