@@ -641,3 +641,80 @@
 - All property locks pass (L1-L7, J1-J7, axis certifications, axis frontier, multi-axis campaign, registry completeness, import time, CLI readme)
 - `ruff format` and `ruff check` pass on changed files
 - `pyright` passes on changed files
+
+---
+
+## 20. Session Progress Summary (2026-10-07) — P2/P3 Reporting Enhancement & Agent-Friendly CLI
+
+### Completed in This Session (P2 — Reporting + Gallery Enhancement)
+
+**Enhanced HTML Report (4.1):**
+- ✅ Comprehensive interactive Plotly dashboard with 9 subplots (3×3 grid)
+- ✅ Multiple Pareto frontiers: val_acc vs walltime, val_acc vs params, spectral_radius vs psi_capacity
+- ✅ Convergence curves: train/val loss per epoch, train/val accuracy per epoch (from checkpoint history)
+- ✅ Objective distributions: box plots for all measured objectives
+- ✅ Credit vs Update heatmap: mean validation accuracy per credit/update combination
+- ✅ Substrate comparison scatter plots
+- ✅ Stability metrics scatter: ρ(J) vs σ_max with diagonal reference line, colored by val_acc
+- ✅ Checkpoint history loading from DuckDB artifacts for convergence visualization
+
+**Code Changes:**
+- `computronium/experiment/surface/report.py` — Added `_load_training_history()`, `_compute_ablation_table()`, completely rewrote `generate_html_report()` with comprehensive dashboard
+- `computronium/experiment/evidence/artifacts.py` — Fixed `get()` method to query correct columns (bytes, external_uri instead of storage, bytes, external_uri)
+
+### Completed in This Session (P3 — Agent-Friendly CLI/Output)
+
+**New CLI Commands (14.1, 14.3):**
+- ✅ `comp stats` — Machine-readable summary statistics with grouping, aggregations (mean, std, min, max, median, ci95), output formats (json, csv, table)
+- ✅ `comp pareto` — Pareto frontier export for plotting (csv, json)
+- ✅ `comp diff` — Statistical run comparison with multiple tests (ttest, wilcoxon, mannwhitney), effect sizes (Cohen's d, Cliff's delta)
+- ✅ `comp repro` — Reproducibility gate: replays run, verifies bitwise match within tolerance, exits 0/1 for CI
+
+**Code Changes:**
+- `computronium/experiment/surface/cli.py` — Added 4 new command parsers and handlers with full argument support
+- `computronium/experiment/surface/cli.py` — Added `_ensure_registries_seeded()` call in main() for objective registry access
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, registry locks, CLI readme)
+- New commands tested: stats (with group-by), pareto, diff, repro
+- HTML report generates successfully with all 9 subplots
+- `ruff format` passes on changed files
+
+---
+
+## 21. Remaining Work & Next Priorities
+
+### P2 Remaining (Reporting + Gallery)
+- [ ] Per-axis ablation tables (credit swap, substrate swap, plasticity swap) — partially done via `comp stats --group-by`
+- [ ] LaTeX/PDF export via pandoc
+- [ ] Gallery manifest: `docs/figures/manifest.json` with SHA, params, metrics for reproducibility
+- [ ] CI integration: Gallery lock fails if figures drift from committed manifest
+
+### P3 Remaining (Agent-Friendly CLI)
+- [ ] `comp schema` — Dump RunSpec/Coordinate/Objective schemas as JSON Schema
+- [ ] RunSpec builder API (Python) for programmatic construction
+- [ ] `--output json` for all commands (structured JSON to stdout for piping)
+
+### P4 (Benchmark Suites + Analysis)
+- [ ] GPU tests for existing 5 benchmark suites
+- [ ] 3 new benchmark suites: credit_assignment_scaling, substrate_precision_scaling, stability_plasticity_frontier
+- [ ] Bootstrap CIs, significance testing, Pareto front analysis
+
+### P5 (Campaign Automation)
+- [ ] `comp campaign` YAML declarative multi-run campaigns
+- [ ] Parallel execution across GPUs
+- [ ] Progress webhooks
+
+### P6 (Reproducibility + Packaging)
+- [ ] `comp export` / `comp repro` round-trip with Docker
+- [ ] Nightly benchmark CI
+
+### Fixes & Correctness (6.1)
+- [ ] EnergyMinimization β≥1 gradient credit zero pseudo-gradient
+- [ ] Determinism: bitwise reproducibility on GPU
+- [ ] Memory leaks in long runs
+
+### Analysis Infrastructure (7)
+- [ ] Bootstrap CIs, significance testing, effect sizes
+- [ ] Pareto front knee detection, hypervolume
+- [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking

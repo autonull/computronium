@@ -12,6 +12,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
+import statistics
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -498,6 +501,119 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_frozen.add_argument(
         "--dry-run", action="store_true", help="Show plan without running"
     )
+
+    # Stats command - machine-readable summary statistics
+    p_stats = sub.add_parser(
+        "stats", help="Compute summary statistics for run metrics (machine-readable)"
+    )
+    p_stats.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_stats.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_stats.add_argument(
+        "--metrics",
+        default="val_acc,walltime_s,flops,param_count,memory_usage,energy_per_step",
+        help="Comma-separated metrics to compute statistics for",
+    )
+    p_stats.add_argument(
+        "--agg",
+        default="mean,std,min,max,median,ci95",
+        help="Comma-separated aggregations: mean,std,min,max,median,ci95,count",
+    )
+    p_stats.add_argument(
+        "--group-by",
+        default=None,
+        help="Comma-separated axes to group by (e.g., credit,update,substrate)",
+    )
+    p_stats.add_argument(
+        "--format",
+        choices=["json", "csv", "table"],
+        default="json",
+        help="Output format",
+    )
+    p_stats.add_argument("--output", default=None, help="Output file path")
+
+    # Pareto command - frontier export
+    p_pareto = sub.add_parser(
+        "pareto", help="Export Pareto frontier points for plotting (machine-readable)"
+    )
+    p_pareto.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_pareto.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_pareto.add_argument(
+        "--objectives",
+        default="val_acc,energy_per_step",
+        help="Comma-separated objectives for frontier (2+ objectives)",
+    )
+    p_pareto.add_argument(
+        "--maximize",
+        default=None,
+        help="Comma-separated maximize flags (true/false per objective, auto-detected if omitted)",
+    )
+    p_pareto.add_argument(
+        "--format", choices=["json", "csv"], default="csv", help="Output format"
+    )
+    p_pareto.add_argument("--output", required=True, help="Output file path")
+
+    # Diff command - run comparison
+    p_diff = sub.add_parser(
+        "diff", help="Compare two runs statistically (machine-readable)"
+    )
+    p_diff.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_diff.add_argument("--run-id-a", required=True, help="First run ID")
+    p_diff.add_argument("--run-id-b", required=True, help="Second run ID")
+    p_diff.add_argument(
+        "--metrics",
+        default="val_acc,walltime_s,flops,param_count",
+        help="Comma-separated metrics to compare",
+    )
+    p_diff.add_argument(
+        "--test",
+        choices=["ttest", "wilcoxon", "mannwhitney"],
+        default="mannwhitney",
+        help="Statistical test",
+    )
+    p_diff.add_argument(
+        "--format", choices=["json", "table"], default="json", help="Output format"
+    )
+    p_diff.add_argument("--output", default=None, help="Output file path")
+
+    # Repro command - reproducibility gate
+    p_repro = sub.add_parser(
+        "repro", help="Replay a run and verify bitwise reproducibility (CI gate)"
+    )
+    p_repro.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_repro.add_argument("--run-id", required=True, help="Run ID to reproduce")
+    p_repro.add_argument(
+        "--tolerance",
+        type=float,
+        default=1e-6,
+        help="Numerical tolerance for bitwise match",
+    )
+    p_repro.add_argument(
+        "--metrics",
+        default=None,
+        help="Comma-separated metrics to verify (all measured if omitted)",
+    )
+    p_repro.add_argument(
+        "--seeds", type=int, default=None, help="Override seed count for repro run"
+    )
+    p_repro.add_argument(
+        "--device", default="auto", help="Device for repro run (auto, cpu, cuda)"
+    )
+    p_repro.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_repro.add_argument("--output", default=None, help="Output file path")
 
     return parser
 
@@ -1500,11 +1616,498 @@ def _cmd_hypothesis_campaign(args: argparse.Namespace) -> int:  # ruff: ignore[c
         return 0
 
 
+def _cmd_stats(args: argparse.Namespace) -> int:
+    """Compute summary statistics for run metrics."""
+    import statistics
+    from collections import defaultdict
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
+        run_id = args.run_id or store.latest_run_id()
+        if run_id is None:
+            logger.error("No runs found in store")
+            return 1
+
+        generator = ReportGenerator(store)
+        records = list(store.query_records(run_id=run_id))
+        if not records:
+            logger.error(f"No records for run {run_id}")
+            return 1
+
+        metrics = [m.strip() for m in args.metrics.split(",")]
+        aggs = [a.strip() for a in args.agg.split(",")]
+        group_by = (
+            [g.strip() for g in args.group_by.split(",")] if args.group_by else []
+        )
+
+        # Group records
+        groups: dict[tuple, list] = defaultdict(list)
+        for r in records:
+            if group_by:
+                key = tuple(getattr(r, axis) for axis in group_by)
+            else:
+                key = ("all",)
+            groups[key].append(r)
+
+        # Compute statistics per group
+        results = []
+        for key, group_records in groups.items():
+            row = {}
+            if group_by:
+                for axis, val in zip(group_by, key):
+                    row[axis] = val
+            row["count"] = len(group_records)
+
+            for metric in metrics:
+                vals = [
+                    r.payload.get(metric)
+                    for r in group_records
+                    if r.payload.get(metric) is not None
+                ]
+                if not vals:
+                    continue
+                vals = [float(v) for v in vals]
+                row[f"{metric}_count"] = len(vals)
+                if "mean" in aggs:
+                    row[f"{metric}_mean"] = statistics.mean(vals)
+                if "std" in aggs and len(vals) > 1:
+                    row[f"{metric}_std"] = statistics.stdev(vals)
+                if "min" in aggs:
+                    row[f"{metric}_min"] = min(vals)
+                if "max" in aggs:
+                    row[f"{metric}_max"] = max(vals)
+                if "median" in aggs:
+                    row[f"{metric}_median"] = statistics.median(vals)
+                if "ci95" in aggs and len(vals) > 1:
+                    # 95% CI using t-distribution approximation
+                    import math
+
+                    se = statistics.stdev(vals) / math.sqrt(len(vals))
+                    t_val = 1.96  # Approximate for large n
+                    row[f"{metric}_ci95_low"] = statistics.mean(vals) - t_val * se
+                    row[f"{metric}_ci95_high"] = statistics.mean(vals) + t_val * se
+
+            results.append(row)
+
+        # Output
+        if args.format == "json":
+            output = json.dumps(results, indent=2, default=str)
+        elif args.format == "csv":
+            import csv
+            import io
+
+            output_io = io.StringIO()
+            if results:
+                writer = csv.DictWriter(output_io, fieldnames=sorted(results[0].keys()))
+                writer.writeheader()
+                writer.writerows(results)
+            output = output_io.getvalue()
+        elif results:
+            headers = sorted(results[0].keys())
+            col_widths = {
+                h: max(len(h), max(len(str(r.get(h, ""))) for r in results))
+                for h in headers
+            }
+            header_line = " | ".join(h.ljust(col_widths[h]) for h in headers)
+            sep_line = "-+-".join("-" * col_widths[h] for h in headers)
+            lines = [header_line, sep_line]
+            for r in results:
+                lines.append(
+                    " | ".join(
+                        str(r.get(h, "")).ljust(col_widths[h]) for h in headers
+                    )
+                )
+            output = "\n".join(lines)
+        else:
+            output = "(no data)"
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Stats written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+
+def _cmd_pareto(args: argparse.Namespace) -> int:
+    """Export Pareto frontier points for plotting."""
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
+        run_id = args.run_id or store.latest_run_id()
+        if run_id is None:
+            logger.error("No runs found in store")
+            return 1
+
+        generator = ReportGenerator(store)
+        objectives = tuple(o.strip() for o in args.objectives.split(","))
+        if len(objectives) < 2:
+            logger.error("Need at least 2 objectives for Pareto frontier")
+            return 1
+
+        maximize = None
+        if args.maximize:
+            maximize = tuple(
+                m.strip().lower() == "true" for m in args.maximize.split(",")
+            )
+            if len(maximize) != len(objectives):
+                logger.error("Maximize flags must match objectives count")
+                return 1
+
+        # Use all records for Pareto frontier (not just claim-eligible)
+        records = list(store.query_records(run_id=run_id))
+        from computronium.experiment.surface.report import _directions
+
+        maximize = maximize or _directions(objectives)
+        pareto_points = generator._pareto_subset(records, objectives, maximize)
+        if not pareto_points:
+            logger.warning("No Pareto points found")
+            pareto_points = []
+
+        # Convert to flat rows
+        rows = []
+        for p in pareto_points:
+            row = {
+                "record_id": p["record_id"],
+                "cell_key": p["cell_key"],
+                **p["objectives"],
+                **p["coordinate"],
+            }
+            rows.append(row)
+
+        if args.format == "json":
+            output = json.dumps(rows, indent=2, default=str)
+        else:  # csv
+            import csv
+            import io
+
+            output_io = io.StringIO()
+            if rows:
+                writer = csv.DictWriter(output_io, fieldnames=sorted(rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(rows)
+            output = output_io.getvalue()
+
+        Path(args.output).write_text(output, encoding="utf-8")
+        logger.info(f"Pareto frontier ({len(rows)} points) written to {args.output}")
+        return 0
+
+
+def _cmd_diff(args: argparse.Namespace) -> int:
+    """Compare two runs statistically."""
+    from scipy import stats
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
+        generator = ReportGenerator(store)
+
+        for run_id in [args.run_id_a, args.run_id_b]:
+            if not generator.run_summary(run_id):
+                logger.error(f"Run {run_id} not found")
+                return 1
+
+        metrics = [m.strip() for m in args.metrics.split(",")]
+
+        # Get claim-eligible records for both runs
+        records_a = generator.claim_eligible_records(args.run_id_a)
+        records_b = generator.claim_eligible_records(args.run_id_b)
+
+        if not records_a or not records_b:
+            logger.warning(
+                "One or both runs have no claim-eligible records, using all records"
+            )
+            records_a = generator._store.query_records(run_id=args.run_id_a)
+            records_b = generator._store.query_records(run_id=args.run_id_b)
+
+        results = {}
+        for metric in metrics:
+            vals_a = [
+                r.payload.get(metric)
+                for r in records_a
+                if r.payload.get(metric) is not None
+            ]
+            vals_b = [
+                r.payload.get(metric)
+                for r in records_b
+                if r.payload.get(metric) is not None
+            ]
+
+            if not vals_a or not vals_b:
+                results[metric] = {"error": "Insufficient data"}
+                continue
+
+            vals_a = [float(v) for v in vals_a]
+            vals_b = [float(v) for v in vals_b]
+
+            # Compute statistics
+            mean_a, mean_b = statistics.mean(vals_a), statistics.mean(vals_b)
+            std_a = statistics.stdev(vals_a) if len(vals_a) > 1 else 0
+            std_b = statistics.stdev(vals_b) if len(vals_b) > 1 else 0
+
+            # Statistical test
+            p_value = None
+            effect_size = None
+            try:
+                if args.test == "ttest":
+                    stat, p_value = stats.ttest_ind(vals_a, vals_b, equal_var=False)
+                    # Cohen's d
+                    pooled_std = (
+                        math.sqrt((std_a**2 + std_b**2) / 2)
+                        if (std_a > 0 or std_b > 0)
+                        else 1
+                    )
+                    effect_size = (mean_a - mean_b) / pooled_std
+                elif args.test == "wilcoxon":
+                    if len(vals_a) == len(vals_b):
+                        stat, p_value = stats.wilcoxon(vals_a, vals_b)
+                    else:
+                        p_value = None
+                elif args.test == "mannwhitney":
+                    stat, p_value = stats.mannwhitneyu(
+                        vals_a, vals_b, alternative="two-sided"
+                    )
+                    # Cliff's delta
+                    n_a, n_b = len(vals_a), len(vals_b)
+                    pairs = [(a, b) for a in vals_a for b in vals_b]
+                    greater = sum(1 for a, b in pairs if a > b)
+                    less = sum(1 for a, b in pairs if a < b)
+                    effect_size = (greater - less) / (n_a * n_b) if n_a * n_b > 0 else 0
+            except Exception as e:
+                logger.warning(f"Statistical test failed for {metric}: {e}")
+
+            results[metric] = {
+                "run_a": {"mean": mean_a, "std": std_a, "count": len(vals_a)},
+                "run_b": {"mean": mean_b, "std": std_b, "count": len(vals_b)},
+                "mean_diff": mean_a - mean_b,
+                "p_value": p_value,
+                "effect_size": effect_size,
+                "test": args.test,
+                "significant": p_value is not None and p_value < 0.05,
+            }
+
+        output_data = {
+            "run_a": args.run_id_a,
+            "run_b": args.run_id_b,
+            "comparisons": results,
+        }
+
+        if args.format == "json":
+            output = json.dumps(output_data, indent=2, default=str)
+        else:  # table
+            lines = [f"Diff: {args.run_id_a} vs {args.run_id_b}"]
+            for metric, comp in results.items():
+                if "error" in comp:
+                    lines.append(f"  {metric}: {comp['error']}")
+                    continue
+                lines.append(
+                    f"  {metric}: A={comp['run_a']['mean']:.4g}±{comp['run_a']['std']:.4g} "
+                    f"B={comp['run_b']['mean']:.4g}±{comp['run_b']['std']:.4g} "
+                    f"Δ={comp['mean_diff']:.4g} p={comp['p_value']} d={comp['effect_size']} "
+                    f"{'*' if comp['significant'] else ''}"
+                )
+            output = "\n".join(lines)
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Diff written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+
+def _cmd_repro(args: argparse.Namespace) -> int:
+    """Replay a run and verify bitwise reproducibility."""
+    import tempfile
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
+        generator = ReportGenerator(store)
+        run_info = generator.run_summary(args.run_id)
+        if run_info is None:
+            logger.error(f"Run {args.run_id} not found")
+            return 1
+
+        spec = run_info.spec
+        if spec is None:
+            logger.error(f"Run {args.run_id} has no spec")
+            return 1
+
+        # Create a modified spec for reproduction
+        repro_spec = spec.model_copy(
+            update={
+                "deterministic": True,
+                **({"n_seeds": args.seeds} if args.seeds is not None else {}),
+                **({"device": args.device} if args.device != "auto" else {}),
+            }
+        )
+
+        # Run reproduction in a temp store
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repro_store = Path(tmpdir) / "repro.duckdb"
+            repro_spec_file = Path(tmpdir) / "repro_spec.json"
+            repro_spec_file.write_text(json.dumps(repro_spec.to_dict(), indent=2))
+
+            # Execute the spec
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "computronium.experiment.surface.cli",
+                    "run",
+                    "--spec",
+                    str(repro_spec_file),
+                    "--store",
+                    str(repro_store),
+                    "--dry-run",  # Just validate the spec first
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if result.returncode != 0:
+                logger.error(f"Repro dry-run failed: {result.stderr}")
+                return 1
+
+            # Now run for real
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "computronium.experiment.surface.cli",
+                    "run",
+                    "--spec",
+                    str(repro_spec_file),
+                    "--store",
+                    str(repro_store),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=3600,
+            )
+            if result.returncode != 0:
+                logger.error(f"Repro run failed: {result.stderr}")
+                return 1
+
+            # Compare metrics
+            repro_store_obj = RecordStore(StoreConfig(path=repro_store, read_only=True))
+            with repro_store_obj:
+                repro_run_id = repro_store_obj.latest_run_id()
+                if repro_run_id is None:
+                    logger.error("Repro run produced no run ID")
+                    return 1
+
+                repro_generator = ReportGenerator(repro_store_obj)
+                orig_records = generator.claim_eligible_records(args.run_id)
+                repro_records = repro_generator.claim_eligible_records(repro_run_id)
+
+                if not orig_records or not repro_records:
+                    logger.warning("No claim-eligible records for comparison")
+                    # Fall back to all records
+                    orig_records = generator._store.query_records(run_id=args.run_id)
+                    repro_records = repro_generator._store.query_records(
+                        run_id=repro_run_id
+                    )
+
+                # Match by cell_key
+                orig_by_cell = {r.cell_key: r for r in orig_records}
+                repro_by_cell = {r.cell_key: r for r in repro_records}
+
+                common_cells = set(orig_by_cell.keys()) & set(repro_by_cell.keys())
+                if not common_cells:
+                    logger.error("No matching cells between original and reproduction")
+                    return 1
+
+                metrics_to_check = (
+                    [m.strip() for m in args.metrics.split(",")]
+                    if args.metrics
+                    else None
+                )
+
+                mismatches = []
+                for cell_key in sorted(common_cells):
+                    orig_r = orig_by_cell[cell_key]
+                    repro_r = repro_by_cell[cell_key]
+                    orig_payload = orig_r.payload
+                    repro_payload = repro_r.payload
+
+                    if metrics_to_check:
+                        check_metrics = metrics_to_check
+                    else:
+                        check_metrics = [
+                            k
+                            for k in orig_payload
+                            if isinstance(orig_payload[k], int | float)
+                        ]
+
+                    for metric in check_metrics:
+                        if metric not in orig_payload or metric not in repro_payload:
+                            continue
+                        orig_val = orig_payload[metric]
+                        repro_val = repro_payload[metric]
+                        if isinstance(orig_val, int | float) and isinstance(
+                            repro_val, int | float
+                        ):
+                            diff = abs(float(orig_val) - float(repro_val))
+                            if diff > args.tolerance:
+                                mismatches.append({
+                                    "cell_key": cell_key,
+                                    "metric": metric,
+                                    "original": orig_val,
+                                    "reproduction": repro_val,
+                                    "diff": diff,
+                                })
+
+                output_data = {
+                    "original_run_id": args.run_id,
+                    "reproduction_run_id": repro_run_id,
+                    "tolerance": args.tolerance,
+                    "cells_compared": len(common_cells),
+                    "metrics_checked": metrics_to_check or "all",
+                    "mismatches": mismatches,
+                    "passed": len(mismatches) == 0,
+                }
+
+                if args.format == "json":
+                    output = json.dumps(output_data, indent=2, default=str)
+                elif mismatches:
+                    lines = [
+                        f"REPRO FAILED: {len(mismatches)} mismatches > {args.tolerance}"
+                    ]
+                    for m in mismatches[:10]:
+                        lines.append(
+                            f"  {m['cell_key'][:16]} {m['metric']}: {m['original']} vs {m['reproduction']} (diff={m['diff']})"
+                        )
+                    output = "\n".join(lines)
+                else:
+                    output = f"REPRO PASSED: {len(common_cells)} cells match within {args.tolerance}"
+
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    logger.info(f"Repro result written to {args.output}")
+                else:
+                    print(output)
+
+                return 0 if output_data["passed"] else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point for surface CLI."""
     import logging
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+
+    # Ensure registries are seeded for objective lookups
+    from computronium.experiment.schema import _ensure_registries_seeded
+
+    _ensure_registries_seeded()
+
     args = _build_parser().parse_args(argv)
     command_handlers = {
         "run": _cmd_run,
@@ -1516,6 +2119,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "hypothesis-campaign": _cmd_hypothesis_campaign,
         "stability-plasticity": _cmd_stability_plasticity,
         "frozen-theta-psi": _cmd_frozen_theta_psi,
+        "stats": _cmd_stats,
+        "pareto": _cmd_pareto,
+        "diff": _cmd_diff,
+        "repro": _cmd_repro,
     }
     try:
         handler = command_handlers.get(args.command)

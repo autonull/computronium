@@ -286,16 +286,16 @@ class ArtifactStore:
         For external artifacts, reads from external store.
         """
         row = self._conn.execute(
-            "SELECT storage, bytes, external_uri FROM artifacts WHERE digest = ?",
+            "SELECT bytes, external_uri FROM artifacts WHERE digest = ?",
             [digest],
         ).fetchone()
 
         if row is None:
             return None
 
-        storage, data, external_uri = row
+        data, external_uri = row
 
-        if storage == ArtifactStorage.INLINE.value:
+        if data is not None:
             return data
         else:
             if external_uri and external_uri.startswith("file://"):

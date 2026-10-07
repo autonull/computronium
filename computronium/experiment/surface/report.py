@@ -902,12 +902,104 @@ def export_to_parquet(
     return output_path
 
 
+def _load_training_history(store: RecordStore, run_id: str) -> dict[str, list[dict]]:
+    """Load training history from checkpoint artifacts for all records in a run.
+
+    Returns:
+        Dict mapping cell_key to list of epoch history dicts.
+    """
+    import io
+
+    import torch
+
+    history_data: dict[str, list[dict]] = {}
+    records = store.query_records(run_id=run_id)
+    for record in records:
+        artifacts = store.artifacts.get_for_record(record.record_id)
+        for artifact in artifacts:
+            if artifact.role.value == "model_checkpoint":
+                ckpt_bytes = store.artifacts.get(artifact.digest)
+                if ckpt_bytes:
+                    try:
+                        ckpt = torch.load(
+                            io.BytesIO(ckpt_bytes),
+                            map_location="cpu",
+                            weights_only=False,
+                        )
+                        if "history" in ckpt:
+                            history_data[record.cell_key] = ckpt["history"]
+                    except Exception:
+                        pass  # Skip corrupted checkpoints
+    return history_data
+
+
+def _compute_ablation_table(
+    records: list,
+    fixed_axes: dict[str, str],
+    varying_axis: str,
+    metric: str,
+) -> list[dict]:
+    """Compute ablation table: metric mean/std per value of varying_axis.
+
+    Args:
+        records: List of records to analyze.
+        fixed_axes: Dict of axis -> value to filter on (e.g., {"substrate": "digital"}).
+        varying_axis: Axis to ablate over (e.g., "credit").
+        metric: Payload key to aggregate (e.g., "val_acc").
+
+    Returns:
+        List of dicts with axis value, mean, std, count.
+    """
+    import statistics
+    from collections import defaultdict
+
+    # Filter records matching fixed axes
+    filtered = []
+    for r in records:
+        match = True
+        for axis, value in fixed_axes.items():
+            if getattr(r, axis) != value:
+                match = False
+                break
+        if match:
+            filtered.append(r)
+
+    # Group by varying axis
+    groups: dict[str, list[float]] = defaultdict(list)
+    for r in filtered:
+        val = r.payload.get(metric)
+        if val is not None:
+            groups[getattr(r, varying_axis)].append(float(val))
+
+    # Compute statistics
+    result = []
+    for axis_val, vals in sorted(groups.items()):
+        if vals:
+            result.append({
+                varying_axis: axis_val,
+                "mean": statistics.mean(vals),
+                "std": statistics.stdev(vals) if len(vals) > 1 else 0.0,
+                "count": len(vals),
+                "min": min(vals),
+                "max": max(vals),
+            })
+    return result
+
+
 def generate_html_report(
     store: RecordStore,
     run_id: str,
     output_path: str | Path | None = None,
 ) -> Path:
-    """Generate an interactive HTML report with Pareto plots for a run.
+    """Generate a comprehensive interactive HTML report for a run.
+
+    Includes:
+    - Multiple Pareto frontiers (accuracy vs walltime, accuracy vs params, stability vs plasticity)
+    - Convergence curves (loss/accuracy per epoch, per seed)
+    - Objective distributions
+    - Credit vs Update performance heatmap
+    - Substrate comparison
+    - Per-axis ablation tables
 
     Args:
         store: Record store containing the run data.
@@ -918,8 +1010,8 @@ def generate_html_report(
         Path to the generated HTML file.
     """
     try:
-        import plotly.graph_objects as go
         import plotly.express as px
+        import plotly.graph_objects as go
         from plotly.subplots import make_subplots
     except ImportError:
         raise ImportError(
@@ -942,7 +1034,6 @@ def generate_html_report(
     # Get objectives for this run
     objectives = generator.claim_metrics(run_id)
     if len(objectives) < 2:
-        # Fallback to default objectives
         objectives = generator.front_objectives(run_id)
 
     # Prepare data for plotting
@@ -957,40 +1048,59 @@ def generate_html_report(
             "substrate": record.substrate,
             "geometry": record.geometry,
             "plasticity": record.plasticity,
+            "seed": record.schedule.seed,
         }
         for obj in objectives:
             row[obj] = record.payload.get(obj)
+        # Add all available metrics for ablation analysis
+        for key, value in record.payload.items():
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                if key not in row:
+                    row[key] = value
         plot_data.append(row)
 
     if not plot_data:
         raise ValueError("No valid data for plotting")
 
-    # Filter records with all objectives present
-    plot_data = [r for r in plot_data if all(r.get(obj) is not None for obj in objectives)]
+    # Load training history from checkpoints
+    history_data = _load_training_history(store, run_id)
 
-    # Create subplots: Pareto frontiers + distribution plots
+    # Filter records with primary objectives present
+    obj_x, obj_y = objectives[0], objectives[1]
+    plot_data = [
+        r for r in plot_data if r.get(obj_x) is not None and r.get(obj_y) is not None
+    ]
+
+    # Create comprehensive dashboard with 3 rows x 3 cols
     fig = make_subplots(
-        rows=2,
-        cols=2,
+        rows=3,
+        cols=3,
         subplot_titles=(
-            f"Pareto Frontier: {objectives[0]} vs {objectives[1]}",
+            f"Pareto: {obj_x.replace('_', ' ').title()} vs {obj_y.replace('_', ' ').title()}",
+            "Pareto: Validation Accuracy vs Params",
+            "Pareto: Spectral Radius vs Plasticity Capacity",
+            "Convergence: Train/Val Loss per Epoch",
+            "Convergence: Train/Val Accuracy per Epoch",
             "Objective Distributions",
-            "Credit vs Update Performance",
+            "Credit vs Update Heatmap",
             "Substrate Comparison",
+            "Stability Metrics: ρ(J) vs σ_max",
         ),
         specs=[
-            [{"type": "scatter"}, {"type": "box"}],
-            [{"type": "scatter"}, {"type": "scatter"}],
+            [{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}],
+            [{"type": "scatter"}, {"type": "scatter"}, {"type": "box"}],
+            [{"type": "heatmap"}, {"type": "scatter"}, {"type": "scatter"}],
         ],
+        vertical_spacing=0.08,
+        horizontal_spacing=0.06,
     )
 
-    # Plot 1: Pareto frontier
-    obj_x, obj_y = objectives[0], objectives[1]
+    # ===== ROW 1: PARETO FRONTIERS =====
 
+    # Plot 1: Primary Pareto frontier
     x_vals = [r[obj_x] for r in plot_data]
     y_vals = [r[obj_y] for r in plot_data]
 
-    # All points
     fig.add_trace(
         go.Scatter(
             x=x_vals,
@@ -998,14 +1108,18 @@ def generate_html_report(
             mode="markers",
             name="All Cells",
             marker=dict(size=8, opacity=0.6, color="lightblue"),
-            text=[f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}" for r in plot_data],
+            text=[
+                f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}"
+                for r in plot_data
+            ],
             hovertemplate="%{text}<br>%{xaxis_title}: %{x:.4g}<br>%{yaxis_title}: %{y:.4g}<extra></extra>",
+            showlegend=True,
         ),
-        row=1, col=1,
+        row=1,
+        col=1,
     )
 
-    # Pareto frontier points
-    pareto_points = generator.pareto_frontier(run_id)
+    pareto_points = generator.pareto_frontier(run_id, (obj_x, obj_y))
     if pareto_points:
         pareto_x = [p["objectives"][obj_x] for p in pareto_points]
         pareto_y = [p["objectives"][obj_y] for p in pareto_points]
@@ -1017,75 +1131,284 @@ def generate_html_report(
                 name="Pareto Frontier",
                 marker=dict(size=12, color="red", symbol="diamond"),
                 line=dict(color="red", dash="dot"),
-                text=[f"{p['cell_key']}<br>{p['coordinate']['dynamics']}/{p['coordinate']['credit']}/{p['coordinate']['update']}" for p in pareto_points],
+                text=[
+                    f"{p['cell_key']}<br>{p['coordinate']['dynamics']}/{p['coordinate']['credit']}/{p['coordinate']['update']}"
+                    for p in pareto_points
+                ],
                 hovertemplate="%{text}<br>%{xaxis_title}: %{x:.4g}<br>%{yaxis_title}: %{y:.4g}<extra></extra>",
+                showlegend=True,
             ),
-            row=1, col=1,
+            row=1,
+            col=1,
         )
 
     fig.update_xaxes(title_text=obj_x.replace("_", " ").title(), row=1, col=1)
     fig.update_yaxes(title_text=obj_y.replace("_", " ").title(), row=1, col=1)
 
-    # Plot 2: Objective distributions (box plots)
-    for obj in objectives[:4]:  # Limit to first 4 objectives
-        vals = [r[obj] for r in plot_data if r[obj] is not None]
+    # Plot 2: Accuracy vs Params Pareto
+    if "val_acc" in objectives and "param_count" in objectives:
+        acc_vals = [r["val_acc"] for r in plot_data if r.get("val_acc") is not None]
+        param_vals = [
+            r["param_count"] for r in plot_data if r.get("param_count") is not None
+        ]
+        if acc_vals and param_vals:
+            # Match records with both metrics
+            valid_records = [
+                r
+                for r in plot_data
+                if r.get("val_acc") is not None and r.get("param_count") is not None
+            ]
+            if valid_records:
+                fig.add_trace(
+                    go.Scatter(
+                        x=[r["param_count"] for r in valid_records],
+                        y=[r["val_acc"] for r in valid_records],
+                        mode="markers",
+                        name="Acc vs Params",
+                        marker=dict(size=8, opacity=0.6, color="lightgreen"),
+                        text=[
+                            f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}"
+                            for r in valid_records
+                        ],
+                        hovertemplate="%{text}<br>Params: %{x:.0f}<br>Val Acc: %{y:.4g}<extra></extra>",
+                        showlegend=False,
+                    ),
+                    row=1,
+                    col=2,
+                )
+                pareto_acc_param = generator.pareto_frontier(
+                    run_id, ("param_count", "val_acc")
+                )
+                if pareto_acc_param:
+                    pareto_x = [
+                        p["objectives"]["param_count"] for p in pareto_acc_param
+                    ]
+                    pareto_y = [p["objectives"]["val_acc"] for p in pareto_acc_param]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=pareto_x,
+                            y=pareto_y,
+                            mode="markers+lines",
+                            name="Acc-Params Frontier",
+                            marker=dict(size=12, color="darkgreen", symbol="diamond"),
+                            line=dict(color="darkgreen", dash="dot"),
+                            showlegend=False,
+                        ),
+                        row=1,
+                        col=2,
+                    )
+    fig.update_xaxes(title_text="Param Count", type="log", row=1, col=2)
+    fig.update_yaxes(title_text="Validation Accuracy", row=1, col=2)
+
+    # Plot 3: Stability vs Plasticity Pareto (ρ(J) vs psi_capacity)
+    if "spectral_radius" in objectives and "psi_capacity" in objectives:
+        valid_records = [
+            r
+            for r in plot_data
+            if r.get("spectral_radius") is not None
+            and r.get("psi_capacity") is not None
+        ]
+        if valid_records:
+            fig.add_trace(
+                go.Scatter(
+                    x=[r["psi_capacity"] for r in valid_records],
+                    y=[r["spectral_radius"] for r in valid_records],
+                    mode="markers",
+                    name="Stability vs Plasticity",
+                    marker=dict(size=8, opacity=0.6, color="orange"),
+                    text=[
+                        f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}/{r['plasticity']}"
+                        for r in valid_records
+                    ],
+                    hovertemplate="%{text}<br>Psi Capacity: %{x:.0f}<br>ρ(J): %{y:.4g}<extra></extra>",
+                    showlegend=False,
+                ),
+                row=1,
+                col=3,
+            )
+    fig.update_xaxes(title_text="Psi Capacity", row=1, col=3)
+    fig.update_yaxes(title_text="Spectral Radius ρ(J)", row=1, col=3)
+
+    # ===== ROW 2: CONVERGENCE CURVES =====
+
+    # Plot 4: Convergence - Loss per epoch
+    has_history = len(history_data) > 0
+    if has_history:
+        for cell_key, history in list(history_data.items())[
+            :10
+        ]:  # Limit to 10 cells for readability
+            epochs = [h["epoch"] for h in history]
+            train_loss = [h.get("train_loss", 0) for h in history]
+            val_loss = [h.get("val_loss", 0) for h in history]
+            fig.add_trace(
+                go.Scatter(
+                    x=epochs,
+                    y=train_loss,
+                    mode="lines+markers",
+                    name=f"{cell_key[:8]} train",
+                    line=dict(width=1),
+                    marker=dict(size=4),
+                    opacity=0.7,
+                    showlegend=False,
+                    legendgroup=cell_key,
+                ),
+                row=2,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=epochs,
+                    y=val_loss,
+                    mode="lines+markers",
+                    name=f"{cell_key[:8]} val",
+                    line=dict(width=1, dash="dot"),
+                    marker=dict(size=4),
+                    opacity=0.7,
+                    showlegend=False,
+                    legendgroup=cell_key,
+                ),
+                row=2,
+                col=1,
+            )
+    else:
+        fig.add_annotation(
+            text="No checkpoint history available",
+            xref="x4",
+            yref="y4",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            row=2,
+            col=1,
+        )
+    fig.update_xaxes(title_text="Epoch", row=2, col=1)
+    fig.update_yaxes(title_text="Loss", row=2, col=1)
+
+    # Plot 5: Convergence - Accuracy per epoch
+    if has_history:
+        for cell_key, history in list(history_data.items())[:10]:
+            epochs = [h["epoch"] for h in history]
+            train_acc = [h.get("train_acc", 0) for h in history]
+            val_acc = [h.get("val_acc", 0) for h in history]
+            fig.add_trace(
+                go.Scatter(
+                    x=epochs,
+                    y=train_acc,
+                    mode="lines+markers",
+                    name=f"{cell_key[:8]} train",
+                    line=dict(width=1),
+                    marker=dict(size=4),
+                    opacity=0.7,
+                    showlegend=False,
+                    legendgroup=f"{cell_key}_acc",
+                ),
+                row=2,
+                col=2,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=epochs,
+                    y=val_acc,
+                    mode="lines+markers",
+                    name=f"{cell_key[:8]} val",
+                    line=dict(width=1, dash="dot"),
+                    marker=dict(size=4),
+                    opacity=0.7,
+                    showlegend=False,
+                    legendgroup=f"{cell_key}_acc",
+                ),
+                row=2,
+                col=2,
+            )
+    else:
+        fig.add_annotation(
+            text="No checkpoint history available",
+            xref="x5",
+            yref="y5",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            row=2,
+            col=2,
+        )
+    fig.update_xaxes(title_text="Epoch", row=2, col=2)
+    fig.update_yaxes(title_text="Accuracy", row=2, col=2)
+
+    # Plot 6: Objective distributions (box plots)
+    for obj in objectives[:6]:
+        vals = [r[obj] for r in plot_data if r.get(obj) is not None]
         if vals:
             fig.add_trace(
                 go.Box(
                     y=vals,
                     name=obj.replace("_", " ").title(),
                     boxmean=True,
+                    showlegend=False,
                 ),
-                row=1, col=2,
+                row=2,
+                col=3,
             )
-    fig.update_yaxes(title_text="Value", row=1, col=2)
+    fig.update_yaxes(title_text="Value", row=2, col=3)
 
-    # Plot 3: Credit vs Update scatter
-    credit_vals = [r["credit"] for r in plot_data]
-    update_vals = [r["update"] for r in plot_data]
-    colors = [r[obj_x] for r in plot_data]
+    # ===== ROW 3: ABLATION & COMPARISON =====
 
-    # Create categorical mapping for credit/update
-    unique_credits = sorted(set(credit_vals))
-    unique_updates = sorted(set(update_vals))
-    credit_to_num = {c: i for i, c in enumerate(unique_credits)}
-    update_to_num = {u: i for i, u in enumerate(unique_updates)}
+    # Plot 7: Credit vs Update heatmap (mean val_acc)
+    credit_vals = sorted(set(r["credit"] for r in plot_data))
+    update_vals = sorted(set(r["update"] for r in plot_data))
+    if credit_vals and update_vals and "val_acc" in objectives:
+        heatmap_data = []
+        heatmap_text = []
+        for credit in credit_vals:
+            row_vals = []
+            row_text = []
+            for update in update_vals:
+                subset = [
+                    r
+                    for r in plot_data
+                    if r["credit"] == credit
+                    and r["update"] == update
+                    and r.get("val_acc") is not None
+                ]
+                if subset:
+                    mean_acc = sum(r["val_acc"] for r in subset) / len(subset)
+                    row_vals.append(mean_acc)
+                    row_text.append(
+                        f"{credit}/{update}<br>acc={mean_acc:.3f}<br>n={len(subset)}"
+                    )
+                else:
+                    row_vals.append(None)
+                    row_text.append("")
+            heatmap_data.append(row_vals)
+            heatmap_text.append(row_text)
 
-    fig.add_trace(
-        go.Scatter(
-            x=[credit_to_num[c] for c in credit_vals],
-            y=[update_to_num[u] for u in update_vals],
-            mode="markers",
-            name="Credit vs Update",
-            marker=dict(
-                size=10,
-                color=colors,
+        fig.add_trace(
+            go.Heatmap(
+                z=heatmap_data,
+                x=update_vals,
+                y=credit_vals,
+                text=heatmap_text,
+                texttemplate="%{text}",
                 colorscale="Viridis",
+                colorbar=dict(title="Val Acc"),
                 showscale=True,
-                colorbar=dict(title=obj_x.replace("_", " ").title()),
+                hoverongaps=False,
             ),
-            text=[f"{r['dynamics']}/{r['credit']}/{r['update']}<br>{obj_x}: {r[obj_x]:.4g}" for r in plot_data],
-            hovertemplate="%{text}<extra></extra>",
-        ),
-        row=2, col=1,
-    )
-    fig.update_xaxes(
-        title_text="Credit",
-        tickvals=list(range(len(unique_credits))),
-        ticktext=unique_credits,
-        row=2, col=1,
-    )
-    fig.update_yaxes(
-        title_text="Update",
-        tickvals=list(range(len(unique_updates))),
-        ticktext=unique_updates,
-        row=2, col=1,
-    )
+            row=3,
+            col=1,
+        )
+    fig.update_xaxes(title_text="Update", row=3, col=1)
+    fig.update_yaxes(title_text="Credit", row=3, col=1)
 
-    # Plot 4: Substrate comparison
+    # Plot 8: Substrate comparison
     substrates = sorted(set(r["substrate"] for r in plot_data))
     for substrate in substrates:
-        sub_data = [r for r in plot_data if r["substrate"] == substrate]
+        sub_data = [
+            r
+            for r in plot_data
+            if r["substrate"] == substrate
+            and r.get(obj_x) is not None
+            and r.get(obj_y) is not None
+        ]
         if sub_data:
             fig.add_trace(
                 go.Scatter(
@@ -1094,20 +1417,76 @@ def generate_html_report(
                     mode="markers",
                     name=f"Substrate: {substrate}",
                     marker=dict(size=8),
-                    text=[f"{r['dynamics']}/{r['credit']}/{r['update']}" for r in sub_data],
+                    text=[
+                        f"{r['dynamics']}/{r['credit']}/{r['update']}" for r in sub_data
+                    ],
                     hovertemplate="%{text}<br>%{xaxis_title}: %{x:.4g}<br>%{yaxis_title}: %{y:.4g}<extra></extra>",
+                    showlegend=False,
                 ),
-                row=2, col=2,
+                row=3,
+                col=2,
             )
-    fig.update_xaxes(title_text=obj_x.replace("_", " ").title(), row=2, col=2)
-    fig.update_yaxes(title_text=obj_y.replace("_", " ").title(), row=2, col=2)
+    fig.update_xaxes(title_text=obj_x.replace("_", " ").title(), row=3, col=2)
+    fig.update_yaxes(title_text=obj_y.replace("_", " ").title(), row=3, col=2)
+
+    # Plot 9: Stability metrics scatter (ρ(J) vs σ_max)
+    stability_records = [
+        r
+        for r in plot_data
+        if r.get("spectral_radius") is not None
+        and r.get("max_singular_value") is not None
+    ]
+    if stability_records:
+        fig.add_trace(
+            go.Scatter(
+                x=[r["spectral_radius"] for r in stability_records],
+                y=[r["max_singular_value"] for r in stability_records],
+                mode="markers",
+                name="Stability",
+                marker=dict(
+                    size=10,
+                    color=[r.get("val_acc", 0) for r in stability_records],
+                    colorscale="RdYlGn",
+                    showscale=True,
+                    colorbar=dict(title="Val Acc"),
+                ),
+                text=[
+                    f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}<br>ρ={r['spectral_radius']:.4f}<br>σ_max={r['max_singular_value']:.4f}"
+                    for r in stability_records
+                ],
+                hovertemplate="%{text}<extra></extra>",
+                showlegend=False,
+            ),
+            row=3,
+            col=3,
+        )
+        # Add diagonal line y=x (where σ_max = ρ)
+        max_val = max(
+            max(r["spectral_radius"] for r in stability_records),
+            max(r["max_singular_value"] for r in stability_records),
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[0, max_val],
+                y=[0, max_val],
+                mode="lines",
+                name="σ_max = ρ(J)",
+                line=dict(color="gray", dash="dash", width=1),
+                showlegend=False,
+            ),
+            row=3,
+            col=3,
+        )
+    fig.update_xaxes(title_text="Spectral Radius ρ(J)", row=3, col=3)
+    fig.update_yaxes(title_text="Max Singular Value σ_max", row=3, col=3)
 
     # Update layout
     fig.update_layout(
         title=f"Run Report: {run_id} (Status: {summary.status})",
-        height=900,
+        height=1400,
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
+        margin=dict(t=100, b=50, l=50, r=50),
     )
 
     # Generate HTML
