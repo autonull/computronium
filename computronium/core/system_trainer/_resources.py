@@ -72,6 +72,7 @@ class EpochResource:
     peak_memory_mb: float | None = None
     forward_flops: int | None = None
     backward_flops: int | None = None
+    energy_joules: float | None = None
 
 
 @dataclass(slots=True)
@@ -90,6 +91,8 @@ class EpochResources:
     _stopped: bool = False
     _flops_per_batch: int = 0
     _peak_mb: float = 0.0
+    _energy_j: float = 0.0
+    _start_power_w: float = 0.0
 
     @property
     def _cuda(self) -> bool:
@@ -122,8 +125,15 @@ class EpochResources:
         self.steps = 0
         self.paths = {}
         self._flops_per_batch = 0
+        self._energy_j = 0.0
         if self._cuda:
             torch.cuda.reset_peak_memory_stats()
+            # Sample initial power for energy estimation
+            try:
+                from computronium.core.profiling import get_gpu_power_watts
+                self._start_power_w = get_gpu_power_watts()
+            except Exception:
+                self._start_power_w = 0.0
 
     def note_step(self, batch_size: int) -> None:
         """Record one completed training batch."""
@@ -137,7 +147,16 @@ class EpochResources:
         """Close the epoch's timer and read the peak memory it reached."""
         self._elapsed = time.perf_counter() - self._started
         self._stopped = True
-        self._peak_mb = torch.cuda.max_memory_allocated() / _MB if self._cuda else 0.0
+        if self._cuda:
+            self._peak_mb = torch.cuda.max_memory_allocated() / _MB
+            # Estimate energy: average power × time
+            try:
+                from computronium.core.profiling import get_gpu_power_watts
+                end_power_w = get_gpu_power_watts()
+                avg_power_w = (self._start_power_w + end_power_w) / 2
+                self._energy_j = avg_power_w * self._elapsed
+            except Exception:
+                self._energy_j = 0.0
 
     def record(self, epoch: int) -> EpochResource:
         """Freeze this epoch's cost. Call after :meth:`stop`."""
@@ -151,6 +170,7 @@ class EpochResources:
             peak_memory_mb=self._peak_mb if self._cuda else None,
             forward_flops=forward,
             backward_flops=2 * forward if forward is not None else None,
+            energy_joules=self._energy_j if self._cuda and self._energy_j > 0 else None,
         )
 
 

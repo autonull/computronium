@@ -28,6 +28,12 @@ from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
     PARAM_BUDGET_TOLERANCE,
 )
+from computronium.ontology.substrate.spec import (
+    SubstrateSpec,
+    compute_substrate_objectives,
+)
+from computronium.ontology.substrate._substrate import SubstrateConfig
+from computronium.core.joint.transition import PlasticityPrimitive
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -472,6 +478,59 @@ def compute_energy_metrics(system: Any, *, batch_size: int) -> dict[str, float]:
     return metrics
 
 
+def compute_plasticity_metrics(system: Any) -> dict[str, float]:
+    """Plasticity objectives: psi capacity, consolidation cost, rewrite rate.
+
+    Args:
+        system: The trained system (5-D or 6-D joint).
+
+    Returns:
+        Dict with plasticity metrics:
+        - psi_capacity: Total plastic state dimension (sum of numel)
+        - consolidation_cost: Estimated FLOPs for ψ→θ consolidation
+        - rewrite_rate: Placeholder (requires multi-episode tracking)
+    """
+    metrics: dict[str, float] = {}
+    plasticity = getattr(system, "plasticity", None)
+    if plasticity is None:
+        return metrics
+
+    # Check if it's a NullPlasticity (5-D system)
+    from computronium.state import NullPlasticity
+    if isinstance(plasticity, NullPlasticity):
+        return metrics
+
+    # Get plastic state dimensions from config
+    plastic_dims = getattr(plasticity, "config", None)
+    if plastic_dims is None:
+        return metrics
+
+    plastic_state_dims = getattr(plastic_dims, "plastic_state_dims", None)
+    if plastic_state_dims is None:
+        return metrics
+
+    # psi_capacity: sum of all plastic state dimensions
+    psi_capacity = sum(plastic_state_dims.values())
+    metrics["psi_capacity"] = float(psi_capacity)
+
+    # consolidation_cost: estimate FLOPs for ψ→θ consolidation
+    # For fast_weights: consolidation is a low-rank update (fast_weight_dim * param_count)
+    # For routing: consolidation is gate logit integration (gate_dim * param_count)
+    # For rule_state: consolidation is operator selection (num_operators * operator_dim)
+    # Use a heuristic: psi_capacity * hidden_dim (typical consolidation cost)
+    hidden_dim = 256  # Typical hidden dimension
+    if hasattr(system.geometry, "config") and hasattr(system.geometry.config, "hidden_dim"):
+        hidden_dim = system.geometry.config.hidden_dim
+    consolidation_flops = psi_capacity * hidden_dim * 2  # 2 FLOPs per MAC
+    metrics["consolidation_cost"] = float(consolidation_flops)
+
+    # rewrite_rate: placeholder (requires tracking psi over episodes)
+    # Set to 0.0 for now; would need multi-episode tracking
+    metrics["rewrite_rate"] = 0.0
+
+    return metrics
+
+
 class _Batches:
     """A bounded view of a data provider: ``batch_limit`` batches, then stop.
 
@@ -669,10 +728,56 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
             metrics["latency_ms"] = (
                 last_epoch.epoch_time_s / last_epoch.steps
             ) * 1000.0
+        # Energy per step (NVML-based)
+        if last_epoch.energy_joules is not None and last_epoch.steps > 0:
+            metrics["energy_per_step"] = last_epoch.energy_joules / last_epoch.steps
 
     sample_x = _sample_inputs(task, config.device)
     metrics.update(compute_stability_metrics(cell.system, sample_x))
     metrics.update(compute_energy_metrics(cell.system, batch_size=sample_x.shape[0]))
+
+    # Substrate-specific objectives
+    # Build SubstrateSpec from coordinate's substrate name (mirrors compose logic)
+    name_lower = coordinate.substrate.lower()
+    factory_map = {
+        "digital": SubstrateConfig.digital,
+        "analog": SubstrateConfig.analog,
+        "memristive": SubstrateConfig.memristive,
+        "neuromorphic": SubstrateConfig.neuromorphic,
+        "optical": SubstrateConfig.optical,
+        "quantum": SubstrateConfig.quantum,
+        "sparse": SubstrateConfig.sparse,
+        "ternary": SubstrateConfig.ternary,
+        "complex": SubstrateConfig.complex,
+    }
+    factory = factory_map.get(name_lower, SubstrateConfig.digital)
+    # Add noise for diffusion/spike_integration/pc_alm dynamics (mirrors compose logic)
+    dynamics_name = coordinate.dynamics
+    if dynamics_name in {"diffusion", "spike_integration", "pc_alm"}:
+        substrate_config = factory(noise_level=0.05)
+    else:
+        substrate_config = factory()
+    substrate_spec = SubstrateSpec.from_config(substrate_config)
+    settle_telemetry = {
+        "energy_per_step": metrics.get("energy_per_step", 0.0),
+        "settle_steps_used": metrics.get("settle_steps", 0),
+        "free_energy_final": metrics.get("hopfield_energy", metrics.get("free_energy", 0.0)),
+        "spike_rate": metrics.get("spike_rate", 0.0),
+        "event_density": metrics.get("event_density", 0.0),
+    }
+    runtime_stats = {
+        "walltime_s": walltime_s,
+        "memory_mb": metrics.get("memory_usage", 0.0),
+        "flops": metrics.get("flops", 0.0),
+        "latency_ms": metrics.get("latency_ms", 0.0),
+    }
+    substrate_objectives = compute_substrate_objectives(
+        substrate_spec, settle_telemetry, runtime_stats
+    )
+    metrics.update(substrate_objectives)
+
+    # Plasticity objectives
+    metrics.update(compute_plasticity_metrics(cell.system))
 
     # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
     # Higher is better (more accuracy per joule)

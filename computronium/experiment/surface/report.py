@@ -63,6 +63,7 @@ __all__ = [
     "Significance",
     "export_to_json",
     "export_to_parquet",
+    "generate_html_report",
     "generate_run_report",
     "load_export_bundle",
     "narrative_handoff_summary",
@@ -899,6 +900,221 @@ def export_to_parquet(
         json.dump(metadata, f, indent=2)
 
     return output_path
+
+
+def generate_html_report(
+    store: RecordStore,
+    run_id: str,
+    output_path: str | Path | None = None,
+) -> Path:
+    """Generate an interactive HTML report with Pareto plots for a run.
+
+    Args:
+        store: Record store containing the run data.
+        run_id: Run ID to generate report for.
+        output_path: Optional output file path. Defaults to {run_id}_report.html.
+
+    Returns:
+        Path to the generated HTML file.
+    """
+    try:
+        import plotly.graph_objects as go
+        import plotly.express as px
+        from plotly.subplots import make_subplots
+    except ImportError:
+        raise ImportError(
+            "plotly required for HTML report. Install with: uv add plotly"
+        )
+
+    generator = ReportGenerator(store)
+    summary = generator.run_summary(run_id)
+    if summary is None:
+        raise ValueError(f"Run {run_id} not found")
+
+    # Get claim-eligible records for Pareto analysis
+    eligible_records = generator.claim_eligible_records(run_id)
+    # Fallback to all records if no claim-eligible records
+    if not eligible_records:
+        eligible_records = generator._store.query_records(run_id=run_id)
+    if not eligible_records:
+        raise ValueError(f"No records for run {run_id}")
+
+    # Get objectives for this run
+    objectives = generator.claim_metrics(run_id)
+    if len(objectives) < 2:
+        # Fallback to default objectives
+        objectives = generator.front_objectives(run_id)
+
+    # Prepare data for plotting
+    plot_data = []
+    for record in eligible_records:
+        row = {
+            "record_id": record.record_id[:12],
+            "cell_key": record.cell_key[:12],
+            "dynamics": record.dynamics,
+            "credit": record.credit,
+            "update": record.update,
+            "substrate": record.substrate,
+            "geometry": record.geometry,
+            "plasticity": record.plasticity,
+        }
+        for obj in objectives:
+            row[obj] = record.payload.get(obj)
+        plot_data.append(row)
+
+    if not plot_data:
+        raise ValueError("No valid data for plotting")
+
+    # Filter records with all objectives present
+    plot_data = [r for r in plot_data if all(r.get(obj) is not None for obj in objectives)]
+
+    # Create subplots: Pareto frontiers + distribution plots
+    fig = make_subplots(
+        rows=2,
+        cols=2,
+        subplot_titles=(
+            f"Pareto Frontier: {objectives[0]} vs {objectives[1]}",
+            "Objective Distributions",
+            "Credit vs Update Performance",
+            "Substrate Comparison",
+        ),
+        specs=[
+            [{"type": "scatter"}, {"type": "box"}],
+            [{"type": "scatter"}, {"type": "scatter"}],
+        ],
+    )
+
+    # Plot 1: Pareto frontier
+    obj_x, obj_y = objectives[0], objectives[1]
+
+    x_vals = [r[obj_x] for r in plot_data]
+    y_vals = [r[obj_y] for r in plot_data]
+
+    # All points
+    fig.add_trace(
+        go.Scatter(
+            x=x_vals,
+            y=y_vals,
+            mode="markers",
+            name="All Cells",
+            marker=dict(size=8, opacity=0.6, color="lightblue"),
+            text=[f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}" for r in plot_data],
+            hovertemplate="%{text}<br>%{xaxis_title}: %{x:.4g}<br>%{yaxis_title}: %{y:.4g}<extra></extra>",
+        ),
+        row=1, col=1,
+    )
+
+    # Pareto frontier points
+    pareto_points = generator.pareto_frontier(run_id)
+    if pareto_points:
+        pareto_x = [p["objectives"][obj_x] for p in pareto_points]
+        pareto_y = [p["objectives"][obj_y] for p in pareto_points]
+        fig.add_trace(
+            go.Scatter(
+                x=pareto_x,
+                y=pareto_y,
+                mode="markers+lines",
+                name="Pareto Frontier",
+                marker=dict(size=12, color="red", symbol="diamond"),
+                line=dict(color="red", dash="dot"),
+                text=[f"{p['cell_key']}<br>{p['coordinate']['dynamics']}/{p['coordinate']['credit']}/{p['coordinate']['update']}" for p in pareto_points],
+                hovertemplate="%{text}<br>%{xaxis_title}: %{x:.4g}<br>%{yaxis_title}: %{y:.4g}<extra></extra>",
+            ),
+            row=1, col=1,
+        )
+
+    fig.update_xaxes(title_text=obj_x.replace("_", " ").title(), row=1, col=1)
+    fig.update_yaxes(title_text=obj_y.replace("_", " ").title(), row=1, col=1)
+
+    # Plot 2: Objective distributions (box plots)
+    for obj in objectives[:4]:  # Limit to first 4 objectives
+        vals = [r[obj] for r in plot_data if r[obj] is not None]
+        if vals:
+            fig.add_trace(
+                go.Box(
+                    y=vals,
+                    name=obj.replace("_", " ").title(),
+                    boxmean=True,
+                ),
+                row=1, col=2,
+            )
+    fig.update_yaxes(title_text="Value", row=1, col=2)
+
+    # Plot 3: Credit vs Update scatter
+    credit_vals = [r["credit"] for r in plot_data]
+    update_vals = [r["update"] for r in plot_data]
+    colors = [r[obj_x] for r in plot_data]
+
+    # Create categorical mapping for credit/update
+    unique_credits = sorted(set(credit_vals))
+    unique_updates = sorted(set(update_vals))
+    credit_to_num = {c: i for i, c in enumerate(unique_credits)}
+    update_to_num = {u: i for i, u in enumerate(unique_updates)}
+
+    fig.add_trace(
+        go.Scatter(
+            x=[credit_to_num[c] for c in credit_vals],
+            y=[update_to_num[u] for u in update_vals],
+            mode="markers",
+            name="Credit vs Update",
+            marker=dict(
+                size=10,
+                color=colors,
+                colorscale="Viridis",
+                showscale=True,
+                colorbar=dict(title=obj_x.replace("_", " ").title()),
+            ),
+            text=[f"{r['dynamics']}/{r['credit']}/{r['update']}<br>{obj_x}: {r[obj_x]:.4g}" for r in plot_data],
+            hovertemplate="%{text}<extra></extra>",
+        ),
+        row=2, col=1,
+    )
+    fig.update_xaxes(
+        title_text="Credit",
+        tickvals=list(range(len(unique_credits))),
+        ticktext=unique_credits,
+        row=2, col=1,
+    )
+    fig.update_yaxes(
+        title_text="Update",
+        tickvals=list(range(len(unique_updates))),
+        ticktext=unique_updates,
+        row=2, col=1,
+    )
+
+    # Plot 4: Substrate comparison
+    substrates = sorted(set(r["substrate"] for r in plot_data))
+    for substrate in substrates:
+        sub_data = [r for r in plot_data if r["substrate"] == substrate]
+        if sub_data:
+            fig.add_trace(
+                go.Scatter(
+                    x=[r[obj_x] for r in sub_data],
+                    y=[r[obj_y] for r in sub_data],
+                    mode="markers",
+                    name=f"Substrate: {substrate}",
+                    marker=dict(size=8),
+                    text=[f"{r['dynamics']}/{r['credit']}/{r['update']}" for r in sub_data],
+                    hovertemplate="%{text}<br>%{xaxis_title}: %{x:.4g}<br>%{yaxis_title}: %{y:.4g}<extra></extra>",
+                ),
+                row=2, col=2,
+            )
+    fig.update_xaxes(title_text=obj_x.replace("_", " ").title(), row=2, col=2)
+    fig.update_yaxes(title_text=obj_y.replace("_", " ").title(), row=2, col=2)
+
+    # Update layout
+    fig.update_layout(
+        title=f"Run Report: {run_id} (Status: {summary.status})",
+        height=900,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+
+    # Generate HTML
+    output_file = Path(output_path) if output_path else Path(f"{run_id}_report.html")
+    output_file.write_text(fig.to_html(include_plotlyjs="cdn"), encoding="utf-8")
+
+    return output_file
 
 
 def export_to_json(  # ruff: ignore[too-many-locals]

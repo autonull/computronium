@@ -409,6 +409,122 @@ def get_gpu_peak_memory_mb() -> float:
         return torch.cuda.max_memory_allocated() / (1024 * 1024)
 
 
+def get_gpu_power_watts() -> float:
+    """Get current GPU power draw in watts using NVML."""
+    if not torch.cuda.is_available():
+        return 0.0
+
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
+        power_mw = pynvml.nvmlDeviceGetPowerUsage(handle)
+        return power_mw / 1000.0  # Convert mW to W
+    except Exception:
+        return 0.0
+
+
+class EnergyTracker:
+    """Per-step energy/power measurement with throttled heavy metrics.
+
+    The activation-sparsity forward and the GPU weight-sparsity reduction are
+    expensive relative to one train step. Inside a probe (``global_step`` is
+    not ``None``) they are computed **once**, on the first measured step, and
+    cached on the model for reuse on every later step. Standalone use
+    (``global_step=None``) always measures, preserving the original eager
+    behaviour. The probe driver passes the step counter so the whole run is
+    monitored without paying the heavy cost per batch.
+    """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        requires_backward: bool = True,
+        global_step: int | None = None,
+    ) -> None:
+        self.model = model
+        self.requires_backward = requires_backward
+        self.global_step = global_step
+        self.start_time = 0.0
+        self.wall_time_ms = 0.0
+        self.profile = None
+        self._start_power_w = 0.0
+        self._energy_j = 0.0
+
+    def __enter__(self):
+        self.start_time = time.time()
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+            self._start_power_w = get_gpu_power_watts()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.wall_time_ms = (time.time() - self.start_time) * 1000
+
+        peak_mem = 0.0
+        if torch.cuda.is_available():
+            peak_mem = torch.cuda.max_memory_allocated() / (1024 * 1024)
+            # Estimate energy from average power during step
+            end_power_w = get_gpu_power_watts()
+            avg_power_w = (self._start_power_w + end_power_w) / 2
+            self._energy_j = avg_power_w * (self.wall_time_ms / 1000.0)
+
+        if exc_type is not None:
+            return False
+
+        params = sum(p.numel() for p in self.model.parameters())
+
+        # Heavy metrics are throttled to the first step of a probe and cached on
+        # the model; standalone trackers (global_step=None) always measure.
+        heavy_cached = hasattr(self.model, "_biopl_activation_sparsity")
+        compute_heavy = self.global_step is None or not heavy_cached
+
+        if compute_heavy:
+            zero_weights = sum(
+                (p.abs() < 1e-5).sum().item() for p in self.model.parameters()
+            )
+            weight_sparsity = zero_weights / max(params, 1)
+
+            # Pass None so _estimate_activation_sparsity builds a proper
+            # spatial/flat dummy matching the model's input format.
+            activation_sparsity = _estimate_activation_sparsity(self.model, None)
+
+            if self.global_step is not None:
+                setattr(self.model, "_biopl_activation_sparsity", activation_sparsity)
+                setattr(self.model, "_biopl_weight_sparsity", weight_sparsity)
+        else:
+            activation_sparsity = float(
+                getattr(self.model, "_biopl_activation_sparsity")
+            )
+            weight_sparsity = float(getattr(self.model, "_biopl_weight_sparsity"))
+
+        batch_size = 64
+        fwd_flops = 2 * params * batch_size
+        bwd_flops = 2 * fwd_flops if self.requires_backward else 0
+
+        energy_proxy = (
+            (fwd_flops + bwd_flops) * (1 - activation_sparsity) / max(params, 1)
+        )
+
+        self.profile = EnergyProfile(
+            forward_flops=fwd_flops,
+            backward_flops=bwd_flops,
+            param_count=params,
+            activation_sparsity=activation_sparsity,
+            weight_sparsity=weight_sparsity,
+            wall_time_ms=self.wall_time_ms,
+            peak_memory_mb=peak_mem,
+            energy_proxy=energy_proxy,
+            requires_backward=self.requires_backward,
+        )
+        return False
+
+    def energy_joules(self) -> float:
+        """Return measured energy in joules (NVML-based)."""
+        return self._energy_j
+
+
 def profile_run(
     model: nn.Module, input_shape: tuple[int, ...], requires_backward: bool = True
 ) -> EnergyProfile:

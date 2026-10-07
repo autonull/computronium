@@ -11,7 +11,11 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.core.logging import get_logger
-from computronium.core.system_trainer import compose_system_from_configs
+from computronium.core.system_trainer import (
+    compose_system_from_configs,
+    compose_joint_system_from_configs,
+)
+from computronium.core.joint.transition import PlasticityConfig
 from computronium.core.system_trainer.factory import param_count
 from computronium.experiment.learning.prior import apply_dynamics_step_size
 from computronium.experiment.schema.axis import StructuralAxis
@@ -792,13 +796,25 @@ def compose_cell_system(
         param_budget=param_budget,
     )
     active = harvest_schema().active(coordinate)
-    system = compose_system_from_configs(
-        config.substrate,
-        config.geometry,
-        config.dynamics,
-        config.credit,
-        config.update,
-    )
+    # Use joint system (6-D) when plasticity is not null, otherwise 5-D system
+    if coordinate.plasticity != "null":
+        system = compose_joint_system_from_configs(
+            config.substrate,
+            config.geometry,
+            config.dynamics,
+            config.plasticity,
+            config.credit,
+            config.update,
+            validate=True,
+        )
+    else:
+        system = compose_system_from_configs(
+            config.substrate,
+            config.geometry,
+            config.dynamics,
+            config.credit,
+            config.update,
+        )
     return ComposedCell(
         system=system,
         config=config,

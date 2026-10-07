@@ -55,6 +55,7 @@ dependencies = [
     "pytorch-lightning>=2.6.6",
     "duckdb>=1.5.6",
     "fvcore>=0.1.5.post20221221",
+    "plotly>=7.1.0",
 ]
 
 [tool.uv.workspace]

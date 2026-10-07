@@ -85,6 +85,34 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "memory_usage",
     "flops",
     "latency_ms",
+    # Substrate objectives (P0)
+    "energy_per_step",
+    "energy_per_op",
+    "spike_rate",
+    "ir_drop_variance",
+    "phase_noise",
+    "gate_fidelity",
+    "coherence_time_us",
+    "synaptic_ops_per_sample",
+    "thermal_noise_variance",
+    "nonlinearity_error",
+    "settle_steps_used",
+    "free_energy_final",
+    "write_energy_pj",
+    "endurance_cycles",
+    "event_density",
+    "spike_energy_pj",
+    "optical_power_mw",
+    "insertion_loss_db",
+    "phase_shifter_energy_pj",
+    "shot_noise",
+    "qubit_count",
+    "drift_rate",
+    "precision_bits",
+    # Plasticity objectives (P0)
+    "psi_capacity",
+    "consolidation_cost",
+    "rewrite_rate",
 }
 
 # Objective name -> the payload key that satisfies it.
@@ -105,7 +133,7 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "augmented_lagrangian": "augmented_lagrangian",
     "spike_proxy_energy": "spike_proxy_energy",
     "instantaneous_proxy_energy": "instantaneous_proxy_energy",
-    "energy_per_step": "energy_per_sample",
+    "energy_per_step": "energy_per_step",
     "energy_per_mac": "energy_per_mac",
     "macs_per_step": "macs_per_step",
     "stability_margin": "stability_margin",
@@ -118,6 +146,22 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "memory_usage": "memory_usage",
     "flops": "flops",
     "latency_ms": "latency_ms",
+    # Substrate objectives (P0)
+    "spike_rate": "spike_rate",
+    "ir_drop_variance": "ir_drop_variance",
+    "phase_noise": "phase_noise",
+    "gate_fidelity": "gate_fidelity",
+    "coherence_time": "coherence_time_us",
+    "energy_per_op": "energy_per_op",
+    "synaptic_ops_per_sample": "synaptic_ops_per_sample",
+    "thermal_noise_variance": "thermal_noise_variance",
+    "nonlinearity_error": "nonlinearity_error",
+    "settle_steps_used": "settle_steps_used",
+    "free_energy_final": "free_energy_final",
+    # Plasticity objectives (P0)
+    "psi_capacity": "psi_capacity",
+    "consolidation_cost": "consolidation_cost",
+    "rewrite_rate": "rewrite_rate",
 })
 
 

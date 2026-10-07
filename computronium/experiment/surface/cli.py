@@ -48,6 +48,7 @@ from computronium.experiment.surface.report import (
     RunSummary,
     export_to_json,
     export_to_parquet,
+    generate_html_report,
     generate_run_report,
 )
 
@@ -268,7 +269,7 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     )
     p_report.add_argument(
         "--format",
-        choices=["text", "json", "parquet"],
+        choices=["text", "json", "parquet", "html"],
         default="text",
         help="Output format",
     )
@@ -881,6 +882,12 @@ def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struct
             output_path = args.output or f"{run_id}.report.parquet"
             export_to_parquet(store, output_path, run_id)
             logger.info(f"Parquet report written to {output_path}")
+            return 0
+
+        elif args.format == "html":
+            output_path = args.output or f"{run_id}.report.html"
+            generate_html_report(store, run_id, output_path)
+            logger.info(f"HTML report written to {output_path}")
             return 0
 
     return 0
