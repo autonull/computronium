@@ -15,14 +15,15 @@ from torch import Tensor
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from computronium.ontology import System
     from computronium.core.system_trainer.config import SystemTrainerConfig
     from computronium.core.system_trainer.trainer import _DataProvider
+    from computronium.ontology import System
 
 
 @dataclass
 class MultiSeedResult:
     """Results from multi-seed evaluation."""
+
     seeds: list[int]
     metrics_per_seed: list[dict[str, float]]
     mean_metrics: dict[str, float]
@@ -30,9 +31,9 @@ class MultiSeedResult:
 
 
 def _make_vmap_compatible_system(
-    system_factory: "Callable[[int], System]",
+    system_factory: Callable[[int], System],
     seeds: list[int],
-) -> tuple["System", list[dict[str, Tensor]]]:
+) -> tuple[System, list[dict[str, Tensor]]]:
     """Create a system with stacked parameters for vmap.
 
     Args:
@@ -59,7 +60,7 @@ def _make_vmap_compatible_system(
 
 
 def _vmap_train_step(
-    base_system: "System",
+    base_system: System,
     param_dicts: list[dict[str, Tensor]],
     x: Tensor,
     y: Tensor,
@@ -73,7 +74,7 @@ def _vmap_train_step(
     """
     # Stack parameters along seed dimension
     stacked_params = {}
-    for name in param_dicts[0].keys():
+    for name in param_dicts[0]:
         stacked_params[name] = torch.stack([p[name] for p in param_dicts], dim=0)
 
     # For now, fall back to sequential execution
@@ -93,11 +94,11 @@ def _vmap_train_step(
 
 
 def run_multi_seed_evaluation(
-    system_factory: "Callable[[int], System]",
-    train_data: "_DataProvider",
-    config: "SystemTrainerConfig",
+    system_factory: Callable[[int], System],
+    train_data: _DataProvider,
+    config: SystemTrainerConfig,
     seeds: list[int],
-    val_data: "_DataProvider | None" = None,
+    val_data: _DataProvider | None = None,
     max_batches: int | None = None,
 ) -> MultiSeedResult:
     """Run evaluation across multiple seeds.
@@ -114,6 +115,7 @@ def run_multi_seed_evaluation(
         MultiSeedResult with per-seed and aggregate metrics.
     """
     from computronium.core.system_trainer.trainer import SystemTrainer
+
     all_seed_metrics: list[list[dict[str, float]]] = []
 
     for seed in seeds:
@@ -159,8 +161,10 @@ def run_multi_seed_evaluation(
             values = [m[key] for m in seed_final_metrics]
             mean_metrics[key] = sum(values) / len(values)
             if len(values) > 1:
-                variance = sum((v - mean_metrics[key]) ** 2 for v in values) / (len(values) - 1)
-                std_metrics[key] = variance ** 0.5
+                variance = sum((v - mean_metrics[key]) ** 2 for v in values) / (
+                    len(values) - 1
+                )
+                std_metrics[key] = variance**0.5
             else:
                 std_metrics[key] = 0.0
 
@@ -173,11 +177,11 @@ def run_multi_seed_evaluation(
 
 
 def run_multi_seed_parallel(
-    system_factory: "Callable[[int], System]",
-    train_data: "_DataProvider",
-    config: "SystemTrainerConfig",
+    system_factory: Callable[[int], System],
+    train_data: _DataProvider,
+    config: SystemTrainerConfig,
     seeds: list[int],
-    val_data: "_DataProvider | None" = None,
+    val_data: _DataProvider | None = None,
     max_batches: int | None = None,
     num_workers: int = 4,
 ) -> MultiSeedResult:
@@ -192,7 +196,6 @@ def run_multi_seed_parallel(
     factory function (not a local closure).
     """
     import concurrent.futures
-    from functools import partial
 
     from computronium.core.system_trainer.trainer import SystemTrainer
 
@@ -202,6 +205,7 @@ def run_multi_seed_parallel(
 
     def _run_single_seed(seed: int) -> dict[str, float]:
         import torch
+
         torch.manual_seed(seed)
         system = system_factory(seed)
         trainer = SystemTrainer(
@@ -235,8 +239,119 @@ def run_multi_seed_parallel(
             values = [m[key] for m in seed_metrics]
             mean_metrics[key] = sum(values) / len(values)
             if len(values) > 1:
-                variance = sum((v - mean_metrics[key]) ** 2 for v in values) / (len(values) - 1)
-                std_metrics[key] = variance ** 0.5
+                variance = sum((v - mean_metrics[key]) ** 2 for v in values) / (
+                    len(values) - 1
+                )
+                std_metrics[key] = variance**0.5
+            else:
+                std_metrics[key] = 0.0
+
+    return MultiSeedResult(
+        seeds=seeds,
+        metrics_per_seed=seed_metrics,
+        mean_metrics=mean_metrics,
+        std_metrics=std_metrics,
+    )
+
+
+def run_multi_seed_multiprocess(
+    system_factory: Callable[[int], System],
+    train_data: _DataProvider,
+    config: SystemTrainerConfig,
+    seeds: list[int],
+    val_data: _DataProvider | None = None,
+    max_batches: int | None = None,
+    num_workers: int = 4,
+) -> MultiSeedResult:
+    """Run multi-seed evaluation in parallel using multiprocessing.
+
+    This provides true CPU parallelism by spawning separate processes.
+    Requires `system_factory` to be a top-level function (not a closure or
+    lambda) so it can be pickled and sent to worker processes.
+
+    The train/val data providers must also be picklable (e.g., lists of
+    batches, not generators).
+
+    Args:
+        system_factory: Top-level function that creates a System given a seed.
+        train_data: Training data provider (must be picklable).
+        config: Trainer configuration (must be picklable).
+        seeds: List of seeds to evaluate.
+        val_data: Optional validation data provider (must be picklable).
+        max_batches: Optional limit on batches per epoch.
+        num_workers: Number of worker processes.
+
+    Returns:
+        MultiSeedResult with per-seed and aggregate metrics.
+    """
+    import multiprocessing as mp
+    from functools import partial
+
+    # Materialize data for pickling
+    train_batches = list(train_data)
+    val_batches = list(val_data) if val_data is not None else None
+
+    # Use spawn context for CUDA safety
+    ctx = mp.get_context("spawn")
+
+    def _run_single_seed(
+        seed: int,
+        factory: Callable[[int], System],
+        train_data_local: list[tuple[Tensor, Tensor]],
+        val_data_local: list[tuple[Tensor, Tensor]] | None,
+        config_local: SystemTrainerConfig,
+        max_batches_local: int | None,
+    ) -> dict[str, float]:
+        import torch
+
+        from computronium.core.system_trainer.trainer import SystemTrainer
+
+        torch.manual_seed(seed)
+        system = factory(seed)
+        trainer = SystemTrainer(
+            system=system,
+            config=config_local,
+            train_data=train_data_local,
+            val_data=val_data_local,
+        )
+
+        if max_batches_local:
+            original_limit = config_local.limit_train_batches
+            config_local.limit_train_batches = max_batches_local
+
+        history = trainer.fit()
+
+        if max_batches_local:
+            config_local.limit_train_batches = original_limit
+
+        return history[-1] if history else {}
+
+    # Prepare partial function with picklable arguments
+    worker_fn = partial(
+        _run_single_seed,
+        factory=system_factory,
+        train_data_local=train_batches,
+        val_data_local=val_batches,
+        config_local=config,
+        max_batches_local=max_batches,
+    )
+
+    with ctx.Pool(processes=num_workers) as pool:
+        seed_metrics = pool.map(worker_fn, seeds)
+
+    # Compute aggregate statistics
+    mean_metrics = {}
+    std_metrics = {}
+    if seed_metrics:
+        keys = seed_metrics[0].keys()
+        for key in keys:
+            values = [m[key] for m in seed_metrics]
+            mean_metrics[key] = sum(values) / len(values)
+            if len(values) > 1:
+                variance = sum((v - mean_metrics[key]) ** 2 for v in values) / (
+                    len(values) - 1
+                )
+                std_metrics[key] = variance**0.5
             else:
                 std_metrics[key] = 0.0
 
@@ -250,8 +365,9 @@ def run_multi_seed_parallel(
 
 __all__ = [
     "MultiSeedResult",
-    "run_multi_seed_evaluation",
-    "run_multi_seed_parallel",
-    "_vmap_train_step",
     "_make_vmap_compatible_system",
+    "_vmap_train_step",
+    "run_multi_seed_evaluation",
+    "run_multi_seed_multiprocess",
+    "run_multi_seed_parallel",
 ]

@@ -21,13 +21,15 @@ import inspect
 from dataclasses import fields
 from pathlib import Path
 
-from computronium.experiment.schema.axis import NO_DEFAULT, StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate
-from computronium.experiment.schema.harvest import (
+from computronium.experiment.schema import (
+    NO_DEFAULT,
+    PRIORS_REGISTRY,
+    Coordinate,
+    StructuralAxis,
     _config_default,
     harvest_schema,
+    prior_value,
 )
-from computronium.experiment.schema.registries import PRIORS_REGISTRY
 
 _SRC = Path(__file__).resolve().parents[2] / "computronium"
 
@@ -77,7 +79,7 @@ def test_every_value_has_a_source_and_none_resolves_to_the_domain_edge() -> None
     at harvest, and ``_config_default`` raises at resolve). Falsifiable by
     deleting the prior or default of any row.
     """
-    from computronium.experiment.schema.registries import prior_value
+    # prior_value imported at module level from computronium.experiment.schema
 
     schema = harvest_schema()
     coordinates = [
@@ -198,7 +200,7 @@ def test_alias_map_targets_real_config_fields() -> None:
     Geometry is excluded: it is built by its own normalizer (``_fit_geometry``),
     whose key aliases live there.
     """
-    from computronium.experiment.schema.harvest import CONFIG_FIELD_ALIASES
+    from computronium.experiment.schema import CONFIG_FIELD_ALIASES
 
     schema = harvest_schema()
     for spec in schema.hyperparameters:

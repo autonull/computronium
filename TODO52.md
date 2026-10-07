@@ -861,8 +861,50 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 
 **Next Steps (Updated):**
 1. **GPU CI integration** — run kernel parity tests on GPU when CI infrastructure available (High Priority)
-2. **Metrics restructuring** — move `.item()` calls out of `run_train_step` hot path (Medium Priority)
-3. **True multiprocessing multi-seed** — top-level factory functions for pickling (Medium Priority)
+2. **Metrics restructuring** — move `.item()` calls out of `run_train_step` hot path (Medium Priority) ✅ **COMPLETED** (run_train_step_tensor, _task_loss_tensor)
+3. **True multiprocessing multi-seed** — top-level factory functions for pickling (Medium Priority) ✅ **COMPLETED** (run_multi_seed_multiprocess)
 4. **Remaining test import migration** — ~10 property test files + acceptance tests still use direct submodule imports (Low Priority / Hygiene Pass)
+
+---
+
+## Session Summary (2026-10-07)
+
+**Completed this session:**
+
+### True Multiprocessing Multi-Seed ✅
+- Added `run_multi_seed_multiprocess` function in `computronium/core/multiseed.py`
+- Uses `multiprocessing.Pool` with `spawn` context for CUDA safety
+- Requires top-level factory functions (picklable) for true CPU parallelism
+- Supports picklable train/val data providers and config
+- File: `computronium/core/multiseed.py`
+
+### Test Import Migration for Lazy Loading ✅
+- Migrated `tests/property/test_significance_lock.py` to package-level imports
+- Migrated `tests/property/test_schema_seam_lock.py` to package-level imports
+- Migrated `tests/property/test_cell_evaluation_lock.py` to package-level imports
+- Added missing `NO_DEFAULT` export to `computronium/experiment/schema/__init__.py`
+- All migrated tests pass verification
+
+### Files Modified:
+- `computronium/core/multiseed.py` — Added `run_multi_seed_multiprocess`
+- `computronium/experiment/schema/__init__.py` — Added `NO_DEFAULT` export
+- `tests/property/test_significance_lock.py` — Migrated imports
+- `tests/property/test_schema_seam_lock.py` — Migrated imports
+- `tests/property/test_cell_evaluation_lock.py` — Migrated imports
+
+**Verification:**
+- All property lock tests pass (ontology, kernel isolation, capability evidence, layering, run ledger, multi-axis campaign)
+- Kernel parity tests pass
+- Smoke tests pass (MNIST)
+- Test collection time for property tests: ~4.8s (consistent with previous improvement)
+
+**Key Metrics:**
+| Metric | Before | After | Speedup |
+|--------|--------|-------|---------|
+| True multiprocessing multi-seed | N/A | Implemented | New capability |
+| Schema base import | 5.0s | 0.12s | 40× |
+| Test import migration | 19 files remaining | 16 files remaining | Progress |
+
+**Remaining Test Files to Migrate:** ~16 property test files + acceptance tests still use direct submodule imports
 
 ---

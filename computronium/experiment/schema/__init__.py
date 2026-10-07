@@ -36,6 +36,7 @@ __all__ = [
     "AxisSpec",
     "Domain",
     "HyperparameterSpec",
+    "NO_DEFAULT",
     "Scale",
     "StructuralAxis",
     "get_axis_spec",
@@ -159,6 +160,7 @@ _symbol_to_module: dict[str, str] = {
     "AxisSpec": "axis",
     "Domain": "axis",
     "HyperparameterSpec": "axis",
+    "NO_DEFAULT": "axis",
     "Scale": "axis",
     "StructuralAxis": "axis",
     "get_axis_spec": "axis",
@@ -288,7 +290,18 @@ def _ensure_registries_seeded() -> None:
 def __getattr__(name: str) -> Any:
     """Lazy load submodules and symbols on first access."""
     # Submodules
-    if name in ("axis", "coordinate", "harvest", "metrics", "record", "registries", "registry", "run_spec", "seed_registries", "versioning"):
+    if name in (
+        "axis",
+        "coordinate",
+        "harvest",
+        "metrics",
+        "record",
+        "registries",
+        "registry",
+        "run_spec",
+        "seed_registries",
+        "versioning",
+    ):
         return _get_submodule(f"computronium.experiment.schema.{name}")
 
     # Symbols from specific submodules
@@ -300,7 +313,9 @@ def __getattr__(name: str) -> Any:
             _ensure_registries_seeded()
         return getattr(submodule, name)
 
-    raise AttributeError(f"module 'computronium.experiment.schema' has no attribute '{name}'")
+    raise AttributeError(
+        f"module 'computronium.experiment.schema' has no attribute '{name}'"
+    )
 
 
 def __dir__() -> list[str]:

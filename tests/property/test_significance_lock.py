@@ -30,23 +30,27 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from computronium.experiment.evidence.claims import (
+from computronium.experiment.evidence import (
     DEFAULT_MIN_SEEDS,
-    CellMetrics,
-    cell_metrics_by_axis_value,
-    pairing_key,
-)
-from computronium.experiment.evidence.significance import (
     MIN_SHARED_CELLS,
     SIGNIFICANCE_TEST,
+    CellMetrics,
+    RecordStore,
     Significance,
+    StoreConfig,
+    cell_metrics_by_axis_value,
     paired_significance,
+    pairing_key,
 )
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET, RunSpec
-from computronium.experiment.surface.report import ReportGenerator, generate_run_report
+from computronium.experiment.schema import (
+    MEASURED_PARAM_BUDGET,
+    Coordinate,
+    Provenance,
+    RunSpec,
+    Schedule,
+    StructuralAxis,
+)
+from computronium.experiment.surface import ReportGenerator, generate_run_report
 
 from ._fake_backend import synthetic_record
 

@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.execution.evaluate import cell_record, evaluate_cell
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
+from computronium.experiment.execution import cell_record, evaluate_cell, task_shape
+from computronium.experiment.schema import Coordinate, Provenance, Schedule
 
 _BACKENDS = Path(__file__).resolve().parents[2] / "computronium/experiment/execution"
 _TASK_ID = "digits"
@@ -97,7 +97,7 @@ def test_swapping_credit_changes_the_measurement() -> None:
 @pytest.mark.timeout(300)
 def test_digits_shape_reaches_the_geometry() -> None:
     """The task decides the geometry: 8x8 digits is 64 inputs, never 784."""
-    from computronium.experiment.execution.evaluate import task_shape
+    # task_shape imported at module level from computronium.experiment.execution
 
     shape = task_shape(_schedule().task_id)
     assert shape.input_shape == (1, 8, 8)
@@ -108,7 +108,7 @@ def test_digits_shape_reaches_the_geometry() -> None:
 @pytest.mark.timeout(300)
 def test_record_carries_measurement_and_a_derived_verdict() -> None:
     """The Record holds the measurement; the verdict comes from what happened."""
-    from computronium.experiment.schema.record import GateVerdict
+    from computronium.experiment.schema import GateVerdict
 
     record = cell_record(_coordinate(), _schedule(), _provenance())
 
