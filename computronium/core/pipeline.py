@@ -195,7 +195,7 @@ def _step_psi(
     return new_psi
 
 
-def run_train_step_tensor(
+def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,
@@ -281,7 +281,9 @@ def run_train_step_tensor(
             free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
             free_loss, _ = _task_loss_tensor(free_settled, y)
             free_energy = dynamics.compute_energy(free_settled, geometry)
-            free_accuracy = (free_settled.metrics or {}).get("accuracy", torch.tensor(0.0))
+            free_accuracy = (free_settled.metrics or {}).get(
+                "accuracy", torch.tensor(0.0)
+            )
 
         metrics: dict[str, Tensor] = {
             "loss": loss,
