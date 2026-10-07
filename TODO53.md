@@ -344,7 +344,7 @@
 - [ ] Documentation renders without errors; all code blocks execute
 
 ---
-
+ 
 ## 18. Session Progress Summary (2026-10-07)
 
 ### Completed in This Session (P0 — GPU Default + Measured Objectives)
@@ -368,7 +368,7 @@
 - `computronium/core/system_trainer/config.py` — added `precision`, `checkpoint_every_n` fields
 - `computronium/core/system_trainer/protocol.py` — added `precision`, `checkpoint_every_n` fields
 - `computronium/core/system_trainer/trainer.py` — mixed precision via `torch.autocast`, checkpointing methods
-- `computronium/core/system_trainer/_resources.py` — fvcore FLOP counting with fallback
+- `computtonium/core/system_trainer/_resources.py` — fvcore FLOP counting with fallback
 - `computronium/experiment/schema/coordinate.py` — Schedule `precision` field
 - `computronium/experiment/schema/run_spec.py` — RunSpec `precision` field
 - `computronium/experiment/schema/metrics.py` — added `flops`, `macs_per_step`, `memory_usage`, `latency_ms` to MEASURED_OBJECTIVES
@@ -395,7 +395,7 @@
 **Code Changes:**
 - `computronium/ontology/geometry.py` — NcaGeometry: added `_reshape_to_grid`, `_reshape_from_grid`, `_apply_readout` helpers; updated `forward`, `route`, `forward_with_intermediates`, `transition_modules`, `__init__`; added readout layer
 - `computronium/experiment/execution/compose.py` — compute `channels` from `input_dim // grid_area`, pass `output_dim` to NCA config
-- `computronium/ontology/geometry.py` — `GeometryConfig.nca` factory: added `output_dim` parameter
+- `computtonium/ontology/geometry.py` — `GeometryConfig.nca` factory: added `output_dim` parameter
 - `computronium/experiment/schema/seed_registries.py` — removed NCA from `_UNAVAILABLE`
 
 **Verification:**
@@ -404,6 +404,36 @@
 - All measured objectives populated: `flops`, `macs_per_step`, `memory_usage`, `latency_ms`
 - All property locks pass (L1-L7, J1-J7, geometry/dynamics wiring locks, registry completeness)
 - NCA no longer in `_UNAVAILABLE` registry
+
+---
+
+### Completed in This Session (P1 — Evaluator Hardening + Checkpointing)
+
+**Checkpointing Infrastructure (3.3, 7.1, 7.2, 7.3):**
+- ✅ Added `checkpoint_every_n` field to Schedule and RunSpec with validation
+- ✅ SystemTrainer checkpoint callback mechanism for periodic persistence
+- ✅ Checkpoints saved as DuckDB artifacts (role=MODEL_CHECKPOINT) with base64 encoding for large artifacts
+- ✅ Resume logic: backend loads latest checkpoint artifact and continues training via `SystemTrainer.from_checkpoint`
+- ✅ Heartbeat mechanism: pipeline runner updates `last_heartbeat` in runs table every 30 seconds
+- ✅ Graceful SIGTERM/SIGINT handling: runner shutdown triggers checkpoint save before exit
+
+**Code Changes:**
+- `computronium/experiment/schema/coordinate.py` — Schedule `checkpoint_every_n` field, validation, serialization, measurement_key inclusion
+- `computtonium/experiment/schema/run_spec.py` — RunSpec `checkpoint_every_n` field with validation
+- `computtonium/experiment/surface/cli.py` — RunProfile `checkpoint_every_n`, quick-verify profile enabled (every epoch)
+- `computtonium/core/system_trainer/trainer.py` — checkpoint_callback field, called in train_epoch after save_checkpoint
+- `computtonium/experiment/execution/evaluate.py` — evaluate_cell accepts checkpoint_dir and resume_checkpoint_path; checkpoint callback saves to temp dir; resume via SystemTrainer.from_checkpoint
+- `computtonium/experiment/execution/backends.py` — submit() saves checkpoint bytes to record payload; submit() loads latest checkpoint artifact for resume; base64 encoding for artifact persistence
+- `computtonium/experiment/execution/pipeline.py` — _heartbeat_loop task (30s interval); runner.shutdown() called on SIGTERM/SIGINT
+- `computtonium/experiment/evidence/store.py` — runs table `last_heartbeat` column; update_heartbeat() method; _parse_schedule handles NULL num_workers/deterministic/precision
+- `computtonium/experiment/surface/cli.py` — execute_spec runner.shutdown() on signal handler
+
+**Verification:**
+- quick-verify runs on GPU (RTX 3080) with checkpoint_every_n=1
+- Checkpoints saved as artifacts in DuckDB (verified via store.artifacts.get_for_record)
+- Resume via `--run-id` loads checkpoint and continues training (verified: run completed with 20 total records across 2 launches)
+- Heartbeat timestamp updated in runs table during execution
+- SIGTERM handling tested via signal handler integration
 
 ---
 

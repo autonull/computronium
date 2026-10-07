@@ -78,6 +78,7 @@ class RunInfo:
     replay_hash: str | None
     started_at: datetime
     finished_at: datetime | None
+    last_heartbeat: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +221,8 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 budget_consumed_s DOUBLE,
                 replay_hash       TEXT,
                 started_at        TIMESTAMP NOT NULL,
-                finished_at       TIMESTAMP
+                finished_at       TIMESTAMP,
+                last_heartbeat    TIMESTAMP
             )
         """)
 
@@ -351,6 +353,16 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             self._conn.execute(
                 "UPDATE runs SET replay_hash = ? WHERE run_id = ?",
                 [replay_hash, run_id],
+            )
+
+    def update_heartbeat(self, run_id: str) -> None:
+        """Update the run's last heartbeat timestamp."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        with self._write_lock:
+            self._conn.execute(
+                "UPDATE runs SET last_heartbeat = ? WHERE run_id = ?",
+                [datetime.now(), run_id],
             )
 
     def set_cell_maturity(
@@ -1071,11 +1083,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             budget_id=schedule_struct["budget_id"],
             task_id=schedule_struct["task_id"],
             # Rows written before the ceiling existed declare none.
-            param_budget=schedule_struct.get("param_budget", 0),
+            param_budget=schedule_struct.get("param_budget", 0) or 0,
             device=device,
-            deterministic=schedule_struct.get("deterministic", False),
-            num_workers=schedule_struct.get("num_workers", 0),
-            precision=schedule_struct.get("precision", "fp32"),
+            deterministic=schedule_struct.get("deterministic", False) or False,
+            num_workers=schedule_struct.get("num_workers", 0) or 0,
+            precision=schedule_struct.get("precision", "fp32") or "fp32",
         )
 
     def _parse_provenance(self, provenance_json: str) -> Provenance:
@@ -1166,7 +1178,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         limit_clause = f" LIMIT {int(limit)}" if limit else ""  # ruff: ignore[hardcoded-sql-expression] - int-coerced
         rows = self._conn.execute(
             f"SELECT run_id, spec, spec_version, status, budget_consumed_s, "  # ruff: ignore[hardcoded-sql-expression] - static column list
-            f"replay_hash, started_at, finished_at FROM runs{where_clause} "
+            f"replay_hash, started_at, finished_at, last_heartbeat FROM runs{where_clause} "
             f"ORDER BY started_at DESC{limit_clause}",
             params,
         ).fetchall()
@@ -1180,6 +1192,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 replay_hash=row[5],
                 started_at=row[6],
                 finished_at=row[7],
+                last_heartbeat=row[8],
             )
             for row in rows
         ]

@@ -82,6 +82,10 @@ class Coordinate:
                 "task_id": schedule.task_id,
                 "param_budget": schedule.param_budget,
                 "device": schedule.device,
+                "deterministic": schedule.deterministic,
+                "num_workers": schedule.num_workers,
+                "precision": schedule.precision,
+                "checkpoint_every_n": schedule.checkpoint_every_n,
             },
         }
         return hashlib.sha256(_canonical_json(combined).encode()).hexdigest()
@@ -160,6 +164,8 @@ class Schedule:
     num_workers: int = 0
     # Numerical precision: "fp32", "fp16", "bf16"
     precision: str = "fp32"
+    # Save checkpoint every N epochs (0 = disabled)
+    checkpoint_every_n: int = 0
 
     def __post_init__(self) -> None:
         if self.fidelity not in {"L0", "L1", "L2"}:
@@ -184,6 +190,8 @@ class Schedule:
             raise ValueError(
                 f"Invalid precision: {self.precision}; expected 'fp32', 'fp16', or 'bf16'"
             )
+        if self.checkpoint_every_n < 0:
+            raise ValueError("checkpoint_every_n must be non-negative")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -199,6 +207,7 @@ class Schedule:
             "deterministic": self.deterministic,
             "num_workers": self.num_workers,
             "precision": self.precision,
+            "checkpoint_every_n": self.checkpoint_every_n,
         }
 
     @property
@@ -230,6 +239,7 @@ class Schedule:
             deterministic=data.get("deterministic", False),
             num_workers=data.get("num_workers", 0),
             precision=data.get("precision", "fp32"),
+            checkpoint_every_n=data.get("checkpoint_every_n", 0),
         )
 
 

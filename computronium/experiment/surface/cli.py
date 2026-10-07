@@ -74,6 +74,7 @@ class RunProfile:
     maturation: bool  # Whether to run maturation after
     deep_tier: bool  # Whether to run deep-tier claim-grade
     axes: tuple[AxisSelection, ...] = ()
+    checkpoint_every_n: int = 0  # Save checkpoint every N epochs (0 = disabled)
 
 
 # Run profiles as data — single source of truth for CLI behavior
@@ -127,6 +128,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
                 axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam", "muon")
             ),
         ),
+        checkpoint_every_n=1,
     ),
     "production-map": RunProfile(
         name="production-map",
@@ -672,6 +674,7 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
         param_budget=profile.param_budget,
         policy=profile.policy,
         axes=profile.axes,
+        checkpoint_every_n=profile.checkpoint_every_n,
     )
 
 
@@ -746,7 +749,8 @@ def execute_spec(
         def _signal_handler(signum, _frame):
             logger.info("Received signal %s; finishing run %s", signum, run)
             interrupted["flag"] = True
-            # The runner will be stopped on the next loop iteration
+            # Trigger graceful shutdown of runner (stops backend, saves checkpoints)
+            runner.shutdown()
 
         old_sigint = signal.signal(signal.SIGINT, _signal_handler)
         old_sigterm = signal.signal(signal.SIGTERM, _signal_handler)

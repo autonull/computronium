@@ -95,6 +95,7 @@ class CellEvaluation:
     walltime_s: float
     epochs_completed: int
     task_id: str
+    checkpoint_path: str | None = None
 
 
 def _task(task_id: str, device: str, num_workers: int = 0) -> Any:
@@ -526,6 +527,8 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     coordinate: Coordinate,
     schedule: Schedule,
     geometry: Mapping[str, Any] | None = None,
+    checkpoint_dir: str | None = None,
+    resume_checkpoint_path: str | None = None,
 ) -> CellEvaluation:
     """Train one coordinate on the schedule's task and measure it.
 
@@ -533,6 +536,8 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         coordinate: The six-axis selection and its hyperparameters.
         schedule: Epochs, seed, batch limit, task identity, and device.
         geometry: Topology overrides for the geometry axis.
+        checkpoint_dir: Optional directory to save checkpoints. If provided and
+            schedule.checkpoint_every_n > 0, checkpoints are saved here.
 
     Returns:
         CellEvaluation carrying the measured metrics and the effective
@@ -542,6 +547,8 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         EvaluationError: The task, the composition, or the training run failed.
     """
     import random
+    import tempfile
+    from pathlib import Path
 
     import numpy as np
     import torch
@@ -579,19 +586,61 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         track_memory=True,
         deterministic=schedule.deterministic,
         precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
-        checkpoint_every_n=0,
+        checkpoint_every_n=schedule.checkpoint_every_n,
     )
+
+    # Set up checkpoint directory if checkpointing is enabled
+    checkpoint_path: str | None = None
+    temp_dir: tempfile.TemporaryDirectory | None = None
+    if schedule.checkpoint_every_n > 0:
+        if checkpoint_dir is not None:
+            ckpt_dir = Path(checkpoint_dir)
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            temp_dir = tempfile.TemporaryDirectory(prefix="ckpt_")
+            ckpt_dir = Path(temp_dir.name)
+
+        def _checkpoint_callback(snapshot):
+            nonlocal checkpoint_path
+            ckpt_file = ckpt_dir / f"checkpoint_epoch_{snapshot.epoch}.pt"
+            torch.save(
+                {
+                    "epoch": snapshot.epoch,
+                    "global_step": snapshot.global_step,
+                    "history": snapshot.history,
+                    "theta": snapshot.theta,
+                    "opt_state": snapshot.opt_state,
+                    "credit_state": snapshot.credit_state,
+                    "config": config,
+                },
+                ckpt_file,
+            )
+            checkpoint_path = str(ckpt_file)
 
     start = time.monotonic()
     trainer: SystemTrainer | None = None
     try:
-        trainer = SystemTrainer(
-            cell.system,
-            config,
-            task.get_dataloader("train"),
-            val_data=_val_batches(task, config.limit_val_batches),
-        )
-        history = trainer.fit()
+        if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
+            # Resume from checkpoint
+            trainer = SystemTrainer.from_checkpoint(
+                resume_checkpoint_path,
+                system=cell.system,
+                train_data=task.get_dataloader("train"),
+                val_data=_val_batches(task, config.limit_val_batches),
+            )
+            # Update checkpoint callback for continued checkpointing
+            if schedule.checkpoint_every_n > 0:
+                trainer.checkpoint_callback = _checkpoint_callback
+            history = trainer.fit()
+        else:
+            trainer = SystemTrainer(
+                cell.system,
+                config,
+                task.get_dataloader("train"),
+                val_data=_val_batches(task, config.limit_val_batches),
+                checkpoint_callback=_checkpoint_callback if schedule.checkpoint_every_n > 0 else None,
+            )
+            history = trainer.fit()
     except EvaluationError:
         raise
     except Exception as exc:
@@ -600,6 +649,8 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     finally:
         if trainer is not None:
             trainer.close()
+        if temp_dir is not None:
+            temp_dir.cleanup()
     walltime_s = time.monotonic() - start
 
     metrics = history_metrics(history)
@@ -641,6 +692,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         walltime_s=walltime_s,
         epochs_completed=len(history),
         task_id=schedule.task_id,
+        checkpoint_path=checkpoint_path,
     )
 
 
@@ -649,6 +701,8 @@ def cell_record(
     schedule: Schedule,
     provenance: Provenance,
     geometry: Mapping[str, Any] | None = None,
+    checkpoint_dir: str | None = None,
+    resume_checkpoint_path: str | None = None,
 ) -> Record:
     """Evaluate one cell and wrap the measurement in a Record.
 
@@ -667,7 +721,7 @@ def cell_record(
     )
 
     try:
-        evaluation = evaluate_cell(coordinate, schedule, geometry)
+        evaluation = evaluate_cell(coordinate, schedule, geometry, checkpoint_dir, resume_checkpoint_path)
     except EvaluationError as exc:
         cause = FailureCause(exc.cause)
         return Record.create(
@@ -705,6 +759,8 @@ def cell_record(
         "param_count": evaluation.param_count,
         "param_budget": schedule.param_budget,
     }
+    if evaluation.checkpoint_path:
+        payload["checkpoint_path"] = evaluation.checkpoint_path
     passed = complete and within_ceiling
     return Record.create(
         run_id=provenance.links.get("run_id", str(uuid.uuid4())),

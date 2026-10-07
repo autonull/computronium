@@ -22,6 +22,7 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
@@ -312,6 +313,9 @@ class PipelineRunner:
             self._stages,
         )
 
+        # Start heartbeat task
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
         # Load already-measured keys for resume support
         self._resume_completed_measurements()
 
@@ -335,6 +339,13 @@ class PipelineRunner:
 
         self._record_replay_hash()
 
+        # Stop heartbeat
+        self._heartbeat_task.cancel()
+        try:
+            await self._heartbeat_task
+        except asyncio.CancelledError:
+            pass
+
         logger.info(
             "Pipeline run %s completed: %d records, %d rounds",
             self._config.run_id,
@@ -342,6 +353,19 @@ class PipelineRunner:
             self._state.current_round,
         )
         return all_records
+
+    async def _heartbeat_loop(self) -> None:
+        """Update run heartbeat every 30 seconds."""
+        while not self._shutdown:
+            await asyncio.sleep(30)
+            if self._shutdown:
+                break
+            try:
+                if self._store.is_open:
+                    self._store.update_heartbeat(self._config.run_id)
+                    logger.debug("Heartbeat updated for run %s", self._config.run_id)
+            except Exception as e:
+                logger.warning("Failed to update heartbeat: %s", e)
 
     async def _run_initial_phases(self, all_records: list[Record]) -> None:
         """Run S1-S2 phases once at start."""
@@ -809,8 +833,31 @@ class PipelineRunner:
                 case Success(records=records):
                     stored_here: list[Record] = []
                     for record in records:
+                        # Check for checkpoint artifact
+                        artifacts = []
+                        if "checkpoint_bytes_b64" in record.payload:
+                            import base64
+                            from computronium.experiment.evidence.artifacts import (
+                                ArtifactInput,
+                                ArtifactRole,
+                            )
+                            checkpoint_bytes = base64.b64decode(
+                                record.payload["checkpoint_bytes_b64"]
+                            )
+                            artifacts.append(
+                                ArtifactInput(
+                                    bytes=checkpoint_bytes,
+                                    role=ArtifactRole.MODEL_CHECKPOINT,
+                                )
+                            )
+                            # Remove from payload to avoid duplication
+                            del record.payload["checkpoint_bytes_b64"]
+                        
                         try:
-                            self._store.append(record)
+                            if artifacts:
+                                self._store.append_with_artifacts(record, artifacts)
+                            else:
+                                self._store.append(record)
                         except Exception as e:
                             logger.exception(
                                 "Failed to persist record %s", coord.cell_key()

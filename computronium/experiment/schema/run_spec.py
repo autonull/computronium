@@ -180,6 +180,8 @@ class RunSpec(BaseModel):
     num_workers: int = 0
     # Numerical precision: "fp32", "fp16", "bf16"
     precision: str = "fp32"
+    # Save checkpoint every N epochs (0 = disabled)
+    checkpoint_every_n: _NONNEG = 0
     # Axis-aligned objective sets: mapping from axis name to tuple of objective names.
     # When set, the policy will use per-axis objective sets for multi-objective optimization.
     # Format: {"substrate": ("energy_efficiency", "latency_ms", "precision"), ...}
@@ -240,6 +242,9 @@ class RunSpec(BaseModel):
             raise ValueError(msg)
         if self.precision not in {"fp32", "fp16", "bf16"}:
             msg = f"invalid precision {self.precision!r}; expected 'fp32', 'fp16', or 'bf16'"
+            raise ValueError(msg)
+        if self.checkpoint_every_n < 0:
+            msg = f"checkpoint_every_n must be non-negative, got {self.checkpoint_every_n}"
             raise ValueError(msg)
 
         # Validate axis_objectives

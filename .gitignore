@@ -52,3 +52,4 @@ scripts/probes/data/
 
 *.duckdb*
 
+checkpoint_epoch_*.pt

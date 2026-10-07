@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
     from computronium.experiment.evidence.failure import FailureEvent
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.coordinate import (
@@ -143,11 +145,13 @@ class _ThreadedBackend:
         schedule: Schedule,
         provenance: Provenance,
         params: dict[str, Any],
+        checkpoint_dir: str | None = None,
+        resume_checkpoint_path: str | None = None,
     ) -> Record:
         """Train one cell and wrap the measurement as a Record."""
         from computronium.experiment.execution.evaluate import cell_record
 
-        return cell_record(coordinate, schedule, provenance, params)
+        return cell_record(coordinate, schedule, provenance, params, checkpoint_dir, resume_checkpoint_path)
 
     async def submit(
         self,
@@ -158,12 +162,78 @@ class _ThreadedBackend:
         store: RecordStore,
     ) -> list[Record]:
         """Evaluate one coordinate across the schedule's seeds."""
-        return [
+        import tempfile
+        from pathlib import Path
+
+        from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
+
+        cell_key = coordinate.cell_key()
+
+        # Check for existing checkpoint artifact to resume from
+        resume_checkpoint_path = None
+        if schedule.checkpoint_every_n > 0:
+            # Find records with the same cell_key that have checkpoint artifacts
+            existing_records = store.query_records(cell_key=cell_key)
+            for record in existing_records:
+                artifacts = store.artifacts.get_for_record(record.record_id)
+                for artifact in artifacts:
+                    if artifact.role == ArtifactRole.MODEL_CHECKPOINT:
+                        # Found a checkpoint, save it to a temp file and use for resume
+                        checkpoint_bytes = store.artifacts.get(artifact.digest)
+                        if checkpoint_bytes:
+                            temp_ckpt = tempfile.NamedTemporaryFile(
+                                suffix=".pt", delete=False
+                            )
+                            temp_ckpt.write(checkpoint_bytes)
+                            temp_ckpt.close()
+                            resume_checkpoint_path = temp_ckpt.name
+                            logger.info(
+                                "Resuming cell %s from checkpoint (epoch %d)",
+                                cell_key[:12],
+                                record.payload.get("epochs_completed", 0),
+                            )
+                            break
+                if resume_checkpoint_path:
+                    break
+
+        # Create checkpoint directory if checkpointing is enabled
+        checkpoint_dir = None
+        temp_dir = None
+        if schedule.checkpoint_every_n > 0:
+            temp_dir = tempfile.TemporaryDirectory(prefix="ckpt_")
+            checkpoint_dir = temp_dir.name
+
+        records = [
             await asyncio.to_thread(
-                self._evaluate, coordinate, seed_schedule, provenance, params
+                self._evaluate,
+                coordinate,
+                seed_schedule,
+                provenance,
+                params,
+                checkpoint_dir,
+                resume_checkpoint_path,
             )
             for seed_schedule in schedule.seed_plan
         ]
+
+        # Clean up resume checkpoint temp file
+        if resume_checkpoint_path:
+            Path(resume_checkpoint_path).unlink(missing_ok=True)
+
+        # Store checkpoint bytes in record payload for later artifact persistence
+        if checkpoint_dir and records:
+            # Get the latest checkpoint from the first record's payload (all seeds share the same checkpoint dir)
+            checkpoint_path = records[0].payload.get("checkpoint_path")
+            if checkpoint_path and Path(checkpoint_path).exists():
+                # Read checkpoint bytes and store as base64 in payload
+                import base64
+                checkpoint_bytes = Path(checkpoint_path).read_bytes()
+                records[0].payload["checkpoint_bytes_b64"] = base64.b64encode(checkpoint_bytes).decode()
+
+        if temp_dir:
+            temp_dir.cleanup()
+
+        return records
 
     async def submit_batch(
         self,
@@ -188,6 +258,9 @@ class _ThreadedBackend:
                 try:
                     records = await self.submit(coord, sched, prov, params, store)
                 except Exception as e:
+                    import traceback
+                    logger.error("Evaluation failed for %s: %s", coord.cell_key()[:12], e)
+                    logger.error("Full traceback: %s", traceback.format_exc())
                     return Failure(
                         failure_event=self._create_failure_event(
                             coord, sched, prov, str(e)

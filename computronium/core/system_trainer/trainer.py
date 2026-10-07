@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from computronium.ontology import System
 
 type StepCallback = Callable[[Mapping[str, float]], None]
+type CheckpointCallback = Callable[[TrainerSnapshot], None]
 
 logger = get_logger()
 
@@ -67,6 +68,9 @@ class SystemTrainer:
     # Optional per-batch telemetry sink. Default no-op: a bare
     # `None` check on the hot path, never blocks or errors training.
     step_callback: StepCallback | None = None
+    # Optional checkpoint persistence callback. Called with TrainerSnapshot
+    # when a checkpoint is saved (every config.checkpoint_every_n epochs).
+    checkpoint_callback: CheckpointCallback | None = None
 
     # Training state
     current_epoch: int = field(default=0, init=False)
@@ -352,6 +356,8 @@ class SystemTrainer:
             and self.current_epoch % self.config.checkpoint_every_n == 0
         ):
             self.save_checkpoint()
+            if self.checkpoint_callback is not None:
+                self.checkpoint_callback(self.snapshot())
 
         return epoch_record
 
