@@ -262,14 +262,101 @@
 
 ---
 
-## 14. References
+## 14. Agent-Friendly Interface (External AI/Operator Usability)
+
+**Goal**: Make the system trivial to drive from an external agent (OpenCode, scripts, CI) — not by embedding LLMs, but by providing clean, scriptable, well-documented interfaces that an operator can compose.
+
+### 14.1 CLI Consistency & Discoverability
+- [ ] **Unified `--help` / `--dry-run`**: Every `comp` subcommand supports `--dry-run` (show plan, no execution) and machine-readable `--help` (JSON schema for args)
+- [ ] **`comp <cmd> --output json`**: All commands emit structured JSON to stdout for piping (`comp run ... | jq`, `comp benchmark run ... | python process.py`)
+- [ ] **`comp schema`**: Dump RunSpec/Coordinate/Objective schemas as JSON Schema for agent validation
+- [ ] **Exit codes**: Consistent codes (0=success, 1=usage, 2=validation, 3=execution, 4=timeout) for script logic
+
+### 14.2 Experiment Composition for Agents
+- [ ] **RunSpec as code**: Python builder API for programmatic RunSpec construction (alternative to YAML/JSON)
+  ```python
+  from computronium.experiment import RunSpecBuilder
+  spec = (RunSpecBuilder()
+      .task("mnist").fidelity("L1").seeds(3).epochs(10)
+      .objectives("validation_accuracy", "walltime_total")
+      .axis("credit", ["gradient", "thermodynamic_contrast", "random_projections"])
+      .axis("plasticity", ["null", "routing"])
+      .build())
+  spec.to_file("my_run.yaml")
+  ```
+- [ ] **Profile override API**: `comp run quick-verify --override '{"epochs": 5, "objectives": ["val_acc", "flops"]}'` (already exists via `--overrides` JSON)
+- [ ] **Coordinate spec syntax**: Human-readable `substrate/geometry/dynamics/plasticity/credit/update` strings (already used in benchmarks) — document as first-class CLI format
+
+### 14.3 Output & Analysis for Automated Consumption
+- [ ] **Machine-readable records**: `comp export --run-id <id> --format jsonl` → one JSON line per record with all metrics, provenance, config
+- [ ] **Summary statistics CLI**: `comp stats --store exp.db --run-id <id> --metrics val_acc,walltime,flops --agg mean,std,ci95` → CSV/JSON table
+- [ ] **Pareto frontier export**: `comp pareto --store exp.db --objectives val_acc,energy_per_step --format csv` → frontier points for plotting
+- [ ] **Diff runs**: `comp diff --run-id A --run-id B --metrics val_acc,param_count` → statistical comparison (effect size, p-value) as JSON
+
+### 14.4 Reproducibility for Agent Workflows
+- [ ] **`comp repro --run-id <id> --tolerance 1e-6`**: Replay run → exit code 0 if bitwise match, 1 if drift (for CI gates)
+- [ ] **Environment capture**: `comp env --store exp.db --run-id <id> --format dockerfile` → Dockerfile with exact CUDA/PyTorch/deps
+- [ ] **Config snapshot**: Every run stores full resolved RunSpec + git SHA + `pip freeze` + `nvidia-smi` output
+
+### 14.5 Batch & Campaign Automation
+- [ ] **`comp campaign`**: Declarative multi-run campaigns (YAML) with dependencies, shared store, policy progression
+  ```yaml
+  campaign:
+    name: "credit_scaling"
+    runs:
+      - profile: quick-verify
+        overrides: {axes: {credit: [gradient, fa, pepita]}}
+      - profile: maturation
+        depends_on: [0]
+        overrides: {fidelity: L2, n_seeds: 5}
+  ```
+- [ ] **Parallel execution**: `comp campaign run campaign.yaml --parallel 4 --device cuda` (dispatches runs across GPUs)
+- [ ] **Progress webhook**: `--webhook-url` for run start/complete/fail notifications (CI integration)
+
+---
+
+## 15. Updated Prioritized Execution Order
+
+| Phase | Focus | Deliverable | Est. Effort |
+|-------|-------|-------------|-------------|
+| **P0** | GPU default + measured objectives | `quick-verify` on GPU with flops/memory/energy | 2-3 days |
+| **P1** | Evaluator hardening + checkpointing | Full `production-map` run on GPU, resumable | 3-4 days |
+| **P2** | Reporting + gallery | Publication-ready HTML/PDF from `comp report` | 2-3 days |
+| **P3** | **Agent-friendly CLI/Output** | JSON schemas, `comp stats/pareto/diff`, repro gate | 2-3 days |
+| **P4** | Benchmark suites + analysis | All 5 suites + 3 new suites with statistical rigor | 4-5 days |
+| **P5** | Campaign automation | `comp campaign` YAML, parallel execution, webhooks | 2-3 days |
+| **P6** | Reproducibility + packaging | Docker export, nightly benchmark CI | 2-3 days |
+
+**Total**: ~15-21 days for production-ready, agent-friendly experiment infrastructure.
+
+---
+
+## 16. Updated Success Criteria
+
+- [ ] `comp run quick-verify --store exp.db --device auto --dry-run` → valid JSON plan in <1s
+- [ ] `comp run quick-verify --store exp.db --device auto` → completes in <2 min on RTX 3080 with 6+ measured objectives
+- [ ] `comp stats --store exp.db --metrics val_acc,walltime,flops --format json` → machine-readable summary table
+- [ ] `comp pareto --store exp.db --objectives val_acc,energy_per_step --format csv` → frontier points for plotting
+- [ ] `comp repro --run-id <id> --tolerance 1e-6` → exit 0 (bitwise match) in CI
+- [ ] `comp campaign run campaign.yaml --parallel 2 --device cuda` → executes dependent runs correctly
+- [ ] All property locks (L1-J7, axis locks, registry locks) pass on GPU
+- [ ] Gallery figures re-pinned and committed (`docs/figures/manifest.json` updated)
+- [ ] Documentation renders without errors; all code blocks execute
+
+---
+
+## 17. References (Updated)
 
 - `AGENTS.md` — Code guidelines, commit checklist, testing tiers
 - `README.md` — System overview, 6-axis ontology, CLI reference
 - `computronium/experiment/schema/` — RunSpec, objectives, registries, constraints
 - `computronium/experiment/surface/profiles.py` — Run profiles (quick-verify, production-map, etc.)
+- `computronium/experiment/learning/reasoning.py` — ReasoningStore, Hypothesis, LiteratureRecord, ProvenanceLink
+- `computronium/experiment/learning/icu.py` — ICUModel, I(C,U) metamodel, leakage guard
+- `computronium/experiment/learning/surrogate.py` — SurrogatePolicy, GP/TPE, EHVI, acquisition functions
 - `computronium/benchmarks/joint/` — 5 benchmark suites
 - `computronium/analysis/` — Pareto, ablation, energy landscape, genealogy
 - `tests/property/` — Property locks (L1-J7, axis locks, registry locks)
 - `tests/acceptance/test_unified_kernel.py` — U1-U5 kernel guarantees
 - `scripts/probes/` — Probe scripts with measured-regime numbers
+- `packages/ceec-core` — Standalone epistemic governance ledger (CEEC.md)
