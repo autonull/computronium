@@ -32,7 +32,7 @@ from computronium.experiment.surface import cli, generate_run_report, ReportGene
 
 
 def _build_narrowed_spec_path(tmp_path: Path) -> Path:
-    """A 10-cell spec: 2 dynamics × 2 credits × 1 geometry × 1 task × ~2 sweep points × 1 seed."""
+    """A 10-cell spec: 1 dynamics × 2 credits × 1 geometry × 1 task × ~5 sweep points × 1 seed."""
     spec = RunSpec(
         version=2,
         profile="d2_economics",
@@ -66,7 +66,7 @@ def _build_narrowed_spec_path(tmp_path: Path) -> Path:
             AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean",)),
             AxisSelection(
                 axis=StructuralAxis.DYNAMICS,
-                primitives=("energy_minimization", "instantaneous"),
+                primitives=("instantaneous",),
             ),
             AxisSelection(
                 axis=StructuralAxis.CREDIT,

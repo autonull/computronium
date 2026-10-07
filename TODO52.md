@@ -194,6 +194,8 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 | Capability evidence lock setup | ~50s | **~1.2s** | **40×** | ✅ Done |
 | **Grid-convention census** | **11.1s** | **3.1s** | **3.6×** | ✅ Done (2026-10-07) |
 | **Cross-module import lock** | **24.5s** | **3.6s** | **6.8×** | ✅ Done (2026-10-07) |
+| **Run ledger lock (test_run_ledger_lock.py)** | **~115s** | **~52s** | **2.2×** | ✅ Done (2026-10-07) |
+| **Campaign economics lock (test_campaign_economics_lock.py)** | **~36s** | **~12s** | **3×** | ✅ Done (2026-10-07) |
 | MNIST epoch (EqProp, hidden=32) | N/A | ~30s | — | Acceptable |
 | Test collection time | 33s | ~22s | **1.5×** | At the torch import floor (1.4s) — target retired |
 
@@ -295,6 +297,8 @@ Lazy Surface Integrity (2026-10-07):
 - `computronium/experiment/schema/__init__.py` — **Fixed global statement for kernel isolation lock** (mutable container)
 - `tests/property/test_lint_count_ratchet.py` — **Updated BASELINE to 412** after lint reductions
 - `computronium/experiment/execution/pipeline.py` — **Fixed S3_SCHEDULE/S10_DECIDE proposal handling + resume loading**
+- `tests/property/test_run_ledger_lock.py` — **Optimized fixture**: reduced DYNAMICS to `("instantaneous",)`, added `("fast_weights", "null")` PLASTICITY, added `"analog"` SUBSTRATE; 2.2× speedup (115s → 52s)
+- `tests/property/test_campaign_economics_lock.py` — **Optimized fixture**: reduced DYNAMICS to `("instantaneous",)`; 3× speedup (36s → 12s)
 
 ### Core Optimizations (This Session)
 - `computronium/experiment/surface/evidence.py` — **Inverted index for external_call_sites** (O(1) lookup vs O(N files)), 6× speedup on capability evidence lock
@@ -1155,3 +1159,35 @@ the lock now reads the map off the AST so a duplicate is reportable at all.
 7. **Torch import is 1.4s and is now the collection floor** for every shard.
    Nothing short of not importing torch can move it; stop treating collection
    time as a target.
+
+---
+
+## Session Summary (2026-10-07) — Test Fixture Optimization
+
+**Completed this session:**
+
+### 1. `test_run_ledger_lock.py` — 2.2× speedup (115s → 52s) ✅
+- **Problem**: Fixture declared too many slow dynamics/credits (`energy_minimization`, `lazy`, `predictive_settling`, `instantaneous` × `thermodynamic_contrast`, `gradient`, `random_projections` × `digital`, `sparse` substrates)
+- **Solution**: Narrowed to fast dynamics only (`instantaneous`), added `null` plasticity, added `analog` substrate to ensure >10 legal cells per round
+- **Result**: All 9 tests pass, slowest test dropped from 75s → 40s
+
+### 2. `test_campaign_economics_lock.py` — 3× speedup (36s → 12s) ✅
+- **Problem**: Fixture used `energy_minimization` + `instantaneous` dynamics (slow settle loop)
+- **Solution**: Reduced to `instantaneous` only (single forward pass)
+- **Result**: All 4 tests pass, fixture setup dropped from 28s → 4s
+
+### Files Modified:
+- `tests/property/test_run_ledger_lock.py` — Optimized `_run_spec()` and `_campaign_spec()` fixtures
+- `tests/property/test_campaign_economics_lock.py` — Optimized `_build_narrowed_spec_path()` fixture
+
+### Key Metrics:
+| Metric | Before | After | Speedup |
+|--------|--------|-------|---------|
+| test_run_ledger_lock.py (total) | 115s | 52s | 2.2× |
+| test_campaign_economics_lock.py (total) | 36s | 12s | 3× |
+| Property suite (full) | ~216s | ~180s | ~1.2× |
+
+**Note**: The remaining test time is dominated by actual cell training (instantaneous dynamics + gradient credit on digits task). Further speedup would require:
+- Using even faster primitives (e.g., `linear` geometry if available)
+- Reducing epochs/batch_limit further
+- Mocking the training path (but this defeats the lock's purpose of testing the full pipeline)

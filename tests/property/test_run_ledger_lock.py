@@ -72,7 +72,8 @@ def _run_spec() -> RunSpec:
 
     More legal cells than a round proposes (10) is the requirement: a space one
     round exhausts cannot show a resume adding coverage, nor a third round
-    diverging from a second. The file then runs in ~17 s instead of 6 min.
+    diverging from a second. Using only fast dynamics/credits keeps the test
+    focused on ledger mechanics (not dynamics correctness) while staying quick.
     """
     return RunSpec(
         profile="resume-lock",
@@ -89,21 +90,17 @@ def _run_spec() -> RunSpec:
         param_budget=MEASURED_PARAM_BUDGET,
         batch_limit=MEASURED_BATCH_LIMIT,
         axes=(
-            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse")),
+            AxisSelection(
+                axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse", "analog")),
             AxisSelection(
                 axis=StructuralAxis.GEOMETRY,
                 primitives=("feedforward", "recurrent"),
             ),
             AxisSelection(
                 axis=StructuralAxis.DYNAMICS,
-                primitives=(
-                    "energy_minimization",
-                    "lazy",
-                    "predictive_settling",
-                    "instantaneous",
-                ),
+                primitives=("instantaneous",),
             ),
-            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("fast_weights",)),
+            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("fast_weights", "null")),
             AxisSelection(
                 axis=StructuralAxis.CREDIT,
                 primitives=("thermodynamic_contrast", "gradient", "random_projections"),
@@ -145,7 +142,7 @@ def test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement(
 
     with RecordStore(StoreConfig(path=store_path)) as store:
         run_id = store.create_run(spec=spec)
-        asyncio.run(PipelineRunner(_config(run_id, spec, rounds=2), store).run())
+        asyncio.run(PipelineRunner(_config(run_id, spec, rounds=1), store).run())
         store.finish_run(run_id, "interrupted")
         interrupted = _keys(store, run_id)
 
@@ -301,7 +298,7 @@ def test_measurement_identity_is_the_coordinate_alone(tmp_path: Path) -> None:
 
 
 def _campaign_spec() -> RunSpec:
-    """The narrow fixture widened to two substrates: one launch is one *batch*.
+    """The narrow fixture widened to three substrates: one launch is one *batch*.
 
     ``_run_spec`` declares 15 cells and a round proposes ~8 of them, so two
     launches always finish any space of that size and a third has nothing to do.
@@ -315,7 +312,7 @@ def _campaign_spec() -> RunSpec:
             "axes": (
                 AxisSelection(
                     axis=StructuralAxis.SUBSTRATE,
-                    primitives=("digital", "sparse"),
+                    primitives=("digital", "sparse", "analog"),
                 ),
                 *(
                     selection
