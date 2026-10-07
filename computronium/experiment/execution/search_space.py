@@ -625,6 +625,7 @@ def _schedule(spec: RunSpec, task: str) -> Schedule:
         device=spec.device,
         deterministic=spec.deterministic,
         num_workers=spec.num_workers,
+        precision=spec.precision,
     )
 
 

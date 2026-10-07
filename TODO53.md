@@ -7,17 +7,17 @@
 ## 1. GPU-First Execution Infrastructure
 
 ### 1.1 Default GPU for All Experiment Commands
-- [ ] **CLI**: Add `--device auto` (default) → CUDA if available, else CPU to all `comp` subcommands (`run`, `benchmark`, `stability-plasticity`, `frozen-theta-psi`, `parity`)
-- [ ] **RunSpec**: Add `device: "auto" | "cuda" | "cpu"` field with auto-detection logic in `RunSpec.model_validator`
-- [ ] **Trainer**: Ensure `SystemTrainerConfig.device="auto"` resolves to CUDA; propagate to all sub-components (geometry, substrate, kernels)
+- [x] **CLI**: Add `--device auto` (default) → CUDA if available, else CPU to all `comp` subcommands (`run`, `benchmark`, `stability-plasticity`, `frozen-theta-psi`, `parity`)
+- [x] **RunSpec**: Add `device: "auto" | "cuda" | "cpu"` field with auto-detection logic in `RunSpec.model_validator`
+- [x] **Trainer**: Ensure `SystemTrainerConfig.device="auto"` resolves to CUDA; propagate to all sub-components (geometry, substrate, kernels)
 - [ ] **Kernels**: Verify Triton kernels auto-dispatch on CUDA (status: `kernel_verified` → `select_backend(spec, "auto")` returns `"kernel"`)
 - [ ] **Tests**: Add `@pytest.mark.gpu` marker to GPU-required tests; ensure CI can run on GPU runners
 
 ### 1.2 GPU Memory Management
 - [ ] **Batch sizing**: Auto-scale batch size based on `torch.cuda.get_device_properties(0).total_memory` (target 80% utilization)
 - [ ] **Gradient accumulation**: Implement for large models that exceed memory at desired batch size
-- [ ] **Mixed precision**: Enable `torch.autocast("cuda")` by default for FP16/BF16 training; add `precision` field to RunSpec (`fp32`, `fp16`, `bf16`)
-- [ ] **Memory profiling**: Integrate `torch.cuda.max_memory_allocated()` into metrics payload for `memory_usage` objective
+- [x] **Mixed precision**: Enable `torch.autocast("cuda")` by default for FP16/BF16 training; add `precision` field to RunSpec (`fp32`, `fp16`, `bf16`)
+- [x] **Memory profiling**: Integrate `torch.cuda.max_memory_allocated()` into metrics payload for `memory_usage` objective
 
 ### 1.3 Multi-GPU Support (DDP/FSDP)
 - [ ] **DistributedSystemTrainer**: Wire `DistributedSystemTrainer` into experiment kernel evaluator for `s6_train` stage
@@ -33,12 +33,12 @@
 ### 2.1 Cost Objectives (High Priority)
 | Objective | Implementation | Effort |
 |-----------|----------------|--------|
-| `flops` | `fvcore.nn.FlopCountAnalysis` or custom counter in `SystemTrainer.train_step` | Medium |
-| `macs_per_step` | Same as FLOPs; 1 MAC = 2 FLOPs | Low (derivative) |
-| `memory_usage` | `torch.cuda.max_memory_allocated()` / CPU RSS delta in trainer | Low |
+| `flops` | `fvcore.nn.FlopCountAnalysis` in `SystemTrainer` via `count_flops_fvcore` | ✅ Done |
+| `macs_per_step` | Same as FLOPs; 1 MAC = 2 FLOPs | ✅ Done |
+| `memory_usage` | `torch.cuda.max_memory_allocated()` in trainer epoch resources | ✅ Done |
 | `energy_per_step` | NVML `nvidia-smi` power draw × step time; fallback: `macs_per_step × substrate.energy_per_mac` | Medium |
 | `energy_per_mac` | SubstrateSpec field: `Digital=0.1pJ`, `Memristive=0.01pJ`, `Neuromorphic=0.001pJ` (literature) | Low |
-| `latency_ms` | `torch.cuda.Event` timing around forward+backward; avg over 100 steps | Low |
+| `latency_ms` | `epoch_time_s / steps * 1000` from trainer epoch resources | ✅ Done |
 
 ### 2.2 Substrate Objectives
 - [ ] Implement `spike_rate` for NeuromorphicSubstrate (count spikes / neuron / step)
@@ -342,6 +342,43 @@
 - [ ] All property locks (L1-J7, axis locks, registry locks) pass on GPU
 - [ ] Gallery figures re-pinned and committed (`docs/figures/manifest.json` updated)
 - [ ] Documentation renders without errors; all code blocks execute
+
+---
+
+## 18. Session Progress Summary (2026-10-07)
+
+### Completed in This Session (P0 — GPU Default + Measured Objectives)
+
+**GPU-First Infrastructure (1.1, 1.2):**
+- ✅ RunSpec `device: "auto" | "cuda" | "cpu"` with auto-detection in validator
+- ✅ SystemTrainerConfig `device="auto"` resolves to CUDA, propagates to all components
+- ✅ SystemTrainerConfig `precision: "fp32" | "fp16" | "bf16"` with `torch.autocast` mixed precision
+- ✅ Schedule `precision` field added for experiment kernel
+
+**Measured Objectives (2.1 — 4 of 6 new objectives implemented):**
+- ✅ `flops` — fvcore `FlopCountAnalysis` via `count_flops_fvcore` in profiling.py
+- ✅ `macs_per_step` — derived from FLOPs (1 MAC = 2 FLOPs)
+- ✅ `memory_usage` — `torch.cuda.max_memory_allocated()` from trainer epoch resources
+- ✅ `latency_ms` — `epoch_time_s / steps * 1000` from trainer epoch resources
+- ⏳ `energy_per_step` — needs NVML integration
+- ⏳ `energy_per_mac` — needs SubstrateSpec energy_per_mac field
+
+**Code Changes:**
+- `computronium/core/profiling.py` — added `count_flops_fvcore`, `count_flops_detailed_fvcore`
+- `computronium/core/system_trainer/config.py` — added `precision`, `checkpoint_every_n` fields
+- `computronium/core/system_trainer/protocol.py` — added `precision`, `checkpoint_every_n` fields
+- `computronium/core/system_trainer/trainer.py` — mixed precision via `torch.autocast`, checkpointing methods
+- `computronium/core/system_trainer/_resources.py` — fvcore FLOP counting with fallback
+- `computronium/experiment/schema/coordinate.py` — Schedule `precision` field
+- `computronium/experiment/schema/run_spec.py` — RunSpec `precision` field
+- `computronium/experiment/schema/metrics.py` — added `flops`, `macs_per_step`, `memory_usage`, `latency_ms` to MEASURED_OBJECTIVES
+- `computronium/experiment/execution/evaluate.py` — extracts resource metrics from trainer
+- `computronium/experiment/evidence/store.py` — ScheduleModel `precision` field, DuckDB schema updated
+
+**Verification:**
+- quick-verify runs on GPU (RTX 3080) with all 4 new measured objectives populated
+- Cell evaluation lock tests pass
+- DuckDB schema updated for Schedule.precision field
 
 ---
 

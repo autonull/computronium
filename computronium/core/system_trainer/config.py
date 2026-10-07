@@ -51,6 +51,9 @@ class SystemTrainerConfig:
         async_dataloading: Enable CUDA stream double-buffering to overlap
             host->device data transfer with forward/backward computation.
             Only effective on CUDA devices. Default: False.
+        precision: Numerical precision ("fp32", "fp16", "bf16").
+            Uses ``torch.autocast`` for mixed precision on CUDA.
+        checkpoint_every_n: Save checkpoint every N epochs (0 = disabled).
     """
 
     max_epochs: int = 10
@@ -72,6 +75,8 @@ class SystemTrainerConfig:
     harvest_every_n: int = 10
     max_epoch_time: float = 0.0
     async_dataloading: bool = False
+    precision: Literal["fp32", "fp16", "bf16"] = "fp32"
+    checkpoint_every_n: int = 0
 
 
 class _DataProvider(Protocol):

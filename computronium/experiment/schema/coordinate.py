@@ -158,6 +158,8 @@ class Schedule:
     deterministic: bool = False
     # DataLoader num_workers (0 for single-threaded determinism)
     num_workers: int = 0
+    # Numerical precision: "fp32", "fp16", "bf16"
+    precision: str = "fp32"
 
     def __post_init__(self) -> None:
         if self.fidelity not in {"L0", "L1", "L2"}:
@@ -178,6 +180,10 @@ class Schedule:
             )
         if self.num_workers < 0:
             raise ValueError("num_workers must be non-negative")
+        if self.precision not in {"fp32", "fp16", "bf16"}:
+            raise ValueError(
+                f"Invalid precision: {self.precision}; expected 'fp32', 'fp16', or 'bf16'"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -192,6 +198,7 @@ class Schedule:
             "device": self.device,
             "deterministic": self.deterministic,
             "num_workers": self.num_workers,
+            "precision": self.precision,
         }
 
     @property
@@ -222,6 +229,7 @@ class Schedule:
             device=data.get("device", "auto"),
             deterministic=data.get("deterministic", False),
             num_workers=data.get("num_workers", 0),
+            precision=data.get("precision", "fp32"),
         )
 
 

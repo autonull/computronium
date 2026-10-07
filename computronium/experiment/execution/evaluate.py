@@ -522,7 +522,7 @@ def _sample_inputs(task: Any, device: str) -> torch.Tensor:
     return flat
 
 
-def evaluate_cell(
+def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-many-locals]
     coordinate: Coordinate,
     schedule: Schedule,
     geometry: Mapping[str, Any] | None = None,
@@ -575,28 +575,49 @@ def evaluate_cell(
         seed=schedule.seed,
         limit_train_batches=limit,
         limit_val_batches=limit,
-        track_flops=False,
-        track_memory=False,
+        track_flops=True,
+        track_memory=True,
         deterministic=schedule.deterministic,
+        precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
+        checkpoint_every_n=0,
     )
 
     start = time.monotonic()
+    trainer: SystemTrainer | None = None
     try:
-        with SystemTrainer(
+        trainer = SystemTrainer(
             cell.system,
             config,
             task.get_dataloader("train"),
             val_data=_val_batches(task, config.limit_val_batches),
-        ) as trainer:
-            history = trainer.fit()
+        )
+        history = trainer.fit()
     except EvaluationError:
         raise
     except Exception as exc:
         msg = f"{coordinate.dynamics}/{coordinate.credit} on {schedule.task_id}: {exc}"
         raise EvaluationError("runtime_error", msg) from exc
+    finally:
+        if trainer is not None:
+            trainer.close()
     walltime_s = time.monotonic() - start
 
     metrics = history_metrics(history)
+
+    # Extract resource metrics from trainer
+    if trainer is not None and trainer.epoch_resources:
+        last_epoch = trainer.epoch_resources[-1]
+        if last_epoch.forward_flops is not None and last_epoch.steps > 0:
+            flops_per_step = last_epoch.forward_flops / last_epoch.steps
+            metrics["flops"] = float(flops_per_step)
+            metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
+        if last_epoch.peak_memory_mb is not None:
+            metrics["memory_usage"] = last_epoch.peak_memory_mb
+        # Latency estimate: epoch_time_s / steps * 1000 (ms per step)
+        if last_epoch.steps > 0:
+            metrics["latency_ms"] = (
+                last_epoch.epoch_time_s / last_epoch.steps
+            ) * 1000.0
 
     sample_x = _sample_inputs(task, config.device)
     metrics.update(compute_stability_metrics(cell.system, sample_x))

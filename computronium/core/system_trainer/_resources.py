@@ -160,10 +160,33 @@ def _flops_per_batch(system: System, batch_size: int) -> int:
     The estimator needs a layered geometry and a known settle structure; a
     system without either reports no FLOPs rather than a fabricated number.
     """
-    from computronium.core.profiling import estimate_train_step_flops
+    from computronium.core.profiling import (
+        count_flops_fvcore,
+        estimate_train_step_flops,
+    )
 
+    # Try fvcore first for accurate measurement
+    try:
+        # Get input shape from the system's geometry
+        input_shape = _get_input_shape(system)
+        if input_shape:
+            return count_flops_fvcore(system.geometry, (batch_size, *input_shape[1:]))
+    except Exception as exc:
+        logger.debug("fvcore FLOP count failed for %s: %s", type(system).__name__, exc)
+
+    # Fallback to structure-derived estimate
     try:
         return estimate_train_step_flops(system, batch_size)
     except (ValueError, TypeError, AttributeError, KeyError) as exc:
         logger.debug("no FLOP estimate for %s: %s", type(system).__name__, exc)
         return 0
+
+
+def _get_input_shape(system: System) -> tuple[int, ...] | None:
+    """Extract input shape from system geometry."""
+    geometry = system.geometry
+    if hasattr(geometry, "config") and hasattr(geometry.config, "input_dim"):
+        return (1, geometry.config.input_dim)
+    if hasattr(geometry, "input_dim"):
+        return (1, geometry.input_dim)
+    return None

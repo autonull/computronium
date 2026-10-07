@@ -76,6 +76,8 @@ class SystemTrainerConfig:
         seed: Random seed
         deterministic: Use deterministic algorithms
         max_epoch_time: Per-epoch wall-clock budget in seconds (0 = unlimited)
+        precision: Numerical precision ("fp32", "fp16", "bf16")
+        checkpoint_every_n: Save checkpoint every N epochs (0 = disabled)
     """
 
     max_epochs: int = 10
@@ -90,6 +92,8 @@ class SystemTrainerConfig:
     seed: int = 42
     deterministic: bool = False
     max_epoch_time: float = 0.0
+    precision: Literal["fp32", "fp16", "bf16"] = "fp32"
+    checkpoint_every_n: int = 0
 
 
 class _DataProvider(Protocol):

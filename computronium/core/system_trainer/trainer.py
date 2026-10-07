@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Mapping
 from dataclasses import field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
@@ -34,6 +35,17 @@ if TYPE_CHECKING:
 type StepCallback = Callable[[Mapping[str, float]], None]
 
 logger = get_logger()
+
+
+def _autocast_context(device: torch.device, precision: str):
+    """Return appropriate autocast context manager for the device and precision."""
+    if device.type == "cuda" and precision != "fp32":
+        if precision == "fp16":
+            return torch.autocast("cuda", dtype=torch.float16)
+        if precision == "bf16":
+            return torch.autocast("cuda", dtype=torch.bfloat16)
+    # Return a no-op context manager for CPU or fp32
+    return torch.autocast("cpu", enabled=False)  # type: ignore[return-value]
 
 
 @dataclasses.dataclass
@@ -81,6 +93,8 @@ class SystemTrainer:
             track_memory=self.config.track_memory,
             max_epoch_time=self.config.max_epoch_time,
         )
+        # Autocast context for mixed precision
+        self._autocast = _autocast_context(self.device, self.config.precision)
 
     def _harvest_enabled(self) -> bool:
         return self.config.harvest_mode is not None
@@ -181,7 +195,7 @@ class SystemTrainer:
         if self.config.deterministic:
             torch.use_deterministic_algorithms(True)
 
-    def train_epoch(self) -> dict[str, float]:
+    def train_epoch(self) -> dict[str, float]:  # ruff: ignore[complex-structure, too-many-statements, too-many-branches, too-many-locals]
         """Run one training epoch.
 
         When ``config.async_dataloading`` is True and CUDA is available,
@@ -249,14 +263,19 @@ class SystemTrainer:
             if x.dim() > 2:
                 x = x.reshape(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
 
+            # Run train_step with mixed precision
+            def _train_step():
+                with self._autocast:
+                    return self.system.train_step(x, y)
+
             # Run train_step on compute stream for async path
             if use_async:
                 with torch.cuda.stream(compute_stream):
-                    metrics = self.system.train_step(x, y)
+                    metrics = _train_step()
                 # Sync to get metrics for logging/accumulation
                 torch.cuda.current_stream().wait_stream(compute_stream)
             else:
-                metrics = self.system.train_step(x, y)
+                metrics = _train_step()
 
             batch = x.size(0)
             self._resources.note_step(batch)
@@ -327,6 +346,13 @@ class SystemTrainer:
             avg_energy,
         )
 
+        # Checkpoint if configured
+        if (
+            self.config.checkpoint_every_n > 0
+            and self.current_epoch % self.config.checkpoint_every_n == 0
+        ):
+            self.save_checkpoint()
+
         return epoch_record
 
     def validate(self) -> dict[str, float]:
@@ -339,7 +365,7 @@ class SystemTrainer:
         val_correct = 0
         num_samples = 0
 
-        with torch.no_grad():
+        with torch.no_grad(), self._autocast:
             for x, y in self.val_data:
                 x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
                 y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
@@ -359,6 +385,72 @@ class SystemTrainer:
             "val_acc": val_correct / denom,
             "val_ppl": perplexity(val_loss),
         }
+
+    def save_checkpoint(self, path: str | Path | None = None) -> Path:
+        """Save a training checkpoint to disk.
+
+        Args:
+            path: Optional path to save checkpoint. If None, uses a default
+                path based on the store location.
+
+        Returns:
+            Path to the saved checkpoint file.
+        """
+        if path is None:
+            path = Path(f"checkpoint_epoch_{self.current_epoch}.pt")
+
+        snapshot = self.snapshot()
+        torch.save(
+            {
+                "epoch": snapshot.epoch,
+                "global_step": snapshot.global_step,
+                "history": snapshot.history,
+                "theta": snapshot.theta,
+                "opt_state": snapshot.opt_state,
+                "credit_state": snapshot.credit_state,
+                "config": self.config,
+            },
+            path,
+        )
+        logger.info("Checkpoint saved to %s", path)
+        return Path(path)
+
+    @classmethod
+    def from_checkpoint(
+        cls,
+        checkpoint_path: str | Path,
+        *,
+        system: System,
+        train_data: _DataProvider,
+        val_data: _DataProvider | None = None,
+    ) -> SystemTrainer:
+        """Load a trainer from a checkpoint file.
+
+        Args:
+            checkpoint_path: Path to the checkpoint file.
+            system: The system to load state into.
+            train_data: Training data provider.
+            val_data: Optional validation data provider.
+
+        Returns:
+            A new SystemTrainer instance restored from the checkpoint.
+        """
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        config = checkpoint["config"]
+        trainer = cls(
+            system=system, config=config, train_data=train_data, val_data=val_data
+        )
+        snapshot = TrainerSnapshot(
+            epoch=checkpoint["epoch"],
+            global_step=checkpoint["global_step"],
+            history=checkpoint["history"],
+            theta=checkpoint["theta"],
+            opt_state=checkpoint["opt_state"],
+            credit_state=checkpoint["credit_state"],
+        )
+        trainer._restore(snapshot)
+        logger.info("Restored from checkpoint: %s", checkpoint_path)
+        return trainer
 
     def snapshot(self) -> TrainerSnapshot:
         """Capture the full resume state (theta, optimizer state, counters)."""

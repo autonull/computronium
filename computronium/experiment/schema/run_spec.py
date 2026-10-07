@@ -2,7 +2,7 @@
 
 A run spec is the only description of a run that survives it: it is what the
 CLI loads, what ``runs.spec`` persists, and what ``PipelineConfig`` reads.  It
-is validated once, at the boundary (TODO46 D4/§3.2), so every reader downstream
+is validated once, at the boundary (TODO46 D4/sec.3.2), so every reader downstream
 consumes a checked object instead of a dict whose keys are an implicit
 contract spread across six modules.
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 RUN_SPEC_VERSION = 2
 
-# The ceiling the digits campaign measured (TODO46 §8 session 6). Sized to the
+# The ceiling the digits campaign measured (TODO46 sec.8 session 6). Sized to the
 # unconstrained default (a 64x2 feedforward is 8 970 parameters) so a bounded
 # run is not *slower* than an unbounded one, while cutting the cells that cost:
 # unconstrained, a lattice cell composes at 839 690 parameters and dominates the
@@ -48,7 +48,7 @@ MEASURED_PARAM_BUDGET: Final[int] = 10_000
 # participate while still providing a meaningful constraint.
 BROAD_PARAM_BUDGET: Final[int] = 50_000
 
-# The rest of the measured regime (TODO46 §6.1): what a cell actually costs. Two
+# The rest of the measured regime (TODO46 sec.6.1): what a cell actually costs. Two
 # batches on digits is a real forward/backward pass and a real gradient step, so
 # the acceptance gate locks orchestration and measurement identity without paying
 # for 45 batches it does not need; the full-regime evidence lives in one
@@ -178,6 +178,8 @@ class RunSpec(BaseModel):
     deterministic: bool = False
     # DataLoader num_workers (0 for single-threaded determinism)
     num_workers: int = 0
+    # Numerical precision: "fp32", "fp16", "bf16"
+    precision: str = "fp32"
     # Axis-aligned objective sets: mapping from axis name to tuple of objective names.
     # When set, the policy will use per-axis objective sets for multi-objective optimization.
     # Format: {"substrate": ("energy_efficiency", "latency_ms", "precision"), ...}
@@ -236,6 +238,9 @@ class RunSpec(BaseModel):
         if self.num_workers < 0:
             msg = f"num_workers must be non-negative, got {self.num_workers}"
             raise ValueError(msg)
+        if self.precision not in {"fp32", "fp16", "bf16"}:
+            msg = f"invalid precision {self.precision!r}; expected 'fp32', 'fp16', or 'bf16'"
+            raise ValueError(msg)
 
         # Validate axis_objectives
         from computronium.experiment.schema.registries import (
@@ -278,8 +283,8 @@ class RunSpec(BaseModel):
         )
         if structural:
             msg = (
-                f"hyperparameter(s) {structural} are structural — derived from the "
-                "task or chosen by the run — and cannot be swept"
+                f"hyperparameter(s) {structural} are structural -- derived from the "
+                "task or chosen by the run -- and cannot be swept"
             )
             raise ValueError(msg)
 
@@ -366,8 +371,8 @@ class RunSpec(BaseModel):
     def load(cls, path: str | Path) -> Self:
         """Validate a spec file.
 
-        The format follows the suffix — ``.yaml``/``.yml`` are YAML, ``.json``
-        is JSON — so a spec written by hand and a spec emitted by
+        The format follows the suffix -- ``.yaml``/``.yml`` are YAML, ``.json``
+        is JSON -- so a spec written by hand and a spec emitted by
         ``to_dict`` load through one declaration and neither is guessed at.
 
         Raises:

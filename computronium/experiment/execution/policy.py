@@ -923,6 +923,7 @@ class EvolutionPolicy:
             device=ctx.spec.device,
             deterministic=ctx.spec.deterministic,
             num_workers=ctx.spec.num_workers,
+            precision=ctx.spec.precision,
         )
 
     def _evolve(self, ctx: ProposalContext) -> Iterator[Proposal]:

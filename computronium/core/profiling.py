@@ -68,6 +68,69 @@ def count_flops(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     return 2 * params * batch_size
 
 
+def count_flops_fvcore(model: nn.Module, input_shape: tuple[int, ...]) -> int:
+    """Accurate FLOP count using fvcore.nn.FlopCountAnalysis.
+
+    This runs a real forward pass through the model with a dummy input and
+    counts actual operations, handling all layer types correctly.
+
+    Args:
+        model: The model to profile.
+        input_shape: Input shape including batch dimension.
+
+    Returns:
+        Total FLOPs for one forward pass.
+    """
+    try:
+        from fvcore.nn import FlopCountAnalysis
+    except ImportError:
+        # Fallback to parameter-count estimate
+        return count_flops(model, input_shape)
+
+    device = _infer_model_device(model)
+    dummy_input = torch.zeros(input_shape, device=device)
+
+    # Build a proper dummy for spatial models
+    if len(input_shape) == 4:  # (B, C, H, W)
+        dummy_input = _build_spatial_dummy(model, torch.device(device))
+
+    try:
+        flops = FlopCountAnalysis(model, dummy_input).total()
+        return int(flops)
+    except Exception:
+        # Fallback on any analysis error
+        return count_flops(model, input_shape)
+
+
+def count_flops_detailed_fvcore(
+    model: nn.Module, input_shape: tuple[int, ...]
+) -> dict[str, int]:
+    """Detailed FLOP count per module using fvcore.
+
+    Returns dict with total and breakdown by module name.
+    """
+    try:
+        from fvcore.nn import FlopCountAnalysis
+    except ImportError:
+        return count_flops_detailed(model, input_shape)
+
+    device = _infer_model_device(model)
+    dummy_input = torch.zeros(input_shape, device=device)
+
+    if len(input_shape) == 4:
+        dummy_input = _build_spatial_dummy(model, torch.device(device))
+
+    try:
+        analysis = FlopCountAnalysis(model, dummy_input)
+        by_module = analysis.by_module()
+        return {
+            "total": int(analysis.total()),
+            **{k: int(v) for k, v in by_module.items()},
+        }
+    except Exception:
+        return count_flops_detailed(model, input_shape)
+
+
 def measure_suite_resources(
     model: nn.Module,
     *,

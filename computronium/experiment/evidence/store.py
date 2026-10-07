@@ -240,15 +240,16 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 credit          TEXT NOT NULL,
                 update          TEXT NOT NULL,
                 params          JSON NOT NULL,
-schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
+                schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                                         epochs INTEGER, batch_limit INTEGER, budget_id TEXT,
                                         task_id TEXT, param_budget INTEGER, device TEXT,
-                                        deterministic BOOLEAN, num_workers INTEGER) NOT NULL,
+                                        deterministic BOOLEAN, num_workers INTEGER,
+                                        precision TEXT) NOT NULL,
                 provenance      JSON NOT NULL,
                 status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
-                                       quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
-                                       reproducibility TEXT, assessment_procedure_version TEXT,
-                                       ceec_link TEXT) NOT NULL,
+                                        quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
+                                        reproducibility TEXT, assessment_procedure_version TEXT,
+                                        ceec_link TEXT) NOT NULL,
                 payload         JSON NOT NULL,
                 unknown         JSON,
                 effective_params JSON NOT NULL DEFAULT '{}',
@@ -1458,6 +1459,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         task_id: str = ""
         param_budget: Annotated[int, Field(ge=0)] = 0
         device: Annotated[str, Field(pattern="^(cpu|cuda|auto)$")] = "auto"
+        precision: Annotated[str, Field(pattern="^(fp32|fp16|bf16)$")] = "fp32"
 
     class ProvenanceModel(BaseModel):
         """Pydantic model for Provenance validation at I/O boundaries."""

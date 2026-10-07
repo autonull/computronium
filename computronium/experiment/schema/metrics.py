@@ -81,6 +81,10 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "forward_energy_per_batch",
     "update_energy_per_batch",
     "energy_efficiency",
+    # New cost metrics (P0)
+    "memory_usage",
+    "flops",
+    "latency_ms",
 }
 
 # Objective name -> the payload key that satisfies it.
@@ -110,6 +114,10 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "drift_max_singular_value": "drift_max_singular_value",
     "contraction_rate": "contraction_rate",
     "energy_efficiency": "energy_efficiency",
+    # New cost metrics (P0)
+    "memory_usage": "memory_usage",
+    "flops": "flops",
+    "latency_ms": "latency_ms",
 })
 
 
