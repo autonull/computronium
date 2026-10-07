@@ -908,3 +908,42 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 **Remaining Test Files to Migrate:** ~16 property test files + acceptance tests still use direct submodule imports
 
 ---
+
+## Session Summary (2026-10-07) — Lint Baseline Update & Gallery Provenance Refresh
+
+**Completed this session:**
+
+### Lint Count Baseline Update ✅
+- Updated `BASELINE` in `tests/property/test_lint_count_ratchet.py` from 845 → 837
+- Measured lint count: 827 (18 fewer findings than previous baseline)
+- Both lint ratchet tests now pass (`test_repo_wide_lint_count_does_not_regress`, `test_the_baseline_is_not_stale`)
+
+### Gallery Provenance Records Regenerated ✅
+- Re-ran all 4 demo tests with `-m demo` to regenerate provenance records with current git commit hash
+- Updated records: `d1_compose_6axis.json`, `d2_swap_credit.json`, `d6_substrate_swap.json`, `d8_geometry_swap.json`
+- All 85 tests in `test_gallery_provenance_lock.py` pass
+
+### Comprehensive Verification ✅
+- All core property lock tests pass (ontology, capability evidence, kernel isolation, layering, run ledger, multi-axis campaign) — 51 tests
+- Kernel parity tests pass (7 passed, 3 xfailed expected)
+- Smoke tests pass (11/11 tasks including MNIST, CIFAR-10, KMNIST, USPS, Fashion-MNIST, Digits, Tiny Shakespeare, Char N-gram, CartPole, Pendulum, Acrobot)
+- Demo tests pass (4/4: compose_6axis, swap_credit, substrate_swap, geometry_swap)
+- Test collection time for property tests: ~4.8s (consistent with previous improvement)
+
+### Files Modified:
+- `tests/property/test_lint_count_ratchet.py` — Updated BASELINE to 837
+- `docs/figures/run_records/d1_compose_6axis.json` — Updated git_commit hash
+- `docs/figures/run_records/d2_swap_credit.json` — Updated git_commit hash
+- `docs/figures/run_records/d6_substrate_swap.json` — Updated git_commit hash
+- `docs/figures/run_records/d8_geometry_swap.json` — Updated git_commit hash
+
+**Key Metrics:**
+| Met | Before | After |
+|-----|--------|-------|
+| Lint count baseline | 845 | 837 |
+| Measured lint count | 845 (stale) | 827 |
+| Gallery provenance tests | 85 pass | 85 pass |
+| Core property locks | 51 pass | 51 pass |
+| Demo tests | 4 pass | 4 pass |
+
+---
