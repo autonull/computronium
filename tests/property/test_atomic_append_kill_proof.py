@@ -16,10 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.record import (
+from computronium.experiment.evidence import ArtifactInput, ArtifactRole, RecordStore, StoreConfig
+from computronium.experiment.schema import (
+    Coordinate,
+    Provenance,
+    Schedule,
     FailureCause,
     GateVerdict,
     Maturity,
@@ -131,9 +132,7 @@ class TestAtomicAppendKillProof:
                     run_id, seed=42
                 )  # Same seed = same measurement_key
 
-                from computronium.experiment.evidence.store import (
-                    DuplicateMeasurementError,
-                )
+                from computronium.experiment.evidence import DuplicateMeasurementError
 
                 with pytest.raises(DuplicateMeasurementError):
                     store.append_with_artifacts(record2, artifacts)
@@ -165,10 +164,9 @@ class TestAtomicAppendKillProof:
 import sys
 sys.path.insert(0, "/home/me/computronium")
 
-from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.record import (
+from computronium.experiment.evidence import ArtifactInput, ArtifactRole, RecordStore, StoreConfig
+from computronium.experiment.schema import (
+    Coordinate, Provenance, Schedule,
     FailureCause, GateVerdict, Maturity, Record, ReproducibilityClass,
     Severity, Status
 )

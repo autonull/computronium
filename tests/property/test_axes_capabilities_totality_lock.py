@@ -12,16 +12,14 @@ import inspect
 
 import pytest
 
-from computronium.experiment.schema.axis import (
+from computronium.experiment.schema import (
     AXES_REGISTRIES,
-    StructuralAxis,
-    get_registry,
-)
-from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilityKind,
     CapabilitySpec,
     CapabilityStatus,
+    StructuralAxis,
+    get_registry,
 )
 
 
@@ -112,7 +110,7 @@ class TestAxesRegistryWiring:
 
     def test_harvest_schema_integrity(self) -> None:
         """harvest_schema() runs without ConflictingHyperparameterError."""
-        from computronium.experiment.schema.harvest import harvest_schema
+        from computronium.experiment.schema import harvest_schema
 
         schema = harvest_schema()
         assert schema.version == 1
@@ -130,7 +128,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_capabilities_registry_exists_and_seeded(self) -> None:
         """Capabilities registry exists and has C1-C88 entries after seeding."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
         assert len(CAPABILITIES_REGISTRY) == 88, (
@@ -139,7 +137,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_all_seeded_capabilities_have_valid_specs(self) -> None:
         """All C1-C88 have valid CapabilitySpec with required fields."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -162,7 +160,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_capability_kind_distribution(self) -> None:
         """Capabilities distributed across all kinds."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -183,7 +181,7 @@ class TestCapabilitiesRegistryTotality:
         only options were ACTIVE — claiming a guarantee nothing verifies — or
         RETIRED, which is a stronger statement than "untested".
         """
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -199,7 +197,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_retired_capabilities_have_retirement_record(self) -> None:
         """RETIRED capabilities must have retirement_record."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -211,7 +209,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_stage_coverage(self) -> None:
         """Capabilities cover all pipeline stages S1-S11 (canonical names)."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -239,7 +237,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_owner_coverage(self) -> None:
         """Capabilities have meaningful owner assignments."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -284,7 +282,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_verifying_test_format(self) -> None:
         """verifying_test should be pytest node id format."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -298,7 +296,7 @@ class TestCapabilitiesRegistryTotality:
 
     def test_flags_are_tuples(self) -> None:
         """flags should be tuples of strings."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -418,7 +416,7 @@ class TestCRequirementsMatrix:
 
     def test_every_capability_cites_at_least_one_requirement(self) -> None:
         """Every capability (C) cited by ≥1 requirement (R)."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -447,7 +445,7 @@ class TestCRequirementsMatrix:
 
     def test_matrix_covers_all_seeded_capabilities(self) -> None:
         """C↔R matrix covers all 88 seeded capabilities."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -465,7 +463,7 @@ class TestSeedRegistriesIdempotent:
 
     def test_seed_all_registries_idempotent(self) -> None:
         """Calling seed_all_registries twice produces same result."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
         counts1 = {

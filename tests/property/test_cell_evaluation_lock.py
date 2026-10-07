@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from computronium.experiment.execution import cell_record, evaluate_cell, task_shape
-from computronium.experiment.schema import Coordinate, Provenance, Schedule
+from computronium.experiment.schema import Coordinate, GateVerdict, Provenance, Schedule
 
 _BACKENDS = Path(__file__).resolve().parents[2] / "computronium/experiment/execution"
 _TASK_ID = "digits"
@@ -105,11 +105,8 @@ def test_digits_shape_reaches_the_geometry() -> None:
     assert shape.output_dim == 10
 
 
-@pytest.mark.timeout(300)
 def test_record_carries_measurement_and_a_derived_verdict() -> None:
     """The Record holds the measurement; the verdict comes from what happened."""
-    from computronium.experiment.schema import GateVerdict
-
     record = cell_record(_coordinate(), _schedule(), _provenance())
 
     assert record.payload["train_acc"] > 0.0

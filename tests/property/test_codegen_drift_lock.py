@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.surface.codegen import (
+from computronium.experiment.surface import (
     generate_all,
     generate_capabilities_listing,
 )

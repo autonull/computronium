@@ -164,6 +164,11 @@ __all__ = [
     "SpaceStage",
     "TrainStage",
     "get_stage_implementation",
+    "_allocate_origins",
+    "_design_factors",
+    "_is_assignment",
+    "_match_design",
+    "_origins_for_design",
     # sysctx
     "EnvironmentSnapshot",
     "SystemContext",
@@ -312,6 +317,11 @@ _symbol_to_module: dict[str, str] = {
     "SpaceStage": "stages_impl",
     "TrainStage": "stages_impl",
     "get_stage_implementation": "stages_impl",
+    "_allocate_origins": "stages_impl",
+    "_design_factors": "stages_impl",
+    "_is_assignment": "stages_impl",
+    "_match_design": "stages_impl",
+    "_origins_for_design": "stages_impl",
     # sysctx
     "EnvironmentSnapshot": "sysctx",
     "SystemContext": "sysctx",

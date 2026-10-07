@@ -14,7 +14,7 @@ After WP8/WP9 completion, registries are seeded with domain data:
 
 from pathlib import Path
 
-from computronium.experiment.schema.registries import (
+from computronium.experiment.schema import (
     ALL_REGISTRIES,
     CAPABILITIES_REGISTRY,
     CONSTRAINTS_REGISTRY,
@@ -22,8 +22,8 @@ from computronium.experiment.schema.registries import (
     POLICIES_REGISTRY,
     PRIORS_REGISTRY,
     STAGES_REGISTRY,
+    seed_all_registries,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 ROOT_INIT = Path("computronium") / "__init__.py"
 EXPERIMENT_INIT = Path("computronium/experiment") / "__init__.py"

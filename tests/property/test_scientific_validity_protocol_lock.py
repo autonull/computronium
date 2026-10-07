@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.evidence.protocol import (
+from computronium.experiment.evidence import (
     SYNTHETIC_FIXTURE,
     ComparisonGuard,
     CostBudget,
@@ -22,16 +22,15 @@ from computronium.experiment.evidence.protocol import (
     compute_effect_size,
     create_synthetic_fixture,
     wilcoxon_paired,
+    RecordStore,
+    StoreConfig,
 )
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.coordinate import (
+from computronium.experiment.schema import (
     Coordinate,
     DataOrigin,
     Provenance,
     Schedule,
     TransferMode,
-)
-from computronium.experiment.schema.record import (
     FailureCause,
     GateVerdict,
     Maturity,

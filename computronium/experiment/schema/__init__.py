@@ -49,6 +49,7 @@ __all__ = [
     "DataOrigin",
     "Provenance",
     "Schedule",
+    "TransferMode",
     # Harvest symbols
     "AXIS_KIND_ORDER",
     "CONFIG_FIELD_ALIASES",
@@ -84,6 +85,7 @@ __all__ = [
     "Severity",
     "Status",
     # Registries symbols
+    "ALL_REGISTRIES",
     "ASSESSMENT_PROCEDURE_VERSION",
     "CAPABILITIES_REGISTRY",
     "CapabilityKind",
@@ -173,6 +175,7 @@ _symbol_to_module: dict[str, str] = {
     "DataOrigin": "coordinate",
     "Provenance": "coordinate",
     "Schedule": "coordinate",
+    "TransferMode": "coordinate",
     # harvest
     "AXIS_KIND_ORDER": "harvest",
     "CONFIG_FIELD_ALIASES": "harvest",
@@ -208,6 +211,7 @@ _symbol_to_module: dict[str, str] = {
     "Severity": "record",
     "Status": "record",
     # registries
+    "ALL_REGISTRIES": "registries",
     "ASSESSMENT_PROCEDURE_VERSION": "registries",
     "CAPABILITIES_REGISTRY": "registries",
     "CapabilityKind": "registries",

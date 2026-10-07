@@ -336,7 +336,7 @@ def test_every_generated_cell_composes_for_the_task_shape() -> None:
 
 def test_the_stream_needs_no_shape_to_be_well_formed() -> None:
     """Without a resolver the stream is the same shape, minus the legality filter."""
-    from computronium.experiment.execution.evaluate import TaskShape
+    from computronium.experiment.execution import TaskShape
 
     spec = _narrowed_spec()
     unfiltered = generate_candidates(spec, search_space_from_spec(spec), limit=5)

@@ -13,13 +13,15 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.evidence.store import (
+from computronium.experiment.evidence import (
     RecordStore,
     StoreConfig,
     UnsupportedSchemaVersionError,
 )
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.record import (
+from computronium.experiment.schema import (
+    Coordinate,
+    Provenance,
+    Schedule,
     FailureCause,
     GateVerdict,
     Maturity,
@@ -27,9 +29,9 @@ from computronium.experiment.schema.record import (
     ReproducibilityClass,
     Severity,
     Status,
+    RunSpec,
+    SCHEMA_REGISTRY,
 )
-from computronium.experiment.schema.run_spec import RunSpec
-from computronium.experiment.schema.versioning import SCHEMA_REGISTRY
 
 
 def _make_record(

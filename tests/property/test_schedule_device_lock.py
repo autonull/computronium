@@ -10,8 +10,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.evaluate import cell_record
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import cell_record
 from computronium.experiment.schema import Coordinate, Provenance, Schedule, RunSpec, seed_all_registries
 
 

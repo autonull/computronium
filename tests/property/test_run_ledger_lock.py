@@ -28,14 +28,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
-from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.policy import (
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import (
+    LocalBackend,
+    Budget,
+    SimpleCostModel,
+    PipelineConfig,
+    PipelineRunner,
     ModelBasedPolicy,
     Policy,
     StratifiedRandomPolicy,
+    ProposalContext,
+    search_space_from_spec,
+    task_shape,
 )
 from computronium.experiment.schema import (
     StructuralAxis,
@@ -275,7 +280,7 @@ def test_two_policies_over_one_store_measure_different_trials(tmp_path: Path) ->
 
 def test_measurement_identity_is_the_coordinate_alone(tmp_path: Path) -> None:
     """A record's key recomputes from its own coordinate — whichever policy wrote it."""
-    from computronium.experiment.schema.coordinate import Coordinate
+    from computronium.experiment.schema import Coordinate
 
     random_keys, model_keys = _two_policy_runs(tmp_path)
 
@@ -328,9 +333,11 @@ def _declared_keys(spec: RunSpec) -> set[str]:
     Read through ``ProposalContext`` with no evidence, so "the space" and "the
     work left" are one implementation rather than two that can disagree.
     """
-    from computronium.experiment.execution.evaluate import task_shape
-    from computronium.experiment.execution.policy import ProposalContext
-    from computronium.experiment.execution.search_space import search_space_from_spec
+    from computronium.experiment.execution import (
+        task_shape,
+        ProposalContext,
+        search_space_from_spec,
+    )
 
     ctx = ProposalContext(
         search_space=search_space_from_spec(spec, tasks=spec.task_names),
@@ -415,14 +422,14 @@ def test_every_policy_resumes_within_the_runs_own_store(tmp_path: Path) -> None:
     (``ProposalContext.cells`` skips what the store holds) and this walks every
     catalog entry over one real store to prove no policy escapes it.
     """
-    from computronium.experiment.execution.evaluate import task_shape
-    from computronium.experiment.execution.policy import (
+    from computronium.experiment.execution import (
+        task_shape,
         POLICY_CATALOG,
         ProposalContext,
         create_policy,
         policy_context,
+        search_space_from_spec,
     )
-    from computronium.experiment.execution.search_space import search_space_from_spec
 
     spec = _campaign_spec()
     store_path = tmp_path / "policy_resume.duckdb"

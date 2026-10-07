@@ -49,8 +49,8 @@ pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
 
 def _system(hidden: int, layers: int = 3, step_size: float | None = None):
-    from computronium.experiment.execution.compose import compose_cell_system
-    from computronium.experiment.schema.coordinate import Coordinate
+    from computronium.experiment.execution import compose_cell_system
+    from computronium.experiment.schema import Coordinate
 
     coordinate = Coordinate(
         substrate="digital",
@@ -355,8 +355,8 @@ _STABILITY_METRICS = (
 
 
 def _system_for_dynamics(dynamics: str, geometry: str, credit: str):
-    from computronium.experiment.execution.compose import compose_cell_system
-    from computronium.experiment.schema.coordinate import Coordinate
+    from computronium.experiment.execution import compose_cell_system
+    from computronium.experiment.schema import Coordinate
 
     return compose_cell_system(
         coordinate=Coordinate(

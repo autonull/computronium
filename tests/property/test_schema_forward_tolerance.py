@@ -18,13 +18,15 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.evidence.store import (
+from computronium.experiment.evidence import (
     RecordStore,
     StoreConfig,
     UnsupportedSchemaVersionError,
 )
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
-from computronium.experiment.schema.record import (
+from computronium.experiment.schema import (
+    Coordinate,
+    Provenance,
+    Schedule,
     FailureCause,
     GateVerdict,
     Maturity,

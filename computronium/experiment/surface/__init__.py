@@ -23,6 +23,7 @@ __all__ = [
     # cli
     "main",
     "RUN_PROFILES",
+    "execute_spec",
     # codegen
     "generate_all",
     "generate_axes_listing",
@@ -85,6 +86,7 @@ __all__ = [
     "generate_run_report",
     "load_export_bundle",
     "narrative_handoff_summary",
+    "non_dominated",
     # service
     "ServiceLoop",
     "ServiceLoopConfig",
@@ -100,6 +102,7 @@ _symbol_to_module: dict[str, str] = {
     # cli
     "main": "cli",
     "RUN_PROFILES": "cli",
+    "execute_spec": "cli",
     # codegen
     "generate_all": "codegen",
     "generate_axes_listing": "codegen",
@@ -162,6 +165,7 @@ _symbol_to_module: dict[str, str] = {
     "generate_run_report": "report",
     "load_export_bundle": "report",
     "narrative_handoff_summary": "report",
+    "non_dominated": "report",
     # service
     "ServiceLoop": "service",
     "ServiceLoopConfig": "service",

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.surface.report import non_dominated
+from computronium.experiment.surface import non_dominated
 
 _RHO, _SIGMA, _MARGIN = "spectral_radius", "max_singular_value", "stability_margin"
 

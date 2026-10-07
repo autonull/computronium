@@ -18,7 +18,7 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.schema import (
     Domain,
     Scale,
@@ -28,8 +28,7 @@ from computronium.experiment.schema import (
     RunSpec,
     seed_all_registries,
 )
-from computronium.experiment.surface import cli
-from computronium.experiment.surface.report import generate_run_report
+from computronium.experiment.surface import cli, generate_run_report, ReportGenerator
 
 
 def _build_narrowed_spec_path(tmp_path: Path) -> Path:
@@ -159,8 +158,6 @@ def test_report_includes_economics_section(d2_store):
     )
 
     # Should have cost per record if there are records
-    from computronium.experiment.surface.report import ReportGenerator
-
     report = ReportGenerator(store)
     summary = report.run_summary(run_id)
     if summary and summary.record_count > 0 and summary.budget_consumed_s:

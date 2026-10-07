@@ -96,7 +96,7 @@ def _sweeps(dynamics_name: str, step_size: float) -> tuple[int, bool]:
 
 
 def _shipped_eqprop_names() -> list[str]:
-    from computronium.experiment.schema.run_spec import RunSpec
+    from computronium.experiment.schema import RunSpec
 
     return [
         primitive
@@ -110,7 +110,7 @@ def _shipped_eqprop_names() -> list[str]:
 
 def _shipped_settle_step() -> tuple[float, float]:
     """The first shipped spec's declared ``settle_step`` band."""
-    from computronium.experiment.schema.run_spec import RunSpec
+    from computronium.experiment.schema import RunSpec
 
     domain = RunSpec.load(SHIPPED_SPECS[0]).hyperparameters["settle_step"]
     assert domain is not None and domain.lo is not None and domain.hi is not None, (

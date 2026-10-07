@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.execution import task_shape
+from computronium.experiment.execution import search_space_from_spec, task_shape
 from computronium.experiment.schema import (
     StructuralAxis,
     MEASURED_OBJECTIVES,
@@ -32,6 +32,7 @@ from computronium.experiment.schema import (
     RunSpec,
     seed_all_registries,
 )
+from computronium.experiment.surface import execute_spec
 
 pytestmark = pytest.mark.timeout(300)
 
@@ -144,7 +145,7 @@ def test_multi_axis_campaign_sweeps_declared_axes(fast_multi_axis_spec: RunSpec)
     """The search space includes all declared axis combinations."""
     spec = fast_multi_axis_spec
 
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.execution import (
         iter_candidates,
         search_space_from_spec,
     )
@@ -186,7 +187,7 @@ def test_multi_axis_campaign_sweeps_declared_axes_full(full_multi_axis_spec: Run
     """Full version: The search space includes all declared axis combinations."""
     spec = full_multi_axis_spec
 
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.execution import (
         iter_candidates,
         search_space_from_spec,
     )
@@ -259,8 +260,6 @@ def test_multi_axis_campaign_run_completes_and_closes(fast_multi_axis_spec: RunS
     store_path = tmp_path / "multi_axis_test.duckdb"
 
     # Use execute_spec which properly closes the run
-    from computronium.experiment.surface.cli import execute_spec
-
     exit_code = execute_spec(spec, store_path=str(store_path))
     assert exit_code == 0, f"execute_spec failed with code {exit_code}"
 
@@ -312,8 +311,6 @@ def test_multi_axis_campaign_run_completes_and_closes_full(full_multi_axis_spec:
     store_path = tmp_path / "multi_axis_test_full.duckdb"
 
     # Use execute_spec which properly closes the run
-    from computronium.experiment.surface.cli import execute_spec
-
     exit_code = execute_spec(spec, store_path=str(store_path))
     assert exit_code == 0, f"execute_spec failed with code {exit_code}"
 

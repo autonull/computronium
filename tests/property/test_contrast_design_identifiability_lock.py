@@ -9,11 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from computronium.experiment.evidence.protocol import (
-    SYNTHETIC_FIXTURE,
-    SyntheticGroundTruth,
-)
-from computronium.experiment.execution.contrast_design import (
+from computronium.experiment.evidence import SYNTHETIC_FIXTURE, SyntheticGroundTruth
+from computronium.experiment.execution import (
     ContrastAssignment,
     ContrastDesign,
     ContrastDesignKind,
@@ -21,6 +18,7 @@ from computronium.experiment.execution.contrast_design import (
     create_fractional_factorial_design,
     create_full_factorial_design,
     create_ofat_design,
+    Proposal,
 )
 from computronium.experiment.schema import Coordinate, Schedule
 
@@ -341,8 +339,6 @@ class TestContrastDesignIntegration:
 
     def test_contrast_design_in_proposal_metadata(self) -> None:
         """Contrast design assignments can be embedded in Proposal metadata."""
-        from computronium.experiment.execution.stage import Proposal
-
         factors = [Factor(name="lr", levels=(1e-4, 1e-2))]
         design = create_ofat_design(factors, seed=42)
         contrast_assignment = design.assignments[1]  # First OFAT run

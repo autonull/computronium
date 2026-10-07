@@ -20,10 +20,11 @@ from __future__ import annotations
 import pytest
 import torch
 
-from computronium.experiment.execution.compose import (
+from computronium.experiment.execution import (
     GRID_CREDITS,
     GRID_UPDATES,
     compose_cell_system,
+    build_geometry_config,
 )
 from computronium.experiment.schema import Coordinate
 from computronium.ontology import (
@@ -55,7 +56,6 @@ _GEOMETRY: dict[str, object] = {"depth": 2, "hidden_dim": 16}
 def _viable_cells() -> list[tuple[str, str, str]]:
     substrate = DigitalSubstrate().config
     cells: list[tuple[str, str, str]] = []
-    from computronium.experiment.execution.compose import build_geometry_config
 
     geometry = build_geometry_config(
         _GEOMETRY, topology=_TOPOLOGY, input_shape=(64,), output_dim=10

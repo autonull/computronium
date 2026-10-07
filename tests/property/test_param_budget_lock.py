@@ -28,6 +28,7 @@ from computronium.experiment.execution import (
     generate_candidates,
     search_space_from_spec,
     task_shape,
+    _GEOMETRY_ALIASES,
 )
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
@@ -40,6 +41,7 @@ from computronium.experiment.schema import (
     PARAM_BUDGET_TOLERANCE,
     MEASURED_PARAM_BUDGET,
     RunSpec,
+    CONSTRAINTS_REGISTRY,
 )
 
 _TRAINABLE_TOPOLOGIES = (
@@ -176,8 +178,6 @@ def test_a_cell_that_cannot_honour_its_ceiling_does_not_pass() -> None:
 
 def test_the_tolerance_is_declared_once() -> None:
     """The registered predicate and the gate read the same number."""
-    from computronium.experiment.schema import CONSTRAINTS_REGISTRY
-
     predicate = str(CONSTRAINTS_REGISTRY["param_budget_fairness"].predicate)
     assert str(1 + PARAM_BUDGET_TOLERANCE) in predicate
 
@@ -221,6 +221,4 @@ def test_an_unhonourable_primitive_is_retired_with_its_reason() -> None:
 
 def test_the_geometry_alias_table_does_not_grow() -> None:
     """``_GEOMETRY_ALIASES`` is a §3.0 violation in miniature; hold it at one."""
-    from computronium.experiment.execution import _GEOMETRY_ALIASES
-
     assert _GEOMETRY_ALIASES == {"num_layers": "depth"}

@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.execution import PipelineConfig, STAGE_SPECS, StageId
-from computronium.experiment.schema import Provenance, RunSpec, STAGES_REGISTRY
+from computronium.experiment.execution import PipelineConfig, STAGE_SPECS, StageId, CostModel
+from computronium.experiment.schema import Provenance, RunSpec, STAGES_REGISTRY, seed_all_registries
 from computronium.experiment.surface import RUN_PROFILES
 
 
@@ -27,7 +27,6 @@ class TestStageModelLock:
     def _seed_registries(self) -> None:
         """Seed registries before each test."""
         from computronium.experiment.schema import seed_all_registries
-
         seed_all_registries()
 
     def test_canonical_stage_ids_match_registry(self) -> None:
@@ -189,7 +188,7 @@ class TestWrapperObligations:
                 for item in items:
                     if len(items) > 1 and item[0].cell_key() == "fail_cell":
                         # Simulate per-item failure
-                        from computronium.experiment.schema.record import Record
+                        from computronium.experiment.schema import Record
 
                         results.append(
                             Record.create(
@@ -241,9 +240,10 @@ class TestReplayResumeIntegration:
 
     def test_resume_reads_the_stores_own_measurement_key(self, tmp_path: Path) -> None:
         """A stored measurement is found by its identity, which is what resume reads."""
-        from computronium.experiment.evidence.store import RecordStore, StoreConfig
-        from computronium.experiment.schema.coordinate import Coordinate, Schedule
-        from computronium.experiment.schema.record import (
+        from computronium.experiment.evidence import RecordStore, StoreConfig
+        from computronium.experiment.schema import (
+            Coordinate,
+            Schedule,
             FailureCause,
             GateVerdict,
             Maturity,
@@ -345,7 +345,7 @@ class TestCostModelLearning:
 
     def test_cost_model_interface_exists(self) -> None:
         """RegistryCostModel implements CostModel protocol."""
-        from computronium.experiment.execution.budget import CostModel
+        from computronium.experiment.execution import CostModel
 
         # Verify the protocol exists
         assert hasattr(CostModel, "estimate_cost")

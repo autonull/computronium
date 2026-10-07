@@ -27,14 +27,12 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.execution.contrast_design import create_ofat_design
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.execution import (
+    create_ofat_design,
+    task_shape,
     iter_candidates,
     search_space_from_spec,
-)
-from computronium.experiment.execution.stage import Proposal
-from computronium.experiment.execution.stages_impl import (
+    Proposal,
     _allocate_origins,
     _design_factors,
     _is_assignment,
