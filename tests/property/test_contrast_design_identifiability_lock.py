@@ -15,10 +15,10 @@ from computronium.experiment.execution import (
     ContrastDesign,
     ContrastDesignKind,
     Factor,
+    Proposal,
     create_fractional_factorial_design,
     create_full_factorial_design,
     create_ofat_design,
-    Proposal,
 )
 from computronium.experiment.schema import Coordinate, Schedule
 

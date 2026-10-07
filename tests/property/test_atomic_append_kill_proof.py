@@ -16,16 +16,21 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.evidence import ArtifactInput, ArtifactRole, RecordStore, StoreConfig
+from computronium.experiment.evidence import (
+    ArtifactInput,
+    ArtifactRole,
+    RecordStore,
+    StoreConfig,
+)
 from computronium.experiment.schema import (
     Coordinate,
-    Provenance,
-    Schedule,
     FailureCause,
     GateVerdict,
     Maturity,
+    Provenance,
     Record,
     ReproducibilityClass,
+    Schedule,
     Severity,
     Status,
 )

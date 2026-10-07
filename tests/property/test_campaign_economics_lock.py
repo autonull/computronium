@@ -20,15 +20,15 @@ if TYPE_CHECKING:
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.schema import (
-    Domain,
-    Scale,
-    StructuralAxis,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
+    Domain,
     RunSpec,
+    Scale,
+    StructuralAxis,
     seed_all_registries,
 )
-from computronium.experiment.surface import cli, generate_run_report, ReportGenerator
+from computronium.experiment.surface import ReportGenerator, cli, generate_run_report
 
 
 def _build_narrowed_spec_path(tmp_path: Path) -> Path:

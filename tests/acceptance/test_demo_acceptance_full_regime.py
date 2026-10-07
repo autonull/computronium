@@ -26,7 +26,11 @@ from computronium.experiment.execution import (
     SimpleCostModel,
     StratifiedRandomPolicy,
 )
-from computronium.experiment.schema import MEASURED_PARAM_BUDGET, RunSpec, seed_all_registries
+from computronium.experiment.schema import (
+    MEASURED_PARAM_BUDGET,
+    RunSpec,
+    seed_all_registries,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -147,7 +147,9 @@ class _LazyRegistryDict(dict):
         if not self._seeded and not self._seeding:
             self._seeding = True
             try:
-                from computronium.experiment.schema.seed_registries import seed_all_registries
+                from computronium.experiment.schema.seed_registries import (
+                    seed_all_registries,
+                )
                 seed_all_registries()
                 self._seeded = True
             finally:
@@ -201,6 +203,7 @@ _axes_registries = _LazyRegistryDict({
 })
 
 AXES_REGISTRIES = _axes_registries
+
 
 # Convenience access - lazy proxies to avoid triggering seeding at module level
 class _LazyRegistryProxy:

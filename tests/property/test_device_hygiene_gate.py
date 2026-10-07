@@ -23,8 +23,8 @@ import torch
 from computronium.experiment.execution import (
     GRID_CREDITS,
     GRID_UPDATES,
-    compose_cell_system,
     build_geometry_config,
+    compose_cell_system,
 )
 from computronium.experiment.schema import Coordinate
 from computronium.ontology import (

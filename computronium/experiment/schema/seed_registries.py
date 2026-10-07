@@ -296,18 +296,8 @@ type PrimitiveRow = tuple[str, str, tuple[str, ...]]
 
 # Primitives the kernel registers but cannot honour, with the reason recorded
 # (R78). An unavailable row is excluded from every space, so the run stops
-# proposing cells it would only fail: ``nca`` composes and validates, then dies
-# in ``NcaGeometry.step`` because the trainer hands a geometry the batch
-# (``(B, F)``) rather than the state grid (``(B, C, H, W)``) its contract names.
-# Restoring it needs a reshape and read-out in ``NcaGeometry.route``, which is a
-# geometry feature rather than a config row.
-_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {
-    (StructuralAxis.GEOMETRY, "nca"): (
-        "NcaGeometry.step requires a (B, C, H, W) state grid; the kernel's "
-        "trainer supplies a flattened batch, so every nca cell fails at "
-        "runtime. Retired 2026-10-02 pending a route-level reshape."
-    ),
-}
+# proposing cells it would only fail.
+_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {}
 
 
 def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...]:

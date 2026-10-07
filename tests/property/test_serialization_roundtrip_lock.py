@@ -19,18 +19,18 @@ from computronium.experiment.evidence import (
     UnsupportedSchemaVersionError,
 )
 from computronium.experiment.schema import (
+    SCHEMA_REGISTRY,
     Coordinate,
-    Provenance,
-    Schedule,
     FailureCause,
     GateVerdict,
     Maturity,
+    Provenance,
     Record,
     ReproducibilityClass,
+    RunSpec,
+    Schedule,
     Severity,
     Status,
-    RunSpec,
-    SCHEMA_REGISTRY,
 )
 
 

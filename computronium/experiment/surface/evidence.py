@@ -283,4 +283,4 @@ def evidence_for(
     )
 
 
-__all__ = ["INDEX", "SourceIndex", "evidence_for", "TestEvidence"]
+__all__ = ["INDEX", "SourceIndex", "TestEvidence", "evidence_for"]

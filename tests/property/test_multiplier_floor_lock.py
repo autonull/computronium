@@ -36,12 +36,12 @@ from __future__ import annotations
 from computronium.experiment.execution import compose_configs, task_shape
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
-    StructuralAxis,
-    Coordinate,
-    harvest_schema,
-    prior_value,
     MEASURED_PARAM_BUDGET,
     PRIORS,
+    Coordinate,
+    StructuralAxis,
+    harvest_schema,
+    prior_value,
     seed_all_registries,
 )
 

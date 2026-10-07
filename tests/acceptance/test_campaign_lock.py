@@ -34,7 +34,7 @@ import pytest
 from _campaign import CAMPAIGN, Campaign
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.surface import cli, ReportGenerator
+from computronium.experiment.surface import ReportGenerator, cli
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -147,8 +147,8 @@ def test_gate_2b_the_reference_cell_learns() -> None:
     """
     from computronium.experiment.execution import cell_record
     from computronium.experiment.schema import (
-        Coordinate,
         MEASURED_PARAM_BUDGET,
+        Coordinate,
         Provenance,
         Schedule,
         seed_all_registries,

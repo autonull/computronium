@@ -141,7 +141,7 @@
 ## 6. Fixes & Correctness
 
 ### 6.1 Known Issues
-- [ ] **NCA Geometry**: Fix `NcaGeometry.step` to accept flattened batch `(B, F)` → reshape to `(B, C, H, W)` in `route`; remove from `_UNAVAILABLE`
+- [x] **NCA Geometry**: Fix `NcaGeometry.step` to accept flattened batch `(B, F)` → reshape to `(B, C, H, W)` in `route`; remove from `_UNAVAILABLE`
 - [ ] **EnergyMinimization β≥1**: Gradient credit with β≥1 has zero pseudo-gradient (constraint exists); verify EqProp works at β=1.0
 - [ ] **Determinism**: Ensure bitwise reproducibility on GPU (CUDA determinism + fixed conv algorithms)
 - [ ] **Memory leaks**: Profile long runs; fix any tensor accumulation in trajectory recording
@@ -257,7 +257,7 @@
 3. ~~**FLOPs metric**: Add `fvcore.nn.FlopCountAnalysis` wrapper → `flops` objective~~ ✅ **DONE**
 4. **Checkpointing**: Save trainer state dict to DuckDB every epoch
 5. ~~**Mixed precision**: `torch.autocast("cuda")` in `SystemTrainer.train_step`~~ ✅ **DONE**
-6. **NCA fix**: Reshape in `NcaGeometry.route` → remove from `_UNAVAILABLE`
+6. ~~**NCA fix**: Reshape in `NcaGeometry.route` → remove from `_UNAVAILABLE`~~ ✅ **DONE**
 7. **Report enhancement**: Add Pareto plots to `comp report --format html`
 
 ---
@@ -373,12 +373,37 @@
 - `computronium/experiment/schema/run_spec.py` — RunSpec `precision` field
 - `computronium/experiment/schema/metrics.py` — added `flops`, `macs_per_step`, `memory_usage`, `latency_ms` to MEASURED_OBJECTIVES
 - `computronium/experiment/execution/evaluate.py` — extracts resource metrics from trainer
-- `computronium/experiment/evidence/store.py` — ScheduleModel `precision` field, DuckDB schema updated
+- `computtonium/experiment/evidence/store.py` — ScheduleModel `precision` field, DuckDB schema updated
 
 **Verification:**
 - quick-verify runs on GPU (RTX 3080) with all 4 new measured objectives populated
 - Cell evaluation lock tests pass
 - DuckDB schema updated for Schedule.precision field
+
+---
+
+### Completed in This Session (P0 — NCA Geometry Fix)
+
+**NCA Geometry Fix (6.1):**
+- ✅ Fixed `NcaGeometry.route` and `forward` to accept flattened batch `(B, F)` → reshape to `(B, C, H, W)` using configured `grid_hw` and `channels`
+- ✅ Added readout layer for classification tasks (projects flattened state grid to `output_dim`)
+- ✅ Fixed device placement for random mask generation in `step` method
+- ✅ Removed NCA from `_UNAVAILABLE` registry in `seed_registries.py`
+- ✅ Updated `GeometryConfig.nca` factory to accept optional `output_dim` parameter
+- ✅ Updated compose logic to derive `channels` from input size and grid area, and pass `output_dim` for classification
+
+**Code Changes:**
+- `computronium/ontology/geometry.py` — NcaGeometry: added `_reshape_to_grid`, `_reshape_from_grid`, `_apply_readout` helpers; updated `forward`, `route`, `forward_with_intermediates`, `transition_modules`, `__init__`; added readout layer
+- `computronium/experiment/execution/compose.py` — compute `channels` from `input_dim // grid_area`, pass `output_dim` to NCA config
+- `computronium/ontology/geometry.py` — `GeometryConfig.nca` factory: added `output_dim` parameter
+- `computronium/experiment/schema/seed_registries.py` — removed NCA from `_UNAVAILABLE`
+
+**Verification:**
+- NCA cell composes and trains on CPU (digits task, grid_hw=(8,8), channels=1, output_dim=10)
+- NCA cell composes and trains on GPU (RTX 3080) with fp16 mixed precision
+- All measured objectives populated: `flops`, `macs_per_step`, `memory_usage`, `latency_ms`
+- All property locks pass (L1-L7, J1-J7, geometry/dynamics wiring locks, registry completeness)
+- NCA no longer in `_UNAVAILABLE` registry
 
 ---
 

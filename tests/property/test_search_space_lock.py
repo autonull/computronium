@@ -20,24 +20,24 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment.execution import (
+    ProposalComposeError,
+    TaskShape,
     compose_cell_system,
     compose_configs,
     generate_candidates,
     iter_candidates,
     search_space_from_spec,
     task_shape,
-    TaskShape,
-    ProposalComposeError,
 )
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
+    AxisSelection,
+    Coordinate,
     Domain,
+    RunSpec,
     Scale,
     StructuralAxis,
-    Coordinate,
     harvest_schema,
-    AxisSelection,
-    RunSpec,
 )
 
 _DIGITS_WIDTH = 64  # 8x8 flattened: the shape `digits` must reach geometry as
@@ -336,7 +336,6 @@ def test_every_generated_cell_composes_for_the_task_shape() -> None:
 
 def test_the_stream_needs_no_shape_to_be_well_formed() -> None:
     """Without a resolver the stream is the same shape, minus the legality filter."""
-    from computronium.experiment.execution import TaskShape
 
     spec = _narrowed_spec()
     unfiltered = generate_candidates(spec, search_space_from_spec(spec), limit=5)

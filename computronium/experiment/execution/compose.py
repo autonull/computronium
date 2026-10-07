@@ -526,11 +526,21 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 init_scale=init_scale,
             )
         case "nca":
+            # Compute channels to match input size: channels * H * W = input_dim
+            # If user specifies channels in geometry, use that; otherwise derive it.
+            user_channels = geometry.get("channels")
+            if user_channels is not None:
+                channels = _as_int(user_channels, hidden)
+            else:
+                h, w = nca_grid_hw
+                grid_area = max(1, h * w)
+                channels = max(1, input_dim // grid_area)
             return GeometryConfig.nca(
-                channels=hidden,
+                channels=channels,
                 hidden=hidden,
                 grid_hw=nca_grid_hw,  # type: ignore[arg-type]
                 init_scale=init_scale,
+                output_dim=output_dim,
             )
         case "ntm":
             return GeometryConfig.ntm(

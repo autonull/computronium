@@ -12,11 +12,12 @@ Run: uv run python -m scripts.probes.t51_learning_signal_probe
 from __future__ import annotations
 
 import torch
-from computronium.experiment.execution.compose import compose_cell_system
-from computronium.experiment.schema.coordinate import Coordinate
+
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.factory import create_task
+from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.execution.evaluate import compute_stability_metrics
+from computronium.experiment.schema.coordinate import Coordinate
 
 
 def _system(dynamics: str, credit: str, geometry: str = "feedforward"):
@@ -141,7 +142,7 @@ def main() -> None:
     stability = compute_stability_metrics(system, sample_x)
 
     final = history[-1]
-    print(f"With max_steps=100, threshold=1e-5:")
+    print("With max_steps=100, threshold=1e-5:")
     print(f"  train_acc: {final.get('train_acc', 0.0):.4f}")
     print(f"  val_acc: {final.get('val_acc', 0.0):.4f}")
     print(f"  settle_steps: {stability.get('settle_steps', 0):.0f}")

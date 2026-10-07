@@ -32,7 +32,7 @@ from computronium.experiment.evidence import (
     replication_key,
 )
 from computronium.experiment.schema import DataOrigin
-from computronium.experiment.surface import cli, ReportGenerator
+from computronium.experiment.surface import ReportGenerator, cli
 
 if TYPE_CHECKING:
     from _campaign import Campaign
@@ -109,7 +109,10 @@ def test_cp1_the_run_charged_the_budget_it_spent(campaign: Campaign) -> None:
     assert campaign.elapsed_s > 0
 
     from computronium.experiment.execution import price_plan, search_space_from_spec
-    from computronium.experiment.schema import FIXED_RUN_COST_SECONDS, seed_all_registries
+    from computronium.experiment.schema import (
+        FIXED_RUN_COST_SECONDS,
+        seed_all_registries,
+    )
 
     seed_all_registries()
     plan = price_plan(

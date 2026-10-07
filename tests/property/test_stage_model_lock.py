@@ -15,8 +15,18 @@ from pathlib import Path
 import pytest
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.execution import PipelineConfig, STAGE_SPECS, StageId, CostModel
-from computronium.experiment.schema import Provenance, RunSpec, STAGES_REGISTRY, seed_all_registries
+from computronium.experiment.execution import (
+    STAGE_SPECS,
+    CostModel,
+    PipelineConfig,
+    StageId,
+)
+from computronium.experiment.schema import (
+    STAGES_REGISTRY,
+    Provenance,
+    RunSpec,
+    seed_all_registries,
+)
 from computronium.experiment.surface import RUN_PROFILES
 
 
@@ -26,7 +36,6 @@ class TestStageModelLock:
     @pytest.fixture(autouse=True)
     def _seed_registries(self) -> None:
         """Seed registries before each test."""
-        from computronium.experiment.schema import seed_all_registries
         seed_all_registries()
 
     def test_canonical_stage_ids_match_registry(self) -> None:
@@ -108,12 +117,12 @@ class TestWrapperObligations:
         """Coverage reported even when stage produces no records (R18)."""
         # This is a property test - we verify the coverage structure exists
         from computronium.experiment.execution import (
-            LocalBackend,
             Budget,
-            SimpleCostModel,
+            LocalBackend,
             PipelineConfig,
             PipelineRunner,
             RoundRobinGridPolicy,
+            SimpleCostModel,
         )
         config = PipelineConfig(
             run_id="test_coverage",
@@ -139,10 +148,10 @@ class TestWrapperObligations:
         # This is verified by checking the method exists on PipelineRunner
         from computronium.experiment.evidence import RecordStore, StoreConfig
         from computronium.experiment.execution import (
-            LocalBackend,
             Budget,
-            SimpleCostModel,
+            LocalBackend,
             PipelineRunner,
+            SimpleCostModel,
             StratifiedRandomPolicy,
         )
 
@@ -174,11 +183,11 @@ class TestWrapperObligations:
         - Pipeline not re-raising on individual stage failures
         """
         from computronium.experiment.execution import (
-            LocalBackend,
             Budget,
-            SimpleCostModel,
+            LocalBackend,
             PipelineRunner,
             RoundRobinGridPolicy,
+            SimpleCostModel,
         )
 
         # Create a failing backend that fails on specific items
@@ -243,12 +252,12 @@ class TestReplayResumeIntegration:
         from computronium.experiment.evidence import RecordStore, StoreConfig
         from computronium.experiment.schema import (
             Coordinate,
-            Schedule,
             FailureCause,
             GateVerdict,
             Maturity,
             Record,
             ReproducibilityClass,
+            Schedule,
             Severity,
             Status,
         )
@@ -345,7 +354,6 @@ class TestCostModelLearning:
 
     def test_cost_model_interface_exists(self) -> None:
         """RegistryCostModel implements CostModel protocol."""
-        from computronium.experiment.execution import CostModel
 
         # Verify the protocol exists
         assert hasattr(CostModel, "estimate_cost")

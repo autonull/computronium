@@ -571,10 +571,10 @@ __all__ = [
     "HarvestedSchema",
     "InactiveHyperparameterError",
     "UnresolvedHyperparameterError",
+    "_config_default",
     "config_field_name",
     "get_hyperparameter_names",
     "get_hyperparameter_spec",
     "harvest_schema",
     "load_axis_config",
-    "_config_default",
 ]

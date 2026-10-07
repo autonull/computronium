@@ -8,7 +8,6 @@ anywhere (including the overnight smoke rail).
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable, Sequence
 
 import numpy as np

@@ -28,28 +28,28 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment.execution import (
-    create_ofat_design,
-    task_shape,
-    iter_candidates,
-    search_space_from_spec,
     Proposal,
     _allocate_origins,
     _design_factors,
     _is_assignment,
     _match_design,
     _origins_for_design,
+    create_ofat_design,
+    iter_candidates,
+    search_space_from_spec,
+    task_shape,
 )
 from computronium.experiment.schema import (
-    Domain,
-    StructuralAxis,
+    RATE_PARAMETERS,
+    AxisSelection,
     Coordinate,
     DataOrigin,
-    Schedule,
-    RATE_PARAMETERS,
-    validate_rate_value,
-    AxisSelection,
+    Domain,
     RunSpec,
+    Schedule,
+    StructuralAxis,
     seed_all_registries,
+    validate_rate_value,
 )
 
 pytestmark = pytest.mark.timeout(120)

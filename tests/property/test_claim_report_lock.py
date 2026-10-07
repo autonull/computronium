@@ -42,21 +42,21 @@ from computronium.experiment.evidence import (
 )
 from computronium.experiment.execution import cell_record
 from computronium.experiment.schema import (
-    StructuralAxis,
+    MEASURED_PARAM_BUDGET,
     Coordinate,
-    Provenance,
-    Schedule,
-    measured_objectives,
-    objective_metric,
     FailureCause,
     GateVerdict,
     Maturity,
+    Provenance,
     Record,
     ReproducibilityClass,
+    RunSpec,
+    Schedule,
     Severity,
     Status,
-    MEASURED_PARAM_BUDGET,
-    RunSpec,
+    StructuralAxis,
+    measured_objectives,
+    objective_metric,
 )
 from computronium.experiment.surface import ReportGenerator, generate_run_report
 

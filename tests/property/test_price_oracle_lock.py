@@ -38,8 +38,8 @@ from computronium.experiment.schema import (
     FIXED_RUN_COST_SECONDS,
     MEASURED_CELL_SECONDS,
     RunSpec,
-    seed_all_registries,
     StructuralAxis,
+    seed_all_registries,
 )
 
 from ._specs import mechanism_spec, unreachable_spec

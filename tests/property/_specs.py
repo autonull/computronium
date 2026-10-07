@@ -15,11 +15,11 @@ legal cell: the pair cannot compose, and the space screens that silently
 from __future__ import annotations
 
 from computronium.experiment.schema import (
-    StructuralAxis,
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
     RunSpec,
+    StructuralAxis,
 )
 
 

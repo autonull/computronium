@@ -12,37 +12,37 @@ from pathlib import Path
 import pytest
 
 from computronium.experiment.evidence import (
+    ArtifactInput,
+    ArtifactRole,
+    ComparisonGuard,
+    CostBudget,
+    CostBudgetKind,
+    RecordStore,
+    StoreConfig,
     alert_on_divergence,
     alert_on_resource_exhaustion,
     beats_baseline,
     check_leakage,
     claim_eligible,
     compare_matched_cost,
+    compute_effect_size,
     evaluation_data_allowed,
     promoted,
     robust,
     same_hardware_class,
     training_data_allowed,
     valid_comparison,
-    ComparisonGuard,
-    CostBudget,
-    CostBudgetKind,
-    compute_effect_size,
-    RecordStore,
-    StoreConfig,
-    ArtifactInput,
-    ArtifactRole,
 )
 from computronium.experiment.schema import (
     Coordinate,
     DataOrigin,
-    Provenance,
-    Schedule,
     FailureCause,
     GateVerdict,
     Maturity,
+    Provenance,
     Record,
     ReproducibilityClass,
+    Schedule,
     Severity,
     Status,
 )
@@ -692,7 +692,6 @@ class TestComparisonGuards:
 
     def test_matched_cost_comparison(self) -> None:
         """Matched-cost comparison uses ComparisonGuard."""
-        from computronium.experiment.evidence import compare_matched_cost
 
         rec_a = self._make_record_with_budget(CostBudgetKind.EVAL_COUNT, 100)
         rec_b = self._make_record_with_budget(CostBudgetKind.EVAL_COUNT, 100)
@@ -742,7 +741,6 @@ class TestStoreIntegration:
 
     def test_append_with_artifacts_atomic(self) -> None:
         """append_with_artifacts is atomic (record + artifacts)."""
-        from computronium.experiment.evidence import ArtifactInput, ArtifactRole
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "test.duckdb"

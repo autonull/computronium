@@ -25,18 +25,18 @@ import pytest
 from computronium.experiment.execution import compose_cell_system
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
+    PRIORS_REGISTRY,
     AxisKind,
+    Coordinate,
     Domain,
     HyperparameterSpec,
+    InactiveHyperparameterError,
     Scale,
     StructuralAxis,
-    Coordinate,
-    InactiveHyperparameterError,
     UnresolvedHyperparameterError,
     config_field_name,
     harvest_schema,
     load_axis_config,
-    PRIORS_REGISTRY,
     prior_value,
 )
 from computronium.ontology.credit import CreditAssignmentConfig

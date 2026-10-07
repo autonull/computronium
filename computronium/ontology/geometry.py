@@ -462,6 +462,7 @@ class GeometryConfig:
         mask_prob: float = 0.5,
         label_channels: int = 0,
         init_scale: float = 0.1,
+        output_dim: int | None = None,
     ) -> GeometryConfig:
         """Create a neural cellular automaton topology config.
 
@@ -475,10 +476,12 @@ class GeometryConfig:
             label_channels: Optional per-cell label grid channels appended
                 to the perception vector (0 = label-free regime, W8.3)
             init_scale: Weight initialization scale
+            output_dim: Output dimension for classification readout.
+                If None, defaults to channels (state grid size).
         """
         return cls(
             input_dim=channels,
-            output_dim=channels,
+            output_dim=output_dim if output_dim is not None else channels,
             hidden_dims=(hidden,),
             num_layers=1,
             topology_type="nca",
@@ -2695,6 +2698,7 @@ class NcaGeometry(nn.Module):
 
     _cell_hidden: nn.Linear
     _cell_delta: nn.Linear
+    _readout: nn.Linear | None
 
     def __init__(self, config: GeometryConfig):
         super().__init__()
@@ -2702,7 +2706,16 @@ class NcaGeometry(nn.Module):
         hidden = config.hidden_dims[0] if config.hidden_dims else 32
         in_dim = config.input_dim * 9 + config.label_channels
         self._cell_hidden = nn.Linear(in_dim, hidden)
-        self._cell_delta = nn.Linear(hidden, config.output_dim)
+        # Delta output channels = state channels (input_dim)
+        self._cell_delta = nn.Linear(hidden, config.input_dim)
+        # Readout layer for classification: projects flattened state to output_dim
+        state_size = config.input_dim * config.grid_hw[0] * config.grid_hw[1]
+        if config.output_dim != state_size:
+            self._readout = nn.Linear(state_size, config.output_dim)
+            nn.init.normal_(self._readout.weight, std=state_size**-0.5)
+            nn.init.zeros_(self._readout.bias)
+        else:
+            self._readout = None
         # Probe-calibrated init (w8_nca_local `_params`): fan-in-scaled
         # randn weights, zero biases — the small-delta tanh regime the
         # W8.1 distill recipe was validated in.
@@ -2719,15 +2732,22 @@ class NcaGeometry(nn.Module):
         _set_param_name(self._cell_delta.weight, "cell_delta_weight")
         if self._cell_delta.bias is not None:
             _set_param_name(self._cell_delta.bias, "cell_delta_bias")
+        if self._readout is not None:
+            _set_param_name(self._readout.weight, "readout_weight")
+            _set_param_name(self._readout.bias, "readout_bias")
 
     @property
     def params(self) -> dict[str, Tensor]:
-        return {
+        params = {
             "cell_hidden_weight": self._cell_hidden.weight,
             "cell_hidden_bias": self._cell_hidden.bias,
             "cell_delta_weight": self._cell_delta.weight,
             "cell_delta_bias": self._cell_delta.bias,
         }
+        if self._readout is not None:
+            params["readout_weight"] = self._readout.weight
+            params["readout_bias"] = self._readout.bias
+        return params
 
     def perceive(self, states: Tensor, labels: Tensor | None = None) -> Tensor:
         """(B, C, H, W) states (+ optional (B, L, H, W) labels) -> (B*H*W, C*9+L)."""
@@ -2773,7 +2793,8 @@ class NcaGeometry(nn.Module):
             mask
             if mask is not None
             else (
-                torch.rand(states.shape[0], *states.shape[-2:]) < self.config.mask_prob
+                torch.rand(states.shape[0], *states.shape[-2:], device=states.device)
+                < self.config.mask_prob
             ).to(states.dtype)
         )
         return states + delta * m.reshape(-1, 1, *states.shape[-2:])
@@ -2853,11 +2874,51 @@ class NcaGeometry(nn.Module):
         h = torch.relu(self._cell_hidden(x))
         return self.config.delta_scale * torch.tanh(self._cell_delta(h))
 
+    def _reshape_to_grid(self, x: Tensor) -> tuple[Tensor, bool]:
+        """Reshape flattened input to (B, C, H, W) grid if needed.
+
+        Returns:
+            (reshaped_tensor, was_flattened)
+        """
+        if x.dim() == 2:
+            b, f = x.shape
+            c = self.config.input_dim  # channels
+            h, w = self.config.grid_hw
+            expected = c * h * w
+            if f == expected:
+                return x.view(b, c, h, w), True
+            # If dimensions don't match, try to project or pad
+            # For now, raise a clear error
+            raise ValueError(
+                f"NcaGeometry: flattened input has {f} features, "
+                f"but grid requires {expected} (C={c}, H={h}, W={w})"
+            )
+        return x, False
+
+    def _reshape_from_grid(self, x: Tensor, was_flattened: bool) -> Tensor:
+        """Reshape grid output back to flattened if input was flattened."""
+        if was_flattened and x.dim() == 4:
+            return x.flatten(1)
+        return x
+
+    def _apply_readout(self, state_grid: Tensor) -> Tensor:
+        """Apply readout layer to flattened state grid if available."""
+        if self._readout is not None:
+            flat = state_grid.flatten(1)
+            return self._readout(flat)
+        return state_grid.flatten(1)
+
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
-        return self.step(x)
+        x_grid, was_flat = self._reshape_to_grid(x)
+        state_grid = self.step(x_grid)
+        # Return state grid for settling dynamics and primitives tests
+        return self._reshape_from_grid(state_grid, was_flat)
 
     def route(self, activations: Tensor) -> Tensor:
-        return self.step(activations)
+        act_grid, was_flat = self._reshape_to_grid(activations)
+        out = self.step(act_grid)
+        # Route returns state grid for settling dynamics
+        return self._reshape_from_grid(out, was_flat)
 
     def update_params(self, new_params: dict[str, Tensor]) -> None:
         own = self.params
@@ -2866,15 +2927,25 @@ class NcaGeometry(nn.Module):
                 own[name].data.copy_(param)
 
     def transition_modules(self) -> list[nn.Module]:
-        return [self._cell_hidden, self._cell_delta]
+        modules: list[nn.Module] = [self._cell_hidden, self._cell_delta]
+        if self._readout is not None:
+            modules.append(self._readout)
+        return modules
 
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
-        acts = [self.perceive(x)]
-        h = torch.relu(self._cell_hidden(acts[0]))
+        x_grid, _ = self._reshape_to_grid(x)
+        perceived = self.perceive(x_grid)
+        acts = [perceived]
+        h = torch.relu(self._cell_hidden(perceived))
         acts.append(h)
-        acts.append(self._delta_flat(h))
+        delta = self._delta_flat(perceived)
+        acts.append(delta)
+        # Add readout logits as final activation if available
+        state_grid = self.step(x_grid)
+        logits = self._apply_readout(state_grid)
+        acts.append(logits)
         return acts
 
 

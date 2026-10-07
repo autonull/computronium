@@ -30,24 +30,24 @@ import pytest
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.execution import (
-    LocalBackend,
     Budget,
-    SimpleCostModel,
+    LocalBackend,
+    ModelBasedPolicy,
     PipelineConfig,
     PipelineRunner,
-    ModelBasedPolicy,
     Policy,
-    StratifiedRandomPolicy,
     ProposalContext,
+    SimpleCostModel,
+    StratifiedRandomPolicy,
     search_space_from_spec,
     task_shape,
 )
 from computronium.experiment.schema import (
-    StructuralAxis,
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
     RunSpec,
+    StructuralAxis,
     seed_all_registries,
 )
 
@@ -330,11 +330,6 @@ def _declared_keys(spec: RunSpec) -> set[str]:
     Read through ``ProposalContext`` with no evidence, so "the space" and "the
     work left" are one implementation rather than two that can disagree.
     """
-    from computronium.experiment.execution import (
-        task_shape,
-        ProposalContext,
-        search_space_from_spec,
-    )
 
     ctx = ProposalContext(
         search_space=search_space_from_spec(spec, tasks=spec.task_names),
@@ -420,12 +415,9 @@ def test_every_policy_resumes_within_the_runs_own_store(tmp_path: Path) -> None:
     catalog entry over one real store to prove no policy escapes it.
     """
     from computronium.experiment.execution import (
-        task_shape,
         POLICY_CATALOG,
-        ProposalContext,
         create_policy,
         policy_context,
-        search_space_from_spec,
     )
 
     spec = _campaign_spec()

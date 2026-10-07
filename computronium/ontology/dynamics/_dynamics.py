@@ -1394,12 +1394,11 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
                             f"NaN/Inf detected in activations at step {step} "
                             f"(energy_minimization eager settle)"
                         )
-            else:
-                if not torch.isfinite(acts).all():
-                    raise RuntimeError(
-                        f"NaN/Inf detected in activations at step {step} "
-                        f"(energy_minimization eager settle)"
-                    )
+            elif not torch.isfinite(acts).all():
+                raise RuntimeError(
+                    f"NaN/Inf detected in activations at step {step} "
+                    f"(energy_minimization eager settle)"
+                )
             self._track_free_energy_and_check_convergence(
                 iterate.value, geometry, step, previous.value, on_step
             )

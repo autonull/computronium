@@ -19,10 +19,10 @@ from computronium.experiment.evidence import RecordStore, StoreConfig, StoreErro
 from computronium.experiment.execution import PipelineConfig, StageId
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
-    Domain,
-    StructuralAxis,
     RUN_SPEC_VERSION,
+    Domain,
     RunSpec,
+    StructuralAxis,
     seed_all_registries,
 )
 

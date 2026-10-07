@@ -23,16 +23,16 @@ from typing import Any
 import pytest
 
 from computronium.experiment.execution import (
+    POLICY_CATALOG,
     Budget,
     EvolutionPolicy,
     ModelBasedPolicy,
-    POLICY_CATALOG,
     Policy,
     ProposalContext,
     RoundRobinGridPolicy,
     SimpleCostModel,
-    StratifiedRandomPolicy,
     StrategyProgressionPolicy,
+    StratifiedRandomPolicy,
     SynthesisPolicy,
     TrainerDrivenPolicy,
     UniformRandomPolicy,
@@ -41,11 +41,11 @@ from computronium.experiment.execution import (
     task_shape,
 )
 from computronium.experiment.schema import (
+    AxisSelection,
     Domain,
+    RunSpec,
     Scale,
     StructuralAxis,
-    AxisSelection,
-    RunSpec,
 )
 
 _TASK = "digits"

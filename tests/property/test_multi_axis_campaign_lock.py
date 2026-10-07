@@ -22,14 +22,14 @@ if TYPE_CHECKING:
 from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.execution import search_space_from_spec, task_shape
 from computronium.experiment.schema import (
-    StructuralAxis,
-    MEASURED_OBJECTIVES,
-    objective_metric,
-    OBJECTIVES_REGISTRY,
     MEASURED_BATCH_LIMIT,
+    MEASURED_OBJECTIVES,
     MEASURED_PARAM_BUDGET,
+    OBJECTIVES_REGISTRY,
     AxisSelection,
     RunSpec,
+    StructuralAxis,
+    objective_metric,
     seed_all_registries,
 )
 from computronium.experiment.surface import execute_spec
@@ -147,7 +147,6 @@ def test_multi_axis_campaign_sweeps_declared_axes(fast_multi_axis_spec: RunSpec)
 
     from computronium.experiment.execution import (
         iter_candidates,
-        search_space_from_spec,
     )
 
     space = search_space_from_spec(spec, tasks=spec.task_names)
@@ -189,7 +188,6 @@ def test_multi_axis_campaign_sweeps_declared_axes_full(full_multi_axis_spec: Run
 
     from computronium.experiment.execution import (
         iter_candidates,
-        search_space_from_spec,
     )
 
     space = search_space_from_spec(spec, tasks=spec.task_names)

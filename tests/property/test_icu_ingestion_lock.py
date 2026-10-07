@@ -24,13 +24,13 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.learning.icu import DataOrigin, ICUModel
 from computronium.experiment.schema import (
     Coordinate,
-    Provenance,
-    Schedule,
     FailureCause,
     GateVerdict,
     Maturity,
+    Provenance,
     Record,
     ReproducibilityClass,
+    Schedule,
     Severity,
     Status,
 )

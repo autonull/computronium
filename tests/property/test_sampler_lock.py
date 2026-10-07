@@ -34,11 +34,12 @@ from computronium.experiment.execution import (
     search_space_from_spec,
 )
 from computronium.experiment.schema import (
+    MEASURED_METRICS,
+    OBJECTIVES_REGISTRY,
     Coordinate,
     FailureCause,
     GateVerdict,
     Maturity,
-    MEASURED_METRICS,
     Provenance,
     Record,
     ReproducibilityClass,
@@ -46,7 +47,6 @@ from computronium.experiment.schema import (
     Schedule,
     Severity,
     Status,
-    OBJECTIVES_REGISTRY,
     UnknownObjectiveError,
     UnmeasuredObjectiveError,
     harvest_schema,
@@ -61,6 +61,8 @@ _TASK_ID = "digits"
 @pytest.fixture(scope="module", autouse=True)
 def _seed_registries() -> None:
     seed_all_registries()
+
+
 _OPTIMAL_SETTLE_STEP = 0.03
 
 

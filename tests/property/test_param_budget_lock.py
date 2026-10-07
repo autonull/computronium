@@ -22,26 +22,26 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment.execution import (
-    compose_cell_system,
-    geometry_param_count,
+    _GEOMETRY_ALIASES,
     cell_record,
+    compose_cell_system,
     generate_candidates,
+    geometry_param_count,
     search_space_from_spec,
     task_shape,
-    _GEOMETRY_ALIASES,
 )
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
-    StructuralAxis,
+    CONSTRAINTS_REGISTRY,
+    MEASURED_PARAM_BUDGET,
+    PARAM_BUDGET_TOLERANCE,
     Coordinate,
-    Provenance,
-    Schedule,
     FailureCause,
     GateVerdict,
-    PARAM_BUDGET_TOLERANCE,
-    MEASURED_PARAM_BUDGET,
+    Provenance,
     RunSpec,
-    CONSTRAINTS_REGISTRY,
+    Schedule,
+    StructuralAxis,
 )
 
 _TRAINABLE_TOPOLOGIES = (
