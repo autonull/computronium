@@ -22,12 +22,10 @@ import pytest
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.learning.icu import DataOrigin, ICUModel
-from computronium.experiment.schema.coordinate import (
+from computronium.experiment.schema import (
     Coordinate,
     Provenance,
     Schedule,
-)
-from computronium.experiment.schema.record import (
     FailureCause,
     GateVerdict,
     Maturity,

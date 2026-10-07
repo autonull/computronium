@@ -35,12 +35,16 @@ from __future__ import annotations
 
 from computronium.experiment.execution.compose import compose_configs
 from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate
-from computronium.experiment.schema.harvest import harvest_schema
-from computronium.experiment.schema.registries import prior_value
-from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET
-from computronium.experiment.schema.seed_registries import PRIORS, seed_all_registries
+from computronium.experiment.schema import (
+    AXES_REGISTRIES,
+    StructuralAxis,
+    Coordinate,
+    harvest_schema,
+    prior_value,
+    MEASURED_PARAM_BUDGET,
+    PRIORS,
+    seed_all_registries,
+)
 
 PREFIX = "step_size_override_"
 

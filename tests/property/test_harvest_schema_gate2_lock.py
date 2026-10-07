@@ -16,7 +16,7 @@ not from the experiment registries, so no seeding is required.
 
 from __future__ import annotations
 
-from computronium.experiment.schema.harvest import harvest_schema
+from computronium.experiment.schema import harvest_schema
 
 # Gate 2 frozen union table (from Appendix IV + §13.2 additions)
 # 37 unique parameters from six implementations' hyperparameter spaces

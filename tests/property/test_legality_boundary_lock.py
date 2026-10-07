@@ -289,9 +289,10 @@ class TestLegalityBoundary:
         # This is a design-time check - PRIORS registry should be separate from
         # CONSTRAINTS registry. The test verifies separation of concerns.
 
-        from computronium.experiment.schema.registries import (
+        from computronium.experiment.schema import (
             CONSTRAINTS_REGISTRY,
             PRIORS_REGISTRY,
+            PriorSpec,
         )
 
         # PRIORS and CONSTRAINTS should be separate registries
@@ -304,8 +305,6 @@ class TestLegalityBoundary:
             )
 
         # CONSTRAINTS should not contain PriorSpec objects
-        from computronium.experiment.schema.registries import PriorSpec
-
         for spec in CONSTRAINTS_REGISTRY.values():
             assert not isinstance(spec, PriorSpec), (
                 f"CONSTRAINTS registry contains PriorSpec: {spec}"

@@ -34,7 +34,7 @@ from computronium.experiment.execution.search_space import (
     search_space_from_spec,
 )
 from computronium.experiment.execution.stage import Proposal
-from computronium.experiment.schema.seed_registries import seed_all_registries
+from computronium.experiment.schema import RunSpec, seed_all_registries
 
 from ._fake_backend import SYNTHETIC_WALLTIME_S, FakeBackend
 from ._specs import mechanism_spec
@@ -45,7 +45,6 @@ if TYPE_CHECKING:
 
     from computronium.experiment.execution.backends import ExecutionBackend
     from computronium.experiment.execution.search_space import SearchSpace
-    from computronium.experiment.schema.run_spec import RunSpec
 
 pytestmark = pytest.mark.timeout(300)
 

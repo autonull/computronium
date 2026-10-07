@@ -6,11 +6,11 @@ from datetime import datetime
 
 import pytest
 
-from computronium.experiment.schema.registries import (
+from computronium.experiment.schema import (
     CAPABILITIES_REGISTRY,
     CapabilityStatus,
+    seed_all_registries,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.surface.conformance import (
     CurrencyLock,
     generate_flag_projection_lock,

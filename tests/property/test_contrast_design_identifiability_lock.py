@@ -22,6 +22,7 @@ from computronium.experiment.execution.contrast_design import (
     create_full_factorial_design,
     create_ofat_design,
 )
+from computronium.experiment.schema import Coordinate, Schedule
 
 
 class TestContrastDesignBasics:
@@ -341,7 +342,6 @@ class TestContrastDesignIntegration:
     def test_contrast_design_in_proposal_metadata(self) -> None:
         """Contrast design assignments can be embedded in Proposal metadata."""
         from computronium.experiment.execution.stage import Proposal
-        from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
         factors = [Factor(name="lr", levels=(1e-4, 1e-2))]
         design = create_ofat_design(factors, seed=42)
@@ -383,7 +383,6 @@ class TestContrastDesignIntegration:
 
     def test_schedule_measurement_key_unchanged_by_data_origin(self) -> None:
         """measurement_key does not depend on data_origin (in metadata, not schedule)."""
-        from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
         coord = Coordinate(
             substrate="digital",

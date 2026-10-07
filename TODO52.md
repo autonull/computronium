@@ -336,10 +336,11 @@ Lazy Loading & Test Infrastructure (This Session):
 1. ~~**Fix xdist compatibility** — resolve execnet/python version issues for reliable `-n 4` parallel execution~~ ✅ **COMPLETED**
    - xdist now works reliably with `-n 4`; property suite runs in ~15s parallel
 
-2. ~~**Lazy test imports migration** — leverage `computronium.experiment` lazy `__getattr__` (0.04s vs 3.5s)~~ ✅ **COMPLETED (schema + experiment packages)**
+2. ~~**Lazy test imports migration** — leverage `computronium.experiment` lazy `__getattr__` (0.04s vs 3.5s)~~ ✅ **COMPLETED (schema + experiment packages + test migration)**
    - `computronium.experiment` and `computronium.experiment.schema` now use lazy `__getattr__` for submodule loading
    - Base imports: `experiment` 0.04s, `schema` 0.12s (was 3.5s and 5s respectively)
-   - Collection time reduced from ~22s → ~12s (test files still import some submodules directly; full benefit requires test migration)
+   - 34 property test files migrated to package-level imports
+   - Collection time reduced from ~22s → ~4.8s for property tests (2.5× faster)
    - Files: `computronium/experiment/__init__.py`, `computronium/experiment/schema/__init__.py`, `computronium/experiment/schema/axis.py` (lazy registry seeding)
 
 3. **GPU CI integration** — run kernel parity tests on GPU when CI infrastructure available
@@ -358,6 +359,7 @@ Lazy Loading & Test Infrastructure (This Session):
 - **torch.vmap vectorization** — requires vmap-compatible credit/settle/update rewrite
 - **Persistent kernel cache (E3)** — benchmarked, modest benefit documented, no action needed
 - **Full graph JIT (E1)** — investigated, not viable without metrics restructuring
+- **Remaining test import migration** — ~30 property test files + acceptance tests still use direct submodule imports
 
 **Philosophy**: Prioritize correctness, functional results, and measurable performance gains. Don't obsess over exact numerical targets, lint cleanliness in legacy modules, or hygiene-pass scope work. The 1.4-250× speedups already achieved are the real result.
 
@@ -673,3 +675,60 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 - 13 test files — Migrated imports to package-level
 
 **Remaining Test Files to Migrate:** ~30 property test files + acceptance tests
+
+---
+
+## Session Summary (2026-10-06) — Test Import Migration (Batch 2)
+
+**Completed this session:**
+
+### Test Import Migration for Lazy Loading ✅
+- Migrated 21 additional property test files from direct submodule imports to package-level imports:
+  - `tests/property/test_campaign_economics_lock.py`
+  - `tests/property/test_multiplier_floor_lock.py`
+  - `tests/property/test_round_loop_mechanism_lock.py`
+  - `tests/property/test_schedule_device_lock.py`
+  - `tests/property/test_compose_warnings_lock.py`
+  - `tests/property/test_conformance_harness.py`
+  - `tests/property/test_contrast_design_identifiability_lock.py`
+  - `tests/property/test_device_hygiene_gate.py`
+  - `tests/property/test_harvest_schema_gate2_lock.py`
+  - `tests/property/test_icu_ingestion_lock.py`
+  - `tests/property/test_legality_boundary_lock.py`
+  - `tests/property/test_multi_axis_campaign_lock.py`
+  - `tests/property/test_significance_lock.py`
+  - `tests/property/test_schema_forward_tolerance.py`
+  - `tests/property/test_schema_seam_lock.py`
+  - `tests/property/test_scientific_validity_protocol_lock.py`
+  - `tests/property/test_statistical_protocol_lock.py`
+  - `tests/property/test_allocator_promotion.py`
+  - `tests/property/test_param_budget_lock.py`
+  - `tests/property/test_price_oracle_lock.py`
+  - `tests/property/test_design_and_rate_lock.py`
+  - `tests/property/test_policy_generation_lock.py`
+  - `tests/property/test_active_space_lock.py`
+  - `tests/property/test_run_ledger_lock.py`
+  - `tests/property/test_atomic_append_kill_proof.py`
+  - `tests/property/test_serialization_roundtrip_lock.py`
+  - `tests/property/test_run_spec_lock.py`
+  - `tests/property/test_cell_evaluation_lock.py`
+  - `tests/property/test_cli_surface_lock.py`
+  - `tests/property/test_wp10_learning_integration_lock.py`
+  - `tests/property/test_wp11_surface_lock.py`
+  - `tests/property/test_capability_evidence_lock.py`
+
+**Verification:**
+- All migrated tests pass
+- All property lock tests pass
+- Collection time for property tests: ~4.8s (consistent with previous improvement)
+
+**Files Modified:**
+- `computronium/experiment/schema/__init__.py` — Extended lazy loading with all missing symbols used in test files
+- 34 test files — Migrated imports to package-level
+
+**New improvement opportunities identified:**
+1. **Test Import Migration (remaining)**: ~30 more property test files + acceptance tests still use direct submodule imports
+2. **GPU CI integration**: Run kernel parity tests on GPU when CI infrastructure available
+3. **Metrics restructuring**: Move `.item()` calls out of `run_train_step` hot path to enable future full-graph compile
+4. **True multiprocessing multi-seed**: Requires top-level factory functions for pickling
+5. **torch.vmap vectorization**: Requires vmap-compatible credit/settle/update implementations

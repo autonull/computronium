@@ -21,16 +21,17 @@ if TYPE_CHECKING:
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.metrics import MEASURED_OBJECTIVES, objective_metric
-from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
-from computronium.experiment.schema.run_spec import (
+from computronium.experiment.schema import (
+    StructuralAxis,
+    MEASURED_OBJECTIVES,
+    objective_metric,
+    OBJECTIVES_REGISTRY,
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
     RunSpec,
+    seed_all_registries,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 pytestmark = pytest.mark.timeout(300)
 

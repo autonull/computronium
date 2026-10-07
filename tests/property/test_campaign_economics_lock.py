@@ -19,13 +19,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.axis import Domain, Scale, StructuralAxis
-from computronium.experiment.schema.run_spec import (
+from computronium.experiment.schema import (
+    Domain,
+    Scale,
+    StructuralAxis,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
     RunSpec,
+    seed_all_registries,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.surface import cli
 from computronium.experiment.surface.report import generate_run_report
 

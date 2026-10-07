@@ -25,7 +25,7 @@ from computronium.experiment.execution.compose import (
     GRID_UPDATES,
     compose_cell_system,
 )
-from computronium.experiment.schema.coordinate import Coordinate
+from computronium.experiment.schema import Coordinate
 from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
