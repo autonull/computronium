@@ -37,6 +37,7 @@ from computronium.experiment.schema.registries import (
 )
 from computronium.experiment.schema.run_spec import (
     BROAD_PARAM_BUDGET,
+    MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
     Fidelity,
@@ -64,6 +65,7 @@ class RunProfile:
     task: str  # The task this profile measures
     n_seeds: int
     epochs: int
+    batch_limit: int
     budget_seconds: float | None
     param_budget: int  # Parameter ceiling for derived geometry sizing
     objectives: tuple[str, ...]  # Names from the OBJECTIVES registry
@@ -92,6 +94,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         fidelity="L1",
         n_seeds=1,
         epochs=3,
+        batch_limit=MEASURED_BATCH_LIMIT,
         budget_seconds=300.0,
         task="digits",
         policy="round_robin_grid",
@@ -144,6 +147,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         fidelity="L0",
         n_seeds=1,
         epochs=1,
+        batch_limit=MEASURED_BATCH_LIMIT,
         budget_seconds=3600.0,
         task="digits",
         policy="model_based",
@@ -173,6 +177,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         fidelity="L2",
         n_seeds=5,
         epochs=10,
+        batch_limit=0,  # Full training
         budget_seconds=7200.0,
         task="digits",
         policy="evolution",
@@ -199,6 +204,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         fidelity="L2",
         n_seeds=10,
         epochs=20,
+        batch_limit=0,  # Full training
         budget_seconds=86400.0,  # 24 hours
         task="digits",
         policy="evolution",
@@ -528,6 +534,7 @@ def _apply_overrides(profile: RunProfile, overrides: dict[str, Any]) -> RunProfi
         task=overrides.get("task", profile.task),
         n_seeds=overrides.get("n_seeds", profile.n_seeds),
         epochs=overrides.get("epochs", profile.epochs),
+        batch_limit=overrides.get("batch_limit", profile.batch_limit),
         budget_seconds=overrides.get("budget_seconds", profile.budget_seconds),
         objectives=tuple(overrides.get("objectives", profile.objectives)),
         param_budget=int(overrides.get("param_budget", profile.param_budget)),
@@ -660,6 +667,7 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
         fidelity=profile.fidelity,
         n_seeds=profile.n_seeds,
         epochs=profile.epochs,
+        batch_limit=profile.batch_limit,
         budget_seconds=profile.budget_seconds,
         param_budget=profile.param_budget,
         policy=profile.policy,

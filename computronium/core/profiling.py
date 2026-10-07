@@ -3,6 +3,7 @@ Profiling utilities for Computronium.
 """
 
 import time
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -10,6 +11,23 @@ import torch
 from torch import nn
 
 from computronium.stability.resources import MAC_ENERGY_J, ResourceUsage
+
+# Suppress fvcore/torch.jit warnings (torch.jit.script deprecated in Python 3.14+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*torch.jit.script.*",
+    category=FutureWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="Unsupported operator aten::",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="The following submodules of the model were never called",
+    category=UserWarning,
+)
 
 if TYPE_CHECKING:
     from computronium.ontology.system import System
@@ -81,6 +99,8 @@ def count_flops_fvcore(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     Returns:
         Total FLOPs for one forward pass.
     """
+    import warnings
+
     try:
         from fvcore.nn import FlopCountAnalysis
     except ImportError:
@@ -95,8 +115,11 @@ def count_flops_fvcore(model: nn.Module, input_shape: tuple[int, ...]) -> int:
         dummy_input = _build_spatial_dummy(model, torch.device(device))
 
     try:
-        flops = FlopCountAnalysis(model, dummy_input).total()
-        return int(flops)
+        # Suppress warnings from torch.jit.script (deprecated in Python 3.14+)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            flops = FlopCountAnalysis(model, dummy_input).total()
+            return int(flops)
     except Exception:
         # Fallback on any analysis error
         return count_flops(model, input_shape)

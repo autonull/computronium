@@ -63,15 +63,15 @@
 ### 3.1 Replace Placeholder Evaluator
 - **Current**: Acceptance tests (U1-U5) use placeholder returning walltime only
 - **Fix**: Wire `execution/evaluate.py` → `SystemTrainer` → real metrics (`train_acc`, `val_acc`, `val_loss`, all measured objectives)
-- [ ] Verify `evaluate_cell` composes coordinate → System → trains → measures → returns payload
-- [ ] Ensure all measured objectives populate `Record.payload`
-- [ ] Add `metric_key` mapping in `MEASURED_OBJECTIVES` for newly implemented objectives (§2)
+- [x] Verify `evaluate_cell` composes coordinate → System → trains → measures → returns payload
+- [x] Ensure all measured objectives populate `Record.payload`
+- [x] Add `metric_key` mapping in `MEASURED_OBJECTIVES` for newly implemented objectives (§2)
 
 ### 3.2 RunSpec → Evaluator Integration
-- [ ] `batch_limit` respected (currently `MEASURED_BATCH_LIMIT=2` for quick gate)
-- [ ] `param_budget` enforced in geometry sizing (auto-narrow `hidden_dim`)
-- [ ] `fidelity` → `n_seeds`, `epochs`, `batch_limit` mapping (L0=1/1/2, L1=3/3/0, L2=5/10/0)
-- [ ] `deterministic=True` → `torch.use_deterministic_algorithms(True)`, `CUBLAS_WORKSPACE_CONFIG=:4096:8`
+- [x] `batch_limit` respected (currently `MEASURED_BATCH_LIMIT=2` for quick gate)
+- [x] `param_budget` enforced in geometry sizing (auto-narrow `hidden_dim`)
+- [x] `fidelity` → `n_seeds`, `epochs`, `batch_limit` mapping (L0=1/1/2, L1=3/3/0, L2=5/10/0)
+- [x] `deterministic=True` → `torch.use_deterministic_algorithms(True)`, `CUBLAS_WORKSPACE_CONFIG=:4096:8`
 
 ### 3.3 Long-Run Resilience
 - [ ] **Checkpointing**: Save `SystemTrainer` state (model, optimizer, epoch, RNG) every N epochs to store
@@ -252,11 +252,11 @@
 
 ## 13. Quick Wins (Do First, <1 Day Each)
 
-1. **GPU default**: Add `device="auto"` → CUDA detection to `RunSpec` and all CLI commands
-2. **Memory metric**: Add `torch.cuda.max_memory_allocated()` to trainer → `memory_usage` objective
-3. **FLOPs metric**: Add `fvcore.nn.FlopCountAnalysis` wrapper → `flops` objective
+1. ~~**GPU default**: Add `device="auto"` → CUDA detection to `RunSpec` and all CLI commands~~ ✅ **DONE**
+2. ~~**Memory metric**: Add `torch.cuda.max_memory_allocated()` to trainer → `memory_usage` objective~~ ✅ **DONE**
+3. ~~**FLOPs metric**: Add `fvcore.nn.FlopCountAnalysis` wrapper → `flops` objective~~ ✅ **DONE**
 4. **Checkpointing**: Save trainer state dict to DuckDB every epoch
-5. **Mixed precision**: `torch.autocast("cuda")` in `SystemTrainer.train_step`
+5. ~~**Mixed precision**: `torch.autocast("cuda")` in `SystemTrainer.train_step`~~ ✅ **DONE**
 6. **NCA fix**: Reshape in `NcaGeometry.route` → remove from `_UNAVAILABLE`
 7. **Report enhancement**: Add Pareto plots to `comp report --format html`
 
