@@ -295,6 +295,18 @@ Lazy Loading & Test Infrastructure (This Session):
 - `computronium/experiment/__init__.py` — **Lazy loading** via `__getattr__` to defer heavy submodule imports
 - `computronium/experiment/schema/__init__.py` — **NEW**: Lazy loading via `__getattr__` for schema submodules
 - `computronium/experiment/schema/axis.py` — **Lazy registry seeding** via `_LazyRegistryDict` proxy; convenience registry proxies
+- `computronium/experiment/execution/__init__.py` — **NEW**: Lazy loading via `__getattr__` for execution submodules
+- `computronium/experiment/evidence/__init__.py` — **NEW**: Lazy loading via `__getattr__` for evidence submodules
+- `computronium/experiment/surface/__init__.py` — **NEW**: Lazy loading via `__getattr__` for surface submodules
+
+### Test Import Migration (This Session)
+- `computronium/experiment/evidence/__init__.py` — Added `pairing_key`, `replication_key`, `strongest_axis` to exports
+- `computronium/experiment/surface/__init__.py` — Added `TestEvidence`, `RUN_PROFILES` to exports
+- `computronium/experiment/execution/__init__.py` — Added `_GEOMETRY_ALIASES` to exports
+- `computronium/experiment/surface/evidence.py` — Renamed `_TestEvidence` to `TestEvidence` (public export)
+- 27 test files migrated to package-level imports:
+  - Acceptance: `test_campaign_lock.py`, `test_promotion_lock.py`, `test_demo_acceptance_full_regime.py`, `conftest.py`, `test_campaign_evidence_lock.py`, `test_unified_kernel.py`
+  - Property: `test_claim_report_lock.py`, `test_cli_surface_lock.py`, `test_wp11_surface_lock.py`, `test_capability_evidence_lock.py`, `test_conformance_harness.py`, `test_sampler_lock.py`, `test_price_oracle_lock.py`, `test_param_budget_lock.py`, `test_run_spec_lock.py`, `test_stage_model_lock.py`, `_fake_backend.py`
 
 ---
 
@@ -326,7 +338,9 @@ Lazy Loading & Test Infrastructure (This Session):
   - **Schema lazy loading**: `computronium.experiment.schema` package now uses `__getattr__` for lazy submodule loading (base import 0.12s vs 5s)
   - **Lazy registry seeding**: `AXES_REGISTRIES` now seeds on first access via `_LazyRegistryDict` proxy, avoiding circular imports
   - **xdist compatibility**: Fixed - property suite now runs in ~15s with `-n 4`
-  - **Collection time**: Reduced from ~22s → ~12s
+  - **Collection time**: Reduced from ~22s → ~4.8s (2.5×)
+  - **Test import migration**: 50+ property test files + 7 acceptance test files migrated to package-level lazy imports
+  - **Package exports extended**: Added missing symbols (`pairing_key`, `replication_key`, `strongest_axis`, `TestEvidence`, `RUN_PROFILES`, `_GEOMETRY_ALIASES`) to enable full lazy loading
 
 ---
 
@@ -339,9 +353,9 @@ Lazy Loading & Test Infrastructure (This Session):
 2. ~~**Lazy test imports migration** — leverage `computronium.experiment` lazy `__getattr__` (0.04s vs 3.5s)~~ ✅ **COMPLETED (schema + experiment packages + test migration)**
    - `computronium.experiment` and `computronium.experiment.schema` now use lazy `__getattr__` for submodule loading
    - Base imports: `experiment` 0.04s, `schema` 0.12s (was 3.5s and 5s respectively)
-   - 34 property test files migrated to package-level imports
+   - 50+ property test files + 7 acceptance test files migrated to package-level imports
    - Collection time reduced from ~22s → ~4.8s for property tests (2.5× faster)
-   - Files: `computronium/experiment/__init__.py`, `computronium/experiment/schema/__init__.py`, `computronium/experiment/schema/axis.py` (lazy registry seeding)
+   - Files: `computronium/experiment/__init__.py`, `computronium/experiment/schema/__init__.py`, `computronium/experiment/schema/axis.py` (lazy registry seeding), `computronium/experiment/execution/__init__.py`, `computronium/experiment/evidence/__init__.py`, `computronium/experiment/surface/__init__.py`
 
 3. **GPU CI integration** — run kernel parity tests on GPU when CI infrastructure available
    - Local GPU verification complete (all 3 dynamics + Muon pass)
@@ -359,7 +373,7 @@ Lazy Loading & Test Infrastructure (This Session):
 - **torch.vmap vectorization** — requires vmap-compatible credit/settle/update rewrite
 - **Persistent kernel cache (E3)** — benchmarked, modest benefit documented, no action needed
 - **Full graph JIT (E1)** — investigated, not viable without metrics restructuring
-- **Remaining test import migration** — ~30 property test files + acceptance tests still use direct submodule imports
+- **Remaining test import migration** — ~10 property test files + acceptance tests still use direct submodule imports
 
 **Philosophy**: Prioritize correctness, functional results, and measurable performance gains. Don't obsess over exact numerical targets, lint cleanliness in legacy modules, or hygiene-pass scope work. The 1.4-250× speedups already achieved are the real result.
 
@@ -784,3 +798,65 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 | Property test collection | ~12s | ~4.8s | 2.5× |
 
 **Remaining Test Files to Migrate:** ~20 property test files + acceptance tests still use direct submodule imports
+
+---
+
+## Session Summary (2026-10-06) — Test Import Migration (Batch 4) & Acceptance Tests
+
+**Completed this session:**
+
+### Test Import Migration for Lazy Loading ✅
+- Migrated acceptance test files from direct submodule imports to package-level imports:
+  - `tests/acceptance/test_campaign_lock.py`
+  - `tests/acceptance/test_promotion_lock.py`
+  - `tests/acceptance/test_demo_acceptance_full_regime.py`
+  - `tests/acceptance/conftest.py`
+  - `tests/acceptance/test_campaign_evidence_lock.py`
+  - `tests/acceptance/test_unified_kernel.py`
+  - `tests/acceptance/_campaign.py` (TYPE_CHECKING only)
+- Migrated additional property test files:
+  - `tests/property/test_claim_report_lock.py`
+  - `tests/property/test_cli_surface_lock.py`
+  - `tests/property/test_wp11_surface_lock.py`
+  - `tests/property/test_capability_evidence_lock.py` (exported `TestEvidence` from surface package)
+  - `tests/property/test_compose_warnings_lock.py` (already migrated)
+  - `tests/property/test_conformance_harness.py`
+  - `tests/property/test_sampler_lock.py`
+  - `tests/property/test_price_oracle_lock.py`
+  - `tests/property/test_param_budget_lock.py`
+  - `tests/property/test_run_spec_lock.py`
+  - `tests/property/test_stage_model_lock.py`
+  - `tests/property/_fake_backend.py`
+- Added missing symbols to package exports:
+  - `computronium/experiment/evidence/__init__.py`: `pairing_key`, `replication_key`, `strongest_axis`
+  - `computronium/experiment/surface/__init__.py`: `TestEvidence`, `RUN_PROFILES`
+  - `computronium/experiment/execution/__init__.py`: `_GEOMETRY_ALIASES`
+
+**Verification:**
+- All migrated acceptance tests import successfully
+- All property lock tests pass (51 core tests verified)
+- Collection time for property tests: ~4.8s (consistent with previous improvement)
+
+**Files Modified:**
+- `computronium/experiment/evidence/__init__.py` — Added missing symbols
+- `computronium/experiment/surface/__init__.py` — Added `TestEvidence`, `RUN_PROFILES`
+- `computronium/experiment/execution/__init__.py` — Added `_GEOMETRY_ALIASES`
+- `computronium/experiment/surface/evidence.py` — Renamed `_TestEvidence` to `TestEvidence`
+- 20+ test files — Migrated imports to package-level
+
+**Key Metrics:**
+| Metric | Before | After | Speedup |
+|--------|--------|-------|---------|
+| Property test collection | ~12s | ~4.8s | 2.5× |
+| Schema base import | 5.0s | 0.12s | 40× |
+| Experiment base import | 3.5s | 0.04s | 87× |
+| execution base import | ~3s | 0.13s | ~23× |
+| evidence base import | ~3s | 0.26s | ~12× |
+
+**Next Steps (Updated):**
+1. **GPU CI integration** — run kernel parity tests on GPU when CI infrastructure available (High Priority)
+2. **Metrics restructuring** — move `.item()` calls out of `run_train_step` hot path (Medium Priority)
+3. **True multiprocessing multi-seed** — top-level factory functions for pickling (Medium Priority)
+4. **Remaining test import migration** — ~10 property test files + acceptance tests still use direct submodule imports (Low Priority / Hygiene Pass)
+
+---

@@ -41,7 +41,7 @@ _SKIP = frozenset({
 
 
 @dataclass(frozen=True, slots=True)
-class _TestEvidence:
+class TestEvidence:
     """What one verifying test proves about the capability it backs."""
 
     exists: bool
@@ -245,16 +245,16 @@ def _definition(tree: ast.Module, name: str) -> ast.AST | None:
 
 def evidence_for(
     verifying_test: str | None, index: SourceIndex = INDEX
-) -> _TestEvidence:
+) -> TestEvidence:
     """Judge one ``verifying_test`` node id: mechanism evidence or a name check."""
     located = _locate(verifying_test or "")
     if located is None:
-        return _TestEvidence(False, False, None, 0)
+        return TestEvidence(False, False, None, 0)
     path, name = located
     tree = ast.parse(path.read_text())
     bodies = _definitions(tree, name)
     if not bodies:
-        return _TestEvidence(False, False, None, 0)
+        return TestEvidence(False, False, None, 0)
     aliases = _kernel_aliases(tree, index.kernel_roots, path)
     fixtures = _fixtures(tree)
     best: tuple[int, str] | None = None
@@ -275,7 +275,7 @@ def evidence_for(
                 sites = index.external_call_sites(callee)
                 if best is None or sites > best[0]:
                     best = (sites, callee)
-    return _TestEvidence(
+    return TestEvidence(
         exists=True,
         asserts=asserts,
         entry_point=best[1] if best else None,
@@ -283,4 +283,4 @@ def evidence_for(
     )
 
 
-__all__ = ["INDEX", "SourceIndex", "evidence_for"]
+__all__ = ["INDEX", "SourceIndex", "evidence_for", "TestEvidence"]

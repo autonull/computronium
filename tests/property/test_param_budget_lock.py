@@ -21,14 +21,13 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.execution.compose import (
+from computronium.experiment.execution import (
     compose_cell_system,
     geometry_param_count,
-)
-from computronium.experiment.execution.evaluate import cell_record, task_shape
-from computronium.experiment.execution.search_space import (
+    cell_record,
     generate_candidates,
     search_space_from_spec,
+    task_shape,
 )
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
@@ -177,7 +176,7 @@ def test_a_cell_that_cannot_honour_its_ceiling_does_not_pass() -> None:
 
 def test_the_tolerance_is_declared_once() -> None:
     """The registered predicate and the gate read the same number."""
-    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+    from computronium.experiment.schema import CONSTRAINTS_REGISTRY
 
     predicate = str(CONSTRAINTS_REGISTRY["param_budget_fairness"].predicate)
     assert str(1 + PARAM_BUDGET_TOLERANCE) in predicate
@@ -222,6 +221,6 @@ def test_an_unhonourable_primitive_is_retired_with_its_reason() -> None:
 
 def test_the_geometry_alias_table_does_not_grow() -> None:
     """``_GEOMETRY_ALIASES`` is a §3.0 violation in miniature; hold it at one."""
-    from computronium.experiment.execution.compose import _GEOMETRY_ALIASES
+    from computronium.experiment.execution import _GEOMETRY_ALIASES
 
     assert _GEOMETRY_ALIASES == {"num_layers": "depth"}

@@ -28,20 +28,19 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.evidence.claims import (
+from computronium.experiment.evidence import (
     Claim,
-    derive_claims,
-    replication_key,
-    strongest_axis,
-)
-from computronium.experiment.evidence.limitations import (
     Limitation,
     LimitationKind,
+    RecordStore,
+    StoreConfig,
+    derive_claims,
     derive_limitations,
+    replication_key,
     replication_keys_of,
+    strongest_axis,
 )
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.evaluate import cell_record
+from computronium.experiment.execution import cell_record
 from computronium.experiment.schema import (
     StructuralAxis,
     Coordinate,
@@ -59,7 +58,7 @@ from computronium.experiment.schema import (
     MEASURED_PARAM_BUDGET,
     RunSpec,
 )
-from computronium.experiment.surface.report import ReportGenerator, generate_run_report
+from computronium.experiment.surface import ReportGenerator, generate_run_report
 
 _TASK = "digits"
 _CREDITS = ("thermodynamic_contrast", "local_contrastive")

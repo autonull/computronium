@@ -57,6 +57,7 @@ __all__ = [
     "compose_cell_system",
     "compose_configs",
     "geometry_param_count",
+    "_GEOMETRY_ALIASES",
     # contrast_design
     "ContrastAssignment",
     "ContrastDesign",
@@ -204,6 +205,7 @@ _symbol_to_module: dict[str, str] = {
     "compose_cell_system": "compose",
     "compose_configs": "compose",
     "geometry_param_count": "compose",
+    "_GEOMETRY_ALIASES": "compose",
     # contrast_design
     "ContrastAssignment": "contrast_design",
     "ContrastDesign": "contrast_design",

@@ -19,9 +19,10 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-from computronium.experiment.evidence.failure import FailureEvent
-from computronium.experiment.execution.backends import Failure, Success
-from computronium.experiment.schema.record import (
+from computronium.experiment.evidence import FailureEvent
+from computronium.experiment.execution import Failure, Success
+from computronium.experiment.schema import (
+    ASSESSMENT_PROCEDURE_VERSION,
     FailureCause,
     GateVerdict,
     Maturity,
@@ -30,18 +31,13 @@ from computronium.experiment.schema.record import (
     Severity,
     Status,
 )
-from computronium.experiment.schema.registries import ASSESSMENT_PROCEDURE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from computronium.experiment.evidence.store import RecordStore
-    from computronium.experiment.execution.backends import EvaluationResult
-    from computronium.experiment.schema.coordinate import (
-        Coordinate,
-        Provenance,
-        Schedule,
-    )
+    from computronium.experiment.evidence import RecordStore
+    from computronium.experiment.execution import EvaluationResult
+    from computronium.experiment.schema import Coordinate, Provenance, Schedule
 
 # The payload key a synthetic accuracy is derived from, and the one cost
 # metric the budget charge reads (``SimpleCostModel.actual_cost``).

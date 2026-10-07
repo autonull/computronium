@@ -41,9 +41,8 @@ import pytest
 from _campaign import CAMPAIGN, Campaign
 from filelock import FileLock
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.run_spec import RunSpec
-from computronium.experiment.schema.seed_registries import seed_all_registries
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.schema import RunSpec, seed_all_registries
 from computronium.experiment.surface import cli
 
 # The fixture is shared across four modules *and* four workers, so the 900 s

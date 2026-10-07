@@ -11,7 +11,7 @@ from computronium.experiment.schema import (
     CapabilityStatus,
     seed_all_registries,
 )
-from computronium.experiment.surface.conformance import (
+from computronium.experiment.surface import (
     CurrencyLock,
     generate_flag_projection_lock,
     load_currency_lock,

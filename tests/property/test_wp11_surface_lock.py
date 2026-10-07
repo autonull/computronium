@@ -15,31 +15,24 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-from computronium.experiment.evidence.store import (
+from computronium.experiment.evidence import (
     DuplicateMeasurementError,
     RecordStore,
     StoreConfig,
 )
-from computronium.experiment.schema.run_spec import RunSpec
-from computronium.experiment.schema.seed_registries import seed_all_registries
-from computronium.experiment.surface import cli
-from computronium.experiment.surface.operations import (
+from computronium.experiment.schema import RunSpec, seed_all_registries
+from computronium.experiment.surface import (
+    cli,
     DEFAULT_Q14_ROUTES,
     AlertDedup,
     OperatorIntentKind,
+    QUESTION_FIRST_STAGES,
     create_operator_intent,
     default_events_for,
-)
-from computronium.experiment.surface.profiles import (
-    QUESTION_FIRST_STAGES,
-    question_first,
-)
-from computronium.experiment.surface.report import (
     export_to_json,
     narrative_handoff_summary,
-)
-from computronium.experiment.surface.service import (
     poll_control_file,
+    question_first,
     write_control_intent,
 )
 

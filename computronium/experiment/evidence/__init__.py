@@ -61,6 +61,9 @@ __all__ = [
     "is_exploration_data",
     "is_policy_selected_data",
     "is_test_data",
+    "pairing_key",
+    "replication_key",
+    "strongest_axis",
     # failure
     "FailureCluster",
     "FailureEvent",
@@ -180,6 +183,9 @@ _symbol_to_module: dict[str, str] = {
     "is_exploration_data": "claims",
     "is_policy_selected_data": "claims",
     "is_test_data": "claims",
+    "pairing_key": "claims",
+    "replication_key": "claims",
+    "strongest_axis": "claims",
     # failure
     "FailureCluster": "failure",
     "FailureEvent": "failure",

@@ -14,13 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.pipeline import PipelineConfig
-from computronium.experiment.execution.stage import STAGE_SPECS, StageId
-from computronium.experiment.schema.coordinate import Provenance
-from computronium.experiment.schema.registries import STAGES_REGISTRY
-from computronium.experiment.schema.run_spec import RunSpec
-from computronium.experiment.surface.cli import RUN_PROFILES
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import PipelineConfig, STAGE_SPECS, StageId
+from computronium.experiment.schema import Provenance, RunSpec, STAGES_REGISTRY
+from computronium.experiment.surface import RUN_PROFILES
 
 
 class TestStageModelLock:
@@ -29,9 +26,7 @@ class TestStageModelLock:
     @pytest.fixture(autouse=True)
     def _seed_registries(self) -> None:
         """Seed registries before each test."""
-        from computronium.experiment.schema.seed_registries import (
-            seed_all_registries,
-        )
+        from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
@@ -113,14 +108,14 @@ class TestWrapperObligations:
     def test_coverage_emitted_for_empty_stage(self, temp_store: RecordStore) -> None:
         """Coverage reported even when stage produces no records (R18)."""
         # This is a property test - we verify the coverage structure exists
-        from computronium.experiment.execution.backends import LocalBackend
-        from computronium.experiment.execution.budget import Budget, SimpleCostModel
-        from computronium.experiment.execution.pipeline import (
+        from computronium.experiment.execution import (
+            LocalBackend,
+            Budget,
+            SimpleCostModel,
             PipelineConfig,
             PipelineRunner,
+            RoundRobinGridPolicy,
         )
-        from computronium.experiment.execution.policy import RoundRobinGridPolicy
-
         config = PipelineConfig(
             run_id="test_coverage",
             run_spec=RunSpec(task="digits", profile="test"),
@@ -143,11 +138,12 @@ class TestWrapperObligations:
 
         # All policies should use the same _classify_rejection method
         # This is verified by checking the method exists on PipelineRunner
-        from computronium.experiment.evidence.store import RecordStore, StoreConfig
-        from computronium.experiment.execution.backends import LocalBackend
-        from computronium.experiment.execution.budget import Budget, SimpleCostModel
-        from computronium.experiment.execution.pipeline import PipelineRunner
-        from computronium.experiment.execution.policy import (
+        from computronium.experiment.evidence import RecordStore, StoreConfig
+        from computronium.experiment.execution import (
+            LocalBackend,
+            Budget,
+            SimpleCostModel,
+            PipelineRunner,
             StratifiedRandomPolicy,
         )
 
@@ -178,10 +174,13 @@ class TestWrapperObligations:
         - Backend returning per-item Success/Failure (WP19)
         - Pipeline not re-raising on individual stage failures
         """
-        from computronium.experiment.execution.backends import LocalBackend
-        from computronium.experiment.execution.budget import Budget, SimpleCostModel
-        from computronium.experiment.execution.pipeline import PipelineRunner
-        from computronium.experiment.execution.policy import RoundRobinGridPolicy
+        from computronium.experiment.execution import (
+            LocalBackend,
+            Budget,
+            SimpleCostModel,
+            PipelineRunner,
+            RoundRobinGridPolicy,
+        )
 
         # Create a failing backend that fails on specific items
         class FailingBackend(LocalBackend):

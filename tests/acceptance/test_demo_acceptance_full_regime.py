@@ -17,13 +17,16 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
-from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.policy import StratifiedRandomPolicy
-from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET, RunSpec
-from computronium.experiment.schema.seed_registries import seed_all_registries
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import (
+    Budget,
+    LocalBackend,
+    PipelineConfig,
+    PipelineRunner,
+    SimpleCostModel,
+    StratifiedRandomPolicy,
+)
+from computronium.experiment.schema import MEASURED_PARAM_BUDGET, RunSpec, seed_all_registries
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -25,14 +25,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from computronium.experiment.evidence.claims import (
+from computronium.experiment.evidence import (
+    RecordStore,
+    StoreConfig,
     pairing_key,
     replication_key,
 )
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.coordinate import DataOrigin
-from computronium.experiment.surface import cli
-from computronium.experiment.surface.report import ReportGenerator
+from computronium.experiment.schema import DataOrigin
+from computronium.experiment.surface import cli, ReportGenerator
 
 if TYPE_CHECKING:
     from _campaign import Campaign
@@ -72,10 +72,10 @@ def test_cp1_every_declared_legal_cell_reached_the_store(campaign: Campaign) -> 
     was measured is decided by the declaration, not by how loaded the box was
     that day. This is the assertion D-n called a coin flip.
     """
-    from computronium.experiment.execution.evaluate import task_shape
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.execution import (
         iter_candidates,
         search_space_from_spec,
+        task_shape,
     )
 
     space = search_space_from_spec(campaign.spec, tasks=campaign.spec.task_names)
@@ -108,10 +108,8 @@ def test_cp1_the_run_charged_the_budget_it_spent(campaign: Campaign) -> None:
     )
     assert campaign.elapsed_s > 0
 
-    from computronium.experiment.execution.pricing import price_plan
-    from computronium.experiment.execution.search_space import search_space_from_spec
-    from computronium.experiment.schema.registries import FIXED_RUN_COST_SECONDS
-    from computronium.experiment.schema.seed_registries import seed_all_registries
+    from computronium.experiment.execution import price_plan, search_space_from_spec
+    from computronium.experiment.schema import FIXED_RUN_COST_SECONDS, seed_all_registries
 
     seed_all_registries()
     plan = price_plan(
@@ -334,7 +332,7 @@ def test_every_claim_line_pairs_on_something_other_than_the_axis_under_test(
     "insufficient coverage"; one that omitted nothing would pair cells that
     differ in a swept hyperparameter. Both are silent, so both are asserted.
     """
-    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema import StructuralAxis
 
     axis = StructuralAxis.CREDIT
     groups: dict[str, set[str]] = {}

@@ -16,27 +16,29 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
-from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.policy import (
-    EvolutionPolicy,
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import (
+    Budget,
+    EvidenceDrivenAllocator,
+    LocalBackend,
     ModelBasedPolicy,
+    PipelineConfig,
+    PipelineRunner,
     RoundRobinGridPolicy,
+    SimpleCostModel,
     StratifiedRandomPolicy,
     SynthesisPolicy,
     UniformRandomPolicy,
 )
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate, Schedule
-from computronium.experiment.schema.run_spec import (
+from computronium.experiment.schema import (
+    Coordinate,
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
     RunSpec,
+    Schedule,
+    StructuralAxis,
+    seed_all_registries,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 if TYPE_CHECKING:
     from computronium.experiment.execution.search_space import SearchSpace
@@ -52,7 +54,7 @@ if TYPE_CHECKING:
 
 def _space() -> SearchSpace:
     """The active space of the acceptance run spec — one builder, as the runner uses."""
-    from computronium.experiment.execution.search_space import search_space_from_spec
+    from computronium.experiment.execution import search_space_from_spec
 
     return search_space_from_spec(_make_run_spec())
 
@@ -548,17 +550,17 @@ class TestLegalityEnforcement:
             LegalityEngine,
             create_constraint,
         )
-        from computronium.experiment.schema.coordinate import Provenance
-        from computronium.experiment.schema.record import (
+        from computronium.experiment.schema import (
+            CONSTRAINTS_REGISTRY,
             FailureCause,
             GateVerdict,
             Maturity,
+            Provenance,
             Record,
             ReproducibilityClass,
             Severity,
             Status,
         )
-        from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
         # Create and seed legality engine with constraints from registry
         engine = LegalityEngine()

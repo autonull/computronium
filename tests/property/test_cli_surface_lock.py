@@ -53,12 +53,12 @@ from computronium.experiment.execution import (
     search_space_from_spec,
     task_shape,
 )
-from computronium.experiment.schema.coordinate import Provenance
-from computronium.experiment.schema.registries import (
+from computronium.experiment.schema import (
     ASSESSMENT_PROCEDURE_VERSION,
+    Provenance,
     procedure_version_key,
+    seed_all_registries,
 )
-from computronium.experiment.schema import seed_all_registries
 
 from ._fake_backend import synthetic_record
 from ._specs import mechanism_spec
@@ -66,8 +66,7 @@ from ._specs import mechanism_spec
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from computronium.experiment.schema.coordinate import Coordinate, Schedule
-    from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema import Coordinate, Record, Schedule
 
 pytestmark = pytest.mark.timeout(300)
 

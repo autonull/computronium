@@ -15,9 +15,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from pydantic import ValidationError
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig, StoreError
-from computronium.experiment.execution.pipeline import PipelineConfig
-from computronium.experiment.execution.stage import StageId
+from computronium.experiment.evidence import RecordStore, StoreConfig, StoreError
+from computronium.experiment.execution import PipelineConfig, StageId
 from computronium.experiment.schema import (
     Domain,
     StructuralAxis,
@@ -200,7 +199,7 @@ def test_spec_names_no_task_means_the_evaluator_cannot_load_one() -> None:
 
 
 def test_axis_selection_narrows_and_defaults_to_every_primitive() -> None:
-    from computronium.experiment.schema.axis import AXES_REGISTRIES
+    from computronium.experiment.schema import AXES_REGISTRIES
 
     unrestricted = _spec().selected_primitives(StructuralAxis.CREDIT)
     assert unrestricted == tuple(

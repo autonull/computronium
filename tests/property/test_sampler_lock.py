@@ -22,35 +22,36 @@ from typing import Any, cast
 import pytest
 from optuna.distributions import CategoricalDistribution, FloatDistribution
 
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
-from computronium.experiment.execution.optuna_adapter import OptunaDistributionAdapter
-from computronium.experiment.execution.policy import (
+from computronium.experiment.execution import (
+    Budget,
     ModelBasedPolicy,
+    OptunaDistributionAdapter,
     ProposalContext,
+    SimpleCostModel,
     create_policy,
     policy_context,
     resolve_objectives,
+    search_space_from_spec,
 )
-from computronium.experiment.execution.search_space import search_space_from_spec
 from computronium.experiment.schema import (
     Coordinate,
-    Provenance,
-    Schedule,
-    harvest_schema,
-    MEASURED_METRICS,
-    UnknownObjectiveError,
-    UnmeasuredObjectiveError,
-    objective_metric,
-    objective_values,
     FailureCause,
     GateVerdict,
     Maturity,
+    MEASURED_METRICS,
+    Provenance,
     Record,
     ReproducibilityClass,
+    RunSpec,
+    Schedule,
     Severity,
     Status,
     OBJECTIVES_REGISTRY,
-    RunSpec,
+    UnknownObjectiveError,
+    UnmeasuredObjectiveError,
+    harvest_schema,
+    objective_metric,
+    objective_values,
     seed_all_registries,
 )
 
@@ -221,7 +222,7 @@ class TestObjectivesAreMeasurements:
         Family-specific energy metrics for other dynamics (pc_alm, predictive_settling,
         spike_integration, instantaneous) are correctly absent.
         """
-        from computronium.experiment.execution.evaluate import cell_record
+        from computronium.experiment.execution import cell_record
 
         record = cell_record(
             _coordinate(),
@@ -279,7 +280,7 @@ class TestObjectivesAreMeasurements:
             )
 
     def test_every_profile_searches_only_measured_objectives(self) -> None:
-        from computronium.experiment.surface.cli import RUN_PROFILES
+        from computronium.experiment.surface import RUN_PROFILES
 
         for name, profile in RUN_PROFILES.items():
             objective_values(
@@ -321,8 +322,7 @@ class TestDistributionsComeFromTheHarvest:
         assert "train_biases" not in contrastive
 
     def test_a_spec_narrows_and_never_widens(self) -> None:
-        from computronium.experiment.schema.axis import Domain, Scale
-        from computronium.experiment.schema.run_spec import RunSpec
+        from computronium.experiment.schema import Domain, RunSpec, Scale
 
         spec = RunSpec(
             task=_TASK_ID,
@@ -339,8 +339,7 @@ class TestDistributionsComeFromTheHarvest:
         assert bounds.high == pytest.approx(1e-1)
 
     def test_a_domain_outside_the_harvested_one_is_refused(self) -> None:
-        from computronium.experiment.schema.axis import Domain
-        from computronium.experiment.schema.run_spec import RunSpec
+        from computronium.experiment.schema import Domain, RunSpec
 
         spec = RunSpec(
             task=_TASK_ID,
@@ -361,8 +360,7 @@ class TestStructuralKnobsAreNotDimensions:
         assert "device" not in distributions
 
     def test_a_spec_may_not_sweep_a_structural_knob(self) -> None:
-        from computronium.experiment.schema.axis import Domain
-        from computronium.experiment.schema.run_spec import RunSpec
+        from computronium.experiment.schema import Domain, RunSpec
 
         with pytest.raises(ValueError, match="structural"):
             RunSpec(
@@ -459,7 +457,7 @@ class TestTheStudyLearns:
         assert max(values) > 0.5
 
     def test_the_sampler_differs_from_uniform_for_the_same_seed(self) -> None:
-        from computronium.experiment.execution.policy import UniformRandomPolicy
+        from computronium.experiment.execution import UniformRandomPolicy
 
         model_based = ModelBasedPolicy(
             seed=7, objectives=("validation_accuracy",), spec=_run_spec()
@@ -491,7 +489,7 @@ class TestTheStudyLearns:
 
 class TestTheRunReachesThePolicy:
     def test_the_spec_reaches_a_learning_policy(self) -> None:
-        from computronium.experiment.schema.run_spec import RunSpec
+        from computronium.experiment.schema import RunSpec
 
         spec = RunSpec(
             task=_TASK_ID,
@@ -508,7 +506,7 @@ class TestTheRunReachesThePolicy:
         assert create_policy("model_based", **context).get_name() == "model_based_icu_guided"
 
     def test_a_policy_that_declares_no_objectives_receives_none(self) -> None:
-        from computronium.experiment.schema.run_spec import RunSpec
+        from computronium.experiment.schema import RunSpec
 
         spec = RunSpec(task=_TASK_ID, objectives=("validation_accuracy",))
         context = policy_context(spec, "round_robin_grid")

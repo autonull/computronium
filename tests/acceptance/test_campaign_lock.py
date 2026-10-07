@@ -33,9 +33,8 @@ from typing import TYPE_CHECKING, Literal
 import pytest
 from _campaign import CAMPAIGN, Campaign
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.surface import cli
-from computronium.experiment.surface.report import ReportGenerator
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.surface import cli, ReportGenerator
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -67,10 +66,10 @@ def test_gate_1_the_command_writes_records_with_no_duplicate_identity(
     # cell), so coverage is asserted against what the space yields — and the
     # axes must not be locked to each other, or the campaign is one diagonal
     # of its own space.
-    from computronium.experiment.execution.evaluate import task_shape
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.execution import (
         iter_candidates,
         search_space_from_spec,
+        task_shape,
     )
 
     space = search_space_from_spec(campaign.spec, tasks=campaign.spec.task_names)
@@ -146,14 +145,14 @@ def test_gate_2b_the_reference_cell_learns() -> None:
     ``active()`` resolve-once fix returns this gate to a frozen loss at
     chance.
     """
-    from computronium.experiment.execution.evaluate import cell_record
-    from computronium.experiment.schema.coordinate import (
+    from computronium.experiment.execution import cell_record
+    from computronium.experiment.schema import (
         Coordinate,
+        MEASURED_PARAM_BUDGET,
         Provenance,
         Schedule,
+        seed_all_registries,
     )
-    from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET
-    from computronium.experiment.schema.seed_registries import seed_all_registries
 
     seed_all_registries()
     record = cell_record(

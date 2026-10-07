@@ -22,6 +22,7 @@ __all__ = [
     "service",
     # cli
     "main",
+    "RUN_PROFILES",
     # codegen
     "generate_all",
     "generate_axes_listing",
@@ -54,6 +55,7 @@ __all__ = [
     "INDEX",
     "SourceIndex",
     "evidence_for",
+    "TestEvidence",
     # operations
     "DEFAULT_Q14_ROUTES",
     "AlertDedup",
@@ -97,6 +99,7 @@ _lazy_submodules: dict[str, ModuleType] = {}
 _symbol_to_module: dict[str, str] = {
     # cli
     "main": "cli",
+    "RUN_PROFILES": "cli",
     # codegen
     "generate_all": "codegen",
     "generate_axes_listing": "codegen",
@@ -129,6 +132,7 @@ _symbol_to_module: dict[str, str] = {
     "INDEX": "evidence",
     "SourceIndex": "evidence",
     "evidence_for": "evidence",
+    "TestEvidence": "evidence",
     # operations
     "DEFAULT_Q14_ROUTES": "operations",
     "AlertDedup": "operations",

@@ -27,10 +27,7 @@ import pytest
 import yaml
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.schema.record import (
-    Maturity,
-    ReproducibilityClass,
-)
+from computronium.experiment.schema import Maturity, ReproducibilityClass
 from computronium.experiment.surface import cli, ReportGenerator
 
 pytestmark = pytest.mark.timeout(600)
