@@ -34,7 +34,7 @@ Two locks:
   method that does not exist, and therefore a block that had never run and
   never could. There are exactly two shapes, and no third:
 
-  * **9 table-driven lazy shims** -- every one resolves its names from a table
+  * **14 table-driven lazy shims** -- every one resolves its names from a table
     declared in the same file, so the population *is* statically derivable:
 
     - ``_LAZY`` (4): ``computronium/__init__.py``, ``cli``, ``core``,
@@ -42,8 +42,13 @@ Two locks:
     - ``_PRIMITIVES`` (3): ``primitives``, ``primitives/geometry``,
       ``primitives/substrate``.
     - ``_ALGORITHMS`` (1): ``algorithms``.
+    - ``_symbol_to_module`` (5): the experiment kernel packages -- ``experiment``
+      and its ``schema``, ``evidence``, ``execution``, ``surface`` subpackages.
+      Each maps every re-exported symbol to the submodule that defines it, so
+      the package import stays off the ``torch``/``ontology`` path until a name
+      is actually touched.
 
-    The last four have no lock of their own, so they are named here.
+    The last seven have no lock of their own, so they are named here.
   * **2 hand-written single-name modules**, each resolving exactly one name:
     ``computronium/knowledge/__init__.py`` and ``computronium/knowledge/kb.py``
     both resolve ``DEFAULT_KB`` and nothing else, so that constructing the
@@ -66,6 +71,7 @@ from __future__ import annotations
 import ast
 import subprocess
 import sys
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -140,6 +146,7 @@ def test_scanned_roots_exist(module: str) -> None:
     assert (REPO_ROOT / module).is_dir()
 
 
+@cache
 def _module_path(dotted: str) -> Path | None:
     """The file backing a dotted module name, or None if it is a package.
 
@@ -152,7 +159,8 @@ def _module_path(dotted: str) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-def _defined_names(path: Path) -> set[str]:
+@cache
+def _defined_names(path: Path) -> frozenset[str]:
     """Every name bound at the top level of a module (including re-imports)."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     names: set[str] = set()
@@ -178,7 +186,7 @@ def _defined_names(path: Path) -> set[str]:
                 stack.extend(node.body)
                 stack.extend(getattr(node, "orelse", []))
                 stack.extend(handler.body for handler in getattr(node, "handlers", []))
-    return names
+    return frozenset(names)
 
 
 def _runtime_import_nodes(tree: ast.Module) -> list[ast.ImportFrom]:
@@ -204,6 +212,7 @@ def _runtime_import_nodes(tree: ast.Module) -> list[ast.ImportFrom]:
     ]
 
 
+@cache
 def _star_imports(path: Path) -> bool:
     """True when the module re-exports by ``*``, making names unresolvable."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -216,11 +225,14 @@ def _star_imports(path: Path) -> bool:
 def _resolved_imports_in(path: Path) -> list[tuple[str, str, str]]:
     """(source file, dotted module, name) for each import this file can resolve."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    source = str(path.relative_to(REPO_ROOT))
     out: list[tuple[str, str, str]] = []
     for node in _runtime_import_nodes(tree):
+        # _runtime_import_nodes has already narrowed module to a real file.
+        assert node.module is not None
         for alias in node.names:
             if alias.name != "*":
-                out.append((str(path.relative_to(REPO_ROOT)), node.module, alias.name))
+                out.append((source, node.module, alias.name))
     return out
 
 
@@ -234,19 +246,17 @@ def _cross_module_imports() -> list[tuple[str, str, str]]:
     ]
 
 
-@pytest.mark.timeout(300)  # 37.2s measured, budget declared TODO37 §4.11
+@pytest.mark.timeout(300)  # 3.6s measured (TODO52), budget declared TODO37 §4.11
 def test_every_cross_module_import_names_a_defined_symbol() -> None:
     resolved = _cross_module_imports()
     assert len(resolved) >= 150, (
         f"only {len(resolved)} cross-module imports resolved — the scan is "
         "not looking at the population it claims to cover"
     )
-    cache: dict[str, set[str]] = {}
     missing = [
         f"{src}: from {mod} import {name}"
         for src, mod, name in resolved
-        if name not in cache.setdefault(mod, _defined_names(_module_path(mod)))
-        and src not in KNOWN_BLOCKED
+        if name not in _defined_names(_module_path(mod)) and src not in KNOWN_BLOCKED
     ]
     assert missing == [], (
         f"{len(missing)} imports name a symbol the target module does not "
@@ -289,13 +299,18 @@ GETATTR_SHIMS: dict[str, str] = {
     "computronium/primitives/__init__.py": "_PRIMITIVES",
     "computronium/primitives/geometry/__init__.py": "_PRIMITIVES",
     "computronium/primitives/substrate/__init__.py": "_PRIMITIVES",
+    "computronium/experiment/__init__.py": "_symbol_to_module",
+    "computronium/experiment/schema/__init__.py": "_symbol_to_module",
+    "computronium/experiment/evidence/__init__.py": "_symbol_to_module",
+    "computronium/experiment/execution/__init__.py": "_symbol_to_module",
+    "computronium/experiment/surface/__init__.py": "_symbol_to_module",
 }
 
 
 #: Table names a module-level ``__getattr__`` may resolve from. A module whose
 #: names come from a table in the same file is statically derivable, which is the
 #: whole difference between the first shape and the hand-written one.
-_LAZY_TABLES = ("_LAZY", "_PRIMITIVES", "_ALGORITHMS")
+_LAZY_TABLES = ("_LAZY", "_PRIMITIVES", "_ALGORITHMS", "_symbol_to_module")
 
 
 def _getattr_modules() -> dict[str, str]:

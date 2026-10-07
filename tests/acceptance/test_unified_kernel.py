@@ -20,6 +20,7 @@ from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.execution import (
     Budget,
     EvidenceDrivenAllocator,
+    EvolutionPolicy,
     LocalBackend,
     ModelBasedPolicy,
     PipelineConfig,
@@ -31,9 +32,9 @@ from computronium.experiment.execution import (
     UniformRandomPolicy,
 )
 from computronium.experiment.schema import (
-    Coordinate,
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
+    Coordinate,
     RunSpec,
     Schedule,
     StructuralAxis,

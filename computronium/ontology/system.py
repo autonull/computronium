@@ -712,9 +712,13 @@ class SystemConfig:
         """Diffusion dynamics requires substrate noise_level > 0."""
         if self.dynamics.dynamics_type == "diffusion":
             if self.substrate.noise_level == 0.0:
-                logger.debug(
-                    "Diffusion dynamics (Langevin) requires substrate noise_level > 0 "
-                    "for proper sampling. Consider setting noise_level on substrate."
+                warnings.warn(
+                    f"Diffusion dynamics (Langevin) with substrate "
+                    f"noise_level={self.substrate.noise_level} has no noise term, so "
+                    f"the dynamics degenerates to deterministic relaxation; set a "
+                    f"positive noise_level on the substrate for proper sampling.",
+                    UserWarning,
+                    stacklevel=2,
                 )
 
     def _validate_local_contrastive_geometry(self) -> None:

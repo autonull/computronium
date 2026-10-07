@@ -61,7 +61,6 @@ __all__ = [
     "get_hyperparameter_names",
     "get_hyperparameter_spec",
     "harvest_schema",
-    "harvest_weights",
     "load_axis_config",
     "_config_default",
     # Metrics symbols
@@ -136,12 +135,10 @@ __all__ = [
     "RUN_SPEC_VERSION",
     "RunSpec",
     # SeedRegistries symbols
-    "PRIORS",
     "seed_all_registries",
     # Versioning symbols
     "SCHEMA_REGISTRY",
     "current_schema_version",
-    "schema_version",
 ]
 
 # Lazy submodule cache
@@ -187,7 +184,6 @@ _symbol_to_module: dict[str, str] = {
     "get_hyperparameter_names": "harvest",
     "get_hyperparameter_spec": "harvest",
     "harvest_schema": "harvest",
-    "harvest_weights": "harvest",
     "load_axis_config": "harvest",
     "_config_default": "harvest",
     # metrics
@@ -231,7 +227,6 @@ _symbol_to_module: dict[str, str] = {
     "POLICIES_REGISTRY": "registries",
     "PolicyKind": "registries",
     "PolicySpec": "registries",
-    "PRIORS": "registries",
     "PRIORS_REGISTRY": "registries",
     "PriorSpec": "registries",
     "ProofKind": "registries",
@@ -267,7 +262,6 @@ _symbol_to_module: dict[str, str] = {
     # versioning
     "SCHEMA_REGISTRY": "versioning",
     "current_schema_version": "versioning",
-    "schema_version": "versioning",
 }
 
 

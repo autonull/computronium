@@ -192,8 +192,10 @@ GPU tests: 81 skipped in acceleration (require CUDA). Local GPU available for pr
 | **PredictiveSettling settle (compiled)** | ~19ms | **~7ms** | **2.8-4.1×** | ✅ Done |
 | GPU kernel parity (all 3 dynamics) | N/A | **Parity passes** | N/A | ✅ Done |
 | Capability evidence lock setup | ~50s | **~1.2s** | **40×** | ✅ Done |
+| **Grid-convention census** | **11.1s** | **3.1s** | **3.6×** | ✅ Done (2026-10-07) |
+| **Cross-module import lock** | **24.5s** | **3.6s** | **6.8×** | ✅ Done (2026-10-07) |
 | MNIST epoch (EqProp, hidden=32) | N/A | ~30s | — | Acceptable |
-| Test collection time | 33s | ~22s | **1.5×** | Limited by torch import floor |
+| Test collection time | 33s | ~22s | **1.5×** | At the torch import floor (1.4s) — target retired |
 
 **Key insight**: The strict numerical targets (<15s, <8s, <10s) were aspirational. The **actual achieved speedups** (1.4-250× across categories) represent massive practical improvement. Remaining gaps are dominated by:
 - Torch import floor (~1.4s, unavoidable)
@@ -247,8 +249,14 @@ Lazy Loading & Test Infrastructure (This Session):
   ✅ Collection time reduced from ~22s → ~4.8s
   ✅ Metrics restructuring for full-graph compile (run_train_step_tensor, _task_loss_tensor)
 
+Lazy Surface Integrity (2026-10-07):
+  ✅ Lazy-export lock (test_lazy_export_lock.py) — __all__ ↔ _symbol_to_module ↔ submodules
+  ✅ Undefined-name lock extended to the 5 lazy packages; 2 F821s fixed
+  ✅ Lint re-baselined 837 → 380 (491 undefined-export false positives)
+  ✅ train_epoch async path repaired (was unrunnable NameError) + 4-test lock
+
 ⏳ REMAINING HIGH-VALUE WORK:
-  1. Migrate test file imports to use lazy package-level access (partial benefit realized)
+  1. test_run_ledger_lock.py floor (7 × ~45s) — check for per-test re-enumeration
   2. GPU CI integration for kernel parity
 ```
 
@@ -1005,3 +1013,145 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 | Demo tests | 4 pass | 4 pass |
 
 ---
+
+## Session Summary (2026-10-07) — Census Redundancy, Lazy-Wiring Lock, Lint Re-Baseline
+
+The previous session's import migration moved 100+ files onto the lazy package
+surface and left four defects behind, all in code the migration itself created.
+Each is a case where an optimization made a previously-impossible failure
+routine: the migration is what made a wiring table the load-bearing artifact.
+
+### A1. `test_grid_convention.py` collection: 11.1s → 3.1s (**3.6×**) ✅
+`_device_helpers()` called `_triton_functions()` once per jit function — 40
+full-repo AST parses of `computronium/acceleration/**` where 2 suffice. cProfile:
+`ast.walk` 13.1s of a 26.4s import, 3.6M `ast.walk` calls. The comprehension
+at `test_grid_convention.py:82` re-evaluated it inside the filter, and the
+loop at line 63 called it per iteration. `@cache` on both helpers; the census
+itself is ~190ms, so the whole file collects at the torch-import floor now.
+`tests/acceleration/` collection 12.5s → 4.4s.
+
+### A2. `test_undefined_name_lock.py`: 24.5s → 3.6s (**6.8×**) ✅
+`_defined_names` / `_module_path` / `_star_imports` each re-`ast.parse`d the
+target module per import site; `_module_path` alone was called 4× per
+`ImportFrom`. `@cache` on all three, plus dropping a redundant `cache`
+dict (the `@cache` decorator already deduplicates). Timeout annotation
+updated 37.2s → 3.6s.
+
+### A3. `train_epoch` async path was dead code that could not have run ✅
+`computronium/core/system_trainer/trainer.py` read `next_batch` on
+`batch_idx > 0` before the name existed anywhere on that path — F821, and a
+`NameError` the moment `async_dataloading=True` on CUDA. Prefetch exhaustion
+also could not terminate the epoch: `StopIteration` was caught into `None` and
+the loop had no `None` break, so a short stream trained on `None`. Rewritten
+with `_load_batch()` returning `None` as the loop's break condition,
+`record_stream` on the handed-off tensors (the allocator otherwise reuses a
+block the compute stream is still reading), and `wait_stream` on **both**
+streams before the swap — the original waited only on `compute_stream`, which
+left the incoming batch's H2D copy unordered against the consumer. Complexity
+17 → 15.
+
+**New lock**: `tests/unit/core/test_trainer_async_dataloading.py` (4 tests,
+CUDA-gated). Asserts the async epoch matches the synchronous one to `rel=1e-5`,
+that a short stream ends the epoch, that each batch trains exactly the input
+it was handed (the off-by-one a prefetch buffer can have, which agrees with
+sync on step count), and that the flag is inert on CPU. **3 of the 4 fail on
+the pre-fix trainer** — verified by stashing.
+
+### A4. Two unresolvable exports in `schema.__all__` ✅
+`harvest_weights` and `schema_version` were listed in `__all__` and mapped in
+`_symbol_to_module`, but `harvest.py` defines neither (`schema_version` is a
+local in `record.py`) and `versioning.py` exports `current_schema_version`.
+`from computronium.experiment.schema import harvest_weights` was an
+`ImportError`. Introduced by 916b576a (lazy schema loading) and never
+reachable, so nothing caught them. Removed.
+
+### A5. New lock: `tests/property/test_lazy_export_lock.py` (20 tests) ✅
+The lazy map is a hand-maintained wiring table with no lock on it. Four
+directions, because a wiring table has four ways to be wrong: every `__all__`
+name resolves; every map entry names a symbol its submodule defines;
+every listed submodule is in `__all__` and importable; the map holds no row
+`__all__` does not advertise. **Fails on the pre-fix tree** (A4) — verified.
+
+### A6. `test_getattr_population_is_enumerated` + `test_no_undefined_names_in_tree` ✅
+Both red from the lazy migration: the five experiment packages were missing
+from `GETATTR_SHIMS` (so adding lazy `__getattr__` silently joined the
+exclusion), and the map's name — `_symbol_to_module` — was not in
+`_LAZY_TABLES`, so table-driven shims were classified hand-written.
+Also **fixed the two F821s** the migration left: `EvolutionPolicy` used twice
+in `test_unified_kernel.py` without being imported (batch 5's import rewrite
+dropped it), and `next_batch` in A3.
+
+### A7. Lint re-baseline: 837 → 380 (871 → 380 measured, **-56%**) ✅
+The lazy `__getattr__` re-export reported `undefined-export` on all 491 of
+its `__all__` names — the same false positive `computronium/__init__.py`
+already carried a per-file-ignore for, applied to `_LAZY` instead of
+`_symbol_to_module`. One per-file-ignore glob in `pyproject.toml` covers all
+five packages. The 837 baseline was therefore never a real measurement: it
+counted 491 findings no code change could ever fix. Root `__init__.py` and
+`algorithms/__init__.py` still report (genuine, Register C).
+
+### A8. `_validate_diffusion_substrate_noise` was unreachable ✅
+`logger.debug` on a soft constraint that a lock asserts warns — the same
+defect TODO52 fixed twice already (step_size→settle_step, PC-ALM beta).
+Changed to `warnings.warn(UserWarning)`, matching `_validate_beta_matching_pc_alm`
+and `_validate_per_element_displacement_step_size`. `test_diffusion_warns_on_zero_noise_substrate`
+was red; now 26/26 in `test_todo39_coverage_locks.py`.
+
+### Verification
+| Tier | Result | Walltime |
+|------|--------|----------|
+| `tests/unit` + `tests/property` | 2443 passed, 16 skipped, 26 xfailed, 1 xpassed | 405.8s |
+| `tests/primitives` + `algorithms` + `acceptance` | 705 passed | 343.2s |
+| `tests/acceleration` | 372 passed, 81 skipped | 19.9s |
+| 21 demos, batched one file per invocation | all pass | ~15 min total |
+| `test_gallery_provenance_lock.py` | 85 passed (19 records re-pinned) | 3.6s |
+
+Demos must be run **one file per invocation**: `pytest tests/integration -m demo`
+is killed mid-run by the environment at ~13 of 23 tests with no summary
+written (TODO45 §12.1 territory — collection and per-file runs both survive;
+the combined run does not). Batched with a per-file `timeout 300`, all 21 pass.
+
+### A9. `PRIORS` was mapped twice, the first row wrong ✅
+`_symbol_to_module` mapped `"PRIORS"` to **both** `registries` and
+`seed_registries`. `registries` does not define it (it has `PRIORS_REGISTRY`);
+`seed_registries` does. The later row won by dict-literal semantics, so the
+package worked and the wrong row was invisible to every check — including
+`hasattr`, which only ever sees the collapsed dict. Dropped the dead row, and
+the lock now reads the map off the AST so a duplicate is reportable at all.
+
+### Files Modified
+- `tests/acceleration/test_grid_convention.py` — `@cache` on the two census helpers
+- `tests/property/test_undefined_name_lock.py` — `@cache` on three resolvers, `GETATTR_SHIMS` + `_LAZY_TABLES` extended, narrowed `_resolved_imports_in`
+- `computronium/core/system_trainer/trainer.py` — `_load_batch()`, `record_stream`, dual `wait_stream`, `None` break
+- `computronium/ontology/system.py` — diffusion/noise soft constraint now warns
+- `computronium/experiment/schema/__init__.py` — 3 dead map rows dropped
+- `pyproject.toml` — `undefined-export` per-file-ignore for the 5 lazy packages
+- `tests/property/test_lint_count_ratchet.py` — BASELINE 837 → 380, rationale in body
+- `tests/property/test_lazy_export_lock.py` — **NEW** (25 tests)
+- `tests/unit/core/test_trainer_async_dataloading.py` — **NEW** (4 tests)
+
+### New improvement opportunities
+1. **`test_run_ledger_lock.py` is the property suite's floor: 7 tests, 45s
+   each** (`test_two_policies_over_one_store_measure_different_trials` 45.9s,
+   `test_measurement_identity_is_the_coordinate_alone` 45.7s). These compose
+   and train real cells. Same shape as the capability-evidence lock that
+   `SourceIndex._caller_index` cut 50s → 1.2s in E5 — worth checking whether
+   the space is re-enumerated per test rather than built once.
+2. **`test_campaign_economics_lock.py` 46.5s setup** — a session fixture that
+   builds a full campaign. Likely re-derives per axis what the run ledger
+   already builds.
+3. **`test_axis_certifications.py::TestCAxisLocalGoodnessCredit` 8-14s × 4
+   seeds** — hypothesis-style seed sweeps that may not need a fresh system
+   per seed.
+4. **`test_layering_lock.py::_scan` and `test_kernel_isolation_lock.py` walk the
+   package tree per test.** The E5 inverted-index trick applies; so does
+   `@cache` on the parse.
+5. **`tests/unit/core/test_credit.py::TestEnergyGapSign::test_all_batches` 9.9s**
+   — the single slowest unit test, unexamined.
+6. **`surface.cli` still costs 255ms residual** past torch+ontology, and
+   `learning` 960ms (mostly `scipy.stats`, pulled by `evidence.protocol`).
+   Neither package has lazy `__getattr__`; both are candidates once the
+   `_symbol_to_module` pattern has a lock (it now does, A5).
+7. **Torch import is 1.4s and is now the collection floor** for every shard.
+   Nothing short of not importing torch can move it; stop treating collection
+   time as a target.

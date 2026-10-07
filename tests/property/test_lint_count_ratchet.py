@@ -12,7 +12,11 @@ cleanup: the pillar deletions removed code but retired per-file-ignores, the
 docs/generated conformance stubs were excluded from lint, and restored
 Library modules (profiling, param_estimator, probe, stability calibration)
 re-entered the measured population; tranche-start count was 671, the
-pre-re-baseline figure 359). A different ruff version legitimately
+pre-re-baseline figure 359). Re-baselined 2026-10-07 from 837 to 380: the
+experiment kernel packages' lazy `__getattr__` re-export (`__all__` names
+resolved through `_symbol_to_module`) reported undefined-export on all 491
+of their names, the same false positive the root package already carried a
+per-file-ignore for. A different ruff version legitimately
 moves the count, so the version is recorded and a mismatch reports the
 measured number instead of failing opaquely.
 
@@ -30,7 +34,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 837
+BASELINE = 380
 RUFF_VERSION = "0.16.10"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

@@ -293,6 +293,15 @@ ignore = [
 "computronium/__init__.py" = [
     "star-arg-unpacking-after-keyword-arg",  # invalid-all-format — undefined-export — __all__ names resolve through the _LAZY import map
 ]
+# Same shape as the root package: `__all__` is the static surface, `__getattr__`
+# resolves every name through `_symbol_to_module`. Ruff sees no binding and
+# reports undefined-export for all of them; the map is the binding.
+"computronium/experiment/__init__.py" = [
+    "undefined-export",
+]
+"computronium/experiment/**/__init__.py" = [
+    "undefined-export",
+]
 "computronium/ontology/dynamics/__init__.py" = [
     "mutable-class-default",  # implicit-namespace-package — DYNAMICS_REGISTRY lives beside its classes (R1.1)
     "implicit-optional",  # non-empty-init-module — the registry is the single-source wiring point by design (TODO18 wiring lock)

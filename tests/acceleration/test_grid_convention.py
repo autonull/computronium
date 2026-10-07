@@ -19,6 +19,7 @@ checks three things:
 from __future__ import annotations
 
 import ast
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,7 @@ KERNEL_ROOT = Path(__file__).resolve().parents[2] / "computronium" / "accelerati
 _TILED_BLOCK_NAMES = {"BLOCK_IN", "BLOCK_OUT", "BLOCK_PRE", "BLOCK_POST"}
 
 
+@cache
 def _triton_functions() -> list[tuple[Path, ast.FunctionDef]]:
     found: list[tuple[Path, ast.FunctionDef]] = []
     for path in sorted(KERNEL_ROOT.rglob("*.py")):
@@ -51,6 +53,7 @@ def _is_jit(node: ast.FunctionDef) -> bool:
     return any("triton.jit" in ast.unparse(d) for d in node.decorator_list)
 
 
+@cache
 def _device_helpers() -> set[str]:
     """Jit functions called *by name* from inside another jit function.
 

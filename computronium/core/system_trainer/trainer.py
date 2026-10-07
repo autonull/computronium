@@ -19,7 +19,9 @@ from computronium.core.system_trainer._resume import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from types import TracebackType
+    from typing import Any
 
     from torch import Tensor
 
@@ -149,6 +151,24 @@ class SystemTrainer:
             fold_in(self.config.seed, self.current_epoch, 0, domain=DOMAIN_EPOCH)
         )
 
+    def _load_batch(
+        self, train_iter: Iterator[Any], load_stream: torch.cuda.Stream
+    ) -> tuple[torch.Tensor, torch.Tensor] | None:
+        """Fetch the next batch onto the device on the load stream.
+
+        Returns ``None`` once the iterator is exhausted, which is the async
+        path's break condition — the loop cannot rely on ``StopIteration``
+        escaping from a prefetch.
+        """
+        batch = next(train_iter, None)
+        if batch is None:
+            return None
+        with torch.cuda.stream(load_stream):
+            return (
+                batch[0].to(self.device, non_blocking=True),
+                batch[1].to(self.device, non_blocking=True),
+            )
+
     def _setup_device(self) -> None:
         if self.config.device == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -194,29 +214,19 @@ class SystemTrainer:
         if use_async:
             compute_stream = torch.cuda.Stream()
             load_stream = torch.cuda.Stream()
-            # Pre-fetch first batch on load stream
-            first_batch = next(train_iter, None)
+            pending = self._load_batch(train_iter, load_stream)
 
         for batch_idx in range(max_batches):
             if use_async:
-                # Wait for previous compute to finish, then swap buffers
-                if batch_idx > 0:
-                    torch.cuda.current_stream().wait_stream(compute_stream)
-                    x, y = next_batch
-                else:
-                    x, y = first_batch
-
-                # Launch next batch load on load stream (non-blocking)
-                try:
-                    next_batch = next(train_iter)
-                except StopIteration:
-                    next_batch = None
-                if next_batch is not None:
-                    with torch.cuda.stream(load_stream):
-                        next_batch = (
-                            next_batch[0].to(self.device, non_blocking=True),
-                            next_batch[1].to(self.device, non_blocking=True),
-                        )
+                if pending is None:
+                    break
+                current = torch.cuda.current_stream()
+                current.wait_stream(load_stream)
+                current.wait_stream(compute_stream)
+                x, y = pending
+                x.record_stream(compute_stream)
+                y.record_stream(compute_stream)
+                pending = self._load_batch(train_iter, load_stream)
             else:
                 try:
                     x, y = next(train_iter)
