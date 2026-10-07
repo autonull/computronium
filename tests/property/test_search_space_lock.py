@@ -19,10 +19,15 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.execution import (
+    compose_cell_system,
+    compose_configs,
     generate_candidates,
     iter_candidates,
     search_space_from_spec,
+    task_shape,
+    TaskShape,
+    ProposalComposeError,
 )
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
@@ -153,8 +158,6 @@ def test_a_spec_without_a_task_fails() -> None:
 
 def test_task_shape_reaches_geometry_not_a_literal() -> None:
     """The composed geometry's width is the task's, whatever the space was."""
-    from computronium.experiment.execution.compose import compose_cell_system
-    from computronium.experiment.execution.evaluate import task_shape
 
     spec = _narrowed_spec()
     coordinate, _ = generate_candidates(spec, search_space_from_spec(spec), limit=1)[0]
@@ -281,10 +284,6 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
     ``feedforward``, so every non-MLP cell was compiled as an MLP and then
     rejected for carrying keys an MLP has no use for (D2's residual shape).
     """
-    from computronium.experiment.execution.compose import (
-        ProposalComposeError,
-        compose_cell_system,
-    )
 
     coordinate = Coordinate(
         substrate="digital",
@@ -315,8 +314,6 @@ def test_every_generated_cell_composes_for_the_task_shape() -> None:
     that mechanism rather than re-declaring its rules as availability
     predicates — a cell that cannot compose is not worth a training run.
     """
-    from computronium.experiment.execution.compose import compose_configs
-    from computronium.experiment.execution.evaluate import task_shape
 
     spec = _spec()
     cells = generate_candidates(

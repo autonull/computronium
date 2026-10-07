@@ -26,13 +26,12 @@ from tempfile import mkdtemp
 import pytest
 import yaml
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.schema.record import (
     Maturity,
     ReproducibilityClass,
 )
-from computronium.experiment.surface import cli
-from computronium.experiment.surface.report import ReportGenerator
+from computronium.experiment.surface import cli, ReportGenerator
 
 pytestmark = pytest.mark.timeout(600)
 
@@ -66,7 +65,7 @@ _SPEC = {
 @pytest.fixture(scope="module")
 def run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
     """One tiny measured run through the command surface, promotion included."""
-    from computronium.experiment.schema.seed_registries import seed_all_registries
+    from computronium.experiment.schema import seed_all_registries
 
     seed_all_registries()
     store_path = tmp_path_factory.mktemp("promotion") / "promotion.duckdb"
@@ -121,9 +120,9 @@ def test_the_report_counts_the_promotion(run: tuple[Path, str]) -> None:
     report = output.read_text(encoding="utf-8")
     promoted_line = next((ln for ln in report.splitlines() if "Promoted:" in ln), "")
     assert promoted_line, "the report printed no promotion summary"
-    assert not promoted_line.rstrip().endswith("0"), (
-        f"the promotion history is empty on a measured run: {promoted_line!r}"
-    )
+    # Extract the promoted count and verify it's > 0
+    promoted_count = int(promoted_line.split(":")[1].strip())
+    assert promoted_count > 0, f"the promotion history is empty on a measured run: {promoted_line!r}"
     with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
         claims = ReportGenerator(store).claims(run_id)
     assert all(math.isfinite(c.mean) for c in claims)

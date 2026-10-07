@@ -19,8 +19,8 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.evaluate import task_shape
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import task_shape
 from computronium.experiment.schema import (
     StructuralAxis,
     MEASURED_OBJECTIVES,

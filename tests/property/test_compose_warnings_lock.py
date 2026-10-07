@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.execution.compose import compose_configs
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.execution import (
+    compose_configs,
     iter_candidates,
     search_space_from_spec,
+    task_shape,
 )
 from computronium.experiment.schema import RunSpec, seed_all_registries
 

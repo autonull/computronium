@@ -22,23 +22,24 @@ from typing import Any
 
 import pytest
 
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
-from computronium.experiment.execution.compose import compose_configs
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.policy import (
-    POLICY_CATALOG,
+from computronium.experiment.execution import (
+    Budget,
     EvolutionPolicy,
     ModelBasedPolicy,
+    POLICY_CATALOG,
     Policy,
     ProposalContext,
     RoundRobinGridPolicy,
-    StrategyProgressionPolicy,
+    SimpleCostModel,
     StratifiedRandomPolicy,
+    StrategyProgressionPolicy,
     SynthesisPolicy,
     TrainerDrivenPolicy,
     UniformRandomPolicy,
+    compose_configs,
+    search_space_from_spec,
+    task_shape,
 )
-from computronium.experiment.execution.search_space import search_space_from_spec
 from computronium.experiment.schema import (
     Domain,
     Scale,

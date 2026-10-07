@@ -33,12 +33,10 @@ import pytest
 import torch
 from torch.autograd.functional import jacobian
 
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.execution.evaluate import (
+from computronium.experiment.execution import (
+    LocalBackend,
     compute_energy_metrics,
     compute_stability_metrics,
-)
-from computronium.experiment.execution.settle_operator import (
     layer_weight_shapes,
     settle_step_operator,
 )

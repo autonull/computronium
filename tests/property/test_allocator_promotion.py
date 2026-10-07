@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
+from computronium.experiment.execution import EvidenceDrivenAllocator
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 from computronium.experiment.schema.record import (
     FailureCause,

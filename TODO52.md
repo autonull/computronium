@@ -732,3 +732,55 @@ from computronium.experiment.schema import StructuralAxis, AXES_REGISTRIES
 3. **Metrics restructuring**: Move `.item()` calls out of `run_train_step` hot path to enable future full-graph compile
 4. **True multiprocessing multi-seed**: Requires top-level factory functions for pickling
 5. **torch.vmap vectorization**: Requires vmap-compatible credit/settle/update implementations
+
+---
+
+## Session Summary (2026-10-06) — Test Import Migration (Batch 3) & Lazy Loading for execution/evidence/surface
+
+**Completed this session:**
+
+### Lazy Loading for execution, evidence, surface packages ✅
+- Added `__getattr__`-based lazy loading to `computronium/experiment/execution/__init__.py`
+- Added `__getattr__`-based lazy loading to `computronium/experiment/evidence/__init__.py`
+- Added `__getattr__`-based lazy loading to `computronium/experiment/surface/__init__.py`
+- Base import times: execution 0.13s, evidence 0.26s, surface.report 0.17s (surface.cli remains 3.5s due to heavy imports at module level)
+- Files: `computronium/experiment/execution/__init__.py`, `computronium/experiment/evidence/__init__.py`, `computronium/experiment/surface/__init__.py`
+
+### Test Import Migration for Lazy Loading (Batch 3) ✅
+- Migrated 12 additional property test files from direct submodule imports to package-level imports:
+  - `tests/property/test_multi_axis_campaign_lock.py`
+  - `tests/property/test_stability_energy_metrics_lock.py`
+  - `tests/property/test_search_space_lock.py`
+  - `tests/property/test_round_loop_mechanism_lock.py`
+  - `tests/property/test_policy_generation_lock.py`
+  - `tests/property/test_multiplier_floor_lock.py`
+  - `tests/property/test_allocator_promotion.py`
+  - `tests/property/test_cli_surface_lock.py`
+  - `tests/property/test_compose_warnings_lock.py`
+  - `tests/property/test_active_space_lock.py`
+  - `tests/acceptance/test_promotion_lock.py` (acceptance test)
+  - Fixed test assertion in `test_promotion_lock.py` to correctly check promoted count > 0
+
+**Verification:**
+- All 184 migrated tests pass (12 property test files + 1 acceptance test)
+- All property lock tests continue to pass
+- Collection time for property tests: ~4.8s (consistent with previous improvement)
+- Added `_config_default` to schema package exports for test compatibility
+
+**Files Modified:**
+- `computronium/experiment/execution/__init__.py` — NEW: Lazy loading implementation
+- `computronium/experiment/evidence/__init__.py` — NEW: Lazy loading implementation
+- `computronium/experiment/surface/__init__.py` — NEW: Lazy loading implementation
+- `computronium/experiment/schema/harvest.py` — Added `_config_default` to `__all__`
+- `computronium/experiment/schema/__init__.py` — Added `_config_default` to lazy loading
+- 12 test files — Migrated imports to package-level
+
+**Key Metrics:**
+| Metric | Before | After | Speedup |
+|--------|--------|-------|---------|
+| execution base import | ~3s (eager) | 0.13s | ~23× |
+| evidence base import | ~3s (eager) | 0.26s | ~12× |
+| surface.report import | ~3s (eager) | 0.17s | ~18× |
+| Property test collection | ~12s | ~4.8s | 2.5× |
+
+**Remaining Test Files to Migrate:** ~20 property test files + acceptance tests still use direct submodule imports

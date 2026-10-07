@@ -43,24 +43,22 @@ from typing import TYPE_CHECKING
 import pytest
 
 from computronium.cli import __main__ as dispatcher
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.policy import (
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import (
     POLICY_CATALOG,
     RecordSource,
     create_policy,
-    policy_context,
-)
-from computronium.experiment.execution.search_space import (
     iter_candidates,
+    policy_context,
     search_space_from_spec,
+    task_shape,
 )
 from computronium.experiment.schema.coordinate import Provenance
 from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
     procedure_version_key,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
+from computronium.experiment.schema import seed_all_registries
 
 from ._fake_backend import synthetic_record
 from ._specs import mechanism_spec

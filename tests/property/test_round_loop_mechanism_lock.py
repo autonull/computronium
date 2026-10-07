@@ -23,17 +23,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.policy import StratifiedRandomPolicy
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.execution import (
+    Budget,
+    LocalBackend,
+    PipelineConfig,
+    PipelineRunner,
+    Proposal,
+    SimpleCostModel,
+    StratifiedRandomPolicy,
     iter_candidates,
     search_space_from_spec,
+    task_shape,
 )
-from computronium.experiment.execution.stage import Proposal
 from computronium.experiment.schema import RunSpec, seed_all_registries
 
 from ._fake_backend import SYNTHETIC_WALLTIME_S, FakeBackend

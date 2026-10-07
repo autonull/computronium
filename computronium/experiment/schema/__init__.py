@@ -61,6 +61,7 @@ __all__ = [
     "harvest_schema",
     "harvest_weights",
     "load_axis_config",
+    "_config_default",
     # Metrics symbols
     "HISTORY_METRICS",
     "MEASURED_METRICS",
@@ -183,6 +184,7 @@ _symbol_to_module: dict[str, str] = {
     "harvest_schema": "harvest",
     "harvest_weights": "harvest",
     "load_axis_config": "harvest",
+    "_config_default": "harvest",
     # metrics
     "HISTORY_METRICS": "metrics",
     "MEASURED_METRICS": "metrics",

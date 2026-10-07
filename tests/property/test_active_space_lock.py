@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from computronium.experiment.execution import compose_cell_system
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
     AxisKind,
@@ -86,7 +87,6 @@ def test_every_declared_prior_resolves() -> None:
 
 def test_prior_center_falls_inside_the_declared_domain() -> None:
     """The fallback a prior supplies must be a legal value for the spec."""
-    from computronium.experiment.schema.registries import prior_value
 
     illegal = []
     for spec in harvest_schema().hyperparameters:
@@ -198,7 +198,6 @@ def test_inactive_parameter_is_rejected() -> None:
 
 def test_active_values_reach_the_composed_configs() -> None:
     """The falsification half: a searched value must actually be applied."""
-    from computronium.experiment.execution.compose import compose_cell_system
 
     coordinate = Coordinate(
         substrate="digital",
@@ -285,7 +284,7 @@ def test_unswept_values_have_a_declared_source() -> None:
 
 def test_a_continuous_value_with_no_source_raises() -> None:
     """The resolve path raises instead of returning a domain edge."""
-    from computronium.experiment.schema.harvest import _config_default
+    from computronium.experiment.schema import _config_default
 
     spec = HyperparameterSpec(
         name="probe_lr",

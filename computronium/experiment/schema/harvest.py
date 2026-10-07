@@ -576,4 +576,5 @@ __all__ = [
     "get_hyperparameter_spec",
     "harvest_schema",
     "load_axis_config",
+    "_config_default",
 ]
