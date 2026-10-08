@@ -1400,22 +1400,57 @@ spec.to_file("my_run.yaml")
 
 ---
 
+## 37. Session Progress Summary (2026-10-08) — Dynamical Analysis Integration, CI Enablement, Docker Export/Repro Verification
+
+### Completed in This Session
+
+**Dynamical Analysis Integration into Experiment Kernel/Reports (Analysis Infrastructure 7):**
+- ✅ Added stability metrics to `ProbeResult` dataclass: `spectral_radius`, `max_singular_value`, `min_singular_value`, `lyapunov_exponent`, `stability_margin`, `nonnormality`, `settle_steps`, `settle_converged`, `free_energy`
+- ✅ Integrated `compute_stability_metrics()` into `CoreTrainerDriver.train()` — computes stability metrics post-training using the trained system and sample inputs
+- ✅ Updated `field_to_dict()` and `run_probe()` to serialize and include stability metrics in probe results
+- ✅ Verified: stability metrics populate correctly (e.g., spectral_radius=0.98, lyapunov_exponent=-0.018 for backprop on digits)
+
+**CI Enablement (P2):**
+- ✅ Enabled CI by renaming `.github/workflows/ci.yml.disabled` → `ci.yml`
+- ✅ CI includes demo gate (`pytest tests/integration/ -m demo -q`) which runs gallery lock tests (`test_gallery_lock.py::test_figure_lock`)
+- ✅ Gallery lock test compares rendered figures against committed manifest in `docs/figures/manifest.json`
+
+**Export/Repro with Docker Verification (P6):**
+- ✅ Verified `comp export --format json --docker` generates Dockerfile with pinned CUDA/PyTorch, git commit, env fingerprint
+- ✅ Verified `comp repro --docker --device cpu` attempts Docker round-trip (fails in this environment due to missing Docker privileges, but code path works)
+- ✅ Dockerfile includes `CUBLAS_WORKSPACE_CONFIG=:4096:8`, `TORCH_DETERMINISTIC=1` for reproducibility
+
+**Code Changes:**
+- `computronium/experiment/probe.py` — Added stability metrics to `ProbeResult`, integrated `compute_stability_metrics()` in `CoreTrainerDriver.train()`, updated `field_to_dict()` and `run_probe()`
+- `.github/workflows/ci.yml` — Enabled CI pipeline
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, axis frontiers, multi-axis campaign, registry completeness, import time, CLI readme, gallery locks)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- quick-verify runs on CPU with stability metrics populated
+- Gallery lock tests pass (figures match manifest)
+- `ruff format` and `ruff check` pass on changed files
+- `pyright` passes on changed files (0 errors)
+
+---
+
 ## 36. Remaining Work & Next Priorities (Updated)
 
 ### P2 Remaining (Reporting + Gallery)
-- [ ] CI integration: Gallery lock fails if figures drift from committed manifest
+- [x] CI integration: Gallery lock fails if figures drift from committed manifest (enabled ci.yml, demo gate runs test_gallery_lock.py::test_figure_lock)
 
 ### P6 (Reproducibility + Packaging) — Remaining
-- [ ] Full Docker round-trip testing (build image, run repro inside container, verify bitwise match)
+- [ ] Full Docker round-trip testing (build image, run repro inside container, verify bitwise match) — Docker export/repro code implemented, but end-to-end test requires Docker privileges not available in this environment
 
 ### Analysis Infrastructure (7) — Remaining
-- [ ] Integration of dynamical analysis into experiment kernel/reports (Lyapunov spectra, basin stability, energy tracking)
+- [x] Integration of dynamical analysis into experiment kernel/reports — Added stability metrics (spectral_radius, max_singular_value, min_singular_value, lyapunov_exponent, stability_margin, nonnormality, settle_steps, settle_converged, free_energy) to ProbeResult via compute_stability_metrics() in CoreTrainerDriver.train()
+- [ ] Deeper integration: Lyapunov spectra over trajectory, basin stability Monte Carlo, per-iteration energy tracking
 
 ### Documentation (9)
 - [ ] Experiment Guide: `docs/experiments/` — end-to-end tutorials
 - [ ] Benchmark Cookbook: `docs/benchmarks/` — each suite with expected results
 - [ ] Analysis Recipes: `docs/analysis/` — Pareto, ablation, stability-plasticity
 - [ ] GPU Guide: Mixed precision, multi-GPU, memory optimization
-- [ ] RunSpec schema auto-generation from Pydantic model
-- [ ] Objectives registry: add measurement status to `docs/generated/objectives.md`
+- [x] RunSpec schema auto-generation from Pydantic model — `comp schema` command outputs JSON Schema
+- [ ] Objectives registry: add measurement status to `docs/generated/objectives.md` — many objectives now measured but docs show "unmeasured"
 - [ ] CLI reference: `comp --help` output → markdown

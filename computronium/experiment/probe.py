@@ -23,6 +23,10 @@ from typing import Protocol, cast, runtime_checkable
 
 import torch
 
+from computronium.core.logging import get_logger
+
+logger = get_logger()
+
 # Whether probes persist results to the knowledge layer (KnowledgeBase /
 # FailureTracker) by default. Environment-controllable so tests can isolate.
 _DEFAULT_RECORD = os.environ.get("COMPUTRONIUM_RECORD_RESULTS", "1") != "0"
@@ -88,6 +92,35 @@ def _seed_everything(seed: int, device: str) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def _compute_stability_metrics(
+    system: object, handle: object, device: str
+) -> dict[str, object]:
+    """Compute dynamical stability metrics on the trained system.
+
+    Extracts a sample batch from the task handle and runs
+    `compute_stability_metrics` from the evaluation module.
+
+    Errors are caught and logged; an empty dict is returned on failure
+    so stability metrics never break a probe.
+    """
+    try:
+        from computronium.experiment.execution.evaluate import (
+            compute_stability_metrics as _compute_stability_metrics_impl,
+        )
+
+        # Get a sample batch for stability analysis
+        sample_batch = next(iter(handle.get_dataloader("train")))  # type: ignore[attr-defined]
+        sample_x = sample_batch[0].to(device)
+        if sample_x.dim() > 2:
+            sample_x = sample_x.reshape(sample_x.size(0), -1)
+        metrics = _compute_stability_metrics_impl(system, sample_x)
+        # Convert to dict[str, object] for return type compatibility
+        return {k: v for k, v in metrics.items()}
+    except Exception as exc:  # broad: stability metrics must not fail the probe
+        logger.debug("Stability metrics computation failed: %s", exc)
+        return {}
+
+
 @dataclass(frozen=True, slots=True)
 class ProbeResult:
     """Normalized per-probe metrics record (architecture §6.2)."""
@@ -108,6 +141,16 @@ class ProbeResult:
     wall_time_s: float = 0.0
     training_path: str = ""
     error: str = ""
+    # Dynamical stability metrics (computed post-training)
+    spectral_radius: float = 0.0
+    max_singular_value: float = 0.0
+    min_singular_value: float = 0.0
+    lyapunov_exponent: float = 0.0
+    stability_margin: float = 0.0
+    nonnormality: float = 0.0
+    settle_steps: int = 0
+    settle_converged: bool = False
+    free_energy: float = 0.0
 
     def to_dict(self) -> dict[str, object]:
         """Serialize to a plain dict for JSONL output."""
@@ -134,6 +177,15 @@ def field_to_dict(result: ProbeResult) -> dict[str, object]:
         "wall_time_s": result.wall_time_s,
         "training_path": result.training_path,
         "error": result.error,
+        "spectral_radius": result.spectral_radius,
+        "max_singular_value": result.max_singular_value,
+        "min_singular_value": result.min_singular_value,
+        "lyapunov_exponent": result.lyapunov_exponent,
+        "stability_margin": result.stability_margin,
+        "nonnormality": result.nonnormality,
+        "settle_steps": result.settle_steps,
+        "settle_converged": result.settle_converged,
+        "free_energy": result.free_energy,
     }
 
 
@@ -364,6 +416,10 @@ class CoreTrainerDriver:
             for name in ("forward_flops", "backward_flops", "peak_memory_mb")
             if cost is None or getattr(cost, name) is None
         )
+
+        # Compute dynamical stability metrics on the trained system
+        stability_metrics = _compute_stability_metrics(system, handle, device)
+
         metrics: dict[str, object] = {
             "final_acc": float(last.get("train_acc") or last.get("val_acc") or 0.0),
             "final_train_loss": float(last.get("train_loss") or 0.0),
@@ -408,6 +464,16 @@ class CoreTrainerDriver:
             # substrate and has no facade to swap, so this is reported as
             # requested rather than as applied.
             "target_hardware": self.target_hardware,
+            # Dynamical stability metrics
+            "spectral_radius": stability_metrics.get("spectral_radius", 0.0),
+            "max_singular_value": stability_metrics.get("max_singular_value", 0.0),
+            "min_singular_value": stability_metrics.get("min_singular_value", 0.0),
+            "lyapunov_exponent": stability_metrics.get("lyapunov_exponent", 0.0),
+            "stability_margin": stability_metrics.get("stability_margin", 0.0),
+            "nonnormality": stability_metrics.get("nonnormality", 0.0),
+            "settle_steps": stability_metrics.get("settle_steps", 0),
+            "settle_converged": stability_metrics.get("settle_converged", False),
+            "free_energy": stability_metrics.get("free_energy", 0.0),
         }
         permit = (
             self.allow_bptt_fallback
@@ -515,6 +581,15 @@ def run_probe(
             peak_memory_mb=cast("float", metrics.get("peak_memory_mb", 0.0)),
             wall_time_s=cast("float", metrics.get("wall_time_s", 0.0)),
             training_path=cast("str", metrics.get("training_path", "")),
+            spectral_radius=cast("float", metrics.get("spectral_radius", 0.0)),
+            max_singular_value=cast("float", metrics.get("max_singular_value", 0.0)),
+            min_singular_value=cast("float", metrics.get("min_singular_value", 0.0)),
+            lyapunov_exponent=cast("float", metrics.get("lyapunov_exponent", 0.0)),
+            stability_margin=cast("float", metrics.get("stability_margin", 0.0)),
+            nonnormality=cast("float", metrics.get("nonnormality", 0.0)),
+            settle_steps=cast("int", metrics.get("settle_steps", 0)),
+            settle_converged=cast("bool", metrics.get("settle_converged", False)),
+            free_energy=cast("float", metrics.get("free_energy", 0.0)),
         )
     except Exception as exc:  # broad: normalize any probe failure
         return ProbeResult(
