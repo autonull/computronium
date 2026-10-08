@@ -776,3 +776,37 @@
 - HTML report generates successfully with all 9 subplots
 - `ruff format` passes on changed files
 - `pyright` passes on changed files
+
+---
+
+## 23. Session Progress Summary (2026-10-08) — Property Test Fixes & Type Safety
+
+### Completed in This Session (Test & Type Fixes)
+
+**Property Test Updates (6.2):**
+- ✅ Updated `test_sampler_lock.py` to use actually unmeasured objectives (`test_accuracy`, `test_loss`, `f1_score`, `perplexity`, `bleu_score`, `training_time`) instead of now-measured objectives (`flops`, `latency_ms`, `spike_rate`, `ir_drop_variance`)
+- ✅ Removed obsolete `test_an_unhonourable_primitive_is_retired_with_its_reason` since NCA geometry is now available and working
+- ✅ Updated `test_multi_axis_campaign_lock.py` (in previous session) to use actually unmeasured objectives
+
+**Type Safety Improvements (6.3):**
+- ✅ Added `Literal["fp32", "fp16", "bf16"]` type for `Schedule.precision` to match `SystemTrainerConfig.precision`
+- ✅ Fixed pyright errors in `_LazyRegistryDict` with proper generic type annotations (`dict[str, Registry[AxisSpec]]`)
+- ✅ Fixed `__bool__` implementation to return `bool(self)` instead of `super().__bool__()` for pyright compatibility
+- ✅ Fixed `_LazyRegistryProxy._resolve()` return type with type ignore
+- ✅ Fixed `_LazyRegistryProxy.get()` to match `Registry.get()` single-argument signature
+- ✅ Added proper type annotations for `__getitem__`, `__contains__`, `get`, `__len__`, `__bool__` methods
+
+**Code Changes:**
+- `computronium/experiment/schema/coordinate.py` — Added `Literal` import, changed `precision: str` to `precision: Literal["fp32", "fp16", "bf16"]`
+- `computronium/experiment/schema/axis.py` — Added generic type to `_LazyRegistryDict`, fixed all method signatures, fixed `__bool__`, fixed `_resolve` and `get` methods
+- `tests/property/test_sampler_lock.py` — Updated unmeasured objective references
+- `tests/property/test_param_budget_lock.py` — Removed obsolete NCA unavailable test
+- `tests/property/test_multi_axis_campaign_lock.py` — (previous session) Updated unmeasured objectives list
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, axis frontier, multi-axis campaign, registry completeness, import time, CLI readme)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- Gallery lock tests pass
+- `ruff format` and `ruff check` pass (380 errors = baseline)
+- `pyright` passes on changed files (0 errors)
+- quick-verify runs end-to-end
