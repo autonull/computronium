@@ -23,8 +23,11 @@ dict; a measured one proves the claim is a claim.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 import pytest
 
@@ -534,13 +537,22 @@ class TestLimitations:
     def test_an_unmeasured_objective_is_stated_not_silently_dropped(self) -> None:
         unmeasured = [
             name
-            for name in ("flops", "memory_usage")
+            for name in (
+                "test_accuracy",
+                "test_loss",
+                "f1_score",
+                "perplexity",
+                "bleu_score",
+                "training_time",
+            )
             if name not in measured_objectives()
         ]
         assert unmeasured, "fixture should name objectives nothing measures"
         limitations = derive_limitations([], objectives=tuple(unmeasured))
         line = next(
-            l for l in limitations if l.kind is LimitationKind.UNMEASURED_OBJECTIVES
+            limitation
+            for limitation in limitations
+            if limitation.kind is LimitationKind.UNMEASURED_OBJECTIVES
         )
 
         assert line.count == len(unmeasured)
@@ -548,7 +560,9 @@ class TestLimitations:
 
     def test_a_run_that_measured_nothing_says_it_made_no_claim(self) -> None:
         limitations = derive_limitations([], claim_count=0)
-        assert LimitationKind.NO_ELIGIBLE_CLAIM in {l.kind for l in limitations}
+        assert LimitationKind.NO_ELIGIBLE_CLAIM in {
+            limitation.kind for limitation in limitations
+        }
 
 
 class TestReport:
@@ -584,9 +598,9 @@ class TestReport:
 
         with pytest.raises(
             pydantic_core.ValidationError,
-            match="have no measurement.*metric_key is None",
+            match=r"have no measurement.*metric_key is None",
         ):
-            _spec(objectives=("flops",))
+            _spec(objectives=("test_accuracy",))
 
     def test_unmeasured_objectives_in_axis_objectives_do_not_trigger_limitation(
         self, tmp_path: Path
@@ -605,7 +619,9 @@ class TestReport:
         # not axis_objectives. With A4 validation, unmeasured objectives are
         # rejected in the main list, so this limitation kind is unreachable
         # for valid RunSpecs.
-        assert LimitationKind.UNMEASURED_OBJECTIVES not in {l.kind for l in limitations}
+        assert LimitationKind.UNMEASURED_OBJECTIVES not in {
+            limitation.kind for limitation in limitations
+        }
 
     def test_claim_eligibility_is_decided_per_cell_not_per_record(
         self, measured_run: tuple[str, Path]

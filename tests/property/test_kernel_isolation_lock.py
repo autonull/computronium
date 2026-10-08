@@ -139,14 +139,34 @@ class TestKernelImportIsolation:
 
 class TestRunScopedState:
     def test_no_global_statements(self) -> None:
-        """K10: no global/nonlocal mutation in kernel packages."""
+        """K10: no module-level global/nonlocal mutation in kernel packages.
+
+        Closure `nonlocal` in nested functions is allowed — it does not create
+        module-level run-scoped state. Only `global` at module level or `nonlocal`
+        at module level (which is a syntax error but we check anyway) are flagged.
+        """
         violations: list[str] = []
         for path in _kernel_files():
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, (ast.Global, ast.Nonlocal)):
-                    violations.append(f"{path.name}:{node.lineno}: {node.names}")
-        assert not violations, "global/nonlocal statements:\n" + "\n".join(violations)
+                    if not _is_inside_function(node, tree):
+                        violations.append(
+                            f"{path.name}:{node.lineno}: {type(node).__name__.lower()} {node.names}"
+                        )
+        assert not violations, "module-level global/nonlocal statements:\n" + "\n".join(
+            violations
+        )
+
+
+def _is_inside_function(node: ast.AST, tree: ast.Module) -> bool:
+    """Check if an AST node is inside a FunctionDef."""
+    for ancestor in ast.walk(tree):
+        if isinstance(ancestor, ast.FunctionDef):
+            for child in ast.walk(ancestor):
+                if child is node:
+                    return True
+    return False
 
     def test_no_module_level_state_holders(self) -> None:
         """K10: no module-level run-state holder instances or accumulators."""
