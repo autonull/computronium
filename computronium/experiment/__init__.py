@@ -6,23 +6,19 @@ Submodules and symbols are imported on first access via __getattr__.
 
 from __future__ import annotations
 
-import sys
-from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 # Define all public symbols for static analysis and tab completion
 __all__ = [
-    # Submodules (lazy)
-    "evidence",
-    "execution",
-    "schema",
-    "surface",
-    # Axis registries and symbols
     "AXES_REGISTRIES",
     "CREDIT_REGISTRY",
     "DYNAMICS_REGISTRY",
     "GEOMETRY_REGISTRY",
     "PLASTICITY_REGISTRY",
+    "RUN_SPEC_VERSION",
     "SUBSTRATE_REGISTRY",
     "UPDATE_REGISTRY",
     "AxisKind",
@@ -41,16 +37,19 @@ __all__ = [
     "ReproducibilityClass",
     "RunSpec",
     "RunSpecBuilder",
-    "RUN_SPEC_VERSION",
     "Scale",
     "Severity",
     "Status",
     "StructuralAxis",
+    "evidence",
+    "execution",
     "get_axis_spec",
     "get_registry",
     "is_available",
     "list_axis_specs",
     "register_axis_spec",
+    "schema",
+    "surface",
 ]
 
 # Lazy submodule cache - maps submodule name to module
@@ -109,7 +108,7 @@ def _get_submodule(full_name: str) -> ModuleType:
 def __getattr__(name: str) -> Any:
     """Lazy load submodules and symbols on first access."""
     # Submodules
-    if name in ("evidence", "execution", "schema", "surface"):
+    if name in {"evidence", "execution", "schema", "surface"}:
         return _get_submodule(f"computronium.experiment.{name}")
 
     # Symbols from specific submodules

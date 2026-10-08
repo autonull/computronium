@@ -1092,3 +1092,82 @@ spec.to_file("my_run.yaml")
 - [ ] Bootstrap CIs, significance testing, effect sizes
 - [ ] Pareto front knee detection, hypervolume
 - [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking
+
+---
+
+## 30. Session Progress Summary (2026-10-08) — Lint Cleanup & Type Safety Fixes
+
+### Completed in This Session (Fixes & Correctness — 6.2, 6.3)
+
+**Lint Count Ratchet Fix (6.2):**
+- ✅ Fixed lint count regression from 391 to 362 (below baseline of 383)
+- ✅ Fixed `# ruff: noqa` format to `# noqa: PLW2901` in `stability_plasticity_frontier.py`
+- ✅ Added `RUF067` (non-empty-init-module) per-file ignores for experiment package `__init__.py` files in `pyproject.toml`
+- ✅ Fixed all 5 experiment package `__init__.py` files:
+  - Moved `from types import ModuleType` to `TYPE_CHECKING` blocks
+  - Sorted `__all__` lists alphabetically (isort-style)
+  - Changed tuple membership checks to set literals
+  - Added trailing newlines
+- ✅ Updated `test_lint_count_ratchet.py` baseline from 383 to 362
+
+**Type Safety (6.3):**
+- ✅ All pyright checks pass on changed files (0 errors)
+
+**Code Changes:**
+- `computronium/benchmarks/joint/stability_plasticity_frontier.py` — Fixed noqa comment format
+- `pyproject.toml` — Added RUF067 per-file ignores for experiment package
+- `computronium/experiment/__init__.py` — TYPE_CHECKING, sorted __all__, set literals
+- `computronium/experiment/evidence/__init__.py` — TYPE_CHECKING, sorted __all__, set literals
+- `computronium/experiment/execution/__init__.py` — TYPE_CHECKING, sorted __all__, set literals
+- `computronium/experiment/schema/__init__.py` — TYPE_CHECKING, sorted __all__, set literals
+- `computronium/experiment/surface/__init__.py` — TYPE_CHECKING, sorted __all__, set literals
+- `tests/property/test_lint_count_ratchet.py` — Updated BASELINE to 362
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, registry locks, CLI readme)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- quick-verify runs end-to-end on CPU
+- `ruff format` and `ruff check` pass (362 errors = new baseline)
+- `pyright` passes on changed files (0 errors)
+
+---
+
+## 31. Updated Remaining Work & Next Priorities
+
+### P2 Remaining (Reporting + Gallery)
+- [ ] Per-axis ablation tables (credit swap, substrate swap, plasticity swap) — partially done via `comp stats --group-by`
+- ✅ LaTeX/PDF export via pandoc
+- ✅ Gallery manifest: `docs/figures/manifest.json` with SHA, params, metrics for reproducibility
+- [ ] CI integration: Gallery lock fails if figures drift from committed manifest
+
+### P3 Remaining (Agent-Friendly CLI) — **NOW COMPLETE**
+- ✅ `comp schema` — Dump RunSpec/Coordinate/Objective schemas as JSON Schema
+- ✅ RunSpec builder API (Python) for programmatic construction
+- ✅ `--output json` for all commands (structured JSON to stdout for piping)
+
+### P4 (Benchmark Suites + Analysis) — **LARGELY COMPLETE**
+- ✅ GPU tests for existing 5 benchmark suites
+- ✅ 3 new benchmark suites: credit_assignment_scaling, substrate_precision_scaling, stability_plasticity_frontier
+- [ ] Bootstrap CIs, significance testing, Pareto front analysis
+
+### P5 (Campaign Automation) — **COMPLETE**
+- ✅ `comp campaign` YAML declarative multi-run campaigns
+- ✅ Parallel execution across runs (semaphore-based)
+- ✅ Progress webhooks
+- ✅ Dependency resolution between runs
+- ✅ Shared DuckDB store with async lock
+- ✅ Dry-run mode, JSON output, CLI overrides
+
+### P6 (Reproducibility + Packaging)
+- [ ] `comp export` / `comp repro` round-trip with Docker
+- [ ] Nightly benchmark CI
+
+### Fixes & Correctness (6.1)
+- [ ] EnergyMinimization β≥1 gradient credit zero pseudo-gradient
+- [ ] Determinism: bitwise reproducibility on GPU
+- [ ] Memory leaks in long runs
+
+### Analysis Infrastructure (7)
+- [ ] Bootstrap CIs, significance testing, effect sizes
+- [ ] Pareto front knee detection, hypervolume
+- [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking

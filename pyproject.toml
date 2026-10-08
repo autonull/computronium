@@ -300,9 +300,11 @@ ignore = [
 # reports undefined-export for all of them; the map is the binding.
 "computronium/experiment/__init__.py" = [
     "undefined-export",
+    "RUF067",  # non-empty-init-module — lazy loading pattern by design
 ]
 "computronium/experiment/**/__init__.py" = [
     "undefined-export",
+    "RUF067",  # non-empty-init-module — lazy loading pattern by design
 ]
 "computronium/ontology/dynamics/__init__.py" = [
     "mutable-class-default",  # implicit-namespace-package — DYNAMICS_REGISTRY lives beside its classes (R1.1)

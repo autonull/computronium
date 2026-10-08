@@ -6,116 +6,115 @@ Submodules and symbols are imported on first access via __getattr__.
 
 from __future__ import annotations
 
-import sys
-from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 # Define all public symbols for static analysis and tab completion
 __all__ = [
-    # Submodules (lazy)
-    "axis",
-    "coordinate",
-    "harvest",
-    "metrics",
-    "record",
-    "registries",
-    "registry",
-    "run_spec",
-    "seed_registries",
-    "versioning",
-    # Axis symbols
+    "ALL_REGISTRIES",
+    "ASSESSMENT_PROCEDURE_VERSION",
     "AXES_REGISTRIES",
-    "CREDIT_REGISTRY",
-    "DYNAMICS_REGISTRY",
-    "GEOMETRY_REGISTRY",
-    "PLASTICITY_REGISTRY",
-    "SUBSTRATE_REGISTRY",
-    "UPDATE_REGISTRY",
-    "AxisKind",
-    "AxisPrimitive",
-    "AxisSpec",
-    "Domain",
-    "HyperparameterSpec",
-    "NO_DEFAULT",
-    "Scale",
-    "StructuralAxis",
-    "get_axis_spec",
-    "get_registry",
-    "is_available",
-    "list_axis_specs",
-    "register_axis_spec",
-    # Coordinate symbols
-    "Coordinate",
-    "DataOrigin",
-    "Provenance",
-    "Schedule",
-    "TransferMode",
-    # Harvest symbols
     "AXIS_KIND_ORDER",
+    "CAPABILITIES_REGISTRY",
     "CONFIG_FIELD_ALIASES",
-    "ActiveSpace",
-    "HarvestedSchema",
-    "InactiveHyperparameterError",
-    "UnresolvedHyperparameterError",
-    "config_field_name",
-    "get_hyperparameter_names",
-    "get_hyperparameter_spec",
-    "harvest_schema",
-    "load_axis_config",
-    "_config_default",
-    # Metrics symbols
+    "CONSTRAINTS_REGISTRY",
+    "CREDIT_REGISTRY",
+    "DEFAULT_CELL_SECONDS",
+    "DYNAMICS_REGISTRY",
+    "FIXED_RUN_COST_SECONDS",
+    "GEOMETRY_REGISTRY",
     "HISTORY_METRICS",
+    "MEASURED_BATCH_LIMIT",
+    "MEASURED_CELL_SECONDS",
+    "MEASURED_CELL_SECONDS_REGIME",
     "MEASURED_METRICS",
     "MEASURED_OBJECTIVES",
+    "MEASURED_PARALLEL_SPEEDUP",
+    "MEASURED_PARAM_BUDGET",
+    "NO_DEFAULT",
+    "OBJECTIVES_REGISTRY",
+    "PARAM_BUDGET_TOLERANCE",
+    "PLASTICITY_REGISTRY",
+    "POLICIES_REGISTRY",
+    "PRIORS",
+    "PRIORS_REGISTRY",
+    "RATE_PARAMETERS",
+    "REPLAY_METRIC_TOLERANCE",
+    "RUN_SPEC_VERSION",
+    "SCHEMA_REGISTRY",
+    "STAGES_REGISTRY",
+    "SUBSTRATE_REGISTRY",
+    "UPDATE_REGISTRY",
+    "ActiveSpace",
+    "AxisKind",
+    "AxisPrimitive",
+    "AxisSelection",
+    "AxisSpec",
+    "CapabilityKind",
+    "CapabilitySpec",
+    "CapabilityStatus",
+    "ConstraintKind",
+    "ConstraintSpec",
+    "Coordinate",
+    "DataOrigin",
+    "Domain",
+    "FailureCause",
+    "Fidelity",
+    "GateVerdict",
+    "HarvestedSchema",
+    "HyperparameterSpec",
+    "InactiveHyperparameterError",
+    "Maturity",
     "ObjectiveResolutionError",
+    "ObjectiveSpec",
+    "PolicyKind",
+    "PolicySpec",
+    "PriorSpec",
+    "ProofKind",
+    "Provenance",
+    "Record",
+    "Registry",
+    "RegistryDiff",
+    "ReproducibilityClass",
+    "RunSpec",
+    "Scale",
+    "Schedule",
+    "Severity",
+    "StageId",
+    "StageSpec",
+    "Status",
+    "StructuralAxis",
+    "TransferMode",
     "UnknownObjectiveError",
     "UnmeasuredObjectiveError",
+    "UnresolvedHyperparameterError",
+    "_config_default",
+    "axis",
+    "cell_price_seconds",
+    "config_field_name",
+    "coordinate",
+    "current_schema_version",
+    "get_axis_spec",
+    "get_hyperparameter_names",
+    "get_hyperparameter_spec",
+    "get_registry",
+    "harvest",
+    "harvest_schema",
+    "is_available",
+    "list_axis_specs",
+    "load_axis_config",
     "measured_objectives",
+    "metrics",
     "objective_metric",
     "objective_name",
     "objective_values",
     "optimizes",
-    # Record symbols
-    "FailureCause",
-    "GateVerdict",
-    "Maturity",
-    "Record",
-    "ReproducibilityClass",
-    "Severity",
-    "Status",
-    # Registries symbols
-    "ALL_REGISTRIES",
-    "ASSESSMENT_PROCEDURE_VERSION",
-    "CAPABILITIES_REGISTRY",
-    "CapabilityKind",
-    "CapabilitySpec",
-    "CapabilityStatus",
-    "CONSTRAINTS_REGISTRY",
-    "ConstraintKind",
-    "ConstraintSpec",
-    "DEFAULT_CELL_SECONDS",
-    "FIXED_RUN_COST_SECONDS",
-    "MEASURED_CELL_SECONDS",
-    "MEASURED_CELL_SECONDS_REGIME",
-    "MEASURED_PARALLEL_SPEEDUP",
-    "OBJECTIVES_REGISTRY",
-    "ObjectiveSpec",
-    "PARAM_BUDGET_TOLERANCE",
-    "POLICIES_REGISTRY",
-    "PolicyKind",
-    "PolicySpec",
-    "PRIORS",
-    "PRIORS_REGISTRY",
-    "PriorSpec",
-    "ProofKind",
-    "RATE_PARAMETERS",
-    "REPLAY_METRIC_TOLERANCE",
-    "STAGES_REGISTRY",
-    "StageId",
-    "StageSpec",
-    "cell_price_seconds",
-    "procedure_version_key",
     "prior_value",
+    "procedure_version_key",
+    "record",
+    "register_axis_spec",
     "register_capability",
     "register_card_factor",
     "register_constraint",
@@ -123,22 +122,13 @@ __all__ = [
     "register_policy",
     "register_prior",
     "register_stage",
-    "validate_rate_value",
-    # Registry symbols
-    "Registry",
-    "RegistryDiff",
-    # RunSpec symbols
-    "AxisSelection",
-    "Fidelity",
-    "MEASURED_BATCH_LIMIT",
-    "MEASURED_PARAM_BUDGET",
-    "RUN_SPEC_VERSION",
-    "RunSpec",
-    # SeedRegistries symbols
+    "registries",
+    "registry",
+    "run_spec",
     "seed_all_registries",
-    # Versioning symbols
-    "SCHEMA_REGISTRY",
-    "current_schema_version",
+    "seed_registries",
+    "validate_rate_value",
+    "versioning",
 ]
 
 # Lazy submodule cache
@@ -288,7 +278,7 @@ def _ensure_registries_seeded() -> None:
 def __getattr__(name: str) -> Any:
     """Lazy load submodules and symbols on first access."""
     # Submodules
-    if name in (
+    if name in {
         "axis",
         "coordinate",
         "harvest",
@@ -299,16 +289,16 @@ def __getattr__(name: str) -> Any:
         "run_spec",
         "seed_registries",
         "versioning",
-    ):
+    }:
         return _get_submodule(f"computronium.experiment.schema.{name}")
+
+    # Ensure registries are seeded before accessing axis symbols
+    _ensure_registries_seeded()
 
     # Symbols from specific submodules
     if name in _symbol_to_module:
         submodule_name = _symbol_to_module[name]
         submodule = _get_submodule(f"computronium.experiment.schema.{submodule_name}")
-        # Seed registries on first access of axis symbols
-        if submodule_name == "axis":
-            _ensure_registries_seeded()
         return getattr(submodule, name)
 
     raise AttributeError(

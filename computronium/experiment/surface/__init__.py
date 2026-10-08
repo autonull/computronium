@@ -1,4 +1,4 @@
-"""Surface layer — reporting, CLI, conformance, and operations (WP7) — lazy loading.
+"""Experiment surface package — lazy loading.
 
 This module uses lazy loading to avoid eager imports of heavy submodules.
 Submodules and symbols are imported on first access via __getattr__.
@@ -6,92 +6,85 @@ Submodules and symbols are imported on first access via __getattr__.
 
 from __future__ import annotations
 
-from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 # Define all public symbols for static analysis and tab completion
 __all__ = [
-    # Submodules (lazy)
+    "DEFAULT_Q14_ROUTES",
+    "INDEX",
+    "QUESTION_FIRST_STAGES",
+    "RUN_PROFILES",
+    "AlertDedup",
+    "AxisImpact",
+    "Claim",
+    "ConformanceHarness",
+    "ConformanceResult",
+    "ConformanceStatus",
+    "CurrencyLock",
+    "ExportBundle",
+    "FlagProjectionLock",
+    "Limitation",
+    "OperatorIntent",
+    "OperatorIntentKind",
+    "ReportGenerator",
+    "RunController",
+    "RunState",
+    "RunSummary",
+    "ServiceConfig",
+    "ServiceLoop",
+    "ServiceLoopConfig",
+    "ServiceManager",
+    "Significance",
+    "SourceIndex",
+    "TestEvidence",
+    "WebhookConfig",
+    "check_conformance",
     "cli",
     "codegen",
     "conformance",
+    "create_operator_intent",
+    "default_events_for",
     "evidence",
-    "operations",
-    "profiles",
-    "report",
-    "service",
-    # cli
-    "main",
-    "RUN_PROFILES",
+    "evidence_for",
     "execute_spec",
-    # codegen
+    "export_to_json",
+    "export_to_parquet",
     "generate_all",
     "generate_axes_listing",
     "generate_capabilities_listing",
     "generate_cli_flag_tables",
     "generate_compatibility_matrix",
+    "generate_conformance_report",
     "generate_conformance_stubs",
     "generate_constraints_listing",
+    "generate_flag_projection_lock",
     "generate_json_schema_validators",
     "generate_objectives_listing",
     "generate_policies_listing",
     "generate_priors_listing",
+    "generate_run_report",
     "generate_stages_listing",
-    "write_generated_docs",
-    # conformance
-    "ConformanceHarness",
-    "ConformanceResult",
-    "ConformanceStatus",
-    "CurrencyLock",
-    "FlagProjectionLock",
-    "check_conformance",
-    "generate_conformance_report",
-    "generate_flag_projection_lock",
     "load_currency_lock",
+    "load_export_bundle",
     "load_flag_projection_lock",
+    "main",
+    "narrative_handoff_summary",
+    "non_dominated",
+    "operations",
+    "poll_control_file",
+    "profiles",
+    "question_first",
+    "report",
     "run_verifying_test",
     "save_currency_lock",
     "save_flag_projection_lock",
-    # evidence
-    "INDEX",
-    "SourceIndex",
-    "evidence_for",
-    "TestEvidence",
-    # operations
-    "DEFAULT_Q14_ROUTES",
-    "AlertDedup",
-    "OperatorIntent",
-    "OperatorIntentKind",
-    "RunController",
-    "RunState",
-    "ServiceConfig",
-    "ServiceManager",
-    "WebhookConfig",
-    "create_operator_intent",
-    "default_events_for",
+    "service",
     "submit_intent_to_run",
-    # profiles
-    "QUESTION_FIRST_STAGES",
-    "question_first",
-    # report
-    "AxisImpact",
-    "Claim",
-    "ExportBundle",
-    "Limitation",
-    "ReportGenerator",
-    "RunSummary",
-    "Significance",
-    "export_to_json",
-    "export_to_parquet",
-    "generate_run_report",
-    "load_export_bundle",
-    "narrative_handoff_summary",
-    "non_dominated",
-    # service
-    "ServiceLoop",
-    "ServiceLoopConfig",
-    "poll_control_file",
     "write_control_intent",
+    "write_generated_docs",
 ]
 
 # Lazy submodule cache
@@ -184,7 +177,7 @@ def _get_submodule(full_name: str) -> ModuleType:
 def __getattr__(name: str) -> Any:
     """Lazy load submodules and symbols on first access."""
     # Submodules
-    if name in (
+    if name in {
         "cli",
         "codegen",
         "conformance",
@@ -193,7 +186,7 @@ def __getattr__(name: str) -> Any:
         "profiles",
         "report",
         "service",
-    ):
+    }:
         return _get_submodule(f"computronium.experiment.surface.{name}")
 
     # Symbols from specific submodules

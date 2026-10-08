@@ -108,14 +108,14 @@ class StabilityPlasticityModel(nn.Module):
         # Apply plasticity modulation
         if self.plasticity_type == "routing":
             gate = torch.sigmoid(self.gate(self.h))
-            self.h = self.h * gate  # ruff: noqa: PLW2901
+            self.h = self.h * gate  # noqa: PLW2901
         elif self.plasticity_type == "fast_weights":
-            self.h = self.h + self.h @ self.fast_weights.t()  # ruff: noqa: PLW2901
+            self.h = self.h + self.h @ self.fast_weights.t()  # noqa: PLW2901
         elif self.plasticity_type == "rule_state":
             # Apply rule-based modulation (simplified)
             rules = torch.softmax(self.rule_logits, dim=0)
             # Rule 0: amplify, Rule 1: suppress, Rule 2: decorrelate, Rule 3: identity
-            self.h = self.h * (1 + rules[0] - rules[1])  # ruff: noqa: PLW2901
+            self.h = self.h * (1 + rules[0] - rules[1])  # noqa: PLW2901
 
         return self.output_proj(self.h)
 
