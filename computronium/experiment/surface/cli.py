@@ -411,6 +411,9 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         default=None,
         help="Output file for campaign results (JSON)",
     )
+    p_campaign.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
 
     # Hypothesis campaign command
     p_hypothesis = sub.add_parser(
@@ -1549,16 +1552,43 @@ def _cmd_campaign(args: argparse.Namespace) -> int:
 
     if args.dry_run:
         # Print execution plan
-        print(f"Campaign: {spec.name}")
-        print(f"Store: {spec.store}")
-        print(f"Parallel: {args.parallel or spec.parallel}")
-        print(f"Device: {args.device or 'auto'}")
-        print(f"Webhook: {args.webhook_url or spec.webhook_url or 'none'}")
-        print(f"Runs ({len(spec.runs)}):")
-        for i, run in enumerate(spec.runs):
-            deps = f" (depends on: {run.depends_on})" if run.depends_on else ""
-            profile_or_spec = run.profile or run.spec_file
-            print(f"  [{i}] {run.name}: {profile_or_spec}{deps}")
+        if args.format == "json":
+            plan = {
+                "command": "campaign",
+                "campaign": spec.name,
+                "store": spec.store,
+                "parallel": args.parallel or spec.parallel,
+                "device": args.device or "auto",
+                "webhook_url": args.webhook_url or spec.webhook_url,
+                "runs": [
+                    {
+                        "index": i,
+                        "name": run.name,
+                        "profile": run.profile,
+                        "spec_file": run.spec_file,
+                        "depends_on": run.depends_on,
+                        "overrides": run.overrides,
+                    }
+                    for i, run in enumerate(spec.runs)
+                ],
+            }
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print(f"Campaign: {spec.name}")
+            print(f"Store: {spec.store}")
+            print(f"Parallel: {args.parallel or spec.parallel}")
+            print(f"Device: {args.device or 'auto'}")
+            print(f"Webhook: {args.webhook_url or spec.webhook_url or 'none'}")
+            print(f"Runs ({len(spec.runs)}):")
+            for i, run in enumerate(spec.runs):
+                deps = f" (depends on: {run.depends_on})" if run.depends_on else ""
+                profile_or_spec = run.profile or run.spec_file
+                print(f"  [{i}] {run.name}: {profile_or_spec}{deps}")
         return 0
 
     try:
@@ -1575,25 +1605,30 @@ def _cmd_campaign(args: argparse.Namespace) -> int:
         return 1
 
     # Print summary
-    print(f"\nCampaign '{result['campaign']}' completed")
-    print(f"  Total runs: {result['total_runs']}")
-    print(f"  Completed: {result['completed']}")
-    print(f"  Failed: {result['failed']}")
-    for idx, run_result in result["run_results"].items():
-        status = "OK" if run_result["success"] else "FAILED"
-        if run_result.get("skipped"):
-            status = "SKIPPED"
-        run_name = spec.runs[idx].name
-        elapsed = run_result.get("elapsed_s", 0)
-        print(f"  [{idx}] {run_name}: {status} ({elapsed:.1f}s)")
-        if not run_result["success"] and not run_result.get("skipped"):
-            print(f"       Error: {run_result.get('error', 'unknown')}")
+    if args.format == "json":
+        if args.output:
+            Path(args.output).write_text(json.dumps(result, indent=2), encoding="utf-8")
+            logger.info(f"Results written to {args.output}")
+        else:
+            print(json.dumps(result, indent=2))
+    else:
+        print(f"\nCampaign '{result['campaign']}' completed")
+        print(f"  Total runs: {result['total_runs']}")
+        print(f"  Completed: {result['completed']}")
+        print(f"  Failed: {result['failed']}")
+        for idx, run_result in result["run_results"].items():
+            status = "OK" if run_result["success"] else "FAILED"
+            if run_result.get("skipped"):
+                status = "SKIPPED"
+            run_name = spec.runs[idx].name
+            elapsed = run_result.get("elapsed_s", 0)
+            print(f"  [{idx}] {run_name}: {status} ({elapsed:.1f}s)")
+            if not run_result["success"] and not run_result.get("skipped"):
+                print(f"       Error: {run_result.get('error', 'unknown')}")
 
-    if args.output:
-        import json
-
-        Path(args.output).write_text(json.dumps(result, indent=2), encoding="utf-8")
-        logger.info(f"Results written to {args.output}")
+        if args.output:
+            Path(args.output).write_text(json.dumps(result, indent=2), encoding="utf-8")
+            logger.info(f"Results written to {args.output}")
 
     return 0 if result["failed"] == 0 else 1
 

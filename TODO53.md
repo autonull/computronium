@@ -1204,3 +1204,77 @@ spec.to_file("my_run.yaml")
 - ✅ Bootstrap CIs, significance testing, effect sizes
 - ✅ Pareto front knee detection, hypervolume
 - [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking
+
+---
+
+## 33. Session Progress Summary (2026-10-08) — Agent-Friendly CLI Completion & Verification
+
+### Completed in This Session (P3 — Agent-Friendly CLI Completion)
+
+**Unified `--dry-run`, `--format json`, `--output` for all commands:**
+- ✅ Added `--format {json,text}` option to `comp campaign` command (was missing)
+- ✅ All 14 `comp` subcommands now support consistent `--dry-run`, `--format {json,text}`, `--output` arguments
+
+**RunSpec Builder API Verification:**
+- ✅ `RunSpecBuilder` already implemented in `computronium/experiment/schema/builder.py`
+- ✅ Fluent Python API for programmatic RunSpec construction with profile presets
+- ✅ Full round-trip: build → save (JSON/YAML) → load → validate
+- ✅ Exported via `computronium.experiment.RunSpecBuilder`
+
+**Statistical Analysis Infrastructure Verification:**
+- ✅ Bootstrap CIs (`bootstrap_percentile_ci`) in `computronium/experiment/evidence/statistics.py`
+- ✅ Significance testing (`permutation_test_p`, `paired_significance`) in `computronium/experiment/evidence/significance.py`
+- ✅ Effect sizes (`cohens_dz`) in `computronium/experiment/evidence/statistics.py`
+- ✅ Pareto front analysis (`pareto_front`, `hypervolume`, `knee_detection`) in `computronium/experiment/evidence/statistics.py`
+
+**Code Changes:**
+- `computronium/experiment/surface/cli.py` — Added `--format` argument to `campaign` command, updated `_cmd_campaign` handler for JSON output and dry-run plans
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, registry locks, CLI readme, gallery locks)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- quick-verify runs end-to-end on CPU with all measured objectives populated
+- `comp stats`, `comp pareto`, `comp diff`, `comp repro`, `comp schema`, `comp campaign` all tested and working
+- `ruff format` and `ruff check` pass
+- `pyright` passes on changed files (0 errors)
+
+### Updated Status
+
+**P3 (Agent-Friendly CLI) — NOW COMPLETE:**
+- ✅ `comp schema` — Dump RunSpec/Coordinate/Objective schemas as JSON Schema
+- ✅ RunSpec builder API (Python) for programmatic construction
+- ✅ `--output json` for all commands (structured JSON to stdout for piping)
+
+**P4 (Benchmark Suites + Analysis) — NOW COMPLETE:**
+- ✅ GPU tests for existing 5 benchmark suites
+- ✅ 3 new benchmark suites: credit_assignment_scaling, substrate_precision_scaling, stability_plasticity_frontier
+- ✅ Bootstrap CIs, significance testing, effect sizes
+- ✅ Pareto front knee detection, hypervolume
+
+**Analysis Infrastructure (7) — LARGELY COMPLETE:**
+- ✅ Bootstrap CIs, significance testing, effect sizes
+- ✅ Pareto front knee detection, hypervolume
+- [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking
+
+### Remaining Work (Priority Order)
+
+1. **Fixes & Correctness (6.1):**
+   - [ ] EnergyMinimization β≥1 gradient credit zero pseudo-gradient
+   - [ ] Determinism: bitwise reproducibility on GPU
+   - [ ] Memory leaks in long runs
+
+2. **P6 (Reproducibility + Packaging):**
+   - [ ] `comp export` / `comp repro` round-trip with Docker
+   - [ ] Nightly benchmark CI
+
+3. **Analysis Infrastructure (7) — Remaining:**
+   - [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking
+
+4. **Documentation (9):**
+   - [ ] Experiment Guide: `docs/experiments/` — end-to-end tutorials
+   - [ ] Benchmark Cookbook: `docs/benchmarks/` — each suite with expected results
+   - [ ] Analysis Recipes: `docs/analysis/` — Pareto, ablation, stability-plasticity
+   - [ ] GPU Guide: Mixed precision, multi-GPU, memory optimization
+   - [ ] RunSpec schema auto-generation from Pydantic model
+   - [ ] Objectives registry: add measurement status to `docs/generated/objectives.md`
+   - [ ] CLI reference: `comp --help` output → markdown
