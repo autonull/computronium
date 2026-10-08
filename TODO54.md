@@ -42,7 +42,7 @@
 
 ---
 
-### 3. Minor Analysis Infrastructure Items
+### 2. Minor Analysis Infrastructure Items
 
 **Tasks**:
 - [ ] **Effect size reporting in `comp stats`**: Add Cohen's d / Cliff's delta output when `--group-by` is used
@@ -51,18 +51,6 @@
 
 **Effort**: 1 day
 
----
-
-### 4. Nightly CI — Benchmark Regression Detection (P6)
-
-**Status**: Nightly benchmark CI pipeline exists (`.github/workflows/nightly-benchmarks.yml`) and runs benchmarks nightly.
-
-**Tasks**:
-- [ ] Compare benchmark metrics against stored baselines (alert on >5% regression)
-- [ ] Generate markdown regression report for PR comments
-- [ ] Track latency/memory vs commit history
-
-**Effort**: 0.5 days
 ---
 
 ## Quick Wins (< 1 Day Each)
@@ -76,13 +64,14 @@
 
 ---
 
-## Deferred Indefinitely (Docker-Related)
+## Deferred Indefinitely
 
 | Item | Reason |
 |------|--------|
 | Full Docker round-trip testing | Requires Docker + NVIDIA Container Toolkit; export/repro code implemented but cannot verify bitwise match |
 | Nightly CI Docker round-trip | Depends on above; nightly CI already tests benchmarks without Docker |
 | Docker documentation updates | Depends on verified round-trip |
+| Nightly CI benchmark regression detection | Pipeline exists but regression comparison not implemented; not blocking production readiness |
 
 These are deferred because the current environment lacks Docker privileges and the export/repro functionality works without Docker (JSON export/repro is fully functional).
 
@@ -111,9 +100,6 @@ Week 1:
   □ Deeper dynamical analysis: Basin stability Monte Carlo
   □ Deeper dynamical analysis: Per-iteration energy tracking
   □ Minor analysis: Effect size in comp stats, power analysis CLI
-  
-Week 2:
-  □ Nightly CI: Benchmark regression detection
   □ Quick wins: --device to benchmark, --format to export
   □ Documentation updates for new features
 ```
@@ -123,7 +109,6 @@ Week 2:
 ## Success Criteria (Definition of Done)
 
 - [ ] `comp stability-analysis --run-id <id> --metrics lyapunov_spectrum,basin_stability,energy_trajectory` produces plots/data
-- [ ] Nightly CI runs benchmarks and compares against baseline (alert on >5% regression)
 - [ ] All property locks still pass (L1-L7, J1-J7, axis locks, registry locks, gallery locks)
 - [ ] All acceptance tests pass (U1-U5 kernel guarantees)
 - [ ] `ruff format`, `ruff check`, `pyright` all pass
@@ -135,6 +120,5 @@ Week 2:
 
 - `AGENTS.md` — Code guidelines, commit checklist
 - `computronium/stability/` — Lyapunov, basin, spectral, settling analysis primitives
-- `.github/workflows/nightly-benchmarks.yml` — Nightly CI pipeline
 - `docs/experiments/reproducibility.md` — Reproducibility guide
 - `computronium/experiment/probe.py` — CoreTrainerDriver with stability metrics integration
