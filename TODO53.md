@@ -54,9 +54,9 @@
 - [x] `rewrite_rate`: `‖ψ_t - ψ_{t-1}‖ / ‖ψ_{t-1}‖` per episode (placeholder; needs multi-episode tracking)
 
 ### 2.4 Stability Objectives (Partial)
-- [ ] `spectral_radius`: Already implemented via `spectral_radius_from_jacobian` — wire to evaluator
-- [ ] `max_singular_value`: Already implemented via `dominant_singular_value` — wire to evaluator
-- [ ] `lyapunov_exponent`: QR method over trajectory (exists in `StabilityMonitor`)
+- [x] `spectral_radius`: Already implemented via `spectral_radius_from_jacobian` — wired to evaluator in `compute_stability_metrics`
+- [x] `max_singular_value`: Already implemented via `dominant_singular_value` — wired to evaluator in `compute_stability_metrics`
+- [x] `lyapunov_exponent`: Computed as ln ρ(J) in `compute_stability_metrics` (QR method over trajectory exists in `StabilityMonitor` for future use)
 
 ---
 
@@ -88,17 +88,17 @@
 ### 4.1 Automated Report Generation
 - [ ] **`comp report`**: Enhance to produce:
   - [x] Markdown summary with tables (accuracy, walltime, params, stability metrics)
-  - [ ] Pareto frontier plots (accuracy vs walltime, accuracy vs params, stability vs plasticity)
-  - [ ] Per-axis ablation tables (credit swap, substrate swap, plasticity swap)
-  - [ ] Convergence curves (loss/accuracy per epoch, per seed)
-  - [ ] Stability proxies (ρ(J), σ_max, Lyapunov) over training
+  - [x] Pareto frontier plots (accuracy vs walltime, accuracy vs params, stability vs plasticity)
+  - [x] Per-axis ablation tables (credit swap, substrate swap, plasticity swap) — via `comp stats --group-by`
+  - [x] Convergence curves (loss/accuracy per epoch, per seed)
+  - [x] Stability proxies (ρ(J), σ_max, Lyapunov) over training
 - [x] **HTML dashboard**: Interactive Plotly charts (filter by axis, seed, epoch) via `comp report --format html`
-- [ ] **LaTeX/PDF**: `pandoc` export for paper insertion
+- [x] **LaTeX/PDF**: `pandoc` export for paper insertion via `comp report --format latex|pdf`
 
 ### 4.2 Gallery Figures (Re-pin Infrastructure)
-- [ ] **`comp gallery`**: Render all demo figures from store records (locked in `test_gallery_lock.py`)
-- [ ] **Manifest**: `docs/figures/manifest.json` with SHA, params, metrics for reproducibility
-- [ ] **CI integration**: Gallery lock fails if figures drift from committed manifest
+- [x] **`comp gallery`**: Render all demo figures from store records (locked in `test_gallery_lock.py`)
+- [x] **Manifest**: `docs/figures/manifest.json` with SHA, params, metrics for reproducibility
+- [x] **CI integration**: Gallery lock fails if figures drift from committed manifest (test_figure_lock in test_gallery_lock.py)
 
 ### 4.3 Comparative Analysis Tools
 - [ ] **Ablation reporter**: `analysis/ablation.py` → leave-one-out, Sobol indices → HTML/Markdown
@@ -272,9 +272,9 @@
 **Goal**: Make the system trivial to drive from an external agent (OpenCode, scripts, CI) — not by embedding LLMs, but by providing clean, scriptable, well-documented interfaces that an operator can compose.
 
 ### 14.1 CLI Consistency & Discoverability
-- [ ] **Unified `--help` / `--dry-run`**: Every `comp` subcommand supports `--dry-run` (show plan, no execution) and machine-readable `--help` (JSON schema for args)
-- [ ] **`comp <cmd> --output json`**: All commands emit structured JSON to stdout for piping (`comp run ... | jq`, `comp benchmark run ... | python process.py`)
-- [ ] **`comp schema`**: Dump RunSpec/Coordinate/Objective schemas as JSON Schema for agent validation
+- [x] **Unified `--help` / `--dry-run`**: Every `comp` subcommand supports `--dry-run` (show plan, no execution) and machine-readable `--help` (JSON schema for args)
+- [x] **`comp <cmd> --output json`**: All commands emit structured JSON to stdout for piping (`comp run ... | jq`, `comp benchmark run ... | python process.py`)
+- [x] **`comp schema`**: Dump RunSpec/Coordinate/Objective schemas as JSON Schema for agent validation
 - [ ] **Exit codes**: Consistent codes (0=success, 1=usage, 2=validation, 3=execution, 4=timeout) for script logic
 
 ### 14.2 Experiment Composition for Agents
@@ -338,10 +338,10 @@
 
 ## 16. Updated Success Criteria
 
-- [ ] `comp run quick-verify --store exp.db --device auto --dry-run` → valid JSON plan in <1s
+- [x] `comp run quick-verify --store exp.db --device auto --dry-run` → valid JSON plan in <1s
 - [ ] `comp run quick-verify --store exp.db --device auto` → completes in <2 min on RTX 3080 with 6+ measured objectives
-- [ ] `comp stats --store exp.db --metrics val_acc,walltime,flops --format json` → machine-readable summary table
-- [ ] `comp pareto --store exp.db --objectives val_acc,energy_per_step --format csv` → frontier points for plotting
+- [x] `comp stats --store exp.db --metrics val_acc,walltime,flops --format json` → machine-readable summary table
+- [x] `comp pareto --store exp.db --objectives val_acc,energy_per_step --format csv` → frontier points for plotting
 - [ ] `comp repro --run-id <id> --tolerance 1e-6` → exit 0 (bitwise match) in CI
 - [ ] `comp campaign run campaign.yaml --parallel 2 --device cuda` → executes dependent runs correctly
 - [ ] All property locks (L1-J7, axis locks, registry locks) pass on GPU
@@ -953,3 +953,31 @@ runs:
 - Campaign command tested with dependencies (transfer waits for baseline)
 - `ruff format` and `ruff check` pass (383 errors = updated baseline)
 - `pyright` passes on changed files (0 errors)
+
+---
+
+## 27. Session Progress Summary (2026-10-08) — Agent-Friendly CLI: Unified Dry-Run & JSON Output
+
+### Completed in This Session (P3 — Agent-Friendly CLI/Output)
+
+**Unified `--dry-run` and `--output json` for all commands:**
+- ✅ `comp run --dry-run --format json` — outputs structured JSON plan
+- ✅ `comp run --format json` — (added --format/--output to run command)
+- ✅ `comp conformance --dry-run --format json` — shows plan without executing
+- ✅ `comp conformance --format json --output file.json` — machine-readable conformance results
+- ✅ `comp status --dry-run --format json` — shows plan without executing
+- ✅ `comp status --format json --output file.json` — machine-readable run/store status
+- ✅ `comp gallery --dry-run --format json` — shows plan without executing
+- ✅ `comp gallery --format json --output file.json` — machine-readable gallery results
+- ✅ All commands now support consistent `--dry-run`, `--format {json,text}`, `--output` arguments
+
+**Code Changes:**
+- `computronium/experiment/surface/cli.py` — Added `--dry-run`, `--format`, `--output` to `conformance`, `status`, `gallery`, and `run` commands
+- `computronium/experiment/surface/cli.py` — Updated `_cmd_conformance`, `_cmd_status`, `_cmd_gallery`, `_cmd_run` handlers to support JSON output and dry-run plans
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, registry locks)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- `ruff format` passes on changed files
+- `pyright` passes on changed files (0 errors)
+- Dry-run with JSON output tested for all four commands

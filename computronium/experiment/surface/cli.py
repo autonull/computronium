@@ -267,6 +267,10 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_run.add_argument(
         "--dry-run", action="store_true", help="Print plan without executing"
     )
+    p_run.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_run.add_argument("--output", default=None, help="Output file path")
 
     # Report command
     p_report = sub.add_parser("report", help="Generate report from store")
@@ -316,6 +320,13 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_conformance.add_argument(
         "--list-only", action="store_true", help="List capabilities without checking"
     )
+    p_conformance.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+    p_conformance.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_conformance.add_argument("--output", default=None, help="Output file path")
 
     # Status command
     p_status = sub.add_parser("status", help="Show run/store status")
@@ -330,6 +341,13 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         action="store_true",
         help="Show campaign economics: cost per record, projected completion",
     )
+    p_status.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+    p_status.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_status.add_argument("--output", default=None, help="Output file path")
 
     # Gallery command
     p_gallery = sub.add_parser(
@@ -345,6 +363,13 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         default="docs/figures/gallery",
         help="Output directory for gallery figures",
     )
+    p_gallery.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+    p_gallery.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_gallery.add_argument("--output", default=None, help="Output file path")
 
     # Campaign command
     p_campaign = sub.add_parser(
@@ -1011,7 +1036,74 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     # A dry run writes nothing: not a store, not a run row, not a checkpoint.
     if args.dry_run:
-        print(_dry_run_report(spec, policy_name=spec.policy or "round_robin_grid"))
+        if args.format == "json":
+            # Build a JSON representation of the dry run plan
+            from computronium.experiment.execution.evaluate import task_shape
+            from computronium.experiment.execution.pipeline import _resolve_tasks
+            from computronium.experiment.execution.search_space import (
+                iter_candidates,
+                search_space_from_spec,
+            )
+            from computronium.experiment.schema.axis import StructuralAxis
+            from computronium.experiment.schema.harvest import AXIS_KIND_ORDER
+
+            tasks = _resolve_tasks(PipelineConfig(run_id="dry-run", run_spec=spec))
+            space = search_space_from_spec(spec, tasks=tasks)
+            axes = {}
+            for axis in StructuralAxis:
+                names = space.primitives(axis)
+                axes[axis.value] = list(names)
+
+            cells = []
+            for coordinate, schedule in iter_candidates(spec, space, shape=task_shape):
+                swept = (
+                    ", ".join(
+                        f"{k}={v:.4g}" for k, v in sorted(coordinate.params.items())
+                    )
+                    or "no swept params"
+                )
+                selection = ", ".join(
+                    f"{axis.value}={getattr(coordinate, axis.value)}"
+                    for axis in AXIS_KIND_ORDER
+                )
+                cells.append({
+                    "fidelity": schedule.fidelity,
+                    "seed": schedule.seed,
+                    "selection": selection,
+                    "swept_params": swept,
+                })
+
+            from computronium.experiment.execution.pricing import price_plan
+
+            plan = price_plan(spec, space).render().splitlines()
+
+            output = json.dumps(
+                {
+                    "profile": spec.profile,
+                    "tasks": list(tasks),
+                    "fidelity": spec.fidelity,
+                    "epochs": spec.epochs,
+                    "seeds": spec.n_seeds,
+                    "batch_limit": spec.batch_limit,
+                    "param_budget": spec.param_budget,
+                    "budget": spec.budget_seconds,
+                    "policy": spec.policy or "round_robin_grid",
+                    "objectives": list(spec.objectives) or "all",
+                    "spec_version": spec.version,
+                    "axes": axes,
+                    "cells": cells,
+                    "pricing": plan,
+                },
+                indent=2,
+            )
+
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print(_dry_run_report(spec, policy_name=spec.policy or "round_robin_grid"))
         return 0
 
     return execute_spec(spec, store_path=args.store, run_id=args.run_id)
@@ -1115,39 +1207,108 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 def _cmd_conformance(args: argparse.Namespace) -> int:
     """Check capability conformance."""
+    if args.dry_run:
+        plan = {
+            "command": "conformance",
+            "store": args.store,
+            "run_id": args.run_id,
+            "list_only": args.list_only,
+        }
+        if args.format == "json":
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Dry run: would check capability conformance")
+            print(f"  Store: {args.store}")
+            print(f"  Run ID: {args.run_id or 'latest'}")
+            print(f"  List only: {args.list_only}")
+        return 0
+
     store = _open_store(args.store)
     if store is None:
         return 1
     with store:
         if args.list_only:
-            print("Registered Capabilities:")
-            print("=" * 60)
+            results = []
             for name, spec in CAPABILITIES_REGISTRY.items():
                 status = (
-                    "✓"
+                    "pass"
                     if _check_capability(store, run_id=args.run_id, spec=spec)
-                    else "✗"
+                    else "fail"
                 )
-                print(f"  {status} {name} ({spec.kind.value})")
+                if args.format == "json":
+                    results.append({
+                        "name": name,
+                        "kind": spec.kind.value,
+                        "required": spec.required,
+                        "status": status,
+                    })
+                else:
+                    print(f"  {status} {name} ({spec.kind.value})")
+            if args.format == "json":
+                output = json.dumps({"capabilities": results}, indent=2)
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    logger.info(f"Results written to {args.output}")
+                else:
+                    print(output)
             return 0
 
         # Full conformance check
         passed = 0
         failed = 0
+        results = []
 
         for name, spec in CAPABILITIES_REGISTRY.items():
             if not spec.required:
-                logger.info(f"  ⊘ {name} (optional)")
+                if args.format == "json":
+                    results.append({
+                        "name": name,
+                        "kind": spec.kind.value,
+                        "required": False,
+                        "status": "skipped",
+                    })
+                else:
+                    logger.info(f"  ⊘ {name} (optional)")
                 continue
 
             if _check_capability(store, run_id=args.run_id, spec=spec):
                 passed += 1
-                logger.info(f"  ✓ {name}")
+                status = "pass"
+                if args.format != "json":
+                    logger.info(f"  ✓ {name}")
             else:
                 failed += 1
-                logger.error(f"  ✗ {name} - NO PASSING EVIDENCE")
+                status = "fail"
+                if args.format != "json":
+                    logger.error(f"  ✗ {name} - NO PASSING EVIDENCE")
+            if args.format == "json":
+                results.append({
+                    "name": name,
+                    "kind": spec.kind.value,
+                    "required": True,
+                    "status": status,
+                })
 
-        logger.info(f"Conformance: {passed} passed, {failed} failed")
+        if args.format == "json":
+            output = json.dumps(
+                {
+                    "summary": {"passed": passed, "failed": failed},
+                    "capabilities": results,
+                },
+                indent=2,
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Results written to {args.output}")
+            else:
+                print(output)
+        else:
+            logger.info(f"Conformance: {passed} passed, {failed} failed")
         if failed > 0:
             return 1
     return 0
@@ -1163,6 +1324,27 @@ def _check_capability(
 
 def _cmd_status(args: argparse.Namespace) -> int:
     """Show run/store status."""
+    if args.dry_run:
+        plan = {
+            "command": "status",
+            "store": args.store,
+            "run_id": args.run_id,
+            "detailed": args.detailed,
+        }
+        if args.format == "json":
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Dry run: would show run/store status")
+            print(f"  Store: {args.store}")
+            print(f"  Run ID: {args.run_id or 'all'}")
+            print(f"  Detailed: {args.detailed}")
+        return 0
+
     store = _open_store(args.store)
     if store is None:
         return 1
@@ -1172,23 +1354,59 @@ def _cmd_status(args: argparse.Namespace) -> int:
             if summary is None:
                 logger.error(f"Run {args.run_id} not found")
                 return 1
-            if args.detailed:
-                _print_detailed_status(summary)
+            if args.format == "json":
+                output = json.dumps(asdict(summary), default=str, indent=2)
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    logger.info(f"Status written to {args.output}")
+                else:
+                    print(output)
             else:
-                # A slots dataclass has no __dict__: reading one is the crash
-                # §3.7 gate 4 exists to catch, in the branch that reports a run.
-                print(json.dumps(asdict(summary), default=str, indent=2))
+                if args.detailed:
+                    _print_detailed_status(summary)
+                else:
+                    print(json.dumps(asdict(summary), default=str, indent=2))
         else:
             runs = ReportGenerator(store).list_runs()
             if not runs:
-                print("No runs found")
+                if args.format == "json":
+                    output = json.dumps({"runs": []}, indent=2)
+                else:
+                    output = "No runs found"
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    logger.info(f"Status written to {args.output}")
+                else:
+                    print(output)
                 return 0
-            for run in runs:
-                print(
-                    f"  {run.run_id[:8]}... | {run.status:12} | "
-                    f"recs={run.record_count:4} | claim={run.claim_eligible_count:3} | "
-                    f"promo={run.promoted_count:3} | {run.started_at}"
-                )
+
+            if args.format == "json":
+                runs_data = []
+                for run in runs:
+                    runs_data.append({
+                        "run_id": run.run_id,
+                        "status": run.status,
+                        "record_count": run.record_count,
+                        "claim_eligible_count": run.claim_eligible_count,
+                        "promoted_count": run.promoted_count,
+                        "started_at": run.started_at,
+                    })
+                output = json.dumps({"runs": runs_data}, indent=2)
+            else:
+                lines = []
+                for run in runs:
+                    lines.append(
+                        f"  {run.run_id[:8]}... | {run.status:12} | "
+                        f"recs={run.record_count:4} | claim={run.claim_eligible_count:3} | "
+                        f"promo={run.promoted_count:3} | {run.started_at}"
+                    )
+                output = "\n".join(lines)
+
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Status written to {args.output}")
+            else:
+                print(output)
     return 0
 
 
@@ -1243,6 +1461,25 @@ def _cmd_gallery(args: argparse.Namespace) -> int:
     records_dir = Path(args.records_dir)
     output_dir = Path(args.output_dir)
 
+    if args.dry_run:
+        plan = {
+            "command": "gallery",
+            "records_dir": str(records_dir),
+            "output_dir": str(output_dir),
+        }
+        if args.format == "json":
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Dry run: would render gallery figures")
+            print(f"  Records dir: {records_dir}")
+            print(f"  Output dir: {output_dir}")
+        return 0
+
     if not records_dir.exists():
         logger.error(f"Records directory not found: {records_dir}")
         return 1
@@ -1254,9 +1491,28 @@ def _cmd_gallery(args: argparse.Namespace) -> int:
         logger.exception("Gallery rendering failed")
         return 1
     else:
-        logger.info(f"Rendered {len(metas)} gallery figures")
-        for meta in metas:
-            logger.info(f"  {meta.figure_png} (data_sha256={meta.data_sha256[:16]}...)")
+        if args.format == "json":
+            results = []
+            for meta in metas:
+                results.append({
+                    "figure_png": meta.figure_png,
+                    "capability_name": meta.capability_name,
+                    "capability_id": meta.capability_id,
+                    "data_sha256": meta.data_sha256,
+                    "demo_test": meta.demo_test,
+                })
+            output = json.dumps({"figures": results}, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Results written to {args.output}")
+            else:
+                print(output)
+        else:
+            logger.info(f"Rendered {len(metas)} gallery figures")
+            for meta in metas:
+                logger.info(
+                    f"  {meta.figure_png} (data_sha256={meta.data_sha256[:16]}...)"
+                )
         return 0
 
 
@@ -1300,7 +1556,7 @@ def _cmd_campaign(args: argparse.Namespace) -> int:
                 webhook_url=args.webhook_url,
             )
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Campaign execution failed")
         return 1
 
