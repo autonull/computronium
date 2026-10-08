@@ -621,6 +621,9 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     # Set all seeds BEFORE model creation for reproducible initialization
     torch.manual_seed(schedule.seed)
     if schedule.deterministic:
+        import os
+
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
         torch.use_deterministic_algorithms(True)
     np.random.seed(schedule.seed)
     random.seed(schedule.seed)

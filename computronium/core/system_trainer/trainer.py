@@ -197,6 +197,9 @@ class SystemTrainer:
     def _set_seed(self) -> None:
         torch.manual_seed(self.config.seed)
         if self.config.deterministic:
+            import os
+
+            os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
             torch.use_deterministic_algorithms(True)
 
     def train_epoch(self) -> dict[str, float]:  # ruff: ignore[complex-structure, too-many-statements, too-many-branches, too-many-locals]

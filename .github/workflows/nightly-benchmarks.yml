@@ -1,0 +1,128 @@
+name: Nightly Benchmarks
+
+on:
+  schedule:
+    # Run at 2 AM UTC every night
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Benchmark suite to run (all, adaptation_efficiency, compute_efficiency, structural_robustness, algorithm_migration, z3_fixed_weights, credit_assignment_scaling, substrate_precision_scaling, stability_plasticity_frontier)'
+        required: false
+        default: 'all'
+      device:
+        description: 'Device to run on (cpu, cuda)'
+        required: false
+        default: 'cuda'
+
+jobs:
+  nightly-benchmarks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+            nvidia-cuda-toolkit \
+            && rm -rf /var/lib/apt/lists/*
+      
+      - name: Verify CUDA
+        run: |
+          nvidia-smi
+          python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
+      
+      - name: Install dependencies
+        run: uv sync --dev --all-extras
+      
+      - name: Dev environment smoke test
+        run: uv run python -c "import optuna, scipy, torchvision, pytest"
+      
+      - name: Run benchmark suite
+        id: benchmark
+        env:
+          BENCHMARK_SUITE: ${{ github.event.inputs.suite || 'all' }}
+          BENCHMARK_DEVICE: ${{ github.event.inputs.device || 'cuda' }}
+        run: |
+          if [ "$BENCHMARK_SUITE" = "all" ]; then
+            uv run python -m computronium.experiment.surface.cli benchmark run --suite all --device $BENCHMARK_DEVICE --output benchmark_results.json
+          else
+            uv run python -m computronium.experiment.surface.cli benchmark run --suite $BENCHMARK_SUITE --device $BENCHMARK_DEVICE --output benchmark_results.json
+          fi
+      
+      - name: Generate benchmark report
+        run: |
+          uv run python -m computronium.experiment.surface.cli report --store benchmark_results.duckdb --format html --output benchmark_report.html
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: |
+            benchmark_results.json
+            benchmark_results.duckdb
+            benchmark_report.html
+          retention-days: 30
+      
+      - name: Compare with baseline
+        if: always()
+        run: |
+          uv run python scripts/bench_dashboard.py --compare --baseline baseline_results.json --current benchmark_results.json --output comparison_report.md || true
+      
+      - name: Post comparison to PR
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('comparison_report.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            })
+
+  # Regression detection job
+  regression-detection:
+    needs: nightly-benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+      
+      - name: Check for regressions
+        run: |
+          uv run python scripts/check_regression.py --results benchmark_results.json --threshold 0.05 --output regression_report.md || true
+      
+      - name: Alert on regression
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('regression_report.md', 'utf8');
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Nightly Benchmark Regression Detected',
+              body: report,
+              labels: ['regression', 'benchmark', 'nightly']
+            })

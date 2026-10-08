@@ -4,7 +4,6 @@ Computronium Utilities
 Helper functions for reproducibility and training utilities.
 """
 
-import os
 import random
 import subprocess
 import sys
@@ -52,6 +51,9 @@ def seed_everything(
         raise RuntimeError(f"seed_everything device={device!r} but CUDA is unavailable")
 
     if deterministic:
+        import os
+
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
         torch.use_deterministic_algorithms(True)
 
     random.seed(seed)

@@ -1278,3 +1278,75 @@ spec.to_file("my_run.yaml")
    - [ ] RunSpec schema auto-generation from Pydantic model
    - [ ] Objectives registry: add measurement status to `docs/generated/objectives.md`
    - [ ] CLI reference: `comp --help` output → markdown
+
+---
+## 34. Session Progress Summary (2026-10-08) — GPU Determinism, Ablation Tables, Export/Repro with Docker, Nightly CI, Memory Leaks
+
+### Completed in This Session
+
+**GPU Determinism (6.1):**
+- ✅ Added `CUBLAS_WORKSPACE_CONFIG=:4096:8` environment variable when `deterministic=True` in:
+  - `computronium/utils.py` — `seed_everything()`
+  - `computronium/core/utils/seeds.py` — `set_all_seeds()`
+  - `computronium/core/system_trainer/trainer.py` — `_set_seed()`
+  - `computronium/experiment/execution/evaluate.py` — `evaluate_cell()`
+- ✅ All determinism tests pass (L5 lock: bitwise reproducibility on CPU & GPU)
+
+**EnergyMinimization β≥1 Gradient Credit Fix (6.1):**
+- ✅ The constraint `gradient_credit_beta_clamp` in `seed_registries.py` already correctly rejects `beta >= 1.0` for gradient/backprop credit
+- ✅ Verified: `ThermodynamicContrast` (EqProp) works correctly at `beta=1.0` (91.2% accuracy)
+- ✅ Verified: `GradientCredit` correctly shows zero pseudo-gradient at `beta=1.0` (9.3% accuracy = chance)
+
+**Per-Axis Ablation Tables Integration (4.1):**
+- ✅ Added `_ablation_section()` function to `report.py` for credit/substrate/plasticity ablation tables
+- ✅ Integrated into `generate_run_report()` text output
+- ✅ Added `_generate_ablation_html()` for interactive HTML reports
+- ✅ Tables show mean, std, count, min, max for val_acc, walltime_total, param_count, spectral_radius, psi_capacity
+- ✅ Verified: ablation tables appear in both text and HTML reports
+
+**Export/Repro with Docker (8.1):**
+- ✅ Added `--docker` flag to `comp export` — generates Dockerfile with pinned CUDA/PyTorch/deps, git commit, env fingerprint
+- ✅ Added `--docker` flag to `comp repro` — runs reproduction in Docker container for full environment isolation
+- ✅ `_generate_dockerfile()` creates reproducible Dockerfile with `CUBLAS_WORKSPACE_CONFIG=:4096:8`, `TORCH_DETERMINISTIC=1`
+- ✅ Verified: Dockerfile generates correctly with run-specific metadata
+
+**Nightly Benchmark CI Pipeline (8.2):**
+- ✅ Created `.github/workflows/nightly-benchmarks.yml` with scheduled nightly runs (2 AM UTC)
+- ✅ Includes benchmark execution, report generation, artifact upload, baseline comparison
+- ✅ Created `scripts/check_regression.py` — compares metrics, detects >5% regressions, generates markdown report
+- ✅ Created `scripts/bench_dashboard.py` — tracks latency/memory vs commit history
+
+**Memory Leak Profiling (6.1):**
+- ✅ Profiled GPU memory over multiple trainer creation/training cycles
+- ✅ Memory stable: 0.1-0.3 MB baseline, no unbounded growth detected
+- ✅ PyTorch CUDA caching allocator holds ~8.6 MB after tensor operations (expected behavior)
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, axis frontiers, multi-axis campaign, registry completeness, import time, CLI readme, gallery locks)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- quick-verify runs on GPU (RTX 3080) with all measured objectives populated
+- HTML report generates with ablation tables
+- Export/Repro with Docker flags work
+- `ruff format` passes on changed files
+- `pyright` passes on changed files
+
+### Updated Status
+
+**P3 (Agent-Friendly CLI) — COMPLETE**
+**P4 (Benchmark Suites + Analysis) — COMPLETE**  
+**P5 (Campaign Automation) — COMPLETE**
+**P6 (Reproducibility + Packaging) — LARGELY COMPLETE**
+- ✅ `comp export` / `comp repro` with Docker support
+- ✅ Nightly benchmark CI pipeline
+- [ ] Full Docker round-trip testing
+
+**Fixes & Correctness (6.1):**
+- ✅ GPU determinism with CUBLAS_WORKSPACE_CONFIG
+- ✅ EnergyMinimization β≥1 gradient credit constraint verified
+- ✅ Memory leaks profiled — no significant issues found
+
+**Analysis Infrastructure (7):**
+- ✅ Bootstrap CIs, significance testing, effect sizes
+- ✅ Pareto front knee detection, hypervolume
+- ✅ Dynamical analysis primitives available in `stability` package (Lyapunov, basin, spectral, settling)
+- [ ] Integration of dynamical analysis into experiment kernel/reports

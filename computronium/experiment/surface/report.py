@@ -736,6 +736,64 @@ def _axis_frontiers_section(generator: ReportGenerator, run_id: str) -> list[str
     return lines
 
 
+def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
+    """Per-axis ablation tables: credit swap, substrate swap, plasticity swap."""
+    import statistics
+    from collections import defaultdict
+
+    records = list(store.query_records(run_id=run_id))
+    if not records:
+        return []
+
+    lines = _section("Per-Axis Ablation Tables:")
+
+    # Define ablation axes
+    ablation_axes = ["credit", "substrate", "plasticity"]
+    primary_metrics = [
+        "val_acc",
+        "walltime_total",
+        "param_count",
+        "spectral_radius",
+        "psi_capacity",
+    ]
+
+    for axis in ablation_axes:
+        # Get unique values for this axis
+        axis_values = sorted(set(getattr(r, axis) for r in records))
+        if len(axis_values) <= 1:
+            continue  # Skip if only one value
+
+        lines.append(
+            f"  {axis.capitalize()} Ablation (over {axis} values: {', '.join(axis_values)}):"
+        )
+
+        for metric in primary_metrics:
+            # Collect metric values per axis value
+            groups: dict[str, list[float]] = defaultdict(list)
+            for r in records:
+                val = r.payload.get(metric)
+                if val is not None:
+                    groups[getattr(r, axis)].append(float(val))
+
+            if not groups:
+                continue
+
+            lines.append(f"    {metric}:")
+            for axis_val in axis_values:
+                vals = groups.get(axis_val, [])
+                if vals:
+                    mean_val = statistics.mean(vals)
+                    std_val = statistics.stdev(vals) if len(vals) > 1 else 0.0
+                    lines.append(
+                        f"      {axis_val}: mean={mean_val:.4g}, std={std_val:.4g}, n={len(vals)}"
+                    )
+                else:
+                    lines.append(f"      {axis_val}: N/A")
+            lines.append("")  # Empty line between metrics
+
+    return lines
+
+
 def _alerts_section(generator: ReportGenerator, run_id: str) -> list[str]:
     """Records carrying an alert, with the alert kinds."""
     lines = _section("Records with Alerts:")
@@ -835,6 +893,7 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
         *_limitations_section(generator, run_id),
         *_pareto_section(generator, run_id),
         *_axis_frontiers_section(generator, run_id),
+        *_ablation_section(store, run_id),
         *_alerts_section(generator, run_id),
     ]
     return "\n".join(lines)
@@ -984,6 +1043,85 @@ def _compute_ablation_table(
                 "max": max(vals),
             })
     return result
+
+
+def _generate_ablation_html(generator: ReportGenerator, run_id: str) -> str:
+    """Generate HTML tables for per-axis ablation analysis."""
+    import statistics
+    from collections import defaultdict
+
+    records = list(generator._store.query_records(run_id=run_id))
+    if not records:
+        return ""
+
+    ablation_axes = ["credit", "substrate", "plasticity"]
+    primary_metrics = [
+        "val_acc",
+        "walltime_total",
+        "param_count",
+        "spectral_radius",
+        "psi_capacity",
+    ]
+
+    html_parts = [
+        "<div style='margin: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;'>",
+        "<h2>Per-Axis Ablation Tables</h2>",
+    ]
+
+    for axis in ablation_axes:
+        axis_values = sorted(set(getattr(r, axis) for r in records))
+        if len(axis_values) <= 1:
+            continue
+
+        html_parts.append(f"<h3>{axis.capitalize()} Ablation</h3>")
+
+        for metric in primary_metrics:
+            groups: dict[str, list[float]] = defaultdict(list)
+            for r in records:
+                val = r.payload.get(metric)
+                if val is not None:
+                    groups[getattr(r, axis)].append(float(val))
+
+            if not groups:
+                continue
+
+            html_parts.append(f"<h4>{metric}</h4>")
+            html_parts.append(
+                "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+                "<thead><tr style='background-color: #e9ecef;'>"
+                f"<th style='border: 1px solid #dee2e6; padding: 8px;'>{axis}</th>"
+                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Mean</th>"
+                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Std</th>"
+                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Count</th>"
+                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Min</th>"
+                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Max</th>"
+                "</tr></thead><tbody>"
+            )
+
+            for axis_val in axis_values:
+                vals = groups.get(axis_val, [])
+                if vals:
+                    mean_val = statistics.mean(vals)
+                    std_val = statistics.stdev(vals) if len(vals) > 1 else 0.0
+                    html_parts.append(
+                        f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{axis_val}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{mean_val:.4g}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{std_val:.4g}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{len(vals)}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{min(vals):.4g}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{max(vals):.4g}</td>"
+                        "</tr>"
+                    )
+                else:
+                    html_parts.append(
+                        f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{axis_val}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;' colspan='5'>N/A</td></tr>"
+                    )
+
+            html_parts.append("</tbody></table>")
+
+    html_parts.append("</div>")
+    return "\n".join(html_parts)
 
 
 def generate_html_report(
@@ -1489,9 +1627,16 @@ def generate_html_report(
         margin=dict(t=100, b=50, l=50, r=50),
     )
 
+    # Generate ablation tables HTML
+    ablation_html = _generate_ablation_html(generator, run_id)
+
     # Generate HTML
     output_file = Path(output_path) if output_path else Path(f"{run_id}_report.html")
-    output_file.write_text(fig.to_html(include_plotlyjs="cdn"), encoding="utf-8")
+    html_content = fig.to_html(include_plotlyjs="cdn")
+    # Insert ablation tables before closing body tag
+    if ablation_html:
+        html_content = html_content.replace("</body>", f"{ablation_html}</body>")
+    output_file.write_text(html_content, encoding="utf-8")
 
     return output_file
 
