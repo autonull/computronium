@@ -766,7 +766,9 @@ class ModelBasedPolicy:
                     mean_pred, uncertainty = self._icu_model.predict(fv)
                 except Exception as e:  # ruff: ignore[try-except-continue]
                     # If prediction fails, skip this pair
-                    logger.debug("I(C,U) prediction failed for %s/%s: %s", credit, update, e)
+                    logger.debug(
+                        "I(C,U) prediction failed for %s/%s: %s", credit, update, e
+                    )
                     continue
                 scored_pairs.append(((credit, update), mean_pred, uncertainty))
 
@@ -1252,9 +1254,7 @@ def _create_icu_model_from_spec(
         return None, []
 
     # Generate all credit×update pairs
-    credit_update_pairs = [
-        (c, u) for c in credit_primitives for u in update_primitives
-    ]
+    credit_update_pairs = [(c, u) for c in credit_primitives for u in update_primitives]
 
     # Try to load existing I(C,U) model from store
     # For now, create a fresh prior surrogate

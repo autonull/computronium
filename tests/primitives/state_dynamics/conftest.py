@@ -62,7 +62,10 @@ def full_case_config() -> dict[str, Any]:
 # Session-scoped pre-computed reference outputs
 # ============================================================
 
-def _precompute_reference_outputs(dynamics_name: str, seeds: list[int], case_config: dict[str, Any]) -> dict[int, Any]:
+
+def _precompute_reference_outputs(
+    dynamics_name: str, seeds: list[int], case_config: dict[str, Any]
+) -> dict[int, Any]:
     """Pre-compute reference outputs for given seeds and dynamics."""
     if dynamics_name == "energy_minimization":
         make_case = make_case_em
@@ -86,13 +89,17 @@ def _precompute_reference_outputs(dynamics_name: str, seeds: list[int], case_con
 @pytest.fixture(scope="session")
 def energy_minimization_ref_outputs(fast_case_config: dict[str, Any]) -> dict[int, Any]:
     """Pre-computed reference outputs for energy_minimization (seeds 0, 1, 2, 42)."""
-    return _precompute_reference_outputs("energy_minimization", [0, 1, 2, 42], fast_case_config)
+    return _precompute_reference_outputs(
+        "energy_minimization", [0, 1, 2, 42], fast_case_config
+    )
 
 
 @pytest.fixture(scope="session")
 def predictive_settling_ref_outputs(fast_case_config: dict[str, Any]) -> dict[int, Any]:
     """Pre-computed reference outputs for predictive_settling (seeds 0, 1, 2, 42)."""
-    return _precompute_reference_outputs("predictive_settling", [0, 1, 2, 42], fast_case_config)
+    return _precompute_reference_outputs(
+        "predictive_settling", [0, 1, 2, 42], fast_case_config
+    )
 
 
 @pytest.fixture(scope="session")
@@ -104,6 +111,7 @@ def pc_alm_ref_outputs(fast_case_config: dict[str, Any]) -> dict[int, Any]:
 # ============================================================
 # Pre-computed test cases (cases themselves, not just outputs)
 # ============================================================
+
 
 @pytest.fixture(scope="session")
 def energy_minimization_cases(fast_case_config: dict[str, Any]) -> dict[int, Any]:
@@ -120,12 +128,15 @@ def predictive_settling_cases(fast_case_config: dict[str, Any]) -> dict[int, Any
 @pytest.fixture(scope="session")
 def pc_alm_cases(fast_case_config: dict[str, Any]) -> dict[int, Any]:
     """Pre-computed test cases for pc_alm."""
-    return {seed: make_case_pcalm(seed=seed, **fast_case_config) for seed in [0, 1, 2, 42]}
+    return {
+        seed: make_case_pcalm(seed=seed, **fast_case_config) for seed in [0, 1, 2, 42]
+    }
 
 
 # ============================================================
 # Kernel compilation warmup fixtures
 # ============================================================
+
 
 def _warmup_energy_minimization() -> None:
     try:
@@ -134,14 +145,14 @@ def _warmup_energy_minimization() -> None:
             make_case,
             reference_step,
         )
+
         case = make_case(device="cpu", seed=0)
         compiled = compile_model(reference_step, mode="reduce-overhead")
         _ = compiled(case)
     except Exception as exc:
         import logging
-        logging.getLogger(__name__).debug(
-            "EnergyMinimization warmup failed: %s", exc
-        )
+
+        logging.getLogger(__name__).debug("EnergyMinimization warmup failed: %s", exc)
 
 
 def _warmup_predictive_settling() -> None:
@@ -151,14 +162,14 @@ def _warmup_predictive_settling() -> None:
             make_case,
             reference_step,
         )
+
         case = make_case(device="cpu", seed=0)
         compiled = compile_model(reference_step, mode="reduce-overhead")
         _ = compiled(case)
     except Exception as exc:
         import logging
-        logging.getLogger(__name__).debug(
-            "PredictiveSettling warmup failed: %s", exc
-        )
+
+        logging.getLogger(__name__).debug("PredictiveSettling warmup failed: %s", exc)
 
 
 def _warmup_pc_alm() -> None:
@@ -168,11 +179,13 @@ def _warmup_pc_alm() -> None:
             make_case,
             reference_step,
         )
+
         case = make_case(device="cpu", seed=0)
         compiled = compile_model(reference_step, mode="reduce-overhead")
         _ = compiled(case)
     except Exception as exc:
         import logging
+
         logging.getLogger(__name__).debug("PCALM warmup failed: %s", exc)
 
 
@@ -201,6 +214,7 @@ def triton_warmup() -> None:
         try:
             # Import inside to avoid circular imports
             import importlib
+
             accel = importlib.import_module("computronium.acceleration")
             if hasattr(accel, "get_available_kernels"):
                 for kernel in accel.get_available_kernels():
@@ -209,4 +223,5 @@ def triton_warmup() -> None:
                         kernel.warmup()
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).debug("Triton warmup failed: %s", exc)

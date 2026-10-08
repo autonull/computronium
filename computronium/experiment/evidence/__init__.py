@@ -302,7 +302,9 @@ def __getattr__(name: str) -> Any:
         submodule = _get_submodule(f"computronium.experiment.evidence.{submodule_name}")
         return getattr(submodule, name)
 
-    raise AttributeError(f"module 'computronium.experiment.evidence' has no attribute '{name}'")
+    raise AttributeError(
+        f"module 'computronium.experiment.evidence' has no attribute '{name}'"
+    )
 
 
 def __dir__() -> list[str]:

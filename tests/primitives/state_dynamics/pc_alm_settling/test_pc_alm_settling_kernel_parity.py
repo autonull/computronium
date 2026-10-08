@@ -7,7 +7,10 @@ from computronium.acceleration.registry import get
 from computronium.primitives.state_dynamics.pc_alm_settling import kernel
 
 
-@pytest.mark.skipif("kernel" not in get("primitive.state_dynamics.pc_alm_settling").supported_backends, reason="no kernel backend")
+@pytest.mark.skipif(
+    "kernel" not in get("primitive.state_dynamics.pc_alm_settling").supported_backends,
+    reason="no kernel backend",
+)
 @pytest.mark.skipif(not kernel.is_available(), reason="kernel not available")
 def test_kernel_parity(
     pc_alm_kernel_warmup: None,
@@ -23,7 +26,10 @@ def test_kernel_parity(
     assert_parity(reference_output, kernel_output, spec.parity)
 
 
-@pytest.mark.skipif("kernel" not in get("primitive.state_dynamics.pc_alm_settling").supported_backends, reason="no kernel backend")
+@pytest.mark.skipif(
+    "kernel" not in get("primitive.state_dynamics.pc_alm_settling").supported_backends,
+    reason="no kernel backend",
+)
 @pytest.mark.skipif(not kernel.is_available(), reason="kernel not available")
 def test_kernel_parity_different_seeds(
     pc_alm_kernel_warmup: None,

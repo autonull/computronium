@@ -12,10 +12,9 @@ from typing import TYPE_CHECKING, Any, Final
 
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import (
-    compose_system_from_configs,
     compose_joint_system_from_configs,
+    compose_system_from_configs,
 )
-from computronium.core.joint.transition import PlasticityConfig
 from computronium.core.system_trainer.factory import param_count
 from computronium.experiment.learning.prior import apply_dynamics_step_size
 from computronium.experiment.schema.axis import StructuralAxis

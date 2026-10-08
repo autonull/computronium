@@ -201,7 +201,7 @@ class TestObjectivesAreMeasurements:
 
     def test_a_registered_but_unmeasured_objective_is_refused(self) -> None:
         with pytest.raises(UnmeasuredObjectiveError, match="registered but unmeasured"):
-            objective_metric("flops")
+            objective_metric("test_accuracy")
 
     def test_an_unmeasured_payload_yields_no_value(self) -> None:
         assert objective_values(("validation_accuracy",), {}) is None
@@ -214,7 +214,7 @@ class TestObjectivesAreMeasurements:
             ("maximize", "minimize"),
         )
         with pytest.raises(UnmeasuredObjectiveError):
-            resolve_objectives(("flops",))
+            resolve_objectives(("test_accuracy",))
 
     def test_the_evaluator_writes_every_measured_objective(self) -> None:
         """A measured objective must resolve against a real record payload.
@@ -248,7 +248,7 @@ class TestObjectivesAreMeasurements:
             "energy_efficiency",
             "energy_per_mac",
             "energy_per_step",
-            "free_energy",          # alias for hopfield_energy in this family
+            "free_energy",  # alias for hopfield_energy in this family
             "hopfield_energy",
             "lyapunov_exponent",
             "macs_per_step",
@@ -271,10 +271,10 @@ class TestObjectivesAreMeasurements:
         # Family-specific metrics for OTHER dynamics should NOT be present
         # (they are registered with unavailable_reason for this coordinate)
         inapplicable = (
-            "augmented_lagrangian",      # pc_alm only
+            "augmented_lagrangian",  # pc_alm only
             "instantaneous_proxy_energy",  # instantaneous only
-            "pc_free_energy",            # predictive coding only
-            "spike_proxy_energy",        # spike_integration only
+            "pc_free_energy",  # predictive coding only
+            "spike_proxy_energy",  # spike_integration only
         )
         for obj in inapplicable:
             assert objective_values((obj,), record.payload) is None, (
@@ -505,7 +505,10 @@ class TestTheRunReachesThePolicy:
         assert context["seed"] == 11
         assert context["spec"] is spec
         # ICU model is available for default credit/update, so sampler is icu_guided
-        assert create_policy("model_based", **context).get_name() == "model_based_icu_guided"
+        assert (
+            create_policy("model_based", **context).get_name()
+            == "model_based_icu_guided"
+        )
 
     def test_a_policy_that_declares_no_objectives_receives_none(self) -> None:
         from computronium.experiment.schema import RunSpec

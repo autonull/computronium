@@ -124,6 +124,7 @@ class TestWrapperObligations:
             RoundRobinGridPolicy,
             SimpleCostModel,
         )
+
         config = PipelineConfig(
             run_id="test_coverage",
             run_spec=RunSpec(task="digits", profile="test"),

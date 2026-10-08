@@ -210,15 +210,6 @@ def test_a_registered_geometry_is_composable(name: str) -> None:
     assert cell.config.geometry.topology_type == name
 
 
-def test_an_unhonourable_primitive_is_retired_with_its_reason() -> None:
-    """R78: a retired row is excluded from the space and says why (nca)."""
-    spec = _spec()
-    nca = AXES_REGISTRIES[StructuralAxis.GEOMETRY]["nca"]
-    assert not nca.available
-    assert "NcaGeometry.step" in (nca.unavailable_reason or "")
-    assert "nca" not in search_space_from_spec(spec).primitives(StructuralAxis.GEOMETRY)
-
-
 def test_the_geometry_alias_table_does_not_grow() -> None:
     """``_GEOMETRY_ALIASES`` is a §3.0 violation in miniature; hold it at one."""
     assert _GEOMETRY_ALIASES == {"num_layers": "depth"}

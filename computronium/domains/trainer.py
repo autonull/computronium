@@ -79,7 +79,9 @@ def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
     return nn.CrossEntropyLoss()
 
 
-def _compute_task_loss(task: TaskProtocol, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+def _compute_task_loss(
+    task: TaskProtocol, logits: torch.Tensor, targets: torch.Tensor
+) -> torch.Tensor:
     """Compute loss using task's custom logic if available, otherwise use resolved loss.
 
     LM tasks need special handling: they output (B, T, V) and target is (B, T),
@@ -274,9 +276,7 @@ class _TaskTrainer:
             loss = _compute_task_loss(self.task, logits, y)
             loss = self.safety_wrapper.check_loss(loss)
             loss.backward()
-            self.safety_wrapper.clip_grad_norm(
-                self.model.parameters(), self.grad_clip
-            )
+            self.safety_wrapper.clip_grad_norm(self.model.parameters(), self.grad_clip)
             self.optimizer.step()
 
             # Accumulate metrics

@@ -119,7 +119,9 @@ def test_the_report_counts_the_promotion(run: tuple[Path, str]) -> None:
     assert promoted_line, "the report printed no promotion summary"
     # Extract the promoted count and verify it's > 0
     promoted_count = int(promoted_line.split(":")[1].strip())
-    assert promoted_count > 0, f"the promotion history is empty on a measured run: {promoted_line!r}"
+    assert promoted_count > 0, (
+        f"the promotion history is empty on a measured run: {promoted_line!r}"
+    )
     with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
         claims = ReportGenerator(store).claims(run_id)
     assert all(math.isfinite(c.mean) for c in claims)

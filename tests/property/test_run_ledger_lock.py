@@ -91,7 +91,9 @@ def _run_spec() -> RunSpec:
         batch_limit=MEASURED_BATCH_LIMIT,
         axes=(
             AxisSelection(
-                axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse", "analog")),
+                axis=StructuralAxis.SUBSTRATE,
+                primitives=("digital", "sparse", "analog"),
+            ),
             AxisSelection(
                 axis=StructuralAxis.GEOMETRY,
                 primitives=("feedforward", "recurrent"),
@@ -100,7 +102,9 @@ def _run_spec() -> RunSpec:
                 axis=StructuralAxis.DYNAMICS,
                 primitives=("instantaneous",),
             ),
-            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("fast_weights", "null")),
+            AxisSelection(
+                axis=StructuralAxis.PLASTICITY, primitives=("fast_weights", "null")
+            ),
             AxisSelection(
                 axis=StructuralAxis.CREDIT,
                 primitives=("thermodynamic_contrast", "gradient", "random_projections"),

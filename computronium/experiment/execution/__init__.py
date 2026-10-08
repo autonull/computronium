@@ -363,10 +363,14 @@ def __getattr__(name: str) -> Any:
     # Symbols from specific submodules
     if name in _symbol_to_module:
         submodule_name = _symbol_to_module[name]
-        submodule = _get_submodule(f"computronium.experiment.execution.{submodule_name}")
+        submodule = _get_submodule(
+            f"computronium.experiment.execution.{submodule_name}"
+        )
         return getattr(submodule, name)
 
-    raise AttributeError(f"module 'computronium.experiment.execution' has no attribute '{name}'")
+    raise AttributeError(
+        f"module 'computronium.experiment.execution' has no attribute '{name}'"
+    )
 
 
 def __dir__() -> list[str]:

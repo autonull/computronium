@@ -111,7 +111,9 @@ class LMTask(DomainTask):
 
         idx = torch.randint(0, len(data) - self.seq_len - 1, (bsz,))
         x = torch.stack([data[i : i + self.seq_len] for i in idx]).to(self.device)
-        y = torch.stack([data[i + 1 : i + 1 + self.seq_len] for i in idx]).to(self.device)
+        y = torch.stack([data[i + 1 : i + 1 + self.seq_len] for i in idx]).to(
+            self.device
+        )
         return x, y
 
     def evaluate(

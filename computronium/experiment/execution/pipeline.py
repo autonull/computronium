@@ -837,10 +837,12 @@ class PipelineRunner:
                         artifacts = []
                         if "checkpoint_bytes_b64" in record.payload:
                             import base64
+
                             from computronium.experiment.evidence.artifacts import (
                                 ArtifactInput,
                                 ArtifactRole,
                             )
+
                             checkpoint_bytes = base64.b64decode(
                                 record.payload["checkpoint_bytes_b64"]
                             )
@@ -852,7 +854,7 @@ class PipelineRunner:
                             )
                             # Remove from payload to avoid duplication
                             del record.payload["checkpoint_bytes_b64"]
-                        
+
                         try:
                             if artifacts:
                                 self._store.append_with_artifacts(record, artifacts)

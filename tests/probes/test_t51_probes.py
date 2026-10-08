@@ -14,6 +14,7 @@ import pytest
 def test_t51_stability_operator_probe():
     """Smoke test: t51_stability_operator_probe runs without error."""
     from scripts.probes.t51_stability_operator_probe import main
+
     main()
 
 
@@ -23,6 +24,7 @@ def test_t51_stability_operator_probe():
 def test_t51_energy_model_probe():
     """Smoke test: t51_energy_model_probe runs without error."""
     from scripts.probes.t51_energy_model_probe import main
+
     main()
 
 
@@ -32,6 +34,7 @@ def test_t51_energy_model_probe():
 def test_t51_learning_signal_probe():
     """Smoke test: t51_learning_signal_probe runs without error."""
     from scripts.probes.t51_learning_signal_probe import main
+
     main()
 
 
@@ -41,6 +44,7 @@ def test_t51_learning_signal_probe():
 def test_t51_metric_coverage_probe():
     """Smoke test: t51_metric_coverage_probe runs without error."""
     from scripts.probes.t51_metric_coverage_probe import main
+
     main()
 
 
@@ -50,4 +54,5 @@ def test_t51_metric_coverage_probe():
 def test_t51_nonnormality_verification_probe():
     """Smoke test: t51_nonnormality_verification_probe runs without error."""
     from scripts.probes.t51_nonnormality_verification_probe import main
+
     main()

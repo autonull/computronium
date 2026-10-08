@@ -28,12 +28,11 @@ from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
     PARAM_BUDGET_TOLERANCE,
 )
+from computronium.ontology.substrate._substrate import SubstrateConfig
 from computronium.ontology.substrate.spec import (
     SubstrateSpec,
     compute_substrate_objectives,
 )
-from computronium.ontology.substrate._substrate import SubstrateConfig
-from computronium.core.joint.transition import PlasticityPrimitive
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -497,6 +496,7 @@ def compute_plasticity_metrics(system: Any) -> dict[str, float]:
 
     # Check if it's a NullPlasticity (5-D system)
     from computronium.state import NullPlasticity
+
     if isinstance(plasticity, NullPlasticity):
         return metrics
 
@@ -519,7 +519,9 @@ def compute_plasticity_metrics(system: Any) -> dict[str, float]:
     # For rule_state: consolidation is operator selection (num_operators * operator_dim)
     # Use a heuristic: psi_capacity * hidden_dim (typical consolidation cost)
     hidden_dim = 256  # Typical hidden dimension
-    if hasattr(system.geometry, "config") and hasattr(system.geometry.config, "hidden_dim"):
+    if hasattr(system.geometry, "config") and hasattr(
+        system.geometry.config, "hidden_dim"
+    ):
         hidden_dim = system.geometry.config.hidden_dim
     consolidation_flops = psi_capacity * hidden_dim * 2  # 2 FLOPs per MAC
     metrics["consolidation_cost"] = float(consolidation_flops)
@@ -697,7 +699,9 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
                 config,
                 task.get_dataloader("train"),
                 val_data=_val_batches(task, config.limit_val_batches),
-                checkpoint_callback=_checkpoint_callback if schedule.checkpoint_every_n > 0 else None,
+                checkpoint_callback=_checkpoint_callback
+                if schedule.checkpoint_every_n > 0
+                else None,
             )
             history = trainer.fit()
     except EvaluationError:
@@ -761,7 +765,9 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     settle_telemetry = {
         "energy_per_step": metrics.get("energy_per_step", 0.0),
         "settle_steps_used": metrics.get("settle_steps", 0),
-        "free_energy_final": metrics.get("hopfield_energy", metrics.get("free_energy", 0.0)),
+        "free_energy_final": metrics.get(
+            "hopfield_energy", metrics.get("free_energy", 0.0)
+        ),
         "spike_rate": metrics.get("spike_rate", 0.0),
         "event_density": metrics.get("event_density", 0.0),
     }
@@ -826,7 +832,9 @@ def cell_record(
     )
 
     try:
-        evaluation = evaluate_cell(coordinate, schedule, geometry, checkpoint_dir, resume_checkpoint_path)
+        evaluation = evaluate_cell(
+            coordinate, schedule, geometry, checkpoint_dir, resume_checkpoint_path
+        )
     except EvaluationError as exc:
         cause = FailureCause(exc.cause)
         return Record.create(

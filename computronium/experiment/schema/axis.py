@@ -137,7 +137,7 @@ class AxisPrimitive(Protocol):
                 registry.register(cls)  # type: ignore[arg-type]
 
 
-class _LazyRegistryDict(dict):
+class _LazyRegistryDict(dict[str, Registry[AxisSpec]]):
     """Lazy dict that seeds registries on first access."""
 
     _seeded = False
@@ -150,20 +150,23 @@ class _LazyRegistryDict(dict):
                 from computronium.experiment.schema.seed_registries import (
                     seed_all_registries,
                 )
+
                 seed_all_registries()
                 self._seeded = True
             finally:
                 self._seeding = False
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Registry[AxisSpec]:
         self._ensure_seeded()
         return super().__getitem__(key)
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
         self._ensure_seeded()
         return super().__contains__(key)
 
-    def get(self, key, default=None):
+    def get(
+        self, key: str, default: Registry[AxisSpec] | None = None
+    ) -> Registry[AxisSpec] | None:
         self._ensure_seeded()
         return super().get(key, default)
 
@@ -183,13 +186,13 @@ class _LazyRegistryDict(dict):
         self._ensure_seeded()
         return super().__iter__()
 
-    def __len__(self):
+    def __len__(self) -> int:
         self._ensure_seeded()
         return super().__len__()
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         self._ensure_seeded()
-        return super().__bool__()
+        return bool(self)
 
 
 # Global axis registries - one per structural axis (lazy seeding)
@@ -216,7 +219,7 @@ class _LazyRegistryProxy:
     def _resolve(self) -> Registry[AxisSpec]:
         if self._registry is None:
             self._registry = AXES_REGISTRIES[self._axis]
-        return self._registry
+        return self._registry  # type: ignore[return-value]
 
     def __getattr__(self, name: str):
         return getattr(self._resolve(), name)
@@ -230,8 +233,8 @@ class _LazyRegistryProxy:
     def __getitem__(self, key):
         return self._resolve()[key]
 
-    def get(self, key, default=None):
-        return self._resolve().get(key, default)
+    def get(self, key: str) -> AxisSpec | None:
+        return self._resolve().get(key)
 
     def keys(self):
         return self._resolve().keys()

@@ -19,6 +19,7 @@ metric that could not be measured is ``None``, not zero, so "unmeasured" and
 recorded on the epoch it truncated, because a partial epoch's time and memory
 are not comparable with a full epoch's.
 """
+
 from __future__ import annotations
 
 import logging

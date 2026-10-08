@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass, fields, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
@@ -163,7 +163,7 @@ class Schedule:
     # DataLoader num_workers (0 for single-threaded determinism)
     num_workers: int = 0
     # Numerical precision: "fp32", "fp16", "bf16"
-    precision: str = "fp32"
+    precision: Literal["fp32", "fp16", "bf16"] = "fp32"
     # Save checkpoint every N epochs (0 = disabled)
     checkpoint_every_n: int = 0
 

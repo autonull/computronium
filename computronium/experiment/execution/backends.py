@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
     from computronium.experiment.evidence.failure import FailureEvent
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.coordinate import (
@@ -151,7 +150,14 @@ class _ThreadedBackend:
         """Train one cell and wrap the measurement as a Record."""
         from computronium.experiment.execution.evaluate import cell_record
 
-        return cell_record(coordinate, schedule, provenance, params, checkpoint_dir, resume_checkpoint_path)
+        return cell_record(
+            coordinate,
+            schedule,
+            provenance,
+            params,
+            checkpoint_dir,
+            resume_checkpoint_path,
+        )
 
     async def submit(
         self,
@@ -163,9 +169,10 @@ class _ThreadedBackend:
     ) -> list[Record]:
         """Evaluate one coordinate across the schedule's seeds."""
         import tempfile
-        from pathlib import Path
 
-        from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
+        from computronium.experiment.evidence.artifacts import (
+            ArtifactRole,
+        )
 
         cell_key = coordinate.cell_key()
 
@@ -227,8 +234,11 @@ class _ThreadedBackend:
             if checkpoint_path and Path(checkpoint_path).exists():
                 # Read checkpoint bytes and store as base64 in payload
                 import base64
+
                 checkpoint_bytes = Path(checkpoint_path).read_bytes()
-                records[0].payload["checkpoint_bytes_b64"] = base64.b64encode(checkpoint_bytes).decode()
+                records[0].payload["checkpoint_bytes_b64"] = base64.b64encode(
+                    checkpoint_bytes
+                ).decode()
 
         if temp_dir:
             temp_dir.cleanup()
@@ -259,7 +269,10 @@ class _ThreadedBackend:
                     records = await self.submit(coord, sched, prov, params, store)
                 except Exception as e:
                     import traceback
-                    logger.error("Evaluation failed for %s: %s", coord.cell_key()[:12], e)
+
+                    logger.error(
+                        "Evaluation failed for %s: %s", coord.cell_key()[:12], e
+                    )
                     logger.error("Full traceback: %s", traceback.format_exc())
                     return Failure(
                         failure_event=self._create_failure_event(
