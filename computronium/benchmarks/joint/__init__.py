@@ -7,6 +7,11 @@ This package contains the 5 benchmark levels for the joint architecture:
 - Level 3.5: Algorithm Migration
 - Level 4: Z3 Fixed Weights
 
+Additional benchmark suites (new):
+- Credit Assignment Scaling (depth scaling for credit methods)
+- Substrate Precision Scaling (precision vs substrate trade-offs)
+- Stability-Plasticity Frontier (ρ sweep × plasticity types)
+
 Each suite result carries a ``claims_scope`` audit status (see
 ``_claims.py``): L3.5 and L3 are ``plumbing_only`` (no ψ mediation in the
 forward loop today); L1 and L2 are ``psi_wired_uncontrolled`` — ψ is stepped
@@ -32,6 +37,9 @@ __all__ = [
     "adaptation_efficiency",  # ruff: ignore[undefined-export]
     "algorithm_migration",  # ruff: ignore[undefined-export]
     "compute_efficiency",  # ruff: ignore[undefined-export]
+    "credit_assignment_scaling",  # ruff: ignore[undefined-export]
+    "stability_plasticity_frontier",  # ruff: ignore[undefined-export]
     "structural_robustness",  # ruff: ignore[undefined-export]
+    "substrate_precision_scaling",  # ruff: ignore[undefined-export]
     "z3_fixed_weights",  # ruff: ignore[undefined-export]
 ]

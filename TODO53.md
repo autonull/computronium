@@ -10,8 +10,8 @@
 - [x] **CLI**: Add `--device auto` (default) → CUDA if available, else CPU to all `comp` subcommands (`run`, `benchmark`, `stability-plasticity`, `frozen-theta-psi`, `parity`)
 - [x] **RunSpec**: Add `device: "auto" | "cuda" | "cpu"` field with auto-detection logic in `RunSpec.model_validator`
 - [x] **Trainer**: Ensure `SystemTrainerConfig.device="auto"` resolves to CUDA; propagate to all sub-components (geometry, substrate, kernels)
-- [ ] **Kernels**: Verify Triton kernels auto-dispatch on CUDA (status: `kernel_verified` → `select_backend(spec, "auto")` returns `"kernel"`)
-- [ ] **Tests**: Add `@pytest.mark.gpu` marker to GPU-required tests; ensure CI can run on GPU runners
+- [x] **Kernels**: Verify Triton kernels auto-dispatch on CUDA (status: `kernel_verified` → `select_backend(spec, "auto")` returns `"kernel"`)
+- [x] **Tests**: Add `@pytest.mark.gpu` marker to GPU-required tests; ensure CI can run on GPU runners
 
 ### 1.2 GPU Memory Management
 - [ ] **Batch sizing**: Auto-scale batch size based on `torch.cuda.get_device_properties(0).total_memory` (target 80% utilization)
@@ -119,16 +119,16 @@
 ### 5.1 Existing Suites (Verify GPU, Add Metrics)
 | Suite | Status | GPU Test | Add Objectives |
 |-------|--------|----------|----------------|
-| `adaptation_efficiency` | Implemented | [ ] | `memory_usage`, `flops`, `psi_capacity` |
-| `compute_efficiency` | Implemented | [ ] | `macs_per_step`, `latency_ms`, `energy_per_step` |
-| `structural_robustness` | Implemented | [ ] | `basin_stability`, `recovery_time` |
-| `algorithm_migration` | Implemented | [ ] | `migration_accuracy`, `θ_bitwise_invariance` |
-| `z3_fixed_weights` | Implemented | [ ] | `task_diversity`, `ψ_orthogonality` |
+| `adaptation_efficiency` | Implemented | ✅ Done | `memory_usage`, `flops`, `psi_capacity` |
+| `compute_efficiency` | Implemented | ✅ Done | `macs_per_step`, `latency_ms`, `energy_per_step` |
+| `structural_robustness` | Implemented | ✅ Done | `basin_stability`, `recovery_time` |
+| `algorithm_migration` | Implemented | ✅ Done | `migration_accuracy`, `θ_bitwise_invariance` |
+| `z3_fixed_weights` | Implemented | ✅ Done | `task_diversity`, `ψ_orthogonality` |
 
 ### 5.2 New Benchmark Suites (High Impact)
-- [ ] **`credit_assignment_scaling`**: Depth scaling (2→50 layers) for Backprop/FA/EqProp/PEPITA/TargetProp
-- [ ] **`substrate_precision_scaling`**: Digital FP32/FP16/BF16/INT8/Ternary vs Memristive/Neuromorphic
-- [ ] **`stability_plasticity_frontier`**: Systematic ρ(J) sweep (0.5→1.2) × plasticity types × tasks
+- [x] **`credit_assignment_scaling`**: Depth scaling (2→50 layers) for Backprop/FA/EqProp/PEPITA/TargetProp
+- [x] **`substrate_precision_scaling`**: Digital FP32/FP16/BF16/INT8/Ternary vs Memristive/Neuromorphic
+- [x] **`stability_plasticity_frontier`**: Systematic ρ(J) sweep (0.5→1.2) × plasticity types × tasks
 - [ ] **`local_credit_scaling`**: FA/DFA/PEPITA/TargetProp on ImageNet-scale (resnet50, vit-small)
 - [ ] **`energy_accuracy_pareto`**: Multi-objective: accuracy vs energy_per_step across all axes
 
@@ -810,3 +810,56 @@
 - `ruff format` and `ruff check` pass (380 errors = baseline)
 - `pyright` passes on changed files (0 errors)
 - quick-verify runs end-to-end
+
+---
+
+## 24. Session Progress Summary (2026-10-08) — GPU Benchmark Tests & New Benchmark Suites
+
+### Completed in This Session (P4 — Benchmark Suites + Analysis)
+
+**GPU Tests for Existing 5 Benchmark Suites:**
+- ✅ Added `tests/integration/test_benchmarks_gpu.py` with 5 GPU tests for existing suites
+- ✅ All 5 existing benchmark suites now have GPU tests: adaptation_efficiency, compute_efficiency, structural_robustness, algorithm_migration, z3_fixed_weights
+- ✅ Tests marked with `@pytest.mark.gpu` and `@pytest.mark.timeout(300)` (120s for Z3)
+- ✅ Added entries to `KNOWN_LONG` in `tests/test_timeout_marker_policy.py`
+- ✅ All GPU tests pass on RTX 3080
+
+**3 New Benchmark Suites Implemented:**
+1. **`credit_assignment_scaling`** (`computronium/benchmarks/joint/credit_assignment_scaling.py`)
+   - Depth sweep: 2, 4, 8, 16, 32, 50 layers
+   - Credit methods: gradient, FA, EqProp, PEPITA, TargetProp
+   - Measures: final accuracy, gradient norm, FA alignment, walltime, memory
+   - GPU test added
+
+2. **`substrate_precision_scaling`** (`computronium/benchmarks/joint/substrate_precision_scaling.py`)
+   - Digital substrates: FP32, FP16, BF16, INT8, Ternary
+   - Analog substrates: Memristive, Neuromorphic, Photonic, Complex, Quantum
+   - Simulates precision quantization and substrate-specific noise
+   - GPU test added
+
+3. **`stability_plasticity_frontier`** (`computronium/benchmarks/joint/stability_plasticity_frontier.py`)
+   - ρ(J) sweep: 0.5, 0.7, 0.9, 1.0, 1.05, 1.2
+   - Plasticity types: null, routing, fast_weights, rule_state, substrate_coupled
+   - Sequential task learning (Task A → Task B → Task A) for retention measurement
+   - Computes: spectral radius, σ_max, Lyapunov exponent, adaptation speed, retention
+   - GPU test added
+
+**GPU Tests for New Suites:**
+- ✅ Added 3 new GPU test classes in `tests/integration/test_benchmarks_gpu.py`
+- ✅ All 8 GPU benchmark tests pass (5 existing + 3 new)
+- ✅ Timeout markers added and registered in KNOWN_LONG
+
+**Code Changes:**
+- `computronium/benchmarks/joint/credit_assignment_scaling.py` — New benchmark suite
+- `computronium/benchmarks/joint/substrate_precision_scaling.py` — New benchmark suite
+- `computronium/benchmarks/joint/stability_plasticity_frontier.py` — New benchmark suite
+- `computronium/benchmarks/joint/__init__.py` — Exported new benchmarks
+- `tests/integration/test_benchmarks_gpu.py` — Added 8 GPU test classes
+- `tests/test_timeout_marker_policy.py` — Added 8 entries to KNOWN_LONG
+
+**Verification:**
+- All 8 GPU benchmark tests pass on RTX 3080 (CUDA)
+- All property locks pass (L1-L7, J1-J7, axis certifications, etc.)
+- `ruff format` and `ruff check` pass
+- `pyright` passes on all changed files (0 errors)
+- New benchmarks import and run successfully
