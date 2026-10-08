@@ -244,6 +244,12 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     )
     p_run.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
     p_run.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda"],
+        help="Device to run on: auto (CUDA if available), cpu, cuda",
+    )
+    p_run.add_argument(
         "--run-id",
         default=None,
         help=(
@@ -338,6 +344,47 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--output-dir",
         default="docs/figures/gallery",
         help="Output directory for gallery figures",
+    )
+
+    # Campaign command
+    p_campaign = sub.add_parser(
+        "campaign",
+        help="Execute declarative multi-run campaigns from YAML (with dependencies, parallelism, webhooks)",
+    )
+    p_campaign.add_argument(
+        "campaign_file",
+        help="Path to campaign YAML file",
+    )
+    p_campaign.add_argument(
+        "--store",
+        default="experiment.duckdb",
+        help="DuckDB store path (overrides campaign file)",
+    )
+    p_campaign.add_argument(
+        "--parallel",
+        type=int,
+        default=None,
+        help="Number of parallel runs (overrides campaign file)",
+    )
+    p_campaign.add_argument(
+        "--device",
+        default=None,
+        help="Device for all runs: auto, cpu, cuda (overrides campaign file)",
+    )
+    p_campaign.add_argument(
+        "--webhook-url",
+        default=None,
+        help="Webhook URL for progress notifications (overrides campaign file)",
+    )
+    p_campaign.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate campaign file and print execution plan without running",
+    )
+    p_campaign.add_argument(
+        "--output",
+        default=None,
+        help="Output file for campaign results (JSON)",
     )
 
     # Hypothesis campaign command
@@ -814,6 +861,7 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
         policy=profile.policy,
         axes=profile.axes,
         checkpoint_every_n=profile.checkpoint_every_n,
+        device=args.device,
     )
 
 
@@ -1210,6 +1258,74 @@ def _cmd_gallery(args: argparse.Namespace) -> int:
         for meta in metas:
             logger.info(f"  {meta.figure_png} (data_sha256={meta.data_sha256[:16]}...)")
         return 0
+
+
+def _cmd_campaign(args: argparse.Namespace) -> int:
+    """Execute a declarative multi-run campaign from YAML."""
+    import asyncio
+
+    from computronium.experiment.execution.campaign import load_campaign, run_campaign
+
+    campaign_path = Path(args.campaign_file)
+    if not campaign_path.exists():
+        logger.error(f"Campaign file not found: {campaign_path}")
+        return 1
+
+    try:
+        spec = load_campaign(campaign_path)
+    except Exception as e:
+        logger.error(f"Failed to load campaign: {e}")
+        return 1
+
+    if args.dry_run:
+        # Print execution plan
+        print(f"Campaign: {spec.name}")
+        print(f"Store: {spec.store}")
+        print(f"Parallel: {args.parallel or spec.parallel}")
+        print(f"Device: {args.device or 'auto'}")
+        print(f"Webhook: {args.webhook_url or spec.webhook_url or 'none'}")
+        print(f"Runs ({len(spec.runs)}):")
+        for i, run in enumerate(spec.runs):
+            deps = f" (depends on: {run.depends_on})" if run.depends_on else ""
+            profile_or_spec = run.profile or run.spec_file
+            print(f"  [{i}] {run.name}: {profile_or_spec}{deps}")
+        return 0
+
+    try:
+        result = asyncio.run(
+            run_campaign(
+                campaign_path,
+                parallel=args.parallel,
+                device=args.device,
+                webhook_url=args.webhook_url,
+            )
+        )
+    except Exception as e:
+        logger.exception("Campaign execution failed")
+        return 1
+
+    # Print summary
+    print(f"\nCampaign '{result['campaign']}' completed")
+    print(f"  Total runs: {result['total_runs']}")
+    print(f"  Completed: {result['completed']}")
+    print(f"  Failed: {result['failed']}")
+    for idx, run_result in result["run_results"].items():
+        status = "OK" if run_result["success"] else "FAILED"
+        if run_result.get("skipped"):
+            status = "SKIPPED"
+        run_name = spec.runs[idx].name
+        elapsed = run_result.get("elapsed_s", 0)
+        print(f"  [{idx}] {run_name}: {status} ({elapsed:.1f}s)")
+        if not run_result["success"] and not run_result.get("skipped"):
+            print(f"       Error: {run_result.get('error', 'unknown')}")
+
+    if args.output:
+        import json
+
+        Path(args.output).write_text(json.dumps(result, indent=2))
+        logger.info(f"Results written to {args.output}")
+
+    return 0 if result["failed"] == 0 else 1
 
 
 def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-statements, too-many-locals, complex-structure]
@@ -2308,6 +2424,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "conformance": _cmd_conformance,
         "status": _cmd_status,
         "gallery": _cmd_gallery,
+        "campaign": _cmd_campaign,
         "hypothesis-campaign": _cmd_hypothesis_campaign,
         "stability-plasticity": _cmd_stability_plasticity,
         "frozen-theta-psi": _cmd_frozen_theta_psi,
