@@ -1,5 +1,15 @@
 [
   {
+    "name": "augmented_lagrangian",
+    "description": "Augmented Lagrangian at convergence (pc_alm dynamics)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "augmented_lagrangian",
+    "unavailable_reason": null
+  },
+  {
     "name": "bleu_score",
     "description": "BLEU score for translation/generation tasks",
     "direction": "maximize",
@@ -7,7 +17,7 @@
     "normalizer": "minmax",
     "axis_tag": "task",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "bp_deficit",
@@ -17,7 +27,7 @@
     "normalizer": "minmax",
     "axis_tag": "ruler",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "coherence_time",
@@ -26,8 +36,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "substrate",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "coherence_time_us",
+    "unavailable_reason": null
   },
   {
     "name": "consolidation_cost",
@@ -36,8 +46,18 @@
     "weight": 1.0,
     "normalizer": "log",
     "axis_tag": "plasticity",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "consolidation_cost",
+    "unavailable_reason": null
+  },
+  {
+    "name": "contraction_rate",
+    "description": "1 - eta*\u03c1(f(h)-h): the contraction linear theory predicts, not the measured \u03c1_step",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "contraction_rate",
+    "unavailable_reason": null
   },
   {
     "name": "convergence_steps",
@@ -47,7 +67,7 @@
     "normalizer": "minmax",
     "axis_tag": "task",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "credit_efficiency",
@@ -57,7 +77,27 @@
     "normalizer": "minmax",
     "axis_tag": "composite",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
+  },
+  {
+    "name": "drift_max_singular_value",
+    "description": "\u03c3_max of the drift operator: transient amplification of f(h)-h",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "drift_max_singular_value",
+    "unavailable_reason": null
+  },
+  {
+    "name": "drift_spectral_radius",
+    "description": "\u03c1(f(h)-h): the network's own gain, with the relaxation step size divided out",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "drift_spectral_radius",
+    "unavailable_reason": null
   },
   {
     "name": "energy_efficiency",
@@ -66,8 +106,18 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "cost",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "energy_efficiency",
+    "unavailable_reason": null
+  },
+  {
+    "name": "energy_per_mac",
+    "description": "Energy per multiply-accumulate (joules): the substrate's efficiency",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "cost",
+    "metric_key": "energy_per_mac",
+    "unavailable_reason": null
   },
   {
     "name": "energy_per_step",
@@ -76,8 +126,8 @@
     "weight": 1.0,
     "normalizer": "log",
     "axis_tag": "cost",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "energy_per_step",
+    "unavailable_reason": null
   },
   {
     "name": "f1_score",
@@ -87,7 +137,7 @@
     "normalizer": "minmax",
     "axis_tag": "task",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "flops",
@@ -96,18 +146,18 @@
     "weight": 1.0,
     "normalizer": "log",
     "axis_tag": "cost",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "flops",
+    "unavailable_reason": null
   },
   {
     "name": "free_energy",
-    "description": "Free energy at convergence (energy-based dynamics)",
+    "description": "Free energy at convergence (energy-based dynamics; alias for hopfield_energy)",
     "direction": "minimize",
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "stability",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "hopfield_energy",
+    "unavailable_reason": null
   },
   {
     "name": "gate_fidelity",
@@ -116,8 +166,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "substrate",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "gate_fidelity",
+    "unavailable_reason": null
   },
   {
     "name": "generalization_gap",
@@ -127,7 +177,27 @@
     "normalizer": "minmax",
     "axis_tag": "task",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
+  },
+  {
+    "name": "hopfield_energy",
+    "description": "Hopfield energy at convergence (energy_minimization, lazy, diffusion dynamics)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "hopfield_energy",
+    "unavailable_reason": null
+  },
+  {
+    "name": "instantaneous_proxy_energy",
+    "description": "Instantaneous energy proxy (instantaneous dynamics; negative log-likelihood or zero)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "instantaneous_proxy_energy",
+    "unavailable_reason": null
   },
   {
     "name": "ir_drop_variance",
@@ -136,8 +206,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "substrate",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "ir_drop_variance",
+    "unavailable_reason": null
   },
   {
     "name": "latency_ms",
@@ -146,8 +216,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "cost",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "latency_ms",
+    "unavailable_reason": null
   },
   {
     "name": "lyapunov_exponent",
@@ -156,8 +226,18 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "stability",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "lyapunov_exponent",
+    "unavailable_reason": null
+  },
+  {
+    "name": "macs_per_step",
+    "description": "Multiply-accumulates per training step: the arithmetic the cell performs",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "cost",
+    "metric_key": "macs_per_step",
+    "unavailable_reason": null
   },
   {
     "name": "max_singular_value",
@@ -166,8 +246,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "stability",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "max_singular_value",
+    "unavailable_reason": null
   },
   {
     "name": "memory_usage",
@@ -176,8 +256,18 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "cost",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "memory_usage",
+    "unavailable_reason": null
+  },
+  {
+    "name": "nonnormality",
+    "description": "\u03c3_max(J)/\u03c1(J): transient amplification per unit of contraction",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "nonnormality",
+    "unavailable_reason": null
   },
   {
     "name": "param_count",
@@ -190,6 +280,16 @@
     "unavailable_reason": null
   },
   {
+    "name": "pc_free_energy",
+    "description": "Variational free energy at convergence (predictive_settling, error_predictive_coding dynamics)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "pc_free_energy",
+    "unavailable_reason": null
+  },
+  {
     "name": "perplexity",
     "description": "Perplexity for language modeling tasks",
     "direction": "minimize",
@@ -197,7 +297,7 @@
     "normalizer": "log",
     "axis_tag": "task",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "phase_noise",
@@ -206,8 +306,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "substrate",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "phase_noise",
+    "unavailable_reason": null
   },
   {
     "name": "psi_capacity",
@@ -216,8 +316,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "plasticity",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "psi_capacity",
+    "unavailable_reason": null
   },
   {
     "name": "rewrite_rate",
@@ -226,8 +326,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "plasticity",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "rewrite_rate",
+    "unavailable_reason": null
   },
   {
     "name": "ruler_energy_ratio",
@@ -237,7 +337,7 @@
     "normalizer": "log",
     "axis_tag": "ruler",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "ruler_param_ratio",
@@ -247,7 +347,7 @@
     "normalizer": "log",
     "axis_tag": "ruler",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "ruler_walltime_ratio",
@@ -257,7 +357,7 @@
     "normalizer": "log",
     "axis_tag": "ruler",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "settle_steps",
@@ -266,8 +366,8 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "stability",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "settle_steps",
+    "unavailable_reason": null
   },
   {
     "name": "spectral_radius",
@@ -276,8 +376,18 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "stability",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "spectral_radius",
+    "unavailable_reason": null
+  },
+  {
+    "name": "spike_proxy_energy",
+    "description": "Spike energy proxy (spike_integration dynamics; not a Lyapunov function)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "spike_proxy_energy",
+    "unavailable_reason": null
   },
   {
     "name": "spike_rate",
@@ -286,8 +396,18 @@
     "weight": 1.0,
     "normalizer": "minmax",
     "axis_tag": "substrate",
-    "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "metric_key": "spike_rate",
+    "unavailable_reason": null
+  },
+  {
+    "name": "stability_margin",
+    "description": "1 \u2212 \u03c1(J): how far the settle step is inside the unit circle",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability",
+    "metric_key": "stability_margin",
+    "unavailable_reason": null
   },
   {
     "name": "stability_plasticity_ratio",
@@ -297,7 +417,7 @@
     "normalizer": "log",
     "axis_tag": "composite",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "test_accuracy",
@@ -307,7 +427,7 @@
     "normalizer": "minmax",
     "axis_tag": "task",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "test_loss",
@@ -317,7 +437,7 @@
     "normalizer": "minmax",
     "axis_tag": "task",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "training_time",
@@ -327,7 +447,7 @@
     "normalizer": "minmax",
     "axis_tag": "cost",
     "metric_key": null,
-    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count']"
+    "unavailable_reason": "registered ahead of measurement: the evaluator emits no payload key for it. Measured objectives: ['validation_accuracy', 'validation_loss', 'walltime_total', 'param_count', 'settle_steps', 'spectral_radius', 'max_singular_value', 'lyapunov_exponent', 'free_energy', 'hopfield_energy', 'pc_free_energy', 'augmented_lagrangian', 'spike_proxy_energy', 'instantaneous_proxy_energy', 'energy_per_step', 'energy_per_mac', 'macs_per_step', 'stability_margin', 'nonnormality', 'drift_spectral_radius', 'drift_max_singular_value', 'contraction_rate', 'energy_efficiency', 'memory_usage', 'flops', 'latency_ms', 'spike_rate', 'ir_drop_variance', 'phase_noise', 'gate_fidelity', 'coherence_time', 'energy_per_op', 'synaptic_ops_per_sample', 'thermal_noise_variance', 'nonlinearity_error', 'settle_steps_used', 'free_energy_final', 'psi_capacity', 'consolidation_cost', 'rewrite_rate']"
   },
   {
     "name": "validation_accuracy",

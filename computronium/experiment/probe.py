@@ -103,11 +103,11 @@ def _compute_stability_metrics(
     Errors are caught and logged; an empty dict is returned on failure
     so stability metrics never break a probe.
     """
-    try:
-        from computronium.experiment.execution.evaluate import (
-            compute_stability_metrics as _compute_stability_metrics_impl,
-        )
+    from computronium.experiment.execution.evaluate import (
+        compute_stability_metrics as _compute_stability_metrics_impl,
+    )
 
+    try:
         # Get a sample batch for stability analysis
         sample_batch = next(iter(handle.get_dataloader("train")))  # type: ignore[attr-defined]
         sample_x = sample_batch[0].to(device)
@@ -115,7 +115,7 @@ def _compute_stability_metrics(
             sample_x = sample_x.reshape(sample_x.size(0), -1)
         metrics = _compute_stability_metrics_impl(system, sample_x)
         # Convert to dict[str, object] for return type compatibility
-        return {k: v for k, v in metrics.items()}
+        return dict(metrics.items())
     except Exception as exc:  # broad: stability metrics must not fail the probe
         logger.debug("Stability metrics computation failed: %s", exc)
         return {}

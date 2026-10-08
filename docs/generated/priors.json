@@ -24,23 +24,6 @@
     "override_scope": ""
   },
   {
-    "name": "batch_size",
-    "distribution": "categorical",
-    "params": {
-      "choices": [
-        32,
-        64,
-        128,
-        256,
-        512
-      ]
-    },
-    "description": "Batch size prior (Gate 2 addition)",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
     "name": "dynamics_step_size_diffusion",
     "distribution": "log_uniform",
     "params": {
@@ -51,7 +34,7 @@
     "description": "Dynamics settling step size for diffusion",
     "confidence": 0.85,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "dynamics_step_size_predictive_settling",
@@ -64,7 +47,7 @@
     "description": "Dynamics settling step size for predictive_settling",
     "confidence": 0.85,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "hidden_depth",
@@ -77,7 +60,7 @@
     "description": "Default geometry depth",
     "confidence": 0.6,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "hidden_width",
@@ -89,138 +72,6 @@
     },
     "description": "Default geometry width",
     "confidence": 0.6,
-    "uncertainty": 0.0,
-    "override_scope": "coordinate"
-  },
-  {
-    "name": "lr_ruler_arithmetic",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.0001,
-      "high": 0.1
-    },
-    "description": "Ruler LR prior for Arithmetic",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_cifar10",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.0001,
-      "high": 0.1
-    },
-    "description": "Ruler LR prior for CIFAR-10",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_cifar100",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.0001,
-      "high": 0.1
-    },
-    "description": "Ruler LR prior for CIFAR-100",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_copyshake",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.0001,
-      "high": 0.1
-    },
-    "description": "Ruler LR prior for CopyShake",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_imagenet",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 1e-05,
-      "high": 0.01
-    },
-    "description": "Ruler LR prior for ImageNet",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_listops",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.0001,
-      "high": 0.1
-    },
-    "description": "Ruler LR prior for ListOps",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_mnist",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.0001,
-      "high": 0.1
-    },
-    "description": "Ruler LR prior for MNIST",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_ptb",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 1e-05,
-      "high": 0.01
-    },
-    "description": "Ruler LR prior for PTB",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_squad",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 1e-05,
-      "high": 0.01
-    },
-    "description": "Ruler LR prior for SQuAD",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_sst2",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 1e-05,
-      "high": 0.01
-    },
-    "description": "Ruler LR prior for SST-2",
-    "confidence": 1.0,
-    "uncertainty": 0.0,
-    "override_scope": ""
-  },
-  {
-    "name": "lr_ruler_wikitext2",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 1e-05,
-      "high": 0.01
-    },
-    "description": "Ruler LR prior for WikiText-2",
-    "confidence": 1.0,
     "uncertainty": 0.0,
     "override_scope": ""
   },
@@ -237,6 +88,18 @@
     "override_scope": ""
   },
   {
+    "name": "ruler_lr_arithmetic",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for Arithmetic",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
     "name": "ruler_lr_breast_cancer",
     "distribution": "log_uniform",
     "params": {
@@ -247,7 +110,7 @@
     "description": "Ruler-calibrated learning rate for task 'breast_cancer' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_catchall",
@@ -260,7 +123,31 @@
     "description": "Catch-all ruler-calibrated learning rate for unknown tasks (feedforward)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_cifar10",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for CIFAR-10",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_cifar100",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for CIFAR-100",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_circles",
@@ -273,7 +160,19 @@
     "description": "Ruler-calibrated learning rate for task 'circles' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_copyshake",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for CopyShake",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_digits",
@@ -286,7 +185,7 @@
     "description": "Ruler-calibrated learning rate for task 'digits' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_fashion_mnist",
@@ -299,7 +198,19 @@
     "description": "Ruler-calibrated learning rate for task 'fashion_mnist' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_imagenet",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for ImageNet",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_iris",
@@ -312,7 +223,7 @@
     "description": "Ruler-calibrated learning rate for task 'iris' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_kmnist",
@@ -325,7 +236,19 @@
     "description": "Ruler-calibrated learning rate for task 'kmnist' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_listops",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for ListOps",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_mnist",
@@ -338,7 +261,7 @@
     "description": "Ruler-calibrated learning rate for task 'mnist' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_non_feedforward",
@@ -351,7 +274,19 @@
     "description": "Default learning rate for non-feedforward topologies (from topology LR probe)",
     "confidence": 0.8,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_ptb",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for PTB",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_spiral",
@@ -364,7 +299,31 @@
     "description": "Ruler-calibrated learning rate for task 'spiral' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_squad",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for SQuAD",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_sst2",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for SST-2",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_usps",
@@ -377,7 +336,19 @@
     "description": "Ruler-calibrated learning rate for task 'usps' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
+  },
+  {
+    "name": "ruler_lr_wikitext2",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for WikiText-2",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_wine",
@@ -390,7 +361,7 @@
     "description": "Ruler-calibrated learning rate for task 'wine' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_xor",
@@ -403,7 +374,7 @@
     "description": "Ruler-calibrated learning rate for task 'xor' (feedforward topology)",
     "confidence": 0.9,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_diffusion_backprop",
@@ -505,349 +476,349 @@
     "name": "step_size_override_diffusion_homeostatic",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=diffusion, credit=homeostatic",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_diffusion_random_projections",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.05,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=diffusion, credit=random_projections",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.05; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_diffusion_spectral_constrained",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=diffusion, credit=spectral_constrained",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_diffusion_target_inversion",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=diffusion, credit=target_inversion",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_diffusion_temporal_trace",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=diffusion, credit=temporal_trace",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_energy_minimization_gradient",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.5,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=energy_minimization, credit=gradient",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.5; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_energy_minimization_local_goodness",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0005,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=energy_minimization, credit=local_goodness",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0005; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_energy_minimization_pepita",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=energy_minimization, credit=pepita",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_energy_minimization_random_projections",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=energy_minimization, credit=random_projections",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_energy_minimization_target_inversion",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=energy_minimization, credit=target_inversion",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_energy_minimization_temporal_trace",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=energy_minimization, credit=temporal_trace",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_energy_minimization_thermodynamic_contrast",
     "distribution": "log_normal",
     "params": {
-      "mean": 5e-05,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=energy_minimization, credit=thermodynamic_contrast",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.00005; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_error_predictive_coding_local_goodness",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=error_predictive_coding, credit=local_goodness",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_error_predictive_coding_thermodynamic_contrast",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=error_predictive_coding, credit=thermodynamic_contrast",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_instantaneous_homeostatic",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=instantaneous, credit=homeostatic",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_instantaneous_pepita",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.01,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=instantaneous, credit=pepita",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.01; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_instantaneous_temporal_trace",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=instantaneous, credit=temporal_trace",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_lazy_gradient",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.01,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=lazy, credit=gradient",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.01; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_lazy_local_contrastive",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0005,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=lazy, credit=local_contrastive",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0005; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_lazy_local_goodness",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=lazy, credit=local_goodness",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_lazy_pepita",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=lazy, credit=pepita",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_lazy_random_projections",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.1,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=lazy, credit=random_projections",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.1; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_lazy_temporal_trace",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=lazy, credit=temporal_trace",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_lazy_thermodynamic_contrast",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=lazy, credit=thermodynamic_contrast",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_pc_alm_pc_alm",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=pc_alm, credit=pc_alm",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_pc_alm_thermodynamic_contrast",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=pc_alm, credit=thermodynamic_contrast",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_predictive_settling_local_goodness",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=predictive_settling, credit=local_goodness",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_predictive_settling_thermodynamic_contrast",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.5,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=predictive_settling, credit=thermodynamic_contrast",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.5; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_override_spike_integration_temporal_trace",
     "distribution": "log_normal",
     "params": {
-      "mean": 0.0001,
+      "mean": 1.0,
       "sigma": 0.5
     },
-    "description": "Step size multiplier for dynamics=spike_integration, credit=temporal_trace",
-    "confidence": 0.8,
+    "description": "Retired attenuation (TODO48b R4): was 0.0001; never measured, and the audited rule learns 4 decades above its registered lr (scripts/probes/step_size_multipliers.py)",
+    "confidence": 0.2,
     "uncertainty": 0.0,
-    "override_scope": "coordinate"
+    "override_scope": ""
   },
   {
     "name": "step_size_pc_alm_backprop",

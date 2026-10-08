@@ -69,9 +69,11 @@
       "seed_planning": true,
       "per_task_adaptation": true,
       "data_origin_allocation": {
-        "exploration": 0.5,
-        "calibration": 0.3,
-        "test": 0.2
+        "exploration": 0.45,
+        "calibration": 0.25,
+        "test": 0.2,
+        "control": 0.05,
+        "contrast": 0.05
       },
       "contrast_quota": 0.1
     }

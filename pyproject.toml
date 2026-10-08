@@ -57,6 +57,7 @@ dependencies = [
     "fvcore>=0.1.5.post20221221",
     "plotly>=7.1.0",
     "pynvml>=13.0.1",
+    "nvidia-ml-py>=13.615.71",
 ]
 
 [tool.uv.workspace]

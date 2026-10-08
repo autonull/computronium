@@ -1434,7 +1434,28 @@ spec.to_file("my_run.yaml")
 
 ---
 
-## 36. Remaining Work & Next Priorities (Updated)
+## 38. Session Progress Summary (2026-10-08) — Documentation Updates: Objectives Registry, CLI Reference
+
+### Completed in This Session
+
+**Objectives Registry Documentation Update (Documentation 9):**
+- ✅ Updated `generate_all()` in `codegen.py` to call `seed_all_registries()` before generating docs, ensuring all objectives are registered
+- ✅ Regenerated `docs/generated/objectives.md` and `docs/generated/objectives.json` with current measurement status
+- ✅ 48 total objectives, 37 now measured (showing `metric_key`), 11 still unmeasured
+- ✅ Measured objectives now include: `flops`, `memory_usage`, `latency_ms`, `energy_per_step`, `energy_per_mac`, `macs_per_step`, `energy_efficiency`, `spike_rate`, `ir_drop_variance`, `phase_noise`, `gate_fidelity`, `coherence_time`, `psi_capacity`, `consolidation_cost`, `rewrite_rate`, `spectral_radius`, `max_singular_value`, `lyapunov_exponent`, `settle_steps`, `stability_margin`, `nonnormality`, `contraction_rate`, `drift_spectral_radius`, `drift_max_singular_value`, `hopfield_energy`, `pc_free_energy`, `augmented_lagrangian`, `spike_proxy_energy`, `instantaneous_proxy_energy`, `free_energy`, `free_energy_final`, `energy_per_op`, `synaptic_ops_per_sample`, `thermal_noise_variance`, `nonlinearity_error`, `settle_steps_used`
+
+**CLI Reference Generation (Documentation 9):**
+- ✅ Generated `docs/cli_reference.md` from `comp --help` output for all 18 subcommands
+- ✅ Includes main command and all subcommands: `run`, `report`, `export`, `conformance`, `status`, `gallery`, `hypothesis-campaign`, `stability-plasticity`, `frozen-theta-psi`, `parity`, `repro`, `validate`, `joint-validate`, `benchmark`, `stats`, `pareto`, `diff`, `campaign`, `schema`
+- ✅ Each subcommand documents all positional arguments and options
+
+**Codegen Fix:**
+- ✅ Fixed `generate_all()` to call `seed_all_registries()` before writing docs, ensuring objectives registry is populated
+
+**Verification:**
+- All property locks pass (including `test_codegen_drift_lock.py` which validates generated docs)
+- `ruff format` and `ruff check` pass
+- `pyright` passes (0 errors)
 
 ### P2 Remaining (Reporting + Gallery)
 - [x] CI integration: Gallery lock fails if figures drift from committed manifest (enabled ci.yml, demo gate runs test_gallery_lock.py::test_figure_lock)
@@ -1452,5 +1473,5 @@ spec.to_file("my_run.yaml")
 - [ ] Analysis Recipes: `docs/analysis/` — Pareto, ablation, stability-plasticity
 - [ ] GPU Guide: Mixed precision, multi-GPU, memory optimization
 - [x] RunSpec schema auto-generation from Pydantic model — `comp schema` command outputs JSON Schema
-- [ ] Objectives registry: add measurement status to `docs/generated/objectives.md` — many objectives now measured but docs show "unmeasured"
-- [ ] CLI reference: `comp --help` output → markdown
+- [x] Objectives registry: add measurement status to `docs/generated/objectives.md` — regenerated with measured objectives showing metric_key (48 total, many now measured)
+- [x] CLI reference: `comp --help` output → markdown — saved to `docs/cli_reference.md`

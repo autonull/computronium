@@ -428,7 +428,7 @@
     "name": "nca",
     "structural_axis": "geometry",
     "description": "Neural cellular automaton fabric",
-    "available": false,
+    "available": true,
     "axis_kind": "geometry",
     "availability_predicate": null,
     "prior": null,

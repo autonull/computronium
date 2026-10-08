@@ -112,8 +112,12 @@ def generate_axes_listing() -> list[dict[str, Any]]:
     """
     axes = []
     for axis_kind, registry in AXES_REGISTRIES.items():
+        # axis_kind is a StructuralAxis enum, but AXES_REGISTRIES is typed as dict[str, ...]
+        # due to _LazyRegistryDict; cast to StructuralAxis for type checker
+        from computronium.experiment.schema.axis import StructuralAxis
+        kind = StructuralAxis(axis_kind)
         for axis_id, spec in sorted(registry.items()):
-            axes.append(_axis_spec_to_dict(spec, axis_kind))
+            axes.append(_axis_spec_to_dict(spec, kind))
     return axes
 
 
@@ -286,8 +290,11 @@ def generate_json_schema_validators() -> dict[str, dict[str, Any]]:
     """Generate JSON Schema validators per AxisSpec (R5 runtime discovery)."""
     validators = {}
     for axis_kind, registry in AXES_REGISTRIES.items():
+        # axis_kind is a StructuralAxis enum, but AXES_REGISTRIES is typed as dict[str, ...]
+        from computronium.experiment.schema.axis import StructuralAxis
+        kind = StructuralAxis(axis_kind)
         for axis_id, spec in sorted(registry.items()):
-            validators[f"{axis_kind.value}.{axis_id}"] = _axis_spec_to_json_schema(spec)
+            validators[f"{kind.value}.{axis_id}"] = _axis_spec_to_json_schema(spec)
     return validators
 
 
@@ -530,6 +537,9 @@ def _write_stages_md(path: Path) -> None:
 
 def generate_all(output_dir: str | Path = "docs/generated") -> dict[str, Any]:
     """Generate all codegen artifacts and return summary."""
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
     write_generated_docs(output_dir)
 
     total_axes = sum(len(r) for r in AXES_REGISTRIES.values())

@@ -1518,7 +1518,7 @@
     "retirement_record": null
   },
   {
-    "evidence": "mechanism",
+    "evidence": "shape",
     "capability_id": "C81",
     "name": "C81",
     "kind": "core",
@@ -1534,11 +1534,11 @@
       "synthesis",
       "platform"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
-    "evidence": "mechanism",
+    "evidence": "shape",
     "capability_id": "C82",
     "name": "C82",
     "kind": "core",
@@ -1554,7 +1554,7 @@
       "evolution",
       "platform"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {

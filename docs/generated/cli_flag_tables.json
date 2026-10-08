@@ -1173,6 +1173,11 @@
   ],
   "objective_axis_tags": [
     {
+      "axis_tag": "stability",
+      "objective_name": "augmented_lagrangian",
+      "direction": "minimize"
+    },
+    {
       "axis_tag": "task",
       "objective_name": "bleu_score",
       "direction": "maximize"
@@ -1193,6 +1198,11 @@
       "direction": "minimize"
     },
     {
+      "axis_tag": "stability",
+      "objective_name": "contraction_rate",
+      "direction": "maximize"
+    },
+    {
       "axis_tag": "task",
       "objective_name": "convergence_steps",
       "direction": "minimize"
@@ -1203,9 +1213,24 @@
       "direction": "maximize"
     },
     {
+      "axis_tag": "stability",
+      "objective_name": "drift_max_singular_value",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "drift_spectral_radius",
+      "direction": "minimize"
+    },
+    {
       "axis_tag": "cost",
       "objective_name": "energy_efficiency",
       "direction": "maximize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "energy_per_mac",
+      "direction": "minimize"
     },
     {
       "axis_tag": "cost",
@@ -1238,6 +1263,16 @@
       "direction": "minimize"
     },
     {
+      "axis_tag": "stability",
+      "objective_name": "hopfield_energy",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "instantaneous_proxy_energy",
+      "direction": "minimize"
+    },
+    {
       "axis_tag": "substrate",
       "objective_name": "ir_drop_variance",
       "direction": "minimize"
@@ -1253,6 +1288,11 @@
       "direction": "minimize"
     },
     {
+      "axis_tag": "cost",
+      "objective_name": "macs_per_step",
+      "direction": "minimize"
+    },
+    {
       "axis_tag": "stability",
       "objective_name": "max_singular_value",
       "direction": "minimize"
@@ -1263,8 +1303,18 @@
       "direction": "minimize"
     },
     {
+      "axis_tag": "stability",
+      "objective_name": "nonnormality",
+      "direction": "minimize"
+    },
+    {
       "axis_tag": "cost",
       "objective_name": "param_count",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "pc_free_energy",
       "direction": "minimize"
     },
     {
@@ -1313,9 +1363,19 @@
       "direction": "minimize"
     },
     {
+      "axis_tag": "stability",
+      "objective_name": "spike_proxy_energy",
+      "direction": "minimize"
+    },
+    {
       "axis_tag": "substrate",
       "objective_name": "spike_rate",
       "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "stability_margin",
+      "direction": "maximize"
     },
     {
       "axis_tag": "composite",
@@ -1374,6 +1434,12 @@
     },
     {
       "kind": "void",
+      "constraint_name": "attention_geometry_compatibility",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
       "constraint_name": "classification_requires_classifier_head",
       "origin": "TASK_FENCE",
       "proof_kind": "type_mismatch"
@@ -1381,6 +1447,18 @@
     {
       "kind": "void",
       "constraint_name": "credit_update_compatibility",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "diffusion_dynamics_credit",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "diffusion_dynamics_geometry",
       "origin": "DECLARED",
       "proof_kind": "type_mismatch"
     },
@@ -1404,8 +1482,20 @@
     },
     {
       "kind": "void",
+      "constraint_name": "gradient_credit_beta_clamp",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
       "constraint_name": "language_modeling_requires_causal",
       "origin": "TASK_FENCE",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "local_contrastive_geometry",
+      "origin": "DECLARED",
       "proof_kind": "type_mismatch"
     },
     {
@@ -1427,6 +1517,24 @@
       "proof_kind": "resource"
     },
     {
+      "kind": "void",
+      "constraint_name": "nca_ntm_geometry",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "neuromorphic_substrate_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "nonlayered_geometry_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
       "kind": "operating_point",
       "constraint_name": "operating_point_max_epochs",
       "origin": "APPLY_CONSTRAINTS",
@@ -1446,9 +1554,57 @@
     },
     {
       "kind": "void",
+      "constraint_name": "pc_alm_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "predictive_settling_credit",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "quantum_substrate_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "recurrent_geometry_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "residual_connections",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "spike_integration_credit",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
       "constraint_name": "substrate_geometry_compatibility",
       "origin": "DECLARED",
       "proof_kind": "logical"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "thermodynamic_contrast_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "tile_mesh_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
     },
     {
       "kind": "hard",

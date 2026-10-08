@@ -4,7 +4,7 @@
     "kind": "hard",
     "description": "Max hidden dim from apply_constraints",
     "params": null,
-    "predicate": "Le(left=Var(name='hidden_dim'), right=Const(value=4096))",
+    "predicate": "Le(left=Var(name='params.hidden_dim'), right=Const(value=4096))",
     "proof_kind": "resource",
     "origin": "APPLY_CONSTRAINTS"
   },
@@ -13,7 +13,7 @@
     "kind": "hard",
     "description": "Max layers from apply_constraints",
     "params": null,
-    "predicate": "Le(left=Var(name='num_layers'), right=Const(value=32))",
+    "predicate": "Le(left=Var(name='params.num_layers'), right=Const(value=32))",
     "proof_kind": "resource",
     "origin": "APPLY_CONSTRAINTS"
   },
@@ -22,16 +22,25 @@
     "kind": "hard",
     "description": "Max settling steps from apply_constraints",
     "params": null,
-    "predicate": "Le(left=Var(name='max_steps'), right=Const(value=500))",
+    "predicate": "Le(left=Var(name='params.max_steps'), right=Const(value=500))",
     "proof_kind": "resource",
     "origin": "APPLY_CONSTRAINTS"
+  },
+  {
+    "name": "attention_geometry_compatibility",
+    "kind": "void",
+    "description": "Attention geometry incompatible with pepita, local_goodness, local_contrastive, forward_only credit",
+    "params": null,
+    "predicate": "Not(expr=And(left=Eq(left=Var(name='geometry'), right=Const(value='attention')), right=In(left=Var(name='credit'), right=Const(value=['pepita', 'local_goodness', 'local_contrastive', 'forward_only']))))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
   },
   {
     "name": "classification_requires_classifier_head",
     "kind": "void",
     "description": "Classification tasks require output_dim matching num_classes",
     "params": null,
-    "predicate": "Eq(left=Var(name='task_type'), right=Const(value='\"classification\" implies output_dim > 1'))",
+    "predicate": "Or(left=Not(expr=Eq(left=Var(name='task'), right=Const(value='classification'))), right=Gt(left=Var(name='output_dim'), right=Const(value=1)))",
     "proof_kind": "type_mismatch",
     "origin": "TASK_FENCE"
   },
@@ -40,7 +49,25 @@
     "kind": "void",
     "description": "Backprop credit requires Euclidean or compatible update rule",
     "params": null,
-    "predicate": "Eq(left=Var(name='not (credit'), right=Const(value='\"backprop\" and update not in [\"euclidean\", \"muon\", \"natural_gradient\", \"riemannian_orthogonal\"])'))",
+    "predicate": "Not(expr=And(left=Eq(left=Var(name='credit'), right=Const(value='backprop')), right=NotIn(left=Var(name='update'), right=Const(value=['euclidean', 'muon', 'natural_gradient', 'riemannian_orthogonal']))))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "diffusion_dynamics_credit",
+    "kind": "void",
+    "description": "Diffusion dynamics produce non-differentiable state; gradient/backprop credit unsupported",
+    "params": null,
+    "predicate": "Not(expr=And(left=Eq(left=Var(name='dynamics'), right=Const(value='diffusion')), right=In(left=Var(name='credit'), right=Const(value=['gradient', 'backprop']))))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "diffusion_dynamics_geometry",
+    "kind": "void",
+    "description": "Diffusion dynamics requires recurrent geometry",
+    "params": null,
+    "predicate": "Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='diffusion'))), right=In(left=Var(name='geometry'), right=Const(value=['recurrent', 'recurrent_attractor'])))",
     "proof_kind": "type_mismatch",
     "origin": "DECLARED"
   },
@@ -49,7 +76,7 @@
     "kind": "void",
     "description": "Instantaneous dynamics cannot use fast-weight plasticity",
     "params": null,
-    "predicate": "Eq(left=Var(name='not (dynamics'), right=Const(value='\"instantaneous\" and plasticity == \"fast_weight\")'))",
+    "predicate": "Not(expr=And(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weight'))))",
     "proof_kind": "type_mismatch",
     "origin": "DECLARED"
   },
@@ -58,7 +85,7 @@
     "kind": "hard",
     "description": "L2 fidelity requires n_seeds >= 5",
     "params": null,
-    "predicate": "Eq(left=Var(name='fidelity'), right=Const(value='\"L2\" implies n_seeds >= 5'))",
+    "predicate": "Implies(left=Eq(left=Var(name='fidelity'), right=Const(value='L2')), right=Ge(left=Var(name='n_seeds'), right=Const(value=5)))",
     "proof_kind": "logical",
     "origin": "DECLARED"
   },
@@ -69,8 +96,17 @@
     "params": {
       "max_gpu_memory_gb": 80
     },
-    "predicate": "Le(left=Var(name='estimated_gpu_memory_gb'), right=Const(value='max_gpu_memory_gb'))",
+    "predicate": "Le(left=Var(name='estimated_gpu_memory_gb'), right=Var(name='max_gpu_memory_gb'))",
     "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "gradient_credit_beta_clamp",
+    "kind": "void",
+    "description": "Gradient/backprop credit with beta >= 1.0 has zero pseudo-gradient",
+    "params": null,
+    "predicate": "Not(expr=And(left=In(left=Var(name='credit'), right=Const(value=['gradient', 'backprop'])), right=Ge(left=Var(name='params.beta'), right=Const(value=1.0))))",
+    "proof_kind": "type_mismatch",
     "origin": "DECLARED"
   },
   {
@@ -78,16 +114,25 @@
     "kind": "void",
     "description": "Language modeling requires causal attention or recurrent geometry",
     "params": null,
-    "predicate": "Eq(left=Var(name='task_type'), right=Const(value='\"language_modeling\" implies geometry in [\"causal_transformer\", \"recurrent\"]'))",
+    "predicate": "Or(left=Not(expr=Eq(left=Var(name='task'), right=Const(value='language_modeling'))), right=In(left=Var(name='geometry'), right=Const(value=['causal_transformer', 'recurrent'])))",
     "proof_kind": "type_mismatch",
     "origin": "TASK_FENCE"
+  },
+  {
+    "name": "local_contrastive_geometry",
+    "kind": "void",
+    "description": "Local contrastive/goodness/forward_only/pepita credit requires feedforward geometry",
+    "params": null,
+    "predicate": "Or(left=Not(expr=In(left=Var(name='credit'), right=Const(value=['local_goodness', 'forward_only', 'pepita', 'local_contrastive']))), right=In(left=Var(name='geometry'), right=Const(value=['feedforward', 'feedforward_dag'])))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
   },
   {
     "name": "max_hidden_dim",
     "kind": "void",
     "description": "Hidden dimension exceeds hardware limits",
     "params": null,
-    "predicate": "Le(left=Var(name='hidden_dim'), right=Const(value=8192))",
+    "predicate": "Le(left=Var(name='params.hidden_dim'), right=Const(value=8192))",
     "proof_kind": "resource",
     "origin": "DECLARED"
   },
@@ -96,7 +141,7 @@
     "kind": "void",
     "description": "Layer count exceeds hardware limits",
     "params": null,
-    "predicate": "Le(left=Var(name='num_layers'), right=Const(value=64))",
+    "predicate": "Le(left=Var(name='params.num_layers'), right=Const(value=64))",
     "proof_kind": "resource",
     "origin": "DECLARED"
   },
@@ -105,8 +150,35 @@
     "kind": "void",
     "description": "Settling steps exceed budget",
     "params": null,
-    "predicate": "Le(left=Var(name='max_steps'), right=Const(value=1000))",
+    "predicate": "Le(left=Var(name='params.max_steps'), right=Const(value=1000))",
     "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "nca_ntm_geometry",
+    "kind": "void",
+    "description": "NCA/NTM geometries require instantaneous dynamics",
+    "params": null,
+    "predicate": "Or(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Not(expr=In(left=Var(name='geometry'), right=Const(value=['nca', 'ntm']))))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "neuromorphic_substrate_dynamics",
+    "kind": "void",
+    "description": "Neuromorphic substrate requires temporal dynamics (spike_integration, energy_minimization, or diffusion)",
+    "params": null,
+    "predicate": "Or(left=Not(expr=Eq(left=Var(name='substrate'), right=Const(value='neuromorphic'))), right=In(left=Var(name='dynamics'), right=Const(value=['spike_integration', 'energy_minimization', 'diffusion'])))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "nonlayered_geometry_dynamics",
+    "kind": "void",
+    "description": "Non-layered geometries (attention, spatial_lattice, graph, conv, nca, ntm, causal_transformer) require instantaneous dynamics",
+    "params": null,
+    "predicate": "Or(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Not(expr=In(left=Var(name='geometry'), right=Const(value=['attention', 'spatial_lattice', 'graph', 'conv', 'nca', 'ntm', 'causal_transformer']))))",
+    "proof_kind": "type_mismatch",
     "origin": "DECLARED"
   },
   {
@@ -138,8 +210,62 @@
     "params": {
       "tolerance": 0.25
     },
-    "predicate": "Le(left=Var(name='param_count'), right=Const(value='param_budget * 1.25'))",
+    "predicate": "Le(left=Var(name='param_count'), right=Mul(left=Var(name='param_budget'), right=Const(value=1.25)))",
     "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "pc_alm_dynamics",
+    "kind": "void",
+    "description": "PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit and layered geometry",
+    "params": null,
+    "predicate": "And(left=Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))), right=In(left=Var(name='credit'), right=Const(value=['pc_alm', 'thermodynamic_contrast']))), right=Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))), right=In(left=Var(name='geometry'), right=Const(value=['feedforward', 'recurrent', 'tile_mesh']))))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "predictive_settling_credit",
+    "kind": "void",
+    "description": "Predictive settling/error predictive coding dynamics requires thermodynamic_contrast, local_goodness, or forward_only credit",
+    "params": null,
+    "predicate": "Or(left=Not(expr=In(left=Var(name='dynamics'), right=Const(value=['predictive_settling', 'error_predictive_coding']))), right=In(left=Var(name='credit'), right=Const(value=['thermodynamic_contrast', 'equilibrium', 'local_goodness', 'forward_only'])))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "quantum_substrate_dynamics",
+    "kind": "void",
+    "description": "Quantum substrate requires energy_minimization, instantaneous, or diffusion dynamics",
+    "params": null,
+    "predicate": "Or(left=Not(expr=Eq(left=Var(name='substrate'), right=Const(value='quantum'))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'instantaneous', 'diffusion'])))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "recurrent_geometry_dynamics",
+    "kind": "void",
+    "description": "Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics",
+    "params": null,
+    "predicate": "Or(left=Not(expr=In(left=Var(name='geometry'), right=Const(value=['recurrent', 'recurrent_attractor']))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'predictive_settling', 'error_predictive_coding', 'pc_alm', 'diffusion', 'instantaneous'])))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "residual_connections",
+    "kind": "void",
+    "description": "Residual connections (residual=True) require feedforward geometry",
+    "params": null,
+    "predicate": "Or(left=Not(expr=HasKey(obj=Var(name='params'), key=Const(value='residual'))), right=Eq(left=Var(name='geometry'), right=Const(value='feedforward')))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "spike_integration_credit",
+    "kind": "void",
+    "description": "Spike integration dynamics requires temporal trace or target inversion credit",
+    "params": null,
+    "predicate": "Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='spike_integration'))), right=In(left=Var(name='credit'), right=Const(value=['temporal_trace', 'spiking', 'target_inversion', 'target_prop'])))",
+    "proof_kind": "type_mismatch",
     "origin": "DECLARED"
   },
   {
@@ -147,8 +273,26 @@
     "kind": "void",
     "description": "Digital substrate incompatible with analog-only geometries",
     "params": null,
-    "predicate": "Eq(left=Var(name='not (substrate'), right=Const(value='\"digital\" and geometry in [\"analog\", \"photonic\", \"quantum\"])'))",
+    "predicate": "Not(expr=And(left=Eq(left=Var(name='substrate'), right=Const(value='digital')), right=In(left=Var(name='geometry'), right=Const(value=['analog', 'photonic', 'quantum']))))",
     "proof_kind": "logical",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "thermodynamic_contrast_dynamics",
+    "kind": "void",
+    "description": "Thermodynamic contrast/equilibrium credit requires energy-based or PC-family dynamics",
+    "params": null,
+    "predicate": "Or(left=Not(expr=In(left=Var(name='credit'), right=Const(value=['thermodynamic_contrast', 'equilibrium']))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'predictive_settling', 'error_predictive_coding', 'lazy', 'pc_alm'])))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "tile_mesh_dynamics",
+    "kind": "void",
+    "description": "Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics",
+    "params": null,
+    "predicate": "Or(left=Not(expr=In(left=Var(name='geometry'), right=Const(value=['tile_mesh', 'tile']))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'pc_alm', 'instantaneous'])))",
+    "proof_kind": "type_mismatch",
     "origin": "DECLARED"
   },
   {
@@ -158,7 +302,7 @@
     "params": {
       "max_hours": 24
     },
-    "predicate": "Le(left=Var(name='estimated_hours'), right=Const(value='max_hours'))",
+    "predicate": "Le(left=Var(name='estimated_hours'), right=Var(name='max_hours'))",
     "proof_kind": "resource",
     "origin": "DECLARED"
   }

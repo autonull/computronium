@@ -1,6 +1,6 @@
 # Capabilities Registry
 
-Generated: 2026-10-02T11:30:28.628004
+Generated: 2026-10-08T18:43:30.289989
 Total: 88 capabilities
 
 | ID | Name | Kind | Required | Stage | Owner | Verifying Test | Evidence | Flags | Status |
@@ -84,8 +84,8 @@ Total: 88 capabilities
 | C79 | Local feedback projections | core | ✗ | S5_COMPOSE | local_feedback | packages/local-feedback/tests/test_lf_adaptive.py | mechanism | local_feedback, platform | active |
 | C8 | S1-S11 pipeline | core | ✓ | S1_FRAME | pipeline | tests/acceptance/test_unified_kernel.py::TestU1_SynthesisPolicyPipeline::test_u1_synthesis_policy_end_to_end | mechanism | pipeline, stages | active |
 | C80 | Stability guard | core | ✗ | S6_TRAIN | stability | packages/stability/tests/test_stability_guard.py | mechanism | stability, guard, platform | active |
-| C81 | Computronium Lab synthesis | core | ✗ | S1_FRAME | lab | packages/computronium-lab/tests/test_synthesis.py | mechanism | lab, synthesis, platform | active |
-| C82 | Computronium Lab evolution | core | ✗ | S10_DECIDE | lab | packages/computronium-lab/tests/test_lab_integration_loop.py | mechanism | lab, evolution, platform | active |
+| C81 | Computronium Lab synthesis | core | ✗ | S1_FRAME | lab | packages/computronium-lab/tests/test_synthesis.py | shape | lab, synthesis, platform | unverified |
+| C82 | Computronium Lab evolution | core | ✗ | S10_DECIDE | lab | packages/computronium-lab/tests/test_lab_integration_loop.py | shape | lab, evolution, platform | unverified |
 | C83 | Surface CLI dispatcher | core | ✓ | S11_REPORT | surface | tests/property/test_cli_readme_lock.py::TestTierZeroIsReal::test_dry_run_prints_a_plan_and_writes_nothing | mechanism | cli, surface | active |
 | C84 | Report generator | core | ✓ | S11_REPORT | surface | tests/property/test_wp11_surface_lock.py::TestPublicExports::test_handoff_mentions_intents | mechanism | report, export | active |
 | C85 | Codegen from registries | core | ✗ | S11_REPORT | surface | tests/property/test_codegen_drift_lock.py | mechanism | codegen, drift_lock | active |
