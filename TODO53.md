@@ -686,12 +686,12 @@
 
 ### P2 Remaining (Reporting + Gallery)
 - [ ] Per-axis ablation tables (credit swap, substrate swap, plasticity swap) — partially done via `comp stats --group-by`
-- [ ] LaTeX/PDF export via pandoc
-- [ ] Gallery manifest: `docs/figures/manifest.json` with SHA, params, metrics for reproducibility
+- ✅ LaTeX/PDF export via pandoc
+- [ ] Gallery manifest: `docs/figures/manifest.json` with SHA, params, metrics for reproducibility — Already exists
 - [ ] CI integration: Gallery lock fails if figures drift from committed manifest
 
 ### P3 Remaining (Agent-Friendly CLI)
-- [ ] `comp schema` — Dump RunSpec/Coordinate/Objective schemas as JSON Schema
+- ✅ `comp schema` — Dump RunSpec/Coordinate/Objective schemas as JSON Schema
 - [ ] RunSpec builder API (Python) for programmatic construction
 - [ ] `--output json` for all commands (structured JSON to stdout for piping)
 
@@ -718,3 +718,61 @@
 - [ ] Bootstrap CIs, significance testing, effect sizes
 - [ ] Pareto front knee detection, hypervolume
 - [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking
+
+---
+ 
+## 22. Session Progress Summary (2026-10-07) — P2/P3 Reporting Enhancement & Agent-Friendly CLI
+
+### Completed in This Session (P2 — Reporting + Gallery Enhancement)
+
+**Enhanced HTML Report (4.1):**
+- ✅ Comprehensive interactive Plotly dashboard with 9 subplots (3×3 grid)
+- ✅ Multiple Pareto frontiers: val_acc vs walltime, val_acc vs params, spectral_radius vs psi_capacity
+- ✅ Convergence curves: train/val loss per epoch, train/val accuracy per epoch (from checkpoint history)
+- ✅ Objective distributions: box plots for all measured objectives
+- ✅ Credit vs Update heatmap: mean validation accuracy per credit/update combination
+- ✅ Substrate comparison scatter plots
+- ✅ Stability metrics scatter: ρ(J) vs σ_max with diagonal reference line, colored by val_acc
+- ✅ Checkpoint history loading from DuckDB artifacts for convergence visualization
+
+**LaTeX/PDF Export (4.1):**
+- ✅ `generate_latex_report()` function generates comprehensive LaTeX report with all sections
+- ✅ `generate_pdf_report()` function converts LaTeX to PDF via pandoc (requires pandoc installation)
+- ✅ CLI `--format latex` and `--format pdf` options added to `comp report` command
+- ✅ `--keep-tex` option to retain intermediate .tex file when generating PDF
+
+**Code Changes:**
+- `computronium/experiment/surface/report.py` — Added `_generate_latex_report()`, `generate_latex_report()`, `generate_pdf_report()` functions
+- `computronium/experiment/surface/cli.py` — Added `latex` and `pdf` format options to `report` command, added `--keep-tex` flag
+
+### Completed in This Session (P3 — Agent-Friendly CLI/Output)
+
+**New CLI Command (14.1, 14.3):**
+- ✅ `comp schema` — Dump JSON schemas for RunSpec, Coordinate, Schedule, and Objectives
+  - `--model runspec|coordinate|schedule|objectives|all` to select which schema
+  - `--format json|yaml` for output format
+  - `--output` for file output (stdout by default)
+  - Generates JSON Schema compatible with agent validation pipelines
+
+**Code Changes:**
+- `computronium/experiment/surface/cli.py` — Added `schema` command parser and `_cmd_schema()` handler with `_dataclass_to_schema()` and `_type_to_schema()` helpers
+
+### Completed in This Session (Fixes & Correctness)
+
+**Plasticity Type Support (6.1):**
+- ✅ Added support for `temporal_psi` and `conflict_adaptive` plasticity types in `compose_joint_system_from_configs()`
+- ✅ Fixed acceptance test failures caused by "Unknown plasticity_type: 'conflict_adaptive'"
+- ✅ Added imports for `create_temporal_psi_plasticity` and `conflict_adaptive_from_config`
+
+**Code Changes:**
+- `computronium/core/system_trainer/joint.py` — Added plasticity type cases and imports
+
+### Verification:
+- All property locks pass (L1-L7, J1-J7, axis certifications, registry locks, CLI readme)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- Gallery lock tests pass
+- Schema command generates valid JSON Schema for all models
+- LaTeX report generates successfully with all sections
+- HTML report generates successfully with all 9 subplots
+- `ruff format` passes on changed files
+- `pyright` passes on changed files

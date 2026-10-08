@@ -13,10 +13,12 @@ from computronium.core.plasticity import (
     NullPlasticity as _NullPlasticity,
 )
 from computronium.core.plasticity import (
+    conflict_adaptive_from_config,
     create_fast_weight_plasticity,
     create_routing_plasticity,
     create_rule_state_plasticity,
     create_substrate_coupled_plasticity,
+    create_temporal_psi_plasticity,
 )
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
@@ -575,6 +577,10 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
         plasticity_instance = create_substrate_coupled_plasticity(plasticity)
     elif plasticity_type == "rule_state":
         plasticity_instance = create_rule_state_plasticity(plasticity)
+    elif plasticity_type == "temporal_psi":
+        plasticity_instance = create_temporal_psi_plasticity(plasticity)
+    elif plasticity_type == "conflict_adaptive":
+        plasticity_instance = conflict_adaptive_from_config(plasticity)
     elif plasticity_type == "null":
         plasticity_instance = NullPlasticity()
     else:

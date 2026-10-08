@@ -272,7 +272,7 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     )
     p_report.add_argument(
         "--format",
-        choices=["text", "json", "parquet", "html"],
+        choices=["text", "json", "parquet", "html", "latex", "pdf"],
         default="text",
         help="Output format",
     )
@@ -281,6 +281,11 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--axis-coverage",
         action="store_true",
         help="Show per-axis stratification of records (R18 axis-coverage section)",
+    )
+    p_report.add_argument(
+        "--keep-tex",
+        action="store_true",
+        help="Keep intermediate .tex file when generating PDF",
     )
 
     # Export command
@@ -614,6 +619,23 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--format", choices=["json", "text"], default="json", help="Output format"
     )
     p_repro.add_argument("--output", default=None, help="Output file path")
+
+    # Schema command - dump JSON schemas for RunSpec, Coordinate, Schedule, Objectives
+    p_schema = sub.add_parser(
+        "schema", help="Dump JSON schemas for experiment models (agent-friendly)"
+    )
+    p_schema.add_argument(
+        "--model",
+        choices=["runspec", "coordinate", "schedule", "objectives", "all"],
+        default="all",
+        help="Which schema to dump",
+    )
+    p_schema.add_argument(
+        "--output", default=None, help="Output file path (stdout if omitted)"
+    )
+    p_schema.add_argument(
+        "--format", choices=["json", "yaml"], default="json", help="Output format"
+    )
 
     return parser
 
@@ -1004,6 +1026,26 @@ def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struct
             output_path = args.output or f"{run_id}.report.html"
             generate_html_report(store, run_id, output_path)
             logger.info(f"HTML report written to {output_path}")
+            return 0
+
+        elif args.format == "latex":
+            output_path = args.output or f"{run_id}.report.tex"
+            from computronium.experiment.surface.report import generate_latex_report
+
+            generate_latex_report(store, run_id, output_path)
+            logger.info(f"LaTeX report written to {output_path}")
+            return 0
+
+        elif args.format == "pdf":
+            output_path = args.output or f"{run_id}.report.pdf"
+            from computronium.experiment.surface.report import generate_pdf_report
+
+            try:
+                generate_pdf_report(store, run_id, output_path, keep_tex=args.keep_tex)
+                logger.info(f"PDF report written to {output_path}")
+            except RuntimeError as e:
+                logger.error(f"PDF generation failed: {e}")
+                return 1
             return 0
 
     return 0
@@ -1715,9 +1757,7 @@ def _cmd_stats(args: argparse.Namespace) -> int:
             lines = [header_line, sep_line]
             for r in results:
                 lines.append(
-                    " | ".join(
-                        str(r.get(h, "")).ljust(col_widths[h]) for h in headers
-                    )
+                    " | ".join(str(r.get(h, "")).ljust(col_widths[h]) for h in headers)
                 )
             output = "\n".join(lines)
         else:
@@ -2097,6 +2137,158 @@ def _cmd_repro(args: argparse.Namespace) -> int:
                 return 0 if output_data["passed"] else 1
 
 
+def _cmd_schema(args: argparse.Namespace) -> int:
+    """Dump JSON schemas for experiment models."""
+    import json
+    from pathlib import Path
+
+    from computronium.experiment.schema.coordinate import Coordinate, Schedule
+    from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+
+    # Import models
+    from computronium.experiment.schema.run_spec import AxisSelection, RunSpec
+
+    schemas = {}
+
+    if args.model in ("runspec", "all"):
+        schemas["RunSpec"] = RunSpec.model_json_schema()
+        schemas["AxisSelection"] = AxisSelection.model_json_schema()
+        schemas["Fidelity"] = {"type": "string", "enum": ["L0", "L1", "L2"]}
+
+    if args.model in ("coordinate", "all"):
+        schemas["Coordinate"] = (
+            Coordinate.__pydantic_model__.model_json_schema()
+            if hasattr(Coordinate, "__pydantic_model__")
+            else _dataclass_to_schema(Coordinate)
+        )
+        schemas["Schedule"] = (
+            Schedule.__pydantic_model__.model_json_schema()
+            if hasattr(Schedule, "__pydantic_model__")
+            else _dataclass_to_schema(Schedule)
+        )
+
+    if args.model in ("objectives", "all"):
+        # Build objectives schema from registry
+        objectives_schema = {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        }
+        for name, spec in OBJECTIVES_REGISTRY.items():
+            obj_schema = {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "const": name},
+                    "metric_key": {"type": ["string", "null"]},
+                    "description": {"type": "string"},
+                    "axis_tag": {"type": ["string", "null"]},
+                    "direction": {"type": "string", "enum": ["maximize", "minimize"]},
+                    "measured": {"type": "boolean"},
+                },
+                "required": [
+                    "name",
+                    "metric_key",
+                    "description",
+                    "axis_tag",
+                    "direction",
+                    "measured",
+                ],
+            }
+            objectives_schema["properties"][name] = obj_schema
+        schemas["Objectives"] = objectives_schema
+
+    if args.model in ("all",) and not schemas:
+        schemas = {"RunSpec": RunSpec.model_json_schema()}
+
+    # Output
+    if args.format == "json":
+        output = json.dumps(schemas, indent=2)
+    else:
+        import yaml
+
+        output = yaml.dump(schemas, sort_keys=False)
+
+    if args.output:
+        Path(args.output).write_text(output, encoding="utf-8")
+        logger.info(f"Schema written to {args.output}")
+    else:
+        print(output)
+    return 0
+
+
+def _dataclass_to_schema(cls) -> dict:
+    """Convert a frozen dataclass to JSON schema."""
+    import dataclasses
+    from typing import get_type_hints
+
+    hints = get_type_hints(cls)
+    properties = {}
+    required = []
+
+    for field in dataclasses.fields(cls):
+        if field.name.startswith("_"):
+            continue
+        field_type = hints.get(field.name, Any)
+        properties[field.name] = _type_to_schema(field_type)
+        if (
+            field.default == dataclasses.MISSING
+            and field.default_factory == dataclasses.MISSING
+        ):
+            required.append(field.name)
+
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": False,
+    }
+
+
+def _type_to_schema(typ) -> dict:
+    """Convert a Python type to JSON schema."""
+    import typing
+    from typing import Union, get_args, get_origin
+
+    origin = get_origin(typ)
+    args = get_args(typ)
+
+    if typ is str:
+        return {"type": "string"}
+    elif typ is int:
+        return {"type": "integer"}
+    elif typ is float:
+        return {"type": "number"}
+    elif typ is bool:
+        return {"type": "boolean"}
+    elif typ is None or (origin is type(None)):
+        return {"type": "null"}
+    elif origin is list or origin is list:
+        return {"type": "array", "items": _type_to_schema(args[0]) if args else {}}
+    elif origin is dict or origin is dict:
+        return {
+            "type": "object",
+            "additionalProperties": _type_to_schema(args[1]) if len(args) > 1 else {},
+        }
+    elif origin is tuple or origin is tuple:
+        if args and args[-1] is Ellipsis:
+            return {"type": "array", "items": _type_to_schema(args[0])}
+        return {"type": "array", "prefixItems": [_type_to_schema(a) for a in args]}
+    elif origin is Union or origin is typing.Union or typing.get_origin(typ) == Union:
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1 and type(None) in args:
+            schema = _type_to_schema(non_none[0])
+            schema["nullable"] = True
+            return schema
+        return {"anyOf": [_type_to_schema(a) for a in non_none]}
+    elif hasattr(typ, "__pydantic_model__"):
+        return typ.__pydantic_model__.model_json_schema()
+    elif hasattr(typ, "__dataclass_fields__"):
+        return _dataclass_to_schema(typ)
+    else:
+        return {"type": "object", "description": str(typ)}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point for surface CLI."""
     import logging
@@ -2123,6 +2315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pareto": _cmd_pareto,
         "diff": _cmd_diff,
         "repro": _cmd_repro,
+        "schema": _cmd_schema,
     }
     try:
         handler = command_handlers.get(args.command)
