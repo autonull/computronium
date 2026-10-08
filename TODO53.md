@@ -1338,6 +1338,8 @@ spec.to_file("my_run.yaml")
 **P6 (Reproducibility + Packaging) — LARGELY COMPLETE**
 - ✅ `comp export` / `comp repro` with Docker support
 - ✅ Nightly benchmark CI pipeline
+- ✅ Agent-friendly CLI: `stats`, `pareto`, `diff`, `campaign`, `schema` commands with `--dry-run`, `--format json`, `--output`
+- ✅ RunSpec Builder API (`RunSpecBuilder`) for programmatic construction
 - [ ] Full Docker round-trip testing
 
 **Fixes & Correctness (6.1):**
@@ -1350,3 +1352,70 @@ spec.to_file("my_run.yaml")
 - ✅ Pareto front knee detection, hypervolume
 - ✅ Dynamical analysis primitives available in `stability` package (Lyapunov, basin, spectral, settling)
 - [ ] Integration of dynamical analysis into experiment kernel/reports
+
+---
+
+## 35. Session Progress Summary (2026-10-08) — Agent-Friendly CLI Completion, Export/Repro Verification, Type Safety Fixes
+
+### Completed in This Session
+
+**Agent-Friendly CLI Commands (P3 — Complete):**
+- ✅ Added missing commands to main CLI dispatcher (`comp.stats`, `comp.pareto`, `comp.diff`, `comp.campaign`, `comp.schema`)
+- ✅ All 14 `comp` subcommands now support consistent `--dry-run`, `--format {json,text}`, `--output` arguments
+- ✅ `comp stats` — Machine-readable summary statistics with grouping, aggregations (mean, std, min, max, median, ci95, count), output formats (json, csv, table)
+- ✅ `comp pareto` — Pareto frontier export for plotting (csv, json)
+- ✅ `comp diff` — Statistical run comparison with multiple tests (ttest, wilcoxon, mannwhitney), effect sizes (Cohen's d, Cliff's delta)
+- ✅ `comp campaign` — YAML declarative multi-run campaigns with dependencies, parallel execution, webhooks, dry-run
+- ✅ `comp schema` — Dump JSON schemas for RunSpec, Coordinate, Schedule, Objectives (json/yaml output)
+- ✅ `comp repro` — Reproducibility gate: replays run, verifies bitwise match within tolerance, exits 0/1 for CI
+- ✅ `comp export --docker` — Generates reproducible Dockerfile with pinned CUDA/PyTorch/deps, git commit, env fingerprint
+
+**RunSpec Builder API (P3):**
+- ✅ `RunSpecBuilder` fluent Python API for programmatic RunSpec construction
+- ✅ Profile presets: `quick-verify`, `production-map`, `maturation`, `claim`
+- ✅ Full round-trip: build → save (JSON/YAML) → load → validate
+- ✅ Exported via `computronium.experiment.RunSpecBuilder`
+
+**Export/Repro Verification (P6):**
+- ✅ `comp export --format json` produces structured JSONL records with all metrics, provenance, config
+- ✅ `comp export --docker` generates Dockerfile with `CUBLAS_WORKSPACE_CONFIG=:4096:8`, `TORCH_DETERMINISTIC=1`
+- ✅ `comp repro --tolerance 1e-6` runs reproduction and compares metrics
+
+**Type Safety Fixes (6.3):**
+- ✅ Fixed pyright errors in `computronium/experiment/surface/cli.py` (p-value type handling, Pydantic model access)
+- ✅ Fixed pyright errors in `computronium/cli/__main__.py` (command registration)
+- ✅ All pyright checks pass on changed files (0 errors)
+
+**GPU Quick-Verify Verification (P0):**
+- ✅ `comp run quick-verify --store exp.db --device auto` completes in ~40s on RTX 3080
+- ✅ All 6 measured objectives populated: `validation_accuracy`, `walltime_total`, `flops`, `param_count`, `memory_usage`, `energy_per_step`
+- ✅ NVML integration working (pynvml/nvidia-ml-py installed)
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, axis frontiers, multi-axis campaign, registry completeness, import time, CLI readme, gallery locks)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- All 8 GPU benchmark tests pass
+- `ruff format` passes on changed files
+- `pyright` passes on changed files (0 errors)
+
+---
+
+## 36. Remaining Work & Next Priorities (Updated)
+
+### P2 Remaining (Reporting + Gallery)
+- [ ] CI integration: Gallery lock fails if figures drift from committed manifest
+
+### P6 (Reproducibility + Packaging) — Remaining
+- [ ] Full Docker round-trip testing (build image, run repro inside container, verify bitwise match)
+
+### Analysis Infrastructure (7) — Remaining
+- [ ] Integration of dynamical analysis into experiment kernel/reports (Lyapunov spectra, basin stability, energy tracking)
+
+### Documentation (9)
+- [ ] Experiment Guide: `docs/experiments/` — end-to-end tutorials
+- [ ] Benchmark Cookbook: `docs/benchmarks/` — each suite with expected results
+- [ ] Analysis Recipes: `docs/analysis/` — Pareto, ablation, stability-plasticity
+- [ ] GPU Guide: Mixed precision, multi-GPU, memory optimization
+- [ ] RunSpec schema auto-generation from Pydantic model
+- [ ] Objectives registry: add measurement status to `docs/generated/objectives.md`
+- [ ] CLI reference: `comp --help` output → markdown

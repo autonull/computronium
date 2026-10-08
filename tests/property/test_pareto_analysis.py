@@ -18,11 +18,11 @@ class TestParetoFront:
     def test_simple_2d_front(self) -> None:
         """Basic 2D minimization front."""
         points = np.array([
-            [1.0, 5.0],   # dominated by [1, 3]
-            [2.0, 4.0],   # dominated by [1, 3]
-            [1.0, 3.0],   # on front
-            [3.0, 1.0],   # on front
-            [4.0, 2.0],   # dominated by [3, 1]
+            [1.0, 5.0],  # dominated by [1, 3]
+            [2.0, 4.0],  # dominated by [1, 3]
+            [1.0, 3.0],  # on front
+            [3.0, 1.0],  # on front
+            [4.0, 2.0],  # dominated by [3, 1]
         ])
         mask = pareto_front(points)
         assert mask.tolist() == [False, False, True, True, False]
@@ -30,7 +30,7 @@ class TestParetoFront:
     def test_all_dominated_by_one(self) -> None:
         """One point dominates all others."""
         points = np.array([
-            [1.0, 1.0],   # dominates all
+            [1.0, 1.0],  # dominates all
             [2.0, 2.0],
             [3.0, 3.0],
         ])
@@ -50,8 +50,8 @@ class TestParetoFront:
     def test_maximize_direction(self) -> None:
         """Test with maximize=True for some objectives."""
         points = np.array([
-            [1.0, 1.0],   # low on both
-            [5.0, 5.0],   # high on both - should dominate if maximize
+            [1.0, 1.0],  # low on both
+            [5.0, 5.0],  # high on both - should dominate if maximize
             [3.0, 3.0],
         ])
         # Maximize both
@@ -61,9 +61,9 @@ class TestParetoFront:
     def test_mixed_directions(self) -> None:
         """Minimize first, maximize second."""
         points = np.array([
-            [1.0, 1.0],   # good on first, bad on second
-            [2.0, 5.0],   # bad on first, good on second
-            [3.0, 3.0],   # middle
+            [1.0, 1.0],  # good on first, bad on second
+            [2.0, 5.0],  # bad on first, good on second
+            [3.0, 3.0],  # middle
         ])
         mask = pareto_front(points, maximize=[False, True])
         # [1, 1] and [2, 5] should both be on front

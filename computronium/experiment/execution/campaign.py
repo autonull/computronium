@@ -72,7 +72,9 @@ class CampaignRunner:
         self._run_id_map: dict[int, str] = {}
         self._store_lock = asyncio.Lock()
 
-    async def _send_webhook(self, event: str, run_idx: int, data: dict[str, Any]) -> None:
+    async def _send_webhook(
+        self, event: str, run_idx: int, data: dict[str, Any]
+    ) -> None:
         """Send progress webhook if configured."""
         if not self.webhook_url:
             return
@@ -88,12 +90,17 @@ class CampaignRunner:
             import aiohttp
 
             async with aiohttp.ClientSession() as session:
-                await session.post(self.webhook_url, json=payload, timeout=aiohttp.ClientTimeout(total=10))
+                await session.post(
+                    self.webhook_url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                )
         except Exception:  # Webhooks are best-effort
             logger.debug("Webhook delivery failed", exc_info=True)
 
     def _build_run_spec(self, run: CampaignRun) -> RunSpec:
         """Build a RunSpec from a campaign run."""
+
         # Create a mock args namespace for _resolve_spec
         class Args:
             def __init__(self, run: CampaignRun, campaign_store: str):
@@ -127,7 +134,9 @@ class CampaignRunner:
         async with self._store_lock:
             return await self._run_pipeline(spec)
 
-    def _make_result(self, run_idx: int, exit_code: int, elapsed: float) -> dict[str, Any]:
+    def _make_result(
+        self, run_idx: int, exit_code: int, elapsed: float
+    ) -> dict[str, Any]:
         """Create result dict from exit code."""
         if exit_code == 0:
             return {"success": True, "run_id": None, "elapsed_s": elapsed}
@@ -188,7 +197,9 @@ class CampaignRunner:
                 outcomes = await runner.run()
             except KeyboardInterrupt:
                 logger.info("Interrupted; resume with --run-id %s", run_id)
-                store.finish_run(run_id, "interrupted", budget_consumed_s=_consumed(runner))
+                store.finish_run(
+                    run_id, "interrupted", budget_consumed_s=_consumed(runner)
+                )
                 return 130
             except Exception as exc:
                 logger.error("Pipeline failed: %s", exc, exc_info=True)
@@ -199,8 +210,12 @@ class CampaignRunner:
                 signal.signal(signal.SIGTERM, old_sigterm)
 
             if interrupted["flag"]:
-                logger.info("Run interrupted by signal; resume with --run-id %s", run_id)
-                store.finish_run(run_id, "interrupted", budget_consumed_s=_consumed(runner))
+                logger.info(
+                    "Run interrupted by signal; resume with --run-id %s", run_id
+                )
+                store.finish_run(
+                    run_id, "interrupted", budget_consumed_s=_consumed(runner)
+                )
                 return 130
 
             _settle_maturity(store, run_id, spec)
@@ -230,7 +245,9 @@ class CampaignRunner:
 
             if not self.running:
                 if self.pending:
-                    raise RuntimeError("Campaign deadlock: remaining runs have unmet dependencies")
+                    raise RuntimeError(
+                        "Campaign deadlock: remaining runs have unmet dependencies"
+                    )
                 break
 
             done, pending_tasks = await asyncio.wait(
@@ -309,7 +326,11 @@ class CampaignRunner:
                 await self._send_webhook(
                     "skipped", j, {"reason": f"dependency {failed_idx} failed"}
                 )
-                self.results[j] = {"success": False, "skipped": True, "reason": f"dependency {failed_idx} failed"}
+                self.results[j] = {
+                    "success": False,
+                    "skipped": True,
+                    "reason": f"dependency {failed_idx} failed",
+                }
                 self.failed.add(j)
                 to_remove.append(j)
         for j in to_remove:

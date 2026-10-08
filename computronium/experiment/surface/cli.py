@@ -2530,23 +2530,16 @@ def _cmd_diff(args: argparse.Namespace) -> int:
 
         results = {}
         for metric in metrics:
-            vals_a = [
-                r.payload.get(metric)
+            vals_a: list[float] = [
+                float(r.payload[metric])
                 for r in records_a
-                if r.payload.get(metric) is not None
+                if metric in r.payload and r.payload[metric] is not None
             ]
-            vals_b = [
-                r.payload.get(metric)
+            vals_b: list[float] = [
+                float(r.payload[metric])
                 for r in records_b
-                if r.payload.get(metric) is not None
+                if metric in r.payload and r.payload[metric] is not None
             ]
-
-            if not vals_a or not vals_b:
-                results[metric] = {"error": "Insufficient data"}
-                continue
-
-            vals_a = [float(v) for v in vals_a]
-            vals_b = [float(v) for v in vals_b]
 
             # Compute statistics
             mean_a, mean_b = statistics.mean(vals_a), statistics.mean(vals_b)
@@ -2584,14 +2577,21 @@ def _cmd_diff(args: argparse.Namespace) -> int:
             except Exception as e:
                 logger.warning(f"Statistical test failed for {metric}: {e}")
 
+            # Extract p-value from tuple if needed
+            p_val: float | None = (
+                float(p_value[1])  # type: ignore[arg-type]
+                if isinstance(p_value, tuple)
+                else (float(p_value) if p_value is not None else None)  # type: ignore[arg-type]
+            )
+
             results[metric] = {
                 "run_a": {"mean": mean_a, "std": std_a, "count": len(vals_a)},
                 "run_b": {"mean": mean_b, "std": std_b, "count": len(vals_b)},
                 "mean_diff": mean_a - mean_b,
-                "p_value": p_value,
+                "p_value": p_val,
                 "effect_size": effect_size,
                 "test": args.test,
-                "significant": p_value is not None and p_value < 0.05,
+                "significant": p_val is not None and p_val < 0.05,
             }
 
         output_data = {
@@ -3023,16 +3023,8 @@ def _cmd_schema(args: argparse.Namespace) -> int:
         schemas["Fidelity"] = {"type": "string", "enum": ["L0", "L1", "L2"]}
 
     if args.model in ("coordinate", "all"):
-        schemas["Coordinate"] = (
-            Coordinate.__pydantic_model__.model_json_schema()
-            if hasattr(Coordinate, "__pydantic_model__")
-            else _dataclass_to_schema(Coordinate)
-        )
-        schemas["Schedule"] = (
-            Schedule.__pydantic_model__.model_json_schema()
-            if hasattr(Schedule, "__pydantic_model__")
-            else _dataclass_to_schema(Schedule)
-        )
+        schemas["Coordinate"] = _dataclass_to_schema(Coordinate)
+        schemas["Schedule"] = _dataclass_to_schema(Schedule)
 
     if args.model in ("objectives", "all"):
         # Build objectives schema from registry

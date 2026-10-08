@@ -12,8 +12,7 @@ def get_git_commit() -> str:
     """Get current git commit hash."""
     try:
         return subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=True
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
         ).stdout.strip()[:8]
     except Exception:
         return "unknown"
@@ -44,22 +43,26 @@ def main():
     parser.add_argument("--compare", action="store_true", help="Compare with baseline")
     parser.add_argument("--baseline", help="Baseline results JSON file")
     parser.add_argument("--current", help="Current results JSON file")
-    parser.add_argument("--output", default="dashboard_report.md", help="Output markdown file")
-    parser.add_argument("--history", default="benchmark_history.json", help="History file")
-    
+    parser.add_argument(
+        "--output", default="dashboard_report.md", help="Output markdown file"
+    )
+    parser.add_argument(
+        "--history", default="benchmark_history.json", help="History file"
+    )
+
     args = parser.parse_args()
-    
+
     if args.compare:
         if not args.baseline or not args.current:
             print("Error: --baseline and --current required for comparison")
             return 1
-        
+
         baseline = load_results(args.baseline)
         current = load_results(args.current)
-        
+
         base_metrics = extract_key_metrics(baseline)
         curr_metrics = extract_key_metrics(current)
-        
+
         lines = [
             "# Benchmark Dashboard - Comparison",
             f"Baseline commit: {baseline.get('commit', 'unknown')}",
@@ -68,7 +71,7 @@ def main():
             "| Metric | Baseline | Current | Change |",
             "|--------|----------|---------|--------|",
         ]
-        
+
         all_keys = set(base_metrics.keys()) | set(curr_metrics.keys())
         for key in sorted(all_keys):
             if key not in base_metrics:
@@ -84,33 +87,33 @@ def main():
                 else:
                     change = "N/A"
                 lines.append(f"| {key} | {base:.4g} | {curr:.4g} | {change} |")
-        
+
         Path(args.output).write_text("\n".join(lines))
         print(f"Comparison report written to {args.output}")
         return 0
-    
+
     # Single results mode - update history
     results = load_results(args.results)
     commit = results.get("commit", get_git_commit())
     metrics = extract_key_metrics(results)
-    
+
     # Load history
     history = {}
     if Path(args.history).exists():
         with open(args.history) as f:
             history = json.load(f)
-    
+
     # Add current commit
     history[commit] = {
         "commit": commit,
         "timestamp": results.get("timestamp", ""),
         "metrics": metrics,
     }
-    
+
     # Save history
     with open(args.history, "w") as f:
         json.dump(history, f, indent=2)
-    
+
     # Generate dashboard
     lines = [
         "# Benchmark Dashboard",
@@ -121,13 +124,17 @@ def main():
         "| Metric | Value |",
         "|--------|-------|",
     ]
-    
+
     for key, value in sorted(metrics.items()):
         lines.append(f"| {key} | {value:.4g} |")
-    
-    lines.extend(["", "## History (last 10 commits)", "| Commit | " + " | ".join(sorted(metrics.keys())[:5]) + " |"])
+
+    lines.extend([
+        "",
+        "## History (last 10 commits)",
+        "| Commit | " + " | ".join(sorted(metrics.keys())[:5]) + " |",
+    ])
     lines.append("|--------|" + "|".join(["-------"] * min(5, len(metrics))) + "|")
-    
+
     for hist_commit, hist_data in sorted(history.items(), reverse=True)[:10]:
         row = f"| {hist_commit} |"
         for key in sorted(metrics.keys())[:5]:
@@ -137,7 +144,7 @@ def main():
             else:
                 row += f" {val} |"
         lines.append(row)
-    
+
     Path(args.output).write_text("\n".join(lines))
     print(f"Dashboard written to {args.output}")
     return 0

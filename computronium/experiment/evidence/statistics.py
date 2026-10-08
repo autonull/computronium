@@ -146,7 +146,9 @@ def _validate_points(points: np.ndarray) -> tuple[int, int]:
     return n_points, n_objectives
 
 
-def _validate_maximize(maximize: Sequence[bool] | None, n_objectives: int) -> list[bool]:
+def _validate_maximize(
+    maximize: Sequence[bool] | None, n_objectives: int
+) -> list[bool]:
     """Validate and return maximize list."""
     if maximize is None:
         return [False] * n_objectives
@@ -155,7 +157,9 @@ def _validate_maximize(maximize: Sequence[bool] | None, n_objectives: int) -> li
     return list(maximize)
 
 
-def _transform_for_minimization(points: np.ndarray, maximize: Sequence[bool]) -> np.ndarray:
+def _transform_for_minimization(
+    points: np.ndarray, maximize: Sequence[bool]
+) -> np.ndarray:
     """Transform points so all objectives are minimized."""
     transformed = points.copy()
     for j, m in enumerate(maximize):
@@ -223,7 +227,9 @@ def _compute_reference(
         return np.max(transformed, axis=0) + 1e-6
     ref = np.asarray(reference, dtype=float)
     if ref.shape != (n_objectives,):
-        raise ValueError(f"reference must have shape ({n_objectives},), got {ref.shape}")
+        raise ValueError(
+            f"reference must have shape ({n_objectives},), got {ref.shape}"
+        )
     for j, m in enumerate(maximize):
         if m:
             ref[j] = -ref[j]

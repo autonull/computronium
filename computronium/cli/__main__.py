@@ -46,10 +46,15 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "stability-plasticity": (_SURFACE, "main", ("stability-plasticity",)),
     "frozen-theta-psi": (_SURFACE, "main", ("frozen-theta-psi",)),
     "parity": ("computronium.cli.parity", "main", ()),
-    "repro": ("computronium.cli.repro", "main", ()),
+    "repro": (_SURFACE, "main", ("repro",)),
     "validate": ("computronium.cli.validate", "main", ()),
     "joint-validate": ("computronium.cli.joint_validate", "main", ()),
     "benchmark": ("computronium.cli.benchmark", "main", ()),
+    "stats": (_SURFACE, "main", ("stats",)),
+    "pareto": (_SURFACE, "main", ("pareto",)),
+    "diff": (_SURFACE, "main", ("diff",)),
+    "campaign": (_SURFACE, "main", ("campaign",)),
+    "schema": (_SURFACE, "main", ("schema",)),
 }
 
 _SUMMARIES: dict[str, str] = {
@@ -67,6 +72,11 @@ _SUMMARIES: dict[str, str] = {
     "validate": "Validate a config or record against the schema",
     "joint-validate": "Validate a composed multi-axis system",
     "benchmark": "Run kernel benchmarks and emit a verdict",
+    "stats": "Compute summary statistics for run metrics (machine-readable)",
+    "pareto": "Export Pareto frontier for plotting (machine-readable)",
+    "diff": "Statistical run comparison with effect sizes",
+    "campaign": "Run declarative multi-run YAML campaigns",
+    "schema": "Dump JSON schemas for RunSpec/Coordinate/Objectives",
 }
 
 
