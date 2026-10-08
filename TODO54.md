@@ -4,9 +4,9 @@
 
 ---
 
-## Already Working (No Remaining Work Needed)
+## Already Working (Capability — Run After Phases 1-2 Complete)
 
-Run a 1-hour experiment and generate a publication-ready report **today**:
+The system **already supports** preliminary experiments (~1 hour) and publication-ready reports. After Phases 1-2 are complete, run:
 
 ```bash
 # 1. Run experiment campaign (~1 hour on RTX 3080)
@@ -48,9 +48,28 @@ uv run comp report --store exp.db --format pdf --output report.pdf
 
 ## Remaining Work — Phased for Fastest Path to Polished Workflow
 
-### Phase 0: Verify End-to-End (0 days — Already Works)
+### Phase 0: Verify End-to-End (0 days — Dry Runs & Smoke Tests Only)
 
-Run the commands in "Already Working" above. If successful, you have preliminary experiments + meaningful reports.
+**Do not run full experiments yet.** Use dry runs and smoke tests to verify the pipeline:
+
+```bash
+# Dry-run campaign plan (no execution, <1s)
+uv run comp campaign \
+  --model backprop,eqprop,fa,hebbian \
+  --task digits \
+  --epochs 30 \
+  --seeds 42,123,456 \
+  --store exp.db \
+  --dry-run --format json
+
+# Smoke test: single seed, 1 epoch (~30s on RTX 3080)
+uv run comp run quick-verify --store exp.db --device auto --iterations 1
+
+# Verify report generation on smoke test data (<10s)
+uv run comp report --store exp.db --format html --output report.html
+```
+
+If dry-run shows valid JSON plan and smoke test + report complete successfully, the pipeline is verified.
 
 ### Phase 1: UX Polish — Quick Wins (0.5 days)
 
@@ -147,7 +166,7 @@ Day 3-5 (Phase 3, optional): Deeper dynamical analysis — Lyapunov, basin, ener
 
 ## Success Criteria (Definition of Done)
 
-- [ ] **Phase 0 verified**: `comp campaign` + `comp report --format html` works end-to-end
+- [ ] **Phase 0 verified**: Dry-run campaign shows valid plan; smoke test (1 epoch) + report generation complete
 - [ ] **Phase 1**: `--device` on benchmark, `--format` on export, effect size in `comp stats --group-by`
 - [ ] **Phase 2**: `comp power-analysis`, `comp pareto --weights --scalarize`
 - [ ] All property locks pass (L1-L7, J1-J7, axis locks, registry locks, gallery locks)
