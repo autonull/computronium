@@ -430,6 +430,12 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--output", default=None, help="Output file for results (JSON)"
     )
     p_hypothesis.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_hypothesis.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+    p_hypothesis.add_argument(
         "--bind",
         action="append",
         default=[],
@@ -483,6 +489,10 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_sta.add_argument(
         "--dry-run", action="store_true", help="Show plan without running"
     )
+    p_sta.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_sta.add_argument("--output", default=None, help="Output file path")
     p_sta.add_argument(
         "--run-id",
         default=None,
@@ -578,6 +588,10 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_frozen.add_argument(
         "--dry-run", action="store_true", help="Show plan without running"
     )
+    p_frozen.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_frozen.add_argument("--output", default=None, help="Output file path")
 
     # Stats command - machine-readable summary statistics
     p_stats = sub.add_parser(
@@ -1578,7 +1592,7 @@ def _cmd_campaign(args: argparse.Namespace) -> int:
     if args.output:
         import json
 
-        Path(args.output).write_text(json.dumps(result, indent=2))
+        Path(args.output).write_text(json.dumps(result, indent=2), encoding="utf-8")
         logger.info(f"Results written to {args.output}")
 
     return 0 if result["failed"] == 0 else 1
@@ -1633,24 +1647,6 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         * len(convergence_start_vals)
     )
     total_cells = axis_combinations * hyperparameter_combinations
-
-    print("Stability-Plasticity Campaign")
-    print(f"  Rho (contraction): {rho_vals}")
-    print(f"  Feedback scale (coupling): {feedback_scale_vals}")
-    print(f"  Precision: {precision_vals}")
-    print(f"  Noise level: {noise_level_vals}")
-    print(f"  Convergence start (delay proxy): {convergence_start_vals}")
-    print(
-        f"  Axis primitives: substrate={substrate_prims}, geometry={geometry_prims}, "
-        f"dynamics={dynamics_prims}, plasticity={plasticity_prims}, "
-        f"credit={credit_prims}, update={update_prims}"
-    )
-    print(f"  Axis combinations: {axis_combinations}")
-    print(f"  Hyperparameter combinations: {hyperparameter_combinations}")
-    print(f"  Total coordinates: {total_cells}")
-    print(f"  Seeds per coordinate: {args.seeds}")
-    print(f"  Epochs: {args.epochs}")
-    print(f"  Budget: {args.budget_seconds}s")
 
     axes = (
         AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=substrate_prims),
@@ -1739,30 +1735,106 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         sweep_steps=243,
     )
 
-    # Output spec if requested
-    if args.output_spec:
-        output_path = Path(args.output_spec)
-        output_path.write_text(json.dumps(spec.to_dict(), indent=2), encoding="utf-8")
-        print(f"Spec written to {output_path}")
-
     # Dry run or run
     if args.dry_run:
-        from computronium.experiment.execution.search_space import (
-            iter_candidates,
-            search_space_from_spec,
-        )
+        if args.format == "json":
+            plan = {
+                "command": "stability-plasticity",
+                "store": args.store,
+                "run_id": args.run_id,
+                "rho": list(rho_vals),
+                "feedback_scale": list(feedback_scale_vals),
+                "precision": list(precision_vals),
+                "noise_level": list(noise_level_vals),
+                "convergence_start": list(convergence_start_vals),
+                "seeds": args.seeds,
+                "epochs": args.epochs,
+                "budget_seconds": args.budget_seconds,
+                "axes": {
+                    "substrate": list(substrate_prims),
+                    "geometry": list(geometry_prims),
+                    "dynamics": list(dynamics_prims),
+                    "plasticity": list(plasticity_prims),
+                    "credit": list(credit_prims),
+                    "update": list(update_prims),
+                },
+                "total_cells": total_cells,
+                "objectives": list(objectives),
+                "axis_objectives": axis_objectives,
+            }
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Stability-Plasticity Campaign")
+            print(f"  Rho (contraction): {rho_vals}")
+            print(f"  Feedback scale (coupling): {feedback_scale_vals}")
+            print(f"  Precision: {precision_vals}")
+            print(f"  Noise level: {noise_level_vals}")
+            print(f"  Convergence start (delay proxy): {convergence_start_vals}")
+            print(
+                f"  Axis primitives: substrate={substrate_prims}, geometry={geometry_prims}, "
+                f"dynamics={dynamics_prims}, plasticity={plasticity_prims}, "
+                f"credit={credit_prims}, update={update_prims}"
+            )
+            print(f"  Axis combinations: {axis_combinations}")
+            print(f"  Hyperparameter combinations: {hyperparameter_combinations}")
+            print(f"  Total coordinates: {total_cells}")
+            print(f"  Seeds per coordinate: {args.seeds}")
+            print(f"  Epochs: {args.epochs}")
+            print(f"  Budget: {args.budget_seconds}s")
+            from computronium.experiment.execution.search_space import (
+                iter_candidates,
+                search_space_from_spec,
+            )
 
-        print("\nDry run - first 5 candidates:")
-        search_space = search_space_from_spec(spec)
-        for count, (coord, sched) in enumerate(iter_candidates(spec, search_space)):
-            print(f"  {coord}")
-            if count >= 4:
-                break
-        print(f"... (total {total_cells} coordinates)")
+            print("\nDry run - first 5 candidates:")
+            search_space = search_space_from_spec(spec)
+            for count, (coord, sched) in enumerate(iter_candidates(spec, search_space)):
+                print(f"  {coord}")
+                if count >= 4:
+                    break
+            print(f"... (total {total_cells} coordinates)")
         return 0
 
     if not args.run:
-        print("Spec generated. Use --run to execute or --dry-run to preview.")
+        if args.format == "json":
+            plan = {
+                "command": "stability-plasticity",
+                "store": args.store,
+                "run_id": args.run_id,
+                "spec": spec.to_dict(),
+            }
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Stability-Plasticity Campaign")
+            print(f"  Rho (contraction): {rho_vals}")
+            print(f"  Feedback scale (coupling): {feedback_scale_vals}")
+            print(f"  Precision: {precision_vals}")
+            print(f"  Noise level: {noise_level_vals}")
+            print(f"  Convergence start (delay proxy): {convergence_start_vals}")
+            print(
+                f"  Axis primitives: substrate={substrate_prims}, geometry={geometry_prims}, "
+                f"dynamics={dynamics_prims}, plasticity={plasticity_prims}, "
+                f"credit={credit_prims}, update={update_prims}"
+            )
+            print(f"  Axis combinations: {axis_combinations}")
+            print(f"  Hyperparameter combinations: {hyperparameter_combinations}")
+            print(f"  Total coordinates: {total_cells}")
+            print(f"  Seeds per coordinate: {args.seeds}")
+            print(f"  Epochs: {args.epochs}")
+            print(f"  Budget: {args.budget_seconds}s")
+            print("Spec generated. Use --run to execute or --dry-run to preview.")
+            if args.output_spec:
+                print(f"Spec written to {args.output_spec}")
         return 0
 
     # Run the campaign. Same executor every run uses, so the run row is closed,
@@ -1771,8 +1843,9 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
     return execute_spec(spec, store_path=args.store, run_id=args.run_id)
 
 
-def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:
+def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-statements, too-many-locals, complex-structure, too-many-branches]
     """Run frozen-θ ψ benchmarks at scale (multi-substrate, multi-plasticity)."""
+    import json
     from pathlib import Path
 
     from computronium.benchmarks.joint.structural_robustness import (
@@ -1816,28 +1889,80 @@ def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:
             coord = f"{substrate}/{args.geometry}/{args.dynamics}/{plasticity}/{args.credit}/{args.update}"
             coordinates.append(coord)
 
-    print("Frozen-θ ψ Benchmark Campaign")
-    print(f"  Substrates: {substrates}")
-    print(f"  Plasticity types: {plasticity_types}")
-    print(f"  Geometry: {args.geometry}")
-    print(f"  Dynamics: {args.dynamics}")
-    print(f"  Credit: {args.credit}")
-    print(f"  Update: {args.update}")
-    print(f"  Total coordinates: {len(coordinates)}")
-    print(f"  Seeds per coordinate: {args.seeds}")
-    print(f"  Epochs: {args.epochs}")
-    print(f"  Recovery steps: {args.recovery_steps}")
-    print(f"  Damage severity: {args.damage_severity}")
+    plan = {
+        "command": "frozen-theta-psi",
+        "store": args.store,
+        "substrates": list(substrates),
+        "plasticity_types": list(plasticity_types),
+        "geometry": args.geometry,
+        "dynamics": args.dynamics,
+        "credit": args.credit,
+        "update": args.update,
+        "total_coordinates": len(coordinates),
+        "seeds": args.seeds,
+        "epochs": args.epochs,
+        "recovery_steps": args.recovery_steps,
+        "damage_severity": args.damage_severity,
+        "device": args.device,
+    }
 
     if args.dry_run:
-        print("\nDry run - coordinates:")
-        for coord in coordinates:
-            print(f"  {coord}")
+        if args.format == "json":
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Frozen-θ ψ Benchmark Campaign")
+            print(f"  Substrates: {substrates}")
+            print(f"  Plasticity types: {plasticity_types}")
+            print(f"  Geometry: {args.geometry}")
+            print(f"  Dynamics: {args.dynamics}")
+            print(f"  Credit: {args.credit}")
+            print(f"  Update: {args.update}")
+            print(f"  Total coordinates: {len(coordinates)}")
+            print(f"  Seeds per coordinate: {args.seeds}")
+            print(f"  Epochs: {args.epochs}")
+            print(f"  Recovery steps: {args.recovery_steps}")
+            print(f"  Damage severity: {args.damage_severity}")
+            print("\nDry run - coordinates:")
+            for coord in coordinates:
+                print(f"  {coord}")
         return 0
 
     if not args.run:
-        print("Plan generated. Use --run to execute or --dry-run to preview.")
+        if args.format == "json":
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Frozen-θ ψ Benchmark Campaign")
+            print(f"  Substrates: {substrates}")
+            print(f"  Plasticity types: {plasticity_types}")
+            print(f"  Geometry: {args.geometry}")
+            print(f"  Dynamics: {args.dynamics}")
+            print(f"  Credit: {args.credit}")
+            print(f"  Update: {args.update}")
+            print(f"  Total coordinates: {len(coordinates)}")
+            print(f"  Seeds per coordinate: {args.seeds}")
+            print(f"  Epochs: {args.epochs}")
+            print(f"  Recovery steps: {args.recovery_steps}")
+            print(f"  Damage severity: {args.damage_severity}")
+            print("Plan generated. Use --run to execute or --dry-run to preview.")
         return 0
+
+    if args.format == "json":
+        output = json.dumps({"status": "running", **plan}, indent=2)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Running status written to {args.output}")
+        else:
+            print(output)
 
     print("Running benchmark...")
     output_dir = Path(args.output_dir)
@@ -1853,11 +1978,44 @@ def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:
     )
 
     print("Benchmark complete.")
+    if args.format == "json" and args.output:
+        # Update output with completion status
+        output_data = {"status": "completed", **plan, "output_dir": str(output_dir)}
+        Path(args.output).write_text(
+            json.dumps(output_data, indent=2), encoding="utf-8"
+        )
+        logger.info(f"Completion status written to {args.output}")
     return 0
 
 
 def _cmd_hypothesis_campaign(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-statements, too-many-locals]
     """Run hypothesis templates over campaign records."""
+    import json
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "hypothesis-campaign",
+            "store": args.store,
+            "run_id": args.run_id,
+            "templates": args.templates,
+            "bindings": args.bind,
+        }
+        if args.format == "json":
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Dry run: would evaluate hypothesis templates")
+            print(f"  Store: {args.store}")
+            print(f"  Run ID: {args.run_id or 'latest'}")
+            print(f"  Templates: {args.templates}")
+            print(f"  Bindings: {args.bind}")
+        return 0
+
     store = _open_store(args.store)
     if store is None:
         return 1
@@ -2018,14 +2176,17 @@ def _cmd_hypothesis_campaign(args: argparse.Namespace) -> int:  # ruff: ignore[c
             "results": results,
         }
 
+        if args.format == "json":
+            output = json.dumps(output_data, indent=2, default=str)
+        else:
+            output = json.dumps(output_data, indent=2, default=str)
+
         if args.output:
             output_path = Path(args.output)
-            output_path.write_text(
-                json.dumps(output_data, indent=2, default=str), encoding="utf-8"
-            )
+            output_path.write_text(output, encoding="utf-8")
             logger.info(f"Results written to {output_path}")
         else:
-            print(json.dumps(output_data, indent=2, default=str))
+            print(output)
 
         return 0
 

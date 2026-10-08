@@ -40,6 +40,7 @@ __all__ = [
     "RegistryDiff",
     "ReproducibilityClass",
     "RunSpec",
+    "RunSpecBuilder",
     "RUN_SPEC_VERSION",
     "Scale",
     "Severity",
@@ -93,6 +94,8 @@ _symbol_to_module: dict[str, str] = {
     "AxisSelection": "schema.run_spec",
     "Fidelity": "schema.run_spec",
     "RunSpec": "schema.run_spec",
+    # schema.builder
+    "RunSpecBuilder": "schema.builder",
 }
 
 

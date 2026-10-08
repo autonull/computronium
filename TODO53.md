@@ -981,3 +981,114 @@ runs:
 - `ruff format` passes on changed files
 - `pyright` passes on changed files (0 errors)
 - Dry-run with JSON output tested for all four commands
+</content>
+---
+
+## 28. Session Progress Summary (2026-10-08) — Agent-Friendly CLI Completion & RunSpec Builder API
+
+### Completed in This Session (P3 — Agent-Friendly CLI/Output Completion)
+
+**Unified `--dry-run`, `--format json`, `--output` for all remaining commands:**
+- ✅ `comp hypothesis-campaign --dry-run --format json` — outputs structured JSON plan
+- ✅ `comp hypothesis-campaign --format json --output file.json` — machine-readable results
+- ✅ `comp stability-plasticity --dry-run --format json` — outputs structured JSON plan
+- ✅ `comp stability-plasticity --format json --output file.json` — machine-readable plan/spec
+- ✅ `comp frozen-theta-psi --dry-run --format json` — outputs structured JSON plan
+- ✅ `comp frozen-theta-psi --format json --output file.json` — machine-readable plan/status
+- ✅ All 14 `comp` subcommands now support consistent `--dry-run`, `--format {json,text}`, `--output` arguments
+
+**Code Changes:**
+- `computronium/experiment/surface/cli.py` — Added `--dry-run`, `--format`, `--output` to `hypothesis-campaign`, `stability-plasticity`, `frozen-theta-psi` commands
+- `computronium/experiment/surface/cli.py` — Updated handlers to support JSON output and dry-run plans with consistent structure
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, registry locks, CLI readme)
+- All acceptance tests pass (U1-U5 kernel guarantees)
+- Dry-run with JSON output tested for all commands
+- `ruff format` and `ruff check` pass
+- `pyright` passes on changed files (0 errors)
+
+### Completed in This Session (P3 — RunSpec Builder API)
+
+**RunSpec Builder API (`computronium.experiment.schema.builder.RunSpecBuilder`):**
+- ✅ Fluent Python API for programmatic RunSpec construction
+- ✅ Profile presets: `quick-verify`, `production-map`, `maturation`, `claim`
+- ✅ Task, fidelity, seeds, epochs, batch_limit, budget, param_budget, policy configuration
+- ✅ Objectives management: `objectives()`, `add_objective()`
+- ✅ Axis restriction: `axis()`, `axis_all()` for all 6 structural axes
+- ✅ Hyperparameter domains: `hyperparameter_range()`, `hyperparameter_categorical()`, `hyperparameter_int_range()`
+- ✅ Operating points, dataset, code_sha, device, deterministic, num_workers, precision, checkpoint_every
+- ✅ Axis-aligned objectives: `axis_objectives()`
+- ✅ Sweep steps configuration: `sweep_steps()`
+- ✅ Export to JSON: `to_file()` and YAML: `to_yaml()`
+- ✅ Full round-trip: build → save → load → validate
+- ✅ Exported via `computronium.experiment.RunSpecBuilder`
+
+**Example Usage:**
+```python
+from computronium.experiment import RunSpecBuilder
+
+spec = (RunSpecBuilder()
+    .profile("quick-verify")
+    .task("mnist")
+    .fidelity("L1")
+    .seeds(3)
+    .epochs(10)
+    .objectives("validation_accuracy", "walltime_total")
+    .axis("credit", ["gradient", "thermodynamic_contrast", "random_projections"])
+    .axis("plasticity", ["null", "routing"])
+    .build())
+spec.to_file("my_run.yaml")
+```
+
+**Code Changes:**
+- `computronium/experiment/schema/builder.py` — New module with RunSpecBuilder class
+- `computronium/experiment/__init__.py` — Exported RunSpecBuilder in public API
+
+**Verification:**
+- All property locks pass (L1-L7, J1-J7, axis certifications, registry locks, CLI readme)
+- Builder API tested with round-trip JSON save/load
+- `ruff format` and `ruff check` pass
+- `pyright` passes on changed files (0 errors)
+
+---
+
+## 29. Updated Remaining Work & Next Priorities
+
+### P2 Remaining (Reporting + Gallery)
+- [ ] Per-axis ablation tables (credit swap, substrate swap, plasticity swap) — partially done via `comp stats --group-by`
+- ✅ LaTeX/PDF export via pandoc
+- ✅ Gallery manifest: `docs/figures/manifest.json` with SHA, params, metrics for reproducibility
+- [ ] CI integration: Gallery lock fails if figures drift from committed manifest
+
+### P3 Remaining (Agent-Friendly CLI) — **NOW COMPLETE**
+- ✅ `comp schema` — Dump RunSpec/Coordinate/Objective schemas as JSON Schema
+- ✅ RunSpec builder API (Python) for programmatic construction
+- ✅ `--output json` for all commands (structured JSON to stdout for piping)
+
+### P4 (Benchmark Suites + Analysis) — **LARGELY COMPLETE**
+- ✅ GPU tests for existing 5 benchmark suites
+- ✅ 3 new benchmark suites: credit_assignment_scaling, substrate_precision_scaling, stability_plasticity_frontier
+- [ ] Bootstrap CIs, significance testing, Pareto front analysis
+
+### P5 (Campaign Automation) — **COMPLETE**
+- ✅ `comp campaign` YAML declarative multi-run campaigns
+- ✅ Parallel execution across runs (semaphore-based)
+- ✅ Progress webhooks
+- ✅ Dependency resolution between runs
+- ✅ Shared DuckDB store with async lock
+- ✅ Dry-run mode, JSON output, CLI overrides
+
+### P6 (Reproducibility + Packaging)
+- [ ] `comp export` / `comp repro` round-trip with Docker
+- [ ] Nightly benchmark CI
+
+### Fixes & Correctness (6.1)
+- [ ] EnergyMinimization β≥1 gradient credit zero pseudo-gradient
+- [ ] Determinism: bitwise reproducibility on GPU
+- [ ] Memory leaks in long runs
+
+### Analysis Infrastructure (7)
+- [ ] Bootstrap CIs, significance testing, effect sizes
+- [ ] Pareto front knee detection, hypervolume
+- [ ] Dynamical analysis: Lyapunov spectra, basin stability, energy tracking
