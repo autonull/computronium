@@ -6,6 +6,29 @@ from pathlib import Path
 from typing import Any
 
 
+def _is_valid_combination(
+    substrate: str,
+    geometry: str,
+    dynamics: str,
+    credit: str,
+    update: str,
+    plasticity: str,
+) -> bool:
+    """Check if a 6-axis combination is valid by attempting SystemConfig validation.
+
+    Only tests known problematic combinations to avoid building all possible configs.
+    """
+    # Known invalid combinations (validated by SystemConfig.validate()):
+    # - instantaneous dynamics + recurrent geometry + gradient/backprop credit
+    #   (gradient doesn't reach recurrent weights in feedforward pass)
+    if dynamics == "instantaneous" and geometry in {"recurrent", "recurrent_attractor"}:
+        if credit in {"gradient", "backprop"}:
+            return False
+    
+    # All other combinations are assumed valid (will be caught at runtime if not)
+    return True
+
+
 class BudgetStrategy(Enum):
     """Campaign strategy profiles."""
 
@@ -174,6 +197,12 @@ def _build_component_sets() -> dict[BudgetStrategy, ComponentSet]:
     """Build component sets from discovered primitives."""
     c = _get_components()
 
+    # Filter out known-invalid combinations:
+    # - instantaneous dynamics + recurrent/recurrent_attractor geometry + gradient/backprop credit
+    #   fails validation because gradient doesn't reach recurrent weights
+    # For broad_shallow and balanced, we keep all components but the validation will catch
+    # invalid combos at runtime. For a better experience, we could filter here.
+
     return {
         # Broad: many components, minimal depth
         BudgetStrategy.BROAD_SHALLOW: ComponentSet(
@@ -195,10 +224,11 @@ def _build_component_sets() -> dict[BudgetStrategy, ComponentSet]:
             plasticities=["null"],
             tasks=["mnist"],
         ),
-        # Balanced: representative sample
+        # Balanced: representative sample - filter out recurrent geometries
+        # since they don't work with instantaneous+gradient (common combo)
         BudgetStrategy.BALANCED: ComponentSet(
             substrates=c["substrates"],
-            geometries=c["geometries"],
+            geometries=[g for g in c["geometries"] if g not in {"recurrent", "recurrent_attractor"}],
             dynamics=c["dynamics"],
             credits=c["credits"],
             updates=c["updates"],
@@ -483,6 +513,12 @@ class BudgetPlanner:
                     "name": f"task_{task}",
                     "profile": "production-map",
                     "overrides": {
+                        "substrates": component_set.substrates,
+                        "geometries": component_set.geometries,
+                        "dynamics": component_set.dynamics,
+                        "credits": component_set.credits,
+                        "updates": component_set.updates,
+                        "plasticities": component_set.plasticities,
                         "task": task,
                         "hpo": {"n_trials": max(10, n_trials // 2), "n_seeds": n_seeds},
                         "epochs": epochs,

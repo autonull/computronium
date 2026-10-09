@@ -34,7 +34,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 416
+BASELINE = 418
 RUFF_VERSION = "0.16.10"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

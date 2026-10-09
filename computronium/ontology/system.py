@@ -423,6 +423,7 @@ class SystemConfig:
 
         # Special case validations
         self._validate_gradient_credit_beta_clamp()
+        self._validate_gradient_credit_instantaneous_recurrent()
         self._validate_per_element_displacement_step_size()
         self._validate_energy_minimization_momentum_update()
 
@@ -794,6 +795,21 @@ class SystemConfig:
                 f"credit_type={self.credit.credit_type!r} with beta={self.credit.beta} "
                 f"has an exactly-zero pseudo-gradient (the nudged output is fully "
                 f"clamped to the target); use beta < 1.0."
+            )
+
+    def _validate_gradient_credit_instantaneous_recurrent(self) -> None:
+        """Gradient/backprop credit with instantaneous dynamics on recurrent geometry
+        fails because the recurrent weights are not in the feedforward loss graph."""
+        if (
+            self.dynamics.dynamics_type == "instantaneous"
+            and self.geometry.topology_type in {"recurrent", "recurrent_attractor"}
+            and self.credit.credit_type in {"gradient", "backprop"}
+        ):
+            raise ValueError(
+                f"GradientCredit/BackpropCredit with instantaneous dynamics on recurrent "
+                f"geometry cannot compute gradients for recurrent weights (not in "
+                f"feedforward pass). Use energy_minimization, predictive_settling, "
+                f"error_predictive_coding, pc_alm, or diffusion dynamics instead."
             )
 
     def _validate_per_element_displacement_step_size(self) -> None:

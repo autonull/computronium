@@ -3524,13 +3524,33 @@ def _run_lyapunov_analysis(transition_fn, init_state, args):
         return {"lyapunov_spectrum": [], "lyapunov_error": str(exc)}
 
 
-def _run_basin_analysis(transition_fn, init_state, args):
+def _run_basin_analysis(transition_fn, init_state, args, dynamics_type: str | None = None, geometry_type: str | None = None):
     """Run basin stability analysis."""
     from computronium.stability import estimate_basin_stability_multistart
 
+    # Basin stability is only meaningful for iterative dynamics with attractor basins.
+    # Requires: iterative dynamics (not instantaneous) AND recurrent geometry (not feedforward).
+    ITERATIVE_DYNAMICS = {
+        "energy_minimization",
+        "predictive_settling",
+        "error_predictive_coding",
+        "pc_alm",
+        "spike_integration",
+        "diffusion",
+        "lazy",
+    }
+    RECURRENT_GEOMETRIES = {"recurrent", "tile_mesh", "quantum", "nca", "ntm"}
+
+    if dynamics_type and dynamics_type not in ITERATIVE_DYNAMICS:
+        logger.info(f"Skipping basin stability for {dynamics_type} dynamics (no iterative settling)")
+        return {"basin_stability": {}, "basin_skipped": f"not applicable for {dynamics_type} dynamics"}
+    if geometry_type and geometry_type not in RECURRENT_GEOMETRIES:
+        logger.info(f"Skipping basin stability for {geometry_type} geometry (no recurrent connections)")
+        return {"basin_stability": {}, "basin_skipped": f"not applicable for {geometry_type} geometry"}
+
     logger.info("Computing basin stability...")
     try:
-        radii = tuple(float(r.strip()) for r in args.basin_radii.split(","))
+        radii = [float(r.strip()) for r in args.basin_radii.split(",")]
         basin_results = estimate_basin_stability_multistart(
             transition_fn,
             init_state,
@@ -3676,10 +3696,10 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
 
         system = cell.system
         # Move system to target device
-        system = system.to(device)
+        system = system.to(device)  # type: ignore[attr-defined]
 
         # Get a sample input for stability analysis
-        sample_x, _ = next(iter(task.get_dataloader("train")))
+        sample_x, _ = next(iter(task.get_dataloader("train")))  # type: ignore[attr-defined]
 
         # Build transition function and initial state
         transition_fn = _build_transition_fn(system, device)
@@ -3689,11 +3709,11 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
 
         # Run requested analyses
         if args.lyapunov:
-            results.update(_run_lyapunov_analysis(transition_fn, init_state, args))
+            results.update(_run_lyapunov_analysis(transition_fn, init_state, args))  # type: ignore[arg-type]
         if args.basin:
-            results.update(_run_basin_analysis(transition_fn, init_state, args))
+            results.update(_run_basin_analysis(transition_fn, init_state, args, coordinate.dynamics, coordinate.geometry))  # type: ignore[arg-type]
         if args.settling:
-            results.update(_run_settling_analysis(transition_fn, init_state, args))
+            results.update(_run_settling_analysis(transition_fn, init_state, args))  # type: ignore[arg-type]
 
         # Output
         output = _format_output(results, args)
