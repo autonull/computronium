@@ -311,6 +311,40 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
                 OrthoAdamUpdate(ParameterUpdateConfig.ortho_adam()),
                 ParameterUpdateConfig.ortho_adam(),
             ),
+            "adam": lambda: (
+                EuclideanUpdate(ParameterUpdateConfig.adam(step_size=0.01)),
+                ParameterUpdateConfig.adam(step_size=0.01),
+            ),
+            "muon": lambda: (
+                RiemannianOrthogonalUpdate(ParameterUpdateConfig.muon()),
+                ParameterUpdateConfig.muon(),
+            ),
+            "natural_gradient": lambda: (
+                EuclideanUpdate(ParameterUpdateConfig.natural_gradient()),
+                ParameterUpdateConfig.natural_gradient(),
+            ),
+            "local_adam": lambda: (
+                EuclideanUpdate(ParameterUpdateConfig.local_adam()),
+                ParameterUpdateConfig.local_adam(),
+            ),
+            "lion": lambda: (
+                EuclideanUpdate(ParameterUpdateConfig.lion()),
+                ParameterUpdateConfig.lion(),
+            ),
+            "role_split": lambda: (
+                EuclideanUpdate(
+                    ParameterUpdateConfig.role_split(
+                        role_names=("theta", "psi"),
+                        on_role=ParameterUpdateConfig.muon(),
+                        other=ParameterUpdateConfig.euclidean(),
+                    )
+                ),
+                ParameterUpdateConfig.role_split(
+                    role_names=("theta", "psi"),
+                    on_role=ParameterUpdateConfig.muon(),
+                    other=ParameterUpdateConfig.euclidean(),
+                ),
+            ),
         }
         if coord["update"] not in update_map:
             raise ValueError(f"Unknown update: {coord['update']}")  # ruff: ignore[raise-within-try]
