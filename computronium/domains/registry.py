@@ -23,9 +23,12 @@ __all__ = [
     "resolve_task_from_data_config",
 ]
 
-# Network-fetching tasks (cifar100/svhn, the graph datasets) are excluded:
-# geometry resolution is offline, and architecture §11 defers the full Phase-0
-# breadth. The MLP-parity tier only schedules the offline-resolvable set.
+# The schedulable set is exactly what resolves and sets up offline: geometry
+# resolution must not touch the network, and architecture §11 defers the full
+# Phase-0 breadth. A name listed here that cannot resolve is a defect, so
+# network-fetching vision sets (cifar100/svhn) and not-yet-implemented domains
+# (mountain_car/lunar_lander RL, wikitext2/penn_treebank LM,
+# diabetes/california_housing tabular) stay out until their loaders land.
 SUPPORTED_TASKS: frozenset[str] = frozenset({
     # vision (incl. toy boolean/toy-classification datasets)
     "xor",
@@ -37,19 +40,13 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "kmnist",
     "usps",
     "cifar10",
-    "cifar100",
-    "svhn",
     # language
     "tiny_shakespeare",
     "char_ngram",
-    "wikitext2",
-    "penn_treebank",
     # rl
     "pendulum",
     "acrobot",
     "cartpole",
-    "mountain_car",
-    "lunar_lander",
     # graph
     "cora",
     "citeseer",
@@ -58,8 +55,6 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "breast_cancer",
     "iris",
     "wine",
-    "diabetes",
-    "california_housing",
 })
 
 

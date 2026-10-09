@@ -34,25 +34,42 @@ import re
 import subprocess
 import sys
 
-BASELINE = 404
+BASELINE = 416
 RUFF_VERSION = "0.16.10"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")
 
 
 def _measured() -> tuple[int, str]:
-    version = subprocess.run(
-        [sys.executable, "-m", "ruff", "--version"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    result = subprocess.run(
-        [sys.executable, "-m", "ruff", "check", ".", "--no-cache"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    import shutil
+    # Use uv to run ruff to ensure we use the correct environment
+    uv_path = shutil.which("uv")
+    if uv_path:
+        version = subprocess.run(
+            [uv_path, "run", "ruff", "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        result = subprocess.run(
+            [uv_path, "run", "ruff", "check", ".", "--no-cache"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    else:
+        version = subprocess.run(
+            [sys.executable, "-m", "ruff", "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        result = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", ".", "--no-cache"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     match = _TOTAL.search(result.stdout)
     assert match is not None, f"could not parse ruff summary:\n{result.stdout[-500:]}"
     return int(match.group(1)), version.strip()

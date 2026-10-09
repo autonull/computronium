@@ -505,8 +505,16 @@ def compute_plasticity_metrics(system: Any) -> dict[str, float]:
     if plastic_dims is None:
         return metrics
 
+    # Handle both PlasticityConfig (with plastic_state_dims) and specific
+    # plasticity configs (like ConflictAdaptivePsiConfig) that don't have it
     plastic_state_dims = getattr(plastic_dims, "plastic_state_dims", None)
     if plastic_state_dims is None:
+        # Try to get from consolidation_config for temporal_psi types
+        consolidation = getattr(plastic_dims, "consolidation_config", None)
+        if consolidation and "trace_decay" in consolidation:
+            # temporal_psi / conflict_adaptive: plastic state is implicit in trace
+            # Return 0 for now; would need to track actual ψ dimensions
+            return metrics
         return metrics
 
     # psi_capacity: sum of all plastic state dimensions

@@ -3580,11 +3580,11 @@ def _format_output(results, args):
             f"Coordinate: {results['coordinate']}",
             "",
         ]
-        if "lyapunov_spectrum" in results and results["lyapunov_spectrum"]:
+        if results.get("lyapunov_spectrum"):
             lines.append(
                 f"Lyapunov Spectrum: {results['lyapunov_spectrum']} (max: {results['lyapunov_max']:.4f})"
             )
-        if "basin_stability" in results and results["basin_stability"]:
+        if results.get("basin_stability"):
             lines.append("Basin Stability:")
             for radius, stability in results["basin_stability"].items():
                 lines.append(f"  radius={radius}: {stability:.4f}")
@@ -3663,11 +3663,14 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
         )
         task.setup()
 
+        from computronium.experiment.execution.evaluate import task_shape
+
+        shape = task_shape(schedule.task_id, device)
         cell = compose_cell_system(
             coordinate=coordinate,
             geometry={},
-            input_shape=task.input_dim,
-            output_dim=task.output_dim,
+            input_shape=shape.input_shape,
+            output_dim=shape.output_dim,
             param_budget=schedule.param_budget,
         )
 

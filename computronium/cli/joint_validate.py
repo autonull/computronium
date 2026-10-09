@@ -153,7 +153,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         f"Validating coordinate: {coord['substrate']}/{coord['geometry']}/{coord['dynamics']}/{coord['plasticity']}/{coord['credit']}/{coord['update']}"
     )
 
-    try:  # noqa: PLR0915
+    try:  # ruff: ignore[too-many-nested-blocks]
         # Build substrate
         substrate_map = {
             "digital": lambda: (DigitalSubstrate(), SubstrateConfig.digital()),
@@ -318,15 +318,17 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
 
         # Build plasticity config
         plasticity_map = {
-            "null": lambda: PlasticityConfig.null(),  # ruff: ignore[unnecessary-lambda]
-            "routing": lambda: PlasticityConfig.routing(gate_dim=32),
-            "fast_weights": lambda: PlasticityConfig.fast_weights(fast_weight_dim=64),
-            "substrate_coupled": lambda: PlasticityConfig.substrate_coupled(),  # ruff: ignore[unnecessary-lambda]
-            "rule_state": lambda: PlasticityConfig.rule_state(num_operators=8),
+            "null": PlasticityConfig.null(),
+            "routing": PlasticityConfig.routing(gate_dim=32),
+            "fast_weights": PlasticityConfig.fast_weights(fast_weight_dim=64),
+            "substrate_coupled": PlasticityConfig.substrate_coupled(),
+            "rule_state": PlasticityConfig.rule_state(num_operators=8),
+            "temporal_psi": PlasticityConfig.temporal_psi(trace_decay=0.99),
+            "conflict_adaptive": PlasticityConfig.conflict_adaptive(),
         }
         if coord["plasticity"] not in plasticity_map:
             raise ValueError(f"Unknown plasticity: {coord['plasticity']}")  # ruff: ignore[raise-within-try]
-        plasticity_config = plasticity_map[coord["plasticity"]]()
+        plasticity_config = plasticity_map[coord["plasticity"]]
 
         # Create SystemConfig and validate
         sys_config = SystemConfig(
@@ -347,8 +349,9 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         registry = StateRegistry()
         for name in geometry.params:
             registry.register(StateVariable(name=name, persistent=True))
-        if plasticity_config.plastic_state_dims:
-            for name, dim in plasticity_config.plastic_state_dims.items():
+        plastic_state_dims = getattr(plasticity_config, "plastic_state_dims", None)
+        if plastic_state_dims:
+            for name, dim in plastic_state_dims.items():
                 registry.register(StateVariable(name=name, fast_plastic=True))
         registry.register(StateVariable(name="conductance", substrate_owned=True))
 
@@ -357,8 +360,8 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             name: param.detach().clone() for name, param in geometry.params.items()
         }
         dummy_plastic = {}
-        if plasticity_config.plastic_state_dims:
-            for name, dim in plasticity_config.plastic_state_dims.items():
+        if plastic_state_dims:
+            for name, dim in plastic_state_dims.items():
                 dummy_plastic[name] = torch.zeros(4, dim)
         dummy_substrate = {"conductance": torch.randn(4, 20)}
         registry.validate(
@@ -410,7 +413,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         print("  ✓ J2: Theta immutability passed")
 
         # J3: Fast plastic only via plasticity
-        if plasticity_config.plastic_state_dims:
+        if plastic_state_dims:
             print("  ✓ J3: Fast plastic lifecycle (structural check) passed")
 
         # J4: Substrate physics
@@ -418,7 +421,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         print("  ✓ J4: Substrate physics constraints passed")
 
         # J5: Consolidation at episode boundary
-        if plasticity_config.plastic_state_dims:
+        if plastic_state_dims:
             z_final = CompositeState(
                 activity=dummy_activity,
                 plastic=dummy_plastic,
@@ -436,7 +439,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         print("  ✓ J6: Adapter projection structure (structural check) passed")
 
         # J7: Trajectory recording
-        from computronium.core.joint import JointTrajectoryRecorder
+        from computronium.core.joint.state import JointTrajectoryRecorder
 
         recorder = JointTrajectoryRecorder(
             max_steps=5, record_plastic=True, record_substrate=True

@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import json
 import pickle  # ruff: ignore[suspicious-pickle-import]
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -110,7 +109,7 @@ def get_lm_dataset(  # ruff: ignore[complex-structure, too-many-branches]
             if not text or len(text) == 0:
                 raise ValueError("Empty text after loading")  # ruff: ignore[raise-within-try]
         except (OSError, ValueError, RuntimeError, ImportError, KeyError) as e:
-            warnings.warn(f"HuggingFace dataset failed, using fallback: {e}")
+            logger.info("HuggingFace dataset failed, using fallback: %s", e)
             import urllib.request
 
             url = (

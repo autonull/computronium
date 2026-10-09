@@ -4,6 +4,8 @@ Graph Domain Tasks
 Standard graph datasets (Cora, PubMed, CiteSeer, etc.)
 """
 
+import warnings
+
 import torch
 from torch import nn
 
@@ -57,7 +59,14 @@ class GraphTask(DomainTask):
                 "Install with: pip install torch-geometric"
             )
 
-        dataset = Planetoid(root="./data", name=self.dataset_name.capitalize())
+        # Planetoid script-compiles its file reader via torch.jit.script, which
+        # is unsupported on Python 3.14 and warns; the call is the library's,
+        # not ours, so the deprecation is filtered at this boundary only.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=r".*torch\.jit\.script.*", category=FutureWarning
+            )
+            dataset = Planetoid(root="./data", name=self.dataset_name.capitalize())
         data = dataset[0]
 
         self._data = data

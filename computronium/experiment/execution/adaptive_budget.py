@@ -41,9 +41,14 @@ class TimeEstimates:
         # Load measured cell seconds from registry if not provided
         if not self.measured_cell_seconds:
             from computronium.experiment.schema.registries import MEASURED_CELL_SECONDS
-            object.__setattr__(self, "measured_cell_seconds", dict(MEASURED_CELL_SECONDS))
 
-    def per_cell_per_epoch(self, device: DeviceClass, dynamics: str | None = None) -> float:
+            object.__setattr__(
+                self, "measured_cell_seconds", dict(MEASURED_CELL_SECONDS)
+            )
+
+    def per_cell_per_epoch(
+        self, device: DeviceClass, dynamics: str | None = None
+    ) -> float:
         """Get time per cell per epoch, using measured data if available."""
         if dynamics and dynamics in self.measured_cell_seconds:
             base = self.measured_cell_seconds[dynamics]
@@ -51,7 +56,13 @@ class TimeEstimates:
             return base * (1.0 if device == DeviceClass.GPU else 8.0)
         return self.gpu_base if device == DeviceClass.GPU else self.cpu_base
 
-    def round_time(self, n_cells: int, epochs: int, device: DeviceClass, dynamics: str | None = None) -> float:
+    def round_time(
+        self,
+        n_cells: int,
+        epochs: int,
+        device: DeviceClass,
+        dynamics: str | None = None,
+    ) -> float:
         """Estimate time for one round of n_cells with given epochs."""
         cell_time = self.per_cell_per_epoch(device, dynamics) * epochs
         return self.round_overhead + n_cells * cell_time
@@ -85,14 +96,13 @@ class ComponentSet:
 def _discover_components() -> dict[str, list[str]]:
     """Discover all available primitives from ontology registries."""
     # Import here to avoid circular imports at module level
+    from computronium.domains.registry import SUPPORTED_TASKS
     from computronium.experiment.schema.axis import (
         GEOMETRY_REGISTRY,
         UPDATE_REGISTRY,
-        StructuralAxis,
     )
-    from computronium.ontology.substrate import SubstrateType
     from computronium.ontology.dynamics import DYNAMICS_REGISTRY
-    from computronium.domains.registry import SUPPORTED_TASKS
+    from computronium.ontology.substrate import SubstrateType
 
     # Get available substrates from SubstrateType enum
     substrates = [s.value for s in SubstrateType]
@@ -160,7 +170,7 @@ def _get_components() -> dict[str, list[str]]:
 
 
 # Predefined component sets for different strategies (derived from registries)
-def _build_component_sets() -> dict["BudgetStrategy", ComponentSet]:
+def _build_component_sets() -> dict[BudgetStrategy, ComponentSet]:
     """Build component sets from discovered primitives."""
     c = _get_components()
 
@@ -260,13 +270,14 @@ class BudgetPlanner:
         """Estimate round time considering the mix of dynamics primitives."""
         if not dynamics_list:
             return self.estimates.round_time(cells_per_round, epochs, device_class)
-        
+
         # Average time per cell across the dynamics mix
         total_cell_time = sum(
-            self.estimates.per_cell_per_epoch(device_class, dyn) for dyn in dynamics_list
+            self.estimates.per_cell_per_epoch(device_class, dyn)
+            for dyn in dynamics_list
         )
         avg_cell_time = total_cell_time / len(dynamics_list)
-        
+
         return self.estimates.round_overhead + cells_per_round * avg_cell_time * epochs
 
     def plan(
@@ -307,27 +318,48 @@ class BudgetPlanner:
             # Reduce epochs first, then cells_per_round, then seeds
             # Target: time_per_round <= budget_seconds * 0.8
             max_time_per_round = budget_seconds * 0.8
-            
+
             # Reduce epochs
             if target_epochs > self.min_epochs:
                 target_epochs = max(
                     self.min_epochs,
-                    int(max_time_per_round / (cells_per_round * self.estimates.per_cell_per_epoch(device_class, component_set.dynamics[0]) + self.estimates.round_overhead / cells_per_round))
+                    int(
+                        max_time_per_round
+                        / (
+                            cells_per_round
+                            * self.estimates.per_cell_per_epoch(
+                                device_class, component_set.dynamics[0]
+                            )
+                            + self.estimates.round_overhead / cells_per_round
+                        )
+                    ),
                 )
                 time_per_round = self._estimate_round_time(
                     cells_per_round, target_epochs, device_class, component_set.dynamics
                 )
-            
+
             # Reduce cells_per_round
-            if time_per_round > max_time_per_round and cells_per_round > self.min_cells_per_round:
+            if (
+                time_per_round > max_time_per_round
+                and cells_per_round > self.min_cells_per_round
+            ):
                 cells_per_round = max(
                     self.min_cells_per_round,
-                    int(max_time_per_round / (target_epochs * self.estimates.per_cell_per_epoch(device_class, component_set.dynamics[0]) + self.estimates.round_overhead / target_epochs))
+                    int(
+                        max_time_per_round
+                        / (
+                            target_epochs
+                            * self.estimates.per_cell_per_epoch(
+                                device_class, component_set.dynamics[0]
+                            )
+                            + self.estimates.round_overhead / target_epochs
+                        )
+                    ),
                 )
                 time_per_round = self._estimate_round_time(
                     cells_per_round, target_epochs, device_class, component_set.dynamics
                 )
-            
+
             # Reduce seeds (affects total time but not per-round time)
             if target_seeds > self.min_seeds and time_per_round > max_time_per_round:
                 # We can't reduce per-round time further, but we can note that total time will be n_rounds * time_per_round * seeds
@@ -367,7 +399,9 @@ class BudgetPlanner:
         estimated_hours = estimated_seconds / 3600
 
         # Build runs from component set
-        runs = self._build_runs(component_set, target_trials, target_seeds, target_epochs, time_budget_hours)
+        runs = self._build_runs(
+            component_set, target_trials, target_seeds, target_epochs, time_budget_hours
+        )
 
         return BudgetPlan(
             time_budget_hours=time_budget_hours,
@@ -424,42 +458,38 @@ class BudgetPlanner:
         per_run_budget_seconds = (time_budget_hours * 3600) / max(1, num_runs)
 
         # Phase 1: Main comprehensive run
-        runs.append(
-            {
-                "name": "main",
-                "profile": "production-map",
-                "overrides": {
-                    "substrates": component_set.substrates,
-                    "geometries": component_set.geometries,
-                    "dynamics": component_set.dynamics,
-                    "credits": component_set.credits,
-                    "updates": component_set.updates,
-                    "plasticities": component_set.plasticities,
-                    "tasks": component_set.tasks,
-                    "hpo": {"n_trials": n_trials, "n_seeds": n_seeds},
-                    "epochs": epochs,
-                    "budget_seconds": per_run_budget_seconds,
-                },
-                "depends_on": [],
-            }
-        )
+        runs.append({
+            "name": "main",
+            "profile": "production-map",
+            "overrides": {
+                "substrates": component_set.substrates,
+                "geometries": component_set.geometries,
+                "dynamics": component_set.dynamics,
+                "credits": component_set.credits,
+                "updates": component_set.updates,
+                "plasticities": component_set.plasticities,
+                "tasks": component_set.tasks,
+                "hpo": {"n_trials": n_trials, "n_seeds": n_seeds},
+                "epochs": epochs,
+                "budget_seconds": per_run_budget_seconds,
+            },
+            "depends_on": [],
+        })
 
         # Add dependent runs for strategy
         if len(component_set.tasks) > 1:
             for i, task in enumerate(component_set.tasks[1:], 1):
-                runs.append(
-                    {
-                        "name": f"task_{task}",
-                        "profile": "production-map",
-                        "overrides": {
-                            "task": task,
-                            "hpo": {"n_trials": max(10, n_trials // 2), "n_seeds": n_seeds},
-                            "epochs": epochs,
-                            "budget_seconds": per_run_budget_seconds,
-                        },
-                        "depends_on": [0],
-                    }
-                )
+                runs.append({
+                    "name": f"task_{task}",
+                    "profile": "production-map",
+                    "overrides": {
+                        "task": task,
+                        "hpo": {"n_trials": max(10, n_trials // 2), "n_seeds": n_seeds},
+                        "epochs": epochs,
+                        "budget_seconds": per_run_budget_seconds,
+                    },
+                    "depends_on": [0],
+                })
 
         return runs
 
@@ -543,10 +573,7 @@ def create_campaign_yaml(plan: BudgetPlan, output_path: str | Path) -> str:
             "capture_env": True,
             "artifact_hash": True,
         },
-        "runs": [
-            {**run, "store": store_path}
-            for run in plan.runs
-        ],
+        "runs": [{**run, "store": store_path} for run in plan.runs],
     }
 
     output_path = Path(output_path)

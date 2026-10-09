@@ -294,13 +294,15 @@ class CampaignRunner:
             return
 
         def _signal_handler(signum, _frame):
-            logger.info("Campaign received signal %s; initiating graceful shutdown", signum)
+            logger.info(
+                "Campaign received signal %s; initiating graceful shutdown", signum
+            )
             self._shutdown_requested = True
 
         try:
             self._old_sigint = signal.signal(signal.SIGINT, _signal_handler)
             self._old_sigterm = signal.signal(signal.SIGTERM, _signal_handler)
-        except (ValueError, OSError):
+        except ValueError, OSError:
             # Signal handling not available in this context (e.g., non-main thread)
             pass
 
@@ -309,7 +311,7 @@ class CampaignRunner:
         try:
             signal.signal(signal.SIGINT, self._old_sigint)
             signal.signal(signal.SIGTERM, self._old_sigterm)
-        except (AttributeError, ValueError, OSError):
+        except AttributeError, ValueError, OSError:
             pass
 
     def _validate_dependencies(self) -> None:

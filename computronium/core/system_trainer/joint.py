@@ -270,19 +270,19 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 )
 
             # Register plastic variables if any
-            if (
-                hasattr(self.plasticity, "config")
-                and self.plasticity.config.plastic_state_dims
-            ):
-                for name, dim in self.plasticity.config.plastic_state_dims.items():
-                    registry.register(
-                        StateVariable(
-                            name=name,
-                            persistent=False,
-                            fast_plastic=True,
-                            consolidatable=True,
+            plastic_config = getattr(self.plasticity, "config", None)
+            if plastic_config is not None:
+                plastic_state_dims = getattr(plastic_config, "plastic_state_dims", None)
+                if plastic_state_dims:
+                    for name, dim in plastic_state_dims.items():
+                        registry.register(
+                            StateVariable(
+                                name=name,
+                                persistent=False,
+                                fast_plastic=True,
+                                consolidatable=True,
+                            )
                         )
-                    )
 
             # Build configs from components
             substrate_config = self.substrate.config

@@ -189,54 +189,53 @@ def estimate_lyapunov_spectrum(  # ruff: ignore[too-many-locals]
         List of Lyapunov exponents (sorted descending).
     """
     x = activity_tensor(z.activity, activity_key)
-    _batch_size, dim = x.shape
+    n = x.numel()
+    if n == 0:
+        return []
 
-    # Initialize orthonormal perturbation matrix
-    q_mat = torch.randn(num_vectors, dim, device=x.device, dtype=x.dtype)
-    q_mat, _ = torch.linalg.qr(q_mat.T)
-    q_mat = q_mat.T  # [num_vectors, dim]
+    # Orthonormal perturbation basis in the flattened state space, so any
+    # activity shape (batch, features) or (features,) is handled uniformly.
+    q_mat = torch.randn(num_vectors, n, device=x.device, dtype=x.dtype)
+    q_mat, _ = torch.linalg.qr(q_mat.mT)
+    q_mat = q_mat.mT  # [num_vectors, n]
 
     log_sums = torch.zeros(num_vectors, device=x.device)
 
     z_current = z
-    z_next = z_current
 
     for _step in range(num_steps):
-        # Apply perturbations
-        perturbations = q_mat * perturbation_scale  # [num_vectors, dim]
+        with torch.no_grad():
+            z_base = transition_fn(z_current, context)
+            x_base = activity_tensor(z_base.activity, activity_key).reshape(-1)
 
-        # We track each vector separately for simplicity
-        # In practice, would use batched Jacobian-vector products
-        new_q = []
-        for i in range(num_vectors):
-            x_perturbed = x + perturbations[i]
-            z_perturbed = CompositeState(
-                activity={**z_current.activity, activity_key: x_perturbed},
-                plastic=z_current.plastic,
-                substrate=z_current.substrate,
-            )
-
-            with torch.no_grad():
-                z_next = transition_fn(z_current, context)
+            new_q = []
+            for i in range(num_vectors):
+                perturb = (q_mat[i] * perturbation_scale).reshape_as(x)
+                z_perturbed = CompositeState(
+                    activity={**z_current.activity, activity_key: x + perturb},
+                    plastic=z_current.plastic,
+                    substrate=z_current.substrate,
+                )
                 z_next_perturbed = transition_fn(z_perturbed, context)
 
-            delta = activity_tensor(
-                z_next_perturbed.activity, activity_key
-            ) - activity_tensor(z_next.activity, activity_key)
-            new_q.append(delta / perturbation_scale)
+                delta = (
+                    activity_tensor(z_next_perturbed.activity, activity_key).reshape(-1)
+                    - x_base
+                )
+                new_q.append(delta / perturbation_scale)
 
-            # Accumulate log norm
-            norm = delta.norm() / perturbation_scale
-            if norm > 1e-12:
-                log_sums[i] += torch.log(norm)
+                norm = delta.norm() / perturbation_scale
+                if norm > 1e-12:
+                    log_sums[i] += torch.log(norm)
 
         # QR decomposition to re-orthogonalize
         if new_q:
-            new_q = torch.stack(new_q)  # [num_vectors, dim]
-            q_mat, _ = torch.linalg.qr(new_q.T)
-            q_mat = q_mat.T
+            new_q = torch.stack(new_q)  # [num_vectors, n]
+            q_mat, _ = torch.linalg.qr(new_q.mT)
+            q_mat = q_mat.mT
 
-        z_current = z_next
+        z_current = z_base
+        x = activity_tensor(z_current.activity, activity_key)
 
     # Exponents = average log norm per step
     exponents = (log_sums / num_steps).tolist()

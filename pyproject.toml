@@ -56,7 +56,6 @@ dependencies = [
     "duckdb>=1.5.6",
     "fvcore>=0.1.5.post20221221",
     "plotly>=7.1.0",
-    "pynvml>=13.0.1",
     "nvidia-ml-py>=13.615.71",
 ]
 
@@ -302,11 +301,11 @@ ignore = [
 # reports undefined-export for all of them; the map is the binding.
 "computronium/experiment/__init__.py" = [
     "undefined-export",
-    "RUF067",  # non-empty-init-module — lazy loading pattern by design
+    "non-empty-init-module",  # non-empty-init-module — lazy loading pattern by design
 ]
 "computronium/experiment/**/__init__.py" = [
     "undefined-export",
-    "RUF067",  # non-empty-init-module — lazy loading pattern by design
+    "non-empty-init-module",  # non-empty-init-module — lazy loading pattern by design
 ]
 "computronium/ontology/dynamics/__init__.py" = [
     "mutable-class-default",  # implicit-namespace-package — DYNAMICS_REGISTRY lives beside its classes (R1.1)
@@ -365,7 +364,9 @@ ignore = [
 "computronium/experiment/surface/conformance.py" = ["suspicious-subprocess-import", "subprocess-without-shell-equals-true", "start-process-with-partial-path", "if-else-block-instead-of-if-exp", "unused-variable"]
 "computronium/experiment/surface/operations.py" = []
 "computronium/experiment/surface/report.py" = ["unused-noqa"]
-"computronium/cli/joint_validate.py" = []
+"computronium/cli/joint_validate.py" = [
+    "too-many-statements-in-try-clause",  # _validate_coordinate is a single validation function with many branches
+]
 "computronium/core/continual/runner.py" = ["too-many-arguments", "too-many-return-statements", "redefined-loop-name", "ambiguous-variable-name"]
 "computronium/core/continual/training.py" = ["typing-only-first-party-import", "too-many-locals"]
 "computronium/core/local_learning/settling.py" = ["too-many-arguments", "unused-unpacked-variable"]
