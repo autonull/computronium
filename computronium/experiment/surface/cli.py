@@ -780,6 +780,92 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     )
     p_power.add_argument("--output", default=None, help="Output file path")
 
+    # Stability analysis command - dynamical systems analysis
+    p_stability = sub.add_parser(
+        "stability-analysis",
+        help="Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories)",
+    )
+    p_stability.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_stability.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_stability.add_argument(
+        "--record-id",
+        default=None,
+        help="Specific record ID to analyze (overrides run-id)",
+    )
+    p_stability.add_argument(
+        "--lyapunov",
+        action="store_true",
+        help="Compute Lyapunov spectrum over trajectory",
+    )
+    p_stability.add_argument(
+        "--lyapunov-vectors",
+        type=int,
+        default=5,
+        help="Number of Lyapunov vectors to compute (default: 5)",
+    )
+    p_stability.add_argument(
+        "--lyapunov-steps",
+        type=int,
+        default=100,
+        help="Number of steps for Lyapunov estimation (default: 100)",
+    )
+    p_stability.add_argument(
+        "--basin",
+        action="store_true",
+        help="Compute basin stability via Monte Carlo",
+    )
+    p_stability.add_argument(
+        "--basin-samples",
+        type=int,
+        default=100,
+        help="Number of perturbation samples for basin stability (default: 100)",
+    )
+    p_stability.add_argument(
+        "--basin-radii",
+        default="0.1,0.5,1.0,2.0,5.0",
+        help="Comma-separated perturbation radii for basin profile (default: 0.1,0.5,1.0,2.0,5.0)",
+    )
+    p_stability.add_argument(
+        "--basin-steps",
+        type=int,
+        default=200,
+        help="Max steps per basin sample (default: 200)",
+    )
+    p_stability.add_argument(
+        "--settling",
+        action="store_true",
+        help="Compute settling time trajectory with norms history",
+    )
+    p_stability.add_argument(
+        "--settling-steps",
+        type=int,
+        default=1000,
+        help="Max settling steps (default: 1000)",
+    )
+    p_stability.add_argument(
+        "--settling-tolerance",
+        type=float,
+        default=1e-4,
+        help="Settling convergence tolerance (default: 1e-4)",
+    )
+    p_stability.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda"],
+        help="Device to run analysis on (default: auto)",
+    )
+    p_stability.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_stability.add_argument("--output", default=None, help="Output file path")
+    p_stability.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
     # Schema command - dump JSON schemas for RunSpec, Coordinate, Schedule, Objectives
     p_schema = sub.add_parser(
         "schema", help="Dump JSON schemas for experiment models (agent-friendly)"
@@ -3329,6 +3415,295 @@ def _cmd_power_analysis(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_device(device: str) -> str:
+    """Resolve 'auto' to 'cuda' if available, otherwise 'cpu'."""
+    import torch
+
+    if device == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return device
+
+
+def _load_record_for_analysis(
+    store: RecordStore, run_id: str | None, record_id: str | None
+):
+    """Load the record to analyze, preferring claim-eligible records."""
+    from computronium.experiment.surface.report import ReportGenerator
+
+    if run_id is None:
+        run_id = store.latest_run_id()
+        if run_id is None:
+            logger.error("No runs found in store")
+            return None, None
+
+    if record_id:
+        record = store.get_record(record_id)
+        if record is None:
+            logger.error(f"Record {record_id} not found")
+            return None, None
+        return record, run_id
+
+    # Get latest claim-eligible record
+    generator = ReportGenerator(store)
+    eligible = generator.claim_eligible_records(run_id)
+    if eligible:
+        return eligible[-1], run_id
+
+    # Fallback: use any record (e.g., quick-verify runs with n_seeds=1)
+    all_records = list(store.query_records(run_id=run_id))
+    if not all_records:
+        logger.error(f"No records for run {run_id}")
+        return None, None
+    return all_records[-1], run_id
+
+
+def _build_transition_fn(system, device: str):
+    """Build the transition function for stability analysis."""
+    import torch
+    from stability.state import CompositeState
+
+    from computronium.core.pipeline import forward_pass
+    from computronium.ontology import SystemState
+
+    def transition_fn(state, context):
+        with torch.no_grad():
+            # Forward pass through substrate + geometry
+            new_activations = forward_pass(
+                system.substrate, system.geometry, state.activity["x"]
+            )
+            # Settle the dynamics
+            settled_state = system.dynamics.settle(
+                SystemState(x=state.activity["x"], y=None),
+                system.geometry,
+                system.substrate,
+                target=None,
+            )
+            # Get settled activity (handle list or tensor)
+            settled_act = settled_state.activations
+            if isinstance(settled_act, list):
+                settled_act = settled_act[0] if settled_act else state.activity["x"]
+            elif settled_act is None:
+                settled_act = state.activity["x"]
+            # Build new CompositeState with settled activity
+            return CompositeState(
+                activity={"x": settled_act},
+                plastic={},
+                substrate={},
+            )
+
+    return transition_fn
+
+
+def _create_init_state(sample_x, device: str):
+    """Create initial CompositeState for stability analysis."""
+    from stability.state import CompositeState
+
+    flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
+    return CompositeState(activity={"x": flat}, plastic={}, substrate={})
+
+
+def _run_lyapunov_analysis(transition_fn, init_state, args):
+    """Run Lyapunov spectrum analysis."""
+    from computronium.stability import estimate_lyapunov_spectrum
+
+    logger.info("Computing Lyapunov spectrum...")
+    try:
+        spectrum = estimate_lyapunov_spectrum(
+            transition_fn,
+            init_state,
+            None,
+            num_vectors=args.lyapunov_vectors,
+            num_steps=args.lyapunov_steps,
+        )
+        return {
+            "lyapunov_spectrum": spectrum,
+            "lyapunov_max": max(spectrum) if spectrum else 0.0,
+        }
+    except Exception as exc:
+        logger.warning(f"Lyapunov spectrum failed: {exc}")
+        return {"lyapunov_spectrum": [], "lyapunov_error": str(exc)}
+
+
+def _run_basin_analysis(transition_fn, init_state, args):
+    """Run basin stability analysis."""
+    from computronium.stability import estimate_basin_stability_multistart
+
+    logger.info("Computing basin stability...")
+    try:
+        radii = tuple(float(r.strip()) for r in args.basin_radii.split(","))
+        basin_results = estimate_basin_stability_multistart(
+            transition_fn,
+            init_state,
+            None,
+            num_samples=args.basin_samples,
+            perturbation_radii=radii,
+            max_steps=args.basin_steps,
+        )
+        return {"basin_stability": basin_results}
+    except Exception as exc:
+        logger.warning(f"Basin stability failed: {exc}")
+        return {"basin_stability": {}, "basin_error": str(exc)}
+
+
+def _run_settling_analysis(transition_fn, init_state, args):
+    """Run settling trajectory analysis."""
+    from computronium.stability import measure_settling_time
+
+    logger.info("Computing settling trajectory...")
+    try:
+        steps, norms = measure_settling_time(
+            transition_fn,
+            init_state,
+            None,
+            tolerance=args.settling_tolerance,
+            max_steps=args.settling_steps,
+        )
+        return {
+            "settling_steps": steps,
+            "settling_norms": norms,
+            "settling_converged": steps < args.settling_steps,
+        }
+    except Exception as exc:
+        logger.warning(f"Settling trajectory failed: {exc}")
+        return {"settling_steps": 0, "settling_norms": [], "settling_error": str(exc)}
+
+
+def _format_output(results, args):
+    """Format output as JSON or text."""
+    import json
+
+    if args.format == "json":
+        return json.dumps(results, indent=2, default=str)
+    else:
+        lines = [
+            f"Stability Analysis for {results['record_id']}",
+            f"Coordinate: {results['coordinate']}",
+            "",
+        ]
+        if "lyapunov_spectrum" in results and results["lyapunov_spectrum"]:
+            lines.append(
+                f"Lyapunov Spectrum: {results['lyapunov_spectrum']} (max: {results['lyapunov_max']:.4f})"
+            )
+        if "basin_stability" in results and results["basin_stability"]:
+            lines.append("Basin Stability:")
+            for radius, stability in results["basin_stability"].items():
+                lines.append(f"  radius={radius}: {stability:.4f}")
+        if "settling_steps" in results:
+            lines.append(
+                f"Settling: {results['settling_steps']} steps, converged: {results['settling_converged']}"
+            )
+        # Show errors if any
+        for key in ["lyapunov_error", "basin_error", "settling_error"]:
+            if key in results:
+                lines.append(f"{key}: {results[key]}")
+        return "\n".join(lines)
+
+
+def _cmd_stability_analysis(args: argparse.Namespace) -> int:
+    """Run dynamical stability analysis on a trained system."""
+    from pathlib import Path
+
+    device = _resolve_device(args.device)
+
+    if args.dry_run:
+        plan = {
+            "command": "stability-analysis",
+            "store": args.store,
+            "run_id": args.run_id,
+            "record_id": args.record_id,
+            "device": device,
+            "lyapunov": args.lyapunov,
+            "lyapunov_vectors": args.lyapunov_vectors,
+            "lyapunov_steps": args.lyapunov_steps,
+            "basin": args.basin,
+            "basin_samples": args.basin_samples,
+            "basin_radii": args.basin_radii,
+            "basin_steps": args.basin_steps,
+            "settling": args.settling,
+            "settling_steps": args.settling_steps,
+            "settling_tolerance": args.settling_tolerance,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    # Open store
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        record, run_id = _load_record_for_analysis(store, args.run_id, args.record_id)
+        if record is None:
+            return 1
+
+        # Recompose the cell system
+        from computronium.domains.factory import create_task
+        from computronium.experiment.execution.compose import compose_cell_system
+        from computronium.experiment.schema.coordinate import Coordinate
+
+        # Build coordinate from record fields
+        coordinate = Coordinate(
+            substrate=record.substrate,
+            geometry=record.geometry,
+            dynamics=record.dynamics,
+            plasticity=record.plasticity,
+            credit=record.credit,
+            update=record.update,
+            params=dict(record.params),
+        )
+        schedule = record.schedule
+
+        task = create_task(
+            schedule.task_id, device=device, quick_mode=True, num_workers=0
+        )
+        task.setup()
+
+        cell = compose_cell_system(
+            coordinate=coordinate,
+            geometry={},
+            input_shape=task.input_dim,
+            output_dim=task.output_dim,
+            param_budget=schedule.param_budget,
+        )
+
+        system = cell.system
+        # Move system to target device
+        system = system.to(device)
+
+        # Get a sample input for stability analysis
+        sample_x, _ = next(iter(task.get_dataloader("train")))
+
+        # Build transition function and initial state
+        transition_fn = _build_transition_fn(system, device)
+        init_state = _create_init_state(sample_x, device)
+
+        results = {"record_id": record.record_id, "coordinate": coordinate.cell_key()}
+
+        # Run requested analyses
+        if args.lyapunov:
+            results.update(_run_lyapunov_analysis(transition_fn, init_state, args))
+        if args.basin:
+            results.update(_run_basin_analysis(transition_fn, init_state, args))
+        if args.settling:
+            results.update(_run_settling_analysis(transition_fn, init_state, args))
+
+        # Output
+        output = _format_output(results, args)
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Stability analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
 def _cmd_schema(args: argparse.Namespace) -> int:
     """Dump JSON schemas for experiment models."""
     import json
@@ -3503,6 +3878,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "repro": _cmd_repro,
         "schema": _cmd_schema,
         "power-analysis": _cmd_power_analysis,
+        "stability-analysis": _cmd_stability_analysis,
     }
     try:
         handler = command_handlers.get(args.command)

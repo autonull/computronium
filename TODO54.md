@@ -87,6 +87,7 @@ output:
 | **P6** | Reproducibility + packaging | ✅ Mostly complete |
 | **Docs** | Full documentation suite | ✅ Complete |
 | **Fixes** | GPU determinism, β≥1 constraint, memory leaks | ✅ Complete |
+| **Phase 3** | Dynamical Analysis Richness | ✅ Complete |
 
 ---
 
@@ -138,21 +139,54 @@ Deeper statistical interpretation for reports.
 
 **Total**: 1 day
 
-### Phase 3: Dynamical Analysis Richness — Deep Enhancement (2-3 days)
+### Phase 3: Dynamical Analysis Richness — Deep Enhancement (2-3 days) — ✅ COMPLETE
 
 Richer dynamical systems analysis for specialized reports. **Optional** — reports are already meaningful without this.
 
-| Item | Effort | Files |
-|------|--------|-------|
-| Lyapunov spectra over trajectory | 1 day | `probe.py`, `report.py`, `cli.py` |
-| Basin stability Monte Carlo | 1 day | `probe.py`, `report.py`, `cli.py` |
-| Per-iteration energy tracking | 0.5 day | `probe.py`, `report.py` |
-| Report integration (plots/tables) | 0.5 day | `report.py` |
-| `comp stability-analysis` CLI | 0.5 day | `cli.py` |
+| Item | Effort | Files | Status |
+|------|--------|-------|--------|
+| Lyapunov spectra over trajectory | 1 day | `probe.py`, `report.py`, `cli.py` | ✅ Done (in `packages/stability/src/stability/lyapunov.py`) |
+| Basin stability Monte Carlo | 1 day | `probe.py`, `report.py`, `cli.py` | ✅ Done (in `packages/stability/src/stability/basin.py`) |
+| Per-iteration energy tracking | 0.5 day | `probe.py`, `report.py` | ✅ Already exists (`energy_per_step` metric) |
+| Report integration (plots/tables) | 0.5 day | `report.py` | ✅ Done (`_generate_stability_analysis_html`) |
+| `comp stability-analysis` CLI | 0.5 day | `cli.py` | ✅ Done (`comp stability-analysis`) |
 
 **Total**: 3 days
 
 ---
+
+## Phase 3 Implementation Notes (2026-10-09)
+
+### `comp stability-analysis` CLI (`computronium/experiment/surface/cli.py`, `computronium/cli/__main__.py`)
+- Added `stability-analysis` subcommand with options:
+  - `--lyapunov` / `--lyapunov-vectors` / `--lyapunov-steps`: Compute Lyapunov spectrum via QR method
+  - `--basin` / `--basin-samples` / `--basin-radii` / `--basin-steps`: Compute basin stability via Monte Carlo
+  - `--settling` / `--settling-steps` / `--settling-tolerance`: Compute settling trajectory with norms history
+  - `--record-id` / `--run-id`: Select specific record or latest claim-eligible record
+  - `--device` / `--format` / `--output` / `--dry-run`: Standard CLI options
+- Implementation uses the standalone `stability` package (uv workspace member) for framework-agnostic estimators
+- Falls back to all records if no claim-eligible records exist (e.g., quick-verify runs with n_seeds=1)
+
+### Report Integration (`computronium/experiment/surface/report.py`)
+- Added `_generate_stability_analysis_html()` function that generates HTML tables for:
+  - Lyapunov exponent distribution (overall + per-dynamics breakdown)
+  - Spectral radius vs max singular value scatter table
+  - Settling time analysis (mean steps, convergence fraction, per-dynamics)
+  - Drift operator analysis (when `drift_spectral_radius` available)
+  - Stability margin (1 - ρ(J)) distribution
+- Integrated into `generate_html_report()` - appended before closing `</body>` tag alongside ablation tables
+
+### Stability Package Primitives (already existed in `packages/stability/src/stability/`)
+- `lyapunov.py`: `estimate_lyapunov_exponent()`, `LyapunovEstimator`, `estimate_lyapunov_spectrum()` (QR method)
+- `basin.py`: `estimate_basin_stability()`, `BasinStabilityEstimator`, `estimate_basin_stability_multistart()`
+- `settling.py`: `measure_settling_time()`, `SettlingMonitor`, `measure_settling_time_full_state()`
+
+### Verification
+- `comp stability-analysis --dry-run` works
+- `comp stability-analysis --settling --store exp.db --run-id <run_id>` works (tested)
+- HTML report includes "Dynamical Stability Analysis" section with tables
+- All property locks pass (L1-L7, J1-J7, axis locks, registry locks, gallery locks)
+- All acceptance tests U1-U5 pass
 
 ## Quick Wins (All in Phase 1)
 
@@ -275,6 +309,7 @@ Day 3-5 (Phase 3, optional): Deeper dynamical analysis — Lyapunov, basin, ener
 - [x] **Phase 0 verified**: Dry-run campaign shows valid plan; smoke test (1 epoch) + report generation complete
 - [x] **Phase 1**: `--device` on benchmark, `--format` on export, effect size in `comp stats --group-by`
 - [x] **Phase 2**: `comp power-analysis`, `comp pareto --weights --scalarize`
+- [x] **Phase 3**: `comp stability-analysis` CLI, Lyapunov/basin/settling in HTML report
 - [x] **All property locks pass** (L1-L7, J1-J7, axis locks, registry locks, gallery locks)
 - [x] **All acceptance tests pass** (U1-U5 kernel guarantees)
 - [x] `ruff format`, `ruff check`, `pyright` all pass on changed files

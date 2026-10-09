@@ -1124,6 +1124,277 @@ def _generate_ablation_html(generator: ReportGenerator, run_id: str) -> str:
     return "\n".join(html_parts)
 
 
+def _generate_stability_analysis_html(generator: ReportGenerator, run_id: str) -> str:
+    """Generate HTML for dynamical stability analysis (Lyapunov, basin, settling)."""
+    import statistics
+    from collections import defaultdict
+
+    records = list(generator._store.query_records(run_id=run_id))
+    if not records:
+        return ""
+
+    # Get claim-eligible records (higher quality)
+    eligible = generator.claim_eligible_records(run_id)
+    if not eligible:
+        eligible = records
+
+    # Extract stability metrics from records
+    stability_metrics = []
+    for r in eligible:
+        metrics = {
+            "record_id": r.record_id[:12],
+            "cell_key": r.cell_key[:12],
+            "dynamics": r.dynamics,
+            "credit": r.credit,
+            "update": r.update,
+            "substrate": r.substrate,
+            "geometry": r.geometry,
+            "plasticity": r.plasticity,
+        }
+        # Add stability metrics if present
+        for key in [
+            "spectral_radius",
+            "max_singular_value",
+            "min_singular_value",
+            "lyapunov_exponent",
+            "stability_margin",
+            "nonnormality",
+            "settle_steps",
+            "settle_converged",
+            "free_energy",
+            "drift_spectral_radius",
+            "drift_max_singular_value",
+            "drift_nonnormality",
+            "contraction_rate",
+            "settle_step_size",
+            "val_acc",
+            "walltime_s",
+        ]:
+            val = r.payload.get(key)
+            if val is not None:
+                metrics[key] = float(val)
+
+        if any(
+            k in metrics
+            for k in ["spectral_radius", "lyapunov_exponent", "settle_steps"]
+        ):
+            stability_metrics.append(metrics)
+
+    if not stability_metrics:
+        return ""
+
+    html_parts = [
+        "<div style='margin: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;'>",
+        "<h2>Dynamical Stability Analysis</h2>",
+    ]
+
+    # 1. Lyapunov exponent distribution
+    lyap_vals = [
+        m.get("lyapunov_exponent")
+        for m in stability_metrics
+        if "lyapunov_exponent" in m
+    ]
+    if lyap_vals:
+        html_parts.append("<h3>Lyapunov Exponent Distribution</h3>")
+        html_parts.append(
+            "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+            "<thead><tr style='background-color: #e9ecef;'>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Statistic</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Value</th>"
+            "</tr></thead><tbody>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Mean</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.mean(lyap_vals):.4f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Std</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.stdev(lyap_vals) if len(lyap_vals) > 1 else 0.0:.4f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Min</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{min(lyap_vals):.4f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Max</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{max(lyap_vals):.4f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Count</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{len(lyap_vals)}</td></tr>"
+        )
+        html_parts.append("</tbody></table>")
+
+        # Per-dynamics breakdown
+        by_dynamics: dict[str, list[float]] = defaultdict(list)
+        for m in stability_metrics:
+            if "lyapunov_exponent" in m:
+                by_dynamics[m["dynamics"]].append(m["lyapunov_exponent"])
+
+        html_parts.append("<h4>By Dynamics</h4>")
+        html_parts.append(
+            "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+            "<thead><tr style='background-color: #e9ecef;'>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Dynamics</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Mean λ</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Std</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Count</th>"
+            "</tr></thead><tbody>"
+        )
+        for dyn in sorted(by_dynamics):
+            vals = by_dynamics[dyn]
+            html_parts.append(
+                f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{dyn}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.mean(vals):.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.stdev(vals) if len(vals) > 1 else 0.0:.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{len(vals)}</td></tr>"
+            )
+        html_parts.append("</tbody></table>")
+
+    # 2. Spectral radius vs max singular value (stability scatter)
+    sr_vals = [
+        m
+        for m in stability_metrics
+        if "spectral_radius" in m and "max_singular_value" in m
+    ]
+    if sr_vals:
+        html_parts.append("<h3>Spectral Radius vs Max Singular Value</h3>")
+        html_parts.append(
+            "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+            "<thead><tr style='background-color: #e9ecef;'>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Record</td>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>ρ(J)</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>σ_max</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Nonnormality</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Val Acc</th>"
+            "</tr></thead><tbody>"
+        )
+        for m in sorted(sr_vals, key=lambda x: x.get("spectral_radius", 0))[:20]:
+            html_parts.append(
+                f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{m['cell_key']} ({m['dynamics']}/{m['credit']})</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m['spectral_radius']:.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m['max_singular_value']:.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m.get('nonnormality', 0):.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m.get('val_acc', 0):.4f}</td></tr>"
+            )
+        html_parts.append("</tbody></table>")
+
+    # 3. Settling time analysis
+    settle_vals = [m for m in stability_metrics if "settle_steps" in m]
+    if settle_vals:
+        html_parts.append("<h3>Settling Time Analysis</h3>")
+        steps = [m["settle_steps"] for m in settle_vals]
+        converged = [m.get("settle_converged", False) for m in settle_vals]
+        html_parts.append(
+            "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+            "<thead><tr style='background-color: #e9ecef;'>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Statistic</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Value</th>"
+            "</tr></thead><tbody>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Mean Steps</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.mean(steps):.1f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Std Steps</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.stdev(steps) if len(steps) > 1 else 0.0:.1f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Converged Fraction</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{sum(converged) / len(converged):.2%}</td></tr>"
+        )
+        html_parts.append("</tbody></table>")
+
+        # By dynamics
+        by_dynamics = defaultdict(list)
+        by_dynamics_conv = defaultdict(list)
+        for m in settle_vals:
+            by_dynamics[m["dynamics"]].append(m["settle_steps"])
+            by_dynamics_conv[m["dynamics"]].append(m.get("settle_converged", False))
+
+        html_parts.append("<h4>By Dynamics</h4>")
+        html_parts.append(
+            "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+            "<thead><tr style='background-color: #e9ecef;'>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Dynamics</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Mean Steps</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Converged %</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Count</th>"
+            "</tr></thead><tbody>"
+        )
+        for dyn in sorted(by_dynamics):
+            vals = by_dynamics[dyn]
+            conv = by_dynamics_conv[dyn]
+            html_parts.append(
+                f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{dyn}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.mean(vals):.1f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{sum(conv) / len(conv):.2%}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{len(vals)}</td></tr>"
+            )
+        html_parts.append("</tbody></table>")
+
+    # 4. Drift metrics (if available)
+    drift_vals = [m for m in stability_metrics if "drift_spectral_radius" in m]
+    if drift_vals:
+        html_parts.append("<h3>Drift Operator Analysis (f(h) - h)</h3>")
+        html_parts.append(
+            "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+            "<thead><tr style='background-color: #e9ecef;'>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Record</td>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Drift ρ</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Drift σ_max</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Step Size</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Contraction Rate</th>"
+            "</tr></thead><tbody>"
+        )
+        for m in sorted(drift_vals, key=lambda x: x.get("drift_spectral_radius", 0))[
+            :20
+        ]:
+            html_parts.append(
+                f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{m['cell_key']} ({m['dynamics']}/{m['credit']})</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m.get('drift_spectral_radius', 0):.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m.get('drift_max_singular_value', 0):.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m.get('settle_step_size', 0):.4f}</td>"
+                f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{m.get('contraction_rate', 0):.4f}</td></tr>"
+            )
+        html_parts.append("</tbody></table>")
+
+    # 5. Stability margin distribution
+    margin_vals = [
+        m.get("stability_margin") for m in stability_metrics if "stability_margin" in m
+    ]
+    if margin_vals:
+        html_parts.append("<h3>Stability Margin (1 - ρ(J))</h3>")
+        html_parts.append(
+            "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
+            "<thead><tr style='background-color: #e9ecef;'>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Statistic</th>"
+            "<th style='border: 1px solid #dee2e6; padding: 8px;'>Value</th>"
+            "</tr></thead><tbody>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Mean</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.mean(margin_vals):.4f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Std</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{statistics.stdev(margin_vals) if len(margin_vals) > 1 else 0.0:.4f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Min</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{min(margin_vals):.4f}</td></tr>"
+        )
+        html_parts.append(
+            f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>Max</td>"
+            f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{max(margin_vals):.4f}</td></tr>"
+        )
+        html_parts.append("</tbody></table>")
+
+    html_parts.append("</div>")
+    return "\n".join(html_parts)
+
+
 def generate_html_report(
     store: RecordStore,
     run_id: str,
@@ -1630,12 +1901,18 @@ def generate_html_report(
     # Generate ablation tables HTML
     ablation_html = _generate_ablation_html(generator, run_id)
 
+    # Generate stability analysis HTML
+    stability_html = _generate_stability_analysis_html(generator, run_id)
+
     # Generate HTML
     output_file = Path(output_path) if output_path else Path(f"{run_id}_report.html")
     html_content = fig.to_html(include_plotlyjs="cdn")
     # Insert ablation tables before closing body tag
     if ablation_html:
         html_content = html_content.replace("</body>", f"{ablation_html}</body>")
+    # Insert stability analysis before closing body tag
+    if stability_html:
+        html_content = html_content.replace("</body>", f"{stability_html}</body>")
     output_file.write_text(html_content, encoding="utf-8")
 
     return output_file

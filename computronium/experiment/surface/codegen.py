@@ -115,6 +115,7 @@ def generate_axes_listing() -> list[dict[str, Any]]:
         # axis_kind is a StructuralAxis enum, but AXES_REGISTRIES is typed as dict[str, ...]
         # due to _LazyRegistryDict; cast to StructuralAxis for type checker
         from computronium.experiment.schema.axis import StructuralAxis
+
         kind = StructuralAxis(axis_kind)
         for axis_id, spec in sorted(registry.items()):
             axes.append(_axis_spec_to_dict(spec, kind))
@@ -292,6 +293,7 @@ def generate_json_schema_validators() -> dict[str, dict[str, Any]]:
     for axis_kind, registry in AXES_REGISTRIES.items():
         # axis_kind is a StructuralAxis enum, but AXES_REGISTRIES is typed as dict[str, ...]
         from computronium.experiment.schema.axis import StructuralAxis
+
         kind = StructuralAxis(axis_kind)
         for axis_id, spec in sorted(registry.items()):
             validators[f"{kind.value}.{axis_id}"] = _axis_spec_to_json_schema(spec)
