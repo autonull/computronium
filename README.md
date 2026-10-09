@@ -997,6 +997,7 @@ six-axis systems and assert real accuracies.
 | `run` | Execute a run profile (dry-run with --dry-run) |
 | `report` | Generate report from store |
 | `export` | Export store data for round-trip |
+| `import` | Import store data from export (round-trip) |
 | `conformance` | Check capability conformance |
 | `status` | Show run/store status |
 | `gallery` | Render gallery figures from demo records |
@@ -1008,6 +1009,13 @@ six-axis systems and assert real accuracies.
 | `validate` | Validate a config or record against the schema |
 | `joint-validate` | Validate a composed multi-axis system |
 | `benchmark` | Run kernel benchmarks and emit a verdict |
+| `stats` | Compute summary statistics for run metrics (machine-readable) |
+| `pareto` | Export Pareto frontier for plotting (machine-readable) |
+| `diff` | Statistical run comparison with effect sizes |
+| `campaign` | Run declarative multi-run YAML campaigns |
+| `schema` | Dump JSON schemas for RunSpec/Coordinate/Objectives |
+| `power-analysis` | Compute statistical power for experiment design (machine-readable) |
+| `stability-analysis` | Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories) |
 
 This table is locked against the dispatcher by `tests/property/test_cli_readme_lock.py` — set and purpose lines must match exactly, and every fenced `bash` block in this README is executed by that lock, so a documented invocation that errors fails CI.
 
