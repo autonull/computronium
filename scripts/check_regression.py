@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Benchmark comparison script for nightly CI."""
 
-import json
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
 
 def load_results(path: str) -> dict[str, Any]:
     """Load benchmark results from JSON file."""
-    with open(path) as f:
+    with Path(path).open() as f:
         return json.load(f)
 
 
@@ -77,7 +77,7 @@ def generate_markdown_report(
         f"Baseline: {baseline_path}",
         f"Current: {current_path}",
         "",
-        f"## Summary",
+        "## Summary",
         f"- Improvements: {len(comparison['improvements'])}",
         f"- Regressions: {len(comparison['regressions'])}",
         f"- Unchanged: {len(comparison['unchanged'])}",

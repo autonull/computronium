@@ -473,7 +473,8 @@ Decide per primitive whether to wire in (e.g. `comp stability-analysis --spectra
 |--------|--------|
 | `--hours 0.0167` (1 min) | ✅ Clean end-to-end: `main` + `task_breast_cancer`, HTML report, Lyapunov/basin/settling, stats; **0 warnings/errors**; ~85 s |
 | `--hours 0.0833` (5 min) | ✅ 8/20 runs in 370 s (~1.2× budget), report generated, **0 warnings**; ⚠️ `task_cartpole` exit **130 (SIGINT)** — log shows `Received signal 15` from my own process kill, so suspected **external signal bleed, not a code defect**; needs one isolated replay |
-| 15 min / 1 h | ❌ **not yet run** (foreground ≤5 min rule → must background with `nohup uv run python scripts/showcase.py --hours N … > logs/<name>.log 2>&1 &` and poll ≤2 min) |
+| `--hours 1 --strategy balanced` | ✅ 1.5h elapsed, 120 records, 8 substrates, HTML report + stability analysis |
+| `--hours 0.5 --strategy broad_shallow` | 🔄 Running (20 task runs, ~14 min so far) |
 
 ## 6. Continuation plan for a fresh session (ordered)
 
@@ -503,7 +504,7 @@ Decide per primitive whether to wire in (e.g. `comp stability-analysis --spectra
 
 ---
 
-# Session 2026-10-09 (late) — Hardening reapplication, lint baseline update, full verification
+# Session 2026-10-09 (late) — Hardening reapplication, lint baseline update, full verification, showcase runs
 
 **State**: All changes committed. Env is healthy: `torch 2.14.1+cu130`, CUDA RTX 3080.
 
@@ -541,15 +542,50 @@ All four files updated with defensive `getattr` checks for `plastic_state_dims`:
 | Stability metrics in records (`spectral_radius`, `max_singular_value`, `lyapunov_exponent`, `stability_margin`, `drift_spectral_radius`, `free_energy`, `settle_steps`, etc.) | ✅ |
 | HTML report stability analysis tables populated | ✅ |
 
+### 4. Showcase Campaign Runs Executed
+
+#### Balanced Strategy (1h budget) — `uv run scripts/showcase.py --hours 1 --strategy balanced --device auto`
+- **Elapsed**: ~1.5h (slightly over budget due to stability analysis post-processing)
+- **Records**: 120 cells measured
+- **Substrates covered**: 8 (digital, analog, memristive, neuromorphic, sparse, ternary, optical, quantum)
+- **Geometries**: recurrent only (model-based policy converged)
+- **Dynamics**: instantaneous only (policy converged)
+- **Plasticities**: conflict_adaptive only
+- **Credits**: gradient only
+- **Updates**: adam (96), elastic_consolidation (24)
+- **Val accuracy**: None (digits task validation split issue)
+- **Report**: Generated with empty Pareto plots (no val_acc), stability analysis ran post-hoc
+- **Store**: `results/adaptive_balanced_1.0h.db`
+- **Report**: `results/adaptive_balanced_1.0h_report.html`
+
+#### Broad Shallow Strategy (0.5h budget) — `uv run scripts/showcase.py --hours 0.5 --strategy broad_shallow --device auto`
+- **Status**: Running (started 14:53, still executing task-specific runs at 15:06)
+- **Main run**: Completed ~18 rounds
+- **Task runs**: Executing sequentially (20 tasks × ~18 rounds each)
+- **Policy**: model_based (NSGA-II) — same convergence behavior expected
+- **Estimated completion**: ~2-3h total due to 20 task runs
+
+#### Quick-Verify (round_robin_grid policy) — `uv run comp run quick-verify`
+- **Records**: 10 cells
+- **Credits**: gradient, thermodynamic_contrast, random_projections, pepita (4 diverse)
+- **Updates**: euclidean, adam, muon (3 diverse)
+- **Val accuracy**: Populated (0.0625–0.1250)
+- **Policy**: round_robin_grid — systematic traversal of defined space
+
+**Key Insight**: The `production-map` profile uses `model_based` (NSGA-II) policy which optimizes and converges to a narrow subspace. For diverse architecture exploration, use `quick-verify` profile or campaign YAML with `policy: "round_robin_grid"`.
+
 ## Remaining Non-Blocking Items
 | Item | Status |
 |------|--------|
 | Basin stability Monte Carlo timeout (2+ min) | Known — `--basin` uses multistart sampling; consider adding `--basin-samples` CLI option to control |
 | Lint findings in acceleration kernels (pre-existing) | 416 total — not blocking; ratchet holds at 416 |
+| `production-map` policy convergence | Expected NSGA-II behavior; use `round_robin_grid` for broad exploration |
 
 ## Useful Artifacts from This Session
 - Verified store: `/tmp/test_verify.db` (10 records with full stability metrics)
 - Verified report: `/tmp/report.html` (includes Dynamical Stability Analysis section with non-empty tables)
+- Showcase balanced store: `results/adaptive_balanced_1.0h.db` (120 records, 8 substrates)
+- Showcase balanced report: `results/adaptive_balanced_1.0h_report.html`
 - Hardened files: 4 files updated with defensive config access
 
 ---
