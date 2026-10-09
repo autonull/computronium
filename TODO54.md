@@ -592,6 +592,80 @@ All four files updated with defensive `getattr` checks for `plastic_state_dims`:
 
 - `AGENTS.md` — Code guidelines, commit checklist
 - `packages/stability/src/stability/` — Lyapunov, basin, spectral, settling, calibration, guard primitives
+
+---
+
+# Session 2026-10-09 (evening continued) — Checkpoint loading fix, RL seeding fix, end-to-end verification
+
+**State**: All changes committed (ee9a64df). Env is healthy: `torch 2.14.1+cu130`, CUDA RTX 3080.
+
+## Changes Applied in This Session
+
+### 1. PyTorch 2.6+ Checkpoint Loading Fix
+- **File**: `computronium/core/system_trainer/trainer.py:447`
+- **Fix**: Added `weights_only=False` to `torch.load()` in `SystemTrainer.from_checkpoint()`
+- **Reason**: PyTorch 2.6+ defaults to `weights_only=True` which rejects custom classes like `SystemTrainerConfig`
+- **Impact**: Checkpoint resume now works for all cells; previously all quick-verify cells failed with `WeightsUnpickler error`
+
+### 2. RL Seeding Fix (`seed_everything`)
+- **File**: `computronium/utils.py:49`
+- **Fix**: Moved `import os` to top of function (was inside `if deterministic:` block)
+- **Reason**: `os.environ["PYTHONHASHSEED"] = str(seed)` was outside the block but `os` was only imported inside it
+- **Impact**: RL tasks (cartpole, pendulum, acrobot) now work in smoke tests; previously `UnboundLocalError`
+
+### 3. Lint Formatting Fix
+- **File**: `tests/property/test_lint_count_ratchet.py:45`
+- **Fix**: Added blank line after import (ruff formatting)
+
+### 4. Showcase Script Added
+- **File**: `scripts/showcase.py` (new file, 357 lines)
+- **Purpose**: Adaptive showcase campaign runner with configurable strategy (broad_shallow/balanced/narrow_deep) and time budget
+
+## Verification Completed
+
+| Test Suite | Status |
+|------------|--------|
+| `tests/property/test_ontology_locks.py` | ✅ 35 passed |
+| `tests/property/test_dynamics_wiring_lock.py` | ✅ |
+| `tests/property/test_registry_completeness_lock.py` | ✅ |
+| `tests/property/test_stability_energy_metrics_lock.py` | ✅ 39 passed |
+| `tests/property/test_lint_count_ratchet.py` | ✅ 2 passed (baseline 416) |
+| `tests/acceptance/test_promotion_lock.py` | ✅ 2 passed |
+| `tests/integration/test_smoke_all_tasks.py` | ✅ 11 passed (all RL tasks now work) |
+| `comp run quick-verify` + `comp report` | ✅ End-to-end works |
+| `comp stability-analysis --lyapunov --settling` | ✅ Works, produces finite spectra |
+| `comp stats --group-by dynamics,credit,substrate` | ✅ Effect sizes (Cohen's d, Cliff's delta) computed |
+| `comp pareto --weights --scalarize` | ✅ Scalarized Pareto frontier works |
+
+## Continuation Plan Progress
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 1. Reapply §1 hardening | ✅ DONE | Committed in previous session |
+| 2. Populate + verify §4b/§4c | ✅ DONE | quick-verify run has all stability metrics in records; report has Dynamical Stability Analysis section |
+| 3. Non-degeneracy check | ⚠️ PARTIAL | Lyapunov spectrum works (finite, plausible); settling shows 1 step for instantaneous dynamics (expected); basin stability times out at >2 min (known issue, `--basin-samples` can control) |
+| 4. Cartpole replay | ✅ DONE | RL tasks pass in smoke tests |
+| 5. Progressive budgets | 🔄 IN PROGRESS | 1h balanced completed; 0.5h broad_shallow estimated 2-3h |
+| 6. Decide §4d wiring | ⏸️ DEFERRED | Spectral/calibration/guard primitives exist in stability package; can wire later if needed |
+| 7. Quality gates | ✅ DONE | All property locks pass; lint ratchet holds at 416; pyright clean on changed files |
+| 8. Cleanup + commit | ✅ DONE | Generated YAMLs removed; showcase.py added; changes committed |
+
+## Key Improvements This Session
+
+1. **Checkpoint resume now works**: All 10 quick-verify cells complete training and produce stability metrics
+2. **Stability metrics persisted**: Records contain `spectral_radius`, `max_singular_value`, `lyapunov_exponent`, `stability_margin`, `drift_spectral_radius`, `free_energy`, `settle_steps`, `settle_converged`, `energy_per_step`, etc.
+3. **HTML report includes stability analysis**: "Dynamical Stability Analysis" section with Lyapunov distribution, spectral radius vs max singular value scatter, settling time analysis, drift operator analysis, stability margin distribution
+4. **RL tasks functional**: cartpole, pendulum, acrobot all pass smoke tests
+5. **Effect sizes in stats**: Cohen's d and Cliff's delta computed when `--group-by` specified
+
+## Remaining Non-Blocking Items
+
+| Item | Status |
+|------|--------|
+| Basin stability Monte Carlo timeout (2+ min) | Known — `--basin` uses multistart sampling; consider adding `--basin-samples` CLI option to control |
+| Lint findings in acceleration kernels (pre-existing) | 416 total — not blocking; ratchet holds at 416 |
+| `production-map` policy convergence | Expected NSGA-II behavior; use `round_robin_grid` for broad exploration |
+| `energy_per_step` = 0.0 in quick-verify | CPU path doesn't measure NVML energy; GPU runs will have non-zero values |
 - `docs/experiments/reproducibility.md` — Reproducibility guide
 - `computronium/experiment/probe.py` — CoreTrainerDriver with stability metrics integration
 - `computronium/experiment/execution/evaluate.py` — `compute_stability_metrics` (per-cell ρ, σ, Lyapunov, drift)
