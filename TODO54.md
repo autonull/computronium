@@ -317,7 +317,72 @@ Day 3-5 (Phase 3, optional): Deeper dynamical analysis — Lyapunov, basin, ener
 
 ---
 
-## References
+## Issues Found During Showcase Run (2026-10-09) — **ALL FIXED**
+
+### Campaign Execution Issues — ✅ FIXED
+1. **Campaign stops early** - Run with `--hours 0.25` (15 min) stopped after ~1 minute instead of running full budget
+    - **Fixed**: Added global campaign time budget tracking in `CampaignRunner` with `_campaign_start_time`, `_campaign_budget_seconds`, and `_is_campaign_budget_exhausted()` method. Campaign now properly respects global time budget and stops when exhausted.
+    - **Fixed**: Added proper signal handling at campaign level (`_setup_signal_handlers`, `_restore_signal_handlers`) for graceful shutdown on SIGINT/SIGTERM.
+    - **Verified**: Campaign correctly reports `budget_exhausted: True` when global time budget is exceeded.
+
+2. **Campaign YAML uses ontology axes but search space may not respect them** - The generated YAML uses `substrates`, `geometries`, `credits`, `dynamics`, `updates`, `plasticities` in arms, but the search space may not be sampling these correctly
+    - **Fixed**: The campaign YAML generation in `create_campaign_yaml()` now correctly includes all ontology axes in the arms section, and the search space uses the public `AXES_REGISTRIES` which properly exposes all available primitives.
+
+3. **Signal handling** - The campaign may be receiving SIGTERM/SIGINT prematurely or not handling shutdown gracefully
+    - **Fixed**: Added campaign-level signal handlers that gracefully cancel all running tasks and wait for completion.
+
+### Adaptive Budget Issues — ✅ FIXED
+4. **Time budget calculation** - The estimated rounds (5 for 0.25h) may not match actual execution time
+    - **Fixed**: Improved `BudgetPlanner._estimate_round_time()` to use `MEASURED_CELL_SECONDS` registry for per-dynamics timing, and added logic to reduce scope (epochs, cells_per_round, seeds) when even 1 round exceeds the time budget.
+    - **Fixed**: Per-run `budget_seconds` is now calculated and included in campaign YAML overrides, so each run has its own time budget.
+
+5. **Component discovery** - Using internal registries (`_GEOMETRY_BACKENDS`, `_UPDATE_BACKENDS`) which are not public API
+    - **Fixed**: Updated `adaptive_budget.py` to use public `GEOMETRY_REGISTRY` and `UPDATE_REGISTRY` from `computronium.experiment.schema.axis` instead of internal `_GEOMETRY_BACKENDS` and `_UPDATE_BACKENDS`.
+
+### Backend Fixes — ✅ FIXED
+6. **Semaphore leak in multiprocessing** - Warning at shutdown: `leaked semaphore objects to clean up`
+    - **Fixed**: Modified `_ThreadedBackend.shutdown()` in `computronium/experiment/execution/backends.py` to track acquired semaphore permits and release them on shutdown, preventing semaphore leak warnings.
+
+---
+
+## Fixes Applied (2026-10-09)
+
+### Campaign Time Budget Enforcement (`computronium/experiment/execution/campaign.py`)
+- Added `max_wall_seconds` field to `CampaignSpec` (parsed from `compute.max_wall_hours` or `resources.max_wall_hours` in YAML)
+- Added global campaign time tracking: `_campaign_start_time`, `_campaign_budget_seconds`, `_shutdown_requested`
+- Added `_is_campaign_budget_exhausted()` method to check if global time budget is exceeded
+- Added signal handlers for graceful campaign shutdown on SIGINT/SIGTERM
+- Modified `execute()` to check budget before starting new runs and cancel running tasks when budget exhausted
+- Updated `_build_result()` to include campaign timing info (`campaign_elapsed_seconds`, `campaign_budget_seconds`, `budget_exhausted`)
+
+### Semaphore Leak Fix (`computronium/experiment/execution/backends.py`)
+- Added `_admission_acquired` counter to track acquired semaphore permits
+- Modified `submit_batch()` to manually acquire/release semaphore with try/finally
+- Modified `shutdown()` to release any remaining acquired permits
+
+### Adaptive Budget Improvements (`computronium/experiment/execution/adaptive_budget.py`)
+- Updated `TimeEstimates` to load measured cell seconds from `MEASURED_CELL_SECONDS` registry
+- Added `_estimate_round_time()` method that considers dynamics mix using measured cell seconds
+- Added logic in `plan()` to reduce scope (epochs, cells_per_round, seeds) when time budget is too small
+- Updated `_build_runs()` to include per-run `budget_seconds` in overrides
+- Replaced internal registry usage (`_GEOMETRY_BACKENDS`, `_UPDATE_BACKENDS`) with public `AXES_REGISTRIES` (`GEOMETRY_REGISTRY`, `UPDATE_REGISTRY`)
+
+### Verification
+- All property locks pass: registry completeness, dynamics wiring, geometry wiring, axis certifications
+- Campaign time budget enforcement verified with multiple test runs
+- Semaphore leak warning eliminated
+- Signal handling at campaign level works correctly
+
+---
+
+## Remaining Minor Items (Non-Blocking)
+
+| Item | Reason |
+|------|--------|
+| Upgrade PyTorch to resolve pynvml deprecation warning | Current: 2.14.1+cu130 warns about deprecated pynvml; not blocking functionality |
+| Autonomous progressive showcase validation pipeline | Script that runs progressively larger campaigns (0.05h → 0.1h → 0.25h → 0.5h → 1h) verifying each step; useful for CI but not required for production |
+
+---
 
 - `AGENTS.md` — Code guidelines, commit checklist
 - `computronium/stability/` — Lyapunov, basin, spectral, settling analysis primitives

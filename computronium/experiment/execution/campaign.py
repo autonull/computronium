@@ -55,6 +55,8 @@ class CampaignSpec:
     store: str = "experiment.duckdb"
     parallel: int = 1
     webhook_url: str | None = None
+    # Global time budget for the entire campaign (seconds)
+    max_wall_seconds: float | None = None
 
 
 class CampaignRunner:
@@ -71,6 +73,10 @@ class CampaignRunner:
         self.running: dict[int, asyncio.Task] = {}
         self._run_id_map: dict[int, str] = {}
         self._store_lock = asyncio.Lock()
+        # Global campaign time tracking
+        self._campaign_start_time: float = time.monotonic()
+        self._campaign_budget_seconds: float | None = spec.max_wall_seconds
+        self._shutdown_requested: bool = False
 
     async def _send_webhook(
         self, event: str, run_idx: int, data: dict[str, Any]
@@ -100,20 +106,19 @@ class CampaignRunner:
 
     def _build_run_spec(self, run: CampaignRun) -> RunSpec:
         """Build a RunSpec from a campaign run."""
+        import argparse
 
         # Create a mock args namespace for _resolve_spec
-        class Args:
-            def __init__(self, run: CampaignRun, campaign_store: str):
-                self.profile = run.profile
-                self.spec = run.spec_file
-                self.overrides = json.dumps(run.overrides) if run.overrides else None
-                self.task = run.overrides.get("task") if run.overrides else None
-                self.dry_run = False
-                self.device = run.device
-                self.store = campaign_store
-                self.run_id = None
+        args = argparse.Namespace()
+        args.profile = run.profile
+        args.spec = run.spec_file
+        args.overrides = json.dumps(run.overrides) if run.overrides else None
+        args.task = run.overrides.get("task") if run.overrides else None
+        args.dry_run = False
+        args.device = run.device
+        args.store = self.spec.store
+        args.run_id = None
 
-        args = Args(run, self.spec.store)
         return _resolve_spec(args)
 
     async def _execute_run(self, run_idx: int) -> dict[str, Any]:
@@ -231,8 +236,9 @@ class CampaignRunner:
             return 0
 
     async def execute(self) -> dict[str, Any]:
-        """Execute the full campaign with dependency resolution."""
+        """Execute the full campaign with dependency resolution and global time budget."""
         self._validate_dependencies()
+        self._setup_signal_handlers()
 
         semaphore = asyncio.Semaphore(self.spec.parallel)
 
@@ -241,6 +247,18 @@ class CampaignRunner:
                 return await self._execute_run(idx)
 
         while self._has_work_pending():
+            # Check global campaign time budget
+            if self._is_campaign_budget_exhausted():
+                logger.info("Campaign time budget exhausted; stopping")
+                self._shutdown_requested = True
+                # Cancel all running tasks
+                for task in self.running.values():
+                    task.cancel()
+                # Wait for cancellations
+                if self.running:
+                    await asyncio.gather(*self.running.values(), return_exceptions=True)
+                break
+
             self._start_ready_runs(run_with_semaphore)
 
             if not self.running:
@@ -262,6 +280,37 @@ class CampaignRunner:
             await self._process_completed_tasks(done, task_to_idx)
 
         return self._build_result()
+
+    def _is_campaign_budget_exhausted(self) -> bool:
+        """Check if the global campaign time budget has been exhausted."""
+        if self._campaign_budget_seconds is None:
+            return False
+        elapsed = time.monotonic() - self._campaign_start_time
+        return elapsed >= self._campaign_budget_seconds
+
+    def _setup_signal_handlers(self) -> None:
+        """Set up signal handlers for graceful campaign shutdown."""
+        if self._shutdown_requested:
+            return
+
+        def _signal_handler(signum, _frame):
+            logger.info("Campaign received signal %s; initiating graceful shutdown", signum)
+            self._shutdown_requested = True
+
+        try:
+            self._old_sigint = signal.signal(signal.SIGINT, _signal_handler)
+            self._old_sigterm = signal.signal(signal.SIGTERM, _signal_handler)
+        except (ValueError, OSError):
+            # Signal handling not available in this context (e.g., non-main thread)
+            pass
+
+    def _restore_signal_handlers(self) -> None:
+        """Restore original signal handlers."""
+        try:
+            signal.signal(signal.SIGINT, self._old_sigint)
+            signal.signal(signal.SIGTERM, self._old_sigterm)
+        except (AttributeError, ValueError, OSError):
+            pass
 
     def _validate_dependencies(self) -> None:
         """Validate campaign dependencies."""
@@ -338,6 +387,8 @@ class CampaignRunner:
 
     def _build_result(self) -> dict[str, Any]:
         """Build the final campaign result."""
+        self._restore_signal_handlers()
+        campaign_elapsed = time.monotonic() - self._campaign_start_time
         return {
             "campaign": self.spec.name,
             "total_runs": len(self.spec.runs),
@@ -345,6 +396,9 @@ class CampaignRunner:
             "failed": len(self.failed),
             "run_results": self.results,
             "run_ids": self._run_id_map,
+            "campaign_elapsed_seconds": campaign_elapsed,
+            "campaign_budget_seconds": self._campaign_budget_seconds,
+            "budget_exhausted": self._is_campaign_budget_exhausted(),
         }
 
 
@@ -376,12 +430,22 @@ def load_campaign(path: str | Path) -> CampaignSpec:
             )
         )
 
+    # Parse global time budget from compute.max_wall_hours or resources.max_wall_hours
+    max_wall_seconds = None
+    compute = data.get("compute", {})
+    resources = data.get("resources", {})
+    if "max_wall_hours" in compute:
+        max_wall_seconds = compute["max_wall_hours"] * 3600
+    elif "max_wall_hours" in resources:
+        max_wall_seconds = resources["max_wall_hours"] * 3600
+
     return CampaignSpec(
         name=data.get("name", Path(path).stem),
         runs=runs,
         store=data.get("store", "experiment.duckdb"),
         parallel=data.get("parallel", 1),
         webhook_url=data.get("webhook_url"),
+        max_wall_seconds=max_wall_seconds,
     )
 
 
@@ -401,6 +465,7 @@ async def run_campaign(
             store=spec.store,
             parallel=parallel,
             webhook_url=webhook_url or spec.webhook_url,
+            max_wall_seconds=spec.max_wall_seconds,
         )
     elif device is not None or webhook_url is not None:
         # Override device for all runs if specified
@@ -423,6 +488,7 @@ async def run_campaign(
             store=spec.store,
             parallel=spec.parallel,
             webhook_url=webhook_url or spec.webhook_url,
+            max_wall_seconds=spec.max_wall_seconds,
         )
 
     runner = CampaignRunner(spec)

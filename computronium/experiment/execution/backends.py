@@ -137,6 +137,7 @@ class _ThreadedBackend:
         self._max_workers = max_workers
         self._shutdown = False
         self._admission = asyncio.Semaphore(max_workers)
+        self._admission_acquired = 0  # Track acquired permits for cleanup
 
     def _evaluate(
         self,
@@ -264,7 +265,9 @@ class _ThreadedBackend:
             prov: Provenance,
             params: dict[str, Any],
         ) -> EvaluationResult:
-            async with self._admission:
+            await self._admission.acquire()
+            self._admission_acquired += 1
+            try:
                 try:
                     records = await self.submit(coord, sched, prov, params, store)
                 except Exception as e:
@@ -279,6 +282,9 @@ class _ThreadedBackend:
                             coord, sched, prov, str(e)
                         )
                     )
+            finally:
+                self._admission.release()
+                self._admission_acquired -= 1
             if records:
                 return Success(records=tuple(records))
             return Failure(
@@ -318,6 +324,10 @@ class _ThreadedBackend:
     def shutdown(self) -> None:
         """Release the backend. Evaluation bodies live on the default pool."""
         self._shutdown = True
+        # Release any acquired semaphore permits to avoid leak warnings
+        while self._admission_acquired > 0:
+            self._admission.release()
+            self._admission_acquired -= 1
 
 
 class LocalBackend(_ThreadedBackend):
