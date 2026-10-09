@@ -210,7 +210,7 @@ def test_every_evaluator_metric_is_nameable_by_an_objective() -> None:
         f"evaluator writes metrics no objective can name: {unregistered}"
     )
     assert MEASURED_OBJECTIVES["spectral_radius"] == "spectral_radius"
-    assert MEASURED_OBJECTIVES["energy_per_step"] == "energy_per_sample"
+    assert MEASURED_OBJECTIVES["energy_per_step"] == "energy_per_step"
 
 
 @pytest.mark.parametrize(

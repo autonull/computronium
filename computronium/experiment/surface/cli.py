@@ -2445,7 +2445,7 @@ def _cmd_stats(args: argparse.Namespace) -> int:
 
         # Compute effect sizes between groups when group_by is specified
         if group_by and len(group_keys) >= 2:
-            from computronium.validation.statistics import cliffs_delta, cohens_d
+            from computronium.core.statistics import cliffs_delta, cohens_d
 
             # Compare first group (reference) against all others
             reference_key = group_keys[0]
@@ -3189,7 +3189,7 @@ def _cmd_repro(args: argparse.Namespace) -> int:
 
 def _cmd_power_analysis(args: argparse.Namespace) -> int:
     """Compute statistical power for experiment design."""
-    from computronium.validation.statistics import power_for_two_sample
+    from computronium.core.statistics import power_for_two_sample
 
     if args.solve_for == "power":
         if args.n_per_group is None:
