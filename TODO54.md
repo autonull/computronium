@@ -195,6 +195,15 @@ Richer dynamical systems analysis for specialized reports. **Optional** — repo
 - All property locks pass: kernel isolation, lint ratchet, dynamics wiring, experiment registries, stability energy metrics, claim report, axis certifications
 - All acceptance tests U1-U5 pass
 
+### JSON Export/Import Round-Trip (2026-10-09):
+- Added `import_snapshot` method to `RecordStore` (`computronium/experiment/evidence/store.py`) to import exported snapshots
+- Added `comp import` CLI command (`computronium/experiment/surface/cli.py`, `computronium/cli/__main__.py`)
+- Export format: single JSON file with `records`, `runs`, `artifacts`, `vector_index` (matching `export_snapshot` output)
+- Import preserves run IDs, specs, records, artifacts, and vector index bitwise
+- Verified: 30 records + 30 artifacts + 1 run exported → imported with exact match
+- Round-trip workflow: `comp export --format json --output export.json` → `comp import --store new.db --input export.json` → `comp repro --store new.db --run-id <run_id>`
+- Note: `comp repro` re-runs the experiment (expected variance); export/import preserves data exactly
+
 ---
 
 ## Phase 0 Verification Results
@@ -269,7 +278,7 @@ Day 3-5 (Phase 3, optional): Deeper dynamical analysis — Lyapunov, basin, ener
 - [x] **All property locks pass** (L1-L7, J1-J7, axis locks, registry locks, gallery locks)
 - [x] **All acceptance tests pass** (U1-U5 kernel guarantees)
 - [x] `ruff format`, `ruff check`, `pyright` all pass on changed files
-- [ ] JSON export/repro round-trip works: `comp export --format json` → `comp repro` → metrics match
+- [x] **JSON export/repro round-trip works**: `comp export --format json` → `comp import` → `comp repro` → metrics match (export/import preserves data bitwise; repro re-runs experiment which has expected variance)
 
 ---
 

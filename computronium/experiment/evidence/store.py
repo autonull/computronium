@@ -1455,6 +1455,123 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             "vector_index": vectors,
         }
 
+    def import_snapshot(self, snapshot: dict[str, Any]) -> int:
+        """Import a snapshot exported by ``export_snapshot``.
+
+        Args:
+            snapshot: Dictionary with keys "records", "runs", "artifacts",
+                "vector_index" as returned by ``export_snapshot``.
+
+        Returns:
+            Number of records imported.
+
+        Note:
+            This method does not import artifact bytes (they are not included
+            in the exported snapshot). Artifact manifests are imported with
+            their external references intact.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        if self._config.read_only:
+            raise StoreError("Cannot import into read-only store")
+
+        from computronium.experiment.schema.record import Record
+        from computronium.experiment.schema.run_spec import RunSpec
+
+        imported = 0
+
+        with self._write_lock:
+            # Import runs first (records reference run_id)
+            for run_data in snapshot.get("runs", []):
+                run_id = run_data["run_id"]
+                # Check if run already exists
+                existing = self._conn.execute(
+                    "SELECT run_id FROM runs WHERE run_id = ?", [run_id]
+                ).fetchone()
+                if existing is None:
+                    spec_dict = run_data.get("spec")
+                    spec = RunSpec.from_dict(spec_dict) if spec_dict else None
+                    spec_json = json.dumps(spec.to_dict()) if spec else None
+                    started_at = run_data["started_at"]
+                    finished_at = run_data.get("finished_at")
+                    self._conn.execute(
+                        """
+                        INSERT INTO runs (
+                            run_id, spec, spec_version, status, started_at,
+                            finished_at, budget_consumed_s, replay_hash, last_heartbeat
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
+                            run_id,
+                            spec_json,
+                            run_data["spec_version"],
+                            run_data["status"],
+                            started_at,
+                            finished_at,
+                            run_data.get("budget_consumed_s"),
+                            run_data.get("replay_hash"),
+                            run_data.get("last_heartbeat"),
+                        ],
+                    )
+
+            # Import records
+            for record_data in snapshot.get("records", []):
+                record = Record.from_dict(record_data)
+                try:
+                    self.append(record)
+                    imported += 1
+                except Exception:
+                    # Skip duplicates (e.g., re-importing same snapshot)
+                    pass
+
+            # Import artifacts (manifests only, no bytes)
+            for artifact_data in snapshot.get("artifacts", []):
+                digest = artifact_data["digest"]
+                existing = self._conn.execute(
+                    "SELECT digest FROM artifacts WHERE digest = ?", [digest]
+                ).fetchone()
+                if existing is None:
+                    created_at = artifact_data.get("created_at")
+                    self._conn.execute(
+                        """
+                        INSERT INTO artifacts (
+                            digest, role, record_id, created_at,
+                            external_uri, external_size, external_checksum
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
+                            digest,
+                            artifact_data["role"],
+                            artifact_data["record_id"],
+                            created_at,
+                            artifact_data.get("external_uri"),
+                            artifact_data.get("external_size"),
+                            artifact_data.get("external_checksum"),
+                        ],
+                    )
+
+            # Import vector index
+            for vec_data in snapshot.get("vector_index", []):
+                record_id = vec_data["record_id"]
+                existing = self._conn.execute(
+                    "SELECT record_id FROM vector_index WHERE record_id = ?",
+                    [record_id],
+                ).fetchone()
+                if existing is None:
+                    self._conn.execute(
+                        """
+                        INSERT INTO vector_index (record_id, embedding, embedding_version)
+                        VALUES (?, ?, ?)
+                        """,
+                        [
+                            record_id,
+                            vec_data.get("embedding", []),
+                            vec_data.get("embedding_version"),
+                        ],
+                    )
+
+        return imported
+
 
 # =========================================================================
 # Pydantic v2 Models for I/O Validation

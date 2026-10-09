@@ -316,6 +316,22 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         help="Generate Dockerfile for reproducible environment",
     )
 
+    # Import command
+    p_import = sub.add_parser(
+        "import", help="Import store data from export (round-trip)"
+    )
+    p_import.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_import.add_argument("--input", required=True, help="Input JSON export file")
+    p_import.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+    p_import.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_import.add_argument("--output", default=None, help="Output file path")
+
     # Conformance command
     p_conformance = sub.add_parser("conformance", help="Check capability conformance")
     p_conformance.add_argument(
@@ -1360,6 +1376,63 @@ def _cmd_export(args: argparse.Namespace) -> int:
     if args.docker:
         _generate_dockerfile(store, args.run_id, args.output)
         logger.info(f"Dockerfile generated: {args.output}.Dockerfile")
+
+    return 0
+
+
+def _cmd_import(args: argparse.Namespace) -> int:
+    """Import store data from export (round-trip)."""
+    import json
+
+    if args.dry_run:
+        plan = {
+            "command": "import",
+            "store": args.store,
+            "input": args.input,
+        }
+        if args.format == "json":
+            output = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                logger.info(f"Dry run plan written to {args.output}")
+            else:
+                print(output)
+        else:
+            print("Dry run: would import export file")
+            print(f"  Store: {args.store}")
+            print(f"  Input: {args.input}")
+        return 0
+
+    # Load the export file
+    input_path = Path(args.input)
+    if not input_path.exists():
+        logger.error(f"Input file not found: {input_path}")
+        return 1
+
+    with input_path.open(encoding="utf-8") as f:
+        snapshot = json.load(f)
+
+    # Open store in write mode
+    try:
+        store = RecordStore(StoreConfig(path=Path(args.store), read_only=False))
+    except Exception as e:
+        logger.error(f"Failed to open store: {e}")
+        return 1
+
+    with store:
+        imported = store.import_snapshot(snapshot)
+        logger.info(f"Import completed: {imported} records imported")
+
+    if args.format == "json":
+        output = json.dumps({"imported_records": imported}, indent=2)
+    else:
+        output = f"Imported {imported} records"
+
+    if args.output:
+        Path(args.output).write_text(output, encoding="utf-8")
+        logger.info(f"Result written to {args.output}")
+    else:
+        print(output)
 
     return 0
 
@@ -3416,6 +3489,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "run": _cmd_run,
         "report": _cmd_report,
         "export": _cmd_export,
+        "import": _cmd_import,
         "conformance": _cmd_conformance,
         "status": _cmd_status,
         "gallery": _cmd_gallery,
