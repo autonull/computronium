@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ metadata.campaign_name }} - Computronium Experiment Report</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 20px; background: #fafafa; color: #1a1a2e; }
+        h1 { color: #1a1a2e; border-bottom: 3px solid #2563eb; padding-bottom: 10px; }
+        h2 { color: #1e40af; margin-top: 40px; border-bottom: 1px solid #d1d5db; padding-bottom: 5px; }
+        h3 { color: #374151; }
+        h4 { color: #4b5563; }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .meta-item { padding: 10px; }
+        .meta-label { font-size: 0.875rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+        .meta-value { font-size: 1.125rem; font-weight: 600; color: #1a1a2e; }
+        .section { background: white; margin: 20px 0; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .executive-summary { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 4px solid #2563eb; }
+        .coverage-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .coverage-table th, .coverage-table td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+        .coverage-table th { background: #f3f4f6; font-weight: 600; }
+        .coverage-table tr:nth-child(even) { background: #f9fafb; }
+        .coverage-cell { text-align: center; }
+        .coverage-high { background: #dcfce7; }
+        .coverage-medium { background: #fef9c3; }
+        .coverage-low { background: #fee2e2; }
+        .pareto-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .pareto-table th, .pareto-table td { border: 1px solid #e5e7eb; padding: 8px 12px; }
+        .pareto-table th { background: #f3f4f6; }
+        .stability-metric { display: inline-block; padding: 8px 16px; margin: 5px; background: #f3f4f6; border-radius: 6px; font-family: monospace; }
+        .failure-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #e5e7eb; }
+        .failure-cause { font-weight: 500; }
+        .failure-count { color: #ef4444; font-family: monospace; }
+        .hypothesis-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin: 10px 0; background: white; }
+        .hypothesis-id { font-family: monospace; background: #eef2ff; padding: 2px 8px; border-radius: 4px; font-size: 0.875rem; }
+        .hypothesis-tags { margin-top: 8px; }
+        .tag { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; margin-right: 5px; }
+        .repro-block { background: #1a1a2e; color: #e5e7eb; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 0.875rem; overflow-x: auto; white-space: pre-wrap; }
+        .alert { padding: 12px; border-radius: 6px; margin: 10px 0; }
+        .alert-warning { background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; }
+        .alert-info { background: #dbeafe; border: 1px solid #93c5fd; color: #1e40af; }
+        .alert-success { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
+        .toc { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .toc ul { list-style: none; padding-left: 0; }
+        .toc li { margin: 8px 0; }
+        .toc a { color: #2563eb; text-decoration: none; }
+        .toc a:hover { text-decoration: underline; }
+        .stat-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .stat-table th, .stat-table td { border: 1px solid #e5e7eb; padding: 8px 12px; }
+        .stat-table th { background: #f3f4f6; }
+        .stat-row-significant { background: #dcfce7; }
+        .stat-row-not-significant { background: #fee2e2; }
+        .ablation-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-bottom: 20px; }
+        .ablation-table th, .ablation-table td { border: 1px solid #e5e7eb; padding: 8px 12px; }
+        .ablation-table th { background: #f3f4f6; }
+        .key-finding { padding: 10px; margin: 8px 0; background: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px; }
+        .limitation { padding: 10px; margin: 8px 0; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px; }
+        .figure-caption { font-style: italic; color: #6b7280; text-align: center; margin-top: 8px; font-size: 0.875rem; }
+        .collapsible { border: 1px solid #e5e7eb; border-radius: 8px; margin: 10px 0; }
+        .collapsible summary { padding: 15px; background: #f9fafb; cursor: pointer; font-weight: 600; }
+        .collapsible[open] summary { border-bottom: 1px solid #e5e7eb; }
+        .collapsible-content { padding: 20px; }
+        .progress-bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #2563eb; border-radius: 4px; transition: width 0.3s; }
+    </style>
+    {% if plotly_js %}
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    {% endif %}
+</head>
+<body>
+    <h1>🌌 {{ metadata.campaign_name }}</h1>
+    <p><strong>Campaign:</strong> {{ metadata.campaign_name }} | <strong>Generated:</strong> {% if metadata.generated_at is string %}{{ metadata.generated_at }}{% else %}{{ metadata.generated_at.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
+
+    <div class="toc">
+        <h2>📋 Table of Contents</h2>
+        <ul>
+            <li><a href="#executive-summary">Executive Summary</a></li>
+            <li><a href="#campaign-configuration">Campaign Configuration</a></li>
+            <li><a href="#coverage-matrix">Coverage Matrix</a></li>
+            <li><a href="#pareto-gallery">Pareto Gallery</a></li>
+            <li><a href="#stability-atlas">Stability Atlas</a></li>
+            <li><a href="#failure-taxonomy">Failure Taxonomy</a></li>
+            <li><a href="#hypotheses">Hypotheses & Statistical Tests</a></li>
+            <li><a href="#ablation-analysis">Ablation Analysis</a></li>
+            <li><a href="#key-findings">Key Findings</a></li>
+            <li><a href="#limitations">Limitations</a></li>
+            <li><a href="#reproducibility">Reproducibility</a></li>
+        </ul>
+    </div>
+
+    <div id="executive-summary" class="section executive-summary">
+        <h2>📊 Executive Summary</h2>
+        {% if executive_summary %}
+        <p>{{ executive_summary }}</p>
+        {% else %}
+        <p>In <strong>{{ "%.2f"|format(metadata.actual_duration_hours or 0) }} hours</strong>, we explored <strong>{{ axis_coverage|sum(attribute='total_cells') }}</strong> valid combinations across <strong>{{ axis_coverage|length }}</strong> ontology axes.</p>
+        <ul>
+            <li>Coverage across {{ axis_coverage|sum(attribute='unique_primitives') }} unique primitives</li>
+            <li>{{ pareto_points|length }} Pareto-optimal configurations identified</li>
+            <li>{{ failure_taxonomy|sum(attribute='count') }} failures categorized into {{ failure_taxonomy|length }} types</li>
+            <li>{{ hypotheses|length }} testable hypotheses ({{ hypotheses|selectattr('pre_registered')|list|length }} pre-registered)</li>
+            <li>{{ statistical_results|length }} statistical tests completed</li>
+        </ul>
+        {% endif %}
+    </div>
+
+    <div id="campaign-configuration" class="section">
+        <h2>⚙️ Campaign Configuration</h2>
+        <div class="meta-grid">
+            <div class="meta-item"><div class="meta-label">Campaign</div><div class="meta-value">{{ metadata.campaign_name }}</div></div>
+            {% if metadata.campaign_description %}
+            <div class="meta-item"><div class="meta-label">Description</div><div class="meta-value">{{ metadata.campaign_description }}</div></div>
+            {% endif %}
+            <div class="meta-item"><div class="meta-label">Time Budget</div><div class="meta-value">{{ "%.2f"|format(metadata.time_budget_hours or 0) }}h</div></div>
+            <div class="meta-item"><div class="meta-label">Actual Duration</div><div class="meta-value">{{ "%.2f"|format(metadata.actual_duration_hours or 0) }}h</div></div>
+            <div class="meta-item"><div class="meta-label">Device</div><div class="meta-value">{{ metadata.device or 'auto' }}</div></div>
+            <div class="meta-item"><div class="meta-label">Hardware</div><div class="meta-value">{{ metadata.hardware or 'unknown' }}</div></div>
+            {% if metadata.git_commit %}
+            <div class="meta-item"><div class="meta-label">Git Commit</div><div class="meta-value">{{ metadata.git_commit[:8] }}</div></div>
+            <div class="meta-item"><div class="meta-label">Git Branch</div><div class="meta-value">{{ metadata.git_branch or 'unknown' }}</div></div>
+            {% endif %}
+            <div class="meta-item"><div class="meta-label">Environment Hash</div><div class="meta-value">{{ metadata.environment_hash or 'unknown' }}</div></div>
+        </div>
+
+        {% if campaign_config %}
+        <h3>Experimental Design</h3>
+        <div class="collapsible">
+            <summary>Factors & Fixed Axes (click to expand)</summary>
+            <div class="collapsible-content">
+                <h4>Factored Axes</h4>
+                <table class="stat-table">
+                    <thead><tr><th>Axis</th><th>Values</th><th>Count</th></tr></thead>
+                    <tbody>
+                    {% for axis, values in campaign_config.factors.items() %}
+                    <tr><td>{{ axis }}</td><td>{{ values|join(', ') }}</td><td>{{ values|length }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <h4>Fixed Axes</h4>
+                <table class="stat-table">
+                    <thead><tr><th>Axis</th><th>Value</th></tr></thead>
+                    <tbody>
+                    {% for axis, value in campaign_config.fixed.items() %}
+                    <tr><td>{{ axis }}</td><td>{{ value }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <h4>Blocks</h4>
+                <table class="stat-table">
+                    <thead><tr><th>Task</th><th>Epochs</th><th>Seeds</th><th>Other</th></tr></thead>
+                    <tbody>
+                    {% for block in campaign_config.blocks %}
+                    <tr>
+                        <td>{{ block.task }}</td>
+                        <td>{{ block.epochs }}</td>
+                        <td>{{ block.seeds }}</td>
+                        <td>{% set other = block|rejectattr('key', 'in', ['task', 'epochs', 'seeds'])|list %}{{ other|tojson }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <h3>HPO Settings</h3>
+        <table class="stat-table">
+            <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+            <tbody>
+                <tr><td>Sampler</td><td>{{ campaign_config.sampler }}</td></tr>
+                <tr><td>Objectives</td><td>{{ campaign_config.objectives|join(', ') }}</td></tr>
+                <tr><td>Trials</td><td>{{ campaign_config.n_trials }}</td></tr>
+                <tr><td>Seeds per trial</td><td>{{ campaign_config.n_seeds }}</td></tr>
+                <tr><td>Epochs</td><td>{{ campaign_config.epochs }}</td></tr>
+                <tr><td>Max wall hours</td><td>{{ campaign_config.max_wall_hours or 'unlimited' }}</td></tr>
+                <tr><td>Max epoch time (s)</td><td>{{ campaign_config.max_epoch_time_sec }}</td></tr>
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <div id="coverage-matrix" class="section">
+        <h2>📈 Coverage Matrix</h2>
+        <p>Heatmap of (axis × primitive) with cell count. Green = high coverage, yellow = medium, red = low/none.</p>
+        {% for axis_cov in axis_coverage %}
+        <h3>{{ axis_cov.axis }}</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Primitive</th>
+                    <th>Count</th>
+                    <th>% of Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% set total = axis_cov.total_cells %}
+            {% for primitive, count in axis_cov.primitives|dictsort %}
+            {% set pct = (count / total * 100) if total > 0 else 0 %}
+            {% if pct >= 10 %}{% set cls = 'coverage-high' %}{% elif pct > 0 %}{% set cls = 'coverage-medium' %}{% else %}{% set cls = 'coverage-low' %}{% endif %}
+            <tr>
+                <td>{{ primitive }}</td>
+                <td class="coverage-cell {{ cls }}">{{ count }}</td>
+                <td class="coverage-cell {{ cls }}">{{ "%.1f"|format(pct) }}%</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p><strong>Total cells:</strong> {{ total }} | <strong>Unique primitives:</strong> {{ axis_cov.unique_primitives }}</p>
+        {% endfor %}
+    </div>
+
+    <div id="pareto-gallery" class="section">
+        <h2>🎯 Pareto Gallery</h2>
+        <p>Pareto-optimal configurations across objective pairs. Each point represents a unique (substrate, geometry, dynamics, plasticity, credit, update) combination.</p>
+        {% if pareto_points %}
+        <table class="pareto-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    {% for obj_name in pareto_points[0].objectives.keys() %}
+                    <th>{{ obj_name.replace('_', ' ').title() }}</th>
+                    {% endfor %}
+                    {% for axis_name in pareto_points[0].coordinate.keys() %}
+                    <th>{{ axis_name.title() }}</th>
+                    {% endfor %}
+                    <th>Record ID</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for point in pareto_points[:30] %}
+            <tr>
+                <td>{{ point.rank }}</td>
+                {% for val in point.objectives.values() %}
+                <td>{{ "%.4g"|format(val) }}</td>
+                {% endfor %}
+                {% for val in point.coordinate.values() %}
+                <td>{{ val }}</td>
+                {% endfor %}
+                <td>{{ point.record_id }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if pareto_points|length > 30 %}
+        <p><em>Showing top 30 of {{ pareto_points|length }} Pareto points.</em></p>
+        {% endif %}
+        {% else %}
+        <div class="alert alert-info">No Pareto points available. Run with claim-eligible records to generate frontier.</div>
+        {% endif %}
+    </div>
+
+    <div id="stability-atlas" class="section">
+        <h2>🔬 Stability Atlas</h2>
+        <p>Lyapunov, basin, and settling summaries per dynamics family.</p>
+        {% if stability_metrics %}
+        {% for stab in stability_metrics %}
+        <h3>{{ stab.dynamics }} (n={{ stab.n_samples }})</h3>
+        <div class="collapsible">
+            <summary>Stability Metrics</summary>
+            <div class="collapsible-content">
+                {% if stab.lyapunov_exponent %}
+                <div class="stability-metric">λ: {{ "%.4f"|format(stab.lyapunov_exponent.mean) }} ± {{ "%.4f"|format(stab.lyapunov_exponent.std) }} [{{ "%.4f"|format(stab.lyapunov_exponent.min) }}, {{ "%.4f"|format(stab.lyapunov_exponent.max) }}]</div>
+                {% endif %}
+                {% if stab.spectral_radius %}
+                <div class="stability-metric">ρ(J): {{ "%.4f"|format(stab.spectral_radius.mean) }} ± {{ "%.4f"|format(stab.spectral_radius.std) }}</div>
+                {% endif %}
+                {% if stab.max_singular_value %}
+                <div class="stability-metric">σ_max: {{ "%.4f"|format(stab.max_singular_value.mean) }} ± {{ "%.4f"|format(stab.max_singular_value.std) }}</div>
+                {% endif %}
+                {% if stab.nonnormality %}
+                <div class="stability-metric">Nonnormality: {{ "%.4f"|format(stab.nonnormality.mean) }} ± {{ "%.4f"|format(stab.nonnormality.std) }}</div>
+                {% endif %}
+                {% if stab.stability_margin %}
+                <div class="stability-metric">Margin (1-ρ): {{ "%.4f"|format(stab.stability_margin.mean) }} ± {{ "%.4f"|format(stab.stability_margin.std) }}</div>
+                {% endif %}
+                {% if stab.settle_steps %}
+                <div class="stability-metric">Settle Steps: {{ "%.1f"|format(stab.settle_steps.mean) }} ± {{ "%.1f"|format(stab.settle_steps.std) }}{% if stab.converged_fraction is not none %} | Converged: {{ "%.1f"|format(stab.converged_fraction * 100) }}%{% endif %}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="alert alert-info">Stability analysis not available. Ensure stability metrics (Lyapunov, spectral radius, settling) are collected.</div>
+        {% endif %}
+    </div>
+
+    <div id="failure-taxonomy" class="section">
+        <h2>⚠️ Failure Taxonomy</h2>
+        <p>Failure modes categorized by cause with counts.</p>
+        {% if failure_taxonomy %}
+        <table class="stat-table">
+            <thead><tr><th>Cause</th><th>Count</th><th>Examples</th></tr></thead>
+            <tbody>
+            {% for failure in failure_taxonomy|sort(attribute='count', reverse=true) %}
+            <tr>
+                <td>{{ failure.cause }}</td>
+                <td>{{ failure.count }}</td>
+                <td>{{ failure.examples[:3]|join(', ') }}{% if failure.examples|length > 3 %}...{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="alert alert-success">No failures recorded.</div>
+        {% endif %}
+    </div>
+
+    <div id="hypotheses" class="section">
+        <h2>💡 Hypotheses & Statistical Tests</h2>
+        <p>Testable hypotheses derived from showcase results or pre-registered, with statistical test results.</p>
+
+        {% if hypotheses %}
+        {% for hyp in hypotheses %}
+        <div class="hypothesis-card">
+            <div class="hypothesis-id">{{ hyp.id }}{% if hyp.pre_registered %} 📋 Pre-registered{% endif %}</div>
+            <p><strong>Question:</strong> {{ hyp.question }}</p>
+            <p><strong>Prediction:</strong> {{ hyp.prediction }}</p>
+            <p><strong>Test:</strong> <code>{{ hyp.test }}</code></p>
+            <p><strong>Min Effect Size:</strong> {{ hyp.min_effect_size }} | <strong>Required Power:</strong> {{ hyp.required_power }}</p>
+            <div class="hypothesis-tags">
+                {% for tag in hyp.tags %}
+                <span class="tag">{{ tag }}</span>
+                {% endfor %}
+            </div>
+            {% if hyp.evidence %}
+            <p><small>Evidence: {{ hyp.evidence }}</small></p>
+            {% endif %}
+
+            {% set stat_result = statistical_results|selectattr('hypothesis_id', 'equalto', hyp.id)|list %}
+            {% if stat_result %}
+            <div class="alert alert-{{ 'success' if stat_result[0].significant else 'warning' }}">
+                <strong>Test Result:</strong> {{ stat_result[0].test_name }} |
+                p = {{ "%.4g"|format(stat_result[0].p_value) if stat_result[0].p_value is not none else 'N/A' }} |
+                {{ stat_result[0].effect_size_type or 'effect' }} = {{ "%.3f"|format(stat_result[0].effect_size) if stat_result[0].effect_size is not none else 'N/A' }} |
+                CI95 = [{{ "%.3f"|format(stat_result[0].confidence_interval[0]) }}, {{ "%.3f"|format(stat_result[0].confidence_interval[1]) }}] |
+                Power = {{ "%.2f"|format(stat_result[0].power_achieved) if stat_result[0].power_achieved is not none else 'N/A' }} |
+                n = {{ stat_result[0].n_samples }} |
+                {% if stat_result[0].significant %}✅ Significant{% else %}❌ Not significant{% endif %}
+                {% if stat_result[0].notes %}<br><small>{{ stat_result[0].notes }}</small>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="alert alert-info">No hypotheses defined.</div>
+        {% endif %}
+    </div>
+
+    <div id="ablation-analysis" class="section">
+        <h2>🔬 Ablation Analysis</h2>
+        <p>Per-axis ablation tables showing metric mean/std per value of varying axis.</p>
+        {% if ablation_results %}
+        {% for ablation in ablation_results %}
+        <h3>{{ ablation.axis }} Ablation (Metric: {{ ablation.metric }})</h3>
+        {% if ablation.fixed_axes %}
+        <p><small>Fixed: {{ ablation.fixed_axes|dictsort|map('join', '=')|join(', ') }}</small></p>
+        {% endif %}
+        <table class="ablation-table">
+            <thead>
+                <tr>
+                    <th>{{ ablation.axis }}</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Count</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in ablation.values %}
+            <tr>
+                <td>{{ row.axis_value }}</td>
+                <td>{{ "%.4g"|format(row.mean) }}</td>
+                <td>{{ "%.4g"|format(row.std) }}</td>
+                <td>{{ row.count }}</td>
+                <td>{{ "%.4g"|format(row.min) }}</td>
+                <td>{{ "%.4g"|format(row.max) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endfor %}
+        {% else %}
+        <div class="alert alert-info">No ablation analysis available.</div>
+        {% endif %}
+    </div>
+
+    <div id="key-findings" class="section">
+        <h2>🔑 Key Findings</h2>
+        {% if key_findings %}
+        {% for finding in key_findings %}
+        <div class="key-finding">{{ finding }}</div>
+        {% endfor %}
+        {% else %}
+        <div class="alert alert-info">No key findings summarized.</div>
+        {% endif %}
+    </div>
+
+    <div id="limitations" class="section">
+        <h2>⚠️ Limitations</h2>
+        {% if limitations %}
+        {% for lim in limitations %}
+        <div class="limitation">{{ lim }}</div>
+        {% endfor %}
+        {% else %}
+        <div class="alert alert-info">No limitations documented.</div>
+        {% endif %}
+    </div>
+
+    <div id="reproducibility" class="section">
+        <h2>🔁 Reproducibility</h2>
+        {% if reproducibility %}
+        <div class="repro-block">{{ reproducibility.repro_command }}</div>
+        {% if reproducibility.environment_hash %}
+        <p><strong>Environment Hash:</strong> <code>{{ reproducibility.environment_hash }}</code></p>
+        {% endif %}
+        {% if reproducibility.export_json_path %}
+        <p><strong>Export JSON:</strong> <a href="{{ reproducibility.export_json_path }}">{{ reproducibility.export_json_path }}</a></p>
+        {% endif %}
+        {% if reproducibility.export_parquet_path %}
+        <p><strong>Export Parquet:</strong> <a href="{{ reproducibility.export_parquet_path }}">{{ reproducibility.export_parquet_path }}</a></p>
+        {% endif %}
+        {% if reproducibility.checkpoint_paths %}
+        <p><strong>Checkpoints:</strong></p>
+        <ul>
+        {% for cp in reproducibility.checkpoint_paths %}
+        <li><code>{{ cp }}</code></li>
+        {% endfor %}
+        </ul>
+        {% endif %}
+        {% else %}
+        <div class="alert alert-warning">Reproducibility information not available.</div>
+        {% endif %}
+    </div>
+
+    <footer style="margin-top: 40px; padding: 20px; text-align: center; color: #6b7280; font-size: 0.875rem;">
+        Generated by Computronium Experiment Platform | {% if metadata.generated_at is string %}{{ metadata.generated_at }}{% else %}{{ metadata.generated_at.isoformat() }}{% endif %}
+        {% if metadata.git_commit %} | Commit: {{ metadata.git_commit[:8] }}{% endif %}
+    </footer>
+</body>
+</html>

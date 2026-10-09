@@ -486,20 +486,54 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 - Full TUI interactive mode (`--interactive`)
 - Web dashboard mode (`--serve`)
 
-### 🔄 Next Phases (Not Started)
+### ✅ Phase A Complete: Report Architecture & Templates
+
+**Implemented Features:**
+1. **Jinja2 template system**: Base template with structured sections (Abstract, Hypotheses, Methods, Results, Discussion, Limitations, Reproducibility)
+2. **Pydantic context models**: `ReportContext`, `ReportMetadata`, `AxisCoverage`, `ParetoPoint`, `StabilityMetrics`, `FailureTaxonomy`, `Hypothesis`, `StatisticalResult`, `AblationResult`, `CampaignConfig`, `ReproducibilityInfo`
+3. **Domain-specific context inheritance**: Vision, RL, Tabular, Graph, Language report contexts
+4. **Multi-format output**: HTML (interactive), LaTeX, PDF (via pandoc)
+5. **Auto-populated metadata**: Campaign config, environment, git commit, hardware, time budget
+6. **Report generator**: `JinjaReportGenerator` with `generate_report_from_store()` convenience function
+
+### ✅ Phase B Complete: Experiment Design Framework
+
+**Implemented Features:**
+1. **Hypothesis registry**: `HypothesisSpec`, `HypothesisResult`, `HypothesisRegistry` with JSON persistence
+2. **Statistical test specifications**: 14 test types (t-tests, ANOVA, non-parametric, Bayesian, correlation, regression)
+3. **Effect size measures**: Cohen's d, Cliff's Δ, η², ω², Bayes factor, odds ratio
+4. **Multiple comparison correction**: Bonferroni, Holm, Benjamini-Hochberg, Benjamini-Yekutieli, Šidák
+5. **Power analysis integration**: Pre-campaign sample size calculation, adaptive early stopping
+6. **Pre-registration workflow**: Draft → Pre-registered → Tested → Confirmed/Rejected/Inconclusive
+7. **Campaign DSL**: `CampaignDSL` with full Pydantic validation
+8. **Factor design support**: Full factorial, fractional factorial, response surface, randomized block
+9. **Design validation**: Factorial size checks, power analysis validation, resource feasibility, invalid combo detection
+10. **Template campaigns**: 4 flagship campaign factories (credit efficiency, dynamics stability, substrate noise, plasticity forgetting)
+11. **CLI integration**: `comp hypothesis` command with subcommands for all operations
+
+### ✅ Phase C Milestone: First Flagship Campaign Executed
+
+**Credit Efficiency Campaign (`credit_local_vs_global`):**
+- Successfully ran with `comp hypothesis run-campaign --template credit_efficiency`
+- Tested 4 credit assignments × 3 substrates × 2 dynamics = 24 valid combinations
+- Filtered invalid combinations (gradient + instantaneous + recurrent geometry)
+- Generated publication-ready HTML report with Pareto gallery, ablation tables, stability metrics
+- Demonstrated end-to-end: hypothesis → campaign DSL → execution → report generation
+
+### 🔄 Next Phases (In Progress / Not Started)
 
 | Phase | Status | Key Deliverables |
 |-------|--------|------------------|
-| A: Report Architecture | Not started | Jinja2 templates, Pydantic context, multi-format output |
-| B: Experiment Design | Not started | Hypothesis registry, Campaign DSL, Power analysis |
-| C: Capability Campaigns | Not started | 6 campaign families (credit, dynamics, substrate, plasticity, geometry, update) |
+| A: Report Architecture | ✅ Complete | Jinja2 templates, Pydantic context, multi-format output |
+| B: Experiment Design | ✅ Complete | Hypothesis registry, Campaign DSL, Power analysis |
+| C: Capability Campaigns | 🔄 In Progress | 6 campaign families (1/6 executed) |
 | D: Advanced Analyses | Not started | Stability suite, Attribution, Pareto, Reproducibility |
 | E: Scaling | Not started | Multi-GPU, Campaign queue, Artifact mgmt, CI/CD |
 | F: Validation | Not started | Quality gates, Living docs, Plugin API |
 
 ### 🎯 Immediate Next Steps
 
-1. **Phase A**: Implement Jinja2-based report templates with Pydantic context models
-2. **Phase B**: Create `Hypothesis` class + registry, Campaign DSL with Pydantic validation
-3. **Phase C**: Run first flagship campaign (`credit_local_vs_global`) with 10+ seeds
-4. **Integration**: Wire showcase hypotheses → campaign DSL → focused follow-up campaigns
+1. **Phase C**: Run remaining 5 flagship campaigns (dynamics stability, substrate noise, plasticity forgetting, geometry topology, update rules)
+2. **Phase D**: Implement advanced analyses (Lyapunov spectra, basin stability, attribution, Pareto frontiers)
+3. **Integration**: Wire showcase hypotheses → campaign DSL → focused follow-up campaigns
+4. **Phase E**: Multi-GPU support, campaign queue management
