@@ -55,6 +55,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "diff": (_SURFACE, "main", ("diff",)),
     "campaign": (_SURFACE, "main", ("campaign",)),
     "schema": (_SURFACE, "main", ("schema",)),
+    "power-analysis": (_SURFACE, "main", ("power-analysis",)),
 }
 
 _SUMMARIES: dict[str, str] = {
@@ -77,6 +78,7 @@ _SUMMARIES: dict[str, str] = {
     "diff": "Statistical run comparison with effect sizes",
     "campaign": "Run declarative multi-run YAML campaigns",
     "schema": "Dump JSON schemas for RunSpec/Coordinate/Objectives",
+    "power-analysis": "Compute statistical power for experiment design (machine-readable)",
 }
 
 

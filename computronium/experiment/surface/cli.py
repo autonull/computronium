@@ -14,7 +14,7 @@ import asyncio
 import json
 import math
 import statistics
-import subprocess
+import subprocess  # ruff: ignore[suspicious-subprocess-import] -- used for controlled CLI subprocess calls (repro, docker)
 import sys
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -227,7 +227,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
 }
 
 
-def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-statements]
+def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-statements, too-many-locals]
     parser = argparse.ArgumentParser(
         prog="comp-surface",
         description="Computronium Surface CLI — experiment orchestration and reporting",
@@ -655,6 +655,16 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         help="Comma-separated maximize flags (true/false per objective, auto-detected if omitted)",
     )
     p_pareto.add_argument(
+        "--weights",
+        default=None,
+        help="Comma-separated weights for weighted scalarization (enables single-objective ranking)",
+    )
+    p_pareto.add_argument(
+        "--scalarize",
+        action="store_true",
+        help="Compute weighted scalarization scores and rank all records (requires --weights)",
+    )
+    p_pareto.add_argument(
         "--format", choices=["json", "csv"], default="csv", help="Output format"
     )
     p_pareto.add_argument("--output", required=True, help="Output file path")
@@ -716,6 +726,43 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_repro.add_argument(
         "--docker", action="store_true", help="Run reproduction in Docker container"
     )
+
+    # Power analysis command - experiment design helper
+    p_power = sub.add_parser(
+        "power-analysis",
+        help="Compute statistical power for experiment design (machine-readable)",
+    )
+    p_power.add_argument(
+        "--effect-size",
+        type=float,
+        required=True,
+        help="Expected effect size (Cohen's d)",
+    )
+    p_power.add_argument(
+        "--n-per-group",
+        type=int,
+        default=None,
+        help="Sample size per group (required when --solve-for power)",
+    )
+    p_power.add_argument(
+        "--alpha", type=float, default=0.05, help="Significance level (default 0.05)"
+    )
+    p_power.add_argument(
+        "--target-power",
+        type=float,
+        default=0.8,
+        help="Target power for sample size calculation",
+    )
+    p_power.add_argument(
+        "--solve-for",
+        choices=["power", "n"],
+        default="power",
+        help="What to solve for: 'power' (given n) or 'n' (given target power)",
+    )
+    p_power.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_power.add_argument("--output", default=None, help="Output file path")
 
     # Schema command - dump JSON schemas for RunSpec, Coordinate, Schedule, Objectives
     p_schema = sub.add_parser(
@@ -1134,7 +1181,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return execute_spec(spec, store_path=args.store, run_id=args.run_id)
 
 
-def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
+def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-statements]
     """Generate report from store."""
     store = _open_store(args.store)
     if store is None:
@@ -1208,8 +1255,8 @@ def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struct
             try:
                 generate_pdf_report(store, run_id, output_path, keep_tex=args.keep_tex)
                 logger.info(f"PDF report written to {output_path}")
-            except RuntimeError as e:
-                logger.error(f"PDF generation failed: {e}")
+            except RuntimeError:
+                logger.exception("PDF generation failed")
                 return 1
             return 0
 
@@ -1224,21 +1271,25 @@ def _generate_dockerfile(
     with store:
         # Get run info to capture environment
         generator = ReportGenerator(store)
-        run_info = generator.run_summary(run_id) if run_id else None
+        _ = generator.run_summary(run_id) if run_id else None
 
         # Get git commit
-        import subprocess
+        import contextlib
 
         git_commit = "unknown"
-        try:
-            git_commit = subprocess.run(
-                ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-            ).stdout.strip()
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            import shutil
+
+            git_path = shutil.which("git")
+            if git_path:
+                git_commit = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+                    [git_path, "rev-parse", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout.strip()
 
         # Get Python version
-        import sys
 
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
@@ -1247,12 +1298,6 @@ def _generate_dockerfile(
 
         torch_version = torch.__version__
         cuda_version = torch.version.cuda or "cpu"
-
-        # Get uv lock file content for dependencies
-        uv_lock_path = Path("uv.lock")
-        uv_lock_content = ""
-        if uv_lock_path.exists():
-            uv_lock_content = uv_lock_path.read_text()
 
         # Generate Dockerfile
         dockerfile = f"""# Computronium Experiment Reproduction Dockerfile
@@ -2359,6 +2404,7 @@ def _cmd_stats(args: argparse.Namespace) -> int:
 
         # Compute statistics per group
         results = []
+        group_keys = list(groups.keys())
         for key, group_records in groups.items():
             row = {}
             if group_by:
@@ -2396,6 +2442,61 @@ def _cmd_stats(args: argparse.Namespace) -> int:
                     row[f"{metric}_ci95_high"] = statistics.mean(vals) + t_val * se
 
             results.append(row)
+
+        # Compute effect sizes between groups when group_by is specified
+        if group_by and len(group_keys) >= 2:
+            from computronium.validation.statistics import cliffs_delta, cohens_d
+
+            # Compare first group (reference) against all others
+            reference_key = group_keys[0]
+            reference_records = groups[reference_key]
+            for metric in metrics:
+                ref_vals = [
+                    r.payload.get(metric)
+                    for r in reference_records
+                    if r.payload.get(metric) is not None
+                ]
+                if not ref_vals:
+                    continue
+                ref_vals = [float(v) for v in ref_vals]
+
+                for other_key in group_keys[1:]:
+                    other_records = groups[other_key]
+                    other_vals = [
+                        r.payload.get(metric)
+                        for r in other_records
+                        if r.payload.get(metric) is not None
+                    ]
+                    if not other_vals:
+                        continue
+                    other_vals = [float(v) for v in other_vals]
+
+                    # Compute effect sizes
+                    try:
+                        d = cohens_d(ref_vals, other_vals)
+                        row_key = f"{metric}_cohens_d_vs_{'_'.join(str(v) for v in other_key)}"
+                        for r in results:
+                            if all(
+                                r.get(axis) == val
+                                for axis, val in zip(group_by, other_key)
+                            ):
+                                r[row_key] = d
+                                break
+                    except ValueError:
+                        pass
+
+                    try:
+                        delta = cliffs_delta(ref_vals, other_vals)
+                        row_key = f"{metric}_cliffs_delta_vs_{'_'.join(str(v) for v in other_key)}"
+                        for r in results:
+                            if all(
+                                r.get(axis) == val
+                                for axis, val in zip(group_by, other_key)
+                            ):
+                                r[row_key] = delta
+                                break
+                    except ValueError:
+                        pass
 
         # Output
         if args.format == "json":
@@ -2435,7 +2536,7 @@ def _cmd_stats(args: argparse.Namespace) -> int:
         return 0
 
 
-def _cmd_pareto(args: argparse.Namespace) -> int:
+def _cmd_pareto(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-locals, too-many-nested-blocks, complex-structure, too-many-branches, too-many-statements]
     """Export Pareto frontier points for plotting."""
     store = _open_store(args.store)
     if store is None:
@@ -2461,6 +2562,13 @@ def _cmd_pareto(args: argparse.Namespace) -> int:
                 logger.error("Maximize flags must match objectives count")
                 return 1
 
+        weights = None
+        if args.weights:
+            weights = tuple(float(w.strip()) for w in args.weights.split(","))
+            if len(weights) != len(objectives):
+                logger.error("Weights count must match objectives count")
+                return 1
+
         # Use all records for Pareto frontier (not just claim-eligible)
         records = list(store.query_records(run_id=run_id))
         from computronium.experiment.surface.report import _directions
@@ -2481,6 +2589,81 @@ def _cmd_pareto(args: argparse.Namespace) -> int:
                 **p["coordinate"],
             }
             rows.append(row)
+
+        # Add weighted scalarization if requested
+        if args.scalarize:
+            if weights is None:
+                logger.error("--scalarize requires --weights")
+                return 1
+            import math
+
+            # Normalize objectives and compute weighted scores for ALL records
+            all_records = list(store.query_records(run_id=run_id))
+            if not all_records:
+                logger.warning("No records to scalarize")
+            else:
+                # Extract objective values
+                obj_values = {obj: [] for obj in objectives}
+                for r in all_records:
+                    for obj in objectives:
+                        val = r.payload.get(obj)
+                        if val is not None:
+                            obj_values[obj].append(float(val))
+                        else:
+                            obj_values[obj].append(float("nan"))
+
+                # Compute min/max for normalization
+                obj_min = {}
+                obj_max = {}
+                for obj in objectives:
+                    vals = [v for v in obj_values[obj] if not math.isnan(v)]
+                    if vals:
+                        obj_min[obj] = min(vals)
+                        obj_max[obj] = max(vals)
+                    else:
+                        obj_min[obj] = 0.0
+                        obj_max[obj] = 1.0
+
+                # Compute scalarized scores
+                scores = []
+                for i, r in enumerate(all_records):
+                    score = 0.0
+                    for obj, weight in zip(objectives, weights):
+                        val = r.payload.get(obj)
+                        if val is None or math.isnan(float(val)):
+                            score = float("nan")
+                            break
+                        v = float(val)
+                        # Normalize to [0, 1] based on direction
+                        if maximize[objectives.index(obj)]:
+                            # Maximize: higher is better
+                            if obj_max[obj] > obj_min[obj]:
+                                norm = (v - obj_min[obj]) / (
+                                    obj_max[obj] - obj_min[obj]
+                                )
+                            else:
+                                norm = 0.5
+                        # Minimize: lower is better
+                        elif obj_max[obj] > obj_min[obj]:
+                            norm = (obj_max[obj] - v) / (obj_max[obj] - obj_min[obj])
+                        else:
+                            norm = 0.5
+                        score += weight * norm
+                    scores.append(score)
+
+                # Add scores to pareto rows (by matching record_id)
+                score_by_id = {r.record_id: s for r, s in zip(all_records, scores)}
+                for row in rows:
+                    row["scalarized_score"] = score_by_id.get(
+                        row["record_id"], float("nan")
+                    )
+
+                # Sort pareto points by scalarized score (descending = better)
+                rows.sort(
+                    key=lambda x: x.get("scalarized_score", float("-inf")), reverse=True
+                )
+                for i, row in enumerate(rows):
+                    row["scalarized_rank"] = i + 1
 
         if args.format == "json":
             output = json.dumps(rows, indent=2, default=str)
@@ -3004,6 +3187,75 @@ def _cmd_repro(args: argparse.Namespace) -> int:
                 return 0 if output_data["passed"] else 1
 
 
+def _cmd_power_analysis(args: argparse.Namespace) -> int:
+    """Compute statistical power for experiment design."""
+    from computronium.validation.statistics import power_for_two_sample
+
+    if args.solve_for == "power":
+        if args.n_per_group is None:
+            logger.error("--n-per-group is required when --solve-for power")
+            return 1
+        power = power_for_two_sample(args.effect_size, args.n_per_group, args.alpha)
+        result = {
+            "effect_size": args.effect_size,
+            "n_per_group": args.n_per_group,
+            "alpha": args.alpha,
+            "power": power,
+            "solved_for": "power",
+        }
+        if args.format == "text":
+            output = (
+                f"Power Analysis\n"
+                f"  Effect size (Cohen's d): {args.effect_size}\n"
+                f"  Sample size per group: {args.n_per_group}\n"
+                f"  Alpha: {args.alpha}\n"
+                f"  Power: {power:.4f}\n"
+            )
+        else:
+            output = json.dumps(result, indent=2)
+    else:  # solve for n
+        # Binary search for required n
+        target = args.target_power
+        lo, hi = 2, 10000
+        best_n = hi
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            p = power_for_two_sample(args.effect_size, mid, args.alpha)
+            if p >= target:
+                best_n = mid
+                hi = mid - 1
+            else:
+                lo = mid + 1
+        result = {
+            "effect_size": args.effect_size,
+            "alpha": args.alpha,
+            "target_power": args.target_power,
+            "required_n_per_group": best_n,
+            "achieved_power": power_for_two_sample(
+                args.effect_size, best_n, args.alpha
+            ),
+            "solved_for": "n",
+        }
+        if args.format == "text":
+            output = (
+                f"Power Analysis (solve for n)\n"
+                f"  Effect size (Cohen's d): {args.effect_size}\n"
+                f"  Alpha: {args.alpha}\n"
+                f"  Target power: {args.target_power}\n"
+                f"  Required n per group: {best_n}\n"
+                f"  Achieved power: {result['achieved_power']:.4f}\n"
+            )
+        else:
+            output = json.dumps(result, indent=2)
+
+    if args.output:
+        Path(args.output).write_text(output, encoding="utf-8")
+        logger.info(f"Power analysis written to {args.output}")
+    else:
+        print(output)
+    return 0
+
+
 def _cmd_schema(args: argparse.Namespace) -> int:
     """Dump JSON schemas for experiment models."""
     import json
@@ -3176,6 +3428,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "diff": _cmd_diff,
         "repro": _cmd_repro,
         "schema": _cmd_schema,
+        "power-analysis": _cmd_power_analysis,
     }
     try:
         handler = command_handlers.get(args.command)
