@@ -46,13 +46,13 @@ def seed_everything(
             unavailable — a silent CPU fallback would silently defeat the
             bitwise-identical guarantee the caller is relying on.
     """
+    import os
+
     want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")  # ruff: ignore[literal-membership]
     if want_cuda and not torch.cuda.is_available():
         raise RuntimeError(f"seed_everything device={device!r} but CUDA is unavailable")
 
     if deterministic:
-        import os
-
         os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
         torch.use_deterministic_algorithms(True)
 

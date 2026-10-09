@@ -42,6 +42,7 @@ _TOTAL = re.compile(r"Found (\d+) errors?")
 
 def _measured() -> tuple[int, str]:
     import shutil
+
     # Use uv to run ruff to ensure we use the correct environment
     uv_path = shutil.which("uv")
     if uv_path:

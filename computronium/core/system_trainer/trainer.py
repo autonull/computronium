@@ -444,7 +444,7 @@ class SystemTrainer:
         Returns:
             A new SystemTrainer instance restored from the checkpoint.
         """
-        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         config = checkpoint["config"]
         trainer = cls(
             system=system, config=config, train_data=train_data, val_data=val_data
