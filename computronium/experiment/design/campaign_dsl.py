@@ -12,7 +12,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FactorType(str, Enum):
@@ -78,7 +78,7 @@ class FactorSpec(BaseModel):
     description: str | None = None
 
     @model_validator(mode="after")
-    def validate_levels(self) -> "FactorSpec":
+    def validate_levels(self) -> FactorSpec:
         if self.levels is not None and len(self.values) > 0:
             if len(self.values) == 2 and isinstance(self.values[0], int | float):
                 pass
@@ -237,8 +237,9 @@ class DesignSpec(BaseModel):
     def required_sample_size(self) -> int:
         """Get required sample size from power analysis."""
         if self.power_analysis.enabled:
-            from scipy import stats
             import math
+
+            from scipy import stats
 
             z_alpha = stats.norm.ppf(1 - self.power_analysis.alpha / 2)
             z_power = stats.norm.ppf(self.power_analysis.required_power)
@@ -334,14 +335,19 @@ class CampaignDSL(BaseModel):
                 if valid:
                     valid_geometries.append(geom)
 
+            # Build axis selections for overrides (expected by _apply_overrides)
+            axis_selections = [
+                {"axis": "substrate", "primitives": get_factor_values("substrate")},
+                {"axis": "geometry", "primitives": valid_geometries},
+                {"axis": "dynamics", "primitives": get_factor_values("dynamics")},
+                {"axis": "plasticity", "primitives": get_factor_values("plasticity")},
+                {"axis": "credit", "primitives": get_factor_values("credit")},
+                {"axis": "update", "primitives": get_factor_values("update")},
+            ]
+
             # Build overrides for this block
             overrides = {
-                "substrates": get_factor_values("substrate"),
-                "geometries": valid_geometries,
-                "dynamics": get_factor_values("dynamics"),
-                "credits": get_factor_values("credit"),
-                "updates": get_factor_values("update"),
-                "plasticities": get_factor_values("plasticity"),
+                "axes": axis_selections,
                 "tasks": [block.task],
                 "hpo": {"n_trials": self.hpo.n_trials, "n_seeds": self.hpo.n_seeds},
                 "epochs": block.epochs,
@@ -376,7 +382,6 @@ class CampaignDSL(BaseModel):
     def to_adaptive_budget_plan(self):
         """Convert to adaptive budget planner format."""
         from computronium.experiment.execution.adaptive_budget import (
-            BudgetPlanner,
             BudgetStrategy,
             DeviceClass,
             plan_from_args,
@@ -408,7 +413,7 @@ class CampaignDSL(BaseModel):
         )
 
     @classmethod
-    def from_yaml(cls, path: Path | str) -> "CampaignDSL":
+    def from_yaml(cls, path: Path | str) -> CampaignDSL:
         """Load campaign from YAML file."""
         import yaml
 
@@ -463,7 +468,7 @@ def create_credit_efficiency_campaign(
             factors={
                 "credit": FactorSpec(
                     name="credit",
-                    values=["gradient", "equilibrium_prop", "feedback_alignment", "pepita"],
+                    values=["gradient", "thermodynamic_contrast", "random_projections", "pepita"],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "substrate": FactorSpec(
@@ -534,12 +539,12 @@ def create_dynamics_stability_campaign(
             factors={
                 "dynamics": FactorSpec(
                     name="dynamics",
-                    values=["energy_minimization", "predictive_settling", "instantaneous", "equilibrium_prop"],
+                    values=["energy_minimization", "predictive_settling", "instantaneous", "pc_alm"],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "credit": FactorSpec(
                     name="credit",
-                    values=["gradient", "equilibrium_prop", "feedback_alignment"],
+                    values=["gradient", "thermodynamic_contrast", "random_projections"],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "substrate": FactorSpec(
@@ -605,7 +610,7 @@ def create_substrate_noise_campaign(
                 ),
                 "credit": FactorSpec(
                     name="credit",
-                    values=["gradient", "equilibrium_prop"],
+                    values=["gradient", "thermodynamic_contrast"],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
             },
@@ -656,7 +661,7 @@ def create_plasticity_forgetting_campaign(
             factors={
                 "plasticity": FactorSpec(
                     name="plasticity",
-                    values=["null", "ewc", "synaptic_intelligence", "conflict_adaptive", "routing", "fast_weights"],
+                    values=["null", "routing", "fast_weights", "conflict_adaptive", "substrate_coupled", "rule_state"],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "task_sequence": FactorSpec(
@@ -695,14 +700,128 @@ def create_plasticity_forgetting_campaign(
                 ObjectiveSpec(name="forward_transfer", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
             ],
         ),
+)
+ 
+ 
+def create_geometry_topology_campaign(
+    name: str = "geometry_topology_effects",
+    time_budget_hours: float = 3.0,
+    n_seeds: int = 10,
+    epochs: int = 50,
+) -> CampaignDSL:
+    """Create the geometry topology effects campaign (Priority 5 - C5)."""
+    return CampaignDSL(
+        meta=CampaignMeta(
+            name=name,
+            description="Depth vs width tradeoff, recurrent vs feedforward, attention mechanisms",
+            hypotheses=[],
+            tags=["geometry", "topology", "flagship"],
+        ),
+        design=DesignSpec(
+            design_type=DesignType.FULL_FACTORIAL,
+            factors={
+                "geometry": FactorSpec(
+                    name="geometry",
+                    values=["feedforward", "recurrent", "causal_transformer", "tile"],
+                    type=FactorType.BETWEEN_SUBJECTS,
+                ),
+                "dynamics": FactorSpec(
+                    name="dynamics",
+                    values=["energy_minimization", "predictive_settling", "instantaneous"],
+                    type=FactorType.BETWEEN_SUBJECTS,
+                ),
+            },
+            fixed={
+                "substrate": FixedFactorSpec(name="substrate", value="digital"),
+                "credit": FixedFactorSpec(name="credit", value="gradient"),
+                "update": FixedFactorSpec(name="update", value="adam"),
+                "plasticity": FixedFactorSpec(name="plasticity", value="null"),
+            },
+            blocks=[BlockSpec(task="mnist", epochs=epochs, seeds=n_seeds)],
+            power_analysis=PowerAnalysisSpec(enabled=True, min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0),
+        ),
+        analysis=AnalysisSpec(
+            primary="Validation accuracy vs parameter count per geometry",
+            secondary=["settle_steps", "stability_margin", "walltime_total"],
+            stats=["cohens_d", "cliffs_delta", "bayes_factor"],
+            visualizations=["pareto", "ablation", "convergence"],
+        ),
+        resources=ResourceSpec(max_wall_hours=time_budget_hours),
+        hpo=HPOSpec(
+            n_trials=20,
+            n_startup_trials=5,
+            n_seeds=n_seeds,
+            objectives=[
+                ObjectiveSpec(name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
+                ObjectiveSpec(name="param_count", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
+            ],
+        ),
     )
-
-
+ 
+ 
+def create_update_rules_campaign(
+    name: str = "update_rules_comparison",
+    time_budget_hours: float = 3.0,
+    n_seeds: int = 10,
+    epochs: int = 50,
+) -> CampaignDSL:
+    """Create the update rules comparison campaign (Priority 6 - C6)."""
+    return CampaignDSL(
+        meta=CampaignMeta(
+            name=name,
+            description="Adaptive vs fixed optimizers, orthogonal constraints, credit×update interactions",
+            hypotheses=[],
+            tags=["update", "optimization", "flagship"],
+        ),
+        design=DesignSpec(
+            design_type=DesignType.FULL_FACTORIAL,
+            factors={
+                "update": FactorSpec(
+                    name="update",
+                    values=["euclidean", "adam", "muon", "lion", "riemannian_orthogonal"],
+                    type=FactorType.BETWEEN_SUBJECTS,
+                ),
+                "credit": FactorSpec(
+                    name="credit",
+                    values=["gradient", "thermodynamic_contrast", "random_projections", "pepita"],
+                    type=FactorType.BETWEEN_SUBJECTS,
+                ),
+            },
+            fixed={
+                "substrate": FixedFactorSpec(name="substrate", value="digital"),
+                "geometry": FixedFactorSpec(name="geometry", value="feedforward"),
+                "dynamics": FixedFactorSpec(name="dynamics", value="instantaneous"),
+                "plasticity": FixedFactorSpec(name="plasticity", value="null"),
+            },
+            blocks=[BlockSpec(task="mnist", epochs=epochs, seeds=n_seeds)],
+            power_analysis=PowerAnalysisSpec(enabled=True, min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0),
+        ),
+        analysis=AnalysisSpec(
+            primary="Validation accuracy heatmap: update × credit",
+            secondary=["walltime_total", "param_count", "stability_margin"],
+            stats=["anova_two_way", "cohens_d", "cliffs_delta"],
+            visualizations=["heatmap", "pareto", "ablation"],
+        ),
+        resources=ResourceSpec(max_wall_hours=time_budget_hours),
+        hpo=HPOSpec(
+            n_trials=20,
+            n_startup_trials=5,
+            n_seeds=n_seeds,
+            objectives=[
+                ObjectiveSpec(name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
+                ObjectiveSpec(name="walltime_total", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
+            ],
+        ),
+    )
+ 
+ 
 CAMPAIGN_FACTORIES = {
     "credit_efficiency": create_credit_efficiency_campaign,
     "dynamics_stability": create_dynamics_stability_campaign,
     "substrate_noise": create_substrate_noise_campaign,
     "plasticity_forgetting": create_plasticity_forgetting_campaign,
+    "geometry_topology": create_geometry_topology_campaign,
+    "update_rules": create_update_rules_campaign,
 }
 
 
@@ -774,32 +893,32 @@ def validate_campaign_design(campaign: CampaignDSL) -> DesignValidationResult:
 
 
 __all__ = [
+    "CAMPAIGN_FACTORIES",
+    "AnalysisSpec",
+    "ArmsSpec",
+    "BlockSpec",
     "CampaignDSL",
     "CampaignMeta",
     "DesignSpec",
-    "FactorSpec",
-    "FixedFactorSpec",
-    "BlockSpec",
-    "PowerAnalysisSpec",
-    "AnalysisSpec",
-    "ResourceSpec",
-    "SearchSpaceSpec",
-    "ArmsSpec",
-    "HPOSpec",
-    "OutputSpec",
-    "ReproducibilitySpec",
-    "ObjectiveSpec",
-    "FactorType",
     "DesignType",
-    "SamplerType",
-    "ObjectiveDirection",
     "DesignValidationResult",
-    "validate_campaign_design",
-    "CAMPAIGN_FACTORIES",
-    "list_campaign_templates",
+    "FactorSpec",
+    "FactorType",
+    "FixedFactorSpec",
+    "HPOSpec",
+    "ObjectiveDirection",
+    "ObjectiveSpec",
+    "OutputSpec",
+    "PowerAnalysisSpec",
+    "ReproducibilitySpec",
+    "ResourceSpec",
+    "SamplerType",
+    "SearchSpaceSpec",
     "create_campaign",
     "create_credit_efficiency_campaign",
     "create_dynamics_stability_campaign",
-    "create_substrate_noise_campaign",
     "create_plasticity_forgetting_campaign",
+    "create_substrate_noise_campaign",
+    "list_campaign_templates",
+    "validate_campaign_design",
 ]

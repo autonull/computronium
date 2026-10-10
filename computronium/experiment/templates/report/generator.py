@@ -9,10 +9,13 @@ import json
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from computronium.experiment.evidence.store import RecordStore
+from computronium.experiment.surface.report import (
+    ReportGenerator as SurfaceReportGenerator,
+)
 from computronium.experiment.templates.report.models import (
     AblationResult,
     AxisCoverage,
@@ -20,16 +23,13 @@ from computronium.experiment.templates.report.models import (
     FailureTaxonomy,
     Hypothesis,
     ParetoPoint,
-    ReproducibilityInfo,
     ReportContext,
     ReportMetadata,
+    ReproducibilityInfo,
     StabilityMetrics,
     StatisticalResult,
     TemplateConfig,
 )
-from computronium.experiment.evidence.store import RecordStore
-from computronium.experiment.surface.report import ReportGenerator as SurfaceReportGenerator
-from computronium.experiment.schema.axis import StructuralAxis
 
 
 class JinjaReportGenerator:
@@ -388,6 +388,6 @@ def generate_report_from_store(
 
 __all__ = [
     "JinjaReportGenerator",
-    "generate_report_from_store",
     "TemplateConfig",
+    "generate_report_from_store",
 ]

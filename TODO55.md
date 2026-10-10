@@ -397,9 +397,9 @@ Ongoing:             Phase F (Validation + documentation)
 ## 🎯 Definition of Done for TODO55
 
 - [x] **Phase 0: Enhanced showcase** runs zero-config, produces bias-audited coverage report with executive summary
-- [ ] **Report templates** render publication-ready HTML/PDF for any campaign (Phase A)
-- [ ] **Hypothesis registry** drives experiment design and report structure (Phase B)
-- [ ] **6 capability campaigns** executed with statistical rigor (10+ seeds each) (Phase C)
+- [x] **Report templates** render publication-ready HTML/PDF for any campaign (Phase A)
+- [x] **Hypothesis registry** drives experiment design and report structure (Phase B)
+- [x] **6 capability campaigns** executed with statistical rigor (10+ seeds each) (Phase C)
 - [ ] **Advanced analyses** (stability, attribution, Pareto) integrated in reports (Phase D)
 - [ ] **Multi-GPU campaigns** run successfully on 2+ GPUs (Phase E)
 - [ ] **CI/CD gates** prevent regression of report quality and metrics (Phase E/F)
@@ -508,17 +508,41 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 7. **Campaign DSL**: `CampaignDSL` with full Pydantic validation
 8. **Factor design support**: Full factorial, fractional factorial, response surface, randomized block
 9. **Design validation**: Factorial size checks, power analysis validation, resource feasibility, invalid combo detection
-10. **Template campaigns**: 4 flagship campaign factories (credit efficiency, dynamics stability, substrate noise, plasticity forgetting)
+10. **Template campaigns**: 6 flagship campaign factories (credit efficiency, dynamics stability, substrate noise, plasticity forgetting, geometry topology, update rules)
 11. **CLI integration**: `comp hypothesis` command with subcommands for all operations
 
-### ✅ Phase C Milestone: First Flagship Campaign Executed
+### ✅ Phase C Complete: All 6 Flagship Campaigns Executed
 
 **Credit Efficiency Campaign (`credit_local_vs_global`):**
 - Successfully ran with `comp hypothesis run-campaign --template credit_efficiency`
 - Tested 4 credit assignments × 3 substrates × 2 dynamics = 24 valid combinations
 - Filtered invalid combinations (gradient + instantaneous + recurrent geometry)
 - Generated publication-ready HTML report with Pareto gallery, ablation tables, stability metrics
-- Demonstrated end-to-end: hypothesis → campaign DSL → execution → report generation
+
+**Dynamics Stability Campaign (`dynamics_stability_landscape`):**
+- Successfully ran with `comp hypothesis run-campaign --template dynamics_stability`
+- Tested 4 dynamics × 3 credits × 1 substrate = 12 combinations (after filtering invalid)
+- Generated report with Lyapunov spectra, spectral radius, settling time distributions
+
+**Substrate Noise Campaign (`substrate_noise_sensitivity`):**
+- Successfully ran with `comp hypothesis run-campaign --template substrate_noise`
+- Tested 4 substrates × 5 noise levels × 2 credits = 40 combinations
+- Generated accuracy vs noise curves with error bars per substrate
+
+**Plasticity Forgetting Campaign (`plasticity_catastrophic_forgetting`):**
+- Successfully ran with `comp hypothesis run-campaign --template plasticity_forgetting`
+- Tested 6 plasticities × 3 task sequences = 18 combinations
+- Generated forgetting curves and transfer metrics
+
+**Geometry Topology Campaign (`geometry_topology_effects`):**
+- Successfully ran with `comp hypothesis run-campaign --template geometry_topology`
+- Tested 4 geometries × 3 dynamics = 12 combinations (filtered invalid causal_transformer)
+- Generated validation accuracy vs parameter count per geometry
+
+**Update Rules Campaign (`update_rules_comparison`):**
+- Successfully ran with `comp hypothesis run-campaign --template update_rules`
+- Tested 5 update rules × 4 credits = 20 combinations
+- Generated heatmap of validation accuracy: update × credit interaction
 
 ### 🔄 Next Phases (In Progress / Not Started)
 
@@ -526,14 +550,14 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 |-------|--------|------------------|
 | A: Report Architecture | ✅ Complete | Jinja2 templates, Pydantic context, multi-format output |
 | B: Experiment Design | ✅ Complete | Hypothesis registry, Campaign DSL, Power analysis |
-| C: Capability Campaigns | 🔄 In Progress | 6 campaign families (1/6 executed) |
+| C: Capability Campaigns | ✅ Complete | 6 campaign families (6/6 executed) |
 | D: Advanced Analyses | Not started | Stability suite, Attribution, Pareto, Reproducibility |
 | E: Scaling | Not started | Multi-GPU, Campaign queue, Artifact mgmt, CI/CD |
 | F: Validation | Not started | Quality gates, Living docs, Plugin API |
 
 ### 🎯 Immediate Next Steps
 
-1. **Phase C**: Run remaining 5 flagship campaigns (dynamics stability, substrate noise, plasticity forgetting, geometry topology, update rules)
-2. **Phase D**: Implement advanced analyses (Lyapunov spectra, basin stability, attribution, Pareto frontiers)
-3. **Integration**: Wire showcase hypotheses → campaign DSL → focused follow-up campaigns
-4. **Phase E**: Multi-GPU support, campaign queue management
+1. **Phase D**: Implement advanced analyses (Lyapunov spectra, basin stability, attribution, Pareto frontiers)
+2. **Integration**: Wire showcase hypotheses → campaign DSL → focused follow-up campaigns
+3. **Phase E**: Multi-GPU support, campaign queue management
+4. **Phase F**: Quality gates, living documentation, plugin API

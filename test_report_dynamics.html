@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>test_dynamics - Computronium Experiment Report</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 20px; background: #fafafa; color: #1a1a2e; }
+        h1 { color: #1a1a2e; border-bottom: 3px solid #2563eb; padding-bottom: 10px; }
+        h2 { color: #1e40af; margin-top: 40px; border-bottom: 1px solid #d1d5db; padding-bottom: 5px; }
+        h3 { color: #374151; }
+        h4 { color: #4b5563; }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .meta-item { padding: 10px; }
+        .meta-label { font-size: 0.875rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+        .meta-value { font-size: 1.125rem; font-weight: 600; color: #1a1a2e; }
+        .section { background: white; margin: 20px 0; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .executive-summary { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 4px solid #2563eb; }
+        .coverage-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .coverage-table th, .coverage-table td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+        .coverage-table th { background: #f3f4f6; font-weight: 600; }
+        .coverage-table tr:nth-child(even) { background: #f9fafb; }
+        .coverage-cell { text-align: center; }
+        .coverage-high { background: #dcfce7; }
+        .coverage-medium { background: #fef9c3; }
+        .coverage-low { background: #fee2e2; }
+        .pareto-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .pareto-table th, .pareto-table td { border: 1px solid #e5e7eb; padding: 8px 12px; }
+        .pareto-table th { background: #f3f4f6; }
+        .stability-metric { display: inline-block; padding: 8px 16px; margin: 5px; background: #f3f4f6; border-radius: 6px; font-family: monospace; }
+        .failure-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #e5e7eb; }
+        .failure-cause { font-weight: 500; }
+        .failure-count { color: #ef4444; font-family: monospace; }
+        .hypothesis-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin: 10px 0; background: white; }
+        .hypothesis-id { font-family: monospace; background: #eef2ff; padding: 2px 8px; border-radius: 4px; font-size: 0.875rem; }
+        .hypothesis-tags { margin-top: 8px; }
+        .tag { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; margin-right: 5px; }
+        .repro-block { background: #1a1a2e; color: #e5e7eb; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 0.875rem; overflow-x: auto; white-space: pre-wrap; }
+        .alert { padding: 12px; border-radius: 6px; margin: 10px 0; }
+        .alert-warning { background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; }
+        .alert-info { background: #dbeafe; border: 1px solid #93c5fd; color: #1e40af; }
+        .alert-success { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
+        .toc { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .toc ul { list-style: none; padding-left: 0; }
+        .toc li { margin: 8px 0; }
+        .toc a { color: #2563eb; text-decoration: none; }
+        .toc a:hover { text-decoration: underline; }
+        .stat-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .stat-table th, .stat-table td { border: 1px solid #e5e7eb; padding: 8px 12px; }
+        .stat-table th { background: #f3f4f6; }
+        .stat-row-significant { background: #dcfce7; }
+        .stat-row-not-significant { background: #fee2e2; }
+        .ablation-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-bottom: 20px; }
+        .ablation-table th, .ablation-table td { border: 1px solid #e5e7eb; padding: 8px 12px; }
+        .ablation-table th { background: #f3f4f6; }
+        .key-finding { padding: 10px; margin: 8px 0; background: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px; }
+        .limitation { padding: 10px; margin: 8px 0; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px; }
+        .figure-caption { font-style: italic; color: #6b7280; text-align: center; margin-top: 8px; font-size: 0.875rem; }
+        .collapsible { border: 1px solid #e5e7eb; border-radius: 8px; margin: 10px 0; }
+        .collapsible summary { padding: 15px; background: #f9fafb; cursor: pointer; font-weight: 600; }
+        .collapsible[open] summary { border-bottom: 1px solid #e5e7eb; }
+        .collapsible-content { padding: 20px; }
+        .progress-bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #2563eb; border-radius: 4px; transition: width 0.3s; }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>🌌 test_dynamics</h1>
+    <p><strong>Campaign:</strong> test_dynamics | <strong>Generated:</strong> 2026-10-09T21:09:46.080682</p>
+
+    <div class="toc">
+        <h2>📋 Table of Contents</h2>
+        <ul>
+            <li><a href="#executive-summary">Executive Summary</a></li>
+            <li><a href="#campaign-configuration">Campaign Configuration</a></li>
+            <li><a href="#coverage-matrix">Coverage Matrix</a></li>
+            <li><a href="#pareto-gallery">Pareto Gallery</a></li>
+            <li><a href="#stability-atlas">Stability Atlas</a></li>
+            <li><a href="#failure-taxonomy">Failure Taxonomy</a></li>
+            <li><a href="#hypotheses">Hypotheses & Statistical Tests</a></li>
+            <li><a href="#ablation-analysis">Ablation Analysis</a></li>
+            <li><a href="#key-findings">Key Findings</a></li>
+            <li><a href="#limitations">Limitations</a></li>
+            <li><a href="#reproducibility">Reproducibility</a></li>
+        </ul>
+    </div>
+
+    <div id="executive-summary" class="section executive-summary">
+        <h2>📊 Executive Summary</h2>
+        <p>In <strong>0.05 hours</strong>, we explored <strong>798</strong> valid combinations across <strong>6</strong> ontology axes.</p>
+        <ul>
+            <li>Coverage across 11 unique primitives</li>
+            <li>0 Pareto-optimal configurations identified</li>
+            <li>115 failures categorized into 1 types</li>
+            <li>1 testable hypotheses (0 pre-registered)</li>
+            <li>0 statistical tests completed</li>
+        </ul>
+    </div>
+
+    <div id="campaign-configuration" class="section">
+        <h2>⚙️ Campaign Configuration</h2>
+        <div class="meta-grid">
+            <div class="meta-item"><div class="meta-label">Campaign</div><div class="meta-value">test_dynamics</div></div>
+            <div class="meta-item"><div class="meta-label">Time Budget</div><div class="meta-value">0.05h</div></div>
+            <div class="meta-item"><div class="meta-label">Actual Duration</div><div class="meta-value">0.05h</div></div>
+            <div class="meta-item"><div class="meta-label">Device</div><div class="meta-value">auto</div></div>
+            <div class="meta-item"><div class="meta-label">Hardware</div><div class="meta-value">unknown</div></div>
+            <div class="meta-item"><div class="meta-label">Environment Hash</div><div class="meta-value">unknown</div></div>
+        </div>
+
+        <h3>Experimental Design</h3>
+        <div class="collapsible">
+            <summary>Factors & Fixed Axes (click to expand)</summary>
+            <div class="collapsible-content">
+                <h4>Factored Axes</h4>
+                <table class="stat-table">
+                    <thead><tr><th>Axis</th><th>Values</th><th>Count</th></tr></thead>
+                    <tbody>
+                    <tr><td>dynamics</td><td>energy_minimization, predictive_settling, instantaneous, pc_alm</td><td>4</td></tr>
+                    <tr><td>credit</td><td>gradient, thermodynamic_contrast, random_projections</td><td>3</td></tr>
+                    <tr><td>substrate</td><td>digital</td><td>1</td></tr>
+                    </tbody>
+                </table>
+                <h4>Fixed Axes</h4>
+                <table class="stat-table">
+                    <thead><tr><th>Axis</th><th>Value</th></tr></thead>
+                    <tbody>
+                    <tr><td>geometry</td><td>feedforward</td></tr>
+                    <tr><td>update</td><td>adam</td></tr>
+                    <tr><td>plasticity</td><td>null</td></tr>
+                    </tbody>
+                </table>
+                <h4>Blocks</h4>
+                <table class="stat-table">
+                    <thead><tr><th>Task</th><th>Epochs</th><th>Seeds</th><th>Other</th></tr></thead>
+                    <tbody>
+                    <tr>
+                        <td>mnist</td>
+                        <td>5</td>
+                        <td>3</td>
+                        <td>["task", "epochs", "seeds"]</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <h3>HPO Settings</h3>
+        <table class="stat-table">
+            <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+            <tbody>
+                <tr><td>Sampler</td><td>nsga2</td></tr>
+                <tr><td>Objectives</td><td>val_acc, stability_margin, settle_steps</td></tr>
+                <tr><td>Trials</td><td>40</td></tr>
+                <tr><td>Seeds per trial</td><td>3</td></tr>
+                <tr><td>Epochs</td><td>5</td></tr>
+                <tr><td>Max wall hours</td><td>0.05</td></tr>
+                <tr><td>Max epoch time (s)</td><td>120</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="coverage-matrix" class="section">
+        <h2>📈 Coverage Matrix</h2>
+        <p>Heatmap of (axis × primitive) with cell count. Green = high coverage, yellow = medium, red = low/none.</p>
+        <h3>substrate</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Primitive</th>
+                    <th>Count</th>
+                    <th>% of Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>digital</td>
+                <td class="coverage-cell coverage-high">133</td>
+                <td class="coverage-cell coverage-high">100.0%</td>
+            </tr>
+            </tbody>
+        </table>
+        <p><strong>Total cells:</strong> 133 | <strong>Unique primitives:</strong> 1</p>
+        <h3>geometry</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Primitive</th>
+                    <th>Count</th>
+                    <th>% of Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>feedforward</td>
+                <td class="coverage-cell coverage-high">133</td>
+                <td class="coverage-cell coverage-high">100.0%</td>
+            </tr>
+            </tbody>
+        </table>
+        <p><strong>Total cells:</strong> 133 | <strong>Unique primitives:</strong> 1</p>
+        <h3>dynamics</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Primitive</th>
+                    <th>Count</th>
+                    <th>% of Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>energy_minimization</td>
+                <td class="coverage-cell coverage-high">57</td>
+                <td class="coverage-cell coverage-high">42.9%</td>
+            </tr>
+            <tr>
+                <td>instantaneous</td>
+                <td class="coverage-cell coverage-high">38</td>
+                <td class="coverage-cell coverage-high">28.6%</td>
+            </tr>
+            <tr>
+                <td>pc_alm</td>
+                <td class="coverage-cell coverage-high">19</td>
+                <td class="coverage-cell coverage-high">14.3%</td>
+            </tr>
+            <tr>
+                <td>predictive_settling</td>
+                <td class="coverage-cell coverage-high">19</td>
+                <td class="coverage-cell coverage-high">14.3%</td>
+            </tr>
+            </tbody>
+        </table>
+        <p><strong>Total cells:</strong> 133 | <strong>Unique primitives:</strong> 4</p>
+        <h3>plasticity</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Primitive</th>
+                    <th>Count</th>
+                    <th>% of Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>null</td>
+                <td class="coverage-cell coverage-high">133</td>
+                <td class="coverage-cell coverage-high">100.0%</td>
+            </tr>
+            </tbody>
+        </table>
+        <p><strong>Total cells:</strong> 133 | <strong>Unique primitives:</strong> 1</p>
+        <h3>credit</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Primitive</th>
+                    <th>Count</th>
+                    <th>% of Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>gradient</td>
+                <td class="coverage-cell coverage-high">38</td>
+                <td class="coverage-cell coverage-high">28.6%</td>
+            </tr>
+            <tr>
+                <td>random_projections</td>
+                <td class="coverage-cell coverage-high">38</td>
+                <td class="coverage-cell coverage-high">28.6%</td>
+            </tr>
+            <tr>
+                <td>thermodynamic_contrast</td>
+                <td class="coverage-cell coverage-high">57</td>
+                <td class="coverage-cell coverage-high">42.9%</td>
+            </tr>
+            </tbody>
+        </table>
+        <p><strong>Total cells:</strong> 133 | <strong>Unique primitives:</strong> 3</p>
+        <h3>update</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Primitive</th>
+                    <th>Count</th>
+                    <th>% of Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>adam</td>
+                <td class="coverage-cell coverage-high">133</td>
+                <td class="coverage-cell coverage-high">100.0%</td>
+            </tr>
+            </tbody>
+        </table>
+        <p><strong>Total cells:</strong> 133 | <strong>Unique primitives:</strong> 1</p>
+    </div>
+
+    <div id="pareto-gallery" class="section">
+        <h2>🎯 Pareto Gallery</h2>
+        <p>Pareto-optimal configurations across objective pairs. Each point represents a unique (substrate, geometry, dynamics, plasticity, credit, update) combination.</p>
+        <div class="alert alert-info">No Pareto points available. Run with claim-eligible records to generate frontier.</div>
+    </div>
+
+    <div id="stability-atlas" class="section">
+        <h2>🔬 Stability Atlas</h2>
+        <p>Lyapunov, basin, and settling summaries per dynamics family.</p>
+        <h3>energy_minimization (n=57)</h3>
+        <div class="collapsible">
+            <summary>Stability Metrics</summary>
+            <div class="collapsible-content">
+                <div class="stability-metric">λ: 0.0010 ± 0.0052 [-0.0051, 0.0141]</div>
+                <div class="stability-metric">ρ(J): 1.0010 ± 0.0053</div>
+                <div class="stability-metric">σ_max: 0.9797 ± 0.0130</div>
+                <div class="stability-metric">Nonnormality: 0.9787 ± 0.0145</div>
+                <div class="stability-metric">Margin (1-ρ): -0.0010 ± 0.0053</div>
+                <div class="stability-metric">Settle Steps: 30.0 ± 0.0 | Converged: 0.0%</div>
+            </div>
+        </div>
+        <h3>predictive_settling (n=19)</h3>
+        <div class="collapsible">
+            <summary>Stability Metrics</summary>
+            <div class="collapsible-content">
+                <div class="stability-metric">λ: -0.0017 ± 0.0005 [-0.0021, -0.0001]</div>
+                <div class="stability-metric">ρ(J): 0.9983 ± 0.0005</div>
+                <div class="stability-metric">σ_max: 0.9922 ± 0.0032</div>
+                <div class="stability-metric">Nonnormality: 0.9939 ± 0.0028</div>
+                <div class="stability-metric">Margin (1-ρ): 0.0017 ± 0.0005</div>
+                <div class="stability-metric">Settle Steps: 30.0 ± 0.0 | Converged: 0.0%</div>
+            </div>
+        </div>
+        <h3>instantaneous (n=38)</h3>
+        <div class="collapsible">
+            <summary>Stability Metrics</summary>
+            <div class="collapsible-content">
+                <div class="stability-metric">λ: -0.0019 ± 0.0047 [-0.0066, 0.0119]</div>
+                <div class="stability-metric">ρ(J): 0.9981 ± 0.0047</div>
+                <div class="stability-metric">σ_max: 0.9817 ± 0.0134</div>
+                <div class="stability-metric">Nonnormality: 0.9836 ± 0.0135</div>
+                <div class="stability-metric">Margin (1-ρ): 0.0019 ± 0.0047</div>
+                <div class="stability-metric">Settle Steps: 1.0 ± 0.0 | Converged: 0.0%</div>
+            </div>
+        </div>
+        <h3>pc_alm (n=11)</h3>
+        <div class="collapsible">
+            <summary>Stability Metrics</summary>
+            <div class="collapsible-content">
+                <div class="stability-metric">λ: -0.0026 ± 0.0040 [-0.0070, 0.0033]</div>
+                <div class="stability-metric">ρ(J): 0.9974 ± 0.0040</div>
+                <div class="stability-metric">σ_max: 0.9909 ± 0.0148</div>
+                <div class="stability-metric">Nonnormality: 0.9935 ± 0.0128</div>
+                <div class="stability-metric">Margin (1-ρ): 0.0026 ± 0.0040</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="failure-taxonomy" class="section">
+        <h2>⚠️ Failure Taxonomy</h2>
+        <p>Failure modes categorized by cause with counts.</p>
+        <table class="stat-table">
+            <thead><tr><th>Cause</th><th>Count</th><th>Examples</th></tr></thead>
+            <tbody>
+            <tr>
+                <td>constraint_violation</td>
+                <td>115</td>
+                <td></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="hypotheses" class="section">
+        <h2>💡 Hypotheses & Statistical Tests</h2>
+        <p>Testable hypotheses derived from showcase results or pre-registered, with statistical test results.</p>
+
+        <div class="hypothesis-card">
+            <div class="hypothesis-id">H2_dynamics_stability</div>
+            <p><strong>Question:</strong> Do energy-minimization dynamics have larger basins but slower settling than predictive coding?</p>
+            <p><strong>Prediction:</strong> energy_minimization: larger basin_radius, higher settle_steps than predictive_settling</p>
+            <p><strong>Test:</strong> <code>mann_whitney_u grouped by dynamics comparing energy_minimization, predictive_settling</code></p>
+            <p><strong>Min Effect Size:</strong> 0.5 | <strong>Required Power:</strong> 0.8</p>
+            <div class="hypothesis-tags">
+                <span class="tag">dynamics</span>
+                <span class="tag">stability</span>
+                <span class="tag">settling</span>
+            </div>
+            <p><small>Evidence: Energy minimization converges to fixed points; predictive coding uses iterative inference</small></p>
+
+        </div>
+    </div>
+
+    <div id="ablation-analysis" class="section">
+        <h2>🔬 Ablation Analysis</h2>
+        <p>Per-axis ablation tables showing metric mean/std per value of varying axis.</p>
+        <h3>credit Ablation (Metric: val_acc)</h3>
+        <table class="ablation-table">
+            <thead>
+                <tr>
+                    <th>credit</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Count</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>gradient</td>
+                <td>0.6303</td>
+                <td>0.2336</td>
+                <td>38</td>
+                <td>0.1094</td>
+                <td>0.9688</td>
+            </tr>
+            <tr>
+                <td>random_projections</td>
+                <td>0.2504</td>
+                <td>0.1488</td>
+                <td>38</td>
+                <td>0.0625</td>
+                <td>0.5312</td>
+            </tr>
+            <tr>
+                <td>thermodynamic_contrast</td>
+                <td>0.5726</td>
+                <td>0.2633</td>
+                <td>57</td>
+                <td>0.03125</td>
+                <td>0.9375</td>
+            </tr>
+            </tbody>
+        </table>
+        <h3>credit Ablation (Metric: param_count)</h3>
+        <table class="ablation-table">
+            <thead>
+                <tr>
+                    <th>credit</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Count</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>gradient</td>
+                <td>1.189e+06</td>
+                <td>1.526e+06</td>
+                <td>38</td>
+                <td>1690</td>
+                <td>6.065e+06</td>
+            </tr>
+            <tr>
+                <td>random_projections</td>
+                <td>1.542e+06</td>
+                <td>2.36e+06</td>
+                <td>38</td>
+                <td>970</td>
+                <td>6.963e+06</td>
+            </tr>
+            <tr>
+                <td>thermodynamic_contrast</td>
+                <td>1.692e+06</td>
+                <td>2.171e+06</td>
+                <td>57</td>
+                <td>1895</td>
+                <td>6.931e+06</td>
+            </tr>
+            </tbody>
+        </table>
+        <h3>credit Ablation (Metric: spectral_radius)</h3>
+        <table class="ablation-table">
+            <thead>
+                <tr>
+                    <th>credit</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Count</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>gradient</td>
+                <td>1.001</td>
+                <td>0.006045</td>
+                <td>18</td>
+                <td>0.9944</td>
+                <td>1.012</td>
+            </tr>
+            <tr>
+                <td>random_projections</td>
+                <td>0.9989</td>
+                <td>0.004982</td>
+                <td>26</td>
+                <td>0.9934</td>
+                <td>1.014</td>
+            </tr>
+            <tr>
+                <td>thermodynamic_contrast</td>
+                <td>0.998</td>
+                <td>0.002534</td>
+                <td>32</td>
+                <td>0.993</td>
+                <td>1.003</td>
+            </tr>
+            </tbody>
+        </table>
+        <h3>dynamics Ablation (Metric: val_acc)</h3>
+        <table class="ablation-table">
+            <thead>
+                <tr>
+                    <th>dynamics</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Count</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>energy_minimization</td>
+                <td>0.5496</td>
+                <td>0.3165</td>
+                <td>57</td>
+                <td>0.0625</td>
+                <td>0.9375</td>
+            </tr>
+            <tr>
+                <td>instantaneous</td>
+                <td>0.4445</td>
+                <td>0.2481</td>
+                <td>38</td>
+                <td>0.09375</td>
+                <td>0.9688</td>
+            </tr>
+            <tr>
+                <td>pc_alm</td>
+                <td>0.5041</td>
+                <td>0.2348</td>
+                <td>19</td>
+                <td>0.07812</td>
+                <td>0.8438</td>
+            </tr>
+            <tr>
+                <td>predictive_settling</td>
+                <td>0.4375</td>
+                <td>0.2142</td>
+                <td>19</td>
+                <td>0.03125</td>
+                <td>0.8125</td>
+            </tr>
+            </tbody>
+        </table>
+        <h3>dynamics Ablation (Metric: param_count)</h3>
+        <table class="ablation-table">
+            <thead>
+                <tr>
+                    <th>dynamics</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Count</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>energy_minimization</td>
+                <td>1.476e+06</td>
+                <td>1.942e+06</td>
+                <td>57</td>
+                <td>970</td>
+                <td>6.931e+06</td>
+            </tr>
+            <tr>
+                <td>instantaneous</td>
+                <td>1.833e+06</td>
+                <td>2.391e+06</td>
+                <td>38</td>
+                <td>3070</td>
+                <td>6.963e+06</td>
+            </tr>
+            <tr>
+                <td>pc_alm</td>
+                <td>1.361e+06</td>
+                <td>1.999e+06</td>
+                <td>19</td>
+                <td>4810</td>
+                <td>6.65e+06</td>
+            </tr>
+            <tr>
+                <td>predictive_settling</td>
+                <td>1.084e+06</td>
+                <td>1.818e+06</td>
+                <td>19</td>
+                <td>2335</td>
+                <td>6.562e+06</td>
+            </tr>
+            </tbody>
+        </table>
+        <h3>dynamics Ablation (Metric: spectral_radius)</h3>
+        <table class="ablation-table">
+            <thead>
+                <tr>
+                    <th>dynamics</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Count</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>energy_minimization</td>
+                <td>1.001</td>
+                <td>0.005264</td>
+                <td>29</td>
+                <td>0.9949</td>
+                <td>1.014</td>
+            </tr>
+            <tr>
+                <td>instantaneous</td>
+                <td>0.9981</td>
+                <td>0.00471</td>
+                <td>22</td>
+                <td>0.9934</td>
+                <td>1.012</td>
+            </tr>
+            <tr>
+                <td>pc_alm</td>
+                <td>0.9974</td>
+                <td>0.003986</td>
+                <td>11</td>
+                <td>0.993</td>
+                <td>1.003</td>
+            </tr>
+            <tr>
+                <td>predictive_settling</td>
+                <td>0.9983</td>
+                <td>0.0004731</td>
+                <td>14</td>
+                <td>0.9979</td>
+                <td>0.9999</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="key-findings" class="section">
+        <h2>🔑 Key Findings</h2>
+        <div class="alert alert-info">No key findings summarized.</div>
+    </div>
+
+    <div id="limitations" class="section">
+        <h2>⚠️ Limitations</h2>
+        <div class="alert alert-info">No limitations documented.</div>
+    </div>
+
+    <div id="reproducibility" class="section">
+        <h2>🔁 Reproducibility</h2>
+        <div class="repro-block">uv run comp hypothesis-campaign --campaign test_dynamics.yaml</div>
+        <p><strong>Export JSON:</strong> <a href="experiment_export.json">experiment_export.json</a></p>
+    </div>
+
+    <footer style="margin-top: 40px; padding: 20px; text-align: center; color: #6b7280; font-size: 0.875rem;">
+        Generated by Computronium Experiment Platform | 2026-10-09T21:09:46.080682    </footer>
+</body>
+</html>

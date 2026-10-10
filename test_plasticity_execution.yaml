@@ -1,0 +1,205 @@
+meta:
+  name: test_plasticity
+  description: 'Continual learning: Split MNIST, Permuted MNIST with plasticity variants'
+  hypotheses:
+  - H4_plasticity_catastrophic_forgetting
+  tags:
+  - plasticity
+  - continual_learning
+  - forgetting
+  - flagship
+  created_at: '2026-10-09T21:14:57.668680'
+  version: '1.0'
+design:
+  design_type: full_factorial
+  factors:
+    plasticity:
+      name: plasticity
+      type: between_subjects
+      values:
+      - 'null'
+      - routing
+      - fast_weights
+      - conflict_adaptive
+      - substrate_coupled
+      - rule_state
+    task_sequence:
+      name: task_sequence
+      type: between_subjects
+      values:
+      - split_mnist
+      - permuted_mnist
+      - rotated_mnist
+  fixed:
+    substrate:
+      name: substrate
+      value: digital
+    geometry:
+      name: geometry
+      value: feedforward
+    dynamics:
+      name: dynamics
+      value: instantaneous
+    credit:
+      name: credit
+      value: gradient
+    update:
+      name: update
+      value: adam
+  blocks:
+  - task: split_mnist
+    epochs: 5
+    seeds: 3
+    fidelity: L0
+    extra: {}
+  - task: permuted_mnist
+    epochs: 5
+    seeds: 3
+    fidelity: L0
+    extra: {}
+  power_analysis:
+    enabled: true
+    min_effect_size: 0.5
+    required_power: 0.8
+    alpha: 0.05
+    test_type: paired_t_test
+    adaptive: false
+    interim_analyses: 0
+  generators: []
+analysis:
+  primary: Forgetting curves, forward/backward transfer metrics
+  secondary:
+  - final_accuracy
+  - learning_speed
+  - parameter_efficiency
+  stats:
+  - anova_one_way
+  - cohens_d
+  - cliffs_delta
+  - bayes_factor
+  visualizations:
+  - forgetting_curves
+  - transfer_matrix
+  - pareto
+  multiple_comparison_correction: benjamini_hochberg
+  exploratory: false
+resources:
+  max_wall_hours: 0.05
+search_space:
+  base: {}
+  constraints: []
+arms:
+  adaptive: {}
+hpo:
+  sampler: nsga2
+  objectives:
+  - name: avg_final_acc
+    direction: maximize
+    weight: 1.0
+  - name: forgetting_rate
+    direction: minimize
+    weight: 1.0
+  - name: forward_transfer
+    direction: maximize
+    weight: 1.0
+  n_trials: 15
+  n_startup_trials: 4
+  n_seeds: 3
+  seed: 42
+output:
+  db: experiment.db
+  artifacts_dir: artifacts
+  log_level: INFO
+  emit_every: 5
+  export_formats:
+  - json
+  - parquet
+reproducibility:
+  seed: 42
+  capture_env: true
+  artifact_hash: true
+runs:
+- name: main
+  profile: production-map
+  overrides:
+    axes:
+    - axis: substrate
+      primitives:
+      - digital
+    - axis: geometry
+      primitives:
+      - feedforward
+    - axis: dynamics
+      primitives:
+      - instantaneous
+    - axis: plasticity
+      primitives: &id001
+      - 'null'
+      - routing
+      - fast_weights
+      - conflict_adaptive
+      - substrate_coupled
+      - rule_state
+    - axis: credit
+      primitives:
+      - gradient
+    - axis: update
+      primitives:
+      - adam
+    tasks:
+    - split_mnist
+    hpo:
+      n_trials: 15
+      n_seeds: 3
+    epochs: 5
+    budget_seconds: 90.0
+    substrate: digital
+    geometry: feedforward
+    dynamics: instantaneous
+    credit: gradient
+    update: adam
+  depends_on: []
+  device: auto
+  store: experiment.db
+- name: task_permuted_mnist
+  profile: production-map
+  overrides:
+    axes:
+    - axis: substrate
+      primitives:
+      - digital
+    - axis: geometry
+      primitives:
+      - feedforward
+    - axis: dynamics
+      primitives:
+      - instantaneous
+    - axis: plasticity
+      primitives: *id001
+    - axis: credit
+      primitives:
+      - gradient
+    - axis: update
+      primitives:
+      - adam
+    tasks:
+    - permuted_mnist
+    hpo:
+      n_trials: 15
+      n_seeds: 3
+    epochs: 5
+    budget_seconds: 90.0
+    substrate: digital
+    geometry: feedforward
+    dynamics: instantaneous
+    credit: gradient
+    update: adam
+  depends_on:
+  - 0
+  device: auto
+  store: experiment.db
+store: experiment.db
+parallel: 1
+compute:
+  device: auto
+  max_parallel: 1

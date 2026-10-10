@@ -1,0 +1,54 @@
+hypotheses:
+- id: H1_credit_efficiency
+  question: Does thermodynamic_contrast achieve comparable accuracy to gradient with
+    lower energy_per_step?
+  prediction: thermodynamic_contrast energy_per_step < gradient energy_per_step at
+    matched val_acc
+  test: paired_t_test grouped by substrate comparing gradient, thermodynamic_contrast
+    (paired)
+  min_effect_size: 0.5
+  required_power: 0.8
+  tags:
+  - credit
+  - energy
+  - efficiency
+  pre_registered: true
+- id: H2_dynamics_stability
+  question: Do energy-minimization dynamics have larger basins but slower settling
+    than predictive coding?
+  prediction: 'energy_minimization: larger basin_radius, higher settle_steps than
+    predictive_settling'
+  test: mann_whitney_u grouped by dynamics comparing energy_minimization, predictive_settling
+  min_effect_size: 0.5
+  required_power: 0.8
+  tags:
+  - dynamics
+  - stability
+  - settling
+  pre_registered: true
+- id: H3_substrate_noise_robustness
+  question: Do analog/memristive substrates degrade gracefully with noise while digital
+    is brittle?
+  prediction: 'analog/memristive: gradual accuracy decline; digital: sharp drop at
+    quantization threshold'
+  test: anova_two_way grouped by substrate comparing digital, analog, memristive controlling
+    for noise_level
+  min_effect_size: 0.4
+  required_power: 0.8
+  tags:
+  - substrate
+  - noise
+  - robustness
+  pre_registered: true
+- id: H4_plasticity_catastrophic_forgetting
+  question: Does conflict_adaptive plasticity reduce catastrophic forgetting vs null/substrate_coupled?
+  prediction: conflict_adaptive forgetting < substrate_coupled forgetting < null forgetting
+    on Split MNIST
+  test: anova_one_way grouped by plasticity comparing null, substrate_coupled, conflict_adaptive
+  min_effect_size: 0.5
+  required_power: 0.8
+  tags:
+  - plasticity
+  - continual_learning
+  - forgetting
+  pre_registered: true

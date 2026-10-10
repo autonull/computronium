@@ -1,0 +1,198 @@
+meta:
+  name: test_credit_hyp
+  description: Compare energy efficiency across credit assignments
+  hypotheses:
+  - H1_credit_efficiency
+  tags:
+  - credit
+  - energy
+  - flagship
+  created_at: '2026-10-09T20:48:07.299753'
+  version: '1.0'
+design:
+  design_type: full_factorial
+  factors:
+    credit:
+      name: credit
+      type: between_subjects
+      values:
+      - gradient
+      - thermodynamic_contrast
+      - random_projections
+      - pepita
+    substrate:
+      name: substrate
+      type: between_subjects
+      values:
+      - digital
+      - analog
+      - memristive
+    dynamics:
+      name: dynamics
+      type: between_subjects
+      values:
+      - energy_minimization
+      - predictive_settling
+  fixed:
+    geometry:
+      name: geometry
+      value: feedforward
+    update:
+      name: update
+      value: adam
+    plasticity:
+      name: plasticity
+      value: 'null'
+  blocks:
+  - task: mnist
+    epochs: 5
+    seeds: 3
+    fidelity: L0
+    extra: {}
+  - task: fashion_mnist
+    epochs: 5
+    seeds: 3
+    fidelity: L0
+    extra: {}
+  power_analysis:
+    enabled: true
+    min_effect_size: 0.5
+    required_power: 0.8
+    alpha: 0.05
+    test_type: paired_t_test
+    adaptive: true
+    futility_bound: 0.1
+    interim_analyses: 0
+  generators: []
+analysis:
+  primary: val_acc vs energy_per_step Pareto per substrate
+  secondary:
+  - stability_margin
+  - settle_steps
+  - walltime_total
+  stats:
+  - cohens_d
+  - cliffs_delta
+  - bayes_factor
+  visualizations:
+  - pareto
+  - ablation
+  - convergence
+  - stability
+  multiple_comparison_correction: benjamini_hochberg
+  exploratory: false
+resources:
+  max_wall_hours: 0.05
+search_space:
+  base: {}
+  constraints: []
+arms:
+  adaptive: {}
+hpo:
+  sampler: nsga2
+  objectives:
+  - name: val_acc
+    direction: maximize
+    weight: 1.0
+  - name: energy_per_step
+    direction: minimize
+    weight: 1.0
+  - name: walltime_total
+    direction: minimize
+    weight: 1.0
+  n_trials: 30
+  n_startup_trials: 8
+  n_seeds: 3
+  seed: 42
+output:
+  db: experiment.db
+  artifacts_dir: artifacts
+  log_level: INFO
+  emit_every: 5
+  export_formats:
+  - json
+  - parquet
+reproducibility:
+  seed: 42
+  capture_env: true
+  artifact_hash: true
+runs:
+- name: main
+  profile: production-map
+  overrides:
+    axes:
+    - axis: substrate
+      primitives: &id001
+      - digital
+      - analog
+      - memristive
+    - axis: geometry
+      primitives:
+      - feedforward
+    - axis: dynamics
+      primitives: &id002
+      - energy_minimization
+      - predictive_settling
+    - axis: plasticity
+      primitives:
+      - 'null'
+    - axis: credit
+      primitives: &id003
+      - gradient
+      - thermodynamic_contrast
+      - random_projections
+      - pepita
+    - axis: update
+      primitives:
+      - adam
+    tasks:
+    - mnist
+    hpo:
+      n_trials: 30
+      n_seeds: 3
+    epochs: 5
+    budget_seconds: 90.0
+    geometry: feedforward
+    update: adam
+    plasticity: 'null'
+  depends_on: []
+  device: auto
+  store: experiment.db
+- name: task_fashion_mnist
+  profile: production-map
+  overrides:
+    axes:
+    - axis: substrate
+      primitives: *id001
+    - axis: geometry
+      primitives:
+      - feedforward
+    - axis: dynamics
+      primitives: *id002
+    - axis: plasticity
+      primitives:
+      - 'null'
+    - axis: credit
+      primitives: *id003
+    - axis: update
+      primitives:
+      - adam
+    tasks:
+    - fashion_mnist
+    hpo:
+      n_trials: 30
+      n_seeds: 3
+    epochs: 5
+    budget_seconds: 90.0
+    geometry: feedforward
+    update: adam
+    plasticity: 'null'
+  depends_on:
+  - 0
+  device: auto
+  store: experiment.db
+store: experiment.db
+parallel: 1
+compute:
+  device: auto
+  max_parallel: 1

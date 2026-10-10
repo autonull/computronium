@@ -12,9 +12,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.evidence.claims import Claim
-
 
 class ReportMetadata(BaseModel):
     """Campaign metadata for report header."""

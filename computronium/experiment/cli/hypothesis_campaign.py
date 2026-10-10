@@ -7,34 +7,30 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
 
 from computronium.experiment.design import (
     CampaignDSL,
-    HypothesisRegistry,
-    HypothesisSpec,
-    HypothesisResult,
-    TestType,
     EffectSizeType,
+    HypothesisRegistry,
+    HypothesisResult,
+    HypothesisSpec,
     HypothesisStatus,
-    validate_campaign_design,
+    TestType,
     create_campaign,
     list_campaign_templates,
+    validate_campaign_design,
 )
 from computronium.experiment.evidence.limitations import replication_keys_of
+from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.campaign import run_campaign
 from computronium.experiment.templates.report import (
-    JinjaReportGenerator,
-    generate_report_from_store,
     CampaignConfig,
-    Hypothesis,
-    StatisticalResult,
     ReproducibilityInfo,
+    generate_report_from_store,
 )
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
 
 
 def cmd_list_templates(args: argparse.Namespace) -> int:
@@ -208,8 +204,8 @@ async def _generate_campaign_report(
 
         # Build campaign config for report
         campaign_config = CampaignConfig(
-            factors={name: f.values for name, f in campaign.design.factors.items()},
-            fixed={name: f.value for name, f in campaign.design.fixed.items()},
+            factors={name: [str(v) for v in f.values] for name, f in campaign.design.factors.items()},
+            fixed={name: str(f.value) for name, f in campaign.design.fixed.items()},
             blocks=[{"task": b.task, "epochs": b.epochs, "seeds": b.seeds} for b in campaign.design.blocks],
             sampler=campaign.hpo.sampler.value,
             objectives=[o.name for o in campaign.hpo.objectives],
@@ -247,14 +243,9 @@ async def _test_hypotheses(campaign: CampaignDSL, hypotheses_file: str) -> None:
         print(f"Store not found: {store_path}")
         return
 
-    # Load hypotheses
-    registry = HypothesisRegistry()
+    # Load hypotheses using registry's from_yaml method
     try:
-        with Path(hypotheses_file).open() as f:
-            data = json.load(f)
-        for item in data.get("hypotheses", []):
-            spec = HypothesisSpec(**item)
-            registry._hypotheses[spec.id] = spec
+        registry = HypothesisRegistry.from_yaml(Path(hypotheses_file))
     except Exception as e:
         print(f"Error loading hypotheses: {e}")
         return
@@ -290,11 +281,11 @@ async def _test_hypotheses(campaign: CampaignDSL, hypotheses_file: str) -> None:
                     print(f"    Result: p={result.p_value:.4g}, effect={result.effect_size:.3f} ({result.effect_size_type.value})")
                     print(f"    Significant: {result.significant}, Power: {result.power_achieved:.2f}")
                 else:
-                    print(f"    Result: INSUFFICIENT DATA")
+                    print("    Result: INSUFFICIENT DATA")
             except Exception as e:
                 print(f"    Error: {e}")
 
-    print(f"\nHypothesis results saved to registry")
+    print("\nHypothesis results saved to registry")
 
 
 async def _run_hypothesis_test(
@@ -303,10 +294,14 @@ async def _run_hypothesis_test(
     hypothesis: HypothesisSpec,
 ) -> HypothesisResult | None:
     """Run a single hypothesis test."""
-    from computronium.experiment.evidence.significance import paired_significance, Resampling
-    from computronium.experiment.evidence.limitations import replication_keys_of
-    from computronium.experiment.evidence.claims import cell_metrics_by_axis_value, replication_key
-    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.evidence.claims import (
+        cell_metrics_by_axis_value,
+        replication_key,
+    )
+    from computronium.experiment.evidence.significance import (
+        Resampling,
+        paired_significance,
+    )
     from computronium.experiment.schema.axis import StructuralAxis
 
     records = generator._store.query_records(run_id=run_id)
@@ -448,9 +443,6 @@ def cmd_export_hypotheses(args: argparse.Namespace) -> int:
     registry.export_to_yaml(output_path)
     print(f"Exported {len(registry._hypotheses)} hypotheses to {output_path}")
     return 0
-
-
-from datetime import datetime
 
 
 def build_parser() -> argparse.ArgumentParser:

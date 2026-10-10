@@ -1,0 +1,156 @@
+meta:
+  name: test_updates
+  description: "Adaptive vs fixed optimizers, orthogonal constraints, credit\xD7update\
+    \ interactions"
+  hypotheses: []
+  tags:
+  - update
+  - optimization
+  - flagship
+  created_at: '2026-10-09T21:22:14.658732'
+  version: '1.0'
+design:
+  design_type: full_factorial
+  factors:
+    update:
+      name: update
+      type: between_subjects
+      values:
+      - euclidean
+      - adam
+      - muon
+      - lion
+      - riemannian_orthogonal
+    credit:
+      name: credit
+      type: between_subjects
+      values:
+      - gradient
+      - thermodynamic_contrast
+      - random_projections
+      - pepita
+  fixed:
+    substrate:
+      name: substrate
+      value: digital
+    geometry:
+      name: geometry
+      value: feedforward
+    dynamics:
+      name: dynamics
+      value: instantaneous
+    plasticity:
+      name: plasticity
+      value: 'null'
+  blocks:
+  - task: mnist
+    epochs: 5
+    seeds: 3
+    fidelity: L0
+    extra: {}
+  power_analysis:
+    enabled: true
+    min_effect_size: 0.5
+    required_power: 0.8
+    alpha: 0.05
+    test_type: paired_t_test
+    adaptive: false
+    interim_analyses: 0
+  generators: []
+analysis:
+  primary: "Validation accuracy heatmap: update \xD7 credit"
+  secondary:
+  - walltime_total
+  - param_count
+  - stability_margin
+  stats:
+  - anova_two_way
+  - cohens_d
+  - cliffs_delta
+  visualizations:
+  - heatmap
+  - pareto
+  - ablation
+  multiple_comparison_correction: benjamini_hochberg
+  exploratory: false
+resources:
+  max_wall_hours: 0.05
+search_space:
+  base: {}
+  constraints: []
+arms:
+  adaptive: {}
+hpo:
+  sampler: nsga2
+  objectives:
+  - name: val_acc
+    direction: maximize
+    weight: 1.0
+  - name: walltime_total
+    direction: minimize
+    weight: 1.0
+  n_trials: 20
+  n_startup_trials: 5
+  n_seeds: 3
+  seed: 42
+output:
+  db: experiment.db
+  artifacts_dir: artifacts
+  log_level: INFO
+  emit_every: 5
+  export_formats:
+  - json
+  - parquet
+reproducibility:
+  seed: 42
+  capture_env: true
+  artifact_hash: true
+runs:
+- name: main
+  profile: production-map
+  overrides:
+    axes:
+    - axis: substrate
+      primitives:
+      - digital
+    - axis: geometry
+      primitives:
+      - feedforward
+    - axis: dynamics
+      primitives:
+      - instantaneous
+    - axis: plasticity
+      primitives:
+      - 'null'
+    - axis: credit
+      primitives:
+      - gradient
+      - thermodynamic_contrast
+      - random_projections
+      - pepita
+    - axis: update
+      primitives:
+      - euclidean
+      - adam
+      - muon
+      - lion
+      - riemannian_orthogonal
+    tasks:
+    - mnist
+    hpo:
+      n_trials: 20
+      n_seeds: 3
+    epochs: 5
+    budget_seconds: 180.0
+    substrate: digital
+    geometry: feedforward
+    dynamics: instantaneous
+    plasticity: 'null'
+  depends_on: []
+  device: auto
+  store: experiment.db
+store: experiment.db
+parallel: 1
+compute:
+  device: auto
+  max_parallel: 1

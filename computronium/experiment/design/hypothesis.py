@@ -7,23 +7,20 @@ and power analysis integration.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-from computronium.experiment.templates.report.models import Hypothesis as ReportHypothesis, StatisticalResult
-from computronium.experiment.evidence.significance import Significance
-from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.templates.report.models import (
+    Hypothesis as ReportHypothesis,
+)
+from computronium.experiment.templates.report.models import StatisticalResult
 
 
-class TestType(str, Enum):
+class TestType(StrEnum):
     """Supported statistical test types."""
 
     PAIRED_T_TEST = "paired_t_test"
@@ -44,7 +41,7 @@ class TestType(str, Enum):
     LOGISTIC_REGRESSION = "logistic_regression"
 
 
-class EffectSizeType(str, Enum):
+class EffectSizeType(StrEnum):
     """Effect size measure types."""
 
     COHENS_D = "cohens_d"
@@ -57,7 +54,7 @@ class EffectSizeType(str, Enum):
     RISK_RATIO = "risk_ratio"
 
 
-class MultipleComparisonCorrection(str, Enum):
+class MultipleComparisonCorrection(StrEnum):
     """Multiple comparison correction methods."""
 
     NONE = "none"
@@ -68,7 +65,7 @@ class MultipleComparisonCorrection(str, Enum):
     SIDAK = "sidak"
 
 
-class HypothesisStatus(str, Enum):
+class HypothesisStatus(StrEnum):
     """Hypothesis lifecycle status."""
 
     DRAFT = "draft"
@@ -88,6 +85,23 @@ class HypothesisSpec(BaseModel):
     id: str = Field(..., description="Unique hypothesis identifier")
     version: int = 1
     status: HypothesisStatus = HypothesisStatus.DRAFT
+    test_type: TestType = TestType.PAIRED_T_TEST
+    effect_size_type: EffectSizeType = EffectSizeType.COHENS_D
+    correction: MultipleComparisonCorrection = MultipleComparisonCorrection.NONE
+
+    @model_validator(mode="after")
+    def _coerce_enums_after(self) -> HypothesisSpec:
+        enum_fields = {
+            "status": HypothesisStatus,
+            "test_type": TestType,
+            "effect_size_type": EffectSizeType,
+            "correction": MultipleComparisonCorrection,
+        }
+        for field_name, enum_class in enum_fields.items():
+            value = getattr(self, field_name)
+            if isinstance(value, str):
+                object.__setattr__(self, field_name, enum_class(value))
+        return self
 
     # Scientific content
     question: str = Field(..., description="Research question")
@@ -95,7 +109,6 @@ class HypothesisSpec(BaseModel):
     rationale: str | None = Field(None, description="Theoretical justification")
 
     # Test specification
-    test_type: TestType
     primary_metric: str = Field(..., description="Primary outcome metric")
     grouping_factor: str | None = Field(None, description="Factor to group by (e.g., 'credit')")
     comparison_values: list[str] | None = Field(None, description="Specific values to compare")
@@ -103,10 +116,8 @@ class HypothesisSpec(BaseModel):
 
     # Statistical parameters
     min_effect_size: float = Field(..., gt=0, description="Minimum practically significant effect")
-    effect_size_type: EffectSizeType = EffectSizeType.COHENS_D
     required_power: float = Field(..., ge=0.5, le=0.99, description="Required statistical power")
     alpha: float = Field(0.05, gt=0, le=0.1, description="Significance level")
-    correction: MultipleComparisonCorrection = MultipleComparisonCorrection.NONE
     n_comparisons: int = Field(1, ge=1, description="Number of comparisons for correction")
 
     # Design parameters
@@ -119,7 +130,7 @@ class HypothesisSpec(BaseModel):
     domain: str | None = None
     pre_registered_at: datetime | None = None
     tested_at: datetime | None = None
-    result: "HypothesisResult | None" = None
+    result: HypothesisResult | None = None
 
     @field_validator("id")
     @classmethod
@@ -156,11 +167,12 @@ class HypothesisSpec(BaseModel):
 
     def required_sample_size(self) -> int:
         """Calculate required sample size per group for target power.
-        
+
         Uses approximate formula for two-sample t-test.
         For exact calculation, use specialized power analysis libraries.
         """
         import math
+
         from scipy import stats
 
         # Cohen's d to non-centrality parameter approximation
@@ -194,7 +206,7 @@ class HypothesisResult(BaseModel):
     tested_at: datetime = Field(default_factory=datetime.now)
     raw_output: dict[str, Any] = Field(default_factory=dict)
 
-    def to_statistical_result(self) -> "StatisticalResult":
+    def to_statistical_result(self) -> StatisticalResult:
         """Convert to report model."""
         from computronium.experiment.templates.report.models import StatisticalResult
         return StatisticalResult(
@@ -319,7 +331,7 @@ class HypothesisRegistry:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "HypothesisRegistry":
+    def from_yaml(cls, path: Path) -> HypothesisRegistry:
         """Create registry from YAML file."""
         import yaml
 
@@ -354,13 +366,13 @@ class HypothesisRegistry:
 # Pre-defined hypothesis templates for common experiment types
 CREDIT_EFFICIENCY_HYPOTHESIS = HypothesisSpec(
     id="H1_credit_efficiency",
-    question="Does equilibrium_prop achieve comparable accuracy to gradient with lower energy_per_step?",
-    prediction="eqprop energy_per_step < gradient energy_per_step at matched val_acc",
-    rationale="Equilibrium propagation uses local updates that may be more energy-efficient than backprop",
+    question="Does thermodynamic_contrast achieve comparable accuracy to gradient with lower energy_per_step?",
+    prediction="thermodynamic_contrast energy_per_step < gradient energy_per_step at matched val_acc",
+    rationale="Equilibrium propagation (thermodynamic_contrast) uses local updates that may be more energy-efficient than backprop",
     test_type=TestType.PAIRED_T_TEST,
     primary_metric="energy_per_step",
     grouping_factor="substrate",
-    comparison_values=["gradient", "equilibrium_prop"],
+    comparison_values=["gradient", "thermodynamic_contrast"],
     min_effect_size=0.5,
     required_power=0.8,
     alpha=0.05,
@@ -415,13 +427,13 @@ SUBSTRATE_NOISE_HYPOTHESIS = HypothesisSpec(
 
 PLASTICITY_FORGETTING_HYPOTHESIS = HypothesisSpec(
     id="H4_plasticity_catastrophic_forgetting",
-    question="Does conflict_adaptive plasticity reduce catastrophic forgetting vs null/ewc?",
-    prediction="conflict_adaptive forgetting < ewc forgetting < null forgetting on Split MNIST",
+    question="Does conflict_adaptive plasticity reduce catastrophic forgetting vs null/substrate_coupled?",
+    prediction="conflict_adaptive forgetting < substrate_coupled forgetting < null forgetting on Split MNIST",
     rationale="Conflict-adaptive plasticity modulates updates based on gradient alignment",
     test_type=TestType.ANOVA_ONE_WAY,
     primary_metric="forgetting_rate",
     grouping_factor="plasticity",
-    comparison_values=["null", "ewc", "conflict_adaptive"],
+    comparison_values=["null", "substrate_coupled", "conflict_adaptive"],
     min_effect_size=0.5,
     required_power=0.8,
     alpha=0.05,
@@ -450,17 +462,17 @@ def create_default_registry() -> HypothesisRegistry:
 
 
 __all__ = [
-    "HypothesisSpec",
-    "HypothesisResult",
-    "HypothesisRegistry",
-    "TestType",
-    "EffectSizeType",
-    "MultipleComparisonCorrection",
-    "HypothesisStatus",
     "CREDIT_EFFICIENCY_HYPOTHESIS",
-    "DYNAMICS_STABILITY_HYPOTHESIS",
-    "SUBSTRATE_NOISE_HYPOTHESIS",
-    "PLASTICITY_FORGETTING_HYPOTHESIS",
     "DEFAULT_HYPOTHESES",
+    "DYNAMICS_STABILITY_HYPOTHESIS",
+    "PLASTICITY_FORGETTING_HYPOTHESIS",
+    "SUBSTRATE_NOISE_HYPOTHESIS",
+    "EffectSizeType",
+    "HypothesisRegistry",
+    "HypothesisResult",
+    "HypothesisSpec",
+    "HypothesisStatus",
+    "MultipleComparisonCorrection",
+    "TestType",
     "create_default_registry",
 ]

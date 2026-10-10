@@ -1,0 +1,159 @@
+meta:
+  name: test_dynamics
+  description: Characterize stability landscape across dynamics families
+  hypotheses:
+  - H2_dynamics_stability
+  tags:
+  - dynamics
+  - stability
+  - flagship
+  created_at: '2026-10-09T21:06:46.757517'
+  version: '1.0'
+design:
+  design_type: full_factorial
+  factors:
+    dynamics:
+      name: dynamics
+      type: between_subjects
+      values:
+      - energy_minimization
+      - predictive_settling
+      - instantaneous
+      - pc_alm
+    credit:
+      name: credit
+      type: between_subjects
+      values:
+      - gradient
+      - thermodynamic_contrast
+      - random_projections
+    substrate:
+      name: substrate
+      type: between_subjects
+      values:
+      - digital
+  fixed:
+    geometry:
+      name: geometry
+      value: feedforward
+    update:
+      name: update
+      value: adam
+    plasticity:
+      name: plasticity
+      value: 'null'
+  blocks:
+  - task: mnist
+    epochs: 5
+    seeds: 3
+    fidelity: L0
+    extra: {}
+  power_analysis:
+    enabled: true
+    min_effect_size: 0.5
+    required_power: 0.8
+    alpha: 0.05
+    test_type: paired_t_test
+    adaptive: false
+    interim_analyses: 0
+  generators: []
+analysis:
+  primary: Basin radius profiles, Lyapunov spectra, settling time distributions per
+    dynamics
+  secondary:
+  - spectral_radius
+  - max_singular_value
+  - nonnormality
+  - stability_margin
+  stats:
+  - cohens_d
+  - cliffs_delta
+  - bayes_factor
+  visualizations:
+  - stability
+  - pareto
+  - ablation
+  - trajectories
+  multiple_comparison_correction: benjamini_hochberg
+  exploratory: false
+resources:
+  max_wall_hours: 0.05
+search_space:
+  base: {}
+  constraints: []
+arms:
+  adaptive: {}
+hpo:
+  sampler: nsga2
+  objectives:
+  - name: val_acc
+    direction: maximize
+    weight: 1.0
+  - name: stability_margin
+    direction: maximize
+    weight: 1.0
+  - name: settle_steps
+    direction: minimize
+    weight: 1.0
+  n_trials: 40
+  n_startup_trials: 10
+  n_seeds: 3
+  seed: 42
+output:
+  db: experiment.db
+  artifacts_dir: artifacts
+  log_level: INFO
+  emit_every: 5
+  export_formats:
+  - json
+  - parquet
+reproducibility:
+  seed: 42
+  capture_env: true
+  artifact_hash: true
+runs:
+- name: main
+  profile: production-map
+  overrides:
+    axes:
+    - axis: substrate
+      primitives:
+      - digital
+    - axis: geometry
+      primitives:
+      - feedforward
+    - axis: dynamics
+      primitives:
+      - energy_minimization
+      - predictive_settling
+      - instantaneous
+      - pc_alm
+    - axis: plasticity
+      primitives:
+      - 'null'
+    - axis: credit
+      primitives:
+      - gradient
+      - thermodynamic_contrast
+      - random_projections
+    - axis: update
+      primitives:
+      - adam
+    tasks:
+    - mnist
+    hpo:
+      n_trials: 40
+      n_seeds: 3
+    epochs: 5
+    budget_seconds: 180.0
+    geometry: feedforward
+    update: adam
+    plasticity: 'null'
+  depends_on: []
+  device: auto
+  store: experiment.db
+store: experiment.db
+parallel: 1
+compute:
+  device: auto
+  max_parallel: 1

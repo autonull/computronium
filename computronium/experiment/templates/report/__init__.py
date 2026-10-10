@@ -3,6 +3,10 @@
 Jinja2-based templates with Pydantic context models for publication-grade reports.
 """
 
+from computronium.experiment.templates.report.generator import (
+    JinjaReportGenerator,
+    generate_report_from_store,
+)
 from computronium.experiment.templates.report.models import (
     AblationResult,
     AxisCoverage,
@@ -12,19 +16,15 @@ from computronium.experiment.templates.report.models import (
     Hypothesis,
     LanguageReportContext,
     ParetoPoint,
-    ReproducibilityInfo,
     ReportContext,
     ReportMetadata,
+    ReproducibilityInfo,
     RLReportContext,
     StabilityMetrics,
     StatisticalResult,
     TabularReportContext,
     TemplateConfig,
     VisionReportContext,
-)
-from computronium.experiment.templates.report.generator import (
-    JinjaReportGenerator,
-    generate_report_from_store,
 )
 
 __all__ = [

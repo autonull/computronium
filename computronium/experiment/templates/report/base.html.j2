@@ -367,7 +367,7 @@
                 </tr>
             </thead>
             <tbody>
-            {% for row in ablation.values %}
+            {% for row in ablation['values'] %}
             <tr>
                 <td>{{ row.axis_value }}</td>
                 <td>{{ "%.4g"|format(row.mean) }}</td>

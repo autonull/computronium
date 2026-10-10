@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "saved_at": "2026-10-09T20:41:27.734378",
+  "hypotheses": [
+    {
+      "id": "H1_credit_efficiency",
+      "version": 1,
+      "status": "pre_registered",
+      "question": "Does thermodynamic_contrast achieve comparable accuracy to gradient with lower energy_per_step?",
+      "prediction": "thermodynamic_contrast energy_per_step < gradient energy_per_step at matched val_acc",
+      "rationale": "Equilibrium propagation (thermodynamic_contrast) uses local updates that may be more energy-efficient than backprop",
+      "test_type": "paired_t_test",
+      "primary_metric": "energy_per_step",
+      "grouping_factor": "substrate",
+      "comparison_values": [
+        "gradient",
+        "thermodynamic_contrast"
+      ],
+      "covariates": [],
+      "min_effect_size": 0.5,
+      "effect_size_type": "cohens_d",
+      "required_power": 0.8,
+      "alpha": 0.05,
+      "correction": "none",
+      "n_comparisons": 1,
+      "paired": true,
+      "alternative": "two-sided",
+      "min_samples_per_group": 10,
+      "tags": [
+        "credit",
+        "energy",
+        "efficiency"
+      ],
+      "domain": null,
+      "pre_registered_at": null,
+      "tested_at": null,
+      "result": null
+    },
+    {
+      "id": "H2_dynamics_stability",
+      "version": 1,
+      "status": "pre_registered",
+      "question": "Do energy-minimization dynamics have larger basins but slower settling than predictive coding?",
+      "prediction": "energy_minimization: larger basin_radius, higher settle_steps than predictive_settling",
+      "rationale": "Energy minimization converges to fixed points; predictive coding uses iterative inference",
+      "test_type": "mann_whitney_u",
+      "primary_metric": "stability_margin",
+      "grouping_factor": "dynamics",
+      "comparison_values": [
+        "energy_minimization",
+        "predictive_settling"
+      ],
+      "covariates": [],
+      "min_effect_size": 0.5,
+      "effect_size_type": "cohens_d",
+      "required_power": 0.8,
+      "alpha": 0.05,
+      "correction": "none",
+      "n_comparisons": 1,
+      "paired": false,
+      "alternative": "two-sided",
+      "min_samples_per_group": 10,
+      "tags": [
+        "dynamics",
+        "stability",
+        "settling"
+      ],
+      "domain": null,
+      "pre_registered_at": null,
+      "tested_at": null,
+      "result": null
+    },
+    {
+      "id": "H3_substrate_noise_robustness",
+      "version": 1,
+      "status": "pre_registered",
+      "question": "Do analog/memristive substrates degrade gracefully with noise while digital is brittle?",
+      "prediction": "analog/memristive: gradual accuracy decline; digital: sharp drop at quantization threshold",
+      "rationale": "Analog substrates have continuous state; digital has discrete thresholds",
+      "test_type": "anova_two_way",
+      "primary_metric": "val_acc",
+      "grouping_factor": "substrate",
+      "comparison_values": [
+        "digital",
+        "analog",
+        "memristive"
+      ],
+      "covariates": [
+        "noise_level"
+      ],
+      "min_effect_size": 0.4,
+      "effect_size_type": "cohens_d",
+      "required_power": 0.8,
+      "alpha": 0.05,
+      "correction": "none",
+      "n_comparisons": 3,
+      "paired": false,
+      "alternative": "two-sided",
+      "min_samples_per_group": 10,
+      "tags": [
+        "substrate",
+        "noise",
+        "robustness"
+      ],
+      "domain": null,
+      "pre_registered_at": null,
+      "tested_at": null,
+      "result": null
+    },
+    {
+      "id": "H4_plasticity_catastrophic_forgetting",
+      "version": 1,
+      "status": "pre_registered",
+      "question": "Does conflict_adaptive plasticity reduce catastrophic forgetting vs null/substrate_coupled?",
+      "prediction": "conflict_adaptive forgetting < substrate_coupled forgetting < null forgetting on Split MNIST",
+      "rationale": "Conflict-adaptive plasticity modulates updates based on gradient alignment",
+      "test_type": "anova_one_way",
+      "primary_metric": "forgetting_rate",
+      "grouping_factor": "plasticity",
+      "comparison_values": [
+        "null",
+        "substrate_coupled",
+        "conflict_adaptive"
+      ],
+      "covariates": [],
+      "min_effect_size": 0.5,
+      "effect_size_type": "cohens_d",
+      "required_power": 0.8,
+      "alpha": 0.05,
+      "correction": "none",
+      "n_comparisons": 3,
+      "paired": false,
+      "alternative": "two-sided",
+      "min_samples_per_group": 10,
+      "tags": [
+        "plasticity",
+        "continual_learning",
+        "forgetting"
+      ],
+      "domain": null,
+      "pre_registered_at": null,
+      "tested_at": null,
+      "result": null
+    }
+  ]
+}
