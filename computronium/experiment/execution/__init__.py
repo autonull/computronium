@@ -150,6 +150,8 @@ __all__ = [
     "resolve_objectives",
     "search_space",
     "search_space_from_spec",
+    "stream",
+    "batch_sizer",
     "settle_operator",
     "settle_step_operator",
     "stage",
@@ -258,6 +260,11 @@ _symbol_to_module: dict[str, str] = {
     "iter_candidates": "search_space",
     "narrow_domain": "search_space",
     "search_space_from_spec": "search_space",
+    # stream
+    "CellStream": "stream",
+    "CellStreamState": "stream",
+    # batch_sizer
+    "BatchSizer": "batch_sizer",
     # settle_operator
     "hidden_stack_operator": "settle_operator",
     "layer_weight_shapes": "settle_operator",
@@ -327,6 +334,7 @@ def __getattr__(name: str) -> Any:
         "allocator",
         "backends",
         "budget",
+        "batch_sizer",
         "compose",
         "contrast_design",
         "decision",
@@ -340,6 +348,7 @@ def __getattr__(name: str) -> Any:
         "settle_operator",
         "stage",
         "stages_impl",
+        "stream",
         "sysctx",
     }:
         return _get_submodule(f"computronium.experiment.execution.{name}")

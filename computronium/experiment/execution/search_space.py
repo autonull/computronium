@@ -42,9 +42,9 @@ _SWEEP_STEPS: Final = 5
 
 type ShapeResolver = Callable[[str], TaskShape]
 
-# A scan bound, not a space bound: guards against a budget or a predicate that
-# admits nothing, which would otherwise make the candidate stream unbounded.
-_MAX_SCAN: Final = 50_000
+# Default page size for paging through the candidate space. This is a page
+# size, NOT a cap — the stream advances across pages indefinitely.
+_PAGE_SIZE: Final = 50_000
 
 # Module-level cache for search_space_from_spec
 _search_space_cache: dict[tuple, SearchSpace] = {}
@@ -728,6 +728,8 @@ def iter_candidates(  # ruff: ignore[complex-structure]
     shape: ShapeResolver | None = None,
     max_scan: int | None = None,
     check_composable: bool = True,
+    offset: int = 0,
+    page_size: int = _PAGE_SIZE,
 ) -> Iterator[tuple[Coordinate, Schedule]]:
     """Walk the harvested schema under the spec, yielding legal cells.
 
@@ -735,6 +737,8 @@ def iter_candidates(  # ruff: ignore[complex-structure]
     primitives the spec permits, the harvested availability predicates decide
     which hyperparameters a selection can use, and the spec's own domains are
     swept, as a Cartesian product over the axes rather than a diagonal.
+
+    Supports paging via ``offset`` and ``page_size`` for unbounded traversal.
 
     Args:
         spec: The run declaration; names the task, fidelity, seed plan and the
@@ -749,10 +753,12 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             caller that prices or samples a factorial — where the illegal
             candidates are the expensive majority — bounds the examination; a
             caller that walks the space for what it can measure leaves it
-            ``None`` and takes the module's own scan bound.
+            ``None`` and takes the module's page size.
         check_composable: If True (default), verify that configs compose and
             validate via ``_composable``. If False, skip this check for faster
             candidate generation (validation will happen at Gate/Compose stages).
+        offset: Number of candidates to skip before yielding (for paging).
+        page_size: Maximum candidates to examine per page (default 50k).
 
     Yields:
         ``(coordinate, schedule)`` pairs, in a deterministic order.
@@ -793,9 +799,12 @@ def iter_candidates(  # ruff: ignore[complex-structure]
 
     seen: set[str] = set()
     scanned = 0
+    yielded = 0
     for coordinate, task in _walk(spec, search_space, shape):
         scanned += 1
-        if scanned > (max_scan if max_scan is not None else _MAX_SCAN):
+        if scanned <= offset:
+            continue
+        if scanned > offset + (max_scan if max_scan is not None else page_size):
             return
         schedule = _schedule(spec, task)
         if coordinate.measurement_key(schedule) in seen:

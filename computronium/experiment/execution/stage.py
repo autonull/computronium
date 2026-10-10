@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.deadline import Deadline, DeadlineEnforcer
     from computronium.experiment.execution.policy import Policy
     from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.execution.stream import CellStream
     from computronium.experiment.execution.sysctx import SystemContext
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.schema.record import Record
@@ -127,6 +128,8 @@ class StageContext:
     stage_params: dict[str, Any]
     provenance: Any  # Provenance
     system_context: SystemContext
+    batch_sizer: Any = None  # BatchSizer for budget-aware n_propose
+    cell_stream: CellStream | None = None
 
 
 @runtime_checkable

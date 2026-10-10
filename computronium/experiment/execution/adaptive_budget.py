@@ -14,18 +14,13 @@ def _is_valid_combination(
     update: str,
     plasticity: str,
 ) -> bool:
-    """Check if a 6-axis combination is valid by attempting SystemConfig validation.
+    """Check if a 6-axis combination is valid.
 
-    Only tests known problematic combinations to avoid building all possible configs.
+    Legality has exactly one source: SystemConfig.validate reached through
+    _composable / compose_configs. This function is kept for backward
+    compatibility with campaign_dsl validation warnings but always returns True.
+    The constraint engine handles legality at runtime.
     """
-    # Known invalid combinations (validated by SystemConfig.validate()):
-    # - instantaneous dynamics + recurrent geometry + gradient/backprop credit
-    #   (gradient doesn't reach recurrent weights in feedforward pass)
-    if dynamics == "instantaneous" and geometry in {"recurrent", "recurrent_attractor"}:
-        if credit in {"gradient", "backprop"}:
-            return False
-
-    # All other combinations are assumed valid (will be caught at runtime if not)
     return True
 
 
@@ -224,15 +219,12 @@ def _build_component_sets() -> dict[BudgetStrategy, ComponentSet]:
             plasticities=["null"],
             tasks=["mnist"],
         ),
-        # Balanced: representative sample - filter out recurrent geometries
-        # since they don't work with instantaneous+gradient (common combo)
+        # Balanced: representative sample - all geometries included.
+        # Legality is enforced by SystemConfig.validate at runtime, not by
+        # pre-filtering here. This avoids a second source of truth for legality.
         BudgetStrategy.BALANCED: ComponentSet(
             substrates=c["substrates"],
-            geometries=[
-                g
-                for g in c["geometries"]
-                if g not in {"recurrent", "recurrent_attractor"}
-            ],
+            geometries=c["geometries"],
             dynamics=c["dynamics"],
             credits=c["credits"],
             updates=c["updates"],

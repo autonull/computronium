@@ -221,24 +221,21 @@ class FrameStage:
         objectives = run_spec.objectives
         operating_points = run_spec.operating_points
 
-        # The policy generates the opening cells from the spec's own space:
-        # primitives it permits, hyperparameters it sweeps, schedule it declares.
-        from computronium.experiment.execution.evaluate import task_shape
-        from computronium.experiment.execution.policy import ProposalContext
+        # Use CellStream for initial proposals (structural regime)
+        proposals = []
+        if ctx.cell_stream:
+            stream_results = ctx.cell_stream.next(_FRAME_PROPOSALS)
+            for coord, sched in stream_results:
+                from computronium.experiment.execution.stage import Proposal
 
-        proposals = list(
-            ctx.policy.propose(
-                ProposalContext(
-                    search_space=ctx.search_space,
-                    spec=run_spec,
-                    run_id=ctx.run_id,
-                    deadline=ctx.deadline,
-                    evidence=ctx.store,
-                    shape=task_shape,
-                    n_propose=_FRAME_PROPOSALS,
+                proposals.append(
+                    Proposal(
+                        coordinate=coord,
+                        schedule=sched,
+                        rationale="frame",
+                        metadata={},
+                    )
                 )
-            )
-        )
 
         return Fragment(
             stage_id=self.stage_id,
@@ -315,25 +312,24 @@ class ScheduleStage:
         )
 
         proposals = list(ctx.pending_proposals)
-        if not proposals and ctx.policy:
-            from computronium.experiment.execution.evaluate import task_shape
-            from computronium.experiment.execution.policy import ProposalContext
+        if not proposals and ctx.cell_stream:
+            # Use BatchSizer to determine n_propose (budget-aware)
+            n_propose = ctx.batch_sizer.n_propose() if ctx.batch_sizer else 10
+            if n_propose <= 0:
+                logger.info("BatchSizer returned n_propose=0, stopping")
+                return Fragment(stage_id=self.stage_id, proposals=[])
 
-            proposals.extend(
-                ctx.policy.propose(
-                    ProposalContext(
-                        search_space=ctx.search_space,
-                        spec=ctx.run_spec,
-                        run_id=ctx.run_id,
-                        deadline=ctx.deadline,
-                        evidence=ctx.store,
-                        # S1 screens with the shape; a context without it
-                        # proposes cells SystemConfig.validate rejects (the
-                        # lazy x recurrent walk), discovered by training.
-                        shape=task_shape,
+            # Get fresh cells from CellStream (unbounded, advancing)
+            stream_results = ctx.cell_stream.next(n_propose)
+            for coord, sched in stream_results:
+                proposals.append(
+                    Proposal(
+                        coordinate=coord,
+                        schedule=sched,
+                        rationale="cell_stream",
+                        metadata={},
                     )
                 )
-            )
 
         # Apply data-origin allocation from stage params
         allocation = ctx.stage_params.get(

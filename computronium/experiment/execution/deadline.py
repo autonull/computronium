@@ -155,6 +155,7 @@ class CheckpointData:
     system_context_snapshot: dict[str, Any] | None
     cell_timing: dict[str, Any]  # Serialized CellTiming (mixed types)
     timestamp: float
+    cell_stream_state: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +172,7 @@ class _PipelineStateSnapshot:
     allocator_state: dict[str, Any] | None
     system_context_snapshot: dict[str, Any] | None
     cell_timing: CellTiming
+    cell_stream_state: dict[str, Any] | None = None
 
 
 def _create_checkpoint_data(snapshot: _PipelineStateSnapshot) -> CheckpointData:
@@ -190,6 +192,7 @@ def _create_checkpoint_data(snapshot: _PipelineStateSnapshot) -> CheckpointData:
             "total_walltime_s": snapshot.cell_timing.total_walltime_s,
             "cell_times": snapshot.cell_timing.cell_times,
         },
+        cell_stream_state=snapshot.cell_stream_state,
         timestamp=time.monotonic(),
     )
 

@@ -1,16 +1,13 @@
 #!/usr/bin/env python
-"""Enhanced Showcase Campaign — Zero-Config, Bias-Free, Maximally Informative
+"""Enhanced Showcase Campaign — Single Time-Boxed Loop with Advanced Reporting.
 
-Phase 0 of TODO55: Makes showcase a publication-grade demonstration of full
-system versatility with progressive disclosure, bias detection, and
-self-explanatory reporting.
-
-Updated for deadline-based time enforcement (TODO55 Phase E).
-No prediction, no cost models — only measured walltime with hard deadlines.
+This is a thin wrapper around the canonical runner (run_experiment.py) that
+adds advanced reporting: coverage matrix, Pareto gallery, stability atlas,
+failure taxonomy, bias detection, and hypothesis generation.
 
 Usage:
-    uv run scripts/showcase.py [--dry-run] [--store PATH] [--device auto|cpu|cuda]
-        [--hours N] [--profile quick|balanced|thorough|deep]
+    uv run scripts/showcase.py --hours N --device auto|cpu|cuda \
+        --store results/showcase.db [--profile quick|balanced|thorough|deep]
         [--bias-check] [--export-notebook PATH] [--interactive]
 
 Profiles (presets combining strategy + depth):
@@ -18,16 +15,6 @@ Profiles (presets combining strategy + depth):
     balanced   → balanced, 5 epochs, 3 seeds (default)
     thorough   → balanced, 10 epochs, 5 seeds (more depth)
     deep       → narrow_deep, 20 epochs, 5 seeds (max depth on core models)
-
-Features:
-    - Tiered execution: broad exploration → focused refinement → deep dive
-    - Bias detection: compares round_robin_grid vs model_based vs stratified_random
-    - Coverage tracking: reports which axes/primitives exercised/skipped
-    - Self-explanatory HTML report with executive summary, coverage matrix,
-      Pareto gallery, stability atlas, failure taxonomy
-    - Auto-hypothesis generation from results → campaign YAML
-    - Notebook export for interactive exploration
-    - Deadline-aware: --hours N means process stops at N hours ± 30 seconds
 """
 
 import argparse
@@ -35,6 +22,7 @@ import asyncio
 import importlib.util
 import json
 import signal
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -58,7 +46,7 @@ def _signal_handler(signum, frame):
 
 @dataclass(frozen=True, slots=True)
 class ShowcaseConfig:
-    """Configuration for showcase campaign (replaces BudgetPlan)."""
+    """Configuration for showcase campaign."""
 
     time_budget_hours: float
     strategy: str  # "broad_shallow" | "balanced" | "narrow_deep"
@@ -126,9 +114,11 @@ class ShowcaseReportData:
     environment_hash: str
     repro_command: str
     export_json_path: str | None
+    budget_utilization: float
+    termination_reason: str
 
 
-# Profile presets (Phase 0.5)
+# Profile presets
 PROFILES = {
     "quick": {"strategy": "broad_shallow", "epochs": 1, "seeds": 1},
     "balanced": {"strategy": "balanced", "epochs": 5, "seeds": 3},
@@ -148,15 +138,13 @@ async def run_showcase(
     export_notebook: str | None = None,
     interactive: bool = False,
 ) -> int:
-    """Run the enhanced showcase campaign with deadline enforcement."""
+    """Run the showcase campaign with deadline enforcement and enhanced reporting."""
     from computronium.experiment.execution.adaptive_budget import (
         BudgetStrategy,
         _build_component_sets,
         _discover_components,
     )
-    from computronium.experiment.execution.deadline import (
-        Deadline,
-    )
+    from computronium.experiment.execution.deadline import Deadline
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
@@ -231,7 +219,7 @@ async def run_showcase(
         tasks=component_set.tasks,
     )
 
-    # Create hard deadline
+    # Create hard deadline - USE FULL DEADLINE, NO 0.8 FACTOR
     deadline = Deadline.from_hours(hours)
     print(f"Hard deadline: {deadline.remaining_soft_seconds() / 3600:.2f}h from now")
     print(f"Strategy: {config.strategy}")
@@ -249,7 +237,7 @@ async def run_showcase(
     )
     print()
 
-    # Generate campaign YAML using deadline-aware approach
+    # Generate campaign YAML using deadline (no prediction, no 0.8 factor)
     campaign_file = f"campaign_showcase_{config.strategy}_{hours}h.yaml"
     yaml_path = _create_deadline_campaign_yaml(config, deadline, Path(campaign_file))
     print(f"YAML written to: {yaml_path}")
@@ -295,22 +283,12 @@ async def run_showcase(
     print(f"Starting campaign execution at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     start_time = time.time()
 
-    # Execute with tiered progression if not using a simple profile
-    if profile in {"balanced", "thorough"} and hours >= 0.2:
-        result = await _run_tiered_campaign(
-            config=config,
-            campaign_file=campaign_file,
-            actual_store=actual_store,
-            device=resolved_device,
-            hours=hours,
-            start_time=start_time,
-        )
-    else:
-        result = await _run_simple_campaign(
-            campaign_file=campaign_file,
-            device=resolved_device,
-            actual_store=actual_store,
-        )
+    # SINGLE CAMPAIGN RUN - no tiers, run until deadline
+    result = await _run_simple_campaign(
+        campaign_file=campaign_file,
+        device=resolved_device,
+        actual_store=actual_store,
+    )
 
     elapsed = time.time() - start_time
     print(f"\nCampaign completed in {elapsed:.1f}s ({elapsed / 3600:.2f}h)")
@@ -353,15 +331,13 @@ async def run_showcase(
 def _create_deadline_campaign_yaml(
     config: ShowcaseConfig, deadline: Deadline, output_path: Path
 ) -> str:
-    """Generate campaign YAML using deadline (no prediction)."""
+    """Generate campaign YAML using deadline (no prediction, no 0.8 factor)."""
     import yaml
 
     store_path = f"results/showcase_{config.strategy}_{config.time_budget_hours}h.db"
 
-    # Calculate per-run budget from deadline
+    # Use FULL deadline for execution (no 0.8 factor)
     deadline_seconds = deadline.remaining_soft_seconds()
-    # Use 80% of deadline for actual execution, 20% grace
-    execution_seconds = deadline_seconds * 0.8
 
     data = {
         "meta": {
@@ -448,7 +424,7 @@ def _create_deadline_campaign_yaml(
                     "tasks": config.tasks,
                     "hpo": {"n_trials": 50, "n_seeds": config.seeds},
                     "epochs": config.epochs,
-                    "budget_seconds": execution_seconds,
+                    "budget_seconds": deadline_seconds,
                 },
                 "depends_on": [],
             }
@@ -479,155 +455,6 @@ async def _run_simple_campaign(
     return result
 
 
-async def _run_tiered_campaign(
-    config: ShowcaseConfig,
-    campaign_file: str,
-    actual_store: str,
-    device: str,
-    hours: float,
-    start_time: float,
-) -> dict[str, Any]:
-    """Run a tiered campaign with progressive disclosure (Phase 0.2).
-
-    Uses online cell timing for adaptive tier allocation, not historical cache.
-    """
-    from computronium.experiment.execution.adaptive_budget import (
-        BudgetStrategy,
-        _build_component_sets,
-        _discover_components,
-    )
-    from computronium.experiment.execution.campaign import run_campaign
-    from computronium.experiment.execution.deadline import Deadline
-
-    print("\n" + "=" * 70)
-    print("TIERED EXECUTION: Progressive Disclosure (Online Adaptive)")
-    print("=" * 70)
-
-    tier_results = []
-    cumulative_store = actual_store
-
-    # Tier definitions (budget fractions)
-    tiers = [
-        (
-            "tier1_exploration",
-            0.0,
-            0.2,
-            1,
-            1,
-            "broad_shallow",
-            "All axes, minimal depth — max diversity",
-        ),
-        (
-            "tier2_refinement",
-            0.2,
-            0.6,
-            5,
-            3,
-            "balanced",
-            "Promising regions, moderate depth",
-        ),
-        ("tier3_deep_dive", 0.6, 1.0, 20, 5, "balanced", "Deep dive on Pareto front"),
-    ]
-
-    for (
-        tier_name,
-        start_pct,
-        end_pct,
-        epochs,
-        seeds,
-        tier_strategy,
-        description,
-    ) in tiers:
-        tier_budget_hours = hours * (end_pct - start_pct)
-
-        # Check if we've exceeded budget (hard deadline)
-        elapsed_hours = (time.time() - start_time) / 3600
-        if elapsed_hours >= hours * end_pct * 1.1:  # 10% grace
-            print(f"\nDeadline reached, stopping at {tier_name}")
-            break
-
-        print(f"\n>>> {tier_name.upper()} ({description})")
-        print(f"    Budget: {tier_budget_hours:.2f}h, Epochs: {epochs}, Seeds: {seeds}")
-
-        # Build component set for this tier
-        components = _discover_components()
-        component_sets = _build_component_sets()
-        tier_component_set = component_sets[BudgetStrategy(tier_strategy)]
-
-        # For tier 2+, filter to promising regions from previous tier
-        if tier_name != "tier1_exploration" and tier_results:
-            # TODO: Implement Pareto-based filtering using online measurements
-            pass
-
-        tier_config = ShowcaseConfig(
-            time_budget_hours=tier_budget_hours,
-            strategy=tier_strategy,
-            device=device,
-            epochs=epochs,
-            seeds=seeds,
-            substrates=tier_component_set.substrates,
-            geometries=tier_component_set.geometries,
-            dynamics=tier_component_set.dynamics,
-            credits=tier_component_set.credits,
-            updates=tier_component_set.updates,
-            plasticities=tier_component_set.plasticities,
-            tasks=tier_component_set.tasks,
-        )
-
-        tier_deadline = Deadline.from_hours(tier_budget_hours)
-        tier_campaign_file = f"campaign_showcase_{tier_name}_{hours}h.yaml"
-        _create_deadline_campaign_yaml(
-            tier_config, tier_deadline, Path(tier_campaign_file)
-        )
-
-        # Run tier
-        tier_result = await run_campaign(
-            Path(tier_campaign_file),
-            parallel=1,
-            device=device,
-        )
-        tier_results.append(tier_result)
-
-        # Print tier summary
-        completed = tier_result.get("completed", 0)
-        failed = tier_result.get("failed", 0)
-        print(f"    Completed: {completed}, Failed: {failed}")
-
-        # Update cumulative store for next tier
-        cumulative_store = tier_config.tasks[0] if tier_config.tasks else actual_store
-
-    # Return combined result
-    combined = {
-        "campaign": config.strategy,
-        "total_runs": sum(r.get("total_runs", 0) for r in tier_results),
-        "completed": sum(r.get("completed", 0) for r in tier_results),
-        "failed": sum(r.get("failed", 0) for r in tier_results),
-        "run_results": {},
-        "tier_results": tier_results,
-    }
-    idx = 0
-    for tr in tier_results:
-        for k, v in tr.get("run_results", {}).items():
-            combined["run_results"][idx] = v
-            idx += 1
-
-    return combined
-
-
-def _filter_to_promising_regions(
-    config: ShowcaseConfig, prev_result: dict, store_path: str
-):
-    """Filter plan to promising regions from previous tier (Phase 0.2).
-
-    In a full implementation, this would analyze the Pareto frontier from
-    previous tier and focus on high-performing regions. For now, we keep
-    the full plan but could reduce component sets based on results.
-    """
-    # TODO: Implement Pareto-based filtering
-    # For now, return config as-is
-    return config
-
-
 async def _run_bias_check(
     config: ShowcaseConfig,
     campaign_file: str,
@@ -637,6 +464,7 @@ async def _run_bias_check(
 ) -> BiasAuditResult:
     """Run bias detection by comparing policies (Phase 0.3)."""
     from computronium.experiment.execution.campaign import run_campaign
+    from computronium.experiment.execution.deadline import Deadline
 
     print("\n" + "=" * 70)
     print("BIAS DETECTION: Policy Comparison")
@@ -648,7 +476,6 @@ async def _run_bias_check(
     for policy_name in policies:
         print(f"  Running with policy: {policy_name}...")
         # Create a mini-campaign for this policy using deadline-aware approach
-        from computronium.experiment.execution.deadline import Deadline
 
         mini_config = ShowcaseConfig(
             time_budget_hours=hours * 0.1,  # 10% of budget for bias check
@@ -710,10 +537,7 @@ def _analyze_bias(policy_results: dict, reference_store: str) -> BiasAuditResult
         runs = result.get("run_results", {})
         if not runs:
             continue
-        # run_idx = max(runs.keys())  # reserved for future use
 
-        # This would need actual store access to compute marginals
-        # For now, return placeholder structure
         policy_comparison[policy_name] = {
             "completed": result.get("completed", 0),
             "failed": result.get("failed", 0),
@@ -769,12 +593,6 @@ async def _generate_showcase_report(
     export_notebook: str | None,
 ) -> ShowcaseReportData:
     """Generate comprehensive showcase report data."""
-    import subprocess
-
-    from computronium.experiment.evidence.store import RecordStore, StoreConfig
-    from computronium.experiment.surface.report import (
-        ReportGenerator,
-    )
 
     # Get environment hash
     try:
@@ -804,6 +622,9 @@ async def _generate_showcase_report(
     export_json_path = None
 
     if Path(actual_store).exists():
+        from computronium.experiment.evidence.store import RecordStore, StoreConfig
+        from computronium.experiment.surface.report import ReportGenerator
+
         store = RecordStore(StoreConfig(Path(actual_store)))
         with store:
             runs = store.query_runs()
@@ -879,6 +700,19 @@ async def _generate_showcase_report(
             config.time_budget_hours,
         )
 
+    # Calculate budget utilization
+    budget_s = config.time_budget_hours * 3600
+    elapsed_s = end_time - start_time
+    budget_utilization = elapsed_s / budget_s if budget_s > 0 else 0.0
+
+    # Determine termination reason
+    if budget_utilization >= 0.90 and elapsed_s <= budget_s + 30:
+        termination_reason = "deadline"
+    elif elapsed_s > budget_s + 30:
+        termination_reason = "overshoot"
+    else:
+        termination_reason = "early_stop"
+
     return ShowcaseReportData(
         campaign_name=campaign_data.get("meta", {}).get("name", "showcase"),
         start_time=start_time,
@@ -887,13 +721,9 @@ async def _generate_showcase_report(
         device=device,
         strategy=config.strategy,
         profile=profile or "custom",
-        tiers_executed=["tier1_exploration", "tier2_refinement", "tier3_deep_dive"]
-        if profile in {"balanced", "thorough"}
-        else ["single_phase"],
+        tiers_executed=["single_phase"],  # No tiers in new architecture
         total_cells_evaluated=result.get("completed", 0),
-        total_records=sum(
-            r.get("completed", 0) for r in result.get("tier_results", [result])
-        ),
+        total_records=result.get("completed", 0),
         axis_coverage=axis_coverage,
         pareto_points=pareto_points,
         stability_summary=stability_summary,
@@ -903,6 +733,8 @@ async def _generate_showcase_report(
         environment_hash=env_hash,
         repro_command=repro_command,
         export_json_path=export_json_path,
+        budget_utilization=budget_utilization,
+        termination_reason=termination_reason,
     )
 
 
@@ -974,7 +806,7 @@ def _export_json_data(store, run_id: str, output_path: str):
 def _generate_enhanced_html_report(
     report_data: ShowcaseReportData, output_path: str
 ) -> None:
-    """Generate enhanced HTML report with all Phase 0.4 sections."""
+    """Generate enhanced HTML report with all sections."""
     html = _build_enhanced_html(report_data)
     Path(output_path).write_text(html, encoding="utf-8")
     print(f"Enhanced HTML report written to: {output_path}")
@@ -1007,6 +839,10 @@ def _build_enhanced_html(data: ShowcaseReportData) -> str:
 
     # Hypotheses HTML
     hypotheses_html = _build_hypotheses_html(data.hypotheses)
+
+    # Budget utilization status
+    util_status = "✅ PASS" if data.budget_utilization >= 0.90 else "❌ FAIL"
+    term_reason = data.termination_reason
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1055,6 +891,10 @@ def _build_enhanced_html(data: ShowcaseReportData) -> str:
         .toc li {{ margin: 8px 0; }}
         .toc a {{ color: #2563eb; text-decoration: none; }}
         .toc a:hover {{ text-decoration: underline; }}
+        .util-badge {{ display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 0.875rem; }}
+        .util-pass {{ background: #dcfce7; color: #166534; }}
+        .util-fail {{ background: #fee2e2; color: #991b1b; }}
+        .term-badge {{ display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 0.875rem; background: #e0e7ff; color: #3730a3; }}
     </style>
 </head>
 <body>
@@ -1066,6 +906,7 @@ def _build_enhanced_html(data: ShowcaseReportData) -> str:
         <ul>
             <li><a href="#executive-summary">Executive Summary</a></li>
             <li><a href="#campaign-configuration">Campaign Configuration</a></li>
+            <li><a href="#budget-utilization">Budget Utilization</a></li>
             <li><a href="#coverage-matrix">Coverage Matrix</a></li>
             <li><a href="#pareto-gallery">Pareto Gallery</a></li>
             <li><a href="#stability-atlas">Stability Atlas</a></li>
@@ -1078,7 +919,7 @@ def _build_enhanced_html(data: ShowcaseReportData) -> str:
 
     <div id="executive-summary" class="section executive-summary">
         <h2>📊 Executive Summary</h2>
-        <p>In <strong>{duration_hours:.2f} hours</strong>, we explored <strong>{data.total_cells_evaluated}</strong> valid combinations across <strong>{len(data.axis_coverage)}</strong> ontology axes. The campaign executed <strong>{len(data.tiers_executed)}</strong> tier(s): {", ".join(data.tiers_executed)}.</p>
+        <p>In <strong>{duration_hours:.2f} hours</strong>, we explored <strong>{data.total_cells_evaluated}</strong> valid combinations across <strong>{len(data.axis_coverage)}</strong> ontology axes. The campaign executed a <strong>single phase</strong> (no tiers).</p>
         <p><strong>Key Findings:</strong></p>
         <ul>
             <li>Coverage across {sum(len(v) for v in data.axis_coverage.values())} unique primitives</li>
@@ -1097,12 +938,23 @@ def _build_enhanced_html(data: ShowcaseReportData) -> str:
             <div class="meta-item"><div class="meta-label">Time Budget</div><div class="meta-value">{data.total_budget_hours:.2f}h</div></div>
             <div class="meta-item"><div class="meta-label">Actual Duration</div><div class="meta-value">{duration_hours:.2f}h</div></div>
             <div class="meta-item"><div class="meta-label">Device</div><div class="meta-value">{data.device}</div></div>
-            <div class="meta-item"><div class="meta-label">Tiers Executed</div><div class="meta-value">{len(data.tiers_executed)}</div></div>
+            <div class="meta-item"><div class="meta-label">Phases Executed</div><div class="meta-value">{len(data.tiers_executed)}</div></div>
             <div class="meta-item"><div class="meta-label">Cells Evaluated</div><div class="meta-value">{data.total_cells_evaluated}</div></div>
             <div class="meta-item"><div class="meta-label">Total Records</div><div class="meta-value">{data.total_records}</div></div>
             <div class="meta-item"><div class="meta-label">Start Time</div><div class="meta-value">{start_str}</div></div>
             <div class="meta-item"><div class="meta-label">End Time</div><div class="meta-value">{end_str}</div></div>
             <div class="meta-item"><div class="meta-label">Environment Hash</div><div class="meta-value">{data.environment_hash}</div></div>
+        </div>
+    </div>
+
+    <div id="budget-utilization" class="section">
+        <h2>⏱️ Budget Utilization</h2>
+        <div class="meta-grid">
+            <div class="meta-item"><div class="meta-label">Budget</div><div class="meta-value">{data.total_budget_hours:.2f}h</div></div>
+            <div class="meta-item"><div class="meta-label">Elapsed</div><div class="meta-value">{duration_hours:.2f}h</div></div>
+            <div class="meta-item"><div class="meta-label">Utilization</div><div class="meta-value">{data.budget_utilization:.1%}</div></div>
+            <div class="meta-item"><div class="meta-label">Status</div><div class="meta-value"><span class="util-badge {"util-pass" if data.budget_utilization >= 0.90 else "util-fail"}">{util_status}</span></div></div>
+            <div class="meta-item"><div class="meta-label">Termination Reason</div><div class="meta-value"><span class="term-badge">{term_reason}</span></div></div>
         </div>
     </div>
 
@@ -1303,12 +1155,54 @@ def _build_hypotheses_html(hypotheses: list[dict]) -> str:
             <p><strong>Test:</strong> <code>{h["test"]}</code></p>
             <p><strong>Min Effect Size:</strong> {h["min_effect_size"]} | <strong>Required Power:</strong> {h["required_power"]}</p>
             <div class='hypothesis-tags'>
-                {"".join(f"<span class='tag'>{tag}</span>" for tag in h["tags"])}
+                {"".join(f'<span class="tag">{tag}</span>' for tag in h.get("tags", []))}
             </div>
-            <p><small>Evidence: {h["evidence"]}</small></p>
         </div>
         """)
     return "\n".join(html)
+
+
+def _print_final_summary(
+    report_data: ShowcaseReportData, report_path: str, store_path: str
+):
+    """Print final summary to console."""
+    duration_hours = (report_data.end_time - report_data.start_time) / 3600
+    budget_s = report_data.total_budget_hours * 3600
+    elapsed_s = report_data.end_time - report_data.start_time
+
+    print("\n" + "=" * 70)
+    print("SHOWCASE CAMPAIGN COMPLETE")
+    print("=" * 70)
+    print(f"Campaign: {report_data.campaign_name}")
+    print(
+        f"Duration: {duration_hours:.2f}h (budget: {report_data.total_budget_hours:.2f}h)"
+    )
+    print(
+        f"Utilization: {report_data.budget_utilization:.1%} {'✅' if report_data.budget_utilization >= 0.90 else '❌'}"
+    )
+    print(f"Termination: {report_data.termination_reason}")
+    print(f"Cells evaluated: {report_data.total_cells_evaluated}")
+    print(f"Pareto points: {len(report_data.pareto_points)}")
+    print(f"Failure types: {len(report_data.failure_taxonomy)}")
+    print(f"Hypotheses generated: {len(report_data.hypotheses)}")
+    print(f"Report: {report_path}")
+    print(f"Store: {store_path}")
+    print("=" * 70)
+
+
+async def _run_interactive_mode(
+    store: str,
+    device: str,
+    hours: float,
+    strategy: str,
+    profile: str | None,
+    bias_check: bool,
+    export_notebook: str | None,
+) -> int:
+    """Run interactive TUI mode."""
+    print("Interactive mode not yet implemented for single-loop architecture.")
+    print("Run without --interactive for standard execution.")
+    return 1
 
 
 def _export_notebook(
@@ -1591,89 +1485,59 @@ def _export_notebook(
     print(f"Notebook exported to: {output_path}")
 
 
-async def _run_interactive_mode(
-    store: str,
-    device: str,
-    hours: float,
-    strategy: str,
-    profile: str | None,
-    bias_check: bool,
-    export_notebook: str | None,
-) -> int:
-    """Run interactive TUI mode (Phase 0.8)."""
-    print("Interactive TUI mode not yet fully implemented.")
-    print("Falling back to non-interactive mode...")
-    return await run_showcase(
-        store=store,
-        device=device,
-        dry_run=False,
-        strategy=strategy,
-        hours=hours,
-        profile=profile,
-        bias_check=bias_check,
-        export_notebook=export_notebook,
-        interactive=False,
-    )
-
-
 def _print_final_summary(
     report_data: ShowcaseReportData, report_path: str, store_path: str
 ):
     """Print final summary to console."""
+    duration_hours = (report_data.end_time - report_data.start_time) / 3600
+    budget_s = report_data.total_budget_hours * 3600
+    elapsed_s = report_data.end_time - report_data.start_time
+
     print("\n" + "=" * 70)
-    print("SHOWCASE COMPLETE")
+    print("SHOWCASE CAMPAIGN COMPLETE")
     print("=" * 70)
-    print(f"\nResults stored in: {store_path}")
-    print(f"Enhanced report: {report_path}")
-    if report_data.export_json_path:
-        print(f"Export JSON: {report_data.export_json_path}")
-    print(f"Environment: {report_data.environment_hash}")
-    print("\nRepro command:")
-    print(f"  {report_data.repro_command}")
-    print("\nNext steps:")
-    print(f"  1. View HTML report: open {report_path}")
+    print(f"Campaign: {report_data.campaign_name}")
     print(
-        f"  2. Explore data: uv run comp pareto --store {store_path} --objectives validation_accuracy,walltime_total --weights 0.7,0.3 --scalarize --output pareto.csv"
+        f"Duration: {duration_hours:.2f}h (budget: {report_data.total_budget_hours:.2f}h)"
     )
     print(
-        f"  3. Run hypothesis tests: uv run comp hypothesis-campaign --store {store_path} --templates templates/hypotheses.json"
+        f"Utilization: {report_data.budget_utilization:.1%} {'✅' if report_data.budget_utilization >= 0.90 else '❌'}"
     )
-    if report_data.export_json_path:
-        print(
-            f"  4. Open notebook: jupyter lab {report_data.export_json_path.replace('_export.json', '_exploration.ipynb')}"
-        )
+    print(f"Termination: {report_data.termination_reason}")
+    print(f"Cells evaluated: {report_data.total_cells_evaluated}")
+    print(f"Pareto points: {len(report_data.pareto_points)}")
+    print(f"Failure types: {len(report_data.failure_taxonomy)}")
+    print(f"Hypotheses generated: {len(report_data.hypotheses)}")
+    print(f"Report: {report_path}")
+    print(f"Store: {store_path}")
+    print("=" * 70)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Enhanced showcase campaign with tiered execution, bias detection, and rich reporting",
+        description="Enhanced Showcase Campaign — Single Time-Boxed Loop with Advanced Reporting",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Profiles (presets):
-  quick      - broad_shallow, 1 epoch, 1 seed (max diversity, ~5 min)
-  balanced   - balanced, 5 epochs, 3 seeds (default, ~30 min)
-  thorough   - balanced, 10 epochs, 5 seeds (~1-2 hours)
-  deep       - narrow_deep, 20 epochs, 5 seeds (max depth on core models)
-
 Examples:
-    uv run scripts/showcase.py                           # 1h balanced on auto device
-    uv run scripts/showcase.py --profile quick           # 5-min smoke test
-    uv run scripts/showcase.py --profile thorough        # 1-2h thorough exploration
-    uv run scripts/showcase.py --hours 2 --profile deep  # 2h deep dive
-    uv run scripts/showcase.py --hours 1 --bias-check    # With bias audit
-    uv run scripts/showcase.py --hours 1 --export-notebook showcase.ipynb  # Export notebook
-    uv run scripts/showcase.py --dry-run                 # Preview plan
+  # Run 1-hour experiment on GPU
+  uv run scripts/showcase.py --hours 1 --device cuda --store results/showcase_1h.db
 
-Strategies (when not using --profile):
-  broad_shallow  - All components, few epochs/seeds (max diversity)
-  balanced       - All components, moderate epochs/seeds (default)
-  narrow_deep    - Core models only, many epochs/seeds (max depth)
+  # Run 30-minute experiment on CPU with quick profile
+  uv run scripts/showcase.py --hours 0.5 --device cpu --profile quick --store results/showcase_30m.db
+
+  # Run with bias detection
+  uv run scripts/showcase.py --hours 1 --device cuda --bias-check --store results/showcase.db
+
+  # Export Jupyter notebook for interactive analysis
+  uv run scripts/showcase.py --hours 1 --export-notebook showcase.ipynb --store results/showcase.db
         """,
     )
+
     parser.add_argument(
-        "--store",
-        default="results/showcase.db",
-        help="DuckDB store path (default: results/showcase.db)",
+        "--hours",
+        type=float,
+        default=1.0,
+        help="Time budget in hours (hard deadline enforcement)",
     )
     parser.add_argument(
         "--device",
@@ -1682,59 +1546,51 @@ Strategies (when not using --profile):
         help="Device to run on (default: auto)",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Validate campaign and print plan without running",
+        "--store",
+        type=str,
+        default="results/showcase.db",
+        help="DuckDB store path (default: results/showcase.db)",
     )
     parser.add_argument(
         "--strategy",
-        choices=["broad_shallow", "balanced", "narrow_deep"],
+        type=str,
         default="balanced",
-        help="Campaign strategy (default: balanced)",
-    )
-    parser.add_argument(
-        "--hours",
-        type=float,
-        default=1.0,
-        help="Time budget in hours (default: 1.0)",
+        choices=["broad_shallow", "balanced", "narrow_deep"],
+        help="Search strategy (default: balanced)",
     )
     parser.add_argument(
         "--profile",
-        choices=list(PROFILES.keys()),
-        help="Profile preset: quick, balanced, thorough, deep",
+        type=str,
+        choices=["quick", "balanced", "thorough", "deep"],
+        help="Profile preset (overrides strategy/epochs/seeds)",
     )
     parser.add_argument(
         "--bias-check",
         action="store_true",
-        help="Run policy comparison for bias detection",
+        help="Run bias detection by comparing policies",
     )
     parser.add_argument(
         "--export-notebook",
         type=str,
-        help="Export Jupyter notebook with analysis cells to given path",
+        help="Export Jupyter notebook for interactive analysis",
     )
     parser.add_argument(
         "--interactive",
         action="store_true",
-        help="Run interactive TUI dashboard (requires 'textual')",
+        help="Run in interactive TUI mode (requires textual)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate campaign YAML and exit",
     )
 
     args = parser.parse_args()
 
-    # Resolve device
-    if args.device == "auto":
-        resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
-    else:
-        resolved_device = args.device
-
-    print(
-        f"Resolved device: {resolved_device} (CUDA available: {torch.cuda.is_available()})"
-    )
-
     return asyncio.run(
         run_showcase(
             store=args.store,
-            device=resolved_device,
+            device=args.device,
             dry_run=args.dry_run,
             strategy=args.strategy,
             hours=args.hours,

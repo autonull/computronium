@@ -39,6 +39,7 @@ from computronium.experiment.execution.deadline import (
 )
 from computronium.experiment.execution.decision import Decision, RoundController
 from computronium.experiment.execution.stage import StageId, get_stage_spec
+from computronium.experiment.execution.stream import CellStream, CellStreamState
 from computronium.experiment.execution.sysctx import (
     SystemContext,
     capture_environment_snapshot,
@@ -77,10 +78,6 @@ try:
 except ImportError:
     tqdm = None  # type: ignore[assignment]
 
-# Rounds that may measure nothing while still proposing fresh cells before the
-# run concludes they cannot measure anything.
-_MAX_FRUITLESS_ROUNDS: Final = 3
-
 # The stages one round walks, in order. The order is the pipeline's meaning —
 # schedule, gate, compose, train, measure, record, attribute, decide — and a
 # stage the run does not declare is skipped rather than reordered.
@@ -94,6 +91,19 @@ _ROUND_STAGE_ORDER: Final = (
     StageId.S9_ATTRIBUTE,
     StageId.S10_DECIDE,
 )
+
+
+class ZeroYieldError(RuntimeError):
+    """Raised when K>=3 consecutive batches produce zero successes with a
+    single shared failure cause. This is a reviewable failure, not a silent stop.
+    """
+
+    def __init__(self, cause: str, count: int, message: str):
+        super().__init__(
+            f"ZeroYieldError: {count} consecutive batches failed with cause '{cause}': {message}"
+        )
+        self.cause = cause
+        self.count = count
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,7 +207,7 @@ class PipelineState:
     in_progress: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
     deadline: Deadline | None = None
     deadline_enforcer: DeadlineEnforcer | None = None
-    cell_timing: CellTiming | None = None
+    cell_timing: CellTiming = field(default_factory=CellTiming)
     signal_handler: SignalHandler | None = None
     allocator_state: dict[str, Any] | None = None
     last_decision: Decision | None = None
@@ -213,11 +223,16 @@ class PipelineState:
     round_controller: RoundController | None = None
     # Search space
     search_space: SearchSpace | None = None
-    # Whether the last batch contained a cell this run had never proposed, and
-    # how many rounds in a row have measured nothing while fresh cells existed
-    # (a failing cell must not spin the loop forever).
-    last_batch_was_all_seen: bool = False
-    fruitless_rounds: int = 0
+    # Admission gate: durable set of rejected keys (never re-proposed)
+    rejected_keys: set[str] = field(default_factory=set)
+    # Batch sizer for budget-aware n_propose
+    batch_sizer: Any = None  # BatchSizer, imported locally to avoid cycle
+    # Cell stream for unbounded candidate generation
+    cell_stream: CellStream | None = None
+    cell_stream_state: CellStreamState | None = None
+    # Consecutive zero-yield batches for ZeroYieldError
+    zero_yield_count: int = 0
+    last_zero_yield_cause: str | None = None
     # System context with environment snapshot (WP19/R75/K10)
     system_context: SystemContext | None = None
 
@@ -276,6 +291,14 @@ class PipelineRunner:
             ),
             system_context=system_context,
         )
+        # Create BatchSizer for budget-aware n_propose (only if deadline is set)
+        if config.deadline is not None:
+            from computronium.experiment.execution.batch_sizer import BatchSizer
+
+            self._state.batch_sizer = BatchSizer(
+                deadline=config.deadline,
+                timing=self._state.cell_timing,
+            )
         self._stages = config.stages or [
             StageId(n) for n in config.run_spec.stage_names
         ]
@@ -395,6 +418,15 @@ class PipelineRunner:
             total_walltime_s=ct_data.get("total_walltime_s", 0.0),
             cell_times=ct_data.get("cell_times", []),
         )
+
+        # Restore CellStream state
+        cell_stream_state_data = checkpoint_data.get("cell_stream_state")
+        if cell_stream_state_data is not None:
+            from computronium.experiment.execution.stream import CellStreamState
+
+            self._state.cell_stream_state = CellStreamState.from_dict(
+                cell_stream_state_data
+            )
 
         logger.info(
             "Restored checkpoint: %d completed, %d pending, round %d",
@@ -520,6 +552,23 @@ class PipelineRunner:
         # Build SearchSpace from RunSpec
         self._state.search_space = self._build_search_space()
 
+        # Create CellStream for unbounded candidate generation
+        if self._config.deadline is not None and self._state.search_space is not None:
+            from computronium.experiment.execution.evaluate import task_shape
+
+            self._state.cell_stream = CellStream(
+                spec=self._config.run_spec,
+                space=self._state.search_space,
+                shape=task_shape,
+                deadline=self._config.deadline,
+            )
+            # Set exploit policy if available
+            if self._config.policy:
+                self._state.cell_stream.set_exploit_policy(self._config.policy)
+            # Restore cell stream state from checkpoint if available
+            if self._state.cell_stream_state is not None:
+                self._state.cell_stream.set_state(self._state.cell_stream_state)
+
         all_records: list[Record] = []
 
         # S1-S2: Run once at start
@@ -588,7 +637,15 @@ class PipelineRunner:
                 break
 
     async def _run_round_loop(self, all_records: list[Record]) -> None:
-        """Run S3-S10 round loop with Decision-based termination."""
+        """Run S3-S10 round loop — stops ONLY on deadline or shutdown.
+
+        The only legal terminations are:
+        (a) deadline (soft or hard)
+        (b) SIGINT/SIGTERM (shutdown_requested)
+
+        Any other termination — empty stream, "fruitless" rounds, all-seen batch,
+        single-round cap, 80% sub-budget — is a DEFECT.
+        """
         round_controller = self._state.round_controller
         if round_controller is None:
             from computronium.experiment.execution.decision import RoundController
@@ -608,17 +665,25 @@ class PipelineRunner:
                 break
 
             before = len(all_records)
-            await self._execute_round(all_records)
+            try:
+                await self._execute_round(all_records)
+            except ZeroYieldError:
+                # Re-raise to stop the run with a diagnostic
+                raise
 
             self._check_post_round_deadline(deadline_enforcer)
 
             if pbar_rounds:
                 pbar_rounds.update(1)
+
+            # Track zero-yield batches for ZeroYieldError
             if len(all_records) > before:
-                self._state.fruitless_rounds = 0
-                continue
-            if self._should_stop_on_fruitless_rounds(round_controller):
-                break
+                # Successful batch - reset zero-yield counter
+                self._state.zero_yield_count = 0
+                self._state.last_zero_yield_cause = None
+            else:
+                # Zero-yield batch - check for uniform failure cause
+                self._check_zero_yield()
 
         if pbar_rounds:
             pbar_rounds.close()
@@ -639,7 +704,10 @@ class PipelineRunner:
         deadline_enforcer: DeadlineEnforcer | None,
         signal_handler: SignalHandler | None,
     ) -> bool:
-        """Check if round loop should stop. Returns True if should stop."""
+        """Check if round loop should stop. Returns True if should stop.
+
+        ONLY stops on: shutdown signal, hard deadline expired, soft deadline reached.
+        """
         if signal_handler and signal_handler.shutdown_requested:
             logger.info("Shutdown requested, stopping round loop")
             self._shutdown = True
@@ -665,25 +733,43 @@ class PipelineRunner:
             logger.info("Soft deadline reached after round, stopping")
             self._shutdown = True
 
-    def _should_stop_on_fruitless_rounds(
-        self, round_controller: RoundController
-    ) -> bool:
-        """Check if we should stop due to fruitless rounds. Returns True if should stop."""
-        if self._state.last_batch_was_all_seen:
-            logger.info(
-                "Round %d re-proposed only measured cells; the space this "
-                "policy reaches is exhausted",
-                round_controller.current_round,
-            )
-            return True
-        self._state.fruitless_rounds += 1
-        if self._state.fruitless_rounds >= _MAX_FRUITLESS_ROUNDS:
-            logger.info(
-                "%d rounds measured nothing despite fresh cells; stopping",
-                self._state.fruitless_rounds,
-            )
-            return True
-        return False
+    def _check_zero_yield(self) -> None:
+        """Check for consecutive zero-yield batches with uniform failure cause.
+
+        If K>=3 consecutive batches produce zero successes with a single shared
+        failure cause, raise ZeroYieldError — a reviewable failure, not a silent stop.
+        """
+        # Analyze the last round's rejections to find the dominant failure cause
+        if not self._state.rejections:
+            return
+
+        # Get rejections from the last round (approximate by looking at recent)
+        recent_rejections = self._state.rejections[-10:]  # Last 10 rejections
+        if not recent_rejections:
+            return
+
+        # Count causes
+        cause_counts: dict[str, int] = {}
+        for r in recent_rejections:
+            cause = r.get("cause", "UNKNOWN")
+            cause_counts[cause] = cause_counts.get(cause, 0) + 1
+
+        # Find dominant cause
+        if cause_counts:
+            dominant_cause, count = max(cause_counts.items(), key=lambda x: x[1])
+            if count >= 3:  # At least 3 failures with same cause in recent rejections
+                if self._state.last_zero_yield_cause == dominant_cause:
+                    self._state.zero_yield_count += 1
+                else:
+                    self._state.zero_yield_count = 1
+                    self._state.last_zero_yield_cause = dominant_cause
+
+                if self._state.zero_yield_count >= 3:
+                    raise ZeroYieldError(
+                        cause=dominant_cause,
+                        count=self._state.zero_yield_count,
+                        message=f"Uniform failure cause '{dominant_cause}' across {self._state.zero_yield_count} batches",
+                    )
 
     async def _execute_round(self, all_records: list[Record]) -> None:
         """Execute a single round of S3-S10 stages."""
@@ -851,6 +937,8 @@ class PipelineRunner:
             stage_params=stage_spec.params,
             provenance=self._provenance(env_dict),
             system_context=system_context,
+            batch_sizer=self._state.batch_sizer,
+            cell_stream=self._state.cell_stream,
         )
 
     def _provenance(self, env_dict: dict[str, Any]) -> Provenance:
@@ -980,9 +1068,18 @@ class PipelineRunner:
         provenance carries neither: a design that vanishes before persistence
         is a design the store cannot re-derive, and the contrast split was
         exactly that.
+
+        Admission gate: every candidate passes through SystemConfig.validate
+        (via compose_configs) at the batch boundary. Invalid cells are added
+        to rejected_keys and never reach the trainer.
         """
+        from computronium.experiment.execution.compose import compose_configs
+        from computronium.experiment.execution.evaluate import task_shape
+
         seen: set[str] = set(self._state.completed_measurement_keys)
+        rejected: set[str] = set(self._state.rejected_keys)
         skipped = 0
+        rejected_this_batch = 0
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]] = []
         for proposal in proposals:
             item_provenance = _provenance_for(provenance, proposal)
@@ -991,11 +1088,62 @@ class PipelineRunner:
                 if key in seen:
                     skipped += 1
                     continue
+                if key in rejected:
+                    rejected_this_batch += 1
+                    continue
+
+                # ADMISSION GATE: last-mile SystemConfig.validate check
+                # This is the single source of truth for legality
+                try:
+                    task_id = schedule.task_id or (
+                        self._config.run_spec.task_names[0]
+                        if self._config.run_spec.task_names
+                        else "unknown"
+                    )
+                    task_shape_info = task_shape(task_id)
+                    config = compose_configs(
+                        coordinate=proposal.coordinate,
+                        geometry={},
+                        input_shape=task_shape_info.input_shape,
+                        output_dim=task_shape_info.output_dim,
+                        param_budget=schedule.param_budget,
+                    )
+                    # Param budget check (R25 fairness rule)
+                    from computronium.experiment.execution.compose import (
+                        geometry_param_count,
+                    )
+                    from computronium.experiment.schema.registries import (
+                        PARAM_BUDGET_TOLERANCE,
+                    )
+
+                    if schedule.param_budget > 0:
+                        if geometry_param_count(
+                            config.geometry
+                        ) > schedule.param_budget * (1 + PARAM_BUDGET_TOLERANCE):
+                            raise ValueError(
+                                f"Param budget exceeded: {geometry_param_count(config.geometry)} > {schedule.param_budget}"
+                            )
+                except (ValueError, TypeError, KeyError) as e:
+                    # Reject this cell - add to durable rejected set
+                    self._state.rejected_keys.add(key)
+                    rejected_this_batch += 1
+                    self._classify_rejection(
+                        coordinate=proposal.coordinate,
+                        schedule=schedule,
+                        cause="ADMISSION_REJECTED",
+                        message=str(e),
+                    )
+                    continue
+
                 seen.add(key)
                 items.append((proposal.coordinate, schedule, item_provenance, {}))
-        self._state.last_batch_was_all_seen = not items
+
         if skipped:
             logger.info("Skipped %d already-measured seed(s)", skipped)
+        if rejected_this_batch:
+            logger.info(
+                "Admission gate rejected %d invalid cell(s)", rejected_this_batch
+            )
         return items
 
     async def _execute_batch_with_isolation(
@@ -1190,6 +1338,11 @@ class PipelineRunner:
         round_controller_state = self._get_round_controller_state()
         cell_timing = self._get_or_create_cell_timing()
 
+        # Save CellStream state for resume
+        cell_stream_state = None
+        if self._state.cell_stream is not None:
+            cell_stream_state = self._state.cell_stream.get_state().to_dict()
+
         return _PipelineStateSnapshot(
             run_id=self._config.run_id,
             completed_keys=frozenset(self._state.completed_measurement_keys),
@@ -1201,6 +1354,7 @@ class PipelineRunner:
             allocator_state=allocator_state,
             system_context_snapshot=system_context_snapshot,
             cell_timing=cell_timing,
+            cell_stream_state=cell_stream_state,
         )
 
     def _get_policy_state(self) -> dict[str, Any]:
@@ -1276,8 +1430,10 @@ class PipelineRunner:
 
             # Save to store (convert CheckpointData to dict)
             if self._store.is_open:
+                import dataclasses
+
                 self._store.save_checkpoint(
-                    self._config.run_id, checkpoint_data.__dict__
+                    self._config.run_id, dataclasses.asdict(checkpoint_data)
                 )
                 logger.info(
                     "Checkpoint saved for run %s (round %d, %d completed)",

@@ -258,7 +258,7 @@ class ProposalContext:
                 deadline=self.deadline,
                 cost_model=None,
                 shape=self.shape,
-                check_composable=False,  # Defer validation to GateStage/ComposeStage
+                check_composable=True,  # Filter invalid combos at search space level
             )
             if self.fresh(coordinate, schedule, measured)
         )
