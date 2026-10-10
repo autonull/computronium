@@ -110,20 +110,34 @@ class HypothesisSpec(BaseModel):
 
     # Test specification
     primary_metric: str = Field(..., description="Primary outcome metric")
-    grouping_factor: str | None = Field(None, description="Factor to group by (e.g., 'credit')")
-    comparison_values: list[str] | None = Field(None, description="Specific values to compare")
-    covariates: list[str] = Field(default_factory=list, description="Covariates to control for")
+    grouping_factor: str | None = Field(
+        None, description="Factor to group by (e.g., 'credit')"
+    )
+    comparison_values: list[str] | None = Field(
+        None, description="Specific values to compare"
+    )
+    covariates: list[str] = Field(
+        default_factory=list, description="Covariates to control for"
+    )
 
     # Statistical parameters
-    min_effect_size: float = Field(..., gt=0, description="Minimum practically significant effect")
-    required_power: float = Field(..., ge=0.5, le=0.99, description="Required statistical power")
+    min_effect_size: float = Field(
+        ..., gt=0, description="Minimum practically significant effect"
+    )
+    required_power: float = Field(
+        ..., ge=0.5, le=0.99, description="Required statistical power"
+    )
     alpha: float = Field(0.05, gt=0, le=0.1, description="Significance level")
-    n_comparisons: int = Field(1, ge=1, description="Number of comparisons for correction")
+    n_comparisons: int = Field(
+        1, ge=1, description="Number of comparisons for correction"
+    )
 
     # Design parameters
     paired: bool = Field(False, description="Whether samples are paired")
     alternative: str = Field("two-sided", pattern="^(two-sided|greater|less)$")
-    min_samples_per_group: int = Field(10, ge=2, description="Minimum samples per group")
+    min_samples_per_group: int = Field(
+        10, ge=2, description="Minimum samples per group"
+    )
 
     # Metadata
     tags: list[str] = Field(default_factory=list)
@@ -181,7 +195,7 @@ class HypothesisSpec(BaseModel):
         z_power = stats.norm.ppf(self.required_power)
         d = self.min_effect_size
 
-        n_per_group = 2 * (z_alpha + z_power) ** 2 / (d ** 2)
+        n_per_group = 2 * (z_alpha + z_power) ** 2 / (d**2)
         return math.ceil(n_per_group)
 
 
@@ -209,6 +223,7 @@ class HypothesisResult(BaseModel):
     def to_statistical_result(self) -> StatisticalResult:
         """Convert to report model."""
         from computronium.experiment.templates.report.models import StatisticalResult
+
         return StatisticalResult(
             hypothesis_id=self.hypothesis_id,
             test_name=self.test_type.value,
@@ -249,7 +264,9 @@ class HypothesisRegistry:
         data = {
             "version": 1,
             "saved_at": datetime.now().isoformat(),
-            "hypotheses": [h.model_dump(mode="json") for h in self._hypotheses.values()],
+            "hypotheses": [
+                h.model_dump(mode="json") for h in self._hypotheses.values()
+            ],
         }
         with self._storage_path.open("w") as f:
             json.dump(data, f, indent=2, default=str)
@@ -257,7 +274,9 @@ class HypothesisRegistry:
     def register(self, hypothesis: HypothesisSpec) -> HypothesisSpec:
         """Register a new hypothesis."""
         if hypothesis.id in self._hypotheses:
-            raise ValueError(f"Hypothesis {hypothesis.id} already exists. Use update() to modify.")
+            raise ValueError(
+                f"Hypothesis {hypothesis.id} already exists. Use update() to modify."
+            )
         self._hypotheses[hypothesis.id] = hypothesis
         self._save()
         return hypothesis
@@ -265,7 +284,9 @@ class HypothesisRegistry:
     def update(self, hypothesis: HypothesisSpec) -> HypothesisSpec:
         """Update an existing hypothesis."""
         if hypothesis.id not in self._hypotheses:
-            raise ValueError(f"Hypothesis {hypothesis.id} not found. Use register() to create.")
+            raise ValueError(
+                f"Hypothesis {hypothesis.id} not found. Use register() to create."
+            )
         self._hypotheses[hypothesis.id] = hypothesis
         self._save()
         return hypothesis
@@ -291,7 +312,9 @@ class HypothesisRegistry:
         self._save()
         return hyp
 
-    def record_result(self, hypothesis_id: str, result: HypothesisResult) -> HypothesisSpec:
+    def record_result(
+        self, hypothesis_id: str, result: HypothesisResult
+    ) -> HypothesisSpec:
         """Record test result for hypothesis."""
         hyp = self.get(hypothesis_id)
         if not hyp:
@@ -357,7 +380,9 @@ class HypothesisRegistry:
                 alternative=item.get("alternative", "two-sided"),
                 min_samples_per_group=item.get("min_samples_per_group", 10),
                 tags=item.get("tags", []),
-                status=HypothesisStatus.PRE_REGISTERED if item.get("pre_registered") else HypothesisStatus.DRAFT,
+                status=HypothesisStatus.PRE_REGISTERED
+                if item.get("pre_registered")
+                else HypothesisStatus.DRAFT,
             )
             registry._hypotheses[spec.id] = spec
         return registry

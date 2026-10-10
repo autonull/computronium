@@ -24,7 +24,7 @@ def _is_valid_combination(
     if dynamics == "instantaneous" and geometry in {"recurrent", "recurrent_attractor"}:
         if credit in {"gradient", "backprop"}:
             return False
-    
+
     # All other combinations are assumed valid (will be caught at runtime if not)
     return True
 
@@ -228,7 +228,11 @@ def _build_component_sets() -> dict[BudgetStrategy, ComponentSet]:
         # since they don't work with instantaneous+gradient (common combo)
         BudgetStrategy.BALANCED: ComponentSet(
             substrates=c["substrates"],
-            geometries=[g for g in c["geometries"] if g not in {"recurrent", "recurrent_attractor"}],
+            geometries=[
+                g
+                for g in c["geometries"]
+                if g not in {"recurrent", "recurrent_attractor"}
+            ],
             dynamics=c["dynamics"],
             credits=c["credits"],
             updates=c["updates"],

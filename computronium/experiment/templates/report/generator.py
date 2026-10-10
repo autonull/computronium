@@ -82,9 +82,12 @@ class JinjaReportGenerator:
             campaign_name=campaign_name or run_id,
             generated_at=datetime.now(),
             device=str(run_summary.spec.device) if run_summary.spec else "unknown",
-            time_budget_hours=run_summary.budget_consumed_s / 3600 if run_summary.budget_consumed_s else None,
+            time_budget_hours=run_summary.budget_consumed_s / 3600
+            if run_summary.budget_consumed_s
+            else None,
             actual_duration_hours=(
-                (run_summary.finished_at - run_summary.started_at).total_seconds() / 3600
+                (run_summary.finished_at - run_summary.started_at).total_seconds()
+                / 3600
                 if run_summary.finished_at and run_summary.started_at
                 else None
             ),
@@ -174,11 +177,15 @@ class JinjaReportGenerator:
                 val = r.payload.get(key)
                 if val is not None:
                     metrics[key] = float(val)
-            if any(k in metrics for k in ["lyapunov_exponent", "spectral_radius", "settle_steps"]):
+            if any(
+                k in metrics
+                for k in ["lyapunov_exponent", "spectral_radius", "settle_steps"]
+            ):
                 by_dynamics[r.dynamics].append(metrics)
 
         results = []
         for dynamics, samples in by_dynamics.items():
+
             def _stat(key: str) -> dict[str, float] | None:
                 vals = [float(s[key]) for s in samples if key in s]
                 if not vals:
@@ -190,8 +197,14 @@ class JinjaReportGenerator:
                     "max": max(vals),
                 }
 
-            converge_vals = [bool(s.get("settle_converged", False)) for s in samples if "settle_converged" in s]
-            converged_fraction = sum(converge_vals) / len(converge_vals) if converge_vals else None
+            converge_vals = [
+                bool(s.get("settle_converged", False))
+                for s in samples
+                if "settle_converged" in s
+            ]
+            converged_fraction = (
+                sum(converge_vals) / len(converge_vals) if converge_vals else None
+            )
 
             results.append(
                 StabilityMetrics(
@@ -220,7 +233,14 @@ class JinjaReportGenerator:
         if not records:
             return []
 
-        ablation_axes = ["credit", "substrate", "plasticity", "dynamics", "update", "geometry"]
+        ablation_axes = [
+            "credit",
+            "substrate",
+            "plasticity",
+            "dynamics",
+            "update",
+            "geometry",
+        ]
         primary_metrics = [
             "val_acc",
             "walltime_total",
@@ -334,7 +354,9 @@ class JinjaReportGenerator:
         except subprocess.TimeoutExpired:
             raise RuntimeError("pandoc timed out after 120 seconds")
         except FileNotFoundError:
-            raise RuntimeError("pandoc not found. Install pandoc to generate PDF reports.")
+            raise RuntimeError(
+                "pandoc not found. Install pandoc to generate PDF reports."
+            )
 
         if not keep_tex and tex_path.exists():
             tex_path.unlink()

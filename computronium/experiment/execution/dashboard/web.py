@@ -287,7 +287,6 @@ class WebDashboard:
             return {"error": "No store path configured"}
 
         try:
-
             # This would need integration with the cost tracker
             return {"message": "Cost tracking data available after campaign completion"}
         except Exception as e:

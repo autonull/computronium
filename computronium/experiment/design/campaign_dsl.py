@@ -83,7 +83,9 @@ class FactorSpec(BaseModel):
             if len(self.values) == 2 and isinstance(self.values[0], int | float):
                 pass
             elif len(self.values) != self.levels:
-                raise ValueError(f"Factor {self.name}: {len(self.values)} values but {self.levels} levels specified")
+                raise ValueError(
+                    f"Factor {self.name}: {len(self.values)} values but {self.levels} levels specified"
+                )
         return self
 
 
@@ -134,8 +136,12 @@ class AnalysisSpec(BaseModel):
 
     primary: str = ""
     secondary: list[str] = Field(default_factory=list)
-    stats: list[str] = Field(default_factory=lambda: ["cohens_d", "cliffs_delta", "bayes_factor"])
-    visualizations: list[str] = Field(default_factory=lambda: ["pareto", "ablation", "convergence", "stability"])
+    stats: list[str] = Field(
+        default_factory=lambda: ["cohens_d", "cliffs_delta", "bayes_factor"]
+    )
+    visualizations: list[str] = Field(
+        default_factory=lambda: ["pareto", "ablation", "convergence", "stability"]
+    )
     multiple_comparison_correction: str = "benjamini_hochberg"
     exploratory: bool = False
 
@@ -230,7 +236,11 @@ class DesignSpec(BaseModel):
     factors: dict[str, FactorSpec] = Field(default_factory=dict)
     fixed: dict[str, FixedFactorSpec] = Field(default_factory=dict)
     blocks: list[BlockSpec] = Field(default_factory=list)
-    power_analysis: PowerAnalysisSpec = Field(default_factory=lambda: PowerAnalysisSpec(min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0))
+    power_analysis: PowerAnalysisSpec = Field(
+        default_factory=lambda: PowerAnalysisSpec(
+            min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0
+        )
+    )
     fraction: int | None = None
     generators: list[str] = Field(default_factory=list)
 
@@ -244,7 +254,7 @@ class DesignSpec(BaseModel):
             z_alpha = stats.norm.ppf(1 - self.power_analysis.alpha / 2)
             z_power = stats.norm.ppf(self.power_analysis.required_power)
             d = self.power_analysis.min_effect_size
-            n = 2 * (z_alpha + z_power) ** 2 / (d ** 2)
+            n = 2 * (z_alpha + z_power) ** 2 / (d**2)
             return math.ceil(n)
         return 10
 
@@ -285,9 +295,13 @@ class CampaignDSL(BaseModel):
     resources: ResourceSpec = Field(default_factory=lambda: ResourceSpec())
     search_space: SearchSpaceSpec = Field(default_factory=lambda: SearchSpaceSpec())
     arms: ArmsSpec = Field(default_factory=lambda: ArmsSpec())
-    hpo: HPOSpec = Field(default_factory=lambda: HPOSpec(n_trials=20, n_startup_trials=5, n_seeds=3))
+    hpo: HPOSpec = Field(
+        default_factory=lambda: HPOSpec(n_trials=20, n_startup_trials=5, n_seeds=3)
+    )
     output: OutputSpec = Field(default_factory=lambda: OutputSpec())
-    reproducibility: ReproducibilitySpec = Field(default_factory=lambda: ReproducibilitySpec())
+    reproducibility: ReproducibilitySpec = Field(
+        default_factory=lambda: ReproducibilitySpec()
+    )
 
     def to_campaign_yaml(self, output_path: Path | str) -> Path:
         """Export to campaign YAML format for execution."""
@@ -351,7 +365,14 @@ class CampaignDSL(BaseModel):
                 "tasks": [block.task],
                 "hpo": {"n_trials": self.hpo.n_trials, "n_seeds": self.hpo.n_seeds},
                 "epochs": block.epochs,
-                "budget_seconds": block.budget_seconds or (self.resources.max_wall_hours * 3600 / max(1, len(self.design.blocks))) if self.resources.max_wall_hours else None,
+                "budget_seconds": block.budget_seconds
+                or (
+                    self.resources.max_wall_hours
+                    * 3600
+                    / max(1, len(self.design.blocks))
+                )
+                if self.resources.max_wall_hours
+                else None,
             }
             # Add fixed factors to overrides (they override the factor values)
             for name, fixed in self.design.fixed.items():
@@ -369,7 +390,10 @@ class CampaignDSL(BaseModel):
         data["runs"] = runs
         data["store"] = self.output.db
         data["parallel"] = self.resources.max_parallel
-        data["compute"] = {"device": self.resources.device, "max_parallel": self.resources.max_parallel}
+        data["compute"] = {
+            "device": self.resources.device,
+            "max_parallel": self.resources.max_parallel,
+        }
         if self.resources.max_wall_hours:
             data["resources"] = {"max_wall_hours": self.resources.max_wall_hours}
 
@@ -395,20 +419,31 @@ class CampaignDSL(BaseModel):
         }
 
         budget_hours = self.resources.max_wall_hours or 1.0
-        device = DeviceClass.GPU if self.resources.device in ("auto", "cuda") else DeviceClass.CPU
+        device = (
+            DeviceClass.GPU
+            if self.resources.device in ("auto", "cuda")
+            else DeviceClass.CPU
+        )
 
         plan = plan_from_args(
             time_hours=budget_hours,
-            strategy=strategy_map.get(self.design.design_type, BudgetStrategy.BALANCED).value,
+            strategy=strategy_map.get(
+                self.design.design_type, BudgetStrategy.BALANCED
+            ).value,
             device=self.resources.device,
         )
 
         # Return a new plan with overridden parameters
         from dataclasses import replace
+
         return replace(
             plan,
-            epochs=max(b.epochs for b in self.design.blocks) if self.design.blocks else 10,
-            n_seeds=max(b.seeds for b in self.design.blocks) if self.design.blocks else 3,
+            epochs=max(b.epochs for b in self.design.blocks)
+            if self.design.blocks
+            else 10,
+            n_seeds=max(b.seeds for b in self.design.blocks)
+            if self.design.blocks
+            else 3,
             n_trials=self.hpo.n_trials,
         )
 
@@ -430,13 +465,19 @@ class CampaignDSL(BaseModel):
             for factor in self.design.factors.values():
                 n_combinations *= len(factor.values)
             if n_combinations > 1000:
-                warnings.append(f"Full factorial has {n_combinations} combinations - consider fractional factorial")
+                warnings.append(
+                    f"Full factorial has {n_combinations} combinations - consider fractional factorial"
+                )
 
         if self.analysis.primary and self.design.power_analysis.enabled:
             required_n = self.design.required_sample_size()
-            actual_n = min(b.seeds for b in self.design.blocks) if self.design.blocks else 1
+            actual_n = (
+                min(b.seeds for b in self.design.blocks) if self.design.blocks else 1
+            )
             if actual_n < required_n:
-                warnings.append(f"Power analysis requires {required_n} seeds per group, but design has {actual_n}")
+                warnings.append(
+                    f"Power analysis requires {required_n} seeds per group, but design has {actual_n}"
+                )
 
         if self.resources.max_wall_hours:
             n_cells = 1
@@ -444,7 +485,9 @@ class CampaignDSL(BaseModel):
                 n_cells *= len(factor.values)
             est_hours = n_cells * self.hpo.n_trials * self.hpo.n_seeds * 0.01
             if est_hours > self.resources.max_wall_hours * 2:
-                warnings.append(f"Estimated runtime ({est_hours:.1f}h) may exceed budget ({self.resources.max_wall_hours}h)")
+                warnings.append(
+                    f"Estimated runtime ({est_hours:.1f}h) may exceed budget ({self.resources.max_wall_hours}h)"
+                )
 
         return warnings
 
@@ -468,7 +511,12 @@ def create_credit_efficiency_campaign(
             factors={
                 "credit": FactorSpec(
                     name="credit",
-                    values=["gradient", "thermodynamic_contrast", "random_projections", "pepita"],
+                    values=[
+                        "gradient",
+                        "thermodynamic_contrast",
+                        "random_projections",
+                        "pepita",
+                    ],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "substrate": FactorSpec(
@@ -512,9 +560,19 @@ def create_credit_efficiency_campaign(
             n_startup_trials=8,
             n_seeds=n_seeds,
             objectives=[
-                ObjectiveSpec(name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
-                ObjectiveSpec(name="energy_per_step", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
-                ObjectiveSpec(name="walltime_total", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
+                ObjectiveSpec(
+                    name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0
+                ),
+                ObjectiveSpec(
+                    name="energy_per_step",
+                    direction=ObjectiveDirection.MINIMIZE,
+                    weight=1.0,
+                ),
+                ObjectiveSpec(
+                    name="walltime_total",
+                    direction=ObjectiveDirection.MINIMIZE,
+                    weight=1.0,
+                ),
             ],
         ),
     )
@@ -539,7 +597,12 @@ def create_dynamics_stability_campaign(
             factors={
                 "dynamics": FactorSpec(
                     name="dynamics",
-                    values=["energy_minimization", "predictive_settling", "instantaneous", "pc_alm"],
+                    values=[
+                        "energy_minimization",
+                        "predictive_settling",
+                        "instantaneous",
+                        "pc_alm",
+                    ],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "credit": FactorSpec(
@@ -559,11 +622,22 @@ def create_dynamics_stability_campaign(
                 "plasticity": FixedFactorSpec(name="plasticity", value="null"),
             },
             blocks=[BlockSpec(task="mnist", epochs=epochs, seeds=n_seeds)],
-            power_analysis=PowerAnalysisSpec(enabled=True, min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0),
+            power_analysis=PowerAnalysisSpec(
+                enabled=True,
+                min_effect_size=0.5,
+                required_power=0.8,
+                alpha=0.05,
+                interim_analyses=0,
+            ),
         ),
         analysis=AnalysisSpec(
             primary="Basin radius profiles, Lyapunov spectra, settling time distributions per dynamics",
-            secondary=["spectral_radius", "max_singular_value", "nonnormality", "stability_margin"],
+            secondary=[
+                "spectral_radius",
+                "max_singular_value",
+                "nonnormality",
+                "stability_margin",
+            ],
             stats=["cohens_d", "cliffs_delta", "bayes_factor"],
             visualizations=["stability", "pareto", "ablation", "trajectories"],
         ),
@@ -573,9 +647,19 @@ def create_dynamics_stability_campaign(
             n_startup_trials=10,
             n_seeds=n_seeds,
             objectives=[
-                ObjectiveSpec(name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
-                ObjectiveSpec(name="stability_margin", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
-                ObjectiveSpec(name="settle_steps", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
+                ObjectiveSpec(
+                    name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0
+                ),
+                ObjectiveSpec(
+                    name="stability_margin",
+                    direction=ObjectiveDirection.MAXIMIZE,
+                    weight=1.0,
+                ),
+                ObjectiveSpec(
+                    name="settle_steps",
+                    direction=ObjectiveDirection.MINIMIZE,
+                    weight=1.0,
+                ),
             ],
         ),
     )
@@ -616,12 +700,20 @@ def create_substrate_noise_campaign(
             },
             fixed={
                 "geometry": FixedFactorSpec(name="geometry", value="feedforward"),
-                "dynamics": FixedFactorSpec(name="dynamics", value="energy_minimization"),
+                "dynamics": FixedFactorSpec(
+                    name="dynamics", value="energy_minimization"
+                ),
                 "update": FixedFactorSpec(name="update", value="adam"),
                 "plasticity": FixedFactorSpec(name="plasticity", value="null"),
             },
             blocks=[BlockSpec(task="mnist", epochs=epochs, seeds=n_seeds)],
-            power_analysis=PowerAnalysisSpec(enabled=True, min_effect_size=0.4, required_power=0.8, alpha=0.05, interim_analyses=0),
+            power_analysis=PowerAnalysisSpec(
+                enabled=True,
+                min_effect_size=0.4,
+                required_power=0.8,
+                alpha=0.05,
+                interim_analyses=0,
+            ),
         ),
         analysis=AnalysisSpec(
             primary="Accuracy vs noise curves with error bars per substrate",
@@ -635,8 +727,14 @@ def create_substrate_noise_campaign(
             n_startup_trials=5,
             n_seeds=n_seeds,
             objectives=[
-                ObjectiveSpec(name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
-                ObjectiveSpec(name="robustness_slope", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
+                ObjectiveSpec(
+                    name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0
+                ),
+                ObjectiveSpec(
+                    name="robustness_slope",
+                    direction=ObjectiveDirection.MAXIMIZE,
+                    weight=1.0,
+                ),
             ],
         ),
     )
@@ -661,7 +759,14 @@ def create_plasticity_forgetting_campaign(
             factors={
                 "plasticity": FactorSpec(
                     name="plasticity",
-                    values=["null", "routing", "fast_weights", "conflict_adaptive", "substrate_coupled", "rule_state"],
+                    values=[
+                        "null",
+                        "routing",
+                        "fast_weights",
+                        "conflict_adaptive",
+                        "substrate_coupled",
+                        "rule_state",
+                    ],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "task_sequence": FactorSpec(
@@ -681,7 +786,13 @@ def create_plasticity_forgetting_campaign(
                 BlockSpec(task="split_mnist", epochs=epochs, seeds=n_seeds),
                 BlockSpec(task="permuted_mnist", epochs=epochs, seeds=n_seeds),
             ],
-            power_analysis=PowerAnalysisSpec(enabled=True, min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0),
+            power_analysis=PowerAnalysisSpec(
+                enabled=True,
+                min_effect_size=0.5,
+                required_power=0.8,
+                alpha=0.05,
+                interim_analyses=0,
+            ),
         ),
         analysis=AnalysisSpec(
             primary="Forgetting curves, forward/backward transfer metrics",
@@ -695,14 +806,26 @@ def create_plasticity_forgetting_campaign(
             n_startup_trials=4,
             n_seeds=n_seeds,
             objectives=[
-                ObjectiveSpec(name="avg_final_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
-                ObjectiveSpec(name="forgetting_rate", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
-                ObjectiveSpec(name="forward_transfer", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
+                ObjectiveSpec(
+                    name="avg_final_acc",
+                    direction=ObjectiveDirection.MAXIMIZE,
+                    weight=1.0,
+                ),
+                ObjectiveSpec(
+                    name="forgetting_rate",
+                    direction=ObjectiveDirection.MINIMIZE,
+                    weight=1.0,
+                ),
+                ObjectiveSpec(
+                    name="forward_transfer",
+                    direction=ObjectiveDirection.MAXIMIZE,
+                    weight=1.0,
+                ),
             ],
         ),
-)
- 
- 
+    )
+
+
 def create_geometry_topology_campaign(
     name: str = "geometry_topology_effects",
     time_budget_hours: float = 3.0,
@@ -727,7 +850,11 @@ def create_geometry_topology_campaign(
                 ),
                 "dynamics": FactorSpec(
                     name="dynamics",
-                    values=["energy_minimization", "predictive_settling", "instantaneous"],
+                    values=[
+                        "energy_minimization",
+                        "predictive_settling",
+                        "instantaneous",
+                    ],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
             },
@@ -738,7 +865,13 @@ def create_geometry_topology_campaign(
                 "plasticity": FixedFactorSpec(name="plasticity", value="null"),
             },
             blocks=[BlockSpec(task="mnist", epochs=epochs, seeds=n_seeds)],
-            power_analysis=PowerAnalysisSpec(enabled=True, min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0),
+            power_analysis=PowerAnalysisSpec(
+                enabled=True,
+                min_effect_size=0.5,
+                required_power=0.8,
+                alpha=0.05,
+                interim_analyses=0,
+            ),
         ),
         analysis=AnalysisSpec(
             primary="Validation accuracy vs parameter count per geometry",
@@ -752,13 +885,19 @@ def create_geometry_topology_campaign(
             n_startup_trials=5,
             n_seeds=n_seeds,
             objectives=[
-                ObjectiveSpec(name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
-                ObjectiveSpec(name="param_count", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
+                ObjectiveSpec(
+                    name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0
+                ),
+                ObjectiveSpec(
+                    name="param_count",
+                    direction=ObjectiveDirection.MINIMIZE,
+                    weight=1.0,
+                ),
             ],
         ),
     )
- 
- 
+
+
 def create_update_rules_campaign(
     name: str = "update_rules_comparison",
     time_budget_hours: float = 3.0,
@@ -778,12 +917,23 @@ def create_update_rules_campaign(
             factors={
                 "update": FactorSpec(
                     name="update",
-                    values=["euclidean", "adam", "muon", "lion", "riemannian_orthogonal"],
+                    values=[
+                        "euclidean",
+                        "adam",
+                        "muon",
+                        "lion",
+                        "riemannian_orthogonal",
+                    ],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
                 "credit": FactorSpec(
                     name="credit",
-                    values=["gradient", "thermodynamic_contrast", "random_projections", "pepita"],
+                    values=[
+                        "gradient",
+                        "thermodynamic_contrast",
+                        "random_projections",
+                        "pepita",
+                    ],
                     type=FactorType.BETWEEN_SUBJECTS,
                 ),
             },
@@ -794,7 +944,13 @@ def create_update_rules_campaign(
                 "plasticity": FixedFactorSpec(name="plasticity", value="null"),
             },
             blocks=[BlockSpec(task="mnist", epochs=epochs, seeds=n_seeds)],
-            power_analysis=PowerAnalysisSpec(enabled=True, min_effect_size=0.5, required_power=0.8, alpha=0.05, interim_analyses=0),
+            power_analysis=PowerAnalysisSpec(
+                enabled=True,
+                min_effect_size=0.5,
+                required_power=0.8,
+                alpha=0.05,
+                interim_analyses=0,
+            ),
         ),
         analysis=AnalysisSpec(
             primary="Validation accuracy heatmap: update × credit",
@@ -808,13 +964,19 @@ def create_update_rules_campaign(
             n_startup_trials=5,
             n_seeds=n_seeds,
             objectives=[
-                ObjectiveSpec(name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0),
-                ObjectiveSpec(name="walltime_total", direction=ObjectiveDirection.MINIMIZE, weight=1.0),
+                ObjectiveSpec(
+                    name="val_acc", direction=ObjectiveDirection.MAXIMIZE, weight=1.0
+                ),
+                ObjectiveSpec(
+                    name="walltime_total",
+                    direction=ObjectiveDirection.MINIMIZE,
+                    weight=1.0,
+                ),
             ],
         ),
     )
- 
- 
+
+
 CAMPAIGN_FACTORIES = {
     "credit_efficiency": create_credit_efficiency_campaign,
     "dynamics_stability": create_dynamics_stability_campaign,
@@ -831,7 +993,9 @@ def list_campaign_templates() -> list[str]:
 
 def create_campaign(template_name: str, **kwargs) -> CampaignDSL:
     if template_name not in CAMPAIGN_FACTORIES:
-        raise ValueError(f"Unknown template: {template_name}. Available: {list_campaign_templates()}")
+        raise ValueError(
+            f"Unknown template: {template_name}. Available: {list_campaign_templates()}"
+        )
     return CAMPAIGN_FACTORIES[template_name](**kwargs)
 
 
@@ -869,17 +1033,23 @@ def validate_campaign_design(campaign: CampaignDSL) -> DesignValidationResult:
             invalid_combos.append(row)
 
     if invalid_combos:
-        warnings.append(f"{len(invalid_combos)} invalid combinations will be filtered at runtime")
+        warnings.append(
+            f"{len(invalid_combos)} invalid combinations will be filtered at runtime"
+        )
 
     n_cells = design_matrix_size - len(invalid_combos)
     n_trials = campaign.hpo.n_trials
     n_seeds = campaign.hpo.n_seeds
-    epochs = max(b.epochs for b in campaign.design.blocks) if campaign.design.blocks else 10
+    epochs = (
+        max(b.epochs for b in campaign.design.blocks) if campaign.design.blocks else 10
+    )
 
     estimated_hours = n_cells * n_trials * n_seeds * epochs * 0.0001
 
     required_seeds = campaign.design.required_sample_size()
-    actual_seeds = min(b.seeds for b in campaign.design.blocks) if campaign.design.blocks else 1
+    actual_seeds = (
+        min(b.seeds for b in campaign.design.blocks) if campaign.design.blocks else 1
+    )
 
     return DesignValidationResult(
         valid=len(errors) == 0,

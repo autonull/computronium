@@ -1146,12 +1146,8 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_dashboard.add_argument(
         "--store", default="experiment.duckdb", help="DuckDB store path"
     )
-    p_dashboard.add_argument(
-        "--host", default="0.0.0.0", help="Host to bind to"
-    )
-    p_dashboard.add_argument(
-        "--port", type=int, default=8080, help="Port to bind to"
-    )
+    p_dashboard.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    p_dashboard.add_argument("--port", type=int, default=8080, help="Port to bind to")
     p_dashboard.add_argument(
         "--no-websockets", action="store_true", help="Disable WebSocket updates"
     )
@@ -1164,13 +1160,19 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     dataset_sub = p_dataset.add_subparsers(dest="dataset_command", required=True)
 
     # dataset register
-    p_ds_register = dataset_sub.add_parser("register", help="Register a dataset version")
+    p_ds_register = dataset_sub.add_parser(
+        "register", help="Register a dataset version"
+    )
     p_ds_register.add_argument("dataset_id", help="Dataset identifier")
     p_ds_register.add_argument("version", help="Semantic version (e.g., 1.0.0)")
     p_ds_register.add_argument("path", help="Path to dataset directory")
     p_ds_register.add_argument("--description", default="", help="Dataset description")
-    p_ds_register.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
-    p_ds_register.add_argument("--data-root", default="data/datasets", help="Data root directory")
+    p_ds_register.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_ds_register.add_argument(
+        "--data-root", default="data/datasets", help="Data root directory"
+    )
     p_ds_register.add_argument("--source-url", help="Source URL for provenance")
     p_ds_register.add_argument("--source-hash", help="Source hash for provenance")
     p_ds_register.add_argument("--tags", help="Comma-separated key=value tags")
@@ -1179,33 +1181,59 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_ds_get = dataset_sub.add_parser("get", help="Get dataset version info")
     p_ds_get.add_argument("dataset_id", help="Dataset identifier")
     p_ds_get.add_argument("version", nargs="?", help="Version (latest if omitted)")
-    p_ds_get.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
-    p_ds_get.add_argument("--data-root", default="data/datasets", help="Data root directory")
-    p_ds_get.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
+    p_ds_get.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_ds_get.add_argument(
+        "--data-root", default="data/datasets", help="Data root directory"
+    )
+    p_ds_get.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
 
     # dataset list
     p_ds_list = dataset_sub.add_parser("list", help="List dataset versions")
-    p_ds_list.add_argument("dataset_id", nargs="?", help="Dataset identifier (all if omitted)")
-    p_ds_list.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
-    p_ds_list.add_argument("--data-root", default="data/datasets", help="Data root directory")
+    p_ds_list.add_argument(
+        "dataset_id", nargs="?", help="Dataset identifier (all if omitted)"
+    )
+    p_ds_list.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_ds_list.add_argument(
+        "--data-root", default="data/datasets", help="Data root directory"
+    )
     p_ds_list.add_argument("--tag", help="Filter by tag (key=value)")
-    p_ds_list.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
+    p_ds_list.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
 
     # dataset verify
     p_ds_verify = dataset_sub.add_parser("verify", help="Verify dataset integrity")
     p_ds_verify.add_argument("dataset_id", help="Dataset identifier")
     p_ds_verify.add_argument("version", help="Version to verify")
-    p_ds_verify.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
-    p_ds_verify.add_argument("--data-root", default="data/datasets", help="Data root directory")
-    p_ds_verify.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
+    p_ds_verify.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_ds_verify.add_argument(
+        "--data-root", default="data/datasets", help="Data root directory"
+    )
+    p_ds_verify.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
 
     # dataset export
     p_ds_export = dataset_sub.add_parser("export", help="Export dataset metadata")
     p_ds_export.add_argument("dataset_id", help="Dataset identifier")
     p_ds_export.add_argument("version", help="Version to export")
-    p_ds_export.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
-    p_ds_export.add_argument("--data-root", default="data/datasets", help="Data root directory")
-    p_ds_export.add_argument("-o", "--output", required=True, help="Output JSON file path")
+    p_ds_export.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_ds_export.add_argument(
+        "--data-root", default="data/datasets", help="Data root directory"
+    )
+    p_ds_export.add_argument(
+        "-o", "--output", required=True, help="Output JSON file path"
+    )
 
     # Environment snapshot command
     p_env = sub.add_parser(
@@ -1215,31 +1243,51 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     env_sub = p_env.add_subparsers(dest="env_command", required=True)
 
     # environment capture
-    p_env_capture = env_sub.add_parser("capture", help="Capture current environment snapshot")
-    p_env_capture.add_argument("-o", "--output", required=True, help="Output JSON file path")
-    p_env_capture.add_argument("--no-env-vars", action="store_true", help="Exclude environment variables")
+    p_env_capture = env_sub.add_parser(
+        "capture", help="Capture current environment snapshot"
+    )
+    p_env_capture.add_argument(
+        "-o", "--output", required=True, help="Output JSON file path"
+    )
+    p_env_capture.add_argument(
+        "--no-env-vars", action="store_true", help="Exclude environment variables"
+    )
     p_env_capture.add_argument("--no-git", action="store_true", help="Exclude git info")
     p_env_capture.add_argument("--container-image", help="Docker image name to include")
 
     # environment verify
-    p_env_verify = env_sub.add_parser("verify", help="Verify environment against snapshot")
+    p_env_verify = env_sub.add_parser(
+        "verify", help="Verify environment against snapshot"
+    )
     p_env_verify.add_argument("snapshot", help="Snapshot JSON file path")
-    p_env_verify.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
+    p_env_verify.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
 
     # environment docker-build
-    p_env_docker = env_sub.add_parser("docker-build", help="Build Docker image from Dockerfile")
+    p_env_docker = env_sub.add_parser(
+        "docker-build", help="Build Docker image from Dockerfile"
+    )
     p_env_docker.add_argument("dockerfile", help="Path to Dockerfile")
     p_env_docker.add_argument("image_name", help="Name for the built image")
     p_env_docker.add_argument("--tag", default="latest", help="Image tag")
-    p_env_docker.add_argument("--build-arg", action="append", help="Build argument (KEY=VALUE)")
+    p_env_docker.add_argument(
+        "--build-arg", action="append", help="Build argument (KEY=VALUE)"
+    )
 
     # environment docker-save
-    p_env_docker_save = env_sub.add_parser("docker-save", help="Save Docker image to tar archive")
+    p_env_docker_save = env_sub.add_parser(
+        "docker-save", help="Save Docker image to tar archive"
+    )
     p_env_docker_save.add_argument("image_name", help="Image name to save")
-    p_env_docker_save.add_argument("-o", "--output", required=True, help="Output tar file path")
+    p_env_docker_save.add_argument(
+        "-o", "--output", required=True, help="Output tar file path"
+    )
 
     # environment docker-load
-    p_env_docker_load = env_sub.add_parser("docker-load", help="Load Docker image from tar archive")
+    p_env_docker_load = env_sub.add_parser(
+        "docker-load", help="Load Docker image from tar archive"
+    )
     p_env_docker_load.add_argument("input", help="Input tar file path")
 
     # Quality gates command
@@ -1251,22 +1299,36 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
 
     # quality check-report
     p_q_report = quality_sub.add_parser("check-report", help="Validate report quality")
-    p_q_report.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
+    p_q_report.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
     p_q_report.add_argument("--run-id", required=True, help="Run ID to validate")
-    p_q_report.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
+    p_q_report.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
     p_q_report.add_argument("-o", "--output", help="Output file path")
 
     # quality check-store
-    p_q_store = quality_sub.add_parser("check-store", help="Validate store data integrity")
-    p_q_store.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
-    p_q_store.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
+    p_q_store = quality_sub.add_parser(
+        "check-store", help="Validate store data integrity"
+    )
+    p_q_store.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_q_store.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
     p_q_store.add_argument("-o", "--output", help="Output file path")
 
     # quality check-all
     p_q_all = quality_sub.add_parser("check-all", help="Run all quality gates")
-    p_q_all.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
+    p_q_all.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
     p_q_all.add_argument("--run-id", required=True, help="Run ID to validate")
-    p_q_all.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
+    p_q_all.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
     p_q_all.add_argument("-o", "--output", help="Output file path")
 
     return parser
@@ -5136,25 +5198,34 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
 
             if args.format == "json":
                 import json
-                print(json.dumps({
-                    "dataset_id": version.dataset_id,
-                    "version": version.version,
-                    "digest": version.digest,
-                    "created_at": version.created_at,
-                    "description": version.description,
-                    "splits": {k: {
-                        "name": v.name,
-                        "path": v.path,
-                        "hash": v.hash,
-                        "size_bytes": v.size_bytes,
-                        "num_samples": v.num_samples,
-                        "metadata": v.metadata,
-                    } for k, v in version.splits.items()},
-                    "tags": version.tags,
-                    "metadata": version.metadata,
-                    "source_url": version.source_url,
-                    "source_hash": version.source_hash,
-                }, indent=2))
+
+                print(
+                    json.dumps(
+                        {
+                            "dataset_id": version.dataset_id,
+                            "version": version.version,
+                            "digest": version.digest,
+                            "created_at": version.created_at,
+                            "description": version.description,
+                            "splits": {
+                                k: {
+                                    "name": v.name,
+                                    "path": v.path,
+                                    "hash": v.hash,
+                                    "size_bytes": v.size_bytes,
+                                    "num_samples": v.num_samples,
+                                    "metadata": v.metadata,
+                                }
+                                for k, v in version.splits.items()
+                            },
+                            "tags": version.tags,
+                            "metadata": version.metadata,
+                            "source_url": version.source_url,
+                            "source_hash": version.source_hash,
+                        },
+                        indent=2,
+                    )
+                )
             else:
                 print(f"Dataset: {version.dataset_id}")
                 print(f"  Version: {version.version}")
@@ -5163,7 +5234,9 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
                 print(f"  Description: {version.description}")
                 print(f"  Splits:")
                 for k, v in version.splits.items():
-                    print(f"    {k}: {v.num_samples} samples, {v.size_bytes} bytes, hash={v.hash[:12]}...")
+                    print(
+                        f"    {k}: {v.num_samples} samples, {v.size_bytes} bytes, hash={v.hash[:12]}..."
+                    )
                 if version.tags:
                     print(f"  Tags: {version.tags}")
             return 0
@@ -5180,16 +5253,27 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
 
             if args.format == "json":
                 import json
-                print(json.dumps([{
-                    "dataset_id": v.dataset_id,
-                    "version": v.version,
-                    "digest": v.digest,
-                    "created_at": v.created_at,
-                    "splits": list(v.splits.keys()),
-                } for v in versions], indent=2))
+
+                print(
+                    json.dumps(
+                        [
+                            {
+                                "dataset_id": v.dataset_id,
+                                "version": v.version,
+                                "digest": v.digest,
+                                "created_at": v.created_at,
+                                "splits": list(v.splits.keys()),
+                            }
+                            for v in versions
+                        ],
+                        indent=2,
+                    )
+                )
             else:
                 for v in versions:
-                    print(f"{v.dataset_id}@{v.version} (digest: {v.digest[:12]}..., splits: {list(v.splits.keys())})")
+                    print(
+                        f"{v.dataset_id}@{v.version} (digest: {v.digest[:12]}..., splits: {list(v.splits.keys())})"
+                    )
             return 0
 
         elif cmd == "verify":
@@ -5197,20 +5281,27 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
 
             if args.format == "json":
                 import json
+
                 print(json.dumps(result, indent=2))
             else:
                 print(f"Dataset: {args.dataset_id}@{args.version}")
                 print(f"  Overall valid: {result['valid']}")
                 if "overall_digest" in result:
                     od = result["overall_digest"]
-                    print(f"  Overall digest: expected={od['expected'][:12]}... actual={od['actual'][:12]}... valid={od['valid']}")
+                    print(
+                        f"  Overall digest: expected={od['expected'][:12]}... actual={od['actual'][:12]}... valid={od['valid']}"
+                    )
                 if "splits" in result:
                     print("  Splits:")
                     for split_name, split_result in result["splits"].items():
                         if split_result.get("valid"):
-                            print(f"    {split_name}: VALID (hash={split_result['actual_hash'][:12]}...)")
+                            print(
+                                f"    {split_name}: VALID (hash={split_result['actual_hash'][:12]}...)"
+                            )
                         else:
-                            print(f"    {split_name}: INVALID - {split_result.get('error', 'hash mismatch')}")
+                            print(
+                                f"    {split_name}: INVALID - {split_result.get('error', 'hash mismatch')}"
+                            )
             return 0 if result.get("valid") else 1
 
         elif cmd == "export":
@@ -5255,24 +5346,33 @@ def _cmd_environment(args: argparse.Namespace) -> int:
 
         if args.format == "json":
             import json
+
             print(json.dumps(result, indent=2))
         else:
-            print(f"Environment verification: {'MATCH' if result['matches'] else 'MISMATCH'}")
+            print(
+                f"Environment verification: {'MATCH' if result['matches'] else 'MISMATCH'}"
+            )
             print(f"  Expected snapshot: {result['expected_snapshot_id']}")
             print(f"  Actual snapshot: {result['actual_snapshot_id']}")
             if result["mismatches"]:
                 print("  Mismatches:")
                 for m in result["mismatches"]:
                     if m["type"] == "package":
-                        print(f"    Package {m['package']}: expected {m['expected']}, got {m['actual']}")
+                        print(
+                            f"    Package {m['package']}: expected {m['expected']}, got {m['actual']}"
+                        )
                     elif m["type"] == "extra_package":
                         print(f"    Extra package: {m['package']}=={m['version']}")
                     elif m["type"] == "python_version":
-                        print(f"    Python version: expected {m['expected']}, got {m['actual']}")
+                        print(
+                            f"    Python version: expected {m['expected']}, got {m['actual']}"
+                        )
                     elif m["type"] == "uv_lock":
                         print(f"    uv.lock hash mismatch")
                     elif m["type"] == "git_commit":
-                        print(f"    Git commit: expected {m['expected'][:12]}, got {m['actual'][:12]}")
+                        print(
+                            f"    Git commit: expected {m['expected'][:12]}, got {m['actual'][:12]}"
+                        )
             return 0 if result["matches"] else 1
 
     elif cmd == "docker-build":
@@ -5350,7 +5450,9 @@ def _cmd_quality(args: argparse.Namespace) -> int:
         run_all_quality_gates,
     )
     from computronium.experiment.evidence.store import RecordStore, StoreConfig
-    from computronium.experiment.templates.report.generator import generate_report_from_store
+    from computronium.experiment.templates.report.generator import (
+        generate_report_from_store,
+    )
 
     cmd = args.quality_command
 
@@ -5361,7 +5463,10 @@ def _cmd_quality(args: argparse.Namespace) -> int:
 
         with store:
             # Build report context from store
-            generator = __import__("computronium.experiment.templates.report.generator", fromlist=["JinjaReportGenerator"]).JinjaReportGenerator()
+            generator = __import__(
+                "computronium.experiment.templates.report.generator",
+                fromlist=["JinjaReportGenerator"],
+            ).JinjaReportGenerator()
             context = generator.build_context_from_store(store, args.run_id)
 
             gate = ReportQualityGate()
@@ -5383,7 +5488,10 @@ def _cmd_quality(args: argparse.Namespace) -> int:
             return 1
 
         with store:
-            generator = __import__("computronium.experiment.templates.report.generator", fromlist=["JinjaReportGenerator"]).JinjaReportGenerator()
+            generator = __import__(
+                "computronium.experiment.templates.report.generator",
+                fromlist=["JinjaReportGenerator"],
+            ).JinjaReportGenerator()
             context = generator.build_context_from_store(store, args.run_id)
 
             result = run_all_quality_gates(context, Path(args.store))
@@ -5398,6 +5506,7 @@ def _output_result(result, args):
     """Output quality gate result."""
     if args.format == "json":
         import json
+
         output = result.to_json()
     else:
         output = f"Quality Gate: {'PASSED' if result.passed else 'FAILED'}\n"

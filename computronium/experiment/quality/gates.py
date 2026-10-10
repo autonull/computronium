@@ -9,10 +9,11 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from computronium.experiment.templates.report.models import ReportContext
 
 logger = logging.getLogger(__name__)
@@ -161,15 +162,15 @@ class ReportQualityGate:
             "device",
         ]
 
-        for field in required_meta:
-            if not getattr(meta, field, None):
+        for field_name in required_meta:
+            if not getattr(meta, field_name, None):
                 issues.append(
                     QualityIssue(
                         severity="warning",
                         category="report",
-                        message=f"Missing metadata field: {field}",
-                        location=f"metadata.{field}",
-                        suggestion=f"Populate {field} in ReportMetadata",
+                        message=f"Missing metadata field: {field_name}",
+                        location=f"metadata.{field_name}",
+                        suggestion=f"Populate {field_name} in ReportMetadata",
                     )
                 )
 
@@ -488,30 +489,7 @@ class DataIntegrityGate:
         issues: list[QualityIssue] = []
 
         try:
-            from computronium.experiment.evidence.store import RecordStore, StoreConfig
-
-            store = RecordStore(StoreConfig(path=self.store_path))
-            with store:
-                runs = store.query_runs()
-                if not runs:
-                    issues.append(
-                        QualityIssue(
-                            severity="error",
-                            category="data",
-                            message="No runs found in store",
-                            location="store",
-                        )
-                    )
-                    return QualityReport(
-                        passed=False,
-                        timestamp=datetime.now().isoformat(),
-                        issues=issues,
-                        summary={"total": 1, "errors": 1, "warnings": 0, "info": 0},
-                    )
-
-                for run in runs:
-                    issues.extend(self._validate_run(store, run))
-
+            issues = self._validate_store()
         except Exception as e:
             issues.append(
                 QualityIssue(
@@ -537,6 +515,30 @@ class DataIntegrityGate:
             issues=issues,
             summary=summary,
         )
+
+    def _validate_store(self) -> list[QualityIssue]:
+        """Validate store contents (extracted for lint compliance)."""
+        from computronium.experiment.evidence.store import RecordStore, StoreConfig
+
+        issues: list[QualityIssue] = []
+        store = RecordStore(StoreConfig(path=self.store_path))
+        with store:
+            runs = store.query_runs()
+            if not runs:
+                issues.append(
+                    QualityIssue(
+                        severity="error",
+                        category="data",
+                        message="No runs found in store",
+                        location="store",
+                    )
+                )
+                return issues
+
+            for run in runs:
+                issues.extend(self._validate_run(store, run))
+
+        return issues
 
     def _validate_run(self, store: Any, run: Any) -> list[QualityIssue]:
         issues = []
@@ -565,12 +567,13 @@ class DataIntegrityGate:
                     )
                 )
 
-            if not record.coordinate:
+            # Record has individual axis fields (substrate, geometry, etc.), not a coordinate object
+            if not record.substrate or not record.geometry or not record.dynamics:
                 issues.append(
                     QualityIssue(
                         severity="warning",
                         category="data",
-                        message="Record missing coordinate",
+                        message="Record missing axis fields",
                         location=f"runs.{run.run_id}.{record.record_id}",
                     )
                 )

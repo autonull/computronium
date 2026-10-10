@@ -554,12 +554,13 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 | C: Capability Campaigns | ✅ Complete | 6 campaign families (6/6 executed) |
 | D: Advanced Analyses | ✅ Complete | Stability suite, Attribution, Pareto, Reproducibility |
 | E: Scaling | ✅ Complete | Multi-GPU DDP/FSDP, Campaign queue, Model registry, Cost tracking, Dashboard, Dataset versioning, Environment snapshots, CI/CD |
-| F: Validation | 🔄 In Progress | Quality gates, Living docs, Plugin API |
+| F: Validation | 🔄 In Progress | Quality gates (✅), Living docs, Plugin API |
 
 ### 🎯 Immediate Next Steps
 
-1. **Phase F**: Quality gates (✅), living documentation, plugin API
-2. **Run tests** and verify all implementations
+1. **Phase F2**: Living documentation (Experiment Catalog, Method Cards, FAQ)
+2. **Phase F3**: Plugin API for custom objectives, substrates, dynamics
+3. **Run tests** and verify all implementations
 
 ---
 
@@ -654,7 +655,8 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
   - Schema validation of store records
   - Monotonicity checks (epoch progression)
   - Outlier detection for key metrics
-  - Required field validation (record_id, coordinate, payload metrics)
+  - Required field validation (record_id, axis fields, payload metrics)
+  - Fixed: Record axis fields validation (substrate, geometry, dynamics) instead of coordinate object
 
 - **NarrativeCoherenceGate** (`computronium/experiment/quality/gates.py`):
   - Hypothesis → statistical result traceability
@@ -662,6 +664,7 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
   - Ensures every result maps to a pre-registered hypothesis
 
 - **CLI**: `comp quality check-report/check-store/check-all`
+- **Lint/Type-check**: All quality gate code passes ruff format, ruff check, and pyright strict mode
 
 #### F2: Living Documentation — 🔄 IN PROGRESS
 - **Experiment Catalog**: Searchable index of campaigns with results
@@ -690,3 +693,58 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
   - Jupyter notebooks in `docs/notebooks/`
   - Executable in CI for validation
   - Cover: showcase, hypothesis campaigns, report generation, dashboard, quality gates
+
+---
+
+## 📊 Session Progress Summary (2026-10-10)
+
+### ✅ Completed This Session
+
+**Phase F1: Automated Quality Gates - Verified & Fixed**
+- Fixed `DataIntegrityGate` to correctly validate Record axis fields (`substrate`, `geometry`, `dynamics`) instead of non-existent `coordinate` attribute
+- Fixed linting issues in `gates.py`:
+  - Moved `Path` import to `TYPE_CHECKING` block
+  - Renamed loop variable `field` → `field_name` to avoid shadowing `dataclasses.field`
+  - Extracted store validation logic into `_validate_store()` helper to satisfy `too-many-statements-in-try-clause` rule
+- All quality gate code passes: `ruff format`, `ruff check`, `pyright` (strict mode)
+- Verified CLI commands work: `comp quality check-store`, `comp quality check-report`, `comp quality check-all`
+
+**Testing & Verification**
+- Dev-env smoke test: `uv run python -c "import optuna, scipy, torchvision, pytest"` ✅
+- Core ontology tests: 38/38 passed
+- Property locks: 25/25 passed (ontology locks, verification labels, dynamics wiring lock)
+- Quality gates operational on real experiment store
+
+### 🔄 Remaining Work (Phase F)
+
+| Task | Status | Priority |
+|------|--------|----------|
+| **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | 🔄 Not Started | High |
+| **F3: Plugin API** — Custom objectives, substrates, dynamics | ⏳ Planned | Medium |
+| **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ⏳ Planned | Medium |
+| **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ⏳ Planned | Medium |
+
+### 🎯 Next Session Priorities
+
+1. **Implement Experiment Catalog** (`computronium/experiment/documentation/catalog.py`):
+   - Auto-generated from store queries
+   - Filterable by axis, metrics, date range
+   - Links to reports and raw data
+   - CLI: `comp catalog list/search/export`
+
+2. **Implement Method Cards** (`computronium/experiment/documentation/method_cards.py`):
+   - Auto-generated from ontology registries
+   - Covers all 6 axes with purpose, config options, limitations, examples
+   - CLI: `comp method-card list/show/generate`
+
+3. **Implement FAQ/Troubleshooting** (`computronium/experiment/documentation/faq.py`):
+   - Curated from CI/CD failures and user reports
+   - Categorized by axis and error type
+   - CLI: `comp faq list/search`
+
+4. **Plugin API** (`computronium/plugins/`):
+   - Entry point registration via `computronium.plugins` entry point group
+   - Protocol-based extension points
+   - Hot-reload support
+
+5. **Run full test suite** on changed modules to ensure no regressions

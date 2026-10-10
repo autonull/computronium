@@ -56,7 +56,9 @@ def cmd_create_campaign(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    output_path = Path(args.output) if args.output else Path(f"{campaign.meta.name}.yaml")
+    output_path = (
+        Path(args.output) if args.output else Path(f"{campaign.meta.name}.yaml")
+    )
     campaign.to_campaign_yaml(output_path)
 
     # Validate
@@ -157,12 +159,15 @@ async def cmd_run_campaign(args: argparse.Namespace) -> int:
         print(f"Campaign execution failed: {e}", file=sys.stderr)
         return 1
 
-    print(f"Campaign completed: {result['completed']}/{result['total_runs']} runs successful")
+    print(
+        f"Campaign completed: {result['completed']}/{result['total_runs']} runs successful"
+    )
 
     # Generate report if requested
     if args.report:
         # Need to wait for store to be fully closed by campaign runner
         import asyncio
+
         await asyncio.sleep(1.0)
         await _generate_campaign_report(campaign, args.report, args.report_format)
 
@@ -204,9 +209,15 @@ async def _generate_campaign_report(
 
         # Build campaign config for report
         campaign_config = CampaignConfig(
-            factors={name: [str(v) for v in f.values] for name, f in campaign.design.factors.items()},
+            factors={
+                name: [str(v) for v in f.values]
+                for name, f in campaign.design.factors.items()
+            },
             fixed={name: str(f.value) for name, f in campaign.design.fixed.items()},
-            blocks=[{"task": b.task, "epochs": b.epochs, "seeds": b.seeds} for b in campaign.design.blocks],
+            blocks=[
+                {"task": b.task, "epochs": b.epochs, "seeds": b.seeds}
+                for b in campaign.design.blocks
+            ],
             sampler=campaign.hpo.sampler.value,
             objectives=[o.name for o in campaign.hpo.objectives],
             n_trials=campaign.hpo.n_trials,
@@ -260,6 +271,7 @@ async def _test_hypotheses(campaign: CampaignDSL, hypotheses_file: str) -> None:
         main_run = max(runs, key=lambda r: store.count_records(r.run_id))
 
         from computronium.experiment.surface.report import ReportGenerator
+
         generator = ReportGenerator(store)
 
         print(f"\nTesting hypotheses for run {main_run.run_id}:")
@@ -278,8 +290,12 @@ async def _test_hypotheses(campaign: CampaignDSL, hypotheses_file: str) -> None:
                 result = await _run_hypothesis_test(generator, main_run.run_id, hyp)
                 if result:
                     registry.record_result(hyp_id, result)
-                    print(f"    Result: p={result.p_value:.4g}, effect={result.effect_size:.3f} ({result.effect_size_type.value})")
-                    print(f"    Significant: {result.significant}, Power: {result.power_achieved:.2f}")
+                    print(
+                        f"    Result: p={result.p_value:.4g}, effect={result.effect_size:.3f} ({result.effect_size_type.value})"
+                    )
+                    print(
+                        f"    Significant: {result.significant}, Power: {result.power_achieved:.2f}"
+                    )
                 else:
                     print("    Result: INSUFFICIENT DATA")
             except Exception as e:
@@ -310,7 +326,10 @@ async def _run_hypothesis_test(
 
     # Get achieved seeds per cell
     keys = replication_keys_of(records)
-    achieved = {key: generator._store.count_achieved_seeds(replication_key=key, run_id=run_id) for key in keys}
+    achieved = {
+        key: generator._store.count_achieved_seeds(replication_key=key, run_id=run_id)
+        for key in keys
+    }
 
     # Filter to claim-eligible
     min_seeds = hypothesis.min_samples_per_group
@@ -321,7 +340,11 @@ async def _run_hypothesis_test(
         return None
 
     # Get metric values grouped by axis
-    axis = StructuralAxis(hypothesis.grouping_factor) if hypothesis.grouping_factor else None
+    axis = (
+        StructuralAxis(hypothesis.grouping_factor)
+        if hypothesis.grouping_factor
+        else None
+    )
     if not axis:
         return None
 
@@ -457,22 +480,30 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list-templates", help="List available campaign templates")
 
     # create-campaign
-    p_create = subparsers.add_parser("create-campaign", help="Create campaign from template")
+    p_create = subparsers.add_parser(
+        "create-campaign", help="Create campaign from template"
+    )
     p_create.add_argument("template", choices=list_campaign_templates())
     p_create.add_argument("--name", help="Campaign name")
-    p_create.add_argument("--hours", type=float, default=2.0, help="Time budget in hours")
+    p_create.add_argument(
+        "--hours", type=float, default=2.0, help="Time budget in hours"
+    )
     p_create.add_argument("--seeds", type=int, default=10, help="Seeds per cell")
     p_create.add_argument("--epochs", type=int, default=50, help="Epochs per trial")
     p_create.add_argument("-o", "--output", help="Output YAML path")
 
     # validate-campaign
-    p_validate = subparsers.add_parser("validate-campaign", help="Validate campaign YAML")
+    p_validate = subparsers.add_parser(
+        "validate-campaign", help="Validate campaign YAML"
+    )
     p_validate.add_argument("campaign", help="Campaign YAML file")
 
     # run-campaign
     p_run = subparsers.add_parser("run-campaign", help="Run hypothesis-driven campaign")
     p_run.add_argument("--campaign", help="Campaign YAML file")
-    p_run.add_argument("--template", choices=list_campaign_templates(), help="Use template instead")
+    p_run.add_argument(
+        "--template", choices=list_campaign_templates(), help="Use template instead"
+    )
     p_run.add_argument("--name", help="Campaign name")
     p_run.add_argument("--hours", type=float, default=2.0)
     p_run.add_argument("--seeds", type=int, default=10)
@@ -480,7 +511,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--parallel", type=int, default=1)
     p_run.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     p_run.add_argument("--report", help="Generate report at path")
-    p_run.add_argument("--report-format", choices=["html", "latex", "pdf"], default="html")
+    p_run.add_argument(
+        "--report-format", choices=["html", "latex", "pdf"], default="html"
+    )
     p_run.add_argument("--test-hypotheses", help="Hypotheses JSON file to test")
 
     # register-hypothesis
@@ -489,7 +522,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_reg.add_argument("--question", required=True)
     p_reg.add_argument("--prediction", required=True)
     p_reg.add_argument("--rationale")
-    p_reg.add_argument("--test-type", required=True, choices=[t.value for t in TestType])
+    p_reg.add_argument(
+        "--test-type", required=True, choices=[t.value for t in TestType]
+    )
     p_reg.add_argument("--metric", required=True)
     p_reg.add_argument("--grouping")
     p_reg.add_argument("--compare", help="Comma-separated values to compare")
@@ -507,7 +542,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument("--registry", help="Registry file path")
 
     # export-hypotheses
-    p_export = subparsers.add_parser("export-hypotheses", help="Export hypotheses to YAML")
+    p_export = subparsers.add_parser(
+        "export-hypotheses", help="Export hypotheses to YAML"
+    )
     p_export.add_argument("-o", "--output", help="Output YAML path")
     p_export.add_argument("--registry", help="Registry file path")
 

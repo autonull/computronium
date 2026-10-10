@@ -80,7 +80,10 @@ from computronium.core.system_trainer.train_task import (
     train_task,
 )
 from computronium.core.system_trainer.trainer import StepCallback, SystemTrainer
-from computronium.core.system_trainer.distributed import DistributedSystemTrainer, DistributedState
+from computronium.core.system_trainer.distributed import (
+    DistributedSystemTrainer,
+    DistributedState,
+)
 
 __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "EpochResource",

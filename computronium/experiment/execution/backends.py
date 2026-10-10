@@ -26,6 +26,7 @@ try:
     from torch.nn.parallel import DistributedDataParallel as DDP
     from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
     from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
+
     HAS_DDP = True
 except ImportError:
     HAS_DDP = False
@@ -395,7 +396,9 @@ class DDPBackend:
 
     def __init__(self, config: DDPConfig | None = None, max_workers: int = 1) -> None:
         if not HAS_DDP:
-            raise RuntimeError("DDP/FSDP not available. Install torch with distributed support.")
+            raise RuntimeError(
+                "DDP/FSDP not available. Install torch with distributed support."
+            )
         self.config = config or DDPConfig()
         self._max_workers = max_workers
         self._shutdown = False
