@@ -26,6 +26,7 @@ from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
 from computronium.experiment.execution.pipeline import _resolve_tasks
+from computronium.experiment.surface.report import ReportGenerator, generate_html_report
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +206,25 @@ async def main() -> int:
         print("✅ Budget window: PASS")
     else:
         print(f"❌ Budget window: FAIL (eps={eps:.1f}s, grace=30s)")
+
+    # Generate report using existing infrastructure
+    with RecordStore(StoreConfig(path=Path(config.store), read_only=True)) as store:
+        generator = ReportGenerator(store)
+
+        distinct_cells = len({r.cell_key for r in store.query_records(run_id=run_id)})
+        pareto = generator.pareto_frontier(run_id)
+        coverage = generator.axis_coverage(run_id)
+        failures = generator.failures_by_cause(run_id)
+
+        print(f"Distinct cells:   {distinct_cells}")
+        print(f"Pareto points:    {len(pareto)}")
+        print(f"Coverage axes:    {len(coverage)}")
+        print(f"Failure taxonomy: {failures}")
+
+        # HTML report
+        report_path = Path(config.store).with_suffix(".html")
+        generate_html_report(store, run_id, report_path)
+        print(f"HTML report:      {report_path}")
 
     return 0
 

@@ -33,6 +33,7 @@ The plan's §1 absolutism ("only the deadline may stop it") was **correct for th
 | **WS-E locks** | **✅ 3/3** | Budget, admission, stream locks all pass |
 | Short integration (2min) | ⏳ Next | Need to narrow primitives to supported subset |
 | 1h experiment | ⏳ Next | After short integration passes |
+| Report generation | ⚠️ Wired | `ReportGenerator` + `generate_html_report` added to runner |
 
 ---
 
@@ -65,11 +66,8 @@ nohup uv run python scripts/run_experiment.py --hours 1 --device cuda \
   --store results/exp_todo56_1h.db > logs/exp_todo56_1h.log 2>&1 &
 ```
 
-### 2. Reconcile report fields (DoD §6)
-The minimal runner prints summary + budget check. Need:
-- `distinct_cells`, `pareto_points`, `coverage`, `failure_taxonomy` in summary
-- HTML report with coverage matrix, Pareto table, failure taxonomy, termination/utilization line, repro command
-- Can reuse `ReportGenerator` + `generate_html_report` from `surface/report.py`
+### 2. Verify reports render
+The runner now calls `generate_html_report` (from `surface/report.py`) which produces the coverage matrix, Pareto table, failure taxonomy, termination/utilization line, and repro command. Just verify the HTML opens and renders correctly.
 
 ---
 
@@ -85,7 +83,7 @@ The minimal runner prints summary + budget check. Need:
 
 ## Notes for next session
 
-- **No more architecture work needed** — the minimal runner is done and working.
+- **No more architecture work needed** — the minimal runner is done, locks pass, report wired.
 - **Run the short integration** with supported primitives subset.
 - **Don't rebuild CellStream/BatchSizer** — the `iter_candidates` pager + `Deadline` + store dedup is the complete solution.
 - **Lint cleanup** can wait for Register-C hygiene pass.
