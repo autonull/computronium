@@ -1,4 +1,7 @@
-"""Allocation policy for experiment execution (WP4)."""
+"""Allocation policy for experiment execution (WP4).
+
+Updated for deadline-based time enforcement (TODO55 Phase E).
+"""
 
 from __future__ import annotations
 
@@ -9,7 +12,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from computronium.experiment.schema.coordinate import Coordinate
 
 if TYPE_CHECKING:
-    from computronium.experiment.execution.budget import Budget, CostModel
+    from computronium.experiment.execution.deadline import Deadline
     from computronium.experiment.schema.coordinate import Schedule
     from computronium.experiment.schema.record import Record
 
@@ -24,22 +27,24 @@ class AllocationPolicy(Protocol):
     Allocation policies implement evidence-driven successive promotion (R46-R51):
     they observe results from lower-fidelity runs and promote promising cells
     to higher-fidelity evaluation.
+
+    Updated for deadline-based time enforcement (TODO55 Phase E).
     """
 
     def propose(
         self,
         candidates: list[tuple[Coordinate, Schedule]],
         records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
+        deadline=None,  # Deadline | None
+        cost_model=None,  # CostModel | None
     ) -> list[tuple[Coordinate, Schedule]]:
         """Propose next cells to evaluate.
 
         Args:
             candidates: Available (coordinate, schedule) pairs to choose from
             records: Previously completed records for evidence-driven decisions
-            budget: Current budget state
-            cost_model: Cost model for estimation
+            deadline: Current deadline state (replaces budget)
+            cost_model: Cost model for estimation (optional, legacy)
 
         Returns:
             List of proposed (coordinate, schedule) pairs to evaluate next.
@@ -126,16 +131,16 @@ class EvidenceDrivenAllocator:
         self,
         candidates: list[tuple[Coordinate, Schedule]],
         records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
+        deadline=None,
+        cost_model=None,
     ) -> list[tuple[Coordinate, Schedule]]:
         """Propose next cells using evidence-driven promotion."""
         # Update state with new records
         for record in records:
             self.observe(record)
 
-        # Filter candidates by budget
-        affordable = self._filter_affordable(candidates, budget, cost_model)
+        # Filter candidates by deadline
+        affordable = self._filter_affordable(candidates, deadline, cost_model)
         if not affordable:
             return []
 
@@ -144,9 +149,9 @@ class EvidenceDrivenAllocator:
 
         # Prioritize promotions first (evidence-driven)
         proposals = []
-        proposals.extend(self._select_promotions(promotions, budget, cost_model))
+        proposals.extend(self._select_promotions(promotions, deadline, cost_model))
         proposals.extend(
-            self._select_new_cells(new_cells, budget, cost_model, len(proposals))
+            self._select_new_cells(new_cells, len(proposals), deadline, cost_model)
         )
 
         return proposals
@@ -263,30 +268,13 @@ class EvidenceDrivenAllocator:
     def _filter_affordable(
         self,
         candidates: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
+        deadline=None,
+        cost_model=None,
     ) -> list[tuple[Coordinate, Schedule]]:
-        """Filter candidates that fit within remaining budget."""
-        affordable = []
-        for coord, sched in candidates:
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if (
-                budget.target_cost is None
-                or budget.cost_consumed + cost <= budget.target_cost
-            ):
-                affordable.append((coord, sched))
-        return affordable
+        """Filter candidates that fit within remaining deadline."""
+        if deadline is None or not deadline.soft_expired():
+            return candidates
+        return []
 
     def _categorize_candidates(
         self, candidates: list[tuple[Coordinate, Schedule]]
@@ -310,8 +298,8 @@ class EvidenceDrivenAllocator:
     def _select_promotions(
         self,
         promotions: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
+        deadline=None,
+        cost_model=None,
     ) -> list[tuple[Coordinate, Schedule]]:
         """Select promotion candidates, prioritized by score."""
         # Sort by best score descending
@@ -325,22 +313,9 @@ class EvidenceDrivenAllocator:
 
         selected = []
         for coord, sched in sorted_promos:
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if (
-                budget.target_cost is None
-                or budget.cost_consumed + cost <= budget.target_cost
-            ):
+            # In deadline system, we don't check cost against budget
+            # Just check if deadline has soft-expired
+            if deadline is None or not deadline.soft_expired():
                 selected.append((coord, sched))
                 self._state.promoted_cells += 1
             if len(selected) >= 10:  # Limit concurrent promotions
@@ -350,37 +325,23 @@ class EvidenceDrivenAllocator:
     def _select_new_cells(
         self,
         new_cells: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
         already_selected: int,
+        deadline=None,
+        cost_model=None,
     ) -> list[tuple[Coordinate, Schedule]]:
         """Select new cells for exploration."""
         # Simple round-robin for now; could be stratified random
         selected = []
-        remaining_budget = (
-            budget.target_cost - budget.cost_consumed
-            if budget.target_cost
-            else float("inf")
-        )
+        # In deadline system, we don't track remaining budget
+        # Just check if deadline has soft-expired
+        if deadline is not None and deadline.soft_expired():
+            return []
 
         for coord, sched in new_cells:
             if already_selected + len(selected) >= 50:  # Batch limit
                 break
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if cost <= remaining_budget:
-                selected.append((coord, sched))
-                remaining_budget -= cost
+            # In deadline system, we don't check cost against budget
+            selected.append((coord, sched))
         return selected
 
     def get_waste_report(self) -> dict[str, float | int]:

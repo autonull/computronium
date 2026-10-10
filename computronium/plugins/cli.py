@@ -149,19 +149,30 @@ def _cmd_reload(args: argparse.Namespace) -> int:
 def _cmd_validate(args: argparse.Namespace) -> int:
     try:
         module = importlib.import_module(args.module)
-        cls = getattr(module, args.class_name)
-        instance = cls()
-        plugin_type = registry._detect_plugin_type(instance)
-        if plugin_type:
-            print(f"Valid {plugin_type} plugin: {instance.name}")
-            print(f"Description: {instance.description}")
-            if hasattr(instance, "requires"):
-                print(f"Requires: {instance.requires()}")
-        else:
-            print("Class does not implement a known plugin protocol")
-            return 1
     except Exception as e:
-        print(f"Validation failed: {e}")
+        print(f"Failed to import module: {e}")
+        return 1
+
+    try:
+        cls = getattr(module, args.class_name)
+    except AttributeError:
+        print(f"Class not found: {args.class_name}")
+        return 1
+
+    try:
+        instance = cls()
+    except Exception as e:
+        print(f"Failed to instantiate class: {e}")
+        return 1
+
+    plugin_type = registry._detect_plugin_type(instance)
+    if plugin_type:
+        print(f"Valid {plugin_type} plugin: {instance.name}")
+        print(f"Description: {instance.description}")
+        if hasattr(instance, "requires"):
+            print(f"Requires: {instance.requires()}")
+    else:
+        print("Class does not implement a known plugin protocol")
         return 1
     return 0
 

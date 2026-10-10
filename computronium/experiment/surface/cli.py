@@ -1536,14 +1536,16 @@ def execute_spec(
     """
     import signal
 
+    from computronium.experiment.execution.deadline import Deadline
+
     policy_name = spec.policy or "round_robin_grid"
 
     with RecordStore(StoreConfig(path=Path(store_path))) as store:
         run = run_id or store.create_run(spec=spec)
         logger.info("Run ID: %s", run)
 
-        budget = (
-            Budget.from_duration(_duration_str(spec.budget_seconds))
+        deadline = (
+            Deadline.from_seconds(spec.budget_seconds)
             if spec.budget_seconds is not None
             else None
         )
@@ -1553,7 +1555,8 @@ def execute_spec(
         from computronium.experiment.execution.evaluate import task_shape
 
         policy = create_policy(
-            policy_name, **policy_context(spec, policy_name, shape=task_shape)
+            policy_name,
+            **policy_context(spec, policy_name, shape=task_shape, deadline=deadline),
         )
 
         # Without S10 Decide there is no decision to continue or stop on, so
@@ -1566,8 +1569,8 @@ def execute_spec(
             PipelineConfig(
                 run_id=run,
                 run_spec=spec,
-                budget=budget,
-                cost_model=SimpleCostModel(),
+                deadline=deadline,
+                cost_model=None,
                 policy=policy,
                 backend=LocalBackend(max_workers=_CELL_WORKERS),
                 seed=spec.seed,
@@ -1622,9 +1625,11 @@ def execute_spec(
 
 
 def _consumed(runner: PipelineRunner) -> float | None:
-    """Seconds the run's budget reports it spent, or ``None`` if it had none."""
-    budget = runner._state.budget
-    return budget.elapsed_seconds() if budget is not None else None
+    """Seconds the run's deadline reports elapsed, or ``None`` if it had none."""
+    deadline = runner._state.deadline
+    if deadline is not None:
+        return deadline.elapsed_seconds()
+    return None
 
 
 def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:

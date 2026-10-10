@@ -232,8 +232,7 @@ class FrameStage:
                     search_space=ctx.search_space,
                     spec=run_spec,
                     run_id=ctx.run_id,
-                    budget=ctx.budget,
-                    cost_model=ctx.cost_model,
+                    deadline=ctx.deadline,
                     evidence=ctx.store,
                     shape=task_shape,
                     n_propose=_FRAME_PROPOSALS,
@@ -326,8 +325,7 @@ class ScheduleStage:
                         search_space=ctx.search_space,
                         spec=ctx.run_spec,
                         run_id=ctx.run_id,
-                        budget=ctx.budget,
-                        cost_model=ctx.cost_model,
+                        deadline=ctx.deadline,
                         evidence=ctx.store,
                         # S1 screens with the shape; a context without it
                         # proposes cells SystemConfig.validate rejects (the
@@ -891,8 +889,8 @@ class DecideStage:
             allocator_proposals = ctx.allocator.propose(
                 candidates,
                 [],  # records would come from store
-                ctx.budget,
-                ctx.cost_model,
+                ctx.deadline,
+                None,
             )
 
             # Convert allocator proposals (tuples) back to Proposal objects
@@ -905,19 +903,19 @@ class DecideStage:
                     )
                 )
 
-        # Check budget
+        # Check deadline
         should_continue = True
-        if ctx.budget and ctx.budget.expired():
+        if ctx.deadline and ctx.deadline.expired():
             should_continue = False
 
         if should_continue:
             decision = continue_round(
                 new_proposals=new_proposals,
                 promotions=promotions,
-                rationale="Budget remains, continuing round",
+                rationale="Deadline not expired, continuing round",
             )
         else:
-            decision = complete_run(rationale="Budget exhausted")
+            decision = complete_run(rationale="Deadline expired")
 
         return Fragment(
             stage_id=self.stage_id,

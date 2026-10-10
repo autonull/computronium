@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import sys
-from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+logger = logging.getLogger(__name__)
 
 
 class HotReloader:
@@ -26,16 +32,7 @@ class HotReloader:
 
         for watch_path in self.watch_paths:
             for py_file in watch_path.rglob("*.py"):
-                try:
-                    mtime = py_file.stat().st_mtime
-                    key = str(py_file)
-                    if self._watched_modules.get(key) != mtime:
-                        self._watched_modules[key] = mtime
-                        module_name = self._path_to_module(py_file)
-                        if module_name:
-                            reloaded.extend(self._reload_module(module_name))
-                except OSError:
-                    pass
+                self._check_file(py_file, reloaded)
 
         if reloaded:
             from computronium.plugins.core.registry import registry
@@ -43,6 +40,19 @@ class HotReloader:
             registry.reload()
 
         return reloaded
+
+    def _check_file(self, py_file: Path, reloaded: list[str]) -> None:
+        try:
+            mtime = py_file.stat().st_mtime
+        except OSError:
+            return
+
+        key = str(py_file)
+        if self._watched_modules.get(key) != mtime:
+            self._watched_modules[key] = mtime
+            module_name = self._path_to_module(py_file)
+            if module_name:
+                reloaded.extend(self._reload_module(module_name))
 
     def _path_to_module(self, path: Path) -> str | None:
         """Convert file path to module name."""
@@ -59,56 +69,74 @@ class HotReloader:
     def _reload_module(self, module_name: str) -> list[str]:
         """Reload a module and re-register any plugin classes."""
         reloaded = []
+        module = self._get_or_reload_module(module_name)
+        if module is None:
+            return reloaded
+
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if isinstance(attr, type) and attr not in _BASE_PLUGIN_CLASSES:
+                self._try_register_plugin(attr, reloaded)
+
+        return reloaded
+
+    def _get_or_reload_module(self, module_name: str) -> object | None:
+        """Get or reload a module."""
         try:
             if module_name in sys.modules:
                 importlib.reload(sys.modules[module_name])
             else:
                 importlib.import_module(module_name)
+            return sys.modules[module_name]
+        except Exception as e:  # ruff: ignore[blind-except]
+            logger.debug("Failed to reload module %s: %s", module_name, e)
+            return None
 
-            module = sys.modules[module_name]
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if isinstance(attr, type) and attr not in _BASE_PLUGIN_CLASSES:
-                    try:
-                        instance = attr()
-                        from computronium.plugins.core.registry import registry
+    def _try_register_plugin(self, attr: type, reloaded: list[str]) -> None:
+        try:
+            instance = attr()
+            self._register_plugin_instance(instance, reloaded)
+        except Exception as e:  # ruff: ignore[blind-except]
+            logger.debug("Failed to register plugin %s: %s", attr.__name__, e)
 
-                        plugin_type = registry._detect_plugin_type(instance)
-                        if plugin_type:
-                            registry.register(instance)
-                            reloaded.append(f"{plugin_type}:{instance.name}")
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-        return reloaded
+    def _register_plugin_instance(self, instance: object, reloaded: list[str]) -> None:
+        from computronium.plugins.core.registry import registry
+
+        plugin_type = registry._detect_plugin_type(instance)
+        if plugin_type:
+            registry.register(instance)  # type: ignore[arg-type]
+            reloaded.append(f"{plugin_type}:{instance.name}")  # type: ignore[attr-defined]
 
 
 # Lazy import to avoid circular imports
 _BASE_PLUGIN_CLASSES: tuple[type, ...] = ()
 
 
-def _init_base_classes() -> None:
-    global _BASE_PLUGIN_CLASSES
-    from computronium.plugins.core.protocols import (
-        CreditPlugin,
-        DynamicsPlugin,
-        GeometryPlugin,
-        ObjectivePlugin,
-        PlasticityPlugin,
-        SubstratePlugin,
-        UpdatePlugin,
-    )
+def _get_base_plugin_classes() -> tuple[type, ...]:
+    """Get base plugin classes (lazy initialization)."""
+    global _BASE_PLUGIN_CLASSES  # ruff: ignore[global-statement]
+    if not _BASE_PLUGIN_CLASSES:
+        from computronium.plugins.core.protocols import (
+            CreditPlugin,
+            DynamicsPlugin,
+            GeometryPlugin,
+            ObjectivePlugin,
+            PlasticityPlugin,
+            SubstratePlugin,
+            UpdatePlugin,
+        )
 
-    _BASE_PLUGIN_CLASSES = (
-        ObjectivePlugin,
-        SubstratePlugin,
-        DynamicsPlugin,
-        GeometryPlugin,
-        CreditPlugin,
-        UpdatePlugin,
-        PlasticityPlugin,
-    )
+        _BASE_PLUGIN_CLASSES = (
+            ObjectivePlugin,
+            SubstratePlugin,
+            DynamicsPlugin,
+            GeometryPlugin,
+            CreditPlugin,
+            UpdatePlugin,
+            PlasticityPlugin,
+        )
+    return _BASE_PLUGIN_CLASSES
 
 
-_init_base_classes()
+# Initialize base classes on import
+_get_base_plugin_classes()

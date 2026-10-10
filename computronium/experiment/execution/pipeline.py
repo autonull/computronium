@@ -104,6 +104,9 @@ class PipelineConfig:
     run_spec: RunSpec
     stages: list[StageId] = field(default_factory=list)
     deadline: Deadline | None = None  # Hard deadline (replaces budget)
+    budget: Any = (
+        None  # Backward compatibility: accepts legacy Budget, converts to deadline
+    )
     cost_model: CostModel | None = None
     policy: Policy | None = None
     allocator: EvidenceDrivenAllocator | None = None
@@ -119,6 +122,19 @@ class PipelineConfig:
     dtype: str = "float32"
     worker_config: dict[str, Any] = field(default_factory=dict)
     code_sha: str = "unknown"
+
+    def __post_init__(self) -> None:
+        # Convert legacy Budget to Deadline if provided
+        if self.budget is not None and self.deadline is None:
+            from computronium.experiment.execution.budget import Budget as LegacyBudget
+            from computronium.experiment.execution.deadline import Deadline
+
+            if isinstance(self.budget, LegacyBudget):
+                object.__setattr__(
+                    self,
+                    "deadline",
+                    Deadline.from_seconds(self.budget.soft_seconds or 3600),
+                )
 
 
 def _resolve_tasks(config: PipelineConfig) -> tuple[str, ...]:
@@ -295,6 +311,163 @@ class PipelineRunner:
                 len(keys),
             )
 
+    @classmethod
+    def from_checkpoint(
+        cls,
+        run_id: str,
+        config: PipelineConfig,
+        store: RecordStore,
+    ) -> PipelineRunner:
+        """Create PipelineRunner and resume from checkpoint.
+
+        Args:
+            run_id: The run identifier to resume
+            config: Pipeline configuration (deadline, policy, backend, etc.)
+            store: RecordStore with existing run data
+
+        Returns:
+            PipelineRunner with state restored from checkpoint
+        """
+        runner = cls(config, store)
+
+        # Load checkpoint from store
+        if store.is_open:
+            checkpoint_data = store.load_checkpoint(run_id)
+            if checkpoint_data:
+                runner._restore_from_checkpoint(checkpoint_data)
+                logger.info(
+                    "Resumed run %s from checkpoint (round %d)",
+                    run_id,
+                    runner._state.current_round,
+                )
+
+        return runner
+
+    def _restore_from_checkpoint(self, checkpoint_data: dict[str, Any]) -> None:
+        """Restore pipeline state from checkpoint data."""
+        from computronium.experiment.execution.deadline import CellTiming
+
+        # Restore completed keys
+        self._state.completed_measurement_keys = set(
+            checkpoint_data.get("completed_measurement_keys", [])
+        )
+
+        # Restore pending proposals (deserialize)
+        pending_data = checkpoint_data.get("pending_proposals", [])
+        self._state.pending_proposals = [
+            self._deserialize_proposal(p) for p in pending_data
+        ]
+
+        # Restore in-progress
+        in_progress_data = checkpoint_data.get("in_progress", [])
+        self._state.in_progress = [
+            self._deserialize_in_progress(ip) for ip in in_progress_data
+        ]
+
+        # Restore round state
+        self._state.current_round = checkpoint_data.get("current_round", 0)
+        if self._state.round_controller:
+            rc_state = checkpoint_data.get("round_controller_state", {})
+            # Access private attribute since property has no setter
+            self._state.round_controller._current_round = rc_state.get(
+                "current_round", 0
+            )
+
+        # Restore policy state
+        if self._config.policy:
+            policy_state = checkpoint_data.get("policy_state", {})
+            get_state = getattr(self._config.policy, "set_state", None)
+            if callable(get_state):
+                get_state(policy_state)
+
+        # Restore allocator state
+        if self._config.allocator:
+            allocator_state = checkpoint_data.get("allocator_state")
+            if allocator_state:
+                get_state = getattr(self._config.allocator, "set_state", None)
+                if callable(get_state):
+                    get_state(allocator_state)
+
+        # Restore cell timing
+        ct_data = checkpoint_data.get("cell_timing", {})
+        self._state.cell_timing = CellTiming(
+            cell_count=ct_data.get("cell_count", 0),
+            total_walltime_s=ct_data.get("total_walltime_s", 0.0),
+            cell_times=ct_data.get("cell_times", []),
+        )
+
+        logger.info(
+            "Restored checkpoint: %d completed, %d pending, round %d",
+            len(self._state.completed_measurement_keys),
+            len(self._state.pending_proposals),
+            self._state.current_round,
+        )
+
+    def _deserialize_proposal(self, data: dict[str, Any]) -> Proposal:
+        """Deserialize a Proposal from checkpoint data."""
+        from computronium.experiment.schema.coordinate import Coordinate, Schedule
+
+        coord_data = data.get("coordinate", {})
+        coord = Coordinate(
+            substrate=coord_data.get("substrate", ""),
+            geometry=coord_data.get("geometry", ""),
+            dynamics=coord_data.get("dynamics", ""),
+            plasticity=coord_data.get("plasticity", ""),
+            credit=coord_data.get("credit", ""),
+            update=coord_data.get("update", ""),
+            params=coord_data.get("params", {}),
+        )
+        sched_data = data.get("schedule", {})
+        sched = (
+            Schedule.from_dict(sched_data)
+            if sched_data
+            else Schedule(
+                fidelity="L1",
+                seed=0,
+                n_seeds=1,
+                epochs=1,
+                batch_limit=0,
+                budget_id="initial",
+            )
+        )
+        return Proposal(
+            coordinate=coord,
+            schedule=sched,
+            rationale=data.get("rationale", ""),
+            metadata=data.get("metadata", {}),
+        )
+
+    def _deserialize_in_progress(
+        self, data: dict[str, Any]
+    ) -> tuple[Coordinate, Schedule]:
+        """Deserialize an in-progress cell from checkpoint data."""
+        from computronium.experiment.schema.coordinate import Coordinate, Schedule
+
+        coord_data = data.get("coordinate", {})
+        coord = Coordinate(
+            substrate=coord_data.get("substrate", ""),
+            geometry=coord_data.get("geometry", ""),
+            dynamics=coord_data.get("dynamics", ""),
+            plasticity=coord_data.get("plasticity", ""),
+            credit=coord_data.get("credit", ""),
+            update=coord_data.get("update", ""),
+            params=coord_data.get("params", {}),
+        )
+        sched_data = data.get("schedule", {})
+        sched = (
+            Schedule.from_dict(sched_data)
+            if sched_data
+            else Schedule(
+                fidelity="L1",
+                seed=0,
+                n_seeds=1,
+                epochs=1,
+                batch_limit=0,
+                budget_id="initial",
+            )
+        )
+        return (coord, sched)
+
     @property
     def replay_hash(self) -> str | None:
         """The run-level replay hash, once the run has finished measuring."""
@@ -462,7 +635,9 @@ class PipelineRunner:
         )
 
     def _should_stop_round_loop(
-        self, deadline_enforcer: DeadlineEnforcer | None, signal_handler: SignalHandler | None
+        self,
+        deadline_enforcer: DeadlineEnforcer | None,
+        signal_handler: SignalHandler | None,
     ) -> bool:
         """Check if round loop should stop. Returns True if should stop."""
         if signal_handler and signal_handler.shutdown_requested:
@@ -482,13 +657,17 @@ class PipelineRunner:
 
         return bool(self._shutdown)
 
-    def _check_post_round_deadline(self, deadline_enforcer: DeadlineEnforcer | None) -> None:
+    def _check_post_round_deadline(
+        self, deadline_enforcer: DeadlineEnforcer | None
+    ) -> None:
         """Check deadline after round completes."""
         if deadline_enforcer and not deadline_enforcer.check_after_cell():
             logger.info("Soft deadline reached after round, stopping")
             self._shutdown = True
 
-    def _should_stop_on_fruitless_rounds(self, round_controller: RoundController) -> bool:
+    def _should_stop_on_fruitless_rounds(
+        self, round_controller: RoundController
+    ) -> bool:
         """Check if we should stop due to fruitless rounds. Returns True if should stop."""
         if self._state.last_batch_was_all_seen:
             logger.info(
@@ -1093,16 +1272,19 @@ class PipelineRunner:
             snapshot = self._collect_checkpoint_state()
             if snapshot is None:
                 return
-            _create_checkpoint_data(snapshot)
+            checkpoint_data = _create_checkpoint_data(snapshot)
 
-            # Note: We'd need a dedicated checkpoint storage method in RecordStore
-            # For now, log the checkpoint availability
-            logger.info(
-                "Checkpoint prepared for run %s (round %d, %d completed)",
-                self._config.run_id,
-                self._state.current_round,
-                len(self._state.completed_measurement_keys),
-            )
+            # Save to store (convert CheckpointData to dict)
+            if self._store.is_open:
+                self._store.save_checkpoint(
+                    self._config.run_id, checkpoint_data.__dict__
+                )
+                logger.info(
+                    "Checkpoint saved for run %s (round %d, %d completed)",
+                    self._config.run_id,
+                    self._state.current_round,
+                    len(self._state.completed_measurement_keys),
+                )
 
         except Exception:
             logger.exception("Failed to save checkpoint")

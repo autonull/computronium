@@ -5,9 +5,10 @@ from __future__ import annotations
 import importlib.metadata
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from computronium.plugins.core.protocols import PluginProtocol
+if TYPE_CHECKING:
+    from computronium.plugins.core.protocols import PluginProtocol
 
 PLUGIN_ENTRY_POINT_GROUP = "computronium.plugins"
 
@@ -34,7 +35,7 @@ class PluginRegistry:
 
     _instance: ClassVar[PluginRegistry | None] = None
 
-    def __new__(cls) -> PluginRegistry:
+    def __new__(cls) -> PluginRegistry:  # ruff: ignore[non-self-return-type]
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -61,45 +62,62 @@ class PluginRegistry:
         """Load a single entry point."""
         try:
             plugin_class = ep.load()
-            plugin_instance = plugin_class()
-            plugin_type = self._detect_plugin_type(plugin_instance)
-            if plugin_type:
-                key = f"{plugin_type}:{self._get_plugin_key_name(plugin_instance, plugin_type)}"
-                self._plugins[key] = plugin_instance
-                self._metadata[key] = PluginMetadata(
-                    name=self._get_plugin_key_name(plugin_instance, plugin_type),
-                    version=getattr(plugin_class, "__version__", "0.1.0"),
-                    plugin_type=plugin_type,
-                    entry_point_name=ep.name,
-                    module_name=ep.module,
-                    class_name=plugin_class.__name__,
-                    description=plugin_instance.description,
-                    author=getattr(plugin_class, "__author__", None),
-                    license=getattr(plugin_class, "__license__", None),
-                    dependencies=list(getattr(plugin_class, "__dependencies__", [])),
-                )
         except Exception as e:
-            warnings.warn(f"Failed to load plugin {ep.name}: {e}", RuntimeWarning)
+            warnings.warn(f"Failed to load plugin class {ep.name}: {e}", RuntimeWarning)
+            return
+
+        try:
+            plugin_instance = plugin_class()
+        except Exception as e:
+            warnings.warn(
+                f"Failed to instantiate plugin {ep.name}: {e}", RuntimeWarning
+            )
+            return
+
+        plugin_type = self._detect_plugin_type(plugin_instance)
+        if not plugin_type:
+            warnings.warn(f"Unknown plugin type for {ep.name}", RuntimeWarning)
+            return
+
+        key = f"{plugin_type}:{self._get_plugin_key_name(plugin_instance, plugin_type)}"
+        self._plugins[key] = plugin_instance
+        self._metadata[key] = PluginMetadata(
+            name=self._get_plugin_key_name(plugin_instance, plugin_type),
+            version=getattr(plugin_class, "__version__", "0.1.0"),
+            plugin_type=plugin_type,
+            entry_point_name=ep.name,
+            module_name=ep.module,
+            class_name=plugin_class.__name__,
+            description=plugin_instance.description,
+            author=getattr(plugin_class, "__author__", None),
+            license=getattr(plugin_class, "__license__", None),
+            dependencies=list(getattr(plugin_class, "__dependencies__", [])),
+        )
 
     def _detect_plugin_type(self, plugin: Any) -> str | None:
         """Detect which protocol a plugin implements."""
-        if hasattr(plugin, "requires") and callable(getattr(plugin, "requires", None)):
-            return "objective"
-        if hasattr(plugin, "substrate_type"):
-            return "substrate"
-        if hasattr(plugin, "dynamics_type"):
-            return "dynamics"
-        if hasattr(plugin, "topology_type"):
-            return "geometry"
-        if hasattr(plugin, "credit_type"):
-            return "credit"
-        if hasattr(plugin, "update_type"):
-            return "update"
-        if hasattr(plugin, "plasticity_type"):
-            return "plasticity"
+        type_map: list[tuple[str, str]] = [
+            ("requires", "objective"),
+            ("substrate_type", "substrate"),
+            ("dynamics_type", "dynamics"),
+            ("topology_type", "geometry"),
+            ("credit_type", "credit"),
+            ("update_type", "update"),
+            ("plasticity_type", "plasticity"),
+        ]
+
+        for attr_name, plugin_type in type_map:
+            if attr_name == "requires":
+                if hasattr(plugin, attr_name) and callable(
+                    getattr(plugin, attr_name, None)
+                ):
+                    return plugin_type
+            elif hasattr(plugin, attr_name):
+                return plugin_type
+
         return None
 
-    _TYPE_ATTR_MAP: dict[str, str] = {
+    _TYPE_ATTR_MAP: ClassVar[dict[str, str]] = {
         "objective": "name",
         "substrate": "substrate_type",
         "dynamics": "dynamics_type",

@@ -249,7 +249,10 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                                         epochs INTEGER, batch_limit INTEGER, budget_id TEXT,
                                         task_id TEXT, param_budget INTEGER, device TEXT,
                                         deterministic BOOLEAN, num_workers INTEGER,
-                                        precision TEXT, checkpoint_every_n INTEGER) NOT NULL,
+                                        precision TEXT, checkpoint_every_n INTEGER,
+                                        distributed_backend TEXT, ddp_backend TEXT,
+                                        fsdp_sharding_strategy TEXT, fsdp_min_params INTEGER,
+                                        fsdp_cpu_offload BOOLEAN, fsdp_mixed_precision BOOLEAN) NOT NULL,
                 provenance      JSON NOT NULL,
                 status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                                         quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
@@ -282,6 +285,15 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 record_id        TEXT PRIMARY KEY REFERENCES records(record_id),
                 embedding        FLOAT[384] NOT NULL,
                 embedding_version INTEGER NOT NULL
+            )
+        """)
+
+        # Checkpoints table (for SIGTERM-aware resume)
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                run_id           TEXT PRIMARY KEY REFERENCES runs(run_id),
+                checkpoint_data  JSON NOT NULL,
+                created_at       TIMESTAMP NOT NULL
             )
         """)
 
@@ -469,6 +481,52 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 """,
                 [status, budget_consumed_s, replay_hash, datetime.now(), run_id],
             )
+
+    def save_checkpoint(self, run_id: str, checkpoint_data: dict[str, Any]) -> None:
+        """Save a pipeline checkpoint for SIGTERM-aware resume.
+
+        Args:
+            run_id: The run identifier
+            checkpoint_data: Serializable checkpoint data (from CheckpointData)
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        with self._write_lock:
+            self._conn.execute(
+                """
+                INSERT INTO checkpoints (run_id, checkpoint_data, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT (run_id) DO UPDATE SET
+                    checkpoint_data = excluded.checkpoint_data,
+                    created_at = excluded.created_at
+                """,
+                [run_id, json.dumps(checkpoint_data), datetime.now()],
+            )
+
+    def load_checkpoint(self, run_id: str) -> dict[str, Any] | None:
+        """Load a pipeline checkpoint for resume.
+
+        Args:
+            run_id: The run identifier
+
+        Returns:
+            Checkpoint data dict, or None if no checkpoint exists
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        row = self._conn.execute(
+            "SELECT checkpoint_data FROM checkpoints WHERE run_id = ?", [run_id]
+        ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row[0])
+
+    def delete_checkpoint(self, run_id: str) -> None:
+        """Delete a checkpoint after successful completion."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        with self._write_lock:
+            self._conn.execute("DELETE FROM checkpoints WHERE run_id = ?", [run_id])
 
     def append(self, record: Record) -> Record:
         """Append a record to the store. Returns record with assigned seq.

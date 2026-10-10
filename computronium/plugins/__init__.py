@@ -15,6 +15,7 @@ Public API:
 
 from __future__ import annotations
 
+from computronium.plugins.cli import main as plugin_cli_main
 from computronium.plugins.core.base import (
     BaseCreditPlugin,
     BaseDynamicsPlugin,
@@ -43,34 +44,27 @@ from computronium.plugins.core.registry import (
 from computronium.plugins.examples import ExampleObjectivePlugin
 
 __all__ = [
-    # Protocols
-    "PluginProtocol",
-    "ObjectivePlugin",
-    "SubstratePlugin",
-    "DynamicsPlugin",
-    "GeometryPlugin",
-    "CreditPlugin",
-    "UpdatePlugin",
-    "PlasticityPlugin",
-    # Registry
-    "registry",
-    "PluginMetadata",
     "PLUGIN_ENTRY_POINT_GROUP",
-    # Hot-reload
-    "HotReloader",
-    # Base classes
-    "BaseObjectivePlugin",
-    "BaseSubstratePlugin",
+    "BaseCreditPlugin",
     "BaseDynamicsPlugin",
     "BaseGeometryPlugin",
-    "BaseCreditPlugin",
-    "BaseUpdatePlugin",
+    "BaseObjectivePlugin",
     "BasePlasticityPlugin",
-    # Examples
+    "BaseSubstratePlugin",
+    "BaseUpdatePlugin",
+    "CreditPlugin",
+    "DynamicsPlugin",
     "ExampleObjectivePlugin",
+    "GeometryPlugin",
+    "HotReloader",
+    "ObjectivePlugin",
+    "PlasticityPlugin",
+    "PluginMetadata",
+    "PluginProtocol",
+    "SubstratePlugin",
+    "UpdatePlugin",
+    "registry",
 ]
 
 # Convenience: expose CLI main
-from computronium.plugins.cli import main as plugin_cli_main
-
-main = plugin_cli_main  # noqa: PLR0401 (expose CLI entry point)
+main = plugin_cli_main  # ruff: ignore[non-empty-init-module]

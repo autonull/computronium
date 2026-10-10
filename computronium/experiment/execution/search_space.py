@@ -723,8 +723,8 @@ def iter_candidates(  # ruff: ignore[complex-structure]
     spec: RunSpec,
     search_space: SearchSpace,
     *,
-    budget: Budget | None = None,
-    cost_model: CostModel | None = None,
+    deadline=None,  # Deadline | None
+    cost_model=None,  # CostModel | None
     shape: ShapeResolver | None = None,
     max_scan: int | None = None,
     check_composable: bool = True,
@@ -740,8 +740,8 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         spec: The run declaration; names the task, fidelity, seed plan and the
             hyperparameters to sweep.
         search_space: The run's active space.
-        budget: Optional ceiling; a cell estimated above it is skipped.
-        cost_model: Required with ``budget`` to estimate a cell's cost.
+        deadline: Optional hard deadline; if soft-expired, no cells are yielded.
+        cost_model: Optional cost model (not used in deadline system).
         shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
             cell whose configs cannot compose or validate for that shape is
             skipped instead of proposed.
@@ -824,21 +824,8 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             )
         ):
             continue
-        if budget is not None and cost_model is not None:
-            cost = cost_model.estimate_cost(
-                (
-                    coordinate.substrate,
-                    coordinate.geometry,
-                    coordinate.dynamics,
-                    coordinate.plasticity,
-                    coordinate.credit,
-                    coordinate.update,
-                    coordinate.params,
-                ),
-                schedule.to_dict(),
-            )
-            if budget.target_cost and cost > budget.target_cost:
-                continue
+        if deadline is not None and deadline.soft_expired():
+            continue
         yield coordinate, schedule
 
 
@@ -846,14 +833,14 @@ def generate_candidates(
     spec: RunSpec,
     search_space: SearchSpace,
     *,
-    budget: Budget | None = None,
-    cost_model: CostModel | None = None,
+    deadline=None,
+    cost_model=None,
     shape: ShapeResolver | None = None,
     limit: int = 10,
 ) -> list[tuple[Coordinate, Schedule]]:
     """The first ``limit`` cells of :func:`iter_candidates`."""
     stream = iter_candidates(
-        spec, search_space, budget=budget, cost_model=cost_model, shape=shape
+        spec, search_space, deadline=deadline, cost_model=cost_model, shape=shape
     )
     return list(islice(stream, limit))
 

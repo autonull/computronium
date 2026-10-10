@@ -24,6 +24,8 @@ from optuna.distributions import (
 )
 from optuna.study import StudyDirection
 
+from computronium.experiment.execution.budget import Budget
+from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.optuna_adapter import OptunaDistributionAdapter
 from computronium.experiment.execution.search_space import (
     ShapeResolver,
@@ -38,7 +40,6 @@ from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.execution.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
@@ -87,8 +88,10 @@ def resolve_objectives(
     return tuple(spec.name for spec in specs), tuple(spec.direction for spec in specs)
 
 
-def _cost(coord: Coordinate, sched: Schedule, cost_model: CostModel) -> float:
-    """What the cost model charges one cell."""
+def _cost(coord: Coordinate, sched: Schedule, cost_model) -> float:
+    """What the cost model charges one cell (legacy, not used in deadline system)."""
+    if cost_model is None:
+        return 0.0
     return cost_model.estimate_cost(
         (
             coord.substrate,
@@ -105,20 +108,20 @@ def _cost(coord: Coordinate, sched: Schedule, cost_model: CostModel) -> float:
 
 def _affordable(
     candidates: list[tuple[Coordinate, Schedule]],
-    budget: Budget,
-    cost_model: CostModel,
+    deadline,  # Deadline or None
+    cost_model,  # CostModel or None
 ) -> list[tuple[Coordinate, Schedule]]:
-    """The candidates this budget can still pay for.
+    """The candidates this deadline can still afford.
 
-    One implementation for every policy: five copies of this loop differed only
-    in their risk of drifting apart.
+    In the deadline system, we check if there's time remaining rather than
+    comparing against a cost target.
     """
-    return [
-        (coord, sched)
-        for coord, sched in candidates
-        if budget.target_cost is None
-        or budget.cost_consumed + _cost(coord, sched, cost_model) <= budget.target_cost
-    ]
+    if deadline is None:
+        return candidates
+    # If deadline has soft-expired, no candidates are affordable
+    if deadline.soft_expired():
+        return []
+    return candidates
 
 
 def _sampled_value(value: Any, distribution: BaseDistribution) -> Any:
@@ -161,12 +164,23 @@ class ProposalContext:
     search_space: SearchSpace
     spec: RunSpec
     run_id: str
-    budget: Budget
-    cost_model: CostModel
+    deadline: Deadline | None = None
     evidence: RecordSource | None = None
     task: str | None = None
     shape: ShapeResolver | None = None
     n_propose: int = 10
+    # Backward compatibility
+    budget: Any = None
+    cost_model: Any = None
+
+    def __post_init__(self) -> None:
+        # Convert legacy Budget to Deadline if provided
+        if self.budget is not None and self.deadline is None and isinstance(self.budget, Budget):
+            object.__setattr__(
+                self,
+                "deadline",
+                Deadline.from_seconds(self.budget.soft_seconds or 3600),
+            )
 
     @property
     def _scoped_space(self) -> SearchSpace:
@@ -241,8 +255,8 @@ class ProposalContext:
             for coordinate, schedule in iter_candidates(
                 self.spec,
                 self._scoped_space,
-                budget=self.budget,
-                cost_model=self.cost_model,
+                deadline=self.deadline,
+                cost_model=None,
                 shape=self.shape,
                 check_composable=False,  # Defer validation to GateStage/ComposeStage
             )
@@ -275,9 +289,9 @@ class ProposalContext:
         policies that build their own — a mutated cell is a cell nobody has
         composed yet, and an uncomposable cell is discovered by training.
 
-        Checks budget affordability only; composability is validated at GateStage/ComposeStage.
+        Checks deadline affordability only; composability is validated at GateStage/ComposeStage.
         """
-        return bool(_affordable([(coordinate, schedule)], self.budget, self.cost_model))
+        return bool(_affordable([(coordinate, schedule)], self.deadline, None))
 
 
 def _dedupe(
@@ -439,7 +453,7 @@ class ModelBasedPolicy:
     for the credit×update combinations before falling back to standard samplers.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[PLR0913]
         self,
         *,
         sampler: str = "tpe",  # "tpe", "nsga2", "gp", "random", "icu_guided"
@@ -453,6 +467,7 @@ class ModelBasedPolicy:
         | None = None,  # I(C,U) metamodel for guided initialization
         icu_credit_update_pairs: list[tuple[str, str]]
         | None = None,  # List of (credit, update) to try
+        deadline: Deadline | None = None,  # Hard deadline for trial-level timeout
     ) -> None:
         """Declare the study.
 
@@ -472,6 +487,8 @@ class ModelBasedPolicy:
             icu_model: I(C,U) metamodel instance for guided initialization.
             icu_credit_update_pairs: List of (credit, update) pairs to evaluate
                 with the I(C,U) model for initial proposals.
+            deadline: Hard deadline for trial-level timeout. If provided,
+                enables deadline checking during long-running trials.
 
         Raises:
             UnknownObjectiveError: An objective is not registered.
@@ -491,6 +508,7 @@ class ModelBasedPolicy:
         self._axis_studies: dict[str, optuna.Study] = {}
         self._run_id: str | None = None
         self._pending: dict[str, int] = {}
+        self._deadline = deadline
 
         # Resolve objectives: use axis_objectives if set, otherwise global objectives
         if self._axis_objectives:
@@ -501,6 +519,25 @@ class ModelBasedPolicy:
             self._objectives, self._directions = resolve_objectives(all_objs)
         else:
             self._objectives, self._directions = resolve_objectives(objectives)
+
+    def _check_deadline(self) -> bool:
+        """Check if deadline has expired. Returns True if we should continue."""
+        if self._deadline is None:
+            return True
+        return not self._deadline.expired()
+
+    def _deadline_callback(
+        self, study: optuna.Study, trial: optuna.trial.FrozenTrial
+    ) -> None:
+        """Optuna callback to check deadline during trial execution.
+
+        This is called after each trial completes. For checking during
+        trial execution, we'd need a different mechanism (e.g., custom
+        objective function that checks deadline periodically).
+        """
+        if not self._check_deadline():
+            # Stop the study if deadline exceeded
+            study.stop()
 
     def _create_sampler(self) -> optuna.samplers.BaseSampler:
         """The declared sampler. An unknown name is a typo, not a silent TPE."""
@@ -703,6 +740,11 @@ class ModelBasedPolicy:
         """
         study = self._get_or_rebuild_study(ctx.run_id, ctx.records())
 
+        # Check deadline before proposing
+        if not self._check_deadline():
+            logger.info("Deadline expired, stopping proposals")
+            return
+
         # I(C,U) guided initialization: use I(C,U) model to propose promising
         # credit×update combinations for the first few proposals
         if (
@@ -716,6 +758,10 @@ class ModelBasedPolicy:
             return
 
         for coord, sched in islice(ctx.cells(), ctx.n_propose):
+            # Check deadline before each proposal
+            if not self._check_deadline():
+                logger.info("Deadline expired during proposal loop")
+                break
             distributions = self._distributions(coord)
             if not distributions:
                 yield Proposal(coord, sched, self._name)
@@ -925,7 +971,7 @@ class EvolutionPolicy:
             device=ctx.spec.device,
             deterministic=ctx.spec.deterministic,
             num_workers=ctx.spec.num_workers,
-            precision=ctx.spec.precision,
+            precision=ctx.spec.precision,  # type: ignore[arg-type]
         )
 
     def _evolve(self, ctx: ProposalContext) -> Iterator[Proposal]:
@@ -1056,7 +1102,6 @@ class StrategyProgressionPolicy:
         ]
         self._current_stage = current_stage
         self._name = "strategy_progression"
-        self._budget_consumed: float = 0.0
         self._total_budget: float | None = None
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
@@ -1064,11 +1109,13 @@ class StrategyProgressionPolicy:
         if not self._stages:
             return iter(())
 
-        if self._total_budget is None and ctx.budget.target_cost:
-            self._total_budget = ctx.budget.target_cost
+        # Use deadline for progress tracking instead of budget
+        if self._total_budget is None and ctx.deadline:
+            self._total_budget = ctx.deadline.remaining_soft_seconds()
 
-        if self._total_budget and ctx.budget.cost_consumed > 0:
-            progress = ctx.budget.cost_consumed / self._total_budget
+        if self._total_budget and ctx.deadline:
+            elapsed = ctx.deadline.elapsed_seconds()
+            progress = elapsed / self._total_budget
             self._current_stage = min(
                 int(progress * len(self._stages)), len(self._stages) - 1
             )
@@ -1173,7 +1220,11 @@ def create_policy(name: str, **kwargs: Any) -> Policy:
 
 
 def policy_context(
-    spec: RunSpec, name: str, *, shape: ShapeResolver | None = None
+    spec: RunSpec,
+    name: str,
+    *,
+    shape: ShapeResolver | None = None,
+    deadline: Deadline | None = None,
 ) -> dict[str, Any]:
     """The run arguments one policy is offered.
 
@@ -1185,11 +1236,12 @@ def policy_context(
     Args:
         spec: The run declaration.
         name: The chosen policy's catalog key.
+        shape: Shape resolver for cell legality.
+        deadline: Hard deadline for time enforcement.
 
     Returns:
-        The subset of ``seed``, ``objectives``, ``axis_objectives`` and ``spec``
-        that this policy accepts. Objectives are a tuple, defaulting to the
-        measured primary when a spec names none.
+        The subset of ``seed``, ``objectives``, ``axis_objectives``, ``spec``,
+        and ``deadline`` that this policy accepts.
 
     Raises:
         ValueError: The policy name is unknown.
@@ -1207,6 +1259,7 @@ def policy_context(
         # validation rejects (lazy x recurrent, observed): the space cannot
         # screen legality without the shape, so it must reach the policy.
         "shape": shape,
+        "deadline": deadline,
     }
 
     # Add I(C,U) model for icu_guided sampler

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
     from computronium.experiment.execution.backends import ExecutionBackend
-    from computronium.experiment.execution.budget import Budget, CostModel
+    from computronium.experiment.execution.deadline import Deadline, DeadlineEnforcer
     from computronium.experiment.execution.policy import Policy
     from computronium.experiment.execution.search_space import SearchSpace
     from computronium.experiment.execution.sysctx import SystemContext
@@ -115,8 +115,8 @@ class StageContext:
     run_spec: RunSpec
     stage_id: StageId
     store: RecordStore
-    budget: Budget
-    cost_model: CostModel
+    deadline: Deadline | None
+    deadline_enforcer: DeadlineEnforcer | None
     policy: Policy
     allocator: EvidenceDrivenAllocator | None
     backend: ExecutionBackend
