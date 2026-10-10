@@ -160,6 +160,7 @@ comp = "computronium.cli.__main__:main"
 
 [dependency-groups]
 dev = [
+    "duckdb>=1.5.6",
     "fastapi>=0.141.1",
     # The acceptance campaign fixture is shared across xdist workers, so exactly
     # one process may build the store (TODO48b R8). It was already installed

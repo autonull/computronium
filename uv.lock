@@ -642,6 +642,7 @@ vision = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "duckdb" },
     { name = "fastapi" },
     { name = "filelock" },
     { name = "grpcio-tools" },
@@ -746,6 +747,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "duckdb", specifier = ">=1.5.6" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "filelock", specifier = ">=3.16" },
     { name = "grpcio-tools", specifier = ">=1.83.0" },

@@ -1,6 +1,6 @@
 # TODO56 — One Time-Boxed Loop: Make Experiments Spend Their Budget
 
-**Status: Minimal runner works end-to-end. 57 cells in 36s budget (103% utilization). Mechanism locks + WS-E locks all green (9/9). The baroque CellStream/BatchSizer/regime architecture was replaced with a ~200-line runner using `iter_candidates` pager directly. Next: short integration (2min) → 1h experiment.**
+**Status: Short integration (2min) PASSED — 146 cells in 121s (101% utilization). Mechanism locks + WS-E locks all green (9/9). Runner linted/refactored to ~250 lines with extracted helpers. Next: 1h experiment.**
 
 ---
 
@@ -31,9 +31,9 @@ The plan's §1 absolutism ("only the deadline may stop it") was **correct for th
 | Budget smoke (36s) | ✅ | 57 cells, 103% util, soft-deadline stop |
 | Mechanism locks | ✅ 6/6 | `test_round_loop_mechanism_lock.py` |
 | **WS-E locks** | **✅ 3/3** | Budget, admission, stream locks all pass |
-| Short integration (2min) | ⏳ Next | Need to narrow primitives to supported subset |
+| **Short integration (2min)** | **✅ Done** | 146 cells in 121s (101% util), HTML report generated |
 | 1h experiment | ⏳ Next | After short integration passes |
-| Report generation | ⚠️ Wired | `ReportGenerator` + `generate_html_report` added to runner |
+| Report generation | ✅ Verified | `ReportGenerator` + `generate_html_report` works; HTML opens |
 
 ---
 
@@ -51,23 +51,16 @@ The plan's §1 absolutism ("only the deadline may stop it") was **correct for th
 
 ## Remaining work (ordered, minimal)
 
-### 1. Run validation ladder
+### 1. Run 1h experiment
 ```
-# Short integration (narrow to supported primitives)
-uv run python scripts/run_experiment.py --hours 0.0333 --device cuda \
-  --credits gradient,random_projections,pepita,local_goodness,thermodynamic_contrast,target_inversion,homeostatic \
-  --plasticities null,fast_weights,routing \
-  --store results/exp_2m.db
-
-# 1h experiment
 nohup uv run python scripts/run_experiment.py --hours 1 --device cuda \
   --credits gradient,random_projections,pepita,local_goodness,thermodynamic_contrast,target_inversion,homeostatic \
   --plasticities null,fast_weights,routing \
   --store results/exp_todo56_1h.db > logs/exp_todo56_1h.log 2>&1 &
 ```
 
-### 2. Verify reports render
-The runner now calls `generate_html_report` (from `surface/report.py`) which produces the coverage matrix, Pareto table, failure taxonomy, termination/utilization line, and repro command. Just verify the HTML opens and renders correctly.
+### 2. Verify 1h report renders
+The runner calls `generate_html_report` which produces coverage matrix, Pareto table, failure taxonomy, termination/utilization line, and repro command. Verify the HTML opens and renders correctly after 1h run.
 
 ---
 
@@ -83,7 +76,9 @@ The runner now calls `generate_html_report` (from `surface/report.py`) which pro
 
 ## Notes for next session
 
-- **No more architecture work needed** — the minimal runner is done, locks pass, report wired.
-- **Run the short integration** with supported primitives subset.
+- **No more architecture work needed** — the minimal runner is done, locks pass, report wired and verified.
+- **Run the 1h experiment** with the same primitives subset.
 - **Don't rebuild CellStream/BatchSizer** — the `iter_candidates` pager + `Deadline` + store dedup is the complete solution.
-- **Lint cleanup** can wait for Register-C hygiene pass.
+- **Lint cleanup done** — runner passes `ruff format` and `ruff check`.
+
+(End of file - total 89 lines)

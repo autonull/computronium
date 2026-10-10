@@ -8,6 +8,7 @@ Nothing else.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 import time
 from dataclasses import dataclass
@@ -19,13 +20,14 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.search_space import iter_candidates, search_space_from_spec
-from computronium.experiment.execution.stage import StageId
+from computronium.experiment.execution.search_space import (
+    iter_candidates,
+    search_space_from_spec,
+)
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
-from computronium.experiment.execution.pipeline import _resolve_tasks
 from computronium.experiment.surface.report import ReportGenerator, generate_html_report
 
 
@@ -61,10 +63,13 @@ _AXIS_BY_FLAG = {
 
 def _build_spec(config: Config, device: str) -> RunSpec:
     profile = RUN_PROFILES[config.profile]
-    axes = tuple(
-        AxisSelection(axis=_AXIS_BY_FLAG[flag], primitives=tuple(prims))
-        for flag, prims in (config.axes or {}).items()
-    ) or profile.axes
+    axes = (
+        tuple(
+            AxisSelection(axis=_AXIS_BY_FLAG[flag], primitives=tuple(prims))
+            for flag, prims in (config.axes or {}).items()
+        )
+        or profile.axes
+    )
 
     return RunSpec(
         profile=profile.name,
@@ -85,28 +90,28 @@ def _build_spec(config: Config, device: str) -> RunSpec:
     )
 
 
-async def _run_loop(spec: RunSpec, store: RecordStore, run_id: str, deadline: Deadline, backend, device: str) -> int:
+async def _run_loop(
+    spec: RunSpec,
+    store: RecordStore,
+    run_id: str,
+    deadline: Deadline,
+    backend,
+    device: str,
+) -> int:
     """Run cells until deadline. Return records stored."""
-    # Build search space
     tasks = spec.task_names
     space = search_space_from_spec(spec, tasks=tasks)
 
-    # Get cells from the iterator (already screened for composability)
-    cell_iter = iter_candidates(
-        spec, space, shape=task_shape, check_composable=True
-    )
+    cell_iter = iter_candidates(spec, space, shape=task_shape, check_composable=True)
 
-    # Track already-measured keys from store
     completed = {r.measurement_key for r in store.query_records(run_id=run_id)}
 
     count = 0
     for coord, sched in cell_iter:
-        # Hard stop: grace period expired
         if deadline.expired():
             print(f"Hard deadline (with grace) reached, stopping after {count} cells")
             break
 
-        # Soft stop: only stop if we already measured something
         if deadline.soft_expired() and count > 0:
             print(f"Soft deadline reached after {count} cells, stopping")
             break
@@ -117,9 +122,16 @@ async def _run_loop(spec: RunSpec, store: RecordStore, run_id: str, deadline: De
 
         print(f"  Cell {count + 1}: {coord.cell_key()} (seed={sched.seed})")
 
-        # Train single cell
         from computronium.experiment.schema.coordinate import Provenance
-        prov = Provenance(env={}, dataset="unknown", dataset_version="1.0", code_sha="unknown", policy=spec.policy or "unknown", links={"run_id": run_id})
+
+        prov = Provenance(
+            env={},
+            dataset="unknown",
+            dataset_version="1.0",
+            code_sha="unknown",
+            policy=spec.policy or "unknown",
+            links={"run_id": run_id},
+        )
         params = {}
         records = await backend.submit(coord, sched, prov, params, store)
         for r in records:
@@ -130,7 +142,86 @@ async def _run_loop(spec: RunSpec, store: RecordStore, run_id: str, deadline: De
     return count
 
 
-async def main() -> int:
+def _parse_axes(args: argparse.Namespace) -> dict[str, list[str]]:
+    return {
+        flag: [v.strip() for v in getattr(args, flag).split(",") if v.strip()]
+        for flag in _AXIS_BY_FLAG
+        if getattr(args, flag)
+    }
+
+
+def _build_config(args: argparse.Namespace, axes: dict[str, list[str]]) -> Config:
+    return Config(
+        hours=args.hours,
+        device=args.device,
+        store=args.store,
+        policy=args.policy,
+        profile=args.profile,
+        seed=args.seed,
+        epochs=args.epochs,
+        n_seeds=args.n_seeds,
+        param_budget=args.param_budget,
+        axes=axes or None,
+    )
+
+
+def _print_dry_run(spec: RunSpec) -> None:
+    print(f"DRY RUN: profile={spec.profile} budget={spec.budget_seconds:.1f}s")
+    print(f"  task={spec.task} policy={spec.policy} epochs={spec.epochs}")
+
+
+def _run_experiment(
+    config: Config, device: str, spec: RunSpec
+) -> tuple[str, float, int]:
+    Path(config.store).parent.mkdir(parents=True, exist_ok=True)
+
+    with RecordStore(StoreConfig(path=Path(config.store))) as store:
+        run_id = store.create_run(spec=spec)
+        print(f"Run {run_id}: {config.hours}h ({config.hours * 3600:.0f}s) on {device}")
+
+        deadline = Deadline.from_hours(config.hours)
+        backend = LocalBackend(max_workers=1)
+
+        start = time.time()
+        n = asyncio.run(_run_loop(spec, store, run_id, deadline, backend, device))
+        elapsed = time.time() - start
+
+        store.finish_run(run_id, "completed", budget_consumed_s=elapsed)
+
+    return run_id, elapsed, n
+
+
+def _check_budget(budget: float, elapsed: float) -> bool:
+    eps = max(0.02 * budget, 5.0)
+    if budget - eps <= elapsed <= budget + 30.0:
+        print("✅ Budget window: PASS")
+        return True
+    print(f"❌ Budget window: FAIL (eps={eps:.1f}s, grace=30s)")
+    return False
+
+
+def _generate_report(config: Config, run_id: str) -> Path:
+    with RecordStore(StoreConfig(path=Path(config.store), read_only=True)) as store:
+        generator = ReportGenerator(store)
+
+        distinct_cells = len({r.cell_key for r in store.query_records(run_id=run_id)})
+        pareto = generator.pareto_frontier(run_id)
+        coverage = generator.axis_coverage(run_id)
+        failures = generator.failures_by_cause(run_id)
+
+        print(f"Distinct cells:   {distinct_cells}")
+        print(f"Pareto points:    {len(pareto)}")
+        print(f"Coverage axes:    {len(coverage)}")
+        print(f"Failure taxonomy: {failures}")
+
+        report_path = Path(config.store).with_suffix(".html")
+        generate_html_report(store, run_id, report_path)
+        print(f"HTML report:      {report_path}")
+
+    return report_path
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description="Minimal time-boxed experiment runner")
     parser.add_argument("--hours", type=float, required=True)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
@@ -150,85 +241,28 @@ async def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    axes = {
-        flag: [v.strip() for v in getattr(args, flag).split(",") if v.strip()]
-        for flag in _AXIS_BY_FLAG
-        if getattr(args, flag)
-    }
-
-    config = Config(
-        hours=args.hours,
-        device=args.device,
-        store=args.store,
-        policy=args.policy,
-        profile=args.profile,
-        seed=args.seed,
-        epochs=args.epochs,
-        n_seeds=args.n_seeds,
-        param_budget=args.param_budget,
-        axes=axes or None,
-    )
-
+    axes = _parse_axes(args)
+    config = _build_config(args, axes)
     device = _resolve_device(config.device)
     spec = _build_spec(config, device)
 
     if args.dry_run:
-        print(f"DRY RUN: profile={spec.profile} budget={spec.budget_seconds:.1f}s")
-        print(f"  task={spec.task} policy={spec.policy} epochs={spec.epochs}")
+        _print_dry_run(spec)
         return 0
 
-    Path(config.store).parent.mkdir(parents=True, exist_ok=True)
+    run_id, elapsed, n = _run_experiment(config, device, spec)
 
-    with RecordStore(StoreConfig(path=Path(config.store))) as store:
-        run_id = store.create_run(spec=spec)
-        print(f"Run {run_id}: {config.hours}h ({config.hours*3600:.0f}s) on {device}")
-
-        # Deadline starts AFTER store setup, so startup time doesn't eat the budget
-        deadline = Deadline.from_hours(config.hours)
-        backend = LocalBackend(max_workers=1)
-
-        start = time.time()
-        n = await _run_loop(spec, store, run_id, deadline, backend, device)
-        elapsed = time.time() - start
-
-        store.finish_run(run_id, "completed", budget_consumed_s=elapsed)
-
-    # Quick summary
     budget = spec.budget_seconds
     util = elapsed / budget
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Run {run_id} done in {elapsed:.1f}s (budget {budget:.1f}s, {util:.1%})")
     print(f"Cells measured: {n}")
 
-    # Budget check
-    eps = max(0.02 * budget, 5.0)
-    if budget - eps <= elapsed <= budget + 30.0:
-        print("✅ Budget window: PASS")
-    else:
-        print(f"❌ Budget window: FAIL (eps={eps:.1f}s, grace=30s)")
-
-    # Generate report using existing infrastructure
-    with RecordStore(StoreConfig(path=Path(config.store), read_only=True)) as store:
-        generator = ReportGenerator(store)
-
-        distinct_cells = len({r.cell_key for r in store.query_records(run_id=run_id)})
-        pareto = generator.pareto_frontier(run_id)
-        coverage = generator.axis_coverage(run_id)
-        failures = generator.failures_by_cause(run_id)
-
-        print(f"Distinct cells:   {distinct_cells}")
-        print(f"Pareto points:    {len(pareto)}")
-        print(f"Coverage axes:    {len(coverage)}")
-        print(f"Failure taxonomy: {failures}")
-
-        # HTML report
-        report_path = Path(config.store).with_suffix(".html")
-        generate_html_report(store, run_id, report_path)
-        print(f"HTML report:      {report_path}")
+    _check_budget(budget, elapsed)
+    _generate_report(config, run_id)
 
     return 0
 
 
 if __name__ == "__main__":
-    import asyncio
-    sys.exit(asyncio.run(main()))
+    sys.exit(main())
