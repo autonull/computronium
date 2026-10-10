@@ -33,37 +33,86 @@ class MethodCard:
 
 def _get_axis_registries() -> dict[str, dict[str, type]]:
     """Get all axis registries from the ontology."""
-    from computronium.ontology.credit import CreditAssignmentConfig
     from computronium.ontology.dynamics._registry import DYNAMICS_REGISTRY
     from computronium.ontology.geometry import _GEOMETRY_BACKENDS
-    from computronium.ontology.substrate._substrate import SubstrateConfig
     from computronium.ontology.update import _UPDATE_BACKENDS
 
-    # Build substrate registry from config factory methods
-    substrate_registry = {}
-    for name in dir(SubstrateConfig):
-        if not name.startswith("_"):
-            method = getattr(SubstrateConfig, name)
-            if inspect.ismethod(method) or inspect.isfunction(method):
-                substrate_registry[name] = getattr(
-                    __import__("computronium.ontology.substrate", fromlist=[""]),
-                    name,
-                    None,
-                )
+    # For substrate, use the concrete classes directly
+    substrate_registry = {
+        "digital": __import__(
+            "computronium.ontology.substrate", fromlist=["DigitalSubstrate"]
+        ).DigitalSubstrate,
+        "analog": __import__(
+            "computronium.ontology.substrate", fromlist=["AnalogSubstrate"]
+        ).AnalogSubstrate,
+        "memristive": __import__(
+            "computronium.ontology.substrate", fromlist=["MemristiveSubstrate"]
+        ).MemristiveSubstrate,
+        "neuromorphic": __import__(
+            "computronium.ontology.substrate", fromlist=["NeuromorphicSubstrate"]
+        ).NeuromorphicSubstrate,
+        "optical": __import__(
+            "computronium.ontology.substrate", fromlist=["OpticalSubstrate"]
+        ).OpticalSubstrate,
+        "quantum": __import__(
+            "computronium.ontology.substrate", fromlist=["QuantumSubstrate"]
+        ).QuantumSubstrate,
+        "sparse": __import__(
+            "computronium.ontology.substrate", fromlist=["SparseSubstrate"]
+        ).SparseSubstrate,
+        "ternary": __import__(
+            "computronium.ontology.substrate", fromlist=["TernarySubstrate"]
+        ).TernarySubstrate,
+        "complex": __import__(
+            "computronium.ontology.substrate", fromlist=["ComplexSubstrate"]
+        ).ComplexSubstrate,
+        "noisy": __import__(
+            "computronium.ontology.substrate", fromlist=["NoisySubstrate"]
+        ).NoisySubstrate,
+        "quantized": __import__(
+            "computronium.ontology.substrate", fromlist=["QuantizedSubstrate"]
+        ).QuantizedSubstrate,
+    }
 
-    # For credit, use config factory method names
-    credit_registry = {}
-    for name in dir(CreditAssignmentConfig):
-        if not name.startswith("_"):
-            method = getattr(CreditAssignmentConfig, name)
-            if inspect.ismethod(method) or inspect.isfunction(method):
-                credit_class = getattr(
-                    __import__("computronium.ontology.credit", fromlist=[""]),
-                    name,
-                    None,
-                )
-                if credit_class:
-                    credit_registry[name] = credit_class
+    # For credit, use the concrete classes directly
+    credit_registry = {
+        "local_contrastive": __import__(
+            "computronium.ontology.credit", fromlist=["LocalContrastiveCredit"]
+        ).LocalContrastiveCredit,
+        "thermodynamic_contrast": __import__(
+            "computronium.ontology.credit", fromlist=["ThermodynamicContrast"]
+        ).ThermodynamicContrast,
+        "random_projections": __import__(
+            "computronium.ontology.credit", fromlist=["RandomProjectionsCredit"]
+        ).RandomProjectionsCredit,
+        "local_goodness": __import__(
+            "computronium.ontology.credit", fromlist=["LocalGoodnessCredit"]
+        ).LocalGoodnessCredit,
+        "lemma": __import__(
+            "computronium.ontology.credit", fromlist=["LemmaCredit"]
+        ).LemmaCredit,
+        "pepita": __import__(
+            "computronium.ontology.credit", fromlist=["PepitaCredit"]
+        ).PepitaCredit,
+        "pc_alm": __import__(
+            "computronium.ontology.credit", fromlist=["PCALMCredit"]
+        ).PCALMCredit,
+        "temporal_trace": __import__(
+            "computronium.ontology.credit", fromlist=["TemporalTraceCredit"]
+        ).TemporalTraceCredit,
+        "target_inversion": __import__(
+            "computronium.ontology.credit", fromlist=["TargetInversionCredit"]
+        ).TargetInversionCredit,
+        "homeostatic": __import__(
+            "computronium.ontology.credit", fromlist=["HomeostaticCredit"]
+        ).HomeostaticCredit,
+        "gradient": __import__(
+            "computronium.ontology.credit", fromlist=["GradientCredit"]
+        ).GradientCredit,
+        "backprop": __import__(
+            "computronium.ontology.credit", fromlist=["BackpropCredit"]
+        ).BackpropCredit,
+    }
 
     # For plasticity, use the exported classes
     plasticity_registry = {
@@ -111,83 +160,12 @@ def _get_axis_registries() -> dict[str, dict[str, type]]:
     }
 
     return {
-        "substrate": {
-            "digital": __import__(
-                "computronium.ontology.substrate", fromlist=["DigitalSubstrate"]
-            ).DigitalSubstrate,
-            "analog": __import__(
-                "computronium.ontology.substrate", fromlist=["AnalogSubstrate"]
-            ).AnalogSubstrate,
-            "memristive": __import__(
-                "computronium.ontology.substrate", fromlist=["MemristiveSubstrate"]
-            ).MemristiveSubstrate,
-            "neuromorphic": __import__(
-                "computronium.ontology.substrate", fromlist=["NeuromorphicSubstrate"]
-            ).NeuromorphicSubstrate,
-            "optical": __import__(
-                "computronium.ontology.substrate", fromlist=["OpticalSubstrate"]
-            ).OpticalSubstrate,
-            "quantum": __import__(
-                "computronium.ontology.substrate", fromlist=["QuantumSubstrate"]
-            ).QuantumSubstrate,
-            "sparse": __import__(
-                "computronium.ontology.substrate", fromlist=["SparseSubstrate"]
-            ).SparseSubstrate,
-            "ternary": __import__(
-                "computronium.ontology.substrate", fromlist=["TernarySubstrate"]
-            ).TernarySubstrate,
-            "complex": __import__(
-                "computronium.ontology.substrate", fromlist=["ComplexSubstrate"]
-            ).ComplexSubstrate,
-            "noisy": __import__(
-                "computronium.ontology.substrate", fromlist=["NoisySubstrate"]
-            ).NoisySubstrate,
-            "quantized": __import__(
-                "computronium.ontology.substrate", fromlist=["QuantizedSubstrate"]
-            ).QuantizedSubstrate,
-        },
+        "substrate": substrate_registry,
         "geometry": {k: v.cls for k, v in _GEOMETRY_BACKENDS.items()},
         "dynamics": DYNAMICS_REGISTRY,
         "plasticity": plasticity_registry,
-        "credit": {
-            "local_contrastive": __import__(
-                "computronium.ontology.credit", fromlist=["LocalContrastiveCredit"]
-            ).LocalContrastiveCredit,
-            "thermodynamic_contrast": __import__(
-                "computronium.ontology.credit", fromlist=["ThermodynamicContrast"]
-            ).ThermodynamicContrast,
-            "random_projections": __import__(
-                "computronium.ontology.credit", fromlist=["RandomProjectionsCredit"]
-            ).RandomProjectionsCredit,
-            "local_goodness": __import__(
-                "computronium.ontology.credit", fromlist=["LocalGoodnessCredit"]
-            ).LocalGoodnessCredit,
-            "lemma": __import__(
-                "computronium.ontology.credit", fromlist=["LemmaCredit"]
-            ).LemmaCredit,
-            "pepita": __import__(
-                "computronium.ontology.credit", fromlist=["PepitaCredit"]
-            ).PepitaCredit,
-            "pc_alm": __import__(
-                "computronium.ontology.credit", fromlist=["PCALMCredit"]
-            ).PCALMCredit,
-            "temporal_trace": __import__(
-                "computronium.ontology.credit", fromlist=["TemporalTraceCredit"]
-            ).TemporalTraceCredit,
-            "target_inversion": __import__(
-                "computronium.ontology.credit", fromlist=["TargetInversionCredit"]
-            ).TargetInversionCredit,
-            "homeostatic": __import__(
-                "computronium.ontology.credit", fromlist=["HomeostaticCredit"]
-            ).HomeostaticCredit,
-            "gradient": __import__(
-                "computronium.ontology.credit", fromlist=["GradientCredit"]
-            ).GradientCredit,
-            "backprop": __import__(
-                "computronium.ontology.credit", fromlist=["BackpropCredit"]
-            ).BackpropCredit,
-        },
-        "update": {k: v for k, v in _UPDATE_BACKENDS.items()},
+        "credit": credit_registry,
+        "update": dict(_UPDATE_BACKENDS),
     }
 
 
@@ -196,7 +174,7 @@ def _extract_docstring_sections(docstring: str | None) -> dict[str, Any]:
     if not docstring:
         return {"purpose": "", "config_options": {}, "limitations": [], "examples": []}
 
-    sections = {
+    sections: dict[str, Any] = {
         "purpose": "",
         "config_options": {},
         "limitations": [],
@@ -207,22 +185,23 @@ def _extract_docstring_sections(docstring: str | None) -> dict[str, Any]:
     current_section = "purpose"
     current_content: list[str] = []
 
+    def _save_section(sec: str, content: list[str]) -> None:
+        if sec == "purpose":
+            sections["purpose"] = "\n".join(content).strip()
+        elif sec == "limitations":
+            sections["limitations"] = [
+                line.strip("- ") for line in content if line.strip()
+            ]
+        elif sec == "examples":
+            sections["examples"] = [
+                line.strip("- ") for line in content if line.strip()
+            ]
+
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("## "):
-            # Save previous section
-            if current_section == "purpose":
-                sections["purpose"] = "\n".join(current_content).strip()
-            elif current_section == "limitations":
-                sections["limitations"] = [
-                    l.strip("- ") for l in current_content if l.strip()
-                ]
-            elif current_section == "examples":
-                sections["examples"] = [
-                    l.strip("- ") for l in current_content if l.strip()
-                ]
+            _save_section(current_section, current_content)
 
-            # Start new section
             section_name = stripped[3:].strip().lower()
             if "limitation" in section_name:
                 current_section = "limitations"
@@ -234,15 +213,30 @@ def _extract_docstring_sections(docstring: str | None) -> dict[str, Any]:
         else:
             current_content.append(line)
 
-    # Save last section
-    if current_section == "purpose":
-        sections["purpose"] = "\n".join(current_content).strip()
-    elif current_section == "limitations":
-        sections["limitations"] = [l.strip("- ") for l in current_content if l.strip()]
-    elif current_section == "examples":
-        sections["examples"] = [l.strip("- ") for l in current_content if l.strip()]
+    _save_section(current_section, current_content)
 
     return sections
+
+
+def _extract_config_from_method(method: Any) -> dict[str, Any]:
+    """Extract config options from a classmethod."""
+    config_options = {}
+    try:
+        sig = inspect.signature(method)
+        for param_name, param in sig.parameters.items():
+            if param_name not in {"cls", "self"}:
+                config_options[param_name] = {
+                    "type": str(param.annotation)
+                    if param.annotation != inspect.Parameter.empty
+                    else "Any",
+                    "default": param.default
+                    if param.default != inspect.Parameter.empty
+                    else None,
+                    "description": "",
+                }
+    except ValueError, TypeError:
+        pass
+    return config_options
 
 
 def _get_config_classmethod(cls: type) -> dict[str, Any]:
@@ -250,25 +244,11 @@ def _get_config_classmethod(cls: type) -> dict[str, Any]:
     config_options = {}
 
     # Look for a classmethod that creates a config
-    for name in ["config", "from_config", "create_config", "default_config"]:
+    for name in {"config", "from_config", "create_config", "default_config"}:
         if hasattr(cls, name):
             method = getattr(cls, name)
             if callable(method):
-                try:
-                    sig = inspect.signature(method)
-                    for param_name, param in sig.parameters.items():
-                        if param_name not in ("cls", "self"):
-                            config_options[param_name] = {
-                                "type": str(param.annotation)
-                                if param.annotation != inspect.Parameter.empty
-                                else "Any",
-                                "default": param.default
-                                if param.default != inspect.Parameter.empty
-                                else None,
-                                "description": "",
-                            }
-                except ValueError, TypeError:
-                    pass
+                config_options.update(_extract_config_from_method(method))
 
     # Also check for Config inner class
     if hasattr(cls, "Config"):
@@ -380,51 +360,56 @@ def export_method_cards(
         ]
         output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     elif format == "markdown":
-        lines = ["# Method Cards\n"]
-        lines.append(f"Generated: {len(cards)} method cards\n")
-
-        for card in cards:
-            lines.append(f"## {card.axis.capitalize()}: {card.name}")
-            lines.append(f"**Class**: `{card.class_name}` (`{card.module}`)")
-            if card.source_file and card.source_lines:
-                lines.append(
-                    f"**Source**: `{card.source_file}:{card.source_lines[0]}-{card.source_lines[1]}`"
-                )
-            lines.append("")
-            lines.append("### Purpose")
-            lines.append(card.purpose or "No description available.")
-            lines.append("")
-
-            if card.config_options:
-                lines.append("### Configuration Options")
-                lines.append("")
-                lines.append("| Parameter | Type | Default | Description |")
-                lines.append("|-----------|------|---------|-------------|")
-                for param, info in card.config_options.items():
-                    lines.append(
-                        f"| {param} | {info.get('type', 'Any')} | "
-                        f"{info.get('default', 'required')} | {info.get('description', '')} |"
-                    )
-                lines.append("")
-
-            if card.limitations:
-                lines.append("### Limitations")
-                for lim in card.limitations:
-                    lines.append(f"- {lim}")
-                lines.append("")
-
-            if card.examples:
-                lines.append("### Examples")
-                for ex in card.examples:
-                    lines.append(f"- {ex}")
-                lines.append("")
-
-            lines.append("---")
-            lines.append("")
-
-        output_path.write_text("\n".join(lines), encoding="utf-8")
+        _export_method_cards_markdown(cards, output_path)
     else:
         raise ValueError(f"Unknown format: {format}")
+
+
+def _export_method_cards_markdown(cards: list[MethodCard], output_path: Path) -> None:
+    """Export method cards as markdown."""
+    lines = ["# Method Cards\n"]
+    lines.append(f"Generated: {len(cards)} method cards\n")
+
+    for card in cards:
+        lines.append(f"## {card.axis.capitalize()}: {card.name}")
+        lines.append(f"**Class**: `{card.class_name}` (`{card.module}`)")
+        if card.source_file and card.source_lines:
+            lines.append(
+                f"**Source**: `{card.source_file}:{card.source_lines[0]}-{card.source_lines[1]}`"
+            )
+        lines.append("")
+        lines.append("### Purpose")
+        lines.append(card.purpose or "No description available.")
+        lines.append("")
+
+        if card.config_options:
+            lines.append("### Configuration Options")
+            lines.append("")
+            lines.append("| Parameter | Type | Default | Description |")
+            lines.append("|-----------|------|---------|-------------|")
+            for param, info in card.config_options.items():
+                lines.append(
+                    f"| {param} | {info.get('type', 'Any')} | "
+                    f"{info.get('default', 'required')} | {info.get('description', '')} |"
+                )
+            lines.append("")
+
+        if card.limitations:
+            lines.append("### Limitations")
+            for lim in card.limitations:
+                lines.append(f"- {lim}")
+            lines.append("")
+
+        if card.examples:
+            lines.append("### Examples")
+            for ex in card.examples:
+                lines.append(f"- {ex}")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _build_method_cards_parser() -> argparse.ArgumentParser:
@@ -527,67 +512,89 @@ def _print_card_text(card: MethodCard) -> None:
         print()
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point for method-card commands."""
-    import sys
+def _handle_list(args: argparse.Namespace) -> int:
+    """Handle the 'list' subcommand."""
+    cards = generate_method_cards(axis=args.axis, include_internal=args.internal)
 
-    parser = _build_method_cards_parser()
-    args = parser.parse_args(argv)
-
-    if args.method_card_command == "list":
-        cards = generate_method_cards(axis=args.axis, include_internal=args.internal)
-
-        if args.format == "text":
-            for card in cards:
-                print(f"{card.axis:12} {card.name:30} {card.class_name}")
-            print(f"\nTotal: {len(cards)} method cards")
-        elif args.format == "json":
-            data = [
-                {
-                    "axis": c.axis,
-                    "name": c.name,
-                    "class_name": c.class_name,
-                    "module": c.module,
-                    "purpose": c.purpose,
-                }
-                for c in cards
-            ]
-            print(json.dumps(data, indent=2))
-
-    elif args.method_card_command == "show":
-        cards = generate_method_cards(axis=args.axis, include_internal=True)
-        card = next((c for c in cards if c.name == args.name), None)
-        if not card:
-            print(f"Method card not found: {args.axis}/{args.name}", file=sys.stderr)
-            return 1
-
-        if args.format == "text":
-            _print_card_text(card)
-        elif args.format == "json":
-            data = {
-                "axis": card.axis,
-                "name": card.name,
-                "class_name": card.class_name,
-                "module": card.module,
-                "purpose": card.purpose,
-                "config_options": card.config_options,
-                "limitations": card.limitations,
-                "examples": card.examples,
-                "references": card.references,
-                "source_file": card.source_file,
-                "source_lines": card.source_lines,
+    if args.format == "text":
+        for card in cards:
+            print(f"{card.axis:12} {card.name:30} {card.class_name}")
+        print(f"\nTotal: {len(cards)} method cards")
+    elif args.format == "json":
+        data = [
+            {
+                "axis": c.axis,
+                "name": c.name,
+                "class_name": c.class_name,
+                "module": c.module,
+                "purpose": c.purpose,
             }
-            print(json.dumps(data, indent=2))
-        elif args.format == "markdown":
-            export_method_cards([card], Path("/dev/stdout"), "markdown")
-
-    elif args.method_card_command == "generate":
-        cards = generate_method_cards(axis=args.axis, include_internal=args.internal)
-        export_method_cards(cards, Path(args.output), args.format)
-        print(f"Generated {len(cards)} method cards to {args.output}")
+            for c in cards
+        ]
+        print(json.dumps(data, indent=2))
 
     return 0
 
 
+def _handle_show(args: argparse.Namespace) -> int:
+    """Handle the 'show' subcommand."""
+    cards = generate_method_cards(axis=args.axis, include_internal=True)
+    card = next((c for c in cards if c.name == args.name), None)
+    if not card:
+        print(f"Method card not found: {args.axis}/{args.name}", file=sys.stderr)
+        return 1
+
+    if args.format == "text":
+        _print_card_text(card)
+    elif args.format == "json":
+        data = {
+            "axis": card.axis,
+            "name": card.name,
+            "class_name": card.class_name,
+            "module": card.module,
+            "purpose": card.purpose,
+            "config_options": card.config_options,
+            "limitations": card.limitations,
+            "examples": card.examples,
+            "references": card.references,
+            "source_file": card.source_file,
+            "source_lines": card.source_lines,
+        }
+        print(json.dumps(data, indent=2))
+    elif args.format == "markdown":
+        export_method_cards([card], Path("/dev/stdout"), "markdown")
+
+    return 0
+
+
+def _handle_generate(args: argparse.Namespace) -> int:
+    """Handle the 'generate' subcommand."""
+    cards = generate_method_cards(axis=args.axis, include_internal=args.internal)
+    export_method_cards(cards, Path(args.output), args.format)
+    print(f"Generated {len(cards)} method cards to {args.output}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point for method-card commands."""
+    parser = _build_method_cards_parser()
+    args = parser.parse_args(argv)
+
+    handlers = {
+        "list": _handle_list,
+        "show": _handle_show,
+        "generate": _handle_generate,
+    }
+
+    handler = handlers.get(args.method_card_command)
+    if handler is None:
+        parser.print_help()
+        return 1
+
+    return handler(args)
+
+
 if __name__ == "__main__":
+    import sys
+
     raise SystemExit(main())

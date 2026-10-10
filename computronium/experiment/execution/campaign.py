@@ -1,4 +1,8 @@
-"""Campaign execution: declarative multi-run campaigns with dependencies and parallelism."""
+"""Campaign execution: declarative multi-run campaigns with dependencies and parallelism.
+
+Updated for deadline-based time enforcement (TODO55 Phase E).
+No prediction, no cost models — only measured walltime with hard deadlines.
+"""
 
 from __future__ import annotations
 
@@ -16,14 +20,13 @@ import yaml
 from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
+from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.evaluate import task_shape
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.schema import RunSpec, StageId
 from computronium.experiment.surface.cli import (
     _CELL_WORKERS,
     _consumed,
-    _duration_str,
     _resolve_spec,
     _settle_maturity,
     create_policy,
@@ -152,16 +155,18 @@ class CampaignRunner:
         }
 
     async def _run_pipeline(self, spec: RunSpec) -> int:
-        """Run the pipeline for a spec directly."""
+        """Run the pipeline for a spec directly.
 
+        Uses hard deadline enforcement instead of predicted budget.
+        """
         policy_name = spec.policy or "round_robin_grid"
 
         with RecordStore(StoreConfig(path=Path(self.spec.store))) as store:
             run_id = store.create_run(spec=spec)
             logger.info("Run ID: %s", run_id)
 
-            budget = (
-                Budget.from_duration(_duration_str(spec.budget_seconds))
+            deadline = (
+                Deadline.from_seconds(spec.budget_seconds)
                 if spec.budget_seconds is not None
                 else None
             )
@@ -178,8 +183,8 @@ class CampaignRunner:
                 PipelineConfig(
                     run_id=run_id,
                     run_spec=spec,
-                    budget=budget,
-                    cost_model=SimpleCostModel(),
+                    deadline=deadline,
+                    cost_model=None,  # Not used in deadline system
                     policy=policy,
                     backend=LocalBackend(max_workers=_CELL_WORKERS),
                     seed=spec.seed,
@@ -188,15 +193,8 @@ class CampaignRunner:
                 store,
             )
 
-            interrupted = {"flag": False}
-
-            def _signal_handler(signum, _frame):
-                logger.info("Received signal %s; finishing run %s", signum, run_id)
-                interrupted["flag"] = True
-                runner.shutdown()
-
-            old_sigint = signal.signal(signal.SIGINT, _signal_handler)
-            old_sigterm = signal.signal(signal.SIGTERM, _signal_handler)
+            # Signal handling is now internal to PipelineRunner via SignalHandler
+            # No need for external signal handlers
 
             try:
                 outcomes = await runner.run()
@@ -210,11 +208,10 @@ class CampaignRunner:
                 logger.error("Pipeline failed: %s", exc, exc_info=True)
                 store.finish_run(run_id, "failed", budget_consumed_s=_consumed(runner))
                 return 1
-            finally:
-                signal.signal(signal.SIGINT, old_sigint)
-                signal.signal(signal.SIGTERM, old_sigterm)
 
-            if interrupted["flag"]:
+            # PipelineRunner handles shutdown internally via SignalHandler
+            # Check if run was interrupted
+            if runner._shutdown:
                 logger.info(
                     "Run interrupted by signal; resume with --run-id %s", run_id
                 )

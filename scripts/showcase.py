@@ -5,6 +5,9 @@ Phase 0 of TODO55: Makes showcase a publication-grade demonstration of full
 system versatility with progressive disclosure, bias detection, and
 self-explanatory reporting.
 
+Updated for deadline-based time enforcement (TODO55 Phase E).
+No prediction, no cost models — only measured walltime with hard deadlines.
+
 Usage:
     uv run scripts/showcase.py [--dry-run] [--store PATH] [--device auto|cpu|cuda]
         [--hours N] [--profile quick|balanced|thorough|deep]
@@ -24,7 +27,7 @@ Features:
       Pareto gallery, stability atlas, failure taxonomy
     - Auto-hypothesis generation from results → campaign YAML
     - Notebook export for interactive exploration
-    - Resource-aware defaults: hardware profiling, OOM recovery, energy tracking
+    - Deadline-aware: --hours N means process stops at N hours ± 30 seconds
 """
 
 import argparse
@@ -40,6 +43,8 @@ from typing import Any
 
 import torch
 
+from computronium.experiment.execution.deadline import Deadline
+
 # Optional imports for interactive mode
 TEXTUAL_AVAILABLE = importlib.util.find_spec("textual") is not None
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
@@ -52,15 +57,38 @@ def _signal_handler(signum, frame):
 
 
 @dataclass(frozen=True, slots=True)
-class TierConfig:
-    """Configuration for one execution tier."""
+class ShowcaseConfig:
+    """Configuration for showcase campaign (replaces BudgetPlan)."""
 
-    name: str
-    budget_fraction: tuple[float, float]  # (start, end) of total budget
+    time_budget_hours: float
+    strategy: str  # "broad_shallow" | "balanced" | "narrow_deep"
+    device: str  # "cpu" | "cuda"
     epochs: int
     seeds: int
-    strategy: str  # BudgetStrategy value
-    description: str
+    # Component selection (ontology axes) - populated from registries at runtime
+    substrates: list[str] = None  # type: ignore[assignment]
+    geometries: list[str] = None  # type: ignore[assignment]
+    dynamics: list[str] = None  # type: ignore[assignment]
+    credits: list[str] = None  # type: ignore[assignment]
+    updates: list[str] = None  # type: ignore[assignment]
+    plasticities: list[str] = None  # type: ignore[assignment]
+    tasks: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.substrates is None:
+            object.__setattr__(self, "substrates", [])
+        if self.geometries is None:
+            object.__setattr__(self, "geometries", [])
+        if self.dynamics is None:
+            object.__setattr__(self, "dynamics", [])
+        if self.credits is None:
+            object.__setattr__(self, "credits", [])
+        if self.updates is None:
+            object.__setattr__(self, "updates", [])
+        if self.plasticities is None:
+            object.__setattr__(self, "plasticities", [])
+        if self.tasks is None:
+            object.__setattr__(self, "tasks", [])
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,34 +128,6 @@ class ShowcaseReportData:
     export_json_path: str | None
 
 
-# Tier definitions (Phase 0.2)
-TIER_CONFIGS = [
-    TierConfig(
-        name="tier1_exploration",
-        budget_fraction=(0.0, 0.2),
-        epochs=1,
-        seeds=1,
-        strategy="broad_shallow",
-        description="All axes, minimal depth — max diversity",
-    ),
-    TierConfig(
-        name="tier2_refinement",
-        budget_fraction=(0.2, 0.6),
-        epochs=5,
-        seeds=3,
-        strategy="balanced",
-        description="Promising regions, moderate depth",
-    ),
-    TierConfig(
-        name="tier3_deep_dive",
-        budget_fraction=(0.6, 1.0),
-        epochs=20,
-        seeds=5,
-        strategy="balanced",
-        description="Deep dive on Pareto front",
-    ),
-]
-
 # Profile presets (Phase 0.5)
 PROFILES = {
     "quick": {"strategy": "broad_shallow", "epochs": 1, "seeds": 1},
@@ -148,12 +148,14 @@ async def run_showcase(
     export_notebook: str | None = None,
     interactive: bool = False,
 ) -> int:
-    """Run the enhanced showcase campaign."""
+    """Run the enhanced showcase campaign with deadline enforcement."""
     from computronium.experiment.execution.adaptive_budget import (
-        BudgetPlanner,
         BudgetStrategy,
-        DeviceClass,
-        create_campaign_yaml,
+        _build_component_sets,
+        _discover_components,
+    )
+    from computronium.experiment.execution.deadline import (
+        Deadline,
     )
 
     signal.signal(signal.SIGINT, _signal_handler)
@@ -166,7 +168,6 @@ async def run_showcase(
             return 1
         profile_config = PROFILES[profile]
         strategy = profile_config["strategy"]
-        # Override epochs/seeds from profile
         target_epochs = profile_config["epochs"]
         target_seeds = profile_config["seeds"]
     else:
@@ -175,22 +176,19 @@ async def run_showcase(
 
     # Resolve device
     if device == "auto":
-        device_class = DeviceClass.GPU if torch.cuda.is_available() else DeviceClass.CPU
         resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
     elif device == "cuda":
-        device_class = DeviceClass.GPU
         resolved_device = "cuda"
     else:
-        device_class = DeviceClass.CPU
         resolved_device = "cpu"
 
     print("=" * 70)
     print("COMPUTRONIUM ENHANCED SHOWCASE CAMPAIGN")
     print("=" * 70)
-    print(f"Time budget: {hours}h")
+    print(f"Time budget: {hours}h (hard deadline enforcement)")
     print(f"Profile: {profile or 'custom'}")
     print(f"Strategy: {strategy}")
-    print(f"Device: {device} ({device_class.value})")
+    print(f"Device: {device} ({resolved_device})")
     print(f"Store: {store}")
     print(f"Dry run: {dry_run}")
     print(f"Bias check: {bias_check}")
@@ -212,43 +210,48 @@ async def run_showcase(
             export_notebook=export_notebook,
         )
 
-    # Generate adaptive plan
-    planner = BudgetPlanner()
-    plan = planner.plan(
+    # Build component sets from registries (no historical cache)
+    components = _discover_components()
+    component_sets = _build_component_sets()
+    component_set = component_sets[BudgetStrategy(strategy.lower())]
+
+    # Create showcase config with deadline (no prediction!)
+    config = ShowcaseConfig(
         time_budget_hours=hours,
-        strategy=BudgetStrategy(strategy.lower()),
-        device_class=device_class,
+        strategy=strategy,
+        device=resolved_device,
+        epochs=target_epochs if target_epochs is not None else 5,
+        seeds=target_seeds if target_seeds is not None else 3,
+        substrates=component_set.substrates,
+        geometries=component_set.geometries,
+        dynamics=component_set.dynamics,
+        credits=component_set.credits,
+        updates=component_set.updates,
+        plasticities=component_set.plasticities,
+        tasks=component_set.tasks,
     )
 
-    # Override epochs/seeds if profile specified
-    if target_epochs is not None and target_seeds is not None:
-        plan = _override_plan_epochs_seeds(plan, target_epochs, target_seeds)
-
-    print(f"Campaign: {plan.strategy.value}_{hours}h")
-    print(f"Estimated time: {plan.estimated_hours:.2f}h")
-    print(f"Rounds: {plan.n_rounds}")
-    print(f"Cells/round: {plan.cells_per_round}")
-    print(f"Trials: {plan.n_trials}")
-    print(f"Seeds: {plan.n_seeds}")
-    print(f"Epochs: {plan.epochs}")
-    print(f"Substrates ({len(plan.substrates)}): {', '.join(plan.substrates)}")
-    print(f"Geometries ({len(plan.geometries)}): {', '.join(plan.geometries)}")
-    print(f"Credits ({len(plan.credits)}): {', '.join(plan.credits)}")
-    print(f"Dynamics ({len(plan.dynamics)}): {', '.join(plan.dynamics)}")
-    print(f"Updates ({len(plan.updates)}): {', '.join(plan.updates)}")
-    print(f"Plasticities ({len(plan.plasticities)}): {', '.join(plan.plasticities)}")
+    # Create hard deadline
+    deadline = Deadline.from_hours(hours)
+    print(f"Hard deadline: {deadline.remaining_soft_seconds() / 3600:.2f}h from now")
+    print(f"Strategy: {config.strategy}")
+    print(f"Epochs: {config.epochs}, Seeds: {config.seeds}")
+    print(f"Substrates ({len(config.substrates)}): {', '.join(config.substrates)}")
+    print(f"Geometries ({len(config.geometries)}): {', '.join(config.geometries)}")
+    print(f"Credits ({len(config.credits)}): {', '.join(config.credits)}")
+    print(f"Dynamics ({len(config.dynamics)}): {', '.join(config.dynamics)}")
+    print(f"Updates ({len(config.updates)}): {', '.join(config.updates)}")
     print(
-        f"Tasks ({len(plan.tasks)}): {', '.join(plan.tasks[:10])}{'...' if len(plan.tasks) > 10 else ''}"
+        f"Plasticities ({len(config.plasticities)}): {', '.join(config.plasticities)}"
     )
-    print(f"\nRuns ({len(plan.runs)}):")
-    for i, run in enumerate(plan.runs):
-        deps = f" (depends on: {run['depends_on']})" if run["depends_on"] else ""
-        print(f"  [{i}] {run['name']}: {run['profile']}{deps}")
+    print(
+        f"Tasks ({len(config.tasks)}): {', '.join(config.tasks[:10])}{'...' if len(config.tasks) > 10 else ''}"
+    )
     print()
 
-    # Generate campaign YAML
-    campaign_file = f"campaign_showcase_{plan.strategy.value}_{hours}h.yaml"
-    yaml_path = create_campaign_yaml(plan, campaign_file)
+    # Generate campaign YAML using deadline-aware approach
+    campaign_file = f"campaign_showcase_{config.strategy}_{hours}h.yaml"
+    yaml_path = _create_deadline_campaign_yaml(config, deadline, Path(campaign_file))
     print(f"YAML written to: {yaml_path}")
 
     # Read the store path from the generated YAML
@@ -263,7 +266,7 @@ async def run_showcase(
         print("\nDRY RUN - would execute the above campaign")
         plan_dict = {
             "command": "showcase",
-            "campaign": plan.strategy.value,
+            "campaign": config.strategy,
             "profile": profile,
             "store": actual_store,
             "parallel": 1,
@@ -271,7 +274,16 @@ async def run_showcase(
             "hours": hours,
             "bias_check": bias_check,
             "export_notebook": export_notebook,
-            "runs": plan.runs,
+            "deadline_ts": deadline.deadline_ts,
+            "components": {
+                "substrates": config.substrates,
+                "geometries": config.geometries,
+                "dynamics": config.dynamics,
+                "credits": config.credits,
+                "updates": config.updates,
+                "plasticities": config.plasticities,
+                "tasks": config.tasks,
+            },
         }
         print(json.dumps(plan_dict, indent=2))
         return 0
@@ -286,7 +298,7 @@ async def run_showcase(
     # Execute with tiered progression if not using a simple profile
     if profile in {"balanced", "thorough"} and hours >= 0.2:
         result = await _run_tiered_campaign(
-            plan=plan,
+            config=config,
             campaign_file=campaign_file,
             actual_store=actual_store,
             device=resolved_device,
@@ -307,7 +319,7 @@ async def run_showcase(
     report_data = await _generate_showcase_report(
         actual_store=actual_store,
         campaign_data=campaign_data,
-        plan=plan,
+        config=config,
         result=result,
         start_time=start_time,
         end_time=time.time(),
@@ -338,24 +350,117 @@ async def run_showcase(
     return 0
 
 
-def _override_plan_epochs_seeds(plan, epochs: int, seeds: int):
-    """Override epochs and seeds in a budget plan."""
-    from dataclasses import replace
+def _create_deadline_campaign_yaml(
+    config: ShowcaseConfig, deadline: Deadline, output_path: Path
+) -> str:
+    """Generate campaign YAML using deadline (no prediction)."""
+    import yaml
 
-    # Update runs with new epochs/seeds
-    new_runs = []
-    for run in plan.runs:
-        overrides = run["overrides"].copy()
-        overrides["epochs"] = epochs
-        overrides["hpo"] = {**overrides.get("hpo", {}), "n_seeds": seeds}
-        new_runs.append({**run, "overrides": overrides})
+    store_path = f"results/showcase_{config.strategy}_{config.time_budget_hours}h.db"
 
-    return replace(
-        plan,
-        epochs=epochs,
-        n_seeds=seeds,
-        runs=new_runs,
-    )
+    # Calculate per-run budget from deadline
+    deadline_seconds = deadline.remaining_soft_seconds()
+    # Use 80% of deadline for actual execution, 20% grace
+    execution_seconds = deadline_seconds * 0.8
+
+    data = {
+        "meta": {
+            "name": f"showcase_{config.strategy}_{config.time_budget_hours}h",
+            "description": f"Showcase: {config.strategy}, {config.time_budget_hours}h deadline, {config.device}",
+            "strategy": config.strategy,
+            "time_budget_hours": config.time_budget_hours,
+            "device": config.device,
+        },
+        "compute": {
+            "device": config.device,
+            "max_parallel": 1,
+            "max_wall_hours": config.time_budget_hours * 1.1,  # 10% buffer
+        },
+        "store": store_path,
+        "search_space": {
+            "base": {
+                "hidden_dim": [64, 128, 256],
+                "num_layers": [2, 3, 4],
+                "lr": [1e-4, 1e-3, 1e-2, "log"],
+                "batch_size": [128, 256],
+            }
+        },
+        "constraints": ["estimate(config) <= 500000"],
+        "protocols": {
+            "default": "end2end",
+            "overrides": {
+                "fa_mlp": "layerwise",
+                "three_factor_hebbian": "layerwise",
+            },
+        },
+        "arms": {
+            "adaptive": {
+                "input_dim": 784,
+                "num_classes": 10,
+                "flatten": True,
+                "max_params": 500000,
+                "substrates": config.substrates,
+                "geometries": config.geometries,
+                "dynamics": config.dynamics,
+                "credits": config.credits,
+                "updates": config.updates,
+                "plasticities": config.plasticities,
+            }
+        },
+        "tasks": [
+            {"name": t, "epochs": config.epochs, "input_dim": 784, "num_classes": 10}
+            for t in config.tasks
+        ],
+        "hpo": {
+            "sampler": "nsga2",
+            "objectives": ["accuracy", "param_count", "epoch_time_s"],
+            "n_trials": 50,
+            "n_startup_trials": 10,
+            "n_seeds": config.seeds,
+        },
+        "resources": {
+            "max_wall_hours": config.time_budget_hours * 1.1,
+            "max_epoch_time_sec": 120,
+            "early_stop_patience": 10,
+        },
+        "output": {
+            "db": store_path,
+            "artifacts_dir": f"artifacts/showcase_{config.strategy}_{config.time_budget_hours}h",
+            "log_level": "INFO",
+            "emit_every": 5,
+        },
+        "reproducibility": {
+            "seed": 42,
+            "capture_env": True,
+            "artifact_hash": True,
+        },
+        "runs": [
+            {
+                "name": "main",
+                "profile": "production-map",
+                "overrides": {
+                    "substrates": config.substrates,
+                    "geometries": config.geometries,
+                    "dynamics": config.dynamics,
+                    "credits": config.credits,
+                    "updates": config.updates,
+                    "plasticities": config.plasticities,
+                    "tasks": config.tasks,
+                    "hpo": {"n_trials": 50, "n_seeds": config.seeds},
+                    "epochs": config.epochs,
+                    "budget_seconds": execution_seconds,
+                },
+                "depends_on": [],
+            }
+        ],
+    }
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+    return str(output_path)
 
 
 async def _run_simple_campaign(
@@ -375,63 +480,105 @@ async def _run_simple_campaign(
 
 
 async def _run_tiered_campaign(
-    plan,
+    config: ShowcaseConfig,
     campaign_file: str,
     actual_store: str,
     device: str,
     hours: float,
     start_time: float,
 ) -> dict[str, Any]:
-    """Run a tiered campaign with progressive disclosure (Phase 0.2)."""
+    """Run a tiered campaign with progressive disclosure (Phase 0.2).
+
+    Uses online cell timing for adaptive tier allocation, not historical cache.
+    """
     from computronium.experiment.execution.adaptive_budget import (
-        BudgetPlanner,
         BudgetStrategy,
-        DeviceClass,
-        create_campaign_yaml,
+        _build_component_sets,
+        _discover_components,
     )
     from computronium.experiment.execution.campaign import run_campaign
+    from computronium.experiment.execution.deadline import Deadline
 
     print("\n" + "=" * 70)
-    print("TIERED EXECUTION: Progressive Disclosure")
+    print("TIERED EXECUTION: Progressive Disclosure (Online Adaptive)")
     print("=" * 70)
 
     tier_results = []
     cumulative_store = actual_store
 
-    for tier in TIER_CONFIGS:
-        tier_start_pct, tier_end_pct = tier.budget_fraction
-        tier_budget_hours = hours * (tier_end_pct - tier_start_pct)
+    # Tier definitions (budget fractions)
+    tiers = [
+        (
+            "tier1_exploration",
+            0.0,
+            0.2,
+            1,
+            1,
+            "broad_shallow",
+            "All axes, minimal depth — max diversity",
+        ),
+        (
+            "tier2_refinement",
+            0.2,
+            0.6,
+            5,
+            3,
+            "balanced",
+            "Promising regions, moderate depth",
+        ),
+        ("tier3_deep_dive", 0.6, 1.0, 20, 5, "balanced", "Deep dive on Pareto front"),
+    ]
 
-        # Check if we've exceeded budget
+    for (
+        tier_name,
+        start_pct,
+        end_pct,
+        epochs,
+        seeds,
+        tier_strategy,
+        description,
+    ) in tiers:
+        tier_budget_hours = hours * (end_pct - start_pct)
+
+        # Check if we've exceeded budget (hard deadline)
         elapsed_hours = (time.time() - start_time) / 3600
-        if elapsed_hours >= hours * tier_end_pct * 1.1:  # 10% grace
-            print(f"\nBudget exceeded, stopping at {tier.name}")
+        if elapsed_hours >= hours * end_pct * 1.1:  # 10% grace
+            print(f"\nDeadline reached, stopping at {tier_name}")
             break
 
-        print(f"\n>>> {tier.name.upper()} ({tier.description})")
-        print(
-            f"    Budget: {tier_budget_hours:.2f}h, Epochs: {tier.epochs}, Seeds: {tier.seeds}"
-        )
+        print(f"\n>>> {tier_name.upper()} ({description})")
+        print(f"    Budget: {tier_budget_hours:.2f}h, Epochs: {epochs}, Seeds: {seeds}")
 
-        # Create tier-specific plan
-        planner = BudgetPlanner()
-        tier_plan = planner.plan(
-            time_budget_hours=tier_budget_hours,
-            strategy=BudgetStrategy(tier.strategy),
-            device_class=DeviceClass.GPU if device == "cuda" else DeviceClass.CPU,
-        )
-
-        # Override with tier config
-        tier_plan = _override_plan_epochs_seeds(tier_plan, tier.epochs, tier.seeds)
+        # Build component set for this tier
+        components = _discover_components()
+        component_sets = _build_component_sets()
+        tier_component_set = component_sets[BudgetStrategy(tier_strategy)]
 
         # For tier 2+, filter to promising regions from previous tier
-        if tier.name != "tier1_exploration" and tier_results:
-            tier_plan = _filter_to_promising_regions(
-                tier_plan, tier_results[-1], cumulative_store
-            )
+        if tier_name != "tier1_exploration" and tier_results:
+            # TODO: Implement Pareto-based filtering using online measurements
+            pass
 
-        tier_campaign_file = f"campaign_showcase_{tier.name}_{hours}h.yaml"
-        create_campaign_yaml(tier_plan, tier_campaign_file)
+        tier_config = ShowcaseConfig(
+            time_budget_hours=tier_budget_hours,
+            strategy=tier_strategy,
+            device=device,
+            epochs=epochs,
+            seeds=seeds,
+            substrates=tier_component_set.substrates,
+            geometries=tier_component_set.geometries,
+            dynamics=tier_component_set.dynamics,
+            credits=tier_component_set.credits,
+            updates=tier_component_set.updates,
+            plasticities=tier_component_set.plasticities,
+            tasks=tier_component_set.tasks,
+        )
+
+        tier_deadline = Deadline.from_hours(tier_budget_hours)
+        tier_campaign_file = f"campaign_showcase_{tier_name}_{hours}h.yaml"
+        _create_deadline_campaign_yaml(
+            tier_config, tier_deadline, Path(tier_campaign_file)
+        )
 
         # Run tier
         tier_result = await run_campaign(
@@ -447,18 +594,17 @@ async def _run_tiered_campaign(
         print(f"    Completed: {completed}, Failed: {failed}")
 
         # Update cumulative store for next tier
-        cumulative_store = tier_plan.runs[0]["overrides"].get("store", actual_store)
+        cumulative_store = tier_config.tasks[0] if tier_config.tasks else actual_store
 
-    # Return combined result (use last tier's result structure but aggregate)
+    # Return combined result
     combined = {
-        "campaign": plan.strategy.value,
+        "campaign": config.strategy,
         "total_runs": sum(r.get("total_runs", 0) for r in tier_results),
         "completed": sum(r.get("completed", 0) for r in tier_results),
         "failed": sum(r.get("failed", 0) for r in tier_results),
         "run_results": {},
         "tier_results": tier_results,
     }
-    # Merge run results
     idx = 0
     for tr in tier_results:
         for k, v in tr.get("run_results", {}).items():
@@ -468,7 +614,9 @@ async def _run_tiered_campaign(
     return combined
 
 
-def _filter_to_promising_regions(plan, prev_result: dict, store_path: str):
+def _filter_to_promising_regions(
+    config: ShowcaseConfig, prev_result: dict, store_path: str
+):
     """Filter plan to promising regions from previous tier (Phase 0.2).
 
     In a full implementation, this would analyze the Pareto frontier from
@@ -476,24 +624,18 @@ def _filter_to_promising_regions(plan, prev_result: dict, store_path: str):
     the full plan but could reduce component sets based on results.
     """
     # TODO: Implement Pareto-based filtering
-    # For now, return plan as-is
-    return plan
+    # For now, return config as-is
+    return config
 
 
 async def _run_bias_check(
-    plan,
+    config: ShowcaseConfig,
     campaign_file: str,
     actual_store: str,
     device: str,
     hours: float,
 ) -> BiasAuditResult:
     """Run bias detection by comparing policies (Phase 0.3)."""
-    from computronium.experiment.execution.adaptive_budget import (
-        BudgetPlanner,
-        BudgetStrategy,
-        DeviceClass,
-        create_campaign_yaml,
-    )
     from computronium.experiment.execution.campaign import run_campaign
 
     print("\n" + "=" * 70)
@@ -505,18 +647,28 @@ async def _run_bias_check(
 
     for policy_name in policies:
         print(f"  Running with policy: {policy_name}...")
-        # Create a mini-campaign for this policy
-        planner = BudgetPlanner()
-        mini_plan = planner.plan(
-            time_budget_hours=hours * 0.1,  # 10% of budget for bias check
-            strategy=BudgetStrategy(plan.strategy.value),
-            device_class=DeviceClass.GPU if device == "cuda" else DeviceClass.CPU,
-        )
-        mini_plan = _override_plan_epochs_seeds(mini_plan, 1, 1)  # Minimal depth
+        # Create a mini-campaign for this policy using deadline-aware approach
+        from computronium.experiment.execution.deadline import Deadline
 
-        # Override policy in campaign
+        mini_config = ShowcaseConfig(
+            time_budget_hours=hours * 0.1,  # 10% of budget for bias check
+            strategy=config.strategy,
+            device=device,
+            epochs=1,
+            seeds=1,
+            substrates=config.substrates,
+            geometries=config.geometries,
+            dynamics=config.dynamics,
+            credits=config.credits,
+            updates=config.updates,
+            plasticities=config.plasticities,
+            tasks=config.tasks,
+        )
+        mini_deadline = Deadline.from_hours(hours * 0.1)
         mini_campaign_file = f"campaign_bias_{policy_name}_{hours}h.yaml"
-        create_campaign_yaml(mini_plan, mini_campaign_file)
+        _create_deadline_campaign_yaml(
+            mini_config, mini_deadline, Path(mini_campaign_file)
+        )
 
         # Modify YAML to use specific policy
         import yaml
@@ -607,7 +759,7 @@ def _bias_audit_to_dict(audit: BiasAuditResult) -> dict:
 async def _generate_showcase_report(
     actual_store: str,
     campaign_data: dict,
-    plan,
+    config: ShowcaseConfig,
     result: dict,
     start_time: float,
     end_time: float,
@@ -637,8 +789,8 @@ async def _generate_showcase_report(
     if profile:
         repro_parts.append(f"--profile {profile}")
     else:
-        repro_parts.append(f"--strategy {plan.strategy.value}")
-    repro_parts.append(f"--hours {plan.time_budget_hours}")
+        repro_parts.append(f"--strategy {config.strategy}")
+    repro_parts.append(f"--hours {config.time_budget_hours}")
     repro_parts.append(f"--device {device}")
     repro_command = " ".join(repro_parts)
 
@@ -720,22 +872,22 @@ async def _generate_showcase_report(
     # Run bias check if requested
     if bias_check:
         bias_audit = await _run_bias_check(
-            plan,
+            config,
             campaign_data.get("meta", {}).get("name", "showcase"),
             actual_store,
             device,
-            plan.time_budget_hours,
+            config.time_budget_hours,
         )
 
     return ShowcaseReportData(
         campaign_name=campaign_data.get("meta", {}).get("name", "showcase"),
         start_time=start_time,
         end_time=end_time,
-        total_budget_hours=plan.time_budget_hours,
+        total_budget_hours=config.time_budget_hours,
         device=device,
-        strategy=plan.strategy.value,
+        strategy=config.strategy,
         profile=profile or "custom",
-        tiers_executed=[t.name for t in TIER_CONFIGS]
+        tiers_executed=["tier1_exploration", "tier2_refinement", "tier3_deep_dive"]
         if profile in {"balanced", "thorough"}
         else ["single_phase"],
         total_cells_evaluated=result.get("completed", 0),

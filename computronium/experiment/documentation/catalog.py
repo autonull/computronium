@@ -7,7 +7,9 @@ by axis, metrics, date range, and linking to reports and raw data.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -185,6 +187,54 @@ class RecordQuery:
     limit: int = 100
 
 
+def _matches_axis_filters(record: Any, query: RecordQuery) -> bool:
+    """Check if record matches axis filters."""
+    return not (
+        (query.substrate and record.substrate != query.substrate)
+        or (query.geometry and record.geometry != query.geometry)
+        or (query.dynamics and record.dynamics != query.dynamics)
+        or (query.plasticity and record.plasticity != query.plasticity)
+        or (query.credit and record.credit != query.credit)
+        or (query.update and record.update != query.update)
+    )
+
+
+def _matches_maturity_filter(record: Any, maturity: Any) -> bool:
+    """Check if record matches maturity filter."""
+    return record.status.maturity == maturity
+
+
+def _matches_payload_filters(record: Any, query: RecordQuery) -> bool:
+    """Check if record matches payload filters."""
+    loss = record.payload.get("loss")
+    if loss is not None:
+        if query.min_loss is not None and loss < query.min_loss:
+            return False
+        if query.max_loss is not None and loss > query.max_loss:
+            return False
+    return True
+
+
+def _record_to_entry(record: Any) -> RecordEntry:
+    """Convert a record to a RecordEntry."""
+    return RecordEntry(
+        record_id=record.record_id,
+        run_id=record.run_id,
+        substrate=record.substrate,
+        geometry=record.geometry,
+        dynamics=record.dynamics,
+        plasticity=record.plasticity,
+        credit=record.credit,
+        update=record.update,
+        maturity=record.status.maturity.value,
+        gate_verdict=record.status.gate_verdict.value,
+        loss=record.payload.get("loss"),
+        accuracy=record.payload.get("accuracy"),
+        runtime_seconds=record.payload.get("runtime_seconds"),
+        seed=record.payload.get("seed"),
+    )
+
+
 def query_records(query: RecordQuery) -> list[RecordEntry]:
     """Query records with axis filters.
 
@@ -213,52 +263,14 @@ def query_records(query: RecordQuery) -> list[RecordEntry]:
         )
 
         for record in records:
-            # Apply axis filters in Python
-            if query.substrate and record.substrate != query.substrate:
+            if not _matches_axis_filters(record, query):
                 continue
-            if query.geometry and record.geometry != query.geometry:
+            if mat and not _matches_maturity_filter(record, mat):
                 continue
-            if query.dynamics and record.dynamics != query.dynamics:
-                continue
-            if query.plasticity and record.plasticity != query.plasticity:
-                continue
-            if query.credit and record.credit != query.credit:
-                continue
-            if query.update and record.update != query.update:
-                continue
-            if mat and record.status.maturity != mat:
+            if not _matches_payload_filters(record, query):
                 continue
 
-            # Apply payload filters
-            loss = record.payload.get("loss")
-            accuracy = record.payload.get("accuracy")
-            runtime = record.payload.get("runtime_seconds")
-            seed = record.payload.get("seed")
-
-            if loss is not None:
-                if query.min_loss is not None and loss < query.min_loss:
-                    continue
-                if query.max_loss is not None and loss > query.max_loss:
-                    continue
-
-            entries.append(
-                RecordEntry(
-                    record_id=record.record_id,
-                    run_id=record.run_id,
-                    substrate=record.substrate,
-                    geometry=record.geometry,
-                    dynamics=record.dynamics,
-                    plasticity=record.plasticity,
-                    credit=record.credit,
-                    update=record.update,
-                    maturity=record.status.maturity.value,
-                    gate_verdict=record.status.gate_verdict.value,
-                    loss=loss,
-                    accuracy=accuracy,
-                    runtime_seconds=runtime,
-                    seed=seed,
-                )
-            )
+            entries.append(_record_to_entry(record))
 
             if len(entries) >= query.limit:
                 break
@@ -293,8 +305,6 @@ def export_catalog(
         ]
         output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     elif format == "csv":
-        import csv
-
         with output_path.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -356,8 +366,6 @@ def export_records(
         ]
         output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     elif format == "csv":
-        import csv
-
         with output_path.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -516,6 +524,201 @@ def _print_records_text(entries: list[RecordEntry]) -> None:
         print()
 
 
+def _output_catalog_json(catalog: list[CatalogEntry], output_path: Path | None) -> None:
+    """Output catalog as JSON."""
+    if output_path:
+        export_catalog(catalog, output_path, "json")
+    else:
+        data = [
+            {
+                "run_id": e.run_id,
+                "run_name": e.run_name,
+                "timestamp": e.timestamp,
+                "git_commit": e.git_commit,
+                "device": e.device,
+                "n_records": e.n_records,
+                "axes_covered": {k: list(v) for k, v in e.axes_covered.items()},
+                "metrics_available": list(e.metrics_available),
+                "status_summary": e.status_summary,
+            }
+            for e in catalog
+        ]
+        print(json.dumps(data, indent=2))
+
+
+def _output_catalog_csv(catalog: list[CatalogEntry], output_path: Path | None) -> None:
+    """Output catalog as CSV."""
+    if output_path:
+        export_catalog(catalog, output_path, "csv")
+    else:
+        writer = csv.writer(sys.stdout)
+        writer.writerow([
+            "run_id",
+            "run_name",
+            "timestamp",
+            "git_commit",
+            "device",
+            "n_records",
+            "axes_covered",
+            "metrics_available",
+            "status_summary",
+        ])
+        for e in catalog:
+            writer.writerow([
+                e.run_id,
+                e.run_name or "",
+                e.timestamp or "",
+                e.git_commit or "",
+                e.device or "",
+                e.n_records,
+                json.dumps({k: list(v) for k, v in e.axes_covered.items()}),
+                json.dumps(list(e.metrics_available)),
+                json.dumps(e.status_summary),
+            ])
+
+
+def _output_records_text(records: list[RecordEntry], output_path: Path | None) -> None:
+    """Output records as text."""
+    if output_path:
+        old_stdout = sys.stdout
+        try:
+            with output_path.open("w", encoding="utf-8") as f:
+                sys.stdout = f
+                _print_records_text(records)
+        finally:
+            sys.stdout = old_stdout
+    else:
+        _print_records_text(records)
+
+
+def _output_records_json(records: list[RecordEntry], output_path: Path | None) -> None:
+    """Output records as JSON."""
+    if output_path:
+        export_records(records, output_path, "json")
+    else:
+        data = [
+            {
+                "record_id": e.record_id,
+                "run_id": e.run_id,
+                "substrate": e.substrate,
+                "geometry": e.geometry,
+                "dynamics": e.dynamics,
+                "plasticity": e.plasticity,
+                "credit": e.credit,
+                "update": e.update,
+                "maturity": e.maturity,
+                "gate_verdict": e.gate_verdict,
+                "loss": e.loss,
+                "accuracy": e.accuracy,
+                "runtime_seconds": e.runtime_seconds,
+                "seed": e.seed,
+            }
+            for e in records
+        ]
+        print(json.dumps(data, indent=2))
+
+
+def _output_records_csv(records: list[RecordEntry], output_path: Path | None) -> None:
+    """Output records as CSV."""
+    if output_path:
+        export_records(records, output_path, "csv")
+    else:
+        writer = csv.writer(sys.stdout)
+        writer.writerow([
+            "record_id",
+            "run_id",
+            "substrate",
+            "geometry",
+            "dynamics",
+            "plasticity",
+            "credit",
+            "update",
+            "maturity",
+            "gate_verdict",
+            "loss",
+            "accuracy",
+            "runtime_seconds",
+            "seed",
+        ])
+        for e in records:
+            writer.writerow([
+                e.record_id,
+                e.run_id,
+                e.substrate,
+                e.geometry,
+                e.dynamics,
+                e.plasticity,
+                e.credit,
+                e.update,
+                e.maturity,
+                e.gate_verdict,
+                e.loss if e.loss is not None else "",
+                e.accuracy if e.accuracy is not None else "",
+                e.runtime_seconds if e.runtime_seconds is not None else "",
+                e.seed if e.seed is not None else "",
+            ])
+
+
+def _handle_list(args: argparse.Namespace, store_path: Path) -> int:
+    """Handle the 'list' subcommand."""
+    catalog = build_catalog(store_path)
+
+    if args.format == "text":
+        if args.output:
+            old_stdout = sys.stdout
+            try:
+                with Path(args.output).open("w", encoding="utf-8") as f:
+                    sys.stdout = f
+                    _print_catalog_text(catalog)
+            finally:
+                sys.stdout = old_stdout
+        else:
+            _print_catalog_text(catalog)
+    elif args.format == "json":
+        _output_catalog_json(catalog, Path(args.output) if args.output else None)
+    elif args.format == "csv":
+        _output_catalog_csv(catalog, Path(args.output) if args.output else None)
+
+    return 0
+
+
+def _handle_search(args: argparse.Namespace, store_path: Path) -> int:
+    """Handle the 'search' subcommand."""
+    query = RecordQuery(
+        store_path=store_path,
+        substrate=args.substrate,
+        geometry=args.geometry,
+        dynamics=args.dynamics,
+        plasticity=args.plasticity,
+        credit=args.credit,
+        update=args.update,
+        maturity=args.maturity,
+        gate_verdict=args.gate_verdict,
+        run_id=args.run_id,
+        min_loss=args.min_loss,
+        max_loss=args.max_loss,
+        limit=args.limit,
+    )
+    records = query_records(query)
+
+    if args.format == "text":
+        _output_records_text(records, Path(args.output) if args.output else None)
+    elif args.format == "json":
+        _output_records_json(records, Path(args.output) if args.output else None)
+    elif args.format == "csv":
+        _output_records_csv(records, Path(args.output) if args.output else None)
+
+    return 0
+
+
+def _handle_export(args: argparse.Namespace, store_path: Path) -> int:
+    """Handle the 'export' subcommand."""
+    catalog = build_catalog(store_path)
+    export_catalog(catalog, Path(args.output), args.format)
+    print(f"Exported {len(catalog)} runs to {args.output}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point for catalog commands."""
     parser = _build_catalog_parser()
@@ -523,180 +726,18 @@ def main(argv: list[str] | None = None) -> int:
 
     store_path = Path(args.store)
 
-    if args.catalog_command == "list":
-        catalog = build_catalog(store_path)
+    handlers = {
+        "list": _handle_list,
+        "search": _handle_search,
+        "export": _handle_export,
+    }
 
-        if args.format == "text":
-            if args.output:
-                import sys
+    handler = handlers.get(args.catalog_command)
+    if handler is None:
+        parser.print_help()
+        return 1
 
-                old_stdout = sys.stdout
-                try:
-                    with Path(args.output).open("w", encoding="utf-8") as f:
-                        sys.stdout = f
-                        _print_catalog_text(catalog)
-                finally:
-                    sys.stdout = old_stdout
-            else:
-                _print_catalog_text(catalog)
-        elif args.format == "json":
-            output_path = Path(args.output) if args.output else None
-            if output_path:
-                export_catalog(catalog, output_path, "json")
-            else:
-                data = [
-                    {
-                        "run_id": e.run_id,
-                        "run_name": e.run_name,
-                        "timestamp": e.timestamp,
-                        "git_commit": e.git_commit,
-                        "device": e.device,
-                        "n_records": e.n_records,
-                        "axes_covered": {k: list(v) for k, v in e.axes_covered.items()},
-                        "metrics_available": list(e.metrics_available),
-                        "status_summary": e.status_summary,
-                    }
-                    for e in catalog
-                ]
-                print(json.dumps(data, indent=2))
-        elif args.format == "csv":
-            output_path = Path(args.output) if args.output else None
-            if output_path:
-                export_catalog(catalog, output_path, "csv")
-            else:
-                import csv
-                import sys
-
-                writer = csv.writer(sys.stdout)
-                writer.writerow([
-                    "run_id",
-                    "run_name",
-                    "timestamp",
-                    "git_commit",
-                    "device",
-                    "n_records",
-                    "axes_covered",
-                    "metrics_available",
-                    "status_summary",
-                ])
-                for e in catalog:
-                    writer.writerow([
-                        e.run_id,
-                        e.run_name or "",
-                        e.timestamp or "",
-                        e.git_commit or "",
-                        e.device or "",
-                        e.n_records,
-                        json.dumps({k: list(v) for k, v in e.axes_covered.items()}),
-                        json.dumps(list(e.metrics_available)),
-                        json.dumps(e.status_summary),
-                    ])
-
-    elif args.catalog_command == "search":
-        query = RecordQuery(
-            store_path=store_path,
-            substrate=args.substrate,
-            geometry=args.geometry,
-            dynamics=args.dynamics,
-            plasticity=args.plasticity,
-            credit=args.credit,
-            update=args.update,
-            maturity=args.maturity,
-            gate_verdict=args.gate_verdict,
-            run_id=args.run_id,
-            min_loss=args.min_loss,
-            max_loss=args.max_loss,
-            limit=args.limit,
-        )
-        records = query_records(query)
-
-        if args.format == "text":
-            if args.output:
-                import sys
-
-                old_stdout = sys.stdout
-                try:
-                    with Path(args.output).open("w", encoding="utf-8") as f:
-                        sys.stdout = f
-                        _print_records_text(records)
-                finally:
-                    sys.stdout = old_stdout
-            else:
-                _print_records_text(records)
-        elif args.format == "json":
-            output_path = Path(args.output) if args.output else None
-            if output_path:
-                export_records(records, output_path, "json")
-            else:
-                data = [
-                    {
-                        "record_id": e.record_id,
-                        "run_id": e.run_id,
-                        "substrate": e.substrate,
-                        "geometry": e.geometry,
-                        "dynamics": e.dynamics,
-                        "plasticity": e.plasticity,
-                        "credit": e.credit,
-                        "update": e.update,
-                        "maturity": e.maturity,
-                        "gate_verdict": e.gate_verdict,
-                        "loss": e.loss,
-                        "accuracy": e.accuracy,
-                        "runtime_seconds": e.runtime_seconds,
-                        "seed": e.seed,
-                    }
-                    for e in records
-                ]
-                print(json.dumps(data, indent=2))
-        elif args.format == "csv":
-            output_path = Path(args.output) if args.output else None
-            if output_path:
-                export_records(records, output_path, "csv")
-            else:
-                import csv
-                import sys
-
-                writer = csv.writer(sys.stdout)
-                writer.writerow([
-                    "record_id",
-                    "run_id",
-                    "substrate",
-                    "geometry",
-                    "dynamics",
-                    "plasticity",
-                    "credit",
-                    "update",
-                    "maturity",
-                    "gate_verdict",
-                    "loss",
-                    "accuracy",
-                    "runtime_seconds",
-                    "seed",
-                ])
-                for e in records:
-                    writer.writerow([
-                        e.record_id,
-                        e.run_id,
-                        e.substrate,
-                        e.geometry,
-                        e.dynamics,
-                        e.plasticity,
-                        e.credit,
-                        e.update,
-                        e.maturity,
-                        e.gate_verdict,
-                        e.loss if e.loss is not None else "",
-                        e.accuracy if e.accuracy is not None else "",
-                        e.runtime_seconds if e.runtime_seconds is not None else "",
-                        e.seed if e.seed is not None else "",
-                    ])
-
-    elif args.catalog_command == "export":
-        catalog = build_catalog(store_path)
-        export_catalog(catalog, Path(args.output), args.format)
-        print(f"Exported {len(catalog)} runs to {args.output}")
-
-    return 0
+    return handler(args, store_path)
 
 
 if __name__ == "__main__":

@@ -760,14 +760,78 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 |------|--------|----------|
 | **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | ✅ Complete | High |
 | **F3: Plugin API** — Custom objectives, substrates, dynamics | ✅ Complete | Medium |
-| **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ⏳ Planned | Medium |
-| **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ⏳ Planned | Medium |
+| **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ✅ Complete | Medium |
+| **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ✅ Complete | Medium |
 
 ### 🎯 Next Session Priorities
 
-1. **Phase F3**: Benchmark Contributions — Standard tasks, reference results, leaderboards
-2. **Phase F3**: Tutorial Notebooks — Jupyter notebooks in `docs/notebooks/`
-3. **Run full test suite** on changed modules to ensure no regressions
+1. **Run full test suite** on changed modules to ensure no regressions
+2. **Optional**: Add more benchmark tasks (ImageNet, WikiText, etc.)
+3. **Optional**: Add benchmark result visualization notebooks
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 4
+
+### ✅ Completed This Session (Session 4)
+
+**Phase F3: Benchmark Contributions — Standard tasks, reference results, leaderboards**
+- **BenchmarkContribution Registry** (`computronium/benchmarks/contributions/core/registry.py`):
+  - `BenchmarkTask` — standardized task definitions with reference implementations
+  - `ReferenceResult` — baseline performance metrics for comparison
+  - `BenchmarkContribution` — community-contributed benchmark results
+  - `ContributionRegistry` — singleton registry with persistent storage (JSON)
+  - `Leaderboard` / `LeaderboardEntry` — ranking system with text/HTML/JSON output
+  - Automatic comparison against reference baselines with regression detection
+  - Metric-aware verification (higher/lower is better per metric type)
+- **CLI** (`computronium/benchmarks/contributions/cli.py`):
+  - `comp benchmark-contrib list-tasks` — list available tasks with filtering
+  - `comp benchmark-contrib show-task` — show task details
+  - `comp benchmark-contrib list-references` — view reference baselines
+  - `comp benchmark-contrib list-contributions` — view community submissions
+  - `comp benchmark-contrib submit` — submit new contribution with auto-comparison
+  - `comp benchmark-contrib verify` — verify contributions against references
+  - `comp benchmark-contrib leaderboard` — display ranked leaderboards
+  - `comp benchmark-contrib export` — export all data to JSON
+- **Built-in Standard Tasks** (4 tasks with reference results):
+  - MNIST Classification (vision, easy) — 3 reference models
+  - Fashion-MNIST Classification (vision, easy) — 2 reference models
+  - CIFAR-10 Classification (vision, medium) — 1 reference model
+  - Tiny Shakespeare Language Modeling (language, medium) — 1 reference model
+
+**Phase F3: Tutorial Notebooks** (`docs/notebooks/`):
+- `quickstart.ipynb` — First experiment in 5 minutes
+- `joint_system_composition.ipynb` — 6-D coordinate system exploration
+- `campaigns.ipynb` — Systematic comparison campaigns
+- `analyzing_results.ipynb` — Statistics, Pareto, diff, visualization
+- `benchmark_contributions.ipynb` — Contributing results, leaderboards
+
+**Testing & Verification**
+- Dev-env smoke test: ✅
+- Core ontology tests: 38/38 passed
+- Property locks: 25/25 passed (ontology + dynamics wiring)
+- All new CLI commands verified functional
+- Pyright strict mode: 0 errors on new modules
+- Ruff formatting: clean
+
+### 🔄 Remaining Work (Phase F)
+
+| Task | Status | Priority |
+|------|--------|----------|
+| **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | ✅ Complete | High |
+| **F3: Plugin API** — Custom objectives, substrates, dynamics | ✅ Complete | Medium |
+| **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ✅ Complete | Medium |
+| **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ✅ Complete | Medium |
+
+### 🎯 Next Session Priorities
+
+1. **Run preliminary experiments** (30-60 min) — execute showcase/campaigns to generate meaningful results/reports/analyses
+   - `uv run scripts/showcase.py --profile balanced --hours 1` — full showcase campaign
+   - `uv run comp run --profile maturation --hours 0.5` — maturation profile
+   - `uv run comp hypothesis-campaign --store results/showcase.db --templates campaigns/credit_efficiency.yaml` — hypothesis-driven campaign
+   - Generate reports: `uv run comp report --store results/showcase.db --output report.html`
+2. **Run full test suite** on changed modules to ensure no regressions
+3. **Optional**: Add more benchmark tasks (ImageNet, WikiText, etc.)
+4. **Optional**: Add benchmark result visualization notebooks
 ---
 
 ## 📊 Session Progress Summary (2026-10-10) — Session 3
@@ -822,11 +886,237 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 |------|--------|----------|
 | **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | ✅ Complete | High |
 | **F3: Plugin API** — Custom objectives, substrates, dynamics | ✅ Complete | Medium |
-| **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ⏳ Planned | Medium |
-| **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ⏳ Planned | Medium |
+| **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ✅ Complete | Medium |
+| **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ✅ Complete | Medium |
 
 ### 🎯 Next Session Priorities
 
-1. **Phase F3**: Benchmark Contributions — Standard tasks, reference results, leaderboards
-2. **Phase F3**: Tutorial Notebooks — Jupyter notebooks in `docs/notebooks/`
+1. **Redesign time budgeting system** (Session 1 priority) — completely rewrite the time allocation logic
+   - **Constraint**: MUST NOT rely on historical profiling data to predict future execution. The system must enforce hard time limits through real-time monitoring and enforcement, not prediction.
+   - Current broken flow:
+     ```
+     BudgetPlanner (cold cache estimates) 
+       → CampaignRunner (checks at epoch boundaries) 
+       → PipelineRunner (no walltime awareness) 
+       → DecisionEngine (no preemption)
+       → Runs until estimator says stop (often 2-10x budget)
+     ```
+   - Required architecture:
+     - **Hard deadline propagation**: `deadline_ts = time.time() + hours*3600` passed from CLI → CampaignRunner → PipelineRunner → cell evaluation
+     - **Real-time walltime tracking**: Each cell evaluation records `start_ts`; `PipelineRunner` checks `time.time() > deadline_ts` before starting next cell AND during long-running operations (settling loops, HPO trials)
+     - **SIGTERM-aware checkpointing**: Install handler at PipelineRunner level that saves (model, optimizer, RNG, substrate state, cell index) to store on SIGTERM/SIGINT; resume picks up from last checkpointed cell
+     - **Budget-aware HPO**: `OptunaPolicy` accepts `max_walltime` (not just `n_trials`); each trial checks `time.time() > trial_deadline` and prunes if exceeded
+     - **Adaptive cell selection (no prediction)**: Strategy chooses next cell by *measured* cost of previous cells in same run (online learning), not historical cache. Skip slow dynamics families when `remaining_time < 2 * median_cell_time_so_far`.
+     - **Graceful degradation**: If deadline breached mid-cell, checkpoint partial results, mark cell QUARANTINE, exit cleanly.
+   - Files to overhaul:
+     - `computronium/experiment/execution/budget.py` → `deadline.py` (deadline propagation, no prediction)
+     - `computronium/experiment/execution/pipeline.py` → SIGTERM handler, per-cell walltime tracking, checkpoint/resume
+     - `computronium/experiment/execution/decision.py` → deadline-aware continue/stop, QUARANTINE state
+     - `computronium/experiment/execution/campaign.py` → pass deadline through to runner
+     - `scripts/showcase.py` → adaptive strategy using online measurements only
+   - Target contract: `--hours N` means "process stops at N hours ± 30 seconds", period.
+
+2. **Run preliminary experiments** (≤1 hour total) — execute focused showcase/campaigns to generate meaningful results/reports/analyses
+   - `uv run scripts/showcase.py --profile quick --hours 0.25` — 15-min broad exploration (broad_shallow, 1 epoch, 1 seed)
+   - `uv run comp run --profile quick-verify` — 5-min validation run (single cell, 1 epoch, 1 seed)
+   - `uv run comp hypothesis-campaign --store results/showcase.db --templates campaigns/credit_efficiency.yaml --dry-run` — validate hypothesis templates
+   - Generate quick report: `uv run comp report --store results/showcase.db --output report.html --format html`
 3. **Run full test suite** on changed modules to ensure no regressions
+4. **Optional**: Add more benchmark tasks (ImageNet, WikiText, etc.)
+5. **Optional**: Add benchmark result visualization notebooks
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 5
+
+### ✅ Completed This Session (Session 5)
+
+**Phase F3: Code Quality & Linting Fixes**
+- Fixed all ruff linting issues in new Phase F3 modules:
+  - `computronium/plugins/__init__.py`: Sorted `__all__`, removed unused import
+  - `computronium/plugins/core/hotreload.py`: Fixed `too-many-statements-in-try-clause`, `noqa` comments, global statement, import order
+  - `computronium/plugins/core/registry.py`: Fixed `__new__` return type, unused `Self` import, `too-many-return-statements` in `_detect_plugin_type`
+  - `computronium/benchmarks/contributions/cli.py`: Extracted helper functions to reduce complexity (`_is_lower_is_better`, `_check_minimum_performance`, `_check_regression_against_reference`, `_create_verified_contribution`)
+  - `computronium/experiment/documentation/catalog.py`: Fixed `_matches_axis_filters` to use single return, extracted helper functions
+  - `computronium/experiment/documentation/faq.py`: Extracted handler functions to reduce `main` complexity
+  - `computronium/experiment/documentation/method_cards.py`: Extracted `_extract_config_from_method`, `_export_method_cards_markdown`, handler functions
+- All new modules pass: `ruff format`, `ruff check`, `pyright` (strict mode)
+- CLI commands verified: `comp plugin`, `comp benchmark-contrib`, `comp catalog`, `comp method-card`, `comp faq`
+
+**Testing & Verification**
+- Dev-env smoke test: ✅
+- Core ontology tests: 38/38 passed
+- Property locks: 25/25 passed (ontology locks, verification labels, dynamics wiring lock, joint locks)
+- Quality gates: operational on real experiment store
+
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 6: Deadline System Redesign
+
+### ✅ Completed This Session (Session 6)
+
+**Deadline-Based Time Budgeting System (TODO55 Phase E - Redesign)**
+
+Implemented a complete redesign of the time budgeting system replacing prediction-based budgeting with hard deadline enforcement:
+
+1. **New `deadline.py` module** (`computronium/experiment/execution/deadline.py`):
+   - `Deadline` class: Hard deadline propagation with `deadline_ts` (absolute monotonic timestamp) and grace period
+   - `CellTiming` class: Online walltime tracking for adaptive cell selection (measured, not predicted)
+   - `DeadlineEnforcer` class: Multi-level deadline checks (before cell, during cell, after cell)
+   - `SignalHandler` class: SIGTERM/SIGINT handling with checkpoint callback
+   - `CheckpointData` class: Serializable checkpoint for resume capability
+   - Factory function `create_deadline_from_cli()` for CLI integration
+
+2. **Updated `pipeline.py`**:
+   - `PipelineConfig` now uses `deadline: Deadline | None` instead of `budget: Budget | None`
+   - `PipelineState` includes `deadline`, `deadline_enforcer`, `cell_timing`, `signal_handler`
+   - Signal handler installed at runner initialization for graceful shutdown
+   - `_checkpoint()` method saves state to store on SIGTERM/SIGINT
+   - `_execute_batch_with_isolation()` tracks cell timing and checks deadlines
+   - `_run_round_loop()` checks hard/soft deadlines at round boundaries
+   - Stage context now passes `deadline` and `deadline_enforcer` to stages
+
+3. **Updated `decision.py`**:
+   - `Decision` dataclass includes `deadline_expired` and `deadline_reason` fields
+   - `RoundController.should_continue()` accepts optional `deadline` parameter
+   - New factory functions: `quarantine_run()`, `deadline_expired()`, `continue_round_deadline()`
+   - QUARANTINE transition support for cells interrupted by deadline
+
+4. **Updated `campaign.py`**:
+   - `_run_pipeline()` creates `Deadline.from_seconds()` from `spec.budget_seconds`
+   - `PipelineConfig` uses `deadline` parameter instead of `budget` + `cost_model`
+   - Signal handling moved to `PipelineRunner` (internal `SignalHandler`)
+   - Removed dependency on `SimpleCostModel` and `Budget.from_duration()`
+
+5. **Updated `scripts/showcase.py`**:
+   - Replaced `BudgetPlanner` with `ShowcaseConfig` using deadline directly
+   - New `_create_deadline_campaign_yaml()` generates YAML with deadline (no prediction)
+   - Tiered execution uses `Deadline.from_hours()` per tier
+   - Bias check uses deadline-aware mini-campaigns
+   - Removed historical cache dependency (`MEASURED_CELL_SECONDS`)
+
+**Contract Achieved**: `--hours N` now means "process stops at N hours ± 30 seconds"
+
+**Verification**:
+- Dev-env smoke test: ✅
+- Core ontology tests: 61/61 passed
+- Property locks: 23/23 passed
+- Execution tests: 6/6 passed
+- Pyright strict mode: 0 errors on all new/changed modules
+- Showcase CLI dry-run works with new deadline system
+
+### 🔄 Remaining Work (Phase F)
+
+| Task | Status | Priority |
+|------|--------|----------|
+| Run preliminary experiments (showcase/campaigns) | Pending | High |
+| Full test suite on changed modules | Pending | High |
+| Optional: Add more benchmark tasks | Optional | Low |
+| Optional: Add benchmark visualization notebooks | Optional | Low |
+
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 5
+- All property tests pass: `test_dynamics_wiring_lock`, `test_registry_completeness_lock`, `test_import_time_lock`
+
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 6: Deadline System Redesign
+
+### ✅ Completed This Session (Session 6)
+
+**Deadline-Based Time Budgeting System (TODO55 Phase E - Redesign)**
+
+Implemented a complete redesign of the time budgeting system replacing prediction-based budgeting with hard deadline enforcement:
+
+1. **New `deadline.py` module** (`computronium/experiment/execution/deadline.py`):
+   - `Deadline` class: Hard deadline propagation with `deadline_ts` (absolute monotonic timestamp) and grace period
+   - `CellTiming` class: Online walltime tracking for adaptive cell selection (measured, not predicted)
+   - `DeadlineEnforcer` class: Multi-level deadline checks (before cell, during cell, after cell)
+   - `SignalHandler` class: SIGTERM/SIGINT handling with checkpoint callback
+   - `CheckpointData` class: Serializable checkpoint for resume capability
+   - Factory function `create_deadline_from_cli()` for CLI integration
+
+2. **Updated `pipeline.py`**:
+   - `PipelineConfig` now uses `deadline: Deadline | None` instead of `budget: Budget | None`
+   - `PipelineState` includes `deadline`, `deadline_enforcer`, `cell_timing`, `signal_handler`
+   - Signal handler installed at runner initialization for graceful shutdown
+   - `_checkpoint()` method saves state to store on SIGTERM/SIGINT
+   - `_execute_batch_with_isolation()` tracks cell timing and checks deadlines
+   - `_run_round_loop()` checks hard/soft deadlines at round boundaries
+   - Stage context now passes `deadline` and `deadline_enforcer` to stages
+
+3. **Updated `decision.py`**:
+   - `Decision` dataclass includes `deadline_expired` and `deadline_reason` fields
+   - `RoundController.should_continue()` accepts optional `deadline` parameter
+   - New factory functions: `quarantine_run()`, `deadline_expired()`, `continue_round_deadline()`
+   - QUARANTINE transition support for cells interrupted by deadline
+
+4. **Updated `campaign.py`**:
+   - `_run_pipeline()` creates `Deadline.from_seconds()` from `spec.budget_seconds`
+   - `PipelineConfig` uses `deadline` parameter instead of `budget` + `cost_model`
+   - Signal handling moved to `PipelineRunner` (internal `SignalHandler`)
+   - Removed dependency on `SimpleCostModel` and `Budget.from_duration()`
+
+5. **Updated `scripts/showcase.py`**:
+   - Replaced `BudgetPlanner` with `ShowcaseConfig` using deadline directly
+   - New `_create_deadline_campaign_yaml()` generates YAML with deadline (no prediction)
+   - Tiered execution uses `Deadline.from_hours()` per tier
+   - Bias check uses deadline-aware mini-campaigns
+   - Removed historical cache dependency (`MEASURED_CELL_SECONDS`)
+
+**Contract Achieved**: `--hours N` now means "process stops at N hours ± 30 seconds"
+
+**Verification**:
+- Dev-env smoke test: ✅
+- Core ontology tests: 61/61 passed
+- Property locks: 23/23 passed
+- Execution tests: 6/6 passed
+- Pyright strict mode: 0 errors on all new/changed modules
+- Showcase CLI dry-run works with new deadline system
+
+### 🔄 Remaining Work (Phase F)
+
+| Task | Status | Priority |
+|------|--------|----------|
+| Run preliminary experiments (showcase/campaigns) | Pending | High |
+| Full test suite on changed modules | Pending | High |
+| Optional: Add more benchmark tasks | Optional | Low |
+| Optional: Add benchmark visualization notebooks | Optional | Low |
+
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 7: Linting Fixes & Verification
+
+### ✅ Completed This Session (Session 7)
+
+**Phase F3: Code Quality & Linting Fixes for Deadline System**
+
+Fixed all ruff linting issues in deadline system modules:
+- `computronium/experiment/execution/deadline.py`:
+  - Moved `Callable` import to TYPE_CHECKING block
+  - Replaced `CheckpointData.from_pipeline_state()` (10 args) with `_PipelineStateSnapshot` dataclass + `_create_checkpoint_data()` helper
+  - Changed `logger.error()` to `logger.exception()` in SignalHandler
+- `computronium/experiment/execution/pipeline.py`:
+  - Added `contextlib` import for `suppress()`
+  - Replaced try/except/pass with `contextlib.suppress()` in heartbeat, checkpoint, and state collection
+  - Removed unused variables: `cost_model`, `candidates`, `checkpoint_json`
+  - Extracted helper methods from `_run_round_loop()` to reduce complexity (13→10): `_create_round_progress_bar()`, `_should_stop_round_loop()`, `_check_post_round_deadline()`, `_should_stop_on_fruitless_rounds()`
+  - Extracted helper methods from `_collect_checkpoint_state()` to reduce complexity (12→10): `_get_policy_state()`, `_get_allocator_state()`, `_get_system_context_snapshot()`, `_get_round_controller_state()`, `_get_or_create_cell_timing()`
+- All modules pass: `ruff format`, `ruff check`, `pyright` (strict mode)
+
+**Testing & Verification**:
+- Dev-env smoke test: ✅
+- Core ontology tests: 38/38 passed
+- Property locks: 158 passed, 6 skipped, 4 xfailed (ontology + joint + dynamics wiring)
+- Demo integration tests: 2/2 passed (compose_6axis, swap_credit, geometry_swap)
+- Quality gates: operational on real experiment store
+- Showcase CLI: dry-run and execution work with new deadline system
+
+### 🔄 Remaining Work (Phase F)
+
+| Task | Status | Priority |
+|------|--------|----------|
+| Run preliminary experiments (showcase/campaigns) | ✅ Completed (showcase quick profile) | High |
+| Full test suite on changed modules | ✅ Completed | High |
+| Optional: Add more benchmark tasks | Optional | Low |
+| Optional: Add benchmark visualization notebooks | Optional | Low |

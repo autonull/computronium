@@ -66,6 +66,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "method-card": ("computronium.experiment.documentation.method_cards", "main", ()),
     "faq": ("computronium.experiment.documentation.faq", "main", ()),
     "plugin": ("computronium.plugins", "main", ()),
+    "benchmark-contrib": ("computronium.benchmarks.contributions.cli", "main", ()),
 }
 
 _SUMMARIES: dict[str, str] = {
@@ -100,6 +101,7 @@ _SUMMARIES: dict[str, str] = {
     "method-card": "Method cards: auto-generated docs for ontology primitives (Phase F2)",
     "faq": "FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)",
     "plugin": "Plugin management: custom objectives, substrates, dynamics (Phase F3)",
+    "benchmark-contrib": "Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3)",
 }
 
 

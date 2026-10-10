@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -374,6 +375,118 @@ def _print_faq_text(entries: list[FAQEntry]) -> None:
         print()
 
 
+def _filter_faq(
+    faq: list[FAQEntry],
+    category: str | None = None,
+    error_type: str | None = None,
+    tag: str | None = None,
+) -> list[FAQEntry]:
+    """Apply filters to FAQ list."""
+    filtered = faq
+    if category:
+        filtered = [e for e in filtered if e.category == category]
+    if error_type:
+        filtered = [e for e in filtered if e.error_type == error_type]
+    if tag:
+        filtered = [e for e in filtered if tag in e.tags]
+    return filtered
+
+
+def _search_faq(faq: list[FAQEntry], query: str) -> list[FAQEntry]:
+    """Search FAQ entries."""
+    query_lower = query.lower()
+    return [
+        e
+        for e in faq
+        if query_lower in e.question.lower()
+        or query_lower in e.answer.lower()
+        or any(query_lower in tag.lower() for tag in e.tags)
+    ]
+
+
+def _output_faq_text(entries: list[FAQEntry]) -> None:
+    """Output FAQ as text."""
+    _print_faq_text(entries)
+    print(f"Total: {len(entries)} entries")
+
+
+def _output_faq_json(entries: list[FAQEntry]) -> None:
+    """Output FAQ as JSON."""
+    data = [
+        {
+            "id": e.id,
+            "category": e.category,
+            "error_type": e.error_type,
+            "question": e.question,
+            "answer": e.answer,
+            "workaround": e.workaround,
+            "related_docs": e.related_docs,
+            "tags": e.tags,
+        }
+        for e in entries
+    ]
+    print(json.dumps(data, indent=2))
+
+
+def _handle_list(args: argparse.Namespace, faq: list[FAQEntry]) -> int:
+    """Handle the 'list' subcommand."""
+    filtered = _filter_faq(faq, args.category, args.error_type, args.tag)
+
+    if args.format == "text":
+        _output_faq_text(filtered)
+    elif args.format == "json":
+        _output_faq_json(filtered)
+
+    return 0
+
+
+def _handle_search(args: argparse.Namespace, faq: list[FAQEntry]) -> int:
+    """Handle the 'search' subcommand."""
+    filtered = _search_faq(faq, args.query)
+
+    if args.format == "text":
+        _output_faq_text(filtered)
+        print(f"Found: {len(filtered)} entries")
+    elif args.format == "json":
+        _output_faq_json(filtered)
+
+    return 0
+
+
+def _handle_show(args: argparse.Namespace, faq: list[FAQEntry]) -> int:
+    """Handle the 'show' subcommand."""
+    entry = next((e for e in faq if e.id == args.id), None)
+    if not entry:
+        print(f"FAQ entry not found: {args.id}", file=sys.stderr)
+        return 1
+
+    if args.format == "text":
+        _print_faq_text([entry])
+    elif args.format == "json":
+        data = {
+            "id": entry.id,
+            "category": entry.category,
+            "error_type": entry.error_type,
+            "question": entry.question,
+            "answer": entry.answer,
+            "workaround": entry.workaround,
+            "related_docs": entry.related_docs,
+            "tags": entry.tags,
+        }
+        print(json.dumps(data, indent=2))
+    elif args.format == "markdown":
+        export_faq([entry], Path("/dev/stdout"), "markdown")
+
+    return 0
+
+
+def _handle_generate(args: argparse.Namespace, faq: list[FAQEntry]) -> int:
+    """Handle the 'generate' subcommand."""
+    export_faq(faq, Path(args.output), args.format)
+    print(f"Generated {len(faq)} FAQ entries to {args.output}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point for FAQ commands."""
     parser = _build_faq_parser()
@@ -381,94 +494,20 @@ def main(argv: list[str] | None = None) -> int:
 
     faq = generate_faq()
 
-    if args.faq_command == "list":
-        filtered = faq
-        if args.category:
-            filtered = [e for e in filtered if e.category == args.category]
-        if args.error_type:
-            filtered = [e for e in filtered if e.error_type == args.error_type]
-        if args.tag:
-            filtered = [e for e in filtered if args.tag in e.tags]
+    handlers = {
+        "list": _handle_list,
+        "search": _handle_search,
+        "show": _handle_show,
+        "generate": _handle_generate,
+    }
 
-        if args.format == "text":
-            _print_faq_text(filtered)
-            print(f"Total: {len(filtered)} entries")
-        elif args.format == "json":
-            data = [
-                {
-                    "id": e.id,
-                    "category": e.category,
-                    "error_type": e.error_type,
-                    "question": e.question,
-                    "answer": e.answer,
-                    "workaround": e.workaround,
-                    "related_docs": e.related_docs,
-                    "tags": e.tags,
-                }
-                for e in filtered
-            ]
-            print(json.dumps(data, indent=2))
+    handler = handlers.get(args.faq_command)
+    if handler is None:
+        parser.print_help()
+        return 1
 
-    elif args.faq_command == "search":
-        query = args.query.lower()
-        filtered = [
-            e
-            for e in faq
-            if query in e.question.lower()
-            or query in e.answer.lower()
-            or any(query in tag.lower() for tag in e.tags)
-        ]
-
-        if args.format == "text":
-            _print_faq_text(filtered)
-            print(f"Found: {len(filtered)} entries")
-        elif args.format == "json":
-            data = [
-                {
-                    "id": e.id,
-                    "category": e.category,
-                    "error_type": e.error_type,
-                    "question": e.question,
-                    "answer": e.answer,
-                    "workaround": e.workaround,
-                    "related_docs": e.related_docs,
-                    "tags": e.tags,
-                }
-                for e in filtered
-            ]
-            print(json.dumps(data, indent=2))
-
-    elif args.faq_command == "show":
-        entry = next((e for e in faq if e.id == args.id), None)
-        if not entry:
-            print(f"FAQ entry not found: {args.id}", file=sys.stderr)
-            return 1
-
-        if args.format == "text":
-            _print_faq_text([entry])
-        elif args.format == "json":
-            data = {
-                "id": entry.id,
-                "category": entry.category,
-                "error_type": entry.error_type,
-                "question": entry.question,
-                "answer": entry.answer,
-                "workaround": entry.workaround,
-                "related_docs": entry.related_docs,
-                "tags": entry.tags,
-            }
-            print(json.dumps(data, indent=2))
-        elif args.format == "markdown":
-            export_faq([entry], Path("/dev/stdout"), "markdown")
-
-    elif args.faq_command == "generate":
-        export_faq(faq, Path(args.output), args.format)
-        print(f"Generated {len(faq)} FAQ entries to {args.output}")
-
-    return 0
+    return handler(args, faq)
 
 
 if __name__ == "__main__":
-    import sys
-
     raise SystemExit(main())
