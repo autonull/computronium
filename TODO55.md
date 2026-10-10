@@ -759,13 +759,74 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 | Task | Status | Priority |
 |------|--------|----------|
 | **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | ✅ Complete | High |
-| **F3: Plugin API** — Custom objectives, substrates, dynamics | ⏳ Planned | Medium |
+| **F3: Plugin API** — Custom objectives, substrates, dynamics | ✅ Complete | Medium |
 | **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ⏳ Planned | Medium |
 | **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ⏳ Planned | Medium |
 
 ### 🎯 Next Session Priorities
 
-1. **Phase F3**: Plugin API (`computronium/plugins/`) — Entry point registration, protocol-based extensions, hot-reload
-2. **Phase F3**: Benchmark Contributions — Standard tasks, reference results, leaderboards
-3. **Phase F3**: Tutorial Notebooks — Jupyter notebooks in `docs/notebooks/`
-4. **Run full test suite** on changed modules to ensure no regressions
+1. **Phase F3**: Benchmark Contributions — Standard tasks, reference results, leaderboards
+2. **Phase F3**: Tutorial Notebooks — Jupyter notebooks in `docs/notebooks/`
+3. **Run full test suite** on changed modules to ensure no regressions
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 3
+
+### ✅ Completed This Session (Session 3)
+
+**Phase F3: Plugin API — Custom objectives, substrates, dynamics**
+- **Plugin Protocols** (`computronium/plugins/core/protocols.py`):
+  - Structural typing protocols for all 7 plugin types: ObjectivePlugin, SubstratePlugin, DynamicsPlugin, GeometryPlugin, CreditPlugin, UpdatePlugin, PlasticityPlugin
+  - Abstract base classes with required properties and methods
+
+- **Plugin Registry** (`computronium/plugins/core/registry.py`):
+  - Singleton registry with entry point discovery via `computronium.plugins` group
+  - Automatic plugin type detection from protocol attributes
+  - Plugin metadata capture (version, author, dependencies, etc.)
+  - Manual register/unregister for hot-reload support
+
+- **Hot-Reload Support** (`computronium/plugins/core/hotreload.py`):
+  - File system watching for Python module changes
+  - Automatic re-registration of plugin classes on reload
+  - Configurable watch paths
+
+- **Base Classes** (`computronium/plugins/core/base.py`):
+  - Convenience base classes for each plugin type with ClassVar attributes
+  - Abstract method stubs for compute/create_config/create_* methods
+
+- **Example Plugin** (`computronium/plugins/examples.py`):
+  - ExampleObjectivePlugin demonstrating the objective plugin pattern
+
+- **CLI** (`computronium/plugins/cli.py` + `computronium/plugins/__init__.py`):
+  - `comp plugin list [--type TYPE] [--format text|json]`
+  - `comp plugin show TYPE NAME [--format text|json]`
+  - `comp plugin reload [--watch PATH]`
+  - `comp plugin validate MODULE CLASS`
+  - Integrated into main `comp` dispatcher
+
+- **Package Structure**:
+  - `computronium/plugins/__init__.py` — unified public API exports
+  - `computronium/plugins/core/` — internal implementation
+  - `computronium/plugins/examples.py` — example plugins
+
+**Testing & Verification**
+- Dev-env smoke test: ✅
+- Core ontology tests: 38/38 passed
+- Property locks: 25/25 passed
+- Quality gates: operational on real experiment store
+- CLI commands verified: `comp plugin list`, `comp plugin validate`, etc.
+
+### 🔄 Remaining Work (Phase F)
+
+| Task | Status | Priority |
+|------|--------|----------|
+| **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | ✅ Complete | High |
+| **F3: Plugin API** — Custom objectives, substrates, dynamics | ✅ Complete | Medium |
+| **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ⏳ Planned | Medium |
+| **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ⏳ Planned | Medium |
+
+### 🎯 Next Session Priorities
+
+1. **Phase F3**: Benchmark Contributions — Standard tasks, reference results, leaderboards
+2. **Phase F3**: Tutorial Notebooks — Jupyter notebooks in `docs/notebooks/`
+3. **Run full test suite** on changed modules to ensure no regressions
