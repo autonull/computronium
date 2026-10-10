@@ -1,522 +1,214 @@
 #!/usr/bin/env python
-"""Canonical experiment runner — single time-boxed loop.
+"""Minimal time-boxed experiment runner.
 
-Replaces the tiered runner with one loop that runs until the deadline.
-Nothing else stops it.
-
-Usage:
-    uv run scripts/run_experiment.py --hours N --device auto|cpu|cuda \
-        --store results/exp.db [--axes ...] [--policy ...]
-
-Architecture:
-    deadline = Deadline.from_hours(hours)          # persisted, monotonic
-    stream   = CellStream(spec, space, policy)     # unbounded, advancing
-    sizer    = BatchSizer(deadline, timing)        # budget-sized n_propose
-    while not deadline.soft_expired() and not shutdown_requested:
-        k = sizer.n_propose()                      # from remaining time × median cell time
-        if not sizer.can_start(k):                 # not enough time for a safe batch
-            break
-        batch = stream.next(k)                     # screened; mints fresh cells in exploit mode
-        run_and_record(batch)                      # admission-gated, failure-isolated
-    write_report()                                 # from the report reserve
+One loop: while deadline not hit, propose next cell, train it, store it.
+Nothing else.
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
-import signal
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import torch
 
-from computronium.experiment.execution.campaign import run_campaign
-from computronium.experiment.execution.deadline import (
-    Deadline,
-)
+from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.backends import LocalBackend
+from computronium.experiment.execution.deadline import Deadline
+from computronium.experiment.execution.evaluate import task_shape
+from computronium.experiment.execution.search_space import iter_candidates, search_space_from_spec
+from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema import RunSpec
+from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema.run_spec import AxisSelection
+from computronium.experiment.surface.cli import RUN_PROFILES
+from computronium.experiment.execution.pipeline import _resolve_tasks
 
 
 @dataclass(frozen=True, slots=True)
-class RunExperimentConfig:
-    """Configuration for the canonical experiment runner."""
-
+class Config:
     hours: float
-    device: str  # "cpu" | "cuda"
+    device: str
     store: str
-    axes: dict[str, list[str]] | None = None
     policy: str = "round_robin_grid"
-    seed: int = 42
-    epochs: int = 10
-    n_seeds: int = 3
-    param_budget: int = 500_000
-    max_params: int = 500_000
-    fidelity: str = "L0"
-    batch_limit: int = 0
-    max_parallel: int = 1
-    max_rounds: int | None = None
-    min_rounds: int = 1
-    num_workers: int = 0
-    precision: str = "fp32"
-    deterministic: bool = True
-    checkpoint_every_n: int = 0
-    objectives: tuple[str, ...] = ("validation_accuracy", "param_count", "walltime_total")
     profile: str = "production-map"
-
-
-def _signal_handler(signum, frame):
-    """Handle shutdown signals gracefully."""
-    print(f"\nReceived signal {signum}, initiating graceful shutdown...")
-    sys.exit(130)
+    seed: int = 42
+    epochs: int | None = None
+    n_seeds: int | None = None
+    param_budget: int | None = None
+    axes: dict[str, list[str]] | None = None
 
 
 def _resolve_device(device: str) -> str:
-    """Resolve device string to actual device."""
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     return device
 
 
-def _build_run_spec(config: RunExperimentConfig, resolved_device: str) -> RunSpec:
-    """Build RunSpec from experiment config."""
-    import json
-
-    # Build overrides from config
-    overrides = {
-        "device": resolved_device,
-        "epochs": config.epochs,
-        "n_seeds": config.n_seeds,
-        "param_budget": config.param_budget,
-        "fidelity": config.fidelity,
-        "batch_limit": config.batch_limit,
-        "seed": config.seed,
-        "policy": config.policy,
-        "objectives": list(config.objectives),
-        "num_workers": config.num_workers,
-        "precision": config.precision,
-        "deterministic": config.deterministic,
-        "checkpoint_every_n": config.checkpoint_every_n,
-        "max_rounds": config.max_rounds,
-        "min_rounds": config.min_rounds,
-    }
-
-    # Add axes if specified (as axes dict with StructuralAxis enum keys)
-    if config.axes:
-        from computronium.experiment.schema.axis import StructuralAxis
-
-        axes_dict = {}
-        axis_mapping = {
-            "substrates": StructuralAxis.SUBSTRATE,
-            "geometries": StructuralAxis.GEOMETRY,
-            "dynamics": StructuralAxis.DYNAMICS,
-            "credits": StructuralAxis.CREDIT,
-            "updates": StructuralAxis.UPDATE,
-            "plasticities": StructuralAxis.PLASTICITY,
-        }
-        for axis_name, primitives in config.axes.items():
-            if axis_name in axis_mapping:
-                axes_dict[axis_mapping[axis_name]] = tuple(primitives)
-        overrides["axes"] = axes_dict
-
-    # Create mock args for _resolve_spec
-    args = argparse.Namespace()
-    args.profile = config.profile
-    args.spec = None
-    args.overrides = json.dumps(overrides)
-    args.task = None
-    args.dry_run = False
-    args.device = resolved_device
-    args.store = config.store
-    args.run_id = None
-
-    from computronium.experiment.surface.cli import _resolve_spec
-
-    return _resolve_spec(args)
+_AXIS_BY_FLAG = {
+    "substrates": StructuralAxis.SUBSTRATE,
+    "geometries": StructuralAxis.GEOMETRY,
+    "dynamics": StructuralAxis.DYNAMICS,
+    "credits": StructuralAxis.CREDIT,
+    "updates": StructuralAxis.UPDATE,
+    "plasticities": StructuralAxis.PLASTICITY,
+}
 
 
-async def _run_single_experiment(config: RunExperimentConfig) -> int:
-    """Run a single experiment with deadline enforcement."""
-    from computronium.experiment.execution.deadline import Deadline
+def _build_spec(config: Config, device: str) -> RunSpec:
+    profile = RUN_PROFILES[config.profile]
+    axes = tuple(
+        AxisSelection(axis=_AXIS_BY_FLAG[flag], primitives=tuple(prims))
+        for flag, prims in (config.axes or {}).items()
+    ) or profile.axes
 
-    resolved_device = _resolve_device(config.device)
-    print(f"Resolved device: {resolved_device}")
-
-    # Create hard deadline
-    deadline = Deadline.from_hours(config.hours)
-    print(f"Hard deadline: {deadline.remaining_soft_seconds() / 3600:.2f}h from now")
-
-    # Build run spec
-    spec = _build_run_spec(config, resolved_device)
-
-    # Create deadline-aware campaign
-    campaign_file = f"campaign_exp_{config.policy}_{config.hours}h.yaml"
-    campaign_path = Path(campaign_file)
-
-    # Generate campaign YAML
-    _create_deadline_campaign_yaml(
-        config, spec, deadline, campaign_path, resolved_device
-    )
-    print(f"Campaign YAML written to: {campaign_path}")
-
-    # Run campaign
-    print(f"Starting experiment at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    start_time = time.time()
-
-    result = await run_campaign(
-        campaign_path,
-        parallel=config.max_parallel,
-        device=resolved_device,
+    return RunSpec(
+        profile=profile.name,
+        task=profile.task,
+        objectives=profile.objectives,
+        stages=tuple(profile.stages),
+        fidelity=profile.fidelity,
+        n_seeds=config.n_seeds or profile.n_seeds,
+        epochs=config.epochs or profile.epochs,
+        batch_limit=profile.batch_limit,
+        budget_seconds=config.hours * 3600.0,
+        param_budget=config.param_budget or profile.param_budget,
+        policy=config.policy,
+        axes=axes,
+        checkpoint_every_n=profile.checkpoint_every_n,
+        seed=config.seed,
+        device=device,
     )
 
-    elapsed = time.time() - start_time
-    print(f"\nExperiment completed in {elapsed:.1f}s ({elapsed / 3600:.2f}h)")
 
-    # Print summary
-    _print_summary(result, elapsed, config.hours)
+async def _run_loop(spec: RunSpec, store: RecordStore, run_id: str, deadline: Deadline, backend, device: str) -> int:
+    """Run cells until deadline. Return records stored."""
+    # Build search space
+    tasks = spec.task_names
+    space = search_space_from_spec(spec, tasks=tasks)
 
-    return 0
-
-
-def _create_deadline_campaign_yaml(
-    config: RunExperimentConfig,
-    spec: RunSpec,
-    deadline: Deadline,
-    output_path: Path,
-    device: str,
-) -> None:
-    """Generate campaign YAML using deadline (no prediction)."""
-    import yaml
-
-    from computronium.experiment.schema.axis import StructuralAxis
-
-    store_path = config.store
-
-    # Get selected primitives using StructuralAxis enum
-    substrates = list(spec.selected_primitives(StructuralAxis.SUBSTRATE))
-    geometries = list(spec.selected_primitives(StructuralAxis.GEOMETRY))
-    dynamics = list(spec.selected_primitives(StructuralAxis.DYNAMICS))
-    credits = list(spec.selected_primitives(StructuralAxis.CREDIT))
-    updates = list(spec.selected_primitives(StructuralAxis.UPDATE))
-    plasticities = list(spec.selected_primitives(StructuralAxis.PLASTICITY))
-
-    data = {
-        "meta": {
-            "name": f"exp_{config.policy}_{config.hours}h",
-            "description": f"Experiment: {config.policy}, {config.hours}h deadline, {device}",
-            "time_budget_hours": config.hours,
-            "device": device,
-        },
-        "compute": {
-            "device": device,
-            "max_parallel": config.max_parallel,
-            "max_wall_hours": config.hours * 1.1,  # 10% buffer
-        },
-        "store": store_path,
-        "search_space": {
-            "base": {
-                "hidden_dim": [64, 128, 256],
-                "num_layers": [2, 3, 4],
-                "lr": [1e-4, 1e-3, 1e-2, "log"],
-                "batch_size": [128, 256],
-            }
-        },
-        "constraints": ["estimate(config) <= 500000"],
-        "protocols": {
-            "default": "end2end",
-            "overrides": {
-                "fa_mlp": "layerwise",
-                "three_factor_hebbian": "layerwise",
-            },
-        },
-        "arms": {
-            "adaptive": {
-                "input_dim": 784,
-                "num_classes": 10,
-                "flatten": True,
-                "max_params": config.max_params,
-                "substrates": substrates,
-                "geometries": geometries,
-                "dynamics": dynamics,
-                "credits": credits,
-                "updates": updates,
-                "plasticities": plasticities,
-            }
-        },
-        "tasks": [
-            {
-                "name": "mnist",
-                "epochs": config.epochs,
-                "input_dim": 784,
-                "num_classes": 10,
-            }
-        ],
-        "hpo": {
-            "sampler": "nsga2",
-            "objectives": list(config.objectives),
-            "n_trials": 100,
-            "n_startup_trials": 10,
-            "n_seeds": config.n_seeds,
-        },
-        "resources": {
-            "max_wall_hours": config.hours * 1.1,
-            "max_epoch_time_sec": 120,
-            "early_stop_patience": 10,
-        },
-        "output": {
-            "db": store_path,
-            "artifacts_dir": f"artifacts/exp_{config.policy}_{config.hours}h",
-            "log_level": "INFO",
-            "emit_every": 5,
-        },
-        "reproducibility": {
-            "seed": config.seed,
-            "capture_env": True,
-            "artifact_hash": True,
-        },
-        "runs": [
-            {
-                "name": "main",
-                "profile": config.profile,
-                "overrides": {
-                    "substrates": substrates,
-                    "geometries": geometries,
-                    "dynamics": dynamics,
-                    "credits": credits,
-                    "updates": updates,
-                    "plasticities": plasticities,
-                    "tasks": ["mnist"],
-                    "hpo": {"n_trials": 100, "n_seeds": config.n_seeds},
-                    "epochs": config.epochs,
-                    "budget_seconds": deadline.remaining_soft_seconds(),
-                },
-                "depends_on": [],
-            }
-        ],
-    }
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
-
-
-def _print_summary(result: dict[str, Any], elapsed: float, budget_hours: float) -> None:
-    """Print experiment summary."""
-    print("=" * 70)
-    print("EXPERIMENT SUMMARY")
-    print("=" * 70)
-    print(f"Campaign: {result.get('campaign', 'unknown')}")
-    print(f"Total runs: {result.get('total_runs', 0)}")
-    print(f"Completed: {result.get('completed', 0)}")
-    print(f"Failed: {result.get('failed', 0)}")
-    print(f"Elapsed: {elapsed:.1f}s ({elapsed / 3600:.2f}h)")
-    print(f"Budget: {budget_hours:.2f}h")
-    print(f"Utilization: {elapsed / (budget_hours * 3600):.1%}")
-
-    # Budget utilization check
-    budget_s = budget_hours * 3600
-    eps = max(0.02 * budget_s, 5.0)  # 2% or 5s, whichever is larger
-    grace = 30.0
-
-    if abs(elapsed - budget_s) <= eps:
-        print(
-            f"✅ Budget utilization: PASS (elapsed={elapsed:.1f}s, budget={budget_s:.1f}s, eps={eps:.1f}s)"
-        )
-    elif elapsed <= budget_s + grace:
-        print(
-            f"⚠️  Budget utilization: WITHIN GRACE (elapsed={elapsed:.1f}s, budget={budget_s:.1f}s, grace={grace:.1f}s)"
-        )
-    else:
-        print(
-            f"❌ Budget utilization: OVERSHOOT (elapsed={elapsed:.1f}s, budget={budget_s:.1f}s, grace={grace:.1f}s)"
-        )
-
-    # Check for records
-    total_records = sum(
-        r.get("completed", 0) for r in result.get("run_results", {}).values()
-    )
-    if total_records > 0:
-        print(f"✅ Records collected: {total_records}")
-    else:
-        print("❌ No records collected!")
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Canonical experiment runner — single time-boxed loop",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Run 1-hour experiment on GPU
-  uv run scripts/run_experiment.py --hours 1 --device cuda --store results/exp_1h.db
-
-  # Run 30-minute experiment on CPU with custom policy
-  uv run scripts/run_experiment.py --hours 0.5 --device cpu --policy model_based --store results/exp_30m.db
-
-  # Run with custom axes
-  uv run scripts/run_experiment.py --hours 1 --device cuda --store results/exp.db \\
-      --substrates digital,memristive --geometries feedforward,recurrent
-        """,
+    # Get cells from the iterator (already screened for composability)
+    cell_iter = iter_candidates(
+        spec, space, shape=task_shape, check_composable=True
     )
 
-    parser.add_argument(
-        "--hours",
-        type=float,
-        required=True,
-        help="Time budget in hours (hard deadline enforcement)",
-    )
-    parser.add_argument(
-        "--device",
-        choices=["auto", "cpu", "cuda"],
-        default="auto",
-        help="Device to run on (default: auto)",
-    )
-    parser.add_argument(
-        "--store",
-        type=str,
-        default="results/experiment.db",
-        help="DuckDB store path (default: results/experiment.db)",
-    )
-    parser.add_argument(
-        "--policy",
-        type=str,
-        default="round_robin_grid",
-        choices=[
-            "round_robin_grid",
-            "stratified_random",
-            "uniform_random",
-            "model_based",
-            "evolution",
-            "synthesis",
-            "strategy_progression",
-            "trainer_driven",
-        ],
-        help="Policy for cell selection (default: round_robin_grid)",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed (default: 42)",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=10,
-        help="Epochs per cell (default: 10)",
-    )
-    parser.add_argument(
-        "--n-seeds",
-        type=int,
-        default=3,
-        help="Number of seeds per cell (default: 3)",
-    )
-    parser.add_argument(
-        "--param-budget",
-        type=int,
-        default=500_000,
-        help="Parameter budget per cell (default: 500000)",
-    )
-    parser.add_argument(
-        "--max-rounds",
-        type=int,
-        default=None,
-        help="Maximum rounds (default: None = unlimited until deadline)",
-    )
-    parser.add_argument(
-        "--substrates",
-        type=str,
-        help="Comma-separated list of substrates",
-    )
-    parser.add_argument(
-        "--geometries",
-        type=str,
-        help="Comma-separated list of geometries",
-    )
-    parser.add_argument(
-        "--dynamics",
-        type=str,
-        help="Comma-separated list of dynamics",
-    )
-    parser.add_argument(
-        "--credits",
-        type=str,
-        help="Comma-separated list of credits",
-    )
-    parser.add_argument(
-        "--updates",
-        type=str,
-        help="Comma-separated list of updates",
-    )
-    parser.add_argument(
-        "--plasticities",
-        type=str,
-        help="Comma-separated list of plasticities",
-    )
-    parser.add_argument(
-        "--profile",
-        type=str,
-        default="production-map",
-        help="Profile name (default: production-map)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Generate campaign YAML and exit",
-    )
+    # Track already-measured keys from store
+    completed = {r.measurement_key for r in store.query_records(run_id=run_id)}
 
+    count = 0
+    for coord, sched in cell_iter:
+        # Hard stop: grace period expired
+        if deadline.expired():
+            print(f"Hard deadline (with grace) reached, stopping after {count} cells")
+            break
+
+        # Soft stop: only stop if we already measured something
+        if deadline.soft_expired() and count > 0:
+            print(f"Soft deadline reached after {count} cells, stopping")
+            break
+
+        key = coord.measurement_key(sched)
+        if key in completed:
+            continue
+
+        print(f"  Cell {count + 1}: {coord.cell_key()} (seed={sched.seed})")
+
+        # Train single cell
+        from computronium.experiment.schema.coordinate import Provenance
+        prov = Provenance(env={}, dataset="unknown", dataset_version="1.0", code_sha="unknown", policy=spec.policy or "unknown", links={"run_id": run_id})
+        params = {}
+        records = await backend.submit(coord, sched, prov, params, store)
+        for r in records:
+            store.append(r)
+            completed.add(r.measurement_key)
+        count += 1
+
+    return count
+
+
+async def main() -> int:
+    parser = argparse.ArgumentParser(description="Minimal time-boxed experiment runner")
+    parser.add_argument("--hours", type=float, required=True)
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    parser.add_argument("--store", default="results/experiment.db")
+    parser.add_argument("--policy", default="round_robin_grid")
+    parser.add_argument("--profile", default="production-map")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--epochs", type=int, default=None)
+    parser.add_argument("--n-seeds", type=int, default=None)
+    parser.add_argument("--param-budget", type=int, default=None)
+    parser.add_argument("--substrates", type=str)
+    parser.add_argument("--geometries", type=str)
+    parser.add_argument("--dynamics", type=str)
+    parser.add_argument("--credits", type=str)
+    parser.add_argument("--updates", type=str)
+    parser.add_argument("--plasticities", type=str)
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    # Set up signal handlers
-    signal.signal(signal.SIGINT, _signal_handler)
-    signal.signal(signal.SIGTERM, _signal_handler)
+    axes = {
+        flag: [v.strip() for v in getattr(args, flag).split(",") if v.strip()]
+        for flag in _AXIS_BY_FLAG
+        if getattr(args, flag)
+    }
 
-    # Build axes dict from CLI args
-    axes = {}
-    for axis_name in [
-        "substrates",
-        "geometries",
-        "dynamics",
-        "credits",
-        "updates",
-        "plasticities",
-    ]:
-        value = getattr(args, axis_name)
-        if value:
-            axes[axis_name] = [v.strip() for v in value.split(",")]
-
-    config = RunExperimentConfig(
+    config = Config(
         hours=args.hours,
         device=args.device,
         store=args.store,
-        axes=axes if axes else None,
         policy=args.policy,
+        profile=args.profile,
         seed=args.seed,
         epochs=args.epochs,
         n_seeds=args.n_seeds,
         param_budget=args.param_budget,
-        max_rounds=args.max_rounds,
-        profile=args.profile,
+        axes=axes or None,
     )
 
-    # Ensure results directory exists
-    Path("results").mkdir(exist_ok=True)
-    Path("artifacts").mkdir(exist_ok=True)
+    device = _resolve_device(config.device)
+    spec = _build_spec(config, device)
 
     if args.dry_run:
-        print("DRY RUN - would execute experiment with config:")
-        print(f"  Hours: {config.hours}")
-        print(f"  Device: {config.device}")
-        print(f"  Store: {config.store}")
-        print(f"  Policy: {config.policy}")
-        print(f"  Axes: {config.axes}")
+        print(f"DRY RUN: profile={spec.profile} budget={spec.budget_seconds:.1f}s")
+        print(f"  task={spec.task} policy={spec.policy} epochs={spec.epochs}")
         return 0
 
-    return asyncio.run(_run_single_experiment(config))
+    Path(config.store).parent.mkdir(parents=True, exist_ok=True)
+
+    with RecordStore(StoreConfig(path=Path(config.store))) as store:
+        run_id = store.create_run(spec=spec)
+        print(f"Run {run_id}: {config.hours}h ({config.hours*3600:.0f}s) on {device}")
+
+        # Deadline starts AFTER store setup, so startup time doesn't eat the budget
+        deadline = Deadline.from_hours(config.hours)
+        backend = LocalBackend(max_workers=1)
+
+        start = time.time()
+        n = await _run_loop(spec, store, run_id, deadline, backend, device)
+        elapsed = time.time() - start
+
+        store.finish_run(run_id, "completed", budget_consumed_s=elapsed)
+
+    # Quick summary
+    budget = spec.budget_seconds
+    util = elapsed / budget
+    print(f"\n{'='*50}")
+    print(f"Run {run_id} done in {elapsed:.1f}s (budget {budget:.1f}s, {util:.1%})")
+    print(f"Cells measured: {n}")
+
+    # Budget check
+    eps = max(0.02 * budget, 5.0)
+    if budget - eps <= elapsed <= budget + 30.0:
+        print("✅ Budget window: PASS")
+    else:
+        print(f"❌ Budget window: FAIL (eps={eps:.1f}s, grace=30s)")
+
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import asyncio
+    sys.exit(asyncio.run(main()))

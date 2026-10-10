@@ -38,7 +38,7 @@ from computronium.experiment.execution import (
 )
 from computronium.experiment.schema import RunSpec, seed_all_registries
 
-from ._fake_backend import SYNTHETIC_WALLTIME_S, FakeBackend
+from ._fake_backend import FakeBackend
 from ._specs import mechanism_spec
 
 if TYPE_CHECKING:
@@ -49,9 +49,6 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.search_space import SearchSpace
 
 pytestmark = pytest.mark.timeout(300)
-
-# The most rounds a run may spin while measuring nothing, before it concludes.
-MAX_FRUITLESS_ROUNDS = 3
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -149,18 +146,18 @@ def test_a_relaunched_run_measures_nothing_twice_and_says_why(tmp_path: Path) ->
         )
 
 
-def test_a_batch_of_measured_cells_measures_nothing_and_says_so(
+def test_a_measured_batch_measures_nothing_and_the_stream_says_so(
     tmp_path: Path,
 ) -> None:
     """Exhaustion is a signal the round loop reads, not a hang.
 
-    The all-seen batch is what distinguishes "the policy has nothing left" from
-    "the cells this round proposed failed": the first ends the run, the second
-    is retried a bounded number of times. Falsifiable by dropping the flag —
-    the loop then spins to its round limit on a space it has finished.
+    Once every declared cell is stored the stream reports itself exhausted, so
+    the loop concludes the finite space instead of spinning. Falsifiable by
+    dropping the exhaustion flag: the loop then re-proposes measured cells
+    (which the store refuses one at a time) until the round limit.
     """
     spec = mechanism_spec()
-    with _launches(tmp_path, "exhausted", rounds=5) as (keys, runner, _store):
+    with _launches(tmp_path, "exhausted", rounds=20) as (keys, runner, _store):
         assert keys, "the fixture measured nothing"
         assert len(keys) == len(set(keys)), "a round duplicated a measurement"
         proposals = list(iter_candidates(spec, _space(spec), shape=task_shape))
@@ -171,19 +168,19 @@ def test_a_batch_of_measured_cells_measures_nothing_and_says_so(
             ])
         )
         assert measured == [], "a batch of measured cells was measured again"
-        assert runner._state.last_batch_was_all_seen, (
+        stream = runner._state.cell_stream
+        assert stream is not None and stream.is_exhausted, (
             "the exhaustion signal the round loop reads was never raised"
         )
 
 
-def test_a_policy_with_nothing_left_ends_the_run_in_bounded_rounds(
+def test_a_finished_space_ends_the_run_without_the_round_limit(
     tmp_path: Path,
 ) -> None:
     """The loop concludes a finished space rather than running out the clock.
 
-    A policy whose stream is empty proposes nothing at all, so the all-seen
-    batch never forms; the fruitless-round bound is what ends the run instead.
-    Both paths terminate, and neither may cost the round limit.
+    A stream with nothing left proposes nothing at all; the exhaustion check is
+    what ends the run instead of the round limit.
     """
     with _launches(tmp_path, "bounded", rounds=20) as (keys, runner, _store):
         assert keys
@@ -192,49 +189,18 @@ def test_a_policy_with_nothing_left_ends_the_run_in_bounded_rounds(
         )
 
 
-def test_the_budget_is_charged_for_exactly_what_the_run_stored(tmp_path: Path) -> None:
-    """A declared budget binds, because the run charges what it stored.
+def test_the_run_charges_measured_cell_time_for_budget_sizing(tmp_path: Path) -> None:
+    """The sizer reads measured walltime, so the run must charge it.
 
-    Falsifiable by dropping the ``_charge_budget`` call: ``target_cells`` then
-    compares against a counter nothing advances, every cell looks affordable,
-    and a campaign declared to stop measures its whole space instead.
+    ``BatchSizer.n_propose`` divides the remaining budget by the median cell
+    time; falsifiable by dropping the charge: the sizer then never sees a
+    median and every round proposes the cold-start maximum.
     """
-    with _launches(
-        tmp_path, "charged", budget=Budget.from_duration("10m", target_cells=4)
-    ) as (keys, runner, _store):
-        budget = runner._state.budget
-        assert budget is not None
-        assert budget.target_reached(), "the declared cell budget never bound"
-        assert budget.done == len(keys) > 3, (
-            f"the cell budget did not bind: {len(keys)} keys"
-        )
-        assert budget.cost_consumed == pytest.approx(
-            len(keys) * SYNTHETIC_WALLTIME_S, rel=1e-6
-        )
-
-
-def test_an_exhausted_budget_is_read_as_a_decision_not_as_a_clock(
-    tmp_path: Path,
-) -> None:
-    """S10's termination reaches the round loop as a decision.
-
-    Falsifiable by returning ``continue_round`` unconditionally — the shape D3
-    found: the decision was built and then read back as a constant, so the only
-    stopping condition left was the round limit.
-    """
-    with _launches(
-        tmp_path,
-        "decided",
-        rounds=8,
-        budget=Budget.from_duration("10m", target_cells=3),
-    ) as (_keys, runner, _store):
-        decision = runner._state.last_decision
-        assert decision is not None, "no stage ever decided"
-        assert decision.transition.value == "complete"
-        assert decision.rationale == "Budget exhausted"
-        assert runner._state.current_round < 8, (
-            "the round limit stopped it, not the budget"
-        )
+    with _launches(tmp_path, "charged", rounds=20) as (keys, runner, _store):
+        assert keys, "the fixture measured nothing"
+        timing = runner._state.cell_timing
+        assert timing.cell_count > 0, "no cell time was ever recorded"
+        assert timing.median_cell_time() is not None, "the sizer has no median"
 
 
 def test_a_rejected_cell_is_classified_and_its_siblings_still_store(

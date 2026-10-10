@@ -334,6 +334,18 @@ class PipelineRunner:
                 len(keys),
             )
 
+    def _is_measured(self, key: str) -> bool:
+        """Whether the store already holds this cell, or the gate rejected it.
+
+        The stream is the only producer, so freshness lives here: a cell the
+        store has measured, or the admission gate has refused, is never handed
+        out again. Handing it out is a round spent re-measuring nothing.
+        """
+        return (
+            key in self._state.completed_measurement_keys
+            or key in self._state.rejected_keys
+        )
+
     @classmethod
     def from_checkpoint(
         cls,
@@ -561,6 +573,7 @@ class PipelineRunner:
                 space=self._state.search_space,
                 shape=task_shape,
                 deadline=self._config.deadline,
+                is_measured=self._is_measured,
             )
             # Set exploit policy if available
             if self._config.policy:
@@ -673,6 +686,13 @@ class PipelineRunner:
 
             self._check_post_round_deadline(deadline_enforcer)
 
+            if self._stream_is_spent(before, len(all_records)):
+                logger.info(
+                    "Cell stream exhausted and round %d produced nothing; stopping",
+                    self._state.current_round,
+                )
+                self._shutdown = True
+
             if pbar_rounds:
                 pbar_rounds.update(1)
 
@@ -724,6 +744,23 @@ class PipelineRunner:
             return True
 
         return bool(self._shutdown)
+
+    def _stream_is_spent(self, records_before_round: int, records_now: int) -> bool:
+        """Whether a finite space is fully measured and the loop should stop.
+
+        A stream with nothing left to hand out is a finite space, not a
+        timeout: every cell a round could schedule is one the store already
+        holds. Stopping keeps the loop bounded. The production space is
+        astronomically larger than any budget and never reaches this state, so
+        this fires only for the small spaces the mechanism locks declare.
+        """
+        stream = self._state.cell_stream
+        return (
+            stream is not None
+            and stream.is_exhausted
+            and not self._state.pending_proposals
+            and records_now == records_before_round
+        )
 
     def _check_post_round_deadline(
         self, deadline_enforcer: DeadlineEnforcer | None
