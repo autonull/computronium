@@ -62,6 +62,9 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "dataset": (_SURFACE, "main", ("dataset",)),
     "environment": (_SURFACE, "main", ("environment",)),
     "quality": (_SURFACE, "main", ("quality",)),
+    "catalog": ("computronium.experiment.documentation.catalog", "main", ()),
+    "method-card": ("computronium.experiment.documentation.method_cards", "main", ()),
+    "faq": ("computronium.experiment.documentation.faq", "main", ()),
 }
 
 _SUMMARIES: dict[str, str] = {
@@ -92,6 +95,9 @@ _SUMMARIES: dict[str, str] = {
     "dataset": "Dataset registry: versioned datasets with hash-verified splits (Phase E6)",
     "environment": "Environment snapshots: capture uv lockfiles, container images (Phase E7)",
     "quality": "Automated quality gates for reports and data (Phase F1)",
+    "catalog": "Experiment catalog: query runs/records with axis filters (Phase F2)",
+    "method-card": "Method cards: auto-generated docs for ontology primitives (Phase F2)",
+    "faq": "FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)",
 }
 
 

@@ -554,13 +554,14 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 | C: Capability Campaigns | ✅ Complete | 6 campaign families (6/6 executed) |
 | D: Advanced Analyses | ✅ Complete | Stability suite, Attribution, Pareto, Reproducibility |
 | E: Scaling | ✅ Complete | Multi-GPU DDP/FSDP, Campaign queue, Model registry, Cost tracking, Dashboard, Dataset versioning, Environment snapshots, CI/CD |
-| F: Validation | 🔄 In Progress | Quality gates (✅), Living docs, Plugin API |
+| F: Validation | 🔄 In Progress | Quality gates (✅), Living docs (✅), Plugin API |
 
 ### 🎯 Immediate Next Steps
 
-1. **Phase F2**: Living documentation (Experiment Catalog, Method Cards, FAQ)
-2. **Phase F3**: Plugin API for custom objectives, substrates, dynamics
-3. **Run tests** and verify all implementations
+1. **Phase F3**: Plugin API for custom objectives, substrates, dynamics
+2. **Phase F3**: Benchmark Contributions — Standard tasks, reference results, leaderboards
+3. **Phase F3**: Tutorial Notebooks — Jupyter notebooks in `docs/notebooks/`
+4. **Run tests** and verify all implementations
 
 ---
 
@@ -698,7 +699,7 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 
 ## 📊 Session Progress Summary (2026-10-10)
 
-### ✅ Completed This Session
+### ✅ Completed This Session (Session 1)
 
 **Phase F1: Automated Quality Gates - Verified & Fixed**
 - Fixed `DataIntegrityGate` to correctly validate Record axis fields (`substrate`, `geometry`, `dynamics`) instead of non-existent `coordinate` attribute
@@ -715,36 +716,56 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 - Property locks: 25/25 passed (ontology locks, verification labels, dynamics wiring lock)
 - Quality gates operational on real experiment store
 
+---
+
+## 📊 Session Progress Summary (2026-10-10) — Session 2
+
+### ✅ Completed This Session (Session 2)
+
+**Phase F2: Living Documentation — Experiment Catalog, Method Cards, FAQ**
+- **Experiment Catalog** (`computronium/experiment/documentation/catalog.py`):
+  - `build_catalog()` — builds catalog from store with run metadata, axes coverage, metrics, status summary
+  - `query_records()` — searches records with axis filters (substrate, geometry, dynamics, plasticity, credit, update), maturity, gate verdict, run_id, loss range
+  - `export_catalog()` / `export_records()` — exports to JSON or CSV
+  - CLI: `comp catalog list/search/export` — fully functional with text, JSON, CSV output
+
+- **Method Cards** (`computronium/experiment/documentation/method_cards.py`):
+  - `generate_method_cards()` — auto-generates docs from all 6 ontology registries (substrate, geometry, dynamics, plasticity, credit, update)
+  - Extracts purpose, config options (via classmethods), limitations, examples from docstrings
+  - `export_method_cards()` — exports to JSON or Markdown
+  - CLI: `comp method-card list/show/generate` — 63 method cards generated across all axes
+
+- **FAQ/Troubleshooting** (`computronium/experiment/documentation/faq.py`):
+  - 20 built-in FAQ entries covering common issues across all axes and general setup
+  - Categorized by axis (substrate, geometry, dynamics, credit, update, plasticity) and error type (import, config, runtime, performance)
+  - Each entry includes question, answer, workaround, related docs, tags
+  - CLI: `comp faq list/search/show/generate` — with filtering by category, error_type, tag
+
+- **Documentation Package** (`computronium/experiment/documentation/__init__.py`):
+  - Exports all public APIs from catalog, method_cards, faq modules
+
+- **CLI Integration** (`computronium/cli/__main__.py`):
+  - Added `catalog`, `method-card`, `faq` commands to top-level dispatcher
+
+**Testing & Verification**
+- Dev-env smoke test: ✅
+- Core ontology tests: 38/38 passed
+- Property locks: 25/25 passed
+- Quality gates: operational on real experiment store
+- All new CLI commands verified functional: `comp catalog`, `comp method-card`, `comp faq`
+
 ### 🔄 Remaining Work (Phase F)
 
 | Task | Status | Priority |
 |------|--------|----------|
-| **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | 🔄 Not Started | High |
+| **F2: Living Documentation** — Experiment Catalog, Method Cards, FAQ | ✅ Complete | High |
 | **F3: Plugin API** — Custom objectives, substrates, dynamics | ⏳ Planned | Medium |
 | **F3: Benchmark Contributions** — Standard tasks, reference results, leaderboards | ⏳ Planned | Medium |
 | **F3: Tutorial Notebooks** — Jupyter notebooks in `docs/notebooks/` | ⏳ Planned | Medium |
 
 ### 🎯 Next Session Priorities
 
-1. **Implement Experiment Catalog** (`computronium/experiment/documentation/catalog.py`):
-   - Auto-generated from store queries
-   - Filterable by axis, metrics, date range
-   - Links to reports and raw data
-   - CLI: `comp catalog list/search/export`
-
-2. **Implement Method Cards** (`computronium/experiment/documentation/method_cards.py`):
-   - Auto-generated from ontology registries
-   - Covers all 6 axes with purpose, config options, limitations, examples
-   - CLI: `comp method-card list/show/generate`
-
-3. **Implement FAQ/Troubleshooting** (`computronium/experiment/documentation/faq.py`):
-   - Curated from CI/CD failures and user reports
-   - Categorized by axis and error type
-   - CLI: `comp faq list/search`
-
-4. **Plugin API** (`computronium/plugins/`):
-   - Entry point registration via `computronium.plugins` entry point group
-   - Protocol-based extension points
-   - Hot-reload support
-
-5. **Run full test suite** on changed modules to ensure no regressions
+1. **Phase F3**: Plugin API (`computronium/plugins/`) — Entry point registration, protocol-based extensions, hot-reload
+2. **Phase F3**: Benchmark Contributions — Standard tasks, reference results, leaderboards
+3. **Phase F3**: Tutorial Notebooks — Jupyter notebooks in `docs/notebooks/`
+4. **Run full test suite** on changed modules to ensure no regressions
