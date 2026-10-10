@@ -883,6 +883,260 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--format", choices=["json", "yaml"], default="json", help="Output format"
     )
 
+    # Advanced analysis commands (Phase D)
+    # Energy landscape analysis
+    p_energy = sub.add_parser(
+        "energy-landscape",
+        help="Compute 2D energy landscape via PCA of activation space (Phase D1)",
+    )
+    p_energy.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_energy.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_energy.add_argument(
+        "--record-id", default=None, help="Specific record ID to analyze"
+    )
+    p_energy.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
+    p_energy.add_argument(
+        "--grid-resolution", type=int, default=30, help="Grid resolution"
+    )
+    p_energy.add_argument(
+        "--grid-range", type=float, default=3.0, help="Grid range around attractor"
+    )
+    p_energy.add_argument(
+        "--num-trajectories",
+        type=int,
+        default=20,
+        help="Number of trajectories for PCA",
+    )
+    p_energy.add_argument(
+        "--trajectory-length", type=int, default=50, help="Steps per trajectory"
+    )
+    p_energy.add_argument("--output", default=None, help="Output file path")
+    p_energy.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_energy.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Nonnormality analysis
+    p_nonnormal = sub.add_parser(
+        "nonnormality",
+        help="Compute pseudospectra and transient amplification bounds (Phase D1)",
+    )
+    p_nonnormal.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_nonnormal.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_nonnormal.add_argument(
+        "--record-id", default=None, help="Specific record ID to analyze"
+    )
+    p_nonnormal.add_argument(
+        "--device", default="auto", choices=["auto", "cpu", "cuda"]
+    )
+    p_nonnormal.add_argument(
+        "--max-time", type=int, default=100, help="Max time for transient bounds"
+    )
+    p_nonnormal.add_argument("--output", default=None, help="Output file path")
+    p_nonnormal.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_nonnormal.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Axis attribution analysis
+    p_attribution = sub.add_parser(
+        "axis-attribution",
+        help="Compute SHAP/ICE attribution for ontology axes on objectives (Phase D2)",
+    )
+    p_attribution.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_attribution.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_attribution.add_argument(
+        "--metric", default="val_acc", help="Metric to attribute"
+    )
+    p_attribution.add_argument(
+        "--axes", default=None, help="Comma-separated axes to analyze"
+    )
+    p_attribution.add_argument("--output", default=None, help="Output file path")
+    p_attribution.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_attribution.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Counterfactual analysis
+    p_counterfactual = sub.add_parser(
+        "counterfactual",
+        help="Compute counterfactual trajectories: what if axis was different? (Phase D2)",
+    )
+    p_counterfactual.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_counterfactual.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_counterfactual.add_argument(
+        "--metric", default="val_acc", help="Metric to analyze"
+    )
+    p_counterfactual.add_argument(
+        "--axes", default=None, help="Comma-separated axes to swap"
+    )
+    p_counterfactual.add_argument(
+        "--n-targets",
+        type=int,
+        default=10,
+        help="Number of target records (top performers)",
+    )
+    p_counterfactual.add_argument("--output", default=None, help="Output file path")
+    p_counterfactual.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_counterfactual.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Mediation analysis
+    p_mediation = sub.add_parser(
+        "mediation",
+        help="Test if stability mediates credit->accuracy relationship (Phase D2)",
+    )
+    p_mediation.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_mediation.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_mediation.add_argument(
+        "--independent", default="credit", help="Independent variable axis"
+    )
+    p_mediation.add_argument(
+        "--mediator", default="stability_margin", help="Mediator variable (payload key)"
+    )
+    p_mediation.add_argument(
+        "--dependent", default="val_acc", help="Dependent variable (payload key)"
+    )
+    p_mediation.add_argument(
+        "--all-mediators", action="store_true", help="Test all stability mediators"
+    )
+    p_mediation.add_argument("--output", default=None, help="Output file path")
+    p_mediation.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_mediation.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Pareto analysis
+    p_pareto_adv = sub.add_parser(
+        "pareto-advanced",
+        help="Advanced Pareto analysis: hypervolume, scalarization sweeps (Phase D4)",
+    )
+    p_pareto_adv.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_pareto_adv.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_pareto_adv.add_argument(
+        "--objectives",
+        default="val_acc,energy_per_step",
+        help="Comma-separated objectives",
+    )
+    p_pareto_adv.add_argument(
+        "--maximize", default="true,false", help="Comma-separated maximize flags"
+    )
+    p_pareto_adv.add_argument(
+        "--n-weights",
+        type=int,
+        default=20,
+        help="Number of weight samples for scalarization",
+    )
+    p_pareto_adv.add_argument("--output", default=None, help="Output file path")
+    p_pareto_adv.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_pareto_adv.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Seed variability analysis
+    p_seed_var = sub.add_parser(
+        "seed-variability",
+        help="Analyze variability across seeds: violin plots, ANOVA (Phase D5)",
+    )
+    p_seed_var.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_seed_var.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_seed_var.add_argument("--metric", default="val_acc", help="Metric to analyze")
+    p_seed_var.add_argument(
+        "--group-by", default=None, help="Axis to group by (e.g., credit, dynamics)"
+    )
+    p_seed_var.add_argument("--output", default=None, help="Output file path")
+    p_seed_var.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_seed_var.add_argument("--plot", action="store_true", help="Generate violin plot")
+    p_seed_var.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Hardware variance analysis
+    p_hw_var = sub.add_parser(
+        "hardware-variance",
+        help="Compare performance across hardware devices: CPU vs GPU (Phase D5)",
+    )
+    p_hw_var.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_hw_var.add_argument(
+        "--run-ids", required=True, help="Comma-separated run IDs to compare"
+    )
+    p_hw_var.add_argument("--metric", default="val_acc", help="Metric to compare")
+    p_hw_var.add_argument(
+        "--device-field", default="device", help="Record field for device"
+    )
+    p_hw_var.add_argument("--output", default=None, help="Output file path")
+    p_hw_var.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_hw_var.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
+    # Reproducibility verification
+    p_repro_adv = sub.add_parser(
+        "repro-advanced",
+        help="Verify checkpoint replay and bitwise reproducibility (Phase D5)",
+    )
+    p_repro_adv.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_repro_adv.add_argument("--run-id", required=True, help="Run ID to verify")
+    p_repro_adv.add_argument(
+        "--tolerance", type=float, default=1e-6, help="Numerical tolerance"
+    )
+    p_repro_adv.add_argument("--output", default=None, help="Output file path")
+    p_repro_adv.add_argument(
+        "--format", choices=["json", "text"], default="json", help="Output format"
+    )
+    p_repro_adv.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+
     return parser
 
 
@@ -3524,7 +3778,13 @@ def _run_lyapunov_analysis(transition_fn, init_state, args):
         return {"lyapunov_spectrum": [], "lyapunov_error": str(exc)}
 
 
-def _run_basin_analysis(transition_fn, init_state, args, dynamics_type: str | None = None, geometry_type: str | None = None):
+def _run_basin_analysis(
+    transition_fn,
+    init_state,
+    args,
+    dynamics_type: str | None = None,
+    geometry_type: str | None = None,
+):
     """Run basin stability analysis."""
     from computronium.stability import estimate_basin_stability_multistart
 
@@ -3542,11 +3802,21 @@ def _run_basin_analysis(transition_fn, init_state, args, dynamics_type: str | No
     RECURRENT_GEOMETRIES = {"recurrent", "tile_mesh", "quantum", "nca", "ntm"}
 
     if dynamics_type and dynamics_type not in ITERATIVE_DYNAMICS:
-        logger.info(f"Skipping basin stability for {dynamics_type} dynamics (no iterative settling)")
-        return {"basin_stability": {}, "basin_skipped": f"not applicable for {dynamics_type} dynamics"}
+        logger.info(
+            f"Skipping basin stability for {dynamics_type} dynamics (no iterative settling)"
+        )
+        return {
+            "basin_stability": {},
+            "basin_skipped": f"not applicable for {dynamics_type} dynamics",
+        }
     if geometry_type and geometry_type not in RECURRENT_GEOMETRIES:
-        logger.info(f"Skipping basin stability for {geometry_type} geometry (no recurrent connections)")
-        return {"basin_stability": {}, "basin_skipped": f"not applicable for {geometry_type} geometry"}
+        logger.info(
+            f"Skipping basin stability for {geometry_type} geometry (no recurrent connections)"
+        )
+        return {
+            "basin_stability": {},
+            "basin_skipped": f"not applicable for {geometry_type} geometry",
+        }
 
     logger.info("Computing basin stability...")
     try:
@@ -3711,7 +3981,15 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
         if args.lyapunov:
             results.update(_run_lyapunov_analysis(transition_fn, init_state, args))  # type: ignore[arg-type]
         if args.basin:
-            results.update(_run_basin_analysis(transition_fn, init_state, args, coordinate.dynamics, coordinate.geometry))  # type: ignore[arg-type]
+            results.update(
+                _run_basin_analysis(
+                    transition_fn,
+                    init_state,
+                    args,
+                    coordinate.dynamics,
+                    coordinate.geometry,
+                )
+            )  # type: ignore[arg-type]
         if args.settling:
             results.update(_run_settling_analysis(transition_fn, init_state, args))  # type: ignore[arg-type]
 
@@ -3721,6 +3999,706 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
         if args.output:
             Path(args.output).write_text(output, encoding="utf-8")
             logger.info(f"Stability analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_energy_landscape(args: argparse.Namespace) -> int:
+    """Compute 2D energy landscape via PCA."""
+    from pathlib import Path
+
+    device = _resolve_device(args.device)
+
+    if args.dry_run:
+        plan = {
+            "command": "energy-landscape",
+            "store": args.store,
+            "run_id": args.run_id,
+            "record_id": args.record_id,
+            "device": device,
+            "grid_resolution": args.grid_resolution,
+            "grid_range": args.grid_range,
+            "num_trajectories": args.num_trajectories,
+            "trajectory_length": args.trajectory_length,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    # Open store
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        record, run_id = _load_record_for_analysis(store, args.run_id, args.record_id)
+        if record is None:
+            return 1
+
+        # Recompose the cell system
+        from computronium.domains.factory import create_task
+        from computronium.experiment.execution.compose import compose_cell_system
+        from computronium.experiment.schema.coordinate import Coordinate
+
+        coordinate = Coordinate(
+            substrate=record.substrate,
+            geometry=record.geometry,
+            dynamics=record.dynamics,
+            plasticity=record.plasticity,
+            credit=record.credit,
+            update=record.update,
+            params=dict(record.params),
+        )
+        schedule = record.schedule
+
+        task = create_task(
+            schedule.task_id, device=device, quick_mode=True, num_workers=0
+        )
+        task.setup()
+
+        from computronium.experiment.execution.evaluate import task_shape
+
+        shape = task_shape(schedule.task_id, device)
+        cell = compose_cell_system(
+            coordinate=coordinate,
+            geometry={},
+            input_shape=shape.input_shape,
+            output_dim=shape.output_dim,
+            param_budget=schedule.param_budget,
+        )
+
+        system = cell.system
+        system = system.to(device)  # type: ignore[attr-defined]
+
+        sample_x, _ = next(iter(task.get_dataloader("train")))  # type: ignore[attr-defined]
+
+        transition_fn = _build_transition_fn(system, device)
+        init_state = _create_init_state(sample_x, device)
+
+        from computronium.experiment.analysis import EnergyLandscapeConfig
+
+        config = EnergyLandscapeConfig(
+            grid_resolution=args.grid_resolution,
+            grid_range=args.grid_range,
+        )
+
+        from computronium.experiment.analysis import EnergyLandscapeAnalyzer
+
+        analyzer = EnergyLandscapeAnalyzer(transition_fn, None, config)
+        result = analyzer.analyze(
+            init_state,
+            num_trajectories=args.num_trajectories,
+            trajectory_length=args.trajectory_length,
+        )
+
+        output = _format_output(
+            {
+                "record_id": record.record_id,
+                "coordinate": coordinate.cell_key(),
+                "grid_x": result.grid_x.tolist() if result.grid_x.size > 0 else [],
+                "grid_y": result.grid_y.tolist() if result.grid_y.size > 0 else [],
+                "energy_values": result.energy_values.tolist()
+                if result.energy_values.size > 0
+                else [],
+                "pca_explained_variance": result.pca_explained_variance.tolist(),
+                "attractor_points": result.attractor_points,
+                "metadata": result.metadata,
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Energy landscape written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_nonnormality(args: argparse.Namespace) -> int:
+    """Compute pseudospectra and transient amplification bounds."""
+    from pathlib import Path
+
+    device = _resolve_device(args.device)
+
+    if args.dry_run:
+        plan = {
+            "command": "nonnormality",
+            "store": args.store,
+            "run_id": args.run_id,
+            "record_id": args.record_id,
+            "device": device,
+            "max_time": args.max_time,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    # Open store
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        record, run_id = _load_record_for_analysis(store, args.run_id, args.record_id)
+        if record is None:
+            return 1
+
+        from computronium.domains.factory import create_task
+        from computronium.experiment.execution.compose import compose_cell_system
+        from computronium.experiment.schema.coordinate import Coordinate
+
+        coordinate = Coordinate(
+            substrate=record.substrate,
+            geometry=record.geometry,
+            dynamics=record.dynamics,
+            plasticity=record.plasticity,
+            credit=record.credit,
+            update=record.update,
+            params=dict(record.params),
+        )
+        schedule = record.schedule
+
+        task = create_task(
+            schedule.task_id, device=device, quick_mode=True, num_workers=0
+        )
+        task.setup()
+
+        from computronium.experiment.execution.evaluate import task_shape
+
+        shape = task_shape(schedule.task_id, device)
+        cell = compose_cell_system(
+            coordinate=coordinate,
+            geometry={},
+            input_shape=shape.input_shape,
+            output_dim=shape.output_dim,
+            param_budget=schedule.param_budget,
+        )
+
+        system = cell.system
+        system = system.to(device)  # type: ignore[attr-defined]
+
+        sample_x, _ = next(iter(task.get_dataloader("train")))  # type: ignore[attr-defined]
+
+        transition_fn = _build_transition_fn(system, device)
+        init_state = _create_init_state(sample_x, device)
+
+        from computronium.experiment.analysis import (
+            NonnormalityConfig,
+            analyze_nonnormality,
+        )
+
+        config = NonnormalityConfig(max_time=args.max_time)
+        result = analyze_nonnormality(transition_fn, init_state, None, config)
+
+        output = _format_output(
+            {
+                "record_id": record.record_id,
+                "coordinate": coordinate.cell_key(),
+                "spectral_radius": result.spectral_radius,
+                "max_singular_value": result.max_singular_value,
+                "nonnormality_ratio": result.nonnormality_ratio,
+                "transient_amplification_bounds": result.transient_amplification_bounds,
+                "eigenvalues": [complex(e) for e in result.eigenvalues],
+                "metadata": result.metadata,
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Nonnormality analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_axis_attribution(args: argparse.Namespace) -> int:
+    """Compute SHAP/ICE attribution for ontology axes."""
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "axis-attribution",
+            "store": args.store,
+            "run_id": args.run_id,
+            "metric": args.metric,
+            "axes": args.axes,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        from computronium.experiment.surface.report import ReportGenerator
+
+        generator = ReportGenerator(store)
+        run_id = args.run_id or store.latest_run_id()
+        if run_id is None:
+            logger.error("No runs found")
+            return 1
+
+        records = generator._store.query_records(run_id=run_id)
+
+        axes = (
+            args.axes.split(",")
+            if args.axes
+            else ["substrate", "geometry", "dynamics", "plasticity", "credit", "update"]
+        )
+
+        from computronium.experiment.analysis import (
+            AxisAttributionAnalyzer,
+            AttributionConfig,
+        )
+
+        analyzer = AxisAttributionAnalyzer(store, run_id)
+        result = analyzer.analyze(axes=axes, metric=args.metric)
+
+        output = _format_output(
+            {
+                "run_id": run_id,
+                "metric": args.metric,
+                "axes": axes,
+                "shap_values": result.shap_values,
+                "feature_importance": result.feature_importance,
+                "interaction_effects": result.interaction_effects,
+                "metadata": result.metadata,
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Axis attribution written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_counterfactual(args: argparse.Namespace) -> int:
+    """Compute counterfactual trajectories."""
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "counterfactual",
+            "store": args.store,
+            "run_id": args.run_id,
+            "metric": args.metric,
+            "axes": args.axes,
+            "n_targets": args.n_targets,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        from computronium.experiment.surface.report import ReportGenerator
+
+        generator = ReportGenerator(store)
+        run_id = args.run_id or store.latest_run_id()
+        if run_id is None:
+            logger.error("No runs found")
+            return 1
+
+        from computronium.experiment.analysis import (
+            CounterfactualAnalyzer,
+            CounterfactualConfig,
+        )
+
+        analyzer = CounterfactualAnalyzer(store, run_id)
+        axes = (
+            args.axes.split(",")
+            if args.axes
+            else ["substrate", "geometry", "dynamics", "plasticity", "credit", "update"]
+        )
+
+        results = analyzer.analyze(
+            axes=axes, metric=args.metric, n_targets=args.n_targets
+        )
+
+        output = _format_output(
+            {
+                "run_id": run_id,
+                "metric": args.metric,
+                "n_results": len(results),
+                "results": [
+                    {
+                        "counterfactual_axis": r.counterfactual_axis,
+                        "counterfactual_value": r.counterfactual_value,
+                        "predicted_metric": r.predicted_metric,
+                        "actual_metric": r.actual_metric,
+                        "difference": r.difference,
+                        "confidence": r.confidence,
+                        "metadata": r.metadata,
+                    }
+                    for r in results[:50]  # Limit output
+                ],
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Counterfactual analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_mediation(args: argparse.Namespace) -> int:
+    """Test mediation effects."""
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "mediation",
+            "store": args.store,
+            "run_id": args.run_id,
+            "independent": args.independent,
+            "mediator": args.mediator,
+            "dependent": args.dependent,
+            "all_mediators": args.all_mediators,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        from computronium.experiment.analysis import MediationAnalyzer
+
+        analyzer = MediationAnalyzer(store, args.run_id or store.latest_run_id())
+
+        if args.all_mediators:
+            results = analyzer.analyze_all_mediators(args.independent, args.dependent)
+        else:
+            results = [
+                analyzer.analyze(args.independent, args.mediator, args.dependent)
+            ]
+
+        output = _format_output(
+            {
+                "run_id": args.run_id,
+                "independent": args.independent,
+                "dependent": args.dependent,
+                "results": [
+                    {
+                        "mediator": r.mediator_var,
+                        "total_effect": r.total_effect,
+                        "direct_effect": r.direct_effect,
+                        "indirect_effect": r.indirect_effect,
+                        "proportion_mediated": r.proportion_mediated,
+                        "sobel_p_value": r.sobel_p_value,
+                        "bootstrap_ci": r.bootstrap_ci,
+                        "metadata": r.metadata,
+                    }
+                    for r in results
+                ],
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Mediation analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_pareto_advanced(args: argparse.Namespace) -> int:
+    """Advanced Pareto analysis: hypervolume, scalarization sweeps."""
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "pareto-advanced",
+            "store": args.store,
+            "run_id": args.run_id,
+            "objectives": args.objectives,
+            "maximize": args.maximize,
+            "n_weights": args.n_weights,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        from computronium.experiment.surface.report import ReportGenerator
+
+        generator = ReportGenerator(store)
+        run_id = args.run_id or store.latest_run_id()
+        if run_id is None:
+            logger.error("No runs found")
+            return 1
+
+        from computronium.experiment.analysis import ParetoAnalyzer, ParetoConfig
+
+        objectives = args.objectives.split(",")
+        maximize = [m.lower() == "true" for m in args.maximize.split(",")]
+
+        analyzer = ParetoAnalyzer(
+            store, run_id, ParetoConfig(n_weight_samples=args.n_weights)
+        )
+        result = analyzer.analyze(objectives=objectives, maximize=maximize)
+
+        output = _format_output(
+            {
+                "run_id": run_id,
+                "objectives": objectives,
+                "maximize": maximize,
+                "n_pareto": len(result.pareto_points),
+                "n_dominated": len(result.dominated_points),
+                "hypervolume": result.hypervolume,
+                "pareto_points": [
+                    {
+                        "record_id": p["record_id"],
+                        "objectives": p["objectives"],
+                        "coordinate": p["coordinate"],
+                    }
+                    for p in result.pareto_points[:20]
+                ],
+                "scalarization_results": {
+                    k: [
+                        {"record_id": p["record_id"], "score": p["scalarized_score"]}
+                        for p in v[:5]
+                    ]
+                    for k, v in result.scalarization_results.items()
+                },
+                "metadata": result.metadata,
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Advanced Pareto analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_seed_variability(args: argparse.Namespace) -> int:
+    """Analyze variability across seeds."""
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "seed-variability",
+            "store": args.store,
+            "run_id": args.run_id,
+            "metric": args.metric,
+            "group_by": args.group_by,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        from computronium.experiment.analysis import SeedVariabilityAnalyzer
+
+        analyzer = SeedVariabilityAnalyzer(store, args.run_id or store.latest_run_id())
+        result = analyzer.analyze(metric=args.metric, group_by_axis=args.group_by)
+
+        if args.plot:
+            plot_path = (
+                args.output.replace(".json", "_violin.png")
+                if args.output
+                else f"seed_variability_{args.metric}.png"
+            )
+            from computronium.experiment.analysis import plot_violin_plots
+
+            plot_violin_plots(
+                result, plot_path, title=f"Seed Variability: {args.metric}"
+            )
+            logger.info(f"Violin plot saved to {plot_path}")
+
+        output = _format_output(
+            {
+                "run_id": args.run_id or store.latest_run_id(),
+                "metric": args.metric,
+                "group_by": args.group_by,
+                "overall_mean": result.overall_mean,
+                "overall_std": result.overall_std,
+                "cv": result.coefficient_of_variation,
+                "seed_effect_pvalue": result.seed_effect_pvalue,
+                "groups": {
+                    k: {kk: vv for kk, vv in v.items() if kk != "values"}
+                    for k, v in result.groups.items()
+                },
+                "metadata": result.metadata,
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Seed variability analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_hardware_variance(args: argparse.Namespace) -> int:
+    """Compare performance across hardware devices."""
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "hardware-variance",
+            "store": args.store,
+            "run_ids": args.run_ids,
+            "metric": args.metric,
+            "device_field": args.device_field,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        from computronium.experiment.analysis import HardwareVarianceAnalyzer
+
+        analyzer = HardwareVarianceAnalyzer(store)
+        run_ids = args.run_ids.split(",")
+        result = analyzer.analyze_from_runs(
+            run_ids, metric=args.metric, device_field=args.device_field
+        )
+
+        output = _format_output(
+            {
+                "metric": args.metric,
+                "run_ids": run_ids,
+                "devices": result.devices,
+                "device_effect_pvalue": result.device_effect_pvalue,
+                "pairwise_comparisons": result.pairwise_comparisons,
+                "metadata": result.metadata,
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Hardware variance analysis written to {args.output}")
+        else:
+            print(output)
+
+    return 0
+
+
+def _cmd_repro_advanced(args: argparse.Namespace) -> int:
+    """Verify checkpoint replay and bitwise reproducibility."""
+    from pathlib import Path
+
+    if args.dry_run:
+        plan = {
+            "command": "repro-advanced",
+            "store": args.store,
+            "run_id": args.run_id,
+            "tolerance": args.tolerance,
+        }
+        output = _format_output(plan, args)
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Dry run plan written to {args.output}")
+        else:
+            print(output)
+        return 0
+
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+
+    with store:
+        from computronium.experiment.analysis import (
+            ReproducibilityAnalyzer,
+            ReproducibilityConfig,
+        )
+
+        analyzer = ReproducibilityAnalyzer(
+            store, ReproducibilityConfig(tolerance=args.tolerance)
+        )
+        result = analyzer.verify_run_reproducibility(args.run_id)
+
+        output = _format_output(
+            {
+                "run_id": args.run_id,
+                "metrics_match": result.metrics_match,
+                "bitwise_match": result.bitwise_match,
+                "max_relative_diff": result.max_relative_diff,
+                "mismatched_keys": result.mismatched_keys,
+                "metadata": result.metadata,
+            },
+            args,
+        )
+
+        if args.output:
+            Path(args.output).write_text(output, encoding="utf-8")
+            logger.info(f"Reproducibility verification written to {args.output}")
         else:
             print(output)
 
@@ -3902,6 +4880,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "schema": _cmd_schema,
         "power-analysis": _cmd_power_analysis,
         "stability-analysis": _cmd_stability_analysis,
+        "energy-landscape": _cmd_energy_landscape,
+        "nonnormality": _cmd_nonnormality,
+        "axis-attribution": _cmd_axis_attribution,
+        "counterfactual": _cmd_counterfactual,
+        "mediation": _cmd_mediation,
+        "pareto-advanced": _cmd_pareto_advanced,
+        "seed-variability": _cmd_seed_variability,
+        "hardware-variance": _cmd_hardware_variance,
+        "repro-advanced": _cmd_repro_advanced,
     }
     try:
         handler = command_handlers.get(args.command)
