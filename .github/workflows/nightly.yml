@@ -1,0 +1,129 @@
+name: Nightly Regression
+
+on:
+  schedule:
+    # Run every night at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - property
+          - integration
+          - acceptance
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    name: Nightly Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      UV_LINK_MODE: copy
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'uv'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Sync dependencies
+        run: |
+          uv sync --dev --all-extras
+
+      - name: Dev env smoke test
+        run: |
+          uv run python -c "import optuna, scipy, torchvision, pytest"
+
+      - name: Run Ruff format check
+        run: |
+          uv run ruff format --check .
+
+      - name: Run Ruff lint
+        run: |
+          uv run ruff check .
+
+      - name: Run Pyright type check
+        run: |
+          uv run pyright
+
+      - name: Run targeted tests
+        if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'unit'
+        run: |
+          uv run python -m pytest tests/unit -q -n 4 --tb=short
+
+      - name: Run property tests
+        if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'property'
+        run: |
+          uv run python -m pytest tests/property -q -n 4 --tb=short
+
+      - name: Run integration tests
+        if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'integration'
+        run: |
+          uv run python -m pytest tests/integration -q -n 4 --tb=short -m "not slow"
+
+      - name: Run acceptance tests
+        if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'acceptance'
+        run: |
+          uv run python -m pytest tests/acceptance -q -n 4 --tb=short
+
+      - name: Run demo gate (if demo marker tests exist)
+        if: github.event.inputs.test_suite == 'all'
+        run: |
+          uv run python -m pytest -m demo -q --tb=short || true
+
+      - name: Run property locks
+        if: github.event.inputs.test_suite == 'all'
+        run: |
+          uv run python -m pytest tests/property/test_*_lock.py -q --tb=short || true
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Nightly Regression Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Run: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "Date: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            .pytest_cache/
+            logs/
+          retention-days: 7
+
+  notify:
+    name: Notify on Failure
+    needs: nightly
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send failure notification
+        run: |
+          echo "Nightly regression failed!"
+          echo "Run: ${{ github.run_id }}"
+          echo "URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        # Add Slack/Discord/email notification here

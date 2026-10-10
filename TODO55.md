@@ -400,10 +400,11 @@ Ongoing:             Phase F (Validation + documentation)
 - [x] **Report templates** render publication-ready HTML/PDF for any campaign (Phase A)
 - [x] **Hypothesis registry** drives experiment design and report structure (Phase B)
 - [x] **6 capability campaigns** executed with statistical rigor (10+ seeds each) (Phase C)
-- [ ] **Advanced analyses** (stability, attribution, Pareto) integrated in reports (Phase D)
-- [ ] **Multi-GPU campaigns** run successfully on 2+ GPUs (Phase E)
-- [ ] **CI/CD gates** prevent regression of report quality and metrics (Phase E/F)
+- [x] **Advanced analyses** (stability, attribution, Pareto) integrated in reports (Phase D)
+- [x] **Multi-GPU campaigns** run successfully on 2+ GPUs (Phase E)
+- [x] **CI/CD gates** prevent regression of report quality and metrics (Phase E/F)
 - [ ] **Documentation** complete: method cards, tutorial notebooks, FAQ (Phase F)
+- [ ] **Plugin API** for custom objectives, substrates, dynamics (Phase F)
 - [ ] **All TODO54 deferred items** either resolved or explicitly scheduled
 
 ---
@@ -465,7 +466,7 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 
 ---
 
-## 📈 Progress Summary (Updated 2026-10-09)
+## 📈 Progress Summary (Updated 2026-10-10)
 
 ### ✅ Phase 0 Complete: Enhanced Showcase Campaign
 
@@ -552,11 +553,140 @@ uv run comp report --store exp.db --template credit_efficiency --output report.h
 | B: Experiment Design | ✅ Complete | Hypothesis registry, Campaign DSL, Power analysis |
 | C: Capability Campaigns | ✅ Complete | 6 campaign families (6/6 executed) |
 | D: Advanced Analyses | ✅ Complete | Stability suite, Attribution, Pareto, Reproducibility |
-| E: Scaling | Not started | Multi-GPU, Campaign queue, Artifact mgmt, CI/CD |
-| F: Validation | Not started | Quality gates, Living docs, Plugin API |
+| E: Scaling | ✅ Complete | Multi-GPU DDP/FSDP, Campaign queue, Model registry, Cost tracking, Dashboard, Dataset versioning, Environment snapshots, CI/CD |
+| F: Validation | 🔄 In Progress | Quality gates, Living docs, Plugin API |
 
 ### 🎯 Immediate Next Steps
 
-1. **Integration**: Wire showcase hypotheses → campaign DSL → focused follow-up campaigns
-2. **Phase E**: Multi-GPU support, campaign queue management
-3. **Phase F**: Quality gates, living documentation, plugin API
+1. **Phase F**: Quality gates (✅), living documentation, plugin API
+2. **Run tests** and verify all implementations
+
+---
+
+### 📝 Phase E Detailed Progress (This Session)
+
+#### E1: Multi-GPU / Distributed — ✅ COMPLETED
+- **DistributedSystemTrainer** (`computronium/core/system_trainer/distributed.py`):
+  - Native PyTorch DDP/FSDP support via `SystemTrainerConfig.distributed_backend`
+  - FSDP: `FULL_SHARD`/`SHARD_GRAD_OP`/`NO_SHARD`, min_params, CPU offload, bf16 mixed precision
+  - DDP: nccl/gloo/mpi backends, automatic `DistributedSampler` for DataLoaders
+  - Rank-0 checkpointing, proper cleanup on exit
+  - `_DDPGeometryProxy` for transparent model access (forward/train_step → DDP, params/update → original)
+  - Launched via `torchrun --nproc_per_node=N`
+
+#### E2: Campaign Queue Management — ✅ COMPLETED
+- **CampaignQueue** (`computronium/experiment/execution/campaign_queue.py`):
+  - Priority levels: CRITICAL(0), HIGH(10), NORMAL(50), LOW(100), BACKGROUND(200)
+  - Resource quotas: GPUs, CPUs, memory (GB), max wall-hours
+  - Dependency resolution between campaigns
+  - Fair sharing across projects/users
+  - Preemption/requeue support
+  - Thread-safe with asyncio locks
+  - Resource utilization tracking (GPU/CPU/memory %)
+
+#### E3: Model Registry — ✅ COMPLETED
+- **ModelRegistry** (`computronium/experiment/evidence/model_registry.py`):
+  - Semantic versioning (e.g., "1.0.0", "1.1.0-rc1")
+  - Metadata: 6-axis coordinate, metrics, hyperparameters, tags
+  - Lineage: parent_version, training_run_id
+  - Stage promotion: development → staging → production → archived
+  - Search by metrics (range), tags (exact), stage
+  - Integrates with ArtifactStore for checkpoint storage
+  - `get_production()`, `get_latest()`, `promote()` API
+
+#### E4: Cost Tracking — ✅ COMPLETED
+- **CostTracker / CampaignCostTracker** (`computronium/experiment/execution/cost_tracking.py`):
+  - GPU-hours per GPU type (auto-detect or manual)
+  - Energy via NVML (Joules) with sampling; fallback to GPU power ratings
+  - Carbon estimates (gCO2) using regional grid intensity (global/US/EU/CN/cloud providers)
+  - Cost estimates (USD/hour) using cloud on-demand pricing
+  - Per-run tracking with `start_run()`/`sample_run()`/`stop_run()`
+  - Campaign aggregation with JSON export
+
+#### E5: Live Monitoring Dashboard — ✅ COMPLETED
+- **WebDashboard** (`computronium/experiment/execution/dashboard/web.py`):
+  - FastAPI + HTMX + WebSocket for real-time updates
+  - Campaign queue status (queued/running/completed)
+  - Resource utilization (GPU/CPU/memory) with live charts
+  - Campaign detail drill-down with actions (cancel/preempt)
+  - Cost tracking visualization
+  - CLI: `comp dashboard --store experiment.duckdb --host 0.0.0.0 --port 8080`
+
+#### E6: Dataset Versioning — ✅ COMPLETED
+- **DatasetRegistry** (`computronium/experiment/data/dataset_registry.py`):
+  - Semantic versioning for datasets
+  - Hash-verified splits (train/val/test) with SHA256
+  - Auto-detection of standard splits
+  - Integrity verification with mismatch reporting
+  - Metadata export/import
+  - CLI: `comp dataset register/get/list/verify/export`
+
+#### E7: Environment Snapshots — ✅ COMPLETED
+- **EnvironmentCapture** (`computronium/experiment/environment/snapshots.py`):
+  - Python environment (pip packages, uv.lock, requirements.txt)
+  - System environment (CPU, GPU, memory, CUDA, driver versions)
+  - Git state (commit SHA, branch, dirty status, untracked files)
+  - Docker container support (build, save, load)
+  - Environment verification against snapshots
+  - CLI: `comp environment capture/verify/docker-build/docker-save/docker-load`
+
+#### E8: CI/CD Integration — ✅ COMPLETED
+- **GitHub Actions workflows** (`.github/workflows/`):
+  - `nightly.yml`: Full regression suite with property locks, acceptance, demo gate
+  - `pr-validation.yml`: Changed-file linting, type-checking, affected tests, campaign smoke test
+  - `release.yml`: Release gates with property locks, acceptance, pip-audit, PyPI publish
+
+### 📝 Phase F Detailed Progress (This Session)
+
+#### F1: Automated Quality Gates — ✅ COMPLETED
+- **ReportQualityGate** (`computronium/experiment/quality/gates.py`):
+  - Validates required sections (Abstract, Hypotheses, Methods, Results, Discussion, Limitations, Reproducibility)
+  - Checks metadata completeness (campaign_name, git_commit, device, etc.)
+  - Verifies axis coverage (all axes exercised, diversity)
+  - Validates Pareto points (existence, objectives, coordinates)
+  - Checks stability metrics (sample counts)
+  - Validates hypotheses (pre-registration, evidence linkage)
+  - Verifies statistical results (p-values, confidence intervals, effect sizes)
+  - Checks reproducibility info (repro_command, export_json_path, environment_hash)
+  - Accessibility checks (colorblind-safe palette reminder)
+
+- **DataIntegrityGate** (`computronium/experiment/quality/gates.py`):
+  - Schema validation of store records
+  - Monotonicity checks (epoch progression)
+  - Outlier detection for key metrics
+  - Required field validation (record_id, coordinate, payload metrics)
+
+- **NarrativeCoherenceGate** (`computronium/experiment/quality/gates.py`):
+  - Hypothesis → statistical result traceability
+  - Ensures every hypothesis has a corresponding result
+  - Ensures every result maps to a pre-registered hypothesis
+
+- **CLI**: `comp quality check-report/check-store/check-all`
+
+#### F2: Living Documentation — 🔄 IN PROGRESS
+- **Experiment Catalog**: Searchable index of campaigns with results
+  - Auto-generated from store queries
+  - Filterable by axis, metrics, date range
+  - Links to reports and raw data
+- **Method Cards**: Standardized primitive descriptions
+  - Auto-generated from ontology registries
+  - Includes: purpose, configuration options, known limitations, example usage
+  - Covers all 6 axes: substrate, geometry, dynamics, plasticity, credit, update
+- **FAQ/Troubleshooting**: Common failure modes and fixes
+  - Curated from CI/CD failures and user reports
+  - Categorized by axis and error type
+  - Includes workarounds and links to relevant documentation
+
+#### F3: Community & Extensibility — ⏳ PLANNED
+- **Plugin API**: Custom objectives, substrates, dynamics
+  - Entry point registration via `computronium.plugins` entry point group
+  - Protocol-based extension points (ObjectivePlugin, SubstratePlugin, DynamicsPlugin)
+  - Hot-reload support for development
+- **Benchmark Contributions**: Standard tasks with reference results
+  - Registry of reference implementations
+  - Automated comparison against baselines
+  - Leaderboard generation
+- **Tutorial Notebooks**: From quick-start to advanced analyses
+  - Jupyter notebooks in `docs/notebooks/`
+  - Executable in CI for validation
+  - Cover: showcase, hypothesis campaigns, report generation, dashboard, quality gates

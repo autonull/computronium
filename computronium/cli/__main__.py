@@ -58,6 +58,10 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "schema": (_SURFACE, "main", ("schema",)),
     "power-analysis": (_SURFACE, "main", ("power-analysis",)),
     "stability-analysis": (_SURFACE, "main", ("stability-analysis",)),
+    "dashboard": (_SURFACE, "main", ("dashboard",)),
+    "dataset": (_SURFACE, "main", ("dataset",)),
+    "environment": (_SURFACE, "main", ("environment",)),
+    "quality": (_SURFACE, "main", ("quality",)),
 }
 
 _SUMMARIES: dict[str, str] = {
@@ -84,6 +88,10 @@ _SUMMARIES: dict[str, str] = {
     "power-analysis": "Compute statistical power for experiment design (machine-readable)",
     "stability-analysis": "Run dynamical stability analysis "
     "(Lyapunov spectra, basin stability, settling trajectories)",
+    "dashboard": "Launch live monitoring web dashboard for campaigns (Phase E5)",
+    "dataset": "Dataset registry: versioned datasets with hash-verified splits (Phase E6)",
+    "environment": "Environment snapshots: capture uv lockfiles, container images (Phase E7)",
+    "quality": "Automated quality gates for reports and data (Phase F1)",
 }
 
 

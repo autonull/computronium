@@ -54,6 +54,13 @@ class SystemTrainerConfig:
         precision: Numerical precision ("fp32", "fp16", "bf16").
             Uses ``torch.autocast`` for mixed precision on CUDA.
         checkpoint_every_n: Save checkpoint every N epochs (0 = disabled).
+        # Distributed training (Phase E1)
+        distributed_backend: Literal["none", "ddp", "fsdp"] = "none"
+        ddp_backend: str = "nccl"  # nccl, gloo, mpi
+        fsdp_sharding_strategy: str = "FULL_SHARD"  # FULL_SHARD, SHARD_GRAD_OP, NO_SHARD
+        fsdp_min_params: int = 1_000_000  # Minimum params to shard
+        fsdp_cpu_offload: bool = False
+        fsdp_mixed_precision: bool = True
     """
 
     max_epochs: int = 10
@@ -77,6 +84,13 @@ class SystemTrainerConfig:
     async_dataloading: bool = False
     precision: Literal["fp32", "fp16", "bf16"] = "fp32"
     checkpoint_every_n: int = 0
+    # Distributed training (Phase E1)
+    distributed_backend: Literal["none", "ddp", "fsdp"] = "none"
+    ddp_backend: str = "nccl"
+    fsdp_sharding_strategy: str = "FULL_SHARD"
+    fsdp_min_params: int = 1_000_000
+    fsdp_cpu_offload: bool = False
+    fsdp_mixed_precision: bool = True
 
 
 class _DataProvider(Protocol):

@@ -21,7 +21,11 @@ from typing import TYPE_CHECKING, Any, Final
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
+from computronium.core.system_trainer import (
+    DistributedSystemTrainer,
+    SystemTrainer,
+    SystemTrainerConfig,
+)
 from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.schema.metrics import HISTORY_METRICS
 from computronium.experiment.schema.registries import (
@@ -659,6 +663,20 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         deterministic=schedule.deterministic,
         precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
         checkpoint_every_n=schedule.checkpoint_every_n,
+        # Distributed training (Phase E1)
+        distributed_backend=schedule.distributed_backend,
+        ddp_backend=schedule.ddp_backend,
+        fsdp_sharding_strategy=schedule.fsdp_sharding_strategy,
+        fsdp_min_params=schedule.fsdp_min_params,
+        fsdp_cpu_offload=schedule.fsdp_cpu_offload,
+        fsdp_mixed_precision=schedule.fsdp_mixed_precision,
+    )
+
+    # Choose trainer class based on distributed backend
+    trainer_class = (
+        DistributedSystemTrainer
+        if schedule.distributed_backend != "none"
+        else SystemTrainer
     )
 
     # Set up checkpoint directory if checkpointing is enabled
@@ -690,11 +708,13 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
             checkpoint_path = str(ckpt_file)
 
     start = time.monotonic()
-    trainer: SystemTrainer | None = None
+    trainer: SystemTrainer | None = (
+        None  # Both SystemTrainer and DistributedSystemTrainer
+    )
     try:
         if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
             # Resume from checkpoint
-            trainer = SystemTrainer.from_checkpoint(
+            trainer = trainer_class.from_checkpoint(
                 resume_checkpoint_path,
                 system=cell.system,
                 train_data=task.get_dataloader("train"),
@@ -705,7 +725,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
                 trainer.checkpoint_callback = _checkpoint_callback
             history = trainer.fit()
         else:
-            trainer = SystemTrainer(
+            trainer = trainer_class(
                 cell.system,
                 config,
                 task.get_dataloader("train"),

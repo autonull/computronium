@@ -1,0 +1,172 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+concurrency:
+  group: pr-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      UV_LINK_MODE: copy
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'uv'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Sync dependencies
+        run: |
+          uv sync --dev --all-extras
+
+      - name: Dev env smoke test
+        run: |
+          uv run python -c "import optuna, scipy, torchvision, pytest"
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v40
+        with:
+          files: |
+            computronium/**/*.py
+            tests/**/*.py
+            pyproject.toml
+            uv.lock
+
+      - name: Run Ruff format on changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          uv run ruff format --check ${{ steps.changed-files.outputs.all_changed_files }}
+
+      - name: Run Ruff lint on changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          uv run ruff check ${{ steps.changed-files.outputs.all_changed_files }}
+
+      - name: Run Pyright on changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          uv run pyright ${{ steps.changed-files.outputs.all_changed_files }}
+
+      - name: Determine affected test modules
+        if: steps.changed-files.outputs.any_changed == 'true'
+        id: affected-tests
+        run: |
+          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+          TEST_FILES=""
+          for file in $CHANGED_FILES; do
+            if [[ $file == computronium/* ]]; then
+              test_path="${file/computronium\//tests/}"
+              test_path="${test_path/.py/_test.py}"
+              if [[ -f "$test_path" ]]; then
+                TEST_FILES="$TEST_FILES $test_path"
+              fi
+              test_dir=$(dirname "$test_path")
+              test_name=$(basename "$test_path")
+              if [[ ! $test_name == test_* ]]; then
+                test_path_alt="${test_dir}/test_${test_name}"
+                if [[ -f "$test_path_alt" ]]; then
+                  TEST_FILES="$TEST_FILES $test_path_alt"
+                fi
+              fi
+            elif [[ $file == tests/* ]]; then
+              TEST_FILES="$TEST_FILES $file"
+            fi
+          done
+          echo "test_files=$TEST_FILES" >> $GITHUB_OUTPUT
+
+      - name: Run affected tests
+        if: steps.changed-files.outputs.any_changed == 'true' && steps.affected-tests.outputs.test_files != ''
+        run: |
+          uv run python -m pytest ${{ steps.affected-tests.outputs.test_files }} -q -n 4 --tb=short
+
+      - name: Run quick campaign test (if campaign or experiment files changed)
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+          if echo "$CHANGED_FILES" | grep -qE "(campaign|experiment|hypothesis)"; then
+            echo "Campaign/experiment files changed, running quick hypothesis campaign test..."
+            uv run python -c "from computronium.experiment.design import create_credit_efficiency_campaign, validate_campaign_design; campaign = create_credit_efficiency_campaign(time_budget_hours=0.01, n_seeds=1, epochs=1); validation = validate_campaign_design(campaign); print('Campaign validation:', validation.valid); print('Design matrix size:', validation.design_matrix_size); print('Warnings:', validation.warnings)"
+          fi
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number
+            })
+            
+            const botComment = comments.find(c => c.user.type === 'Bot' && c.body.includes('PR Validation Results'))
+            const status = '${{ job.status }}';
+            const runUrl = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            
+            let body = '## PR Validation Results\n\n';
+            body += '**Status:** ' + status + '\n';
+            body += '**Run:** [' + '${{ github.run_id }}' + '](' + runUrl + ')\n';
+            body += '**Commit:** ' + '${{ github.sha }}'.substring(0, 7) + '\n';
+            body += '**Date:** ' + new Date().toISOString() + '\n\n';
+            
+            if (status === 'success') {
+              body += '✅ All checks passed!';
+            } else {
+              body += '❌ Some checks failed. Please review the workflow run.';
+            }
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: body
+              });
+            }
+
+  notify:
+    name: Notify on Failure
+    needs: pr-validation
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send failure notification
+        run: |
+          echo "PR validation failed!"
+          echo "Run: ${{ github.run_id }}"
+          echo "URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        # Add Slack/Discord/email notification here

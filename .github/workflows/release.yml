@@ -1,0 +1,134 @@
+name: Release Gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 3.1.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run without publishing'
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  release-gates:
+    name: Release Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      UV_LINK_MODE: copy
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'uv'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Sync dependencies
+        run: |
+          uv sync --dev --all-extras
+
+      - name: Dev env smoke test
+        run: |
+          uv run python -c "import optuna, scipy, torchvision, pytest"
+
+      - name: Run Ruff format check
+        run: |
+          uv run ruff format --check .
+
+      - name: Run Ruff lint
+        run: |
+          uv run ruff check .
+
+      - name: Run Pyright type check
+        run: |
+          uv run pyright
+
+      - name: Run property locks
+        run: |
+          uv run python -m pytest tests/property/test_*_lock.py -q --tb=short
+
+      - name: Run acceptance tests
+        run: |
+          uv run python -m pytest tests/acceptance -q -n 4 --tb=short
+
+      - name: Run demo gate
+        run: |
+          uv run python -m pytest -m demo -q --tb=short || true
+
+      - name: Run pip-audit
+        run: |
+          uv run pip-audit
+
+      - name: Build package
+        run: |
+          uv build
+
+      - name: Verify package
+        run: |
+          uv run twine check dist/*
+
+      - name: Create release
+        if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ inputs.version }}
+          name: Release ${{ inputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to PyPI
+        if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        run: |
+          uv publish dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Publish to TestPyPI (dry run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: |
+          uv publish --publish-url https://test.pypi.org/legacy/ dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+  notify:
+    name: Notify on Release
+    needs: release-gates
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send notification
+        run: |
+          STATUS="${{ needs.release-gates.result }}"
+          echo "Release ${{ github.event.inputs.version }}: $STATUS"
+          if [ "$STATUS" = "success" ]; then
+            echo "✅ Release successful!"
+          else
+            echo "❌ Release failed!"
+          fi

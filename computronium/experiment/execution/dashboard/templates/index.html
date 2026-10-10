@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Computronium Campaign Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-yellow: #d29922;
+            --accent-red: #f85149;
+            --accent-purple: #a371f7;
+        }
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        
+        .card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .status-pending { background-color: rgba(210, 153, 34, 0.2); color: var(--accent-yellow); }
+        .status-queued { background-color: rgba(88, 166, 255, 0.2); color: var(--accent-blue); }
+        .status-running { background-color: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+        .status-completed { background-color: rgba(163, 113, 247, 0.2); color: var(--accent-purple); }
+        .status-failed { background-color: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+        .status-cancelled { background-color: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+        .status-preempted { background-color: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+        
+        .priority-critical { border-left: 4px solid var(--accent-red); }
+        .priority-high { border-left: 4px solid var(--accent-yellow); }
+        .priority-normal { border-left: 4px solid var(--accent-blue); }
+        .priority-low { border-left: 4px solid var(--text-secondary); }
+        .priority-background { border-left: 4px solid var(--border-color); }
+        
+        .metric-card {
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+            border: 1px solid var(--border-color);
+        }
+        
+        .websocket-connected {
+            color: var(--accent-green);
+        }
+        
+        .websocket-disconnected {
+            color: var(--accent-red);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        th {
+            background-color: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        tr:hover td {
+            background-color: var(--bg-tertiary);
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background-color: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .resource-bar {
+            height: 20px;
+            background-color: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .resource-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .resource-fill.gpu { background-color: var(--accent-blue); }
+        .resource-fill.cpu { background-color: var(--accent-green); }
+        .resource-fill.memory { background-color: var(--accent-yellow); }
+        
+        .chart-container {
+            height: 300px;
+            width: 100%;
+        }
+        
+        .detail-panel {
+            display: none;
+        }
+        
+        .detail-panel.active {
+            display: block;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .live-indicator {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col">
+            <div class="p-4 border-b border-[var(--border-color)]">
+                <h1 class="text-xl font-bold font-mono text-[var(--accent-blue)]">
+                    Computronium
+                </h1>
+                <p class="text-xs text-[var(--text-secondary)] mt-1">Campaign Dashboard</p>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+                <button data-panel="overview" class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2 active">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    Overview
+                </button>
+                <button data-panel="queue" class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                    Campaign Queue
+                </button>
+                <button data-panel="resources" class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                    Resources
+                </button>
+                <button data-panel="campaigns" class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    All Campaigns
+                </button>
+                <button data-panel="cost" class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Cost Tracking
+                </button>
+            </nav>
+            
+            <div class="p-4 border-t border-[var(--border-color)]">
+                <div class="flex items-center gap-2">
+                    <div id="ws-status" class="w-2 h-2 rounded-full bg-[var(--accent-red)] websocket-disconnected"></div>
+                    <span class="text-sm text-[var(--text-secondary)]">WebSocket: <span id="ws-text">Disconnected</span></span>
+                </div>
+                <div class="mt-2 text-xs text-[var(--text-secondary)]">
+                    Last update: <span id="last-update" class="font-mono">-</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            <header class="p-4 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
+                <div class="flex items-center justify-between">
+                    <h2 id="panel-title" class="text-lg font-semibold">Overview</h2>
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-[var(--text-secondary)]">Auto-refresh</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="auto-refresh" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-[var(--border-color)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--accent-blue)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent-green)]"></div>
+                            </label>
+                        </div>
+                        <button id="refresh-btn" class="px-3 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-lg text-sm hover:bg-[var(--border-color)] transition-colors">Refresh</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Panels -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Overview Panel -->
+                <div id="panel-overview" class="panel-content">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="overview-cards">
+                        <!-- Cards populated by JS -->
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                        <div class="card p-4">
+                            <h3 class="font-semibold mb-4">GPU Utilization</h3>
+                            <div id="gpu-chart" class="chart-container"></div>
+                        </div>
+                        <div class="card p-4">
+                            <h3 class="font-semibold mb-4">Campaign Status Distribution</h3>
+                            <div id="status-chart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Queue Panel -->
+                <div id="panel-queue" class="panel-content detail-panel">
+                    <div class="card">
+                        <div class="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                            <h3 class="font-semibold">Campaign Queue</h3>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-[var(--text-secondary)]">Max Concurrent:</span>
+                                <span id="max-concurrent" class="font-mono font-semibold">-</span>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table id="queue-table">
+                                <thead>
+                                    <tr>
+                                        <th>Campaign ID</th>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Priority</th>
+                                        <th>Resources</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resources Panel -->
+                <div id="panel-resources" class="panel-content detail-panel">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="card p-4 metric-card">
+                            <h3 class="font-semibold mb-4">GPU</h3>
+                            <div class="resource-bar mb-2">
+                                <div id="gpu-bar" class="resource-fill gpu" style="width: 0%"></div>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Used: <span id="gpu-used" class="font-mono">0</span></span>
+                                <span>Total: <span id="gpu-total" class="font-mono">0</span></span>
+                            </div>
+                            <div class="flex justify-between text-sm mt-1">
+                                <span>Utilization: <span id="gpu-util" class="font-mono">0%</span></span>
+                            </div>
+                        </div>
+                        <div class="card p-4 metric-card">
+                            <h3 class="font-semibold mb-4">CPU</h3>
+                            <div class="resource-bar mb-2">
+                                <div id="cpu-bar" class="resource-fill cpu" style="width: 0%"></div>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Used: <span id="cpu-used" class="font-mono">0</span></span>
+                                <span>Total: <span id="cpu-total" class="font-mono">0</span></span>
+                            </div>
+                            <div class="flex justify-between text-sm mt-1">
+                                <span>Utilization: <span id="cpu-util" class="font-mono">0%</span></span>
+                            </div>
+                        </div>
+                        <div class="card p-4 metric-card">
+                            <h3 class="font-semibold mb-4">Memory</h3>
+                            <div class="resource-bar mb-2">
+                                <div id="mem-bar" class="resource-fill memory" style="width: 0%"></div>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Used: <span id="mem-used" class="font-mono">0</span> GB</span>
+                                <span>Total: <span id="mem-total" class="font-mono">0</span> GB</span>
+                            </div>
+                            <div class="flex justify-between text-sm mt-1">
+                                <span>Utilization: <span id="mem-util" class="font-mono">0%</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card p-4 mt-4">
+                        <h3 class="font-semibold mb-4">Resource History</h3>
+                        <div id="resource-history-chart" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <!-- All Campaigns Panel -->
+                <div id="panel-campaigns" class="panel-content detail-panel">
+                    <div class="card">
+                        <div class="p-4 border-b border-[var(--border-color)]">
+                            <h3 class="font-semibold">All Campaigns</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table id="campaigns-table">
+                                <thead>
+                                    <tr>
+                                        <th>Campaign ID</th>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Priority</th>
+                                        <th>Project</th>
+                                        <th>User</th>
+                                        <th>Created</th>
+                                        <th>Duration</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cost Panel -->
+                <div id="panel-cost" class="panel-content detail-panel">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="cost-cards">
+                        <!-- Cost cards populated by JS -->
+                    </div>
+                    
+                    <div class="card p-4 mt-4">
+                        <h3 class="font-semibold mb-4">Cost Breakdown by Campaign</h3>
+                        <div id="cost-chart" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <!-- Campaign Detail Modal -->
+                <div id="detail-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+                    <div class="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto m-4">
+                        <div class="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                            <h3 id="modal-title" class="font-semibold">Campaign Details</h3>
+                            <button id="close-modal" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-2xl">&times;</button>
+                        </div>
+                        <div id="modal-content" class="p-4"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Dashboard state
+        let ws = null;
+        let autoRefresh = true;
+        let refreshInterval = null;
+        const UPDATE_INTERVAL = 2000;
+        let resourceHistory = {
+            timestamps: [],
+            gpu: [],
+            cpu: [],
+            memory: []
+        };
+        let charts = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            setupNavigation();
+            setupWebSocket();
+            setupEventListeners();
+            fetchAllData();
+            startAutoRefresh();
+        });
+
+        function setupNavigation() {
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    document.querySelectorAll('.panel-content').forEach(p => p.classList.remove('active'));
+                    document.getElementById('panel-' + btn.dataset.panel).classList.add('active');
+                    
+                    document.getElementById('panel-title').textContent = btn.textContent.trim();
+                });
+            });
+        }
+
+        function setupWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            
+            ws.onopen = () => {
+                document.getElementById('ws-status').classList.remove('websocket-disconnected');
+                document.getElementById('ws-status').classList.add('websocket-connected');
+                document.getElementById('ws-text').textContent = 'Connected';
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('ws-status').classList.remove('websocket-connected');
+                document.getElementById('ws-status').classList.add('websocket-disconnected');
+                document.getElementById('ws-text').textContent = 'Disconnected';
+                // Reconnect after 5 seconds
+                setTimeout(setupWebSocket, 5000);
+            };
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                handleWebSocketMessage(msg);
+            };
+        }
+
+        function handleWebSocketMessage(msg) {
+            if (msg.type === 'status_update' || msg.type === 'periodic_update') {
+                updateOverview(msg.status);
+                updateResources(msg.status);
+            }
+            if (msg.type === 'queue_update' || msg.type === 'periodic_update') {
+                updateQueue(msg.queue);
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('refresh-btn').addEventListener('click', fetchAllData);
+            
+            document.getElementById('auto-refresh').addEventListener('change', (e) => {
+                autoRefresh = e.target.checked;
+                if (autoRefresh) startAutoRefresh();
+                else stopAutoRefresh();
+            });
+            
+            document.getElementById('close-modal').addEventListener('click', closeModal);
+            document.getElementById('detail-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'detail-modal') closeModal();
+            });
+        }
+
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(fetchAllData, UPDATE_INTERVAL);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+
+        async function fetchAllData() {
+            try {
+                const [status, queue, resources, campaigns] = await Promise.all([
+                    fetch('/api/status').then(r => r.json()),
+                    fetch('/api/queue').then(r => r.json()),
+                    fetch('/api/resources').then(r => r.json()),
+                    fetch('/api/campaigns').then(r => r.json())
+                ]);
+                
+                updateOverview(status);
+                updateQueue(queue);
+                updateResources(resources);
+                updateCampaignsTable(campaigns);
+                updateLastUpdate();
+            } catch (e) {
+                console.error('Failed to fetch data:', e);
+            }
+        }
+
+        function updateLastUpdate() {
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        }
+
+        function updateOverview(status) {
+            const cards = document.getElementById('overview-cards');
+            const queued = status.queued_campaigns || 0;
+            const running = status.running_campaigns || 0;
+            const completed = (status.running_campaigns || 0) + (status.queued_campaigns || 0); // placeholder
+            
+            cards.innerHTML = `
+                <div class="card p-4 priority-normal">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Queued</p>
+                            <p class="text-3xl font-bold font-mono">${queued}</p>
+                        </div>
+                        <svg class="w-12 h-12 text-[var(--accent-blue)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </div>
+                </div>
+                <div class="card p-4 priority-high">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Running</p>
+                            <p class="text-3xl font-bold font-mono">${running}</p>
+                        </div>
+                        <svg class="w-12 h-12 text-[var(--accent-green)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12v5m0 0v5m0-5h5m-5 0H7m10 0a10 10 0 100-20 10 10 0 000 20z"></path></svg>
+                    </div>
+                </div>
+                <div class="card p-4 priority-critical">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">GPU Utilization</p>
+                            <p class="text-3xl font-bold font-mono">${((status.gpu_utilization || 0) * 100).toFixed(1)}%</p>
+                        </div>
+                        <svg class="w-12 h-12 text-[var(--accent-red)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                </div>
+                <div class="card p-4 priority-low">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Memory Utilization</p>
+                            <p class="text-3xl font-bold font-mono">${((status.memory_utilization || 0) * 100).toFixed(1)}%</p>
+                        </div>
+                        <svg class="w-12 h-12 text-[var(--accent-yellow)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    </div>
+                </div>
+            `;
+            
+            // Update charts
+            if (status.gpu_utilization !== undefined) {
+                updateResourceHistory(status);
+                updateCharts();
+            }
+        }
+
+        function updateQueue(queue) {
+            document.getElementById('max-concurrent').textContent = queue.max_concurrent || 0;
+            
+            const tbody = document.querySelector('#queue-table tbody');
+            const campaigns = [];
+            
+            // We need to fetch campaigns separately for queue view
+            fetch('/api/campaigns').then(r => r.json()).then(data => {
+                const allCampaigns = data.campaigns || [];
+                tbody.innerHTML = allCampaigns.map(c => `
+                    <tr class="${getPriorityClass(c.priority)}">
+                        <td class="font-mono">${c.campaign_id}</td>
+                        <td>${c.name}</td>
+                        <td><span class="status-badge status-${c.status.toLowerCase()}">${c.status}</span></td>
+                        <td><span class="status-badge">${c.priority}</span></td>
+                        <td class="font-mono">${c.quota.gpus} GPU, ${c.quota.cpus} CPU, ${c.quota.memory_gb}GB</td>
+                        <td class="font-mono">${formatTime(c.created_at)}</td>
+                        <td>
+                            <div class="flex gap-1">
+                                ${c.status === 'running' || c.status === 'queued' ? 
+                                    `<button onclick="cancelCampaign('${c.campaign_id}')" class="px-2 py-1 text-xs bg-[var(--accent-red)]/20 text-[var(--accent-red)] border border-[var(--accent-red)]/30 rounded hover:bg-[var(--accent-red)]/30">Cancel</button>` : ''}
+                                ${c.status === 'running' ? 
+                                    `<button onclick="preemptCampaign('${c.campaign_id}')" class="px-2 py-1 text-xs bg-[var(--accent-yellow)]/20 text-[var(--accent-yellow)] border border-[var(--accent-yellow)]/30 rounded hover:bg-[var(--accent-yellow)]/30">Preempt</button>` : ''}
+                                <button onclick="showCampaignDetail('${c.campaign_id}')" class="px-2 py-1 text-xs bg-[var(--accent-blue)]/20 text-[var(--accent-blue)] border border-[var(--accent-blue)]/30 rounded hover:bg-[var(--accent-blue)]/30">Details</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            });
+        }
+
+        function updateResources(resources) {
+            const gpuUtil = (resources.gpu_utilization || 0) * 100;
+            const cpuUtil = (resources.cpu_utilization || 0) * 100;
+            const memUtil = (resources.memory_utilization || 0) * 100;
+            
+            document.getElementById('gpu-bar').style.width = gpuUtil + '%';
+            document.getElementById('gpu-used').textContent = resources.used_gpus || 0;
+            document.getElementById('gpu-total').textContent = resources.max_gpus || 0;
+            document.getElementById('gpu-util').textContent = gpuUtil.toFixed(1) + '%';
+            
+            document.getElementById('cpu-bar').style.width = cpuUtil + '%';
+            document.getElementById('cpu-used').textContent = resources.used_cpus || 0;
+            document.getElementById('cpu-total').textContent = resources.max_cpus || 0;
+            document.getElementById('cpu-util').textContent = cpuUtil.toFixed(1) + '%';
+            
+            document.getElementById('mem-bar').style.width = memUtil + '%';
+            document.getElementById('mem-used').textContent = (resources.used_memory_gb || 0).toFixed(1);
+            document.getElementById('mem-total').textContent = (resources.max_memory_gb || 0).toFixed(1);
+            document.getElementById('mem-util').textContent = memUtil.toFixed(1) + '%';
+        }
+
+        function updateResourceHistory(status) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            
+            resourceHistory.timestamps.push(timeStr);
+            resourceHistory.gpu.push((status.gpu_utilization || 0) * 100);
+            resourceHistory.cpu.push((status.cpu_utilization || 0) * 100);
+            resourceHistory.memory.push((status.memory_utilization || 0) * 100);
+            
+            // Keep last 60 points
+            if (resourceHistory.timestamps.length > 60) {
+                resourceHistory.timestamps.shift();
+                resourceHistory.gpu.shift();
+                resourceHistory.cpu.shift();
+                resourceHistory.memory.shift();
+            }
+        }
+
+        function updateCharts() {
+            // GPU Utilization Chart
+            if (!charts.gpu) {
+                charts.gpu = createChart('gpu-chart', resourceHistory.timestamps, resourceHistory.gpu, 'GPU Utilization (%)', '#58a6ff');
+            } else {
+                charts.gpu.data.labels = resourceHistory.timestamps;
+                charts.gpu.data.datasets[0].data = resourceHistory.gpu;
+                charts.gpu.update('none');
+            }
+            
+            // Status Chart
+            if (!charts.status) {
+                charts.status = createPieChart('status-chart', ['Queued', 'Running', 'Completed'], [0, 0, 0]);
+            }
+            
+            // Resource History Chart
+            if (!charts.resourceHistory) {
+                charts.resourceHistory = createMultiLineChart('resource-history-chart', resourceHistory.timestamps, [
+                    { label: 'GPU', data: resourceHistory.gpu, color: '#58a6ff' },
+                    { label: 'CPU', data: resourceHistory.cpu, color: '#3fb950' },
+                    { label: 'Memory', data: resourceHistory.memory, color: '#d29922' }
+                ], 'Resource Utilization (%)');
+            } else {
+                charts.resourceHistory.data.labels = resourceHistory.timestamps;
+                charts.resourceHistory.data.datasets[0].data = resourceHistory.gpu;
+                charts.resourceHistory.data.datasets[1].data = resourceHistory.cpu;
+                charts.resourceHistory.data.datasets[2].data = resourceHistory.memory;
+                charts.resourceHistory.update('none');
+            }
+        }
+
+        function createChart(canvasId, labels, data, label, color) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        borderColor: color,
+                        backgroundColor: color + '33',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { min: 0, max: 100, grid: { color: '#30363d' }, ticks: { color: '#8b949e' } }
+                    }
+                }
+            });
+        }
+
+        function createPieChart(canvasId, labels, data) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#58a6ff', '#3fb950', '#a371f7'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#8b949e' } } }
+                }
+            });
+        }
+
+        function createMultiLineChart(canvasId, labels, datasets, label) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets.map(d => ({
+                        label: d.label,
+                        data: d.data,
+                        borderColor: d.color,
+                        backgroundColor: d.color + '33',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', labels: { color: '#8b949e' } } },
+                    scales: {
+                        x: { display: false },
+                        y: { min: 0, max: 100, grid: { color: '#30363d' }, ticks: { color: '#8b949e' } }
+                    }
+                }
+            });
+        }
+
+        function updateCampaignsTable(data) {
+            const tbody = document.querySelector('#campaigns-table tbody');
+            const campaigns = data.campaigns || [];
+            
+            tbody.innerHTML = campaigns.map(c => `
+                <tr class="${getPriorityClass(c.priority)}">
+                    <td class="font-mono">${c.campaign_id}</td>
+                    <td>${c.name}</td>
+                    <td><span class="status-badge status-${c.status.toLowerCase()}">${c.status}</span></td>
+                    <td><span class="status-badge">${c.priority}</span></td>
+                    <td>${c.project}</td>
+                    <td>${c.user}</td>
+                    <td class="font-mono">${formatTime(c.created_at)}</td>
+                    <td class="font-mono">${formatDuration(c.started_at, c.completed_at)}</td>
+                    <td>
+                        <button onclick="showCampaignDetail('${c.campaign_id}')" class="px-2 py-1 text-xs bg-[var(--accent-blue)]/20 text-[var(--accent-blue)] border border-[var(--accent-blue)]/30 rounded hover:bg-[var(--accent-blue)]/30">Details</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function getPriorityClass(priority) {
+            const map = {
+                'CRITICAL': 'priority-critical',
+                'HIGH': 'priority-high',
+                'NORMAL': 'priority-normal',
+                'LOW': 'priority-low',
+                'BACKGROUND': 'priority-background'
+            };
+            return map[priority] || '';
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return '-';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
+        }
+
+        function formatDuration(start, end) {
+            if (!start) return '-';
+            const startMs = start * 1000;
+            const endMs = end ? end * 1000 : Date.now();
+            const diff = endMs - startMs;
+            const mins = Math.floor(diff / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            return `${mins}m ${secs}s`;
+        }
+
+        async function showCampaignDetail(campaignId) {
+            try {
+                const response = await fetch(`/api/campaigns/${campaignId}`);
+                const data = await response.json();
+                
+                document.getElementById('modal-title').textContent = `${data.name} (${data.campaign_id})`;
+                
+                let content = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Status</p>
+                            <p class="font-mono"><span class="status-badge status-${data.status.toLowerCase()}">${data.status}</span></p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Priority</p>
+                            <p class="font-mono"><span class="status-badge">${data.priority}</span></p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Project</p>
+                            <p class="font-mono">${data.project}</p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">User</p>
+                            <p class="font-mono">${data.user}</p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Created</p>
+                            <p class="font-mono">${formatTime(data.created_at)}</p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Started</p>
+                            <p class="font-mono">${formatTime(data.started_at)}</p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Completed</p>
+                            <p class="font-mono">${formatTime(data.completed_at)}</p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm">Duration</p>
+                            <p class="font-mono">${formatDuration(data.started_at, data.completed_at)}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <p class="text-[var(--text-secondary)] text-sm mb-2">Resource Quota</p>
+                        <div class="grid grid-cols-4 gap-4 text-sm">
+                            <div><p class="text-[var(--text-secondary)]">GPUs</p><p class="font-mono">${data.quota.gpus}</p></div>
+                            <div><p class="text-[var(--text-secondary)]">CPUs</p><p class="font-mono">${data.quota.cpus}</p></div>
+                            <div><p class="text-[var(--text-secondary)]">Memory (GB)</p><p class="font-mono">${data.quota.memory_gb}</p></div>
+                            <div><p class="text-[var(--text-secondary)]">Max Wall Hours</p><p class="font-mono">${data.quota.max_wall_hours}</p></div>
+                        </div>
+                    </div>
+                `;
+                
+                if (data.error) {
+                    content += `
+                        <div class="p-4 bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/30 rounded-lg mb-4">
+                            <p class="text-[var(--accent-red)] font-medium">Error:</p>
+                            <p class="font-mono text-sm mt-1">${data.error}</p>
+                        </div>
+                    `;
+                }
+                
+                if (data.result) {
+                    content += `
+                        <div class="mb-4">
+                            <p class="text-[var(--text-secondary)] text-sm mb-2">Result Summary</p>
+                            <pre class="bg-[var(--bg-tertiary)] p-4 rounded text-xs overflow-x-auto">${JSON.stringify(data.result, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('modal-content').innerHTML = content;
+                document.getElementById('detail-modal').classList.remove('hidden');
+                document.getElementById('detail-modal').classList.add('flex');
+            } catch (e) {
+                console.error('Failed to fetch campaign detail:', e);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detail-modal').classList.add('hidden');
+            document.getElementById('detail-modal').classList.remove('flex');
+        }
+
+        async function cancelCampaign(campaignId) {
+            if (!confirm(`Cancel campaign ${campaignId}?`)) return;
+            try {
+                await fetch(`/api/campaigns/${campaignId}/cancel`, { method: 'POST' });
+                fetchAllData();
+            } catch (e) {
+                console.error('Failed to cancel campaign:', e);
+            }
+        }
+
+        async function preemptCampaign(campaignId) {
+            if (!confirm(`Preempt campaign ${campaignId}?`)) return;
+            try {
+                await fetch(`/api/campaigns/${campaignId}/preempt`, { method: 'POST' });
+                fetchAllData();
+            } catch (e) {
+                console.error('Failed to preempt campaign:', e);
+            }
+        }
+    </script>
+</body>
+</html>
