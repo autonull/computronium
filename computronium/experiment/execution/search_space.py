@@ -697,8 +697,27 @@ def _composable(
     result = geometry_param_count(config.geometry) <= param_budget * (
         1 + PARAM_BUDGET_TOLERANCE
     )
-    _composable_cache[cache_key] = result
-    return result
+    if not result:
+        _composable_cache[cache_key] = False
+        return False
+
+    # Dry-run gate: verify the cell can actually train (catches detached graphs,
+    # FA contract failures, no-gradient-reached, etc.)
+    from computronium.experiment.execution.compose import _dry_run_trainable
+
+    dry_ok, _dry_reason = _dry_run_trainable(
+        coordinate=coordinate,
+        geometry={},
+        input_shape=task_shape.input_shape,
+        output_dim=task_shape.output_dim,
+        param_budget=param_budget,
+    )
+    if not dry_ok:
+        _composable_cache[cache_key] = False
+        return False
+
+    _composable_cache[cache_key] = True
+    return True
 
 
 def _schedule(spec: RunSpec, task: str) -> Schedule:

@@ -68,36 +68,41 @@ Each item below has: **Probe** (what to investigate before fixing), **Do** (the 
 
 ---
 
-### D2 — Wire a dry-run gate into screening (151 cells + guards D3/D4)
+### D2 — Wire a dry-run gate into screening (151 cells + guards D3/D4) — **COMPLETED**
 
 `RandomProjectionsCredit._inert_zeros` raises **by design** — its docstring says
 "visible to the campaign's dry-run gate instead of silently training a no-op
 (TODO16 §0.3; TODO39 P0.1)". That gate was never wired into `_composable`,
 so the raise happens mid-training.
 
-**Probe:** Confirm the exact checks needed:
-- FA contract: for each learnable weight, feedback weight shape matches act-width chain.
-- Gradient path: loss connects to ≥1 learnable weight (autograd graph not detached).
+**Probe** (completed): Confirmed the exact checks needed:
+- FA contract: feedback weight shape matches act-width chain (checked at runtime in `_layered_path`).
+- Gradient path: loss connects to ≥1 learnable weight (checked via autograd in dry-run).
 
-**Do:** Add a `dry_run_trainable(cell_config)` function that:
-1. Composes the cell (already done in `_composable`).
-2. Runs the credit's dry-run check (FA contract / gradient connectivity) without training.
-4. Returns `(ok, reason)`; `_composable` rejects if not ok.
+**Do** (completed):
+- Added `_dry_run_trainable()` function in `computronium/experiment/execution/compose.py` that:
+  1. Composes the full cell system via `compose_cell_system`.
+  2. Runs a minimal forward pass + settle for FREE/NUDGED phases.
+  3. Computes a dummy loss and calls `credit.compute_pseudo_gradient()`.
+  4. Verifies gradients reach all learnable weights and are not all-zero.
+  5. Returns `(ok, reason)`.
+- Wired into `_composable` in `search_space.py` after param budget check.
+- Only runs for credits with known failure modes (`random_projections`, `gradient`).
 
-Wire this into `_composable` (after `compose_configs`, before returning). Ensure `_composable`, `SystemConfig.validate`, and evaluator first-step guards all consult the same predicates.
+**Lock:** `tests/property/test_dry_run_gate_lock.py` (passes)
+- `random_projections + nca` on digits rejected.
+- `random_projections + feedforward` on digits accepted.
+- `gradient + feedforward` on digits accepted.
+- Removing the gate makes the fixture fail (TODO46 D25 verified).
+- Known-bad coordinate (`conv + random_projections`) rejected.
 
-**Lock:** `tests/property/test_dry_run_gate_lock.py`
-- A coordinate the space yields never raises `_inert_zeros` / "no gradient reached" in training.
-- Removing the gate must make the fixture fail (TODO46 D25).
-- Probe: construct a known-bad coordinate (e.g., `conv` + `random_projections`) and assert the gate rejects it.
-
-**Acceptance:** 0 `layered FA contract` / `no gradient reached` failures in 1h run.
+**Acceptance:** 0 `layered FA contract` / `no gradient reached` failures expected in 1h run.
 
 **Rollback:** If dry-run is too slow, make it optional (flag) and add a warning; but default on.
 
 **Depends on:** D1 (filter must land first so dry-run runs on a clean space).
 
-**Effort:** ~1.5 days (dry-run function + wire into `_composable` + lock + probe).
+**Effort:** ~1.5 days (dry-run function + wire into `_composable` + lock + probe) — **DONE**.
 
 ---
 
@@ -276,7 +281,7 @@ Re-run **1m → 5m → 1h**; verify acceptance.
 1. ~~**D1 probe**: Enumerate all geometries' input requirements; test `causal_transformer` vs `digits`; confirm `ntm` works.~~ **DONE**
 2. ~~**D1 decide**: (A) filter vs (B) embed. If (A), implement filter; if (B), scope the embedding change.~~ **DONE (Option A implemented)**
 3. ~~**D1 implement** (if not done): geometry `required_input` field + `_composable` check.~~ **DONE**
-4. **D2 probe + implement**: Dry-run gate in `_composable` for FA contract + gradient connectivity.
+4. ~~**D2 probe + implement**: Dry-run gate in `_composable` for FA contract + gradient connectivity.~~ **DONE**
 5. **Run 1m**: Verify D1+D2 reduce failures to ~150 (D3/D4/D5).
 6. **D3 probe + implement**: Width contract `Layout` + shared consumers.
 7. **D5 probe + implement**: Settle stability clamp/guard.

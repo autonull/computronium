@@ -11,6 +11,7 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.core.logging import get_logger
+from computronium.core.pipeline import _task_loss_tensor, forward_pass
 from computronium.core.system_trainer import (
     compose_joint_system_from_configs,
     compose_system_from_configs,
@@ -24,7 +25,11 @@ from computronium.experiment.schema.harvest import (
     harvest_schema,
 )
 from computronium.ontology import GeometryConfig
+from computronium.ontology.credit import Phase
 from computronium.ontology.dynamics import StateDynamicsConfig
+from computronium.ontology.dynamics._state import set_state_field
+from computronium.ontology.system import SystemState
+from computronium.ontology.utils import _learnable_weight_names
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -223,6 +228,131 @@ def _check_geometry_input_compat(
                 f"Geometry '{topology}' requires token input (integer token IDs), "
                 f"but task provides {task_input_type} input with shape {input_shape}"
             )
+
+
+def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, too-many-return-statements, too-many-locals, complex-structure]
+    coordinate: Coordinate,
+    geometry: Mapping[str, object],
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int,
+) -> tuple[bool, str]:
+    """Run a minimal dry-run to verify the cell can train.
+
+    This catches:
+    - RandomProjectionsCredit: detached settle graph or feedback/act width mismatch
+    - GradientCredit: no gradient reaching learnable weights (detached graph)
+    - Other credits: any failure in compute_pseudo_gradient
+
+    Args:
+        coordinate: The six-axis coordinate.
+        geometry: Topology parameters.
+        input_shape: The task's input shape.
+        output_dim: Number of output classes.
+        param_budget: Parameter budget.
+
+    Returns:
+        (ok, reason): True if dry-run passes, False with reason if it fails.
+    """
+    import torch
+
+    # Only run dry-run for credits that have known failure modes
+    credit_name = coordinate.credit
+    DRY_RUN_CREDITS: set[str] = {"random_projections", "gradient"}
+    if credit_name not in DRY_RUN_CREDITS:
+        return True, "credit not checked"
+
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
+        # Compose the full cell system
+        cell = compose_cell_system(
+            coordinate=coordinate,
+            geometry=geometry,
+            input_shape=input_shape,
+            output_dim=output_dim,
+            param_budget=param_budget,
+        )
+        system = cell.system
+
+        # Create a dummy input batch (batch_size=2 for batch norm etc.)
+        batch_size = 2
+        if len(input_shape) == 1:
+            # Sequence or flat: (seq_len,) or (dim,)
+            x = torch.randint(
+                0, output_dim, (batch_size, input_shape[0]), dtype=torch.long
+            )
+        elif len(input_shape) == 2:
+            # (H, W) grayscale
+            x = torch.randn(batch_size, 1, *input_shape)
+        elif len(input_shape) == 3:
+            # (C, H, W)
+            x = torch.randn(batch_size, *input_shape)
+        else:
+            x = torch.randn(batch_size, *input_shape)
+
+        # Target: random labels
+        y = torch.randint(0, output_dim, (batch_size,))
+
+        # Move to CPU (dry-run runs on CPU)
+        system = system.to("cpu")  # type: ignore[attr-defined]
+        x = x.to("cpu")
+        y = y.to("cpu")
+
+        credit = system.credit
+        requires_autograd = getattr(credit, "requires_autograd", False)
+
+        # Run forward pass and settle with/without autograd
+        grad_ctx = torch.enable_grad() if requires_autograd else torch.no_grad()
+        with grad_ctx:
+            initial_activations = forward_pass(system.substrate, system.geometry, x)
+
+            states = {}
+            for phase in credit.phases:
+                state = SystemState(x=x, y=y)
+                state.activations = initial_activations
+                target = y if phase is Phase.NUDGED else None
+                settled = system.dynamics.settle(
+                    state, system.geometry, system.substrate, target=target
+                )
+
+                # Compute loss for nudged phase
+                if phase is Phase.NUDGED:
+                    loss_tensor, _ = _task_loss_tensor(settled, y)
+                    set_state_field(settled, "loss", loss_tensor)
+
+                states[phase] = settled
+
+            # Try to compute pseudo-gradients - this is where failures occur
+            output_state = states.get(Phase.NUDGED) or states.get(Phase.FREE)
+            if output_state is None:
+                return False, "no settled states available"
+            loss = output_state.loss
+            if loss is None:
+                loss, _ = _task_loss_tensor(output_state, y)
+
+            pseudo_grads = credit.compute_pseudo_gradient(states, loss, system.geometry)
+
+            weight_names = _learnable_weight_names(system.geometry.params)
+            if len(pseudo_grads) != len(weight_names):
+                return (
+                    False,
+                    f"pseudo_gradient count mismatch: got {len(pseudo_grads)}, expected {len(weight_names)}",
+                )
+
+            # Check for all-zero gradients (no-op)
+            if all(g.abs().max() == 0 for g in pseudo_grads):
+                return False, "all-zero pseudo-gradients (no-op)"
+
+        return True, "ok"  # ruff: ignore[try-consider-else]
+
+    except RuntimeError as e:
+        msg = str(e)
+        if "all-zero pseudo-gradient" in msg or "layered FA contract" in msg:
+            return False, f"RandomProjectionsCredit: {msg}"
+        if "no gradient reached" in msg:
+            return False, f"GradientCredit: {msg}"
+        return False, f"RuntimeError: {msg}"
+    except Exception as e:
+        return False, f"Exception: {type(e).__name__}: {e}"
 
 
 def _estimate_spatial_lattice_params(
@@ -435,17 +565,16 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
 
     # Check geometry-task input compatibility
     required_input = _TOPOLOGY_REQUIRED_INPUT.get(topology, "image")
-    if required_input == "token":
+    if required_input == "token" and (len(input_shape) != 1 or input_shape[0] < 100):
         # Token-only geometries (causal_transformer) require token input
         # Infer task input type from shape: only 1D with large dim could be sequence
         # But we conservatively reject all non-token tasks for token-only geometries
-        if len(input_shape) != 1 or input_shape[0] < 100:
-            # Heuristic: token tasks typically have seq_len > 100
-            # This is a conservative check; the real check happens at runtime
-            raise ProposalComposeError(
-                f"Geometry '{topology}' requires token input (integer token IDs), "
-                f"but task provides input with shape {input_shape} (expected 1D sequence)"
-            )
+        # Heuristic: token tasks typically have seq_len > 100
+        # This is a conservative check; the real check happens at runtime
+        raise ProposalComposeError(
+            f"Geometry '{topology}' requires token input (integer token IDs), "
+            f"but task provides input with shape {input_shape} (expected 1D sequence)"
+        )
 
     allowed = _allowed_keys(topology)
     unknown = frozenset(geometry) - allowed
