@@ -84,8 +84,13 @@ class SystemTrainer:
     def __post_init__(self) -> None:
         self._setup_device()
         self._set_seed()
-        # Move system components to device
-        if hasattr(self.system.geometry, "to"):
+        # Move the whole system to device when it supports it: the joint system
+        # carries plasticity state (e.g. rule_state's controller) that must
+        # follow the data, or its CPU tensors meet CUDA activations and abort.
+        mover = getattr(self.system, "to", None)
+        if callable(mover):
+            mover(self.device)
+        elif hasattr(self.system.geometry, "to"):
             self.system.geometry.to(self.device)  # type: ignore[attr-defined]
         self._ema: dict[str, Tensor] = {}
         self._best_theta: dict[str, Tensor] | None = None

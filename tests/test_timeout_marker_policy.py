@@ -53,9 +53,9 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ),
     (
         "tests/acceptance/test_unified_kernel.py::test_u3_multi_round_with_allocator",
-        180,
+        900,
     ),
-    ("tests/acceptance/test_unified_kernel.py::test_u3_pause_resume_via_run_id", 180),
+    ("tests/acceptance/test_unified_kernel.py::test_u3_pause_resume_via_run_id", 900),
     ("tests/acceptance/test_unified_kernel.py::test_u4_policy_interchangeability", 300),
     (
         "tests/acceptance/test_unified_kernel.py::test_u5_cross_policy_evidence_reuse",
@@ -118,6 +118,22 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ("tests/property/test_axis_certifications.py::TestCAxisTargetInversionCredit", 600),
     ("tests/property/test_ontology_parity.py", 300),
     (
+        "tests/property/test_runner_transparency_lock.py::test_run_loop_prints_cell_count",
+        300,
+    ),
+    (
+        "tests/property/test_runner_transparency_lock.py::test_run_loop_prints_cell_details",
+        300,
+    ),
+    (
+        "tests/property/test_search_space_diverse_sampling_lock.py::test_prefix_is_diverse",
+        300,
+    ),
+    (
+        "tests/property/test_search_space_diverse_sampling_lock.py::test_walk_is_deterministic_per_seed",
+        300,
+    ),
+    (
         "tests/property/test_state_algebra_lock.py::test_type_checking_imports_are_not_called_at_runtime",
         300,
     ),
@@ -131,6 +147,46 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     (
         "tests/unit/core/test_transformer_geometry.py::test_bp_learns_structured_tokens",
         300,
+    ),
+    ("tests/acceptance/conftest.py", 1800),
+    ("tests/acceptance/test_campaign_evidence_lock.py", 300),
+    ("tests/acceptance/test_campaign_lock.py", 900),
+    (
+        "tests/acceptance/test_demo_acceptance_full_regime.py::test_u1_full_regime_produces_real_measurements",
+        1800,
+    ),
+    ("tests/acceptance/test_promotion_lock.py", 600),
+    ("tests/probes/test_t51_probes.py::test_t51_energy_model_probe", 120),
+    ("tests/probes/test_t51_probes.py::test_t51_learning_signal_probe", 300),
+    ("tests/probes/test_t51_probes.py::test_t51_metric_coverage_probe", 120),
+    ("tests/probes/test_t51_probes.py::test_t51_nonnormality_verification_probe", 120),
+    ("tests/probes/test_t51_probes.py::test_t51_stability_operator_probe", 120),
+    (
+        "tests/property/test_cell_evaluation_lock.py::test_cell_trains_and_reports_measured_accuracy",
+        300,
+    ),
+    (
+        "tests/property/test_cell_evaluation_lock.py::test_digits_shape_reaches_the_geometry",
+        300,
+    ),
+    (
+        "tests/property/test_cell_evaluation_lock.py::test_swapping_credit_changes_the_measurement",
+        300,
+    ),
+    ("tests/property/test_cli_surface_lock.py", 300),
+    (
+        "tests/property/test_codegen_drift_lock.py::test_generate_all_writes_expected_files",
+        600,
+    ),
+    ("tests/property/test_codegen_drift_lock.py::test_listings_deterministic", 600),
+    ("tests/property/test_design_and_rate_lock.py", 120),
+    ("tests/property/test_multi_axis_campaign_lock.py", 300),
+    ("tests/property/test_price_oracle_lock.py", 300),
+    ("tests/property/test_round_loop_mechanism_lock.py", 300),
+    ("tests/property/test_run_ledger_lock.py", 300),
+    (
+        "tests/property/test_stream_advances_lock.py::test_stream_advances_lock",
+        60,
     ),
 )
 

@@ -30,7 +30,6 @@ from computronium.experiment.schema.harvest import (
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 
 if TYPE_CHECKING:
-    from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.execution.evaluate import TaskShape
     from computronium.experiment.schema.axis import AxisSpec
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
@@ -112,6 +111,10 @@ def search_space_from_spec(
         CONSTRAINTS_REGISTRY,
         OBJECTIVES_REGISTRY,
     )
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    # Ensure all registries are seeded (especially CONSTRAINTS_REGISTRY which isn't lazy)
+    seed_all_registries()
 
     # Check cache
     cache_key = _search_space_cache_key(spec, tasks)
@@ -158,6 +161,9 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
 
     For large spaces (>100k combinations), uses per-primitive validation
     instead of full Cartesian product to avoid 50s+ startup.
+
+    User-specified axes (explicit AxisSelection in spec) are NEVER filtered.
+    Only profile-default axes are filtered for validity.
     """
     from computronium.experiment.legality.dsl import (
         CoordinateContext,
@@ -167,6 +173,12 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     )
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+
+    # Determine which axes were explicitly specified by the user
+    user_specified_axes: set[StructuralAxis] = set()
+    for axis in StructuralAxis:
+        if spec.selection(axis) is not None:
+            user_specified_axes.add(axis)
 
     # Check cache
     cache_key = _filter_axes_cache_key(axes_snapshot, spec)
@@ -178,9 +190,12 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
 
         filtered_snapshot = []
         for axis_spec in axes_snapshot:
-            if axis_spec.name in valid_names_by_axis.get(
-                axis_spec.axis_kind, set()
-            ) or not valid_names_by_axis.get(axis_spec.axis_kind):
+            # Never filter user-specified axes
+            if (
+                axis_spec.axis_kind in user_specified_axes
+                or axis_spec.name in valid_names_by_axis.get(axis_spec.axis_kind, set())
+                or not valid_names_by_axis.get(axis_spec.axis_kind)
+            ):
                 filtered_snapshot.append(axis_spec)
         return filtered_snapshot
 
@@ -269,30 +284,58 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
             axis: set() for axis in axes_order
         }
 
-        # Pre-compute default values for other axes (first primitive each)
-        default_selection = {}
+        # Pre-compute candidate values per axis - use more primitives to find valid combinations
+        # For small axes (<=5 primitives), use all; for larger, use first 5
+        # CRITICAL: For axes involved in void constraints, we need broader coverage
+        # because specific combinations are required (e.g., diffusion needs recurrent geometry,
+        # spike_integration needs target_inversion credit)
+        candidate_values: dict[StructuralAxis, list[str]] = {}
         for axis in axes_order:
             primitives = primitives_by_axis.get(axis, [])
-            default_selection[axis.value] = primitives[0] if primitives else ""
+            # Use more candidates for axes that appear in void constraint predicates
+            # Geometry, Credit, Dynamics are heavily constrained
+            if axis in {
+                StructuralAxis.GEOMETRY,
+                StructuralAxis.CREDIT,
+                StructuralAxis.DYNAMICS,
+                StructuralAxis.SUBSTRATE,
+            }:
+                candidate_values[axis] = (
+                    primitives  # Use ALL for heavily constrained axes
+                )
+            elif len(primitives) <= 5:
+                candidate_values[axis] = primitives
+            else:
+                candidate_values[axis] = primitives[:5]
 
         # Max combinations to check per primitive
-        max_checks_per_primitive = 500
+        max_checks_per_primitive = 5000
 
         for axis in axes_order:
+            # Skip user-specified axes entirely - they pass through unfiltered
+            if axis in user_specified_axes:
+                for primitive in primitives_by_axis.get(axis, []):
+                    valid_by_axis[axis].add(primitive)
+                continue
+
             for primitive in primitives_by_axis.get(axis, []):
                 # Try to find a valid combination with this primitive fixed
                 found = False
 
-                # Build list of other axes' primitives
+                # Build list of other axes' candidate primitives
                 other_axes = [a for a in axes_order if a != axis]
-                other_primitives = [primitives_by_axis.get(a, []) for a in other_axes]
+                other_candidates = [candidate_values.get(a, []) for a in other_axes]
 
-                if not all(other_primitives):
-                    # Some axis has no primitives - skip
+                if not all(other_candidates):
+                    # Some axis has no candidates - skip
                     continue
 
-                # Quick check: try default combination first
-                test_selection = default_selection.copy()
+                # First try: test against first candidate of each other axis (the original default)
+                test_selection = {
+                    a.value: cands[0]
+                    for a, cands in zip(other_axes, other_candidates)
+                    if cands
+                }
                 test_selection[axis.value] = primitive
                 coordinate = Coordinate(**test_selection, params={})
                 ctx = CoordinateContext(
@@ -312,15 +355,15 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
                     valid_by_axis[axis].add(primitive)
                     continue
 
-                # If default failed, search other combinations (limited)
+                # Second try: search Cartesian product of candidate values for other axes
                 checks = 0
-                for values in product(*other_primitives):
+                for values in product(*other_candidates):
                     if checks >= max_checks_per_primitive:
                         break
-                    test_selection = default_selection.copy()
+                    test_selection = {
+                        a.value: v for a, v in zip(other_axes, values, strict=True)
+                    }
                     test_selection[axis.value] = primitive
-                    for other_axis, val in zip(other_axes, values, strict=True):
-                        test_selection[other_axis.value] = val
                     coordinate = Coordinate(**test_selection, params={})
                     ctx = CoordinateContext(
                         coordinate, task=spec.task_names[0] if spec.task_names else None
@@ -341,6 +384,50 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
                         break
                     checks += 1
 
+                # Third try: if still not found, try a broader search with more primitives per axis
+                if not found:
+                    # Expand search to more primitives per axis (up to 5)
+                    expanded_candidates = {}
+                    for a in other_axes:
+                        primitives = primitives_by_axis.get(a, [])
+                        expanded_candidates[a] = primitives[:5] if primitives else []
+
+                    if all(expanded_candidates.values()):
+                        other_axes_expanded = list(expanded_candidates.keys())
+                        other_candidates_expanded = list(expanded_candidates.values())
+
+                        checks = 0
+                        for values in product(*other_candidates_expanded):
+                            if checks >= max_checks_per_primitive:
+                                break
+                            test_selection = {
+                                a.value: v
+                                for a, v in zip(
+                                    other_axes_expanded, values, strict=True
+                                )
+                            }
+                            test_selection[axis.value] = primitive
+                            coordinate = Coordinate(**test_selection, params={})
+                            ctx = CoordinateContext(
+                                coordinate,
+                                task=spec.task_names[0] if spec.task_names else None,
+                            )
+
+                            all_pass = True
+                            for constraint in void_constraints:
+                                pred = constraint.predicate
+                                if pred is None:
+                                    continue
+                                if not evaluate(pred, ctx):
+                                    all_pass = False
+                                    break
+
+                            if all_pass:
+                                valid_by_axis[axis].add(primitive)
+                                found = True
+                                break
+                            checks += 1
+
     # Cache the result (store as dict of axis -> set of names)
     _filter_axes_cache[cache_key] = {
         axis.value: list(names) for axis, names in valid_by_axis.items()
@@ -349,9 +436,12 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     # Filter axes_snapshot to only primitives that appear in at least one valid tuple
     filtered_snapshot = []
     for axis_spec in axes_snapshot:
-        if axis_spec.name in valid_by_axis.get(
-            axis_spec.axis_kind, set()
-        ) or not valid_by_axis.get(axis_spec.axis_kind):
+        # Never filter user-specified axes
+        if (
+            axis_spec.axis_kind in user_specified_axes
+            or axis_spec.name in valid_by_axis.get(axis_spec.axis_kind, set())
+            or not valid_by_axis.get(axis_spec.axis_kind)
+        ):
             filtered_snapshot.append(axis_spec)
 
     return filtered_snapshot
@@ -625,7 +715,7 @@ def _schedule(spec: RunSpec, task: str) -> Schedule:
         device=spec.device,
         deterministic=spec.deterministic,
         num_workers=spec.num_workers,
-        precision=spec.precision,
+        precision=spec.precision,  # type: ignore[arg-type]
         checkpoint_every_n=spec.checkpoint_every_n,
     )
 
@@ -645,18 +735,54 @@ def declared_cell_count(spec: RunSpec, space: SearchSpace) -> int:
     return math.prod(per_axis) * len(space.tasks) * steps
 
 
-def _walk(  # ruff: ignore[complex-structure]
+def _decode_index(index: int, radices: Sequence[int]) -> tuple[int, ...]:
+    """Mixed-radix decode; the last radix varies fastest."""
+    digits = [0] * len(radices)
+    for i in range(len(radices) - 1, -1, -1):
+        digits[i] = index % radices[i]
+        index //= radices[i]
+    return tuple(digits)
+
+
+_GOLDEN: Final = 0.6180339887498949
+
+
+def _diverse_permutation(total: int, seed: int) -> tuple[int, int]:
+    """An affine bijection ``k -> (a*k + b) mod total`` spread by the golden ratio.
+
+    ``a`` is coprime to ``total`` (so the map visits every index exactly once)
+    and near ``total * phi`` (so consecutive k land far apart in the space).
+    This replaces a row-major Cartesian sweep, whose first ~124k cells were all
+    illegal for ``production-map`` because the slowest axis (geometry) locked
+    into the non-layered values while dynamics cycled. A golden-spaced walk
+    samples all axes at once and reaches legal cells within the first handful.
+
+    ``b`` is a seeded offset so two seeds traverse the same space differently.
+
+    Returns:
+        ``(a, b)`` with ``gcd(a, total) == 1``.
+    """
+    if total <= 1:
+        return 1, 0
+    b = (seed * 2654435761) % total
+    a = max(1, int(total * _GOLDEN))
+    while math.gcd(a, total) != 1:
+        a += 1
+        if a >= total:
+            a = 1
+    return a, b
+
+
+def _walk(
     spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None
 ) -> Iterator[tuple[Coordinate, str]]:
-    """Every cell the spec declares, as ``(coordinate, task)``.
+    """Every cell the spec declares, as ``(coordinate, task)``, in diverse order.
 
-    The axes are walked with round-robin interleaving on the first axis
-    (substrate) to ensure early diversity across substrates. Within each
-    substrate, the remaining axes follow Cartesian product order.
-
-    This avoids the pathological case where the first axis has many values
-    and the rest have few, causing the stream to exhaust all combinations
-    of the first value before ever reaching the second value.
+    The space is a mixed-radix hypergrid (one radix per axis, plus task and
+    sweep-step). It is traversed by a seeded affine permutation rather than a
+    row-major product, so early cells vary every axis at once — a diverse,
+    unbiased sample of the ontology rather than a corner of it. Each cell is
+    still visited exactly once, so the traversal remains a complete enumeration.
 
     Yields:
         ``(coordinate, task)`` for every cell the spec declares.
@@ -669,54 +795,20 @@ def _walk(  # ruff: ignore[complex-structure]
     tasks = space.tasks
     steps = max((len(ladder) for ladder in ladders.values()), default=1)
 
-    # Round-robin interleaving on the first axis (substrate)
-    first_axis_values = per_axis[0]
-    other_axes_values = per_axis[1:]
+    radices = [len(values) for values in per_axis] + [len(tasks), steps]
+    total = math.prod(radices)
+    a, b = _diverse_permutation(total, spec.seed)
+    axis_count = len(AXIS_KIND_ORDER)
 
-    # If only one value on first axis, fall back to simple product
-    if len(first_axis_values) == 1:
-        for values in product(*per_axis):
-            selection = {
-                axis.value: name
-                for axis, name in zip(AXIS_KIND_ORDER, values, strict=True)
-            }
-            for task in tasks:
-                for step in range(steps):
-                    params = _cell_params(
-                        Coordinate(**selection, params={}), schema, ladders, step
-                    )
-                    yield Coordinate(**selection, params=params), task
-        return
-
-    # Build lazy iterators for each first-axis value
-    def _substrate_iterator(first_val: str):
-        """Lazy iterator for all combinations with a fixed first-axis value."""
-        for other_vals_tuple in product(*other_axes_values):
-            selection = {AXIS_KIND_ORDER[0].value: first_val}
-            for axis, val in zip(AXIS_KIND_ORDER[1:], other_vals_tuple, strict=True):
-                selection[axis.value] = val
-            for task in tasks:
-                for step in range(steps):
-                    params = _cell_params(
-                        Coordinate(**selection, params={}), schema, ladders, step
-                    )
-                    yield Coordinate(**selection, params=params), task
-
-    # Create iterator for each substrate
-    substrate_iterators = [_substrate_iterator(fv) for fv in first_axis_values]
-    exhausted = [False] * len(substrate_iterators)
-    active_count = len(substrate_iterators)
-
-    # Round-robin yield: take one from each substrate iterator in turn
-    while active_count > 0:
-        for i, it in enumerate(substrate_iterators):
-            if exhausted[i]:
-                continue
-            try:
-                yield next(it)
-            except StopIteration:
-                exhausted[i] = True
-                active_count -= 1
+    for k in range(total):
+        digits = _decode_index((a * k + b) % total, radices)
+        selection = {
+            axis.value: per_axis[i][digits[i]] for i, axis in enumerate(AXIS_KIND_ORDER)
+        }
+        task = tasks[digits[axis_count]]
+        step = digits[axis_count + 1]
+        params = _cell_params(Coordinate(**selection, params={}), schema, ladders, step)
+        yield Coordinate(**selection, params=params), task
 
 
 def iter_candidates(  # ruff: ignore[complex-structure]
@@ -801,6 +893,8 @@ def iter_candidates(  # ruff: ignore[complex-structure]
     scanned = 0
     yielded = 0
     for coordinate, task in _walk(spec, search_space, shape):
+        if deadline is not None and deadline.soft_expired():
+            return
         scanned += 1
         if scanned <= offset:
             continue
@@ -834,7 +928,7 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         ):
             continue
         if deadline is not None and deadline.soft_expired():
-            continue
+            return
         yield coordinate, schedule
 
 

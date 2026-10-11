@@ -23,19 +23,16 @@ from computronium.core.plasticity import (
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
     CreditAssignmentConfig,
-    DiffusionDynamics,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     GeometryConfig,
-    InstantaneousDynamics,
     ParameterUpdateConfig,
-    PredictiveSettlingDynamics,
-    SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
     System,
     ThermodynamicContrast,
+    dynamics_from_config,
     geometry_from_config,
     substrate_from_config,
     update_from_config,
@@ -55,13 +52,14 @@ if TYPE_CHECKING:
     from computronium.state.context import SystemContext
 
 
-def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
+def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements, complex-structure]
     """Instantiate the credit implementation named by ``config.credit_type``."""
     from computronium.ontology import (
         BackpropCredit,
         HomeostaticCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
+        PCALMCredit,
         PepitaCredit,
         RandomProjectionsCredit,
         TargetInversionCredit,
@@ -87,6 +85,8 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             return TargetInversionCredit(config)
         case "homeostatic":
             return HomeostaticCredit(config)
+        case "pc_alm":
+            return PCALMCredit(config)
         case "gradient" | "backprop":
             return BackpropCredit(config)
         case other:
@@ -222,14 +222,20 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
             return torch.device("cpu")
 
         def to(self, device: torch.device | str) -> _JointSystem:
-            """Move learnable parameters and plasticity state to ``device``."""
+            """Move every component that owns tensors to ``device``.
+
+            Not just geometry/plasticity: dynamics and credit implementations can
+            hold tensors built at construction on CPU, which then meet CUDA
+            activations (``cuda:0`` vs ``cpu`` cat) during settle or credit.
+            """
             target = get_device(device)
             geometry = self.geometry
             if isinstance(geometry, nn.Module):
                 geometry.to(target)
-            mover = getattr(self.plasticity, "to", None)
-            if callable(mover):
-                mover(target)
+            for component in (self.dynamics, self.plasticity, self.credit, self.update):
+                mover = getattr(component, "to", None)
+                if callable(mover):
+                    mover(target)
             self.substrate.config = dataclasses.replace(
                 self.substrate.config, device=str(target)
             )
@@ -543,21 +549,11 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
     # Instantiate geometry from config
     geometry_instance = geometry_from_config(geometry)
 
-    # Instantiate dynamics from config — unknown values raise; a silent
-    # fallback here once ran "diffusion" coordinates as Instantaneous.
-    dynamics_type = dynamics.dynamics_type.lower()
-    if dynamics_type == "energy_minimization":
-        dynamics_instance = EnergyMinimizationDynamics(dynamics)
-    elif dynamics_type == "predictive_settling":
-        dynamics_instance = PredictiveSettlingDynamics(dynamics)
-    elif dynamics_type == "spike_integration":
-        dynamics_instance = SpikeIntegrationDynamics(dynamics)
-    elif dynamics_type == "diffusion":
-        dynamics_instance = DiffusionDynamics(dynamics)
-    elif dynamics_type == "instantaneous":
-        dynamics_instance = InstantaneousDynamics(dynamics)
-    else:
-        raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
+    # Instantiate dynamics from config via the registry — unknown values raise
+    # (a silent fallback here once ran "diffusion" coordinates as Instantaneous).
+    # The registry is the single source of truth: every declared dynamics_type
+    # (including pc_alm, lazy, error_predictive_coding) composes here.
+    dynamics_instance = dynamics_from_config(dynamics)
 
     # Instantiate credit from config
     credit_instance = _credit_from_config(credit)
@@ -613,7 +609,6 @@ def create_routing_eqprop_system(
     from computronium.core.plasticity import RoutingPlasticity
     from computronium.ontology import (
         CreditAssignmentConfig,
-        EnergyMinimizationDynamics,
         GeometryConfig,
         ParameterUpdateConfig,
         RecurrentGeometry,
@@ -702,7 +697,6 @@ def create_fast_weight_eqprop_system(
     )
     from computronium.ontology import (
         CreditAssignmentConfig,
-        EnergyMinimizationDynamics,
         GeometryConfig,
         ParameterUpdateConfig,
         RecurrentGeometry,
