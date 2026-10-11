@@ -40,6 +40,10 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "kmnist",
     "usps",
     "cifar10",
+    # sequential vision
+    "sequential_mnist",
+    # memory/sequence tasks
+    "copy_task",
     # language
     "tiny_shakespeare",
     "char_ngram",
@@ -47,10 +51,12 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "pendulum",
     "acrobot",
     "cartpole",
-    # graph
+    # graph (node classification)
     "cora",
     "citeseer",
     "pubmed",
+    # graph classification
+    "graph_classification",
     # tabular
     "breast_cancer",
     "iris",

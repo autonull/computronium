@@ -1097,6 +1097,23 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Geometry-Dynamics-Credit: recurrent geometry with instantaneous dynamics
+    # fails gradient credit because instantaneous pass doesn't settle recurrent
+    # connections, leaving some weights disconnected from the loss graph.
+    ConstraintSpec(
+        name="recurrent_instantaneous_gradient_credit",
+        kind=ConstraintKind.VOID,
+        description="Recurrent geometry with instantaneous dynamics incompatible with gradient/backprop credit (weights disconnected from loss)",
+        predicate=not_(
+            and_(
+                eq(var("geometry"), const("recurrent")),
+                eq(var("dynamics"), const("instantaneous")),
+                in_(var("credit"), const(["gradient", "backprop"])),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Credit-Dynamics: thermodynamic contrast needs energy/PC-family/lazy/pc_alm dynamics
     ConstraintSpec(
         name="thermodynamic_contrast_dynamics",

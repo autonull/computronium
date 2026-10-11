@@ -320,7 +320,10 @@ def _record_family_energy(
     geometry: Any,
     family: str,
 ) -> None:
-    """Record the energy metric under the dynamics-family-specific key."""
+    """Record the energy metric under the dynamics-family-specific key.
+
+    Detects energy clamping (warning, not failure) and records it separately.
+    """
     try:
         energy = dynamics.compute_energy(settled, geometry)
     except Exception as exc:  # ruff: ignore[blind-except] - a proxy energy is optional
@@ -329,6 +332,13 @@ def _record_family_energy(
     if energy is None:
         return
     energy_val = float(energy.item() if hasattr(energy, "item") else energy)
+
+    # Detect energy clamping: if energy is at or near the clamp boundary,
+    # it's a warning (numerical stability measure), not a failure.
+    max_energy = getattr(getattr(dynamics, "config", None), "max_energy", 1e6)
+    if abs(energy_val) >= max_energy * 0.999:  # Near clamp boundary
+        metrics["energy_clamped"] = True
+
     if family == "pc":
         metrics["pc_free_energy"] = energy_val
     elif family == "augmented_lagrangian":

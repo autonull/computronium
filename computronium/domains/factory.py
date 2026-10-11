@@ -4,14 +4,31 @@ Task factory for the merged task hierarchy.
 All concrete task classes now live in ``domains/``.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch
 from torch import nn
 
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
+
 from computronium.core.logging import get_logger
-from computronium.domains.trainer import TaskProtocol, _TaskTrainer
+from computronium.domains.base import (
+    DomainSpec,
+    DomainTask,
+    DomainType,
+    Metrics,
+    TaskSplit,
+)
+from computronium.domains.trainer import _TaskTrainer
 
 __all__ = [
     "CharNGramTask",
+    "CopyTask",
+    "GraphClassificationTask",
+    "SequentialMNISTTask",
     "create_task",
     "logger",
 ]
@@ -19,7 +36,374 @@ __all__ = [
 logger = get_logger()
 
 
-class CharNGramTask:
+class SequentialMNISTTask(DomainTask):
+    """Sequential MNIST: MNIST pixels fed as a sequence (1x784).
+
+    This exercises recurrent, causal_transformer, NTM, and NCA geometries
+    which require sequential input processing.
+    """
+
+    def __init__(
+        self,
+        name: str = "sequential_mnist",
+        device: str = "cpu",
+        quick_mode: bool = False,
+        data_dir: str = "./data",
+        download: bool = True,
+        num_workers: int = 0,
+        **kwargs,
+    ):
+        super().__init__(name, device=device, quick_mode=quick_mode, **kwargs)
+        self.data_dir = data_dir
+        self.download = download
+        self.num_workers = num_workers
+        self._input_dim = 784  # 28*28 flattened sequence
+        self._output_dim = 10
+
+    @property
+    def domain_type(self) -> DomainType:
+        return DomainType.VISION
+
+    @property
+    def spec(self) -> DomainSpec:
+        return DomainSpec(
+            name=self.name,
+            domain_type=DomainType.VISION,
+            description="Sequential MNIST: pixels fed as 784-step sequence",
+            default_metrics=["accuracy", "loss"],
+            supported_tasks=["classification"],
+            default_batch_size=64,
+            default_lr=1e-3,
+            requires_sequence=True,
+            tags=["vision", "sequential", "mnist"],
+        )
+
+    def setup(self) -> None:
+        from torch.utils.data import DataLoader, TensorDataset
+        from torchvision import datasets
+
+        transform = None  # We'll flatten manually
+        train_ds = datasets.MNIST(
+            self.data_dir,
+            train=True,
+            download=self.download,
+            transform=transform,
+        )
+        val_ds = datasets.MNIST(
+            self.data_dir,
+            train=False,
+            download=self.download,
+            transform=transform,
+        )
+
+        # Flatten images to sequences: [B, 1, 28, 28] -> [B, 784]
+        train_x = train_ds.data.float() / 255.0
+        train_x = train_x.view(train_x.size(0), -1)  # [B, 784]
+        train_y = train_ds.targets
+
+        val_x = val_ds.data.float() / 255.0
+        val_x = val_x.view(val_x.size(0), -1)
+        val_y = val_ds.targets
+
+        train_ds = TensorDataset(train_x, train_y)
+        val_ds = TensorDataset(val_x, val_y)
+
+        self._train_loader = DataLoader(
+            train_ds,
+            batch_size=32 if self.quick_mode else 64,
+            shuffle=True,
+            num_workers=self.num_workers,
+        )
+        self._val_loader = DataLoader(
+            val_ds,
+            batch_size=32 if self.quick_mode else 64,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+        self._test_loader = self._val_loader
+        self._setup_done = True
+
+    def get_dataloader(self, split: TaskSplit) -> DataLoader:
+        if not self._setup_done:
+            self.setup()
+        if split == TaskSplit.TRAIN:
+            return self._train_loader
+        return self._val_loader
+
+    def evaluate(
+        self,
+        model: nn.Module,
+        split: TaskSplit = TaskSplit.VAL,
+        max_batches: int | None = None,
+    ) -> Metrics:
+        was_training = model.training
+        model.eval()
+        try:
+            loader = self.get_dataloader(split)
+            total_loss = 0.0
+            total_correct = 0
+            total_samples = 0
+            with torch.no_grad():
+                for i, (batch_inputs, batch_targets) in enumerate(loader):
+                    if max_batches and i >= max_batches:
+                        break
+                    dev_inputs = batch_inputs.to(self.device)
+                    dev_targets = batch_targets.to(self.device)
+                    outputs = model(dev_inputs)
+                    loss = self.compute_loss(outputs, dev_targets)
+                    total_loss += loss.item() * dev_inputs.size(0)
+                    total_correct += (outputs.argmax(1) == dev_targets).sum().item()
+                    total_samples += dev_inputs.size(0)
+            avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+            accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+        finally:
+            if was_training:
+                model.train()
+        return Metrics(loss=avg_loss, accuracy=accuracy)
+
+
+class CopyTask(DomainTask):
+    """Copy task: Model must copy an input sequence after a delimiter.
+
+    This exercises attention, recurrent, and NTM geometries which require
+    memory and sequence-to-sequence processing.
+    """
+
+    def __init__(
+        self,
+        name: str = "copy_task",
+        device: str = "cpu",
+        quick_mode: bool = False,
+        seq_len: int = 10,
+        vocab_size: int = 8,
+        num_workers: int = 0,
+        **kwargs,
+    ):
+        super().__init__(name, device=device, quick_mode=quick_mode, **kwargs)
+        self.seq_len = seq_len
+        self.vocab_size = vocab_size
+        self.num_workers = num_workers
+        # Input: [B, seq_len*2+1] (sequence + delimiter + placeholder for output)
+        # Output: [B, seq_len] (the copied sequence)
+        self._input_dim = seq_len * 2 + 1
+        self._output_dim = vocab_size
+
+    @property
+    def domain_type(self) -> DomainType:
+        return DomainType.TIMESERIES
+
+    @property
+    def spec(self) -> DomainSpec:
+        return DomainSpec(
+            name=self.name,
+            domain_type=DomainType.TIMESERIES,
+            description="Copy task: reproduce input sequence after delimiter",
+            default_metrics=["accuracy", "loss"],
+            supported_tasks=["sequence_copy"],
+            default_batch_size=64,
+            default_lr=1e-3,
+            requires_sequence=True,
+            tags=["timeseries", "memory", "copy"],
+        )
+
+    def setup(self) -> None:
+        import torch
+        from torch.utils.data import DataLoader, TensorDataset
+
+        # Generate synthetic copy task data
+        n_train = 1000 if self.quick_mode else 10000
+        n_val = 200 if self.quick_mode else 2000
+
+        # Input sequences: random tokens from vocab
+        train_seq = torch.randint(0, self.vocab_size, (n_train, self.seq_len))
+        val_seq = torch.randint(0, self.vocab_size, (n_val, self.seq_len))
+
+        # Delimiter token (vocab_size)
+        delimiter = torch.full((n_train, 1), self.vocab_size, dtype=torch.long)
+        val_delimiter = torch.full((n_val, 1), self.vocab_size, dtype=torch.long)
+
+        # Target is the original sequence
+        train_y = train_seq.clone()
+        val_y = val_seq.clone()
+
+        # Input is sequence + delimiter + zeros (placeholder for output positions)
+        train_x = torch.cat([train_seq, delimiter, torch.zeros_like(train_seq)], dim=1)
+        val_x = torch.cat([val_seq, val_delimiter, torch.zeros_like(val_seq)], dim=1)
+
+        train_ds = TensorDataset(train_x.float(), train_y)
+        val_ds = TensorDataset(val_x.float(), val_y)
+
+        self._train_loader = DataLoader(
+            train_ds,
+            batch_size=32 if self.quick_mode else 64,
+            shuffle=True,
+            num_workers=self.num_workers,
+        )
+        self._val_loader = DataLoader(
+            val_ds,
+            batch_size=32 if self.quick_mode else 64,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+        self._test_loader = self._val_loader
+        self._setup_done = True
+
+    def get_dataloader(self, split: TaskSplit) -> DataLoader:
+        if not self._setup_done:
+            self.setup()
+        if split == TaskSplit.TRAIN:
+            return self._train_loader
+        return self._val_loader
+
+    def evaluate(
+        self,
+        model: nn.Module,
+        split: TaskSplit = TaskSplit.VAL,
+        max_batches: int | None = None,
+    ) -> Metrics:
+        was_training = model.training
+        model.eval()
+        try:
+            loader = self.get_dataloader(split)
+            total_loss = 0.0
+            total_correct = 0
+            total_samples = 0
+            with torch.no_grad():
+                for i, (batch_inputs, batch_targets) in enumerate(loader):
+                    if max_batches and i >= max_batches:
+                        break
+                    dev_inputs = batch_inputs.to(self.device)
+                    dev_targets = batch_targets.to(self.device)
+                    outputs = model(dev_inputs)
+                    loss = self.compute_loss(outputs, dev_targets)
+                    total_loss += loss.item() * dev_inputs.size(0)
+                    total_correct += (outputs.argmax(1) == dev_targets).sum().item()
+                    total_samples += dev_inputs.size(0)
+            avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+            accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+        finally:
+            if was_training:
+                model.train()
+        return Metrics(loss=avg_loss, accuracy=accuracy)
+
+
+class GraphClassificationTask(DomainTask):
+    """Graph classification: Classify entire graphs (not nodes).
+
+    This exercises graph and spatial_lattice geometries.
+    Uses TUDataset (e.g., MUTAG, PROTEINS, ENZYMES).
+    """
+
+    def __init__(
+        self,
+        name: str = "graph_classification",
+        device: str = "cpu",
+        quick_mode: bool = False,
+        dataset_name: str = "MUTAG",
+        num_workers: int = 0,
+        **kwargs,
+    ):
+        super().__init__(name, device=device, quick_mode=quick_mode, **kwargs)
+        self.dataset_name = dataset_name
+        self.num_workers = num_workers
+        self._input_dim = None  # Will be set in setup
+        self._output_dim = None
+
+    @property
+    def domain_type(self) -> DomainType:
+        return DomainType.GRAPH
+
+    @property
+    def spec(self) -> DomainSpec:
+        return DomainSpec(
+            name=self.name,
+            domain_type=DomainType.GRAPH,
+            description="Graph classification: classify entire graphs",
+            default_metrics=["accuracy", "loss"],
+            supported_tasks=["graph_classification"],
+            default_batch_size=32,
+            default_lr=1e-2,
+            tags=["graph", "classification", "tu"],
+        )
+
+    def setup(self) -> None:
+        try:
+            from torch_geometric.datasets import TUDataset
+            from torch_geometric.loader import DataLoader as GeoDataLoader
+        except ImportError:
+            raise ImportError(
+                "torch-geometric required for graph classification. "
+                "Install with: pip install torch-geometric"
+            )
+
+        dataset = TUDataset(root="./data", name=self.dataset_name)
+        self._input_dim = dataset.num_features
+        self._output_dim = dataset.num_classes
+
+        # Split dataset
+        n = len(dataset)
+        n_train = int(0.8 * n)
+        indices = torch.randperm(n)
+        train_idx, val_idx = indices[:n_train], indices[n_train:]
+
+        train_ds = dataset[train_idx]
+        val_ds = dataset[val_idx]
+
+        self._train_loader = GeoDataLoader(
+            train_ds,
+            batch_size=32 if self.quick_mode else 64,
+            shuffle=True,
+            num_workers=self.num_workers,
+        )
+        self._val_loader = GeoDataLoader(
+            val_ds,
+            batch_size=32 if self.quick_mode else 64,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+        self._test_loader = self._val_loader
+        self._setup_done = True
+
+    def get_dataloader(self, split: TaskSplit) -> DataLoader:
+        if not self._setup_done:
+            self.setup()
+        if split == TaskSplit.TRAIN:
+            return self._train_loader
+        return self._val_loader
+
+    def evaluate(
+        self,
+        model: nn.Module,
+        split: TaskSplit = TaskSplit.VAL,
+        max_batches: int | None = None,
+    ) -> Metrics:
+        was_training = model.training
+        model.eval()
+        try:
+            # For graph classification, we need to handle batch differently
+            loader = self.get_dataloader(split)
+            total_loss = 0.0
+            total_correct = 0
+            total_samples = 0
+            with torch.no_grad():
+                for i, data_batch in enumerate(loader):
+                    if max_batches and i >= max_batches:
+                        break
+                    dev_batch = data_batch.to(self.device)
+                    outputs = model(dev_batch.x, dev_batch.edge_index, dev_batch.batch)
+                    loss = self.compute_loss(outputs, dev_batch.y)
+                    total_loss += loss.item() * dev_batch.num_graphs
+                    total_correct += (outputs.argmax(1) == dev_batch.y).sum().item()
+                    total_samples += dev_batch.num_graphs
+            avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+            accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+        finally:
+            if was_training:
+                model.train()
+        return Metrics(loss=avg_loss, accuracy=accuracy)
+
+
+class CharNGramTask(DomainTask):
     """Synthetic task: Predict next character from previous N chars.
 
     Dataset: Deterministic repeating patterns or simple probabilistic grammar.
@@ -34,10 +418,9 @@ class CharNGramTask:
         quick_mode: bool = False,
         vocab_size: int = 27,
         context_len: int = 3,
+        **kwargs,
     ):
-        self.name = name
-        self.device = device
-        self.quick_mode = quick_mode
+        super().__init__(name, device=device, quick_mode=quick_mode, **kwargs)
         self.vocab_size = vocab_size
         self.context_len = context_len
         self._input_dim = context_len
@@ -45,22 +428,46 @@ class CharNGramTask:
         self.pattern = torch.arange(vocab_size)
 
     @property
-    def task_type(self) -> str:
-        return "lm"
+    def domain_type(self) -> DomainType:
+        return DomainType.LM
 
     @property
-    def input_dim(self) -> int | None:
-        return self._input_dim
-
-    @property
-    def output_dim(self) -> int:
-        return self._output_dim
+    def spec(self) -> DomainSpec:
+        return DomainSpec(
+            name=self.name,
+            domain_type=DomainType.LM,
+            description="Character n-gram language modeling",
+            default_metrics=["loss", "perplexity"],
+            supported_tasks=["language_modeling"],
+            default_batch_size=32,
+            default_lr=1e-3,
+            requires_sequence=True,
+            tags=["lm", "character", "ngram"],
+        )
 
     def setup(self) -> None:
-        pass
+        self._setup_done = True
+
+    def get_dataloader(self, split: TaskSplit) -> DataLoader:
+        # CharNGramTask uses get_batch instead of DataLoader
+        # Return a dummy loader that will be overridden by get_batch
+        if not self._setup_done:
+            self.setup()
+        if self._train_loader is None:
+            from torch.utils.data import DataLoader, TensorDataset
+
+            # Create dummy data for DataLoader interface
+            dummy_x = torch.zeros(1, self.context_len)
+            dummy_y = torch.zeros(1, dtype=torch.long)
+            dummy_ds = TensorDataset(dummy_x, dummy_y)
+            self._train_loader = DataLoader(dummy_ds, batch_size=1)
+            self._val_loader = DataLoader(dummy_ds, batch_size=1)
+        if split == TaskSplit.TRAIN:
+            return self._train_loader
+        return self._val_loader
 
     def get_batch(
-        self, split: str = "train", batch_size: int = 32
+        self, split: str | TaskSplit = "train", batch_size: int = 32
     ) -> tuple[torch.Tensor, torch.Tensor]:
         starts = torch.randint(0, self.vocab_size - self.context_len, (batch_size,))
         x_list: list[torch.Tensor] = []
@@ -77,9 +484,40 @@ class CharNGramTask:
         y = torch.stack(y_list).to(self.device).long()
         return x, y
 
+    def evaluate(
+        self,
+        model: nn.Module,
+        split: TaskSplit = TaskSplit.VAL,
+        max_batches: int | None = None,
+    ) -> Metrics:
+        was_training = model.training
+        model.eval()
+        try:
+            loader = self.get_dataloader(split)
+            total_loss = 0.0
+            total_correct = 0
+            total_samples = 0
+            with torch.no_grad():
+                for i, (batch_inputs, batch_targets) in enumerate(loader):
+                    if max_batches and i >= max_batches:
+                        break
+                    dev_inputs = batch_inputs.to(self.device)
+                    dev_targets = batch_targets.to(self.device)
+                    outputs = model(dev_inputs)
+                    loss = self.compute_loss(outputs, dev_targets)
+                    total_loss += loss.item() * dev_inputs.size(0)
+                    total_correct += (outputs.argmax(1) == dev_targets).sum().item()
+                    total_samples += dev_inputs.size(0)
+            avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+            accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+        finally:
+            if was_training:
+                model.train()
+        return Metrics(loss=avg_loss, accuracy=accuracy)
+
     def create_trainer(self, model: nn.Module, **kwargs) -> _TaskTrainer:
         kwargs.pop("device", None)
-        return _TaskTrainer(model, self, device=self.device, **kwargs)
+        return _TaskTrainer(model, self, device=str(self.device), **kwargs)
 
     def compute_metrics(
         self, logits: torch.Tensor, y: torch.Tensor, loss: float
@@ -140,7 +578,7 @@ def _normalize_vision_name(base_name: str) -> str:  # ruff: ignore[too-many-retu
 
 def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
     task_name: str, device: str = "cpu", quick_mode: bool = False, **kwargs
-) -> TaskProtocol:
+) -> DomainTask:
     """Factory function for tasks. Maps string names to Task classes via heuristics.
 
     ``quick_mode=True`` defaults DataLoader ``num_workers`` to 0 (forkserver
@@ -186,6 +624,18 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
                 dataset_name=task_name,
                 device=str(device),
                 **kwargs,
+            )
+        case "sequential_mnist":
+            return SequentialMNISTTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
+        case "copy_task":
+            return CopyTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
+        case "graph_classification":
+            return GraphClassificationTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
             )
         case _:
             _included_classes, base_name = _parse_split_digits(task_name)
