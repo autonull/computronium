@@ -1148,6 +1148,18 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Substrate-Dynamics: ternary substrate incompatible with pc_alm
+    ConstraintSpec(
+        name="ternary_substrate_dynamics",
+        kind=ConstraintKind.VOID,
+        description="Ternary substrate weight quantization causes numerical instability with pc_alm dynamics",
+        predicate=or_(
+            not_(eq(var("substrate"), const("ternary"))),
+            not_(eq(var("dynamics"), const("pc_alm"))),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Credit-Geometry: local contrastive needs feedforward geometry
     ConstraintSpec(
         name="local_contrastive_geometry",

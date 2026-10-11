@@ -2203,7 +2203,7 @@ class GraphGeometry(nn.Module):
                 "GraphGeometry requires config.connectivity with 'edge_index' key"
             )
         edge_index = config.connectivity["edge_index"]
-        self._edge_index = torch.tensor(edge_index, dtype=torch.long)
+        self.register_buffer("_edge_index", torch.tensor(edge_index, dtype=torch.long), persistent=False)
 
         # Build layers
         c_in = config.input_dim
@@ -2263,9 +2263,7 @@ class GraphGeometry(nn.Module):
         return metric.per_node(self.num_nodes)
 
     def _move_edge_index(self, device: torch.device) -> None:
-        """Move edge_index and degree buffer to device."""
-        if self._edge_index.device != device:
-            self._edge_index = self._edge_index.to(device)
+        """Move degree buffer to device (edge_index is a registered buffer)."""
         if hasattr(self, "_deg") and self._deg.device != device:
             self._deg = self._deg.to(device)
 

@@ -377,6 +377,10 @@ def _free_settle_metrics(system: Any, x: torch.Tensor) -> dict[str, float]:
             metrics["settle_horizon"] = float(
                 getattr(system.dynamics, "_settle_horizon", 0)
             )
+            # Ensure geometry is on the same device as settled activations
+            # to avoid device mismatch in compute_energy
+            if hasattr(system.geometry, "to"):
+                system.geometry.to(device)
             _record_family_energy(
                 metrics, system.dynamics, settled, system.geometry, family
             )
@@ -766,6 +770,12 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         # Energy per step (NVML-based)
         if last_epoch.energy_joules is not None and last_epoch.steps > 0:
             metrics["energy_per_step"] = last_epoch.energy_joules / last_epoch.steps
+
+    # Ensure system geometry is on the correct device for metrics computation
+    # (trainer.close() moves geometry to CPU)
+    device = _resolve_device(config.device)
+    if hasattr(cell.system.geometry, "to"):
+        cell.system.geometry.to(device)
 
     sample_x = _sample_inputs(task, config.device)
     metrics.update(compute_stability_metrics(cell.system, sample_x))
