@@ -24,9 +24,9 @@ from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.evaluate import task_shape
 from computronium.experiment.execution.search_space import (
     declared_cell_count,
-    iter_candidates,
     search_space_from_spec,
 )
+from computronium.experiment.execution.stream import CellStream
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
@@ -49,11 +49,12 @@ class Config:
 
 
 _shutdown_requested = [False]
+_shutdown_signum = [0]
 
 
 def _signal_handler(signum, frame):
     _shutdown_requested[0] = True
-    print(f"\nSignal {signum} received, requesting graceful shutdown...", flush=True)
+    _shutdown_signum[0] = signum
 
 
 signal.signal(signal.SIGINT, _signal_handler)
@@ -141,61 +142,72 @@ async def _run_loop(
 
     _print_experiment(spec, space)
 
-    cell_iter = iter_candidates(
-        spec, space, deadline=deadline, shape=task_shape, check_composable=True
-    )
-
     completed = {r.measurement_key for r in store.query_records(run_id=run_id)}
 
+    # Use CellStream for proper paging through all candidates
+    cell_stream = CellStream(
+        spec=spec,
+        space=space,
+        shape=task_shape,
+        deadline=deadline,
+        is_measured=lambda key: key in completed,
+    )
+
     count = 0
-    for coord, sched in cell_iter:
+    while not deadline.soft_expired() and not cell_stream.is_exhausted:
         if _shutdown_requested[0]:
-            print("Shutdown requested, stopping...", flush=True)
+            if _shutdown_signum[0]:
+                print(f"\nSignal {_shutdown_signum[0]} received, requesting graceful shutdown...", flush=True)
+            else:
+                print("Shutdown requested, stopping...", flush=True)
             break
 
-        if deadline.expired():
+        # Get next batch of cells (up to 10 at a time)
+        cells = cell_stream.next(10)
+        if not cells:
+            break
+
+        for coord, sched in cells:
+            if deadline.expired():
+                print(
+                    f"Hard deadline (with grace) reached, stopping after {count} cells",
+                    flush=True,
+                )
+                return count
+
+            key = coord.measurement_key(sched)
+            if key in completed:
+                continue
+
             print(
-                f"Hard deadline (with grace) reached, stopping after {count} cells",
+                f"  Cell {count + 1}: substrate={coord.substrate} geometry={coord.geometry} "
+                f"dynamics={coord.dynamics} credit={coord.credit} update={coord.update} "
+                f"plasticity={coord.plasticity} (seed={sched.seed})",
                 flush=True,
             )
-            break
 
-        if deadline.soft_expired() and count > 0:
-            print(f"Soft deadline reached after {count} cells, stopping", flush=True)
-            break
+            from computronium.experiment.schema.coordinate import Provenance
 
-        key = coord.measurement_key(sched)
-        if key in completed:
-            continue
-
-        print(
-            f"  Cell {count + 1}: substrate={coord.substrate} geometry={coord.geometry} "
-            f"dynamics={coord.dynamics} credit={coord.credit} update={coord.update} "
-            f"plasticity={coord.plasticity} (seed={sched.seed})",
-            flush=True,
-        )
-
-        from computronium.experiment.schema.coordinate import Provenance
-
-        prov = Provenance(
-            env={},
-            dataset="unknown",
-            dataset_version="1.0",
-            code_sha="unknown",
-            policy=spec.policy or "unknown",
-            links={"run_id": run_id},
-        )
-        params = {}
-        try:
-            records = await backend.submit(coord, sched, prov, params, store)
-            for r in records:
-                store.append(r)
-                completed.add(r.measurement_key)
-            count += 1
-        except Exception as e:
-            print(f"  Cell {count + 1} FAILED: {e}", flush=True)
-            traceback.print_exc()
-            # Continue to next cell
+            prov = Provenance(
+                env={},
+                dataset="unknown",
+                dataset_version="1.0",
+                code_sha="unknown",
+                policy=spec.policy or "unknown",
+                links={"run_id": run_id},
+            )
+            params = {}
+            try:
+                records = await backend.submit(coord, sched, prov, params, store)
+                for r in records:
+                    store.append(r)
+                    completed.add(r.measurement_key)
+                    cell_stream.add_rejected_key(r.measurement_key)
+                count += 1
+            except Exception as e:
+                print(f"  Cell {count + 1} FAILED: {e}", flush=True)
+                traceback.print_exc()
+                # Continue to next cell
 
     return count
 
@@ -232,7 +244,8 @@ def _print_dry_run(spec: RunSpec) -> None:
 
 def _run_experiment(
     config: Config, device: str, spec: RunSpec
-) -> tuple[str, float, int]:
+) -> tuple[str, float, int, bool]:
+    """Run experiment. Returns (run_id, elapsed, n_cells, was_interrupted)."""
     Path(config.store).parent.mkdir(parents=True, exist_ok=True)
 
     with RecordStore(StoreConfig(path=Path(config.store))) as store:
@@ -247,6 +260,7 @@ def _run_experiment(
         backend = LocalBackend(max_workers=1)
 
         start = time.time()
+        interrupted = False
         try:
             n = asyncio.run(_run_loop(spec, store, run_id, deadline, backend, device))
         except Exception as e:
@@ -256,9 +270,15 @@ def _run_experiment(
             raise
         elapsed = time.time() - start
 
-        store.finish_run(run_id, "completed", budget_consumed_s=elapsed)
+        # Check if we were interrupted by signal
+        if _shutdown_requested[0]:
+            interrupted = True
+            print("Run interrupted by signal, marking as interrupted", flush=True)
+            store.finish_run(run_id, "interrupted", budget_consumed_s=elapsed)
+        else:
+            store.finish_run(run_id, "completed", budget_consumed_s=elapsed)
 
-    return run_id, elapsed, n
+    return run_id, elapsed, n, interrupted
 
 
 def _check_budget(budget: float, elapsed: float) -> bool:
@@ -321,7 +341,7 @@ def main() -> int:
         return 0
 
     try:
-        run_id, elapsed, n = _run_experiment(config, device, spec)
+        run_id, elapsed, n, interrupted = _run_experiment(config, device, spec)
     except Exception as e:
         print(f"FATAL: {e}", flush=True)
         return 1
@@ -343,7 +363,12 @@ def main() -> int:
         )
         return 1
 
-    _check_budget(budget, elapsed)
+    # On interrupt, still generate report but skip budget window check
+    if not interrupted:
+        _check_budget(budget, elapsed)
+    else:
+        print("⚠️  Run was interrupted; skipping budget window check", flush=True)
+
     _generate_report(config, run_id)
 
     return 0

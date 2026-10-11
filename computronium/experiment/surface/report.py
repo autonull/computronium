@@ -248,7 +248,14 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         executor writes one record per seed, so a record-level filter cannot
         see a replication group. One definition, read by every consumer here.
         """
-        cells = set(self._store.claim_eligible_replication_keys(run_id))
+        spec = self._spec(run_id)
+        min_seeds = spec.n_seeds if spec else 5
+        fidelity = spec.fidelity if spec else "L2"
+        cells = set(
+            self._store.claim_eligible_replication_keys(
+                run_id, min_n_seeds=min_seeds, fidelity=fidelity
+            )
+        )
         return [
             record
             for record in self._store.query_records(run_id=run_id)
@@ -445,16 +452,34 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
     def front_objectives(self, run_id: str, limit: int = 2) -> tuple[str, ...]:
         """The payload keys a whole-run front defaults to.
 
-        The run's first *limit* measured objectives. Parameter count is the
-        fallback for a run that measured only one thing, because a front needs
-        two axes; it is not the second axis by default, since comparing an
-        outcome against size when the run declared a second outcome discards the
-        outcome.
+        The run's first *limit* measured objectives that are actually present in
+        claim-eligible records. Parameter count is the fallback for a run that
+        measured only one thing, because a front needs two axes; it is not the
+        second axis by default, since comparing an outcome against size when the
+        run declared a second outcome discards the outcome.
         """
         metrics = self.claim_metrics(run_id)
-        if len(metrics) >= limit:
-            return metrics[:limit]
-        return (metrics[0] if metrics else "param_count",) * limit
+        if not metrics:
+            return ("param_count",) * limit
+
+        # Filter to only metrics that appear in at least one claim-eligible record
+        eligible = self.claim_eligible_records(run_id)
+        if not eligible:
+            return (metrics[0],) * limit if metrics else ("param_count",) * limit
+
+        available = set()
+        for record in eligible:
+            for key in metrics:
+                if key in record.payload:
+                    available.add(key)
+
+        filtered = [m for m in metrics if m in available]
+        if len(filtered) >= limit:
+            return tuple(filtered[:limit])
+        if filtered:
+            return (filtered[0],) * limit
+        # Fallback: param_count is always in payload
+        return ("param_count",) * limit
 
     def claim_metrics(self, run_id: str) -> tuple[str, ...]:
         """The payload keys the run's measured objectives resolve to, in order."""
