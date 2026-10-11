@@ -3710,9 +3710,13 @@ class NtmGeometry(nn.Module):
             raise ValueError(
                 "forward_with_intermediates expects one (B, input_dim) step"
             )
-        state = self._state if self._state is not None else self.init_state(x.shape[0])
-        mem = self._mem if self._mem is not None else self.init_mem(x.shape[0])
-        read = self._read
+        # Use registered buffers _state_h, _state_c (not _state)
+        if self._state_h.numel() == 0 or self._state_h.shape[1] != x.shape[0]:
+            state = self.init_state(x.shape[0])
+        else:
+            state = (self._state_h, self._state_c)
+        mem = self._mem if self._mem.numel() > 0 else self.init_mem(x.shape[0])
+        read = self._read if self._read.numel() > 0 else None
         h_c, _state_next = self._controller(
             torch.cat(
                 [
