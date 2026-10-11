@@ -34,6 +34,7 @@ from computronium.core.identity_card import AlgorithmIdentityCard
 
 if TYPE_CHECKING:
     from computronium.core.joint.transition import PlasticityConfig
+    from computronium.ontology.geometry import ActivationLayout
     from computronium.state import CompositeState, SystemContext
 
 
@@ -152,7 +153,10 @@ class TemporalPsiPlasticity:
         return solve_trace_readout(psi, gram, cross, self.config.ridge_lambda)
 
     def modulate(
-        self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
+        self,
+        activations: list[Tensor] | Tensor,
+        psi: dict[str, Tensor],
+        layout: ActivationLayout | None = None,
     ) -> list[Tensor] | Tensor:
         return apply_readout(activations, psi, self.config.replace_readout)
 

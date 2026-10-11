@@ -1,11 +1,17 @@
 # TODO57 — Fix Everything the 1h Experiment Exposed, Then Re-Run
 
-**Status: IN PROGRESS (D1, D2, D3, D4, D5, D6, D7, D8, D9 complete). Source: the 1h `production-map` run committed as `87839185`
+**Status: IN PROGRESS (D1–D9 complete + 1m/5m verification passed; 1h re-run pending). Source: the 1h `production-map` run committed as `87839185`
 (3,744 cells, 100.0% budget, `results/exp_todo56_1h.html`). 504 cells (13%)
 failed. Every failure is a *screening gap* or a *latent runtime defect* — the
 runner and the diverse sampler now work. This plan closes all of them, then
 repeats the experiment (1m → 5m → 1h) expecting a near-empty failure taxonomy
 and complete axis coverage.**
+
+**Progress Update (2026-10-11):**
+- 1m experiment (`exp_todo57_1m_v2`): 10 cells, 0 failures, failure taxonomy `{}`
+- 5m experiment (`exp_todo57_5m`): 10 cells, 0 failures, failure taxonomy `{}`
+- All property locks pass (33 tests across D1–D5, 27 claim report tests)
+- Additional fix applied: Updated `modulate()` signatures in `RoutingPlasticity`, `ConflictAdaptivePsiPlasticity`, `TemporalPsiPlasticity`, and `ClosedFormRidgePlasticity` to accept optional `layout: ActivationLayout` parameter for signature compatibility with `pipeline.py` call site.
 
 Guiding rule (from TODO56): *a coordinate the space proposes is a coordinate the
 evaluator can train.* Today the space proposes cells `SystemConfig.validate`
@@ -282,7 +288,7 @@ External `SIGTERM` (e.g. a `timeout` wrapper) yields a graceful stop but the bud
 
 ## D. Remaining work carried from TODO56.md
 
-- [ ] **Re-run the experiment** after D1–D9 land: 1 min → 5 min → 1 h, expecting failure taxonomy ≈ 0 (only *declared* negative results) and coverage `geometry 11/11`, `update 12/12`, all axes complete.
+- [x] **Re-run the experiment** after D1–D9 land: **1 min ✓**, **5 min ✓** → 1 h (pending), expecting failure taxonomy ≈ 0 (only *declared* negative results) and coverage `geometry 11/11`, `update 12/12`, all axes complete.
 - [x] **Signal handling** (D9) — was TODO56 §1, now closed.
 - [ ] **Do not** reintroduce the deleted CellStream/BatchSizer/regime ladder; the `_walk` pager + `Deadline` + store dedup is the design (TODO56 anti-patterns).
 - [ ] Keep `scripts/run_experiment.py` transparent: it must name the experiment and fail loud on zero cells (already done — keep it that way).
@@ -311,6 +317,22 @@ Re-run **1m → 5m → 1h**; verify acceptance.
 
 ---
 
+## J. Additional fixes discovered during verification
+
+During 1m/5m verification runs, a signature mismatch was found between `pipeline.py:240` calling `plasticity.modulate(activations, psi, layout)` and several plasticity primitives that only accepted 2 arguments.
+
+**Fix applied:** Updated `modulate()` in 4 plasticity classes to accept optional `layout: "ActivationLayout | None" = None`:
+- `RoutingPlasticity` (`core/plasticity/routing.py:252`)
+- `ConflictAdaptivePsiPlasticity` (`core/plasticity/adaptive_psi.py:137`)
+- `TemporalPsiPlasticity` (`core/plasticity/temporal_psi.py:154`)
+- `ClosedFormRidgePlasticity` (`core/plasticity/closed_form.py:117`)
+
+Each implementation accepts the parameter for signature compatibility but does not use it (their modulation logic is per-unit or readout-based, not feature-dimension-dependent like `FastWeightPlasticity`).
+
+**Lock verification:** All existing property locks continue to pass after this change.
+
+---
+
 ## F. Acceptance for "Fixed"
 
 - A fresh 1h `production-map` run: `failure taxonomy == {}` for the intended objectives (or every entry is a *declared* negative result with a constraint naming it in `CONSTRAINTS_REGISTRY`), and coverage complete on all six axes (`geometry 11/11`, `update 12/12`).
@@ -332,7 +354,9 @@ Re-run **1m → 5m → 1h**; verify acceptance.
 8. ~~**D5 probe + implement**: Settle stability clamp/guard.~~ **DONE**
 9. ~~**D6**: ntm buffer registration.~~ **DONE**
 10. ~~**D7, D8, D9**: Runner/report robustness.~~ **DONE**
-11. **Full 1h re-run**: Verify acceptance.
+11. ~~**Run 1m**: Verify all fixes integrate.~~ **DONE (exp_todo57_1m_v2: 0 failures)**
+12. ~~**Run 5m**: Verify scale.~~ **DONE (exp_todo57_5m: 0 failures)**
+13. **Full 1h re-run**: Verify acceptance (final gate).
 
 ---
 

@@ -35,6 +35,7 @@ from computronium.core.plasticity.temporal_psi import (
 
 if TYPE_CHECKING:
     from computronium.core.joint.transition import PlasticityConfig
+    from computronium.ontology.geometry import ActivationLayout
     from computronium.state import CompositeState, SystemContext
 
 
@@ -135,7 +136,10 @@ class ConflictAdaptivePsiPlasticity(TemporalPsiPlasticity):
         return out
 
     def modulate(
-        self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
+        self,
+        activations: list[Tensor] | Tensor,
+        psi: dict[str, Tensor],
+        layout: ActivationLayout | None = None,
     ) -> list[Tensor] | Tensor:
         return apply_readout(activations, psi, self.config.replace_readout)
 

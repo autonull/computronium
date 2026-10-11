@@ -12,6 +12,7 @@ from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityConfig
 
 if TYPE_CHECKING:
+    from computronium.ontology.geometry import ActivationLayout
     from computronium.state import CompositeState, SystemContext
 
 
@@ -219,11 +220,15 @@ class FastWeightPlasticity:
         return {"fast_weights": new_fast_weights}
 
     def modulate(
-        self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
+        self,
+        activations: list[Tensor] | Tensor,
+        psi: dict[str, Tensor],
+        layout: "ActivationLayout | None" = None,
     ) -> list[Tensor] | Tensor:
         """Apply fast weights as additive per-sample modulation.
 
         Adds the fast weight vector (truncated/padded) to each layer's activations.
+        If a layout is provided, uses it to match feature dimensions per layer.
         """
         fast_weights = psi.get("fast_weights")
         if fast_weights is None:
@@ -231,22 +236,55 @@ class FastWeightPlasticity:
 
         acts = activations if isinstance(activations, list) else [activations]
         modulated = []
-        for a in acts:
+
+        # If layout is provided, use it to get per-layer feature shapes
+        layer_feature_shapes: list[tuple[int, ...]] = []
+        if layout is not None:
+            for layer in layout.layers:
+                layer_feature_shapes.append(layer.feature_shape)
+        else:
+            # Fallback: infer from activations
+            for a in acts:
+                layer_feature_shapes.append(a.shape[1:])
+
+        for i, a in enumerate(acts):
             # fast_weights: [batch, fw_dim] -> add to feature dim
             fw = fast_weights
-            if fw.shape[1] != a.shape[1]:
+            expected_feat_dim = 0
+            if i < len(layer_feature_shapes):
+                shape = layer_feature_shapes[i]
+                if shape:
+                    expected_feat_dim = shape[-1]
+            if expected_feat_dim == 0:
+                expected_feat_dim = a.shape[1] if a.dim() > 1 else a.shape[-1]
+
+            if fw.shape[1] != expected_feat_dim:
                 # Truncate or pad to match feature dim
-                if fw.shape[1] > a.shape[1]:
-                    fw = fw[:, : a.shape[1]]
+                if fw.shape[1] > expected_feat_dim:
+                    fw = fw[:, :expected_feat_dim]
                 else:
                     pad = torch.zeros(
                         fw.shape[0],
-                        a.shape[1] - fw.shape[1],
+                        expected_feat_dim - fw.shape[1],
                         device=fw.device,
                         dtype=fw.dtype,
                     )
                     fw = torch.cat([fw, pad], dim=-1)
+
+            # Handle batch dimension mismatch (for cell-mode layers)
+            # fast_weights has batch_size B, but cell-mode layers have B*H*W
+            if a.shape[0] != fw.shape[0] and layout is not None:
+                # Check if this layer is cell-mode
+                if i < len(layout.layers) and layout.layers[i].batch_mode == "cell":
+                    # Tile fast_weights across spatial dimension
+                    spatial = layout.spatial_dims
+                    if spatial is not None:
+                        h, w = spatial
+                        # Repeat each batch element H*W times
+                        fw = fw.repeat_interleave(h * w, dim=0)
+
             modulated.append(a + fw)
+
         return modulated if isinstance(activations, list) else modulated[0]
 
 

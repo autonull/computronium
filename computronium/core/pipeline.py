@@ -234,8 +234,10 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
                 psi = _step_psi(plasticity, psi, settled, x, y, phase, credit, context)
                 modulate = getattr(plasticity, "modulate", None)
                 if modulate is not None:
+                    # Get activation layout from geometry for proper feature matching
+                    layout = geometry.activation_layout(batch_size=x.shape[0])
                     set_state_field(
-                        settled, "activations", modulate(settled.activations, psi)
+                        settled, "activations", modulate(settled.activations, psi, layout)
                     )
 
             if phase is Phase.NUDGED:

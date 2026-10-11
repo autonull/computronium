@@ -22,6 +22,7 @@ from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityPrimitive
 
 if TYPE_CHECKING:
+    from computronium.ontology.geometry import ActivationLayout
     from computronium.state import CompositeState, SystemContext
 
 
@@ -115,7 +116,10 @@ class ClosedFormRidgePlasticity(PlasticityPrimitive):
         }
 
     def modulate(
-        self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
+        self,
+        activations: list[Tensor] | Tensor,
+        psi: dict[str, Tensor],
+        layout: ActivationLayout | None = None,
     ) -> list[Tensor] | Tensor:
         m = psi.get("readout_m")
         if m is None or not isinstance(activations, list) or len(activations) < 2:

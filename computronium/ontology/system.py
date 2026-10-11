@@ -397,6 +397,10 @@ class SystemConfig:
         self._validate_pc_alm_dynamics()
         self._validate_residual_connections()
 
+        # Geometry-Plasticity compatibility
+        self._validate_nca_ntm_fast_weight_plasticity()
+        self._validate_tile_fast_weight_plasticity()
+
         # Credit-Geometry compatibility
         self._validate_local_contrastive_geometry()
         self._validate_attention_geometry_compatibility()
@@ -569,6 +573,24 @@ class SystemConfig:
                 f"Residual connections (residual=True) require feedforward geometry, "
                 f"got topology_type={self.geometry.topology_type!r}"
             )
+
+    def _validate_nca_ntm_fast_weight_plasticity(self) -> None:
+        """NCA/NTM geometries have per-cell activations incompatible with fast-weight plasticity."""
+        if self.geometry.topology_type in {"nca", "ntm"}:
+            if self.plasticity.plasticity_type == "fast_weights":
+                raise ValueError(
+                    f"{self.geometry.topology_type.upper()} geometry has per-cell activations "
+                    f"incompatible with fast-weight plasticity (plasticity_type={self.plasticity.plasticity_type!r})"
+                )
+
+    def _validate_tile_fast_weight_plasticity(self) -> None:
+        """Tile/tile_mesh geometries with fast_weights require layout-aware modulation."""
+        if self.geometry.topology_type in {"tile", "tile_mesh"}:
+            if self.plasticity.plasticity_type == "fast_weights":
+                raise ValueError(
+                    f"{self.geometry.topology_type} geometry with fast-weight plasticity "
+                    f"requires layout-aware modulation (not yet supported)"
+                )
 
     def _validate_thermodynamic_contrast_dynamics(self) -> None:
         """Thermodynamic contrast credit requires energy-based or PC-family dynamics."""

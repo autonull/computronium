@@ -12,6 +12,7 @@ from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityConfig
 
 if TYPE_CHECKING:
+    from computronium.ontology.geometry import ActivationLayout
     from computronium.state import CompositeState, SystemContext
 
 
@@ -250,7 +251,10 @@ class RoutingPlasticity:
             return (torch.sigmoid(logits) > 0.5).float()
 
     def modulate(
-        self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
+        self,
+        activations: list[Tensor] | Tensor,
+        psi: dict[str, Tensor],
+        layout: ActivationLayout | None = None,
     ) -> list[Tensor] | Tensor:
         """Apply per-unit routing gates to activations.
 
@@ -258,6 +262,9 @@ class RoutingPlasticity:
         per-unit soft mask (per-layer fixed projection, seeded by layer
         index). Zero ψ yields the uniform 0.5 mask; stepped ψ differentiates
         units — the realized routing mechanism.
+
+        If layout is provided, it is accepted for signature compatibility but
+        not used by this plasticity (routing is per-unit, not per-feature).
         """
         gate_logits = psi.get("gate_logits")
         if gate_logits is None:

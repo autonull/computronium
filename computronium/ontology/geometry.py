@@ -45,6 +45,67 @@ type InitScheme = Literal["default", "mupc", "innocenti"]
 type RequiredInput = Literal["image", "token", "sequence"]
 
 
+@dataclass(frozen=True, slots=True)
+class LayerLayout:
+    """Description of one layer's activation layout.
+
+    Attributes:
+        name: Layer identifier (e.g., "input", "hidden_0", "output")
+        batch_mode: How batch dimension is handled
+            - "sample": standard per-sample batch [B, ...]
+            - "cell": per-cell batch [B*H*W, ...] (e.g., NCA)
+            - "sequence": per-token batch [B*T, ...] (e.g., causal_transformer)
+        feature_shape: Shape of features per batch element (excluding batch dim)
+        is_readout: Whether this layer is the final readout/logits
+    """
+
+    name: str
+    batch_mode: Literal["sample", "cell", "sequence"]
+    feature_shape: tuple[int, ...]
+    is_readout: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ActivationLayout:
+    """Complete activation layout for a geometry.
+
+    This is the single source of truth for activation shapes consumed by
+    plasticity, credit assignment, and readout. It replaces ad-hoc shape
+    derivation that caused mismatches (TODO57 D3).
+
+    Attributes:
+        layers: Ordered list of layer layouts from input to output
+        batch_size: The batch size (B) for sample-mode layers
+        spatial_dims: (H, W) for cell-mode geometries, None otherwise
+    """
+
+    layers: tuple[LayerLayout, ...]
+    batch_size: int
+    spatial_dims: tuple[int, int] | None = None
+
+    def get_layer(self, name: str) -> LayerLayout | None:
+        """Get layer layout by name."""
+        for layer in self.layers:
+            if layer.name == name:
+                return layer
+        return None
+
+    def sample_mode_layers(self) -> tuple[LayerLayout, ...]:
+        """Layers with standard per-sample batch dimension."""
+        return tuple(l for l in self.layers if l.batch_mode == "sample")
+
+    def cell_mode_layers(self) -> tuple[LayerLayout, ...]:
+        """Layers with per-cell batch dimension (B*H*W)."""
+        return tuple(l for l in self.layers if l.batch_mode == "cell")
+
+    def readout_layer(self) -> LayerLayout | None:
+        """The final readout/logits layer."""
+        for layer in reversed(self.layers):
+            if layer.is_readout:
+                return layer
+        return None
+
+
 def _linear_stack(
     dims: tuple[int, ...],
     init_scale: float,
@@ -689,6 +750,21 @@ class Geometry(Protocol):
         """Return modules in forward order for TransitionGraph protocol."""
         ...
 
+    @abstractmethod
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for this geometry.
+
+        This is the single source of truth for activation shapes consumed by
+        plasticity, credit assignment, and readout (TODO57 D3).
+
+        Args:
+            batch_size: The batch size (B) for sample-mode layers
+
+        Returns:
+            ActivationLayout describing per-layer shapes and batch handling
+        """
+        ...
+
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate
     ) -> list[Tensor]:
@@ -940,6 +1016,40 @@ class FeedforwardGeometry(nn.Module):
     def transition_modules(self) -> list[nn.Module]:
         return [m for m in self._layers if isinstance(m, nn.Linear)]
 
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for feedforward geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        """
+        layers: list[LayerLayout] = []
+        # Input layer
+        layers.append(
+            LayerLayout(
+                name="input",
+                batch_mode="sample",
+                feature_shape=(self.config.input_dim,),
+            )
+        )
+        # Hidden layers
+        for i, hidden_dim in enumerate(self.config.hidden_dims):
+            layers.append(
+                LayerLayout(
+                    name=f"hidden_{i}",
+                    batch_mode="sample",
+                    feature_shape=(hidden_dim,),
+                )
+            )
+        # Output/readout layer
+        layers.append(
+            LayerLayout(
+                name="output",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
+
 
 def _sinusoidal_pe(seq_len: int, d_model: int) -> Tensor:
     pe = torch.zeros(seq_len, d_model)
@@ -1098,6 +1208,63 @@ class TransformerGeometry(nn.Module):
 
     def transition_modules(self) -> list[nn.Module]:
         return [self.embed, *self.blocks, self.head]
+
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for causal transformer geometry.
+
+        All intermediate layers use sequence-mode batch [B*T, features].
+        The readout layer also uses sequence-mode batch.
+        """
+        d_model = self.config.hidden_dims[0]
+        layers: list[LayerLayout] = []
+        # Input embedding (per token)
+        layers.append(
+            LayerLayout(
+                name="input",
+                batch_mode="sequence",
+                feature_shape=(d_model,),
+            )
+        )
+        # Per-block intermediate layers (all B*T, d_model)
+        for i in range(self.config.num_layers):
+            layers.append(
+                LayerLayout(
+                    name=f"block_{i}_ln1",
+                    batch_mode="sequence",
+                    feature_shape=(d_model,),
+                )
+            )
+            layers.append(
+                LayerLayout(
+                    name=f"block_{i}_attn",
+                    batch_mode="sequence",
+                    feature_shape=(d_model,),
+                )
+            )
+            layers.append(
+                LayerLayout(
+                    name=f"block_{i}_ln2",
+                    batch_mode="sequence",
+                    feature_shape=(d_model,),
+                )
+            )
+            layers.append(
+                LayerLayout(
+                    name=f"block_{i}_ffn",
+                    batch_mode="sequence",
+                    feature_shape=(d_model,),
+                )
+            )
+        # Output logits (per token)
+        layers.append(
+            LayerLayout(
+                name="output",
+                batch_mode="sequence",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
 
 
 def _make_recurrent_geometry(config: GeometryConfig) -> RecurrentGeometry:
@@ -1266,6 +1433,40 @@ class RecurrentGeometry(nn.Module):
 
     def transition_modules(self) -> list[nn.Module]:
         return [m for m in self._layers if isinstance(m, nn.Linear)]
+
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for recurrent geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        """
+        layers: list[LayerLayout] = []
+        # Input layer
+        layers.append(
+            LayerLayout(
+                name="input",
+                batch_mode="sample",
+                feature_shape=(self.config.input_dim,),
+            )
+        )
+        # Hidden layers
+        for i, hidden_dim in enumerate(self.config.hidden_dims):
+            layers.append(
+                LayerLayout(
+                    name=f"hidden_{i}",
+                    batch_mode="sample",
+                    feature_shape=(hidden_dim,),
+                )
+            )
+        # Output/readout layer
+        layers.append(
+            LayerLayout(
+                name="output",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
 
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None
@@ -1675,6 +1876,47 @@ class TileGeometry(nn.Module):
             modules.append(self._output_projection)
         return modules
 
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for tile geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        """
+        # Count total neurons per layer
+        layer_neurons = []
+        for layer_tiles in self._graph.layer_ids:
+            total = sum(self._graph.tiles[tid].neurons for tid in layer_tiles)
+            layer_neurons.append(total)
+
+        layers: list[LayerLayout] = []
+        # Input projection output (first layer)
+        layers.append(
+            LayerLayout(
+                name="input_proj",
+                batch_mode="sample",
+                feature_shape=(layer_neurons[0],) if layer_neurons else (0,),
+            )
+        )
+        # Hidden layers
+        for i, neurons in enumerate(layer_neurons[1:-1], 1):
+            layers.append(
+                LayerLayout(
+                    name=f"layer_{i}",
+                    batch_mode="sample",
+                    feature_shape=(neurons,),
+                )
+            )
+        # Output projection output (readout)
+        if len(layer_neurons) > 1:
+            layers.append(
+                LayerLayout(
+                    name="output_proj",
+                    batch_mode="sample",
+                    feature_shape=(self.config.output_dim,),
+                    is_readout=True,
+                )
+            )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
+
     def get_boundary_tiles(self, device_map: dict[int, int]) -> dict[int, list[int]]:
         """Identify boundary tiles that connect to different devices.
 
@@ -1888,6 +2130,50 @@ class ConvGeometry(nn.Module):
     def transition_modules(self) -> list[nn.Module]:
         return [self._head]
 
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for conv geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        """
+        layers: list[LayerLayout] = []
+        # Input (flattened)
+        c, h, w = self.config.in_channels, *self.config.input_hw
+        layers.append(
+            LayerLayout(
+                name="input",
+                batch_mode="sample",
+                feature_shape=(c * h * w,),
+            )
+        )
+        # Conv layers (after flattening and pooling)
+        for i, c_out in enumerate(self.config.conv_channels):
+            layers.append(
+                LayerLayout(
+                    name=f"conv_{i}",
+                    batch_mode="sample",
+                    feature_shape=(c_out * h * w,),  # Pre-pooling
+                )
+            )
+        # Pooled features before head
+        ph, pw = self.config.pool_hw
+        layers.append(
+            LayerLayout(
+                name="pooled",
+                batch_mode="sample",
+                feature_shape=(self.config.conv_channels[-1] * ph * pw,),
+            )
+        )
+        # Output/readout
+        layers.append(
+            LayerLayout(
+                name="output",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
+
 
 @geometry_backend("graph")
 class GraphGeometry(nn.Module):
@@ -2071,6 +2357,44 @@ class GraphGeometry(nn.Module):
 
     def transition_modules(self) -> list[nn.Module]:
         return [self._head]
+
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for graph geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        Note: GraphGeometry operates on node-level features [num_nodes, features]
+        which are batched as [B, num_nodes, features] and flattened to [B*num_nodes, features]
+        for the substrate operator. The layout reflects the per-node feature shape.
+        """
+        num_nodes = self.num_nodes
+        layers: list[LayerLayout] = []
+        # Input (per node)
+        layers.append(
+            LayerLayout(
+                name="input",
+                batch_mode="sample",
+                feature_shape=(num_nodes, self.config.input_dim),
+            )
+        )
+        # Hidden layers (per node)
+        for i, c_out in enumerate(self.config.hidden_dims):
+            layers.append(
+                LayerLayout(
+                    name=f"hidden_{i}",
+                    batch_mode="sample",
+                    feature_shape=(num_nodes, c_out),
+                )
+            )
+        # Output/readout (per node, then pooled/classified)
+        layers.append(
+            LayerLayout(
+                name="output",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
 
 
 class _AttentionBlock(nn.Module):
@@ -2415,6 +2739,49 @@ class AttentionGeometry(nn.Module):
             modules.extend([block.ln1, block.ln2])
         return modules
 
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for attention geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        The attention blocks process sequences of length 1 (flattened input),
+        so the layout is per-sample.
+        """
+        layers: list[LayerLayout] = []
+        # Input projection
+        layers.append(
+            LayerLayout(
+                name="input_proj",
+                batch_mode="sample",
+                feature_shape=(self._hidden_dim,),
+            )
+        )
+        # Attention blocks (each block has attention + FFN)
+        for i in range(self.config.num_layers):
+            layers.append(
+                LayerLayout(
+                    name=f"block_{i}_attn",
+                    batch_mode="sample",
+                    feature_shape=(self._hidden_dim,),
+                )
+            )
+            layers.append(
+                LayerLayout(
+                    name=f"block_{i}_ffn",
+                    batch_mode="sample",
+                    feature_shape=(self._hidden_dim,),
+                )
+            )
+        # Output projection
+        layers.append(
+            LayerLayout(
+                name="output_proj",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
+
 
 @geometry_backend("spatial_lattice")
 class SpatialLattice3DGeometry(nn.Module):
@@ -2682,6 +3049,47 @@ class SpatialLattice3DGeometry(nn.Module):
             modules.append(self._output_projection)
         return modules
 
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for spatial lattice geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        Each site has its own features, flattened into a single vector per sample.
+        """
+        d, h, w = self._lattice_dims
+        num_sites = d * h * w
+        first_hidden = (
+            self.config.hidden_dims[0] if self.config.hidden_dims else self.config.output_dim
+        )
+
+        layers: list[LayerLayout] = []
+        # Input projection output (flattened sites)
+        layers.append(
+            LayerLayout(
+                name="input_proj",
+                batch_mode="sample",
+                feature_shape=(num_sites * first_hidden,),
+            )
+        )
+        # Hidden layers (flattened sites)
+        for i, c_out in enumerate(self.config.hidden_dims):
+            layers.append(
+                LayerLayout(
+                    name=f"layer_{i}",
+                    batch_mode="sample",
+                    feature_shape=(num_sites * c_out,),
+                )
+            )
+        # Output projection output (readout)
+        layers.append(
+            LayerLayout(
+                name="output_proj",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
+
 
 @geometry_backend("nca")
 class NcaGeometry(nn.Module):
@@ -2938,6 +3346,58 @@ class NcaGeometry(nn.Module):
             modules.append(self._readout)
         return modules
 
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for NCA geometry.
+
+        The first three layers use cell-mode batch [B*H*W, features] because
+        NCA processes each cell independently. The readout layer uses
+        sample-mode batch [B, output_dim] as it projects the flattened grid.
+        """
+        h, w = self.config.grid_hw
+        c = self.config.input_dim
+        hidden = self.config.hidden_dims[0] if self.config.hidden_dims else 32
+        in_dim = c * 9 + self.config.label_channels
+
+        layers: list[LayerLayout] = []
+        # Perceived (per cell: 3x3 neighborhood)
+        layers.append(
+            LayerLayout(
+                name="perceived",
+                batch_mode="cell",
+                feature_shape=(in_dim,),
+            )
+        )
+        # Hidden layer (per cell)
+        layers.append(
+            LayerLayout(
+                name="hidden",
+                batch_mode="cell",
+                feature_shape=(hidden,),
+            )
+        )
+        # Delta (per cell, output channels = state channels)
+        layers.append(
+            LayerLayout(
+                name="delta",
+                batch_mode="cell",
+                feature_shape=(c,),
+            )
+        )
+        # Readout/logits (per sample, flattened grid)
+        layers.append(
+            LayerLayout(
+                name="output",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(
+            layers=tuple(layers),
+            batch_size=batch_size,
+            spatial_dims=(h, w),
+        )
+
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
@@ -2992,13 +3452,21 @@ class NtmGeometry(nn.Module):
         self._erase = nn.Linear(hidden, config.mem_width)
         self._out = nn.Linear(hidden + config.mem_width, config.output_dim)
         self._beta = nn.Parameter(torch.tensor(config.beta_init))
-        self._reset_buffers()
+        # Register stateful buffers so .to(device) moves them
+        self.register_buffer("_state_h", torch.empty(0), persistent=False)
+        self.register_buffer("_state_c", torch.empty(0), persistent=False)
+        self.register_buffer("_mem", torch.empty(0), persistent=False)
+        self.register_buffer("_read", torch.empty(0), persistent=False)
         self._set_param_names()
 
     def _reset_buffers(self) -> None:
-        self._state: tuple[Tensor, Tensor] | None = None
-        self._mem: Tensor | None = None
-        self._read: Tensor | None = None
+        """Clear the stateful buffers used by forward()."""
+        # Reset to empty tensors on the same device as _beta
+        device = self._beta.device
+        self._state_h = torch.empty(0, device=device)
+        self._state_c = torch.empty(0, device=device)
+        self._mem = torch.empty(0, device=device)
+        self._read = torch.empty(0, device=device)
 
     def _set_param_names(self) -> None:
         # nn.LSTM weight attributes are typed Tensor | Module in stubs
@@ -3161,12 +3629,14 @@ class NtmGeometry(nn.Module):
 
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
         if x.dim() == 2:
-            if self._state is None or self._state[0].shape[1] != x.shape[0]:
-                self._state = self.init_state(x.shape[0])
+            # Check if buffers need reinitialization (batch size changed)
+            if self._state_h.numel() == 0 or self._state_h.shape[1] != x.shape[0]:
+                self._state_h, self._state_c = self.init_state(x.shape[0])
                 self._mem = self.init_mem(x.shape[0])
-                self._read = None
-            logits, self._read, self._mem, _a_w, _a_r, self._state = self.step(
-                x, self._state, self._mem, self._read
+                self._read = torch.zeros(x.shape[0], self.config.mem_width, device=x.device, dtype=x.dtype)
+            prev_read = self._read if self._read.numel() > 0 else None
+            logits, self._read, self._mem, _a_w, _a_r, (self._state_h, self._state_c) = self.step(
+                x, (self._state_h, self._state_c), self._mem, prev_read
             )
             return logits
         logits, _mem = self.episode(x)
@@ -3190,6 +3660,48 @@ class NtmGeometry(nn.Module):
             self._erase,
             self._out,
         ]
+
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Return the activation layout for NTM geometry.
+
+        All layers use standard per-sample batch dimension [B, features].
+        """
+        layers: list[LayerLayout] = []
+        # Input (controller input: input_dim + mem_width)
+        layers.append(
+            LayerLayout(
+                name="controller_input",
+                batch_mode="sample",
+                feature_shape=(self.config.input_dim + self.config.mem_width,),
+            )
+        )
+        # Controller hidden state
+        hidden = self.config.hidden_dims[0] if self.config.hidden_dims else 32
+        layers.append(
+            LayerLayout(
+                name="controller_hidden",
+                batch_mode="sample",
+                feature_shape=(hidden,),
+            )
+        )
+        # Read vector
+        layers.append(
+            LayerLayout(
+                name="read",
+                batch_mode="sample",
+                feature_shape=(self.config.mem_width,),
+            )
+        )
+        # Output logits
+        layers.append(
+            LayerLayout(
+                name="output",
+                batch_mode="sample",
+                feature_shape=(self.config.output_dim,),
+                is_readout=True,
+            )
+        )
+        return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
 
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None

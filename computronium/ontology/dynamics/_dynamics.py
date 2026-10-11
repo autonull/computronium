@@ -1988,6 +1988,14 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         def _observe(step: int) -> bool:
             if on_step is not None:
                 on_step(step, delta_box.value)
+            # NaN/Inf guard
+            eps_ = eps_box.value
+            for e in eps_:
+                if not torch.isfinite(e).all():
+                    raise RuntimeError(
+                        f"NaN/Inf detected in error variables at step {step} "
+                        f"(error_predictive_coding settle)"
+                    )
             if (
                 step >= self.config.convergence_start
                 and delta_box.value < self.config.convergence_threshold

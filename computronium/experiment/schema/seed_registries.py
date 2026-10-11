@@ -812,7 +812,7 @@ CONSTRAINTS = [
         predicate=not_(
             and_(
                 eq(var("dynamics"), const("instantaneous")),
-                eq(var("plasticity"), const("fast_weight")),
+                eq(var("plasticity"), const("fast_weights")),
             )
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
@@ -909,6 +909,36 @@ CONSTRAINTS = [
         predicate=or_(
             eq(var("dynamics"), const("instantaneous")),
             not_(in_(var("geometry"), const(["nca", "ntm"]))),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Geometry-Plasticity: NCA/NTM geometries incompatible with fast-weight plasticity
+    # (NCA has per-cell activations [B*H*W, C], fast_weights expects per-sample [B, fw_dim])
+    ConstraintSpec(
+        name="nca_ntm_fast_weight_plasticity",
+        kind=ConstraintKind.VOID,
+        description="NCA/NTM geometries have per-cell activations incompatible with fast-weight plasticity",
+        predicate=not_(
+            and_(
+                in_(var("geometry"), const(["nca", "ntm"])),
+                eq(var("plasticity"), const("fast_weights")),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Geometry-Plasticity: tile/tile_mesh geometries with fast_weights need layout awareness
+    # (fast_weights modulation uses geometry layout for feature matching)
+    ConstraintSpec(
+        name="tile_fast_weight_plasticity",
+        kind=ConstraintKind.VOID,
+        description="Tile geometries with fast_weights require layout-aware modulation",
+        predicate=not_(
+            and_(
+                in_(var("geometry"), const(["tile", "tile_mesh"])),
+                eq(var("plasticity"), const("fast_weights")),
+            )
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
