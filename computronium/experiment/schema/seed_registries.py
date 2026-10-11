@@ -1039,6 +1039,64 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Geometry-Dynamics-Credit: NCA with instantaneous dynamics is incompatible
+    # with credits that assume sample-mode activations (NCA uses cell-mode [B*H*W, C])
+    ConstraintSpec(
+        name="nca_instantaneous_target_inversion",
+        kind=ConstraintKind.VOID,
+        description="NCA geometry with instantaneous dynamics incompatible with target_inversion credit (cell-mode activations)",
+        predicate=not_(
+            and_(
+                eq(var("geometry"), const("nca")),
+                eq(var("dynamics"), const("instantaneous")),
+                eq(var("credit"), const("target_inversion")),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    ConstraintSpec(
+        name="nca_instantaneous_homeostatic",
+        kind=ConstraintKind.VOID,
+        description="NCA geometry with instantaneous dynamics incompatible with homeostatic credit (cell-mode activations)",
+        predicate=not_(
+            and_(
+                eq(var("geometry"), const("nca")),
+                eq(var("dynamics"), const("instantaneous")),
+                eq(var("credit"), const("homeostatic")),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    ConstraintSpec(
+        name="nca_instantaneous_pc_alm",
+        kind=ConstraintKind.VOID,
+        description="NCA geometry with instantaneous dynamics incompatible with pc_alm credit (cell-mode activations)",
+        predicate=not_(
+            and_(
+                eq(var("geometry"), const("nca")),
+                eq(var("dynamics"), const("instantaneous")),
+                eq(var("credit"), const("pc_alm")),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Geometry-Dynamics: tile_mesh with pc_alm dynamics has width mismatch
+    ConstraintSpec(
+        name="tile_mesh_pc_alm_dynamics",
+        kind=ConstraintKind.VOID,
+        description="tile_mesh geometry with pc_alm dynamics has layer width mismatch",
+        predicate=not_(
+            and_(
+                eq(var("geometry"), const("tile_mesh")),
+                eq(var("dynamics"), const("pc_alm")),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Credit-Dynamics: thermodynamic contrast needs energy/PC-family/lazy/pc_alm dynamics
     ConstraintSpec(
         name="thermodynamic_contrast_dynamics",

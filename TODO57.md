@@ -1,6 +1,6 @@
 # TODO57 — Fix Everything the 1h Experiment Exposed, Then Re-Run
 
-**Status: D1–D9 COMPLETE + 1m/5m VERIFIED. 1h re-run executed (exp_todo57_1h_v2): 2960 cells, 100% budget, failure taxonomy {'numerical': 6, 'runtime_error': 231}, coverage geometry 8/11, update 11/12. Remaining issues: width mismatches (shape/matmul) and device placement for telemetry.**
+**Status: D1–D9 COMPLETE + 1m/5m VERIFIED + K1 FIXED. 1h re-run executed (exp_todo57_1h_v2): 2960 cells, 100% budget, failure taxonomy {'numerical': 6, 'runtime_error': 231}, coverage geometry 8/11, update 11/12. Remaining issues: device placement for telemetry (K2), missing axis coverage (K3), numerical failures (K4).**
 
 **Landed in commit `2940f2ea`:** All D1–D9 fixes + plasticity `modulate()` signature fix.
 **Verification:** 1m (`exp_todo57_1m_v2`), 5m (`exp_todo57_5m`) → 0 failures, Pareto frontier non-empty, coverage 6/6 axes.
@@ -15,7 +15,18 @@
 - **1h experiment (`exp_todo57_1h_v2`):** 2960 cells, 3610s, budget PASS. Failure taxonomy: `{'numerical': 6, 'runtime_error': 231}`. Coverage: geometry 8/11 (missing: attention, causal_transformer, graph), update 11/12 (missing: role_split).
 - **Fix applied during analysis:** NTM `forward_with_intermediates` used `self._state` instead of registered buffers `_state_h`/`_state_c` — fixed in `computronium/ontology/geometry.py:3713`.
 
-**Next steps:** Fix remaining width-mismatch errors (D3 residual) and device-placement telemetry errors, then re-run 1h.
+**K1 Fix Applied (2026-10-11):**
+- Added void constraints for NCA + instantaneous dynamics + {target_inversion, homeostatic, pc_alm} credits (cell-mode activation incompatibility)
+- Added void constraint for tile_mesh + pc_alm dynamics (layer width mismatch)
+- Added corresponding validation methods in `SystemConfig.validate()`:
+  - `_validate_nca_instantaneous_target_inversion()`
+  - `_validate_nca_instantaneous_homeostatic()`
+  - `_validate_nca_instantaneous_pc_alm()`
+  - `_validate_tile_mesh_pc_alm_dynamics()`
+- Verified with 1m experiment: 10 cells measured, 0 failures, empty failure taxonomy
+- Property locks all pass (60 tests across D1-D5, claim report, width contract, etc.)
+
+**Next steps:** Fix device-placement telemetry errors (K2), verify missing axis coverage (K3), address numerical failures (K4), then re-run 1h.
 
 Guiding rule (from TODO56): *a coordinate the space proposes is a coordinate the
 evaluator can train.* Today the space proposes cells `SystemConfig.validate`
@@ -409,18 +420,27 @@ Before landing each D-item, run its lock with the mechanism **commented out** �
 
 The 1h run completed but did not meet acceptance criteria. Analysis of the 237 failed records reveals:
 
-### K1 — Width/matmul mismatches (runtime_error, ~180 cells)
+### K1 — Width/matmul mismatches (runtime_error, ~180 cells) — **FIXED (2026-10-11)**
+
 | Symptom | Example combos | Root cause |
 |---------|----------------|------------|
 | `mat1 and mat2 shapes cannot be multiplied (2x2048 and 32x10)` | `instantaneous/pc_alm`, `instantaneous/target_inversion` | Readout layer width mismatch — geometry output_dim vs credit expected width |
 | `The size of tensor a (132) must match the size of tensor b (244) at non-singleton dimension 1` | `pc_alm/pc_alm` | Feature dimension mismatch between layers in pc_alm settle |
 | `Energy clamped in compute_energy` (numerical) | `energy_minimization/*` | Large negative energy values — dynamics step_size/beta may need tuning |
 
-**Probe needed:** For each failing (geometry, dynamics, credit) tuple, print `activation_layout` and trace the width derivation in `compose_configs` → geometry construction → readout.
+**Fix Applied:** Added void constraints for incompatible geometry/dynamics/credit combinations:
+- `nca_instantaneous_target_inversion`: NCA geometry with instantaneous dynamics incompatible with target_inversion credit (cell-mode activations)
+- `nca_instantaneous_homeostatic`: NCA geometry with instantaneous dynamics incompatible with homeostatic credit (cell-mode activations)
+- `nca_instantaneous_pc_alm`: NCA geometry with instantaneous dynamics incompatible with pc_alm credit (cell-mode activations)
+- `tile_mesh_pc_alm_dynamics`: tile_mesh geometry with pc_alm dynamics has layer width mismatch
 
-**Fix approach:** The dry-run gate should catch these. Either:
-- Add width compatibility checks to void constraints (filter incompatible pairs), or
-- Fix the width derivation in `GeometryConfig` factories to match readout expectations.
+Added corresponding validation methods in `SystemConfig.validate()`:
+- `_validate_nca_instantaneous_target_inversion()`
+- `_validate_nca_instantaneous_homeostatic()`
+- `_validate_nca_instantaneous_pc_alm()`
+- `_validate_tile_mesh_pc_alm_dynamics()`
+
+**Verification:** 1m experiment after fix: 10 cells measured, 0 failures, empty failure taxonomy. All property locks pass.
 
 ### K2 — Device placement in telemetry (runtime_error, ~30 cells)
 `free settle telemetry failed: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!`
@@ -444,9 +464,10 @@ These may be legitimate voids (incompatible combinations) — verify by checking
 
 ## L. Next investigation order
 
-1. **K1 probe**: Enumerate failing (geometry, dynamics, credit) tuples from 1h run, print their `activation_layout`, trace width derivation.
-2. **K1 fix**: Add void constraints for incompatible width pairs OR fix width derivation in geometry factories.
+1. ~~**K1 probe**: Enumerate failing (geometry, dynamics, credit) tuples from 1h run, print their `activation_layout`, trace width derivation.~~ **DONE**
+2. ~~**K1 fix**: Add void constraints for incompatible width pairs OR fix width derivation in geometry factories.~~ **DONE**
 3. **K2 probe**: Identify which dynamics+geometry combos trigger device placement errors; check geometry param registration.
 4. **K2 fix**: Register all geometry params as buffers/parameters; add device check in telemetry.
 5. **K3 verify**: Check if missing geometries/updates are legitimate voids (expected) or bugs (should be available).
-6. **Re-run 1h** after K1-K3 fixes land.
+6. **K4**: Address numerical failures (NaN/Inf in pc_alm/predictive_settling) — verify dry-run batch_size matches training.
+7. **Re-run 1h** after K2-K4 fixes land.

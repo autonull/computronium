@@ -396,6 +396,10 @@ class SystemConfig:
         self._validate_predictive_settling_credit()
         self._validate_pc_alm_dynamics()
         self._validate_residual_connections()
+        self._validate_nca_instantaneous_target_inversion()
+        self._validate_nca_instantaneous_homeostatic()
+        self._validate_nca_instantaneous_pc_alm()
+        self._validate_tile_mesh_pc_alm_dynamics()
 
         # Geometry-Plasticity compatibility
         self._validate_nca_ntm_fast_weight_plasticity()
@@ -572,6 +576,52 @@ class SystemConfig:
             raise ValueError(
                 f"Residual connections (residual=True) require feedforward geometry, "
                 f"got topology_type={self.geometry.topology_type!r}"
+            )
+
+    def _validate_nca_instantaneous_target_inversion(self) -> None:
+        """NCA geometry with instantaneous dynamics incompatible with target_inversion credit."""
+        if (
+            self.geometry.topology_type == "nca"
+            and self.dynamics.dynamics_type == "instantaneous"
+            and self.credit.credit_type == "target_inversion"
+        ):
+            raise ValueError(
+                f"NCA geometry with instantaneous dynamics incompatible with "
+                f"target_inversion credit (cell-mode activations)"
+            )
+
+    def _validate_nca_instantaneous_homeostatic(self) -> None:
+        """NCA geometry with instantaneous dynamics incompatible with homeostatic credit."""
+        if (
+            self.geometry.topology_type == "nca"
+            and self.dynamics.dynamics_type == "instantaneous"
+            and self.credit.credit_type == "homeostatic"
+        ):
+            raise ValueError(
+                f"NCA geometry with instantaneous dynamics incompatible with "
+                f"homeostatic credit (cell-mode activations)"
+            )
+
+    def _validate_nca_instantaneous_pc_alm(self) -> None:
+        """NCA geometry with instantaneous dynamics incompatible with pc_alm credit."""
+        if (
+            self.geometry.topology_type == "nca"
+            and self.dynamics.dynamics_type == "instantaneous"
+            and self.credit.credit_type == "pc_alm"
+        ):
+            raise ValueError(
+                f"NCA geometry with instantaneous dynamics incompatible with "
+                f"pc_alm credit (cell-mode activations)"
+            )
+
+    def _validate_tile_mesh_pc_alm_dynamics(self) -> None:
+        """tile_mesh geometry with pc_alm dynamics has layer width mismatch."""
+        if (
+            self.geometry.topology_type == "tile_mesh"
+            and self.dynamics.dynamics_type == "pc_alm"
+        ):
+            raise ValueError(
+                f"tile_mesh geometry with pc_alm dynamics has layer width mismatch"
             )
 
     def _validate_nca_ntm_fast_weight_plasticity(self) -> None:
