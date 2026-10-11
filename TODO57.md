@@ -1,17 +1,24 @@
 # TODO57 — Fix Everything the 1h Experiment Exposed, Then Re-Run
 
-**Status: IN PROGRESS (D1–D9 complete + 1m/5m verification passed; 1h re-run pending). Source: the 1h `production-map` run committed as `87839185`
+**Status: D1–D9 COMPLETE + 1m/5m VERIFIED (1h re-run is final gate). Source: the 1h `production-map` run committed as `87839185`
 (3,744 cells, 100.0% budget, `results/exp_todo56_1h.html`). 504 cells (13%)
 failed. Every failure is a *screening gap* or a *latent runtime defect* — the
 runner and the diverse sampler now work. This plan closes all of them, then
 repeats the experiment (1m → 5m → 1h) expecting a near-empty failure taxonomy
 and complete axis coverage.**
 
+**Landed in commit `2940f2ea`:** All D1–D9 fixes + plasticity `modulate()` signature fix.
+**Verification:** 1m (`exp_todo57_1m_v2`), 5m (`exp_todo57_5m`) → 0 failures, Pareto frontier non-empty, coverage 6/6 axes.
+**Final gate:** 1h `production-map` run expecting failure taxonomy `{}` and `geometry 11/11`, `update 12/12`.
+
 **Progress Update (2026-10-11):**
 - 1m experiment (`exp_todo57_1m_v2`): 10 cells, 0 failures, failure taxonomy `{}`
 - 5m experiment (`exp_todo57_5m`): 10 cells, 0 failures, failure taxonomy `{}`
 - All property locks pass (33 tests across D1–D5, 27 claim report tests)
 - Additional fix applied: Updated `modulate()` signatures in `RoutingPlasticity`, `ConflictAdaptivePsiPlasticity`, `TemporalPsiPlasticity`, and `ClosedFormRidgePlasticity` to accept optional `layout: ActivationLayout` parameter for signature compatibility with `pipeline.py` call site.
+- **Commit:** `2940f2ea` — all D1–D9 fixes + plasticity modulate signature fix landed.
+
+**Next step:** Run 1h `production-map` experiment to verify acceptance criteria (failure taxonomy `{}`, coverage `geometry 11/11`, `update 12/12`).
 
 Guiding rule (from TODO56): *a coordinate the space proposes is a coordinate the
 evaluator can train.* Today the space proposes cells `SystemConfig.validate`
@@ -288,7 +295,7 @@ External `SIGTERM` (e.g. a `timeout` wrapper) yields a graceful stop but the bud
 
 ## D. Remaining work carried from TODO56.md
 
-- [x] **Re-run the experiment** after D1–D9 land: **1 min ✓**, **5 min ✓** → 1 h (pending), expecting failure taxonomy ≈ 0 (only *declared* negative results) and coverage `geometry 11/11`, `update 12/12`, all axes complete.
+- [x] **Re-run the experiment** after D1–D9 land: **1 min ✓**, **5 min ✓** → **1 h (final gate pending)**, expecting failure taxonomy ≈ 0 (only *declared* negative results) and coverage `geometry 11/11`, `update 12/12`, all axes complete.
 - [x] **Signal handling** (D9) — was TODO56 §1, now closed.
 - [ ] **Do not** reintroduce the deleted CellStream/BatchSizer/regime ladder; the `_walk` pager + `Deadline` + store dedup is the design (TODO56 anti-patterns).
 - [ ] Keep `scripts/run_experiment.py` transparent: it must name the experiment and fail loud on zero cells (already done — keep it that way).
@@ -356,7 +363,7 @@ Each implementation accepts the parameter for signature compatibility but does n
 10. ~~**D7, D8, D9**: Runner/report robustness.~~ **DONE**
 11. ~~**Run 1m**: Verify all fixes integrate.~~ **DONE (exp_todo57_1m_v2: 0 failures)**
 12. ~~**Run 5m**: Verify scale.~~ **DONE (exp_todo57_5m: 0 failures)**
-13. **Full 1h re-run**: Verify acceptance (final gate).
+13. **Full 1h re-run**: Verify acceptance (final gate) — **NEXT**
 
 ---
 
