@@ -114,7 +114,12 @@ class TestSearchSpaceCompleteDynamicsLock:
 
         # Should include dynamics compatible with filtered credits
         # At minimum: instantaneous, energy_minimization, predictive_settling, pc_alm
-        expected_minimum = {"instantaneous", "energy_minimization", "predictive_settling", "pc_alm"}
+        expected_minimum = {
+            "instantaneous",
+            "energy_minimization",
+            "predictive_settling",
+            "pc_alm",
+        }
         assert expected_minimum.issubset(set(dynamics)), (
             f"Missing minimum dynamics: {expected_minimum - set(dynamics)}, got {dynamics}"
         )

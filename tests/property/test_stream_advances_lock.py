@@ -33,12 +33,43 @@ async def test_stream_advances_lock():
         param_budget=10000,
         policy="round_robin_grid",
         axes=(
-            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse", "analog", "complex", "memristive", "neuromorphic", "optical", "quantum", "ternary")),
-            AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward", "recurrent")),
-            AxisSelection(axis=StructuralAxis.DYNAMICS, primitives=("instantaneous", "energy_minimization")),
-            AxisSelection(axis=StructuralAxis.CREDIT, primitives=("gradient", "random_projections", "pepita", "local_goodness", "thermodynamic_contrast")),
-            AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam", "muon")),
-            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null", "fast_weights")),
+            AxisSelection(
+                axis=StructuralAxis.SUBSTRATE,
+                primitives=(
+                    "digital",
+                    "sparse",
+                    "analog",
+                    "complex",
+                    "memristive",
+                    "neuromorphic",
+                    "optical",
+                    "quantum",
+                    "ternary",
+                ),
+            ),
+            AxisSelection(
+                axis=StructuralAxis.GEOMETRY, primitives=("feedforward", "recurrent")
+            ),
+            AxisSelection(
+                axis=StructuralAxis.DYNAMICS,
+                primitives=("instantaneous", "energy_minimization"),
+            ),
+            AxisSelection(
+                axis=StructuralAxis.CREDIT,
+                primitives=(
+                    "gradient",
+                    "random_projections",
+                    "pepita",
+                    "local_goodness",
+                    "thermodynamic_contrast",
+                ),
+            ),
+            AxisSelection(
+                axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam", "muon")
+            ),
+            AxisSelection(
+                axis=StructuralAxis.PLASTICITY, primitives=("null", "fast_weights")
+            ),
         ),
         seed=42,
     )
@@ -47,10 +78,16 @@ async def test_stream_advances_lock():
 
     # Use small page_size to force multiple pages
     small_page = 1000
-    page0 = list(iter_candidates(spec, space, shape=task_shape, offset=0, page_size=small_page))
+    page0 = list(
+        iter_candidates(spec, space, shape=task_shape, offset=0, page_size=small_page)
+    )
     assert len(page0) > 0, "page 0 should yield cells"
 
-    page1 = list(iter_candidates(spec, space, shape=task_shape, offset=small_page, page_size=small_page))
+    page1 = list(
+        iter_candidates(
+            spec, space, shape=task_shape, offset=small_page, page_size=small_page
+        )
+    )
 
     keys0 = {coord.measurement_key(sched) for coord, sched in page0}
     keys1 = {coord.measurement_key(sched) for coord, sched in page1}
@@ -65,5 +102,6 @@ async def test_stream_advances_lock():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_stream_advances_lock())
     print("PASSED")

@@ -10,7 +10,10 @@ import pytest
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.deadline import Deadline
-from computronium.experiment.execution.search_space import iter_candidates, search_space_from_spec
+from computronium.experiment.execution.search_space import (
+    iter_candidates,
+    search_space_from_spec,
+)
 from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
@@ -29,10 +32,17 @@ async def test_budget_utilization_lock():
         task="digits",
         objectives=("validation_accuracy", "walltime_total"),
         stages=(
-            StageId.S1_FRAME, StageId.S2_SPACE, StageId.S3_SCHEDULE,
-            StageId.S4_GATE, StageId.S5_COMPOSE, StageId.S6_TRAIN,
-            StageId.S7_MEASURE, StageId.S8_RECORD, StageId.S9_ATTRIBUTE,
-            StageId.S10_DECIDE, StageId.S11_REPORT,
+            StageId.S1_FRAME,
+            StageId.S2_SPACE,
+            StageId.S3_SCHEDULE,
+            StageId.S4_GATE,
+            StageId.S5_COMPOSE,
+            StageId.S6_TRAIN,
+            StageId.S7_MEASURE,
+            StageId.S8_RECORD,
+            StageId.S9_ATTRIBUTE,
+            StageId.S10_DECIDE,
+            StageId.S11_REPORT,
         ),
         fidelity="L0",
         n_seeds=1,
@@ -42,12 +52,22 @@ async def test_budget_utilization_lock():
         param_budget=10000,
         policy="round_robin_grid",
         axes=(
-            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse")),
+            AxisSelection(
+                axis=StructuralAxis.SUBSTRATE, primitives=("digital", "sparse")
+            ),
             AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)),
-            AxisSelection(axis=StructuralAxis.DYNAMICS, primitives=("instantaneous", "energy_minimization")),
-            AxisSelection(axis=StructuralAxis.CREDIT, primitives=("gradient", "random_projections")),
+            AxisSelection(
+                axis=StructuralAxis.DYNAMICS,
+                primitives=("instantaneous", "energy_minimization"),
+            ),
+            AxisSelection(
+                axis=StructuralAxis.CREDIT,
+                primitives=("gradient", "random_projections"),
+            ),
             AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean",)),
-            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null", "fast_weights")),
+            AxisSelection(
+                axis=StructuralAxis.PLASTICITY, primitives=("null", "fast_weights")
+            ),
         ),
         seed=42,
     )

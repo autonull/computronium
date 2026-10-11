@@ -175,7 +175,11 @@ class ProposalContext:
 
     def __post_init__(self) -> None:
         # Convert legacy Budget to Deadline if provided
-        if self.budget is not None and self.deadline is None and isinstance(self.budget, Budget):
+        if (
+            self.budget is not None
+            and self.deadline is None
+            and isinstance(self.budget, Budget)
+        ):
             object.__setattr__(
                 self,
                 "deadline",

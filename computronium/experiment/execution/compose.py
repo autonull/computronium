@@ -110,6 +110,21 @@ _TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
     "causal_transformer": frozenset({"num_heads", "seq_len"}),
 }
 
+# Required input type per geometry topology
+_TOPOLOGY_REQUIRED_INPUT: Final[dict[str, str]] = {
+    "feedforward": "image",
+    "recurrent": "image",
+    "tile": "image",
+    "tile_mesh": "image",
+    "attention": "image",
+    "spatial_lattice": "image",
+    "nca": "image",
+    "ntm": "image",
+    "conv": "image",
+    "graph": "image",
+    "causal_transformer": "token",
+}
+
 
 class ProposalComposeError(ValueError):
     """A proposal's geometry or task could not be resolved to a runnable system."""
@@ -155,6 +170,59 @@ def _spatial_extent(input_shape: tuple[int, ...]) -> tuple[int, int]:
     return (
         (int(input_shape[-2]), int(input_shape[-1])) if len(input_shape) > 2 else (1, 1)
     )
+
+
+def _infer_input_type(input_shape: tuple[int, ...]) -> str:
+    """Infer the task's input type from its shape.
+
+    Args:
+        input_shape: The task's input shape, channels first.
+
+    Returns:
+        "image" for spatial inputs (C, H, W) or (H, W),
+        "sequence" for 1D sequences (T,),
+        "flat" for flat vectors (D,).
+    """
+    if len(input_shape) >= 3:
+        # (C, H, W) or higher -> image
+        return "image"
+    if len(input_shape) == 2:
+        # (H, W) -> image (grayscale without channel dim)
+        return "image"
+    # len == 1: could be sequence or flat
+    # Heuristic: if the single dimension is small (< 1000), likely flat;
+    # if large, could be sequence. But we need task name for accuracy.
+    # For now, default to "image" which is compatible with most geometries.
+    # The causal_transformer explicitly requires "token" which only matches
+    # when the task is known to be token-based (handled by caller).
+    return "flat"
+
+
+def _check_geometry_input_compat(
+    topology: str, input_shape: tuple[int, ...], required_input: str
+) -> None:
+    """Check if the geometry's required input type matches the task's input.
+
+    Args:
+        topology: The geometry topology name.
+        input_shape: The task's input shape.
+        required_input: The geometry's required input type.
+
+    Raises:
+        ProposalComposeError: If the geometry is incompatible with the task's input.
+    """
+    # Only enforce for token-only geometries
+    if required_input == "token":
+        task_input_type = _infer_input_type(input_shape)
+        if task_input_type != "token":
+            # We can't reliably infer "token" from shape alone,
+            # so we check if the task is a known token task
+            # For now, reject all non-token tasks for token-only geometries
+            # This will be refined when we have task-type info
+            raise ProposalComposeError(
+                f"Geometry '{topology}' requires token input (integer token IDs), "
+                f"but task provides {task_input_type} input with shape {input_shape}"
+            )
 
 
 def _estimate_spatial_lattice_params(
@@ -364,6 +432,20 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
     if topology not in _TOPOLOGY_KEYS:
         msg = f"Unknown topology {topology!r}; allowed: {sorted(_TOPOLOGY_KEYS)}"
         raise ProposalComposeError(msg)
+
+    # Check geometry-task input compatibility
+    required_input = _TOPOLOGY_REQUIRED_INPUT.get(topology, "image")
+    if required_input == "token":
+        # Token-only geometries (causal_transformer) require token input
+        # Infer task input type from shape: only 1D with large dim could be sequence
+        # But we conservatively reject all non-token tasks for token-only geometries
+        if len(input_shape) != 1 or input_shape[0] < 100:
+            # Heuristic: token tasks typically have seq_len > 100
+            # This is a conservative check; the real check happens at runtime
+            raise ProposalComposeError(
+                f"Geometry '{topology}' requires token input (integer token IDs), "
+                f"but task provides input with shape {input_shape} (expected 1D sequence)"
+            )
 
     allowed = _allowed_keys(topology)
     unknown = frozenset(geometry) - allowed

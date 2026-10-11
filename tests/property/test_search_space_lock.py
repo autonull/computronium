@@ -273,7 +273,19 @@ _COMPOSABLE_TOPOLOGIES = (
     "conv",
     "spatial_lattice",
     "ntm",
+    "nca",
+    "graph",
 )
+
+
+def _input_shape_for_topology(topology: str) -> tuple[int, ...]:
+    """Return appropriate input shape for a topology.
+
+    causal_transformer requires token input (1D sequence), others use image shape.
+    """
+    if topology == "causal_transformer":
+        return (128,)  # token sequence length
+    return (1, 8, 8)  # image shape (digits quick_mode)
 
 
 @pytest.mark.parametrize("topology", _COMPOSABLE_TOPOLOGIES)
@@ -284,26 +296,47 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
     ``feedforward``, so every non-MLP cell was compiled as an MLP and then
     rejected for carrying keys an MLP has no use for (D2's residual shape).
     """
+    input_shape = _input_shape_for_topology(topology)
+    output_dim = 65 if topology == "causal_transformer" else 10
+
+    # Geometry-specific params
+    geometry_params: dict[str, object] = {}
+    if topology == "graph":
+        geometry_params = {"edge_index": [[0, 1], [1, 0]]}
+
+    # recurrent geometry needs compatible dynamics/credit (not instantaneous+gradient)
+    if topology == "recurrent":
+        dynamics = "energy_minimization"
+        credit = "thermodynamic_contrast"
+    else:
+        dynamics = "instantaneous"
+        credit = "gradient"
 
     coordinate = Coordinate(
         substrate="digital",
         geometry=topology,
-        dynamics="instantaneous",
+        dynamics=dynamics,
         plasticity="null",
-        credit="gradient",
+        credit=credit,
         update="euclidean",
         params={},
     )
     cell = compose_cell_system(
-        coordinate=coordinate, geometry={}, input_shape=(1, 8, 8), output_dim=10
+        coordinate=coordinate,
+        geometry=geometry_params,
+        input_shape=input_shape,
+        output_dim=output_dim,
     )
     assert cell.config.geometry.topology_type == topology
     with pytest.raises(ProposalComposeError, match="Unknown topology"):
         compose_cell_system(
-            coordinate=Coordinate(**{**coordinate.to_dict(), "geometry": "nope"}),
-            geometry={},
-            input_shape=(1, 8, 8),
-            output_dim=10,
+            coordinate=Coordinate(**{
+                **coordinate.to_dict(),
+                "geometry": "nope",
+            }),
+            geometry=geometry_params,
+            input_shape=input_shape,
+            output_dim=output_dim,
         )
 
 

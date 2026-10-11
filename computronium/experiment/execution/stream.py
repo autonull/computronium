@@ -163,9 +163,7 @@ class CellStream:
             self._state.offset,
         )
 
-    def _drain(
-        self, results: list[tuple[Coordinate, Schedule]], k: int
-    ) -> None:
+    def _drain(self, results: list[tuple[Coordinate, Schedule]], k: int) -> None:
         """Pop fresh cells off the buffer into ``results`` until it fills."""
         while self._pending and len(results) < k:
             coordinate, schedule = self._pending.pop(0)

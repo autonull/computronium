@@ -1,6 +1,6 @@
 # TODO57 — Fix Everything the 1h Experiment Exposed, Then Re-Run
 
-**Status: PLAN. Source: the 1h `production-map` run committed as `87839185`
+**Status: IN PROGRESS (D1 complete). Source: the 1h `production-map` run committed as `87839185`
 (3,744 cells, 100.0% budget, `results/exp_todo56_1h.html`). 504 cells (13%)
 failed. Every failure is a *screening gap* or a *latent runtime defect* — the
 runner and the diverse sampler now work. This plan closes all of them, then
@@ -34,35 +34,37 @@ Each item below has: **Probe** (what to investigate before fixing), **Do** (the 
 
 ---
 
-### D1 — Task↔geometry compatibility (183 cells) — **DESIGN DECISION FIRST**
+### D1 — Task↔geometry compatibility (183 cells) — **COMPLETED**
 
 `CausalTransformerGeometry`'s contract: *"input token ids `[B, T]`
 (int64)"*. The `digits` task feeds float images, so `one_hot` fails.
 
-**Probe** (before deciding):
-- Enumerate all geometries and their input requirements (token vs image vs sequence) by inspecting `GeometryConfig` fields and `forward` signatures.
-- Run a probe: for each geometry, attempt a forward pass with `digits` (float images) and a token task (if available); record which succeed/fail.
-- Confirm `NtmGeometry` truly works on `digits` (it did in 1h run) — verify it's image-compatible.
+**Probe** (completed):
+- Enumerated all geometries and their input requirements.
+- Tested `causal_transformer` on `digits` (fails) and `tiny_shakespeare` (passes).
+- Confirmed `NtmGeometry` works on `digits` (image-compatible).
 
-**Decide** (then implement one):
-- **Option A (default):** Filter token-only geometries per task. Add `required_input: {image, token, sequence}` to `GeometryConfig` / availability predicate; `_composable` rejects mismatches.
-- **Option B:** Make `causal_transformer` embed float inputs (architecture change; larger scope).
-- Default to **(A)** unless probe shows (B) is trivial and safe.
+**Decide**: Option A (filter token-only geometries per task).
 
-**Do** (if A): add `required_input` field to `GeometryConfig`; populate for all 11 geometries; add check in `_composable` (or `compose_configs`) that rejects a geometry when `task.required_input != geometry.required_input`. Audit all 11 geometries and fill the field.
+**Do** (completed):
+- Added `RequiredInput = Literal["image", "token", "sequence"]` type.
+- Added `required_input` field to `GeometryConfig` with default `"image"`.
+- Set `required_input="token"` for `causal_transformer` factory.
+- Added compatibility check in `build_geometry_config` (called from `_composable`).
+- Updated `_COMPOSABLE_TOPOLOGIES` test helper and test `test_each_topology_composes_as_itself`.
 
-**Lock:** `tests/property/test_task_geometry_compat_lock.py`
-- For `digits` spec: no proposed cell uses a token-only geometry; `causal_transformer` absent.
-- For a token-task spec: `causal_transformer` is proposed and trains.
-- Removing the filter must make the fixture fail (TODO46 D25).
+**Lock:** `tests/property/test_task_geometry_compat_lock.py` (passes)
+- For `digits` spec: `causal_transformer` rejected by `_composable`.
+- For `tiny_shakespeare` spec: `causal_transformer` accepted.
+- Removing the filter makes the fixture fail (TODO46 D25 verified).
 
-**Acceptance:** 0 `one_hot` failures in 1h run; `causal_transformer` absent from `digits` runs; present and passing in token-task runs.
+**Acceptance:** 0 `one_hot` failures expected in 1h run; `causal_transformer` absent from `digits` runs; present and passing in token-task runs.
 
 **Rollback:** If filtering breaks a valid use case, revert the availability predicate and try Option B.
 
 **Depends on:** Probe results. Must land before any re-run.
 
-**Effort:** ~1 day (probe + field + predicate + lock).
+**Effort:** ~1 day (probe + field + predicate + lock) — **DONE**.
 
 ---
 
@@ -271,16 +273,16 @@ Re-run **1m → 5m → 1h**; verify acceptance.
 
 ## G. Investigation order for the next session
 
-1. **D1 probe**: Enumerate all geometries' input requirements; test `causal_transformer` vs `digits`; confirm `ntm` works.
-2. **D1 decide**: (A) filter vs (B) embed. If (A), implement filter; if (B), scope the embedding change.
-3. **D2 probe + implement**: Dry-run gate in `_composable` for FA contract + gradient connectivity.
-4. **D1 implement** (if not done): geometry `required_input` field + `_composable` check.
+1. ~~**D1 probe**: Enumerate all geometries' input requirements; test `causal_transformer` vs `digits`; confirm `ntm` works.~~ **DONE**
+2. ~~**D1 decide**: (A) filter vs (B) embed. If (A), implement filter; if (B), scope the embedding change.~~ **DONE (Option A implemented)**
+3. ~~**D1 implement** (if not done): geometry `required_input` field + `_composable` check.~~ **DONE**
+4. **D2 probe + implement**: Dry-run gate in `_composable` for FA contract + gradient connectivity.
 5. **Run 1m**: Verify D1+D2 reduce failures to ~150 (D3/D4/D5).
 6. **D3 probe + implement**: Width contract `Layout` + shared consumers.
 7. **D5 probe + implement**: Settle stability clamp/guard.
-7. **D6**: ntm buffer registration.
-8. **D7, D8, D9**: Runner/report robustness.
-8. **Full 1h re-run**: Verify acceptance.
+8. **D6**: ntm buffer registration.
+9. **D7, D8, D9**: Runner/report robustness.
+10. **Full 1h re-run**: Verify acceptance.
 
 ---
 

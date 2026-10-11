@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 _DEFAULT_INIT_SCALE = 0.1
 
 type InitScheme = Literal["default", "mupc", "innocenti"]
+type RequiredInput = Literal["image", "token", "sequence"]
 
 
 def _linear_stack(
@@ -116,7 +117,7 @@ class GeometryConfig:
         num_layers: Number of layers (alternative to hidden_dims)
         topology_type: "feedforward", "recurrent", "tile_mesh",
             "neuromorphic", "spatial_lattice", "attention", "conv", "graph",
-            "nca", "ntm"
+            "nca", "ntm", "causal_transformer"
         connectivity: Optional adjacency specification
         recurrent_weight: Optional recurrent weight matrix (for recurrent topology)
         init_scale: Multiplicative scale on weight initialization (weights and
@@ -152,6 +153,8 @@ class GeometryConfig:
         # SpatialLattice3D topology fields
         lattice_dims: tuple[int, int, int] = (4, 4, 4)
         connectivity_radius: int = 1
+        # Input compatibility
+        required_input: RequiredInput = "image"
     """
 
     input_dim: int
@@ -191,6 +194,8 @@ class GeometryConfig:
     # Tile-mesh topology (single source for geometry_from_config dispatch)
     neurons_per_tile: int = 8
     tiles_per_layer: int = 2
+    # Input compatibility
+    required_input: RequiredInput = "image"
 
     @classmethod
     def feedforward(
@@ -236,6 +241,7 @@ class GeometryConfig:
             recurrent_weight=None,
             num_heads=n_heads,
             seq_len=seq_len,
+            required_input="token",
         )
 
     @classmethod

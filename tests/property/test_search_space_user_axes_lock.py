@@ -31,7 +31,10 @@ class TestSearchSpaceUserAxesLock:
         if user_credit_axes is not None:
             axes = (
                 AxisSelection(axis=StructuralAxis.CREDIT, primitives=user_credit_axes),
-                AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null", "fast_weights", "routing")),
+                AxisSelection(
+                    axis=StructuralAxis.PLASTICITY,
+                    primitives=("null", "fast_weights", "routing"),
+                ),
             )
         return RunSpec(
             profile=profile.name,
@@ -114,7 +117,9 @@ class TestSearchSpaceUserAxesLock:
             policy=RUN_PROFILES["production-map"].policy,
             axes=(
                 AxisSelection(axis=StructuralAxis.CREDIT, primitives=("gradient",)),
-                AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=user_plasticities),
+                AxisSelection(
+                    axis=StructuralAxis.PLASTICITY, primitives=user_plasticities
+                ),
             ),
             checkpoint_every_n=RUN_PROFILES["production-map"].checkpoint_every_n,
             seed=42,
@@ -189,7 +194,9 @@ class TestSearchSpaceUserAxesLock:
         # Second call uses cache
         space2 = search_space_from_spec(spec, tasks=spec.task_names)
 
-        assert space1.primitives(StructuralAxis.CREDIT) == space2.primitives(StructuralAxis.CREDIT)
+        assert space1.primitives(StructuralAxis.CREDIT) == space2.primitives(
+            StructuralAxis.CREDIT
+        )
         assert set(space1.primitives(StructuralAxis.CREDIT)) == set(user_credits)
 
 
