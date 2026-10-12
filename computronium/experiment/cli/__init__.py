@@ -59,6 +59,7 @@ async def _run_from_spec(
         ComparisonSpec,
     )
     from computronium.experiment.runners.replay import ReplayRunner, ReplaySpec
+    from computronium.experiment.runners.scaling import ScalingRunner, ScalingSpec
 
     # Create output directory
     out_dir = Path(output_dir or spec.output_dir)
@@ -115,6 +116,26 @@ async def _run_from_spec(
             result = await runner.run()
             runner.print_results(result)
 
+        case "scaling":
+            if spec.scaling is None:
+                raise ValueError("scaling config required")
+            base_coord = None
+            if spec.scaling.base_config:
+                base_coord = spec.scaling.base_config
+            scaling_spec = ScalingSpec(
+                vary=spec.scaling.vary,
+                log_scale=spec.scaling.log_scale,
+                n_points_per_dim=spec.scaling.n_points_per_dim,
+                base_config=base_coord,
+                n_seeds=spec.seeds if isinstance(spec.seeds, int) else spec.seeds[0],
+                budget_seconds=spec.budget.seconds or 3600,
+                metric=spec.scaling.metric,
+                task=spec.tasks[0] if spec.tasks else "digits",
+            )
+            runner = ScalingRunner(scaling_spec, store=store, backend=backend)
+            result = await runner.run()
+            runner.print_results(result)
+
         case "showcase" | "grid" | "multi_task":
             # Use the standard pipeline
             run_spec = spec.to_run_spec()
@@ -156,7 +177,9 @@ async def _run_inline(
         ComparisonRunner,
         ComparisonSpec,
     )
+    from computronium.experiment.runners.scaling import ScalingRunner, ScalingSpec
     from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.coordinate import Coordinate
 
     store = RecordStore(StoreConfig(path=Path(":memory:")))
     backend = LocalBackend(max_workers=4)
@@ -204,6 +227,41 @@ async def _run_inline(
         result = await runner.run()
         runner.print_results(result)
 
+    elif type == "scaling":
+        # Parse base_config from fix (without arm_a/arm_b prefixes)
+        base_config = {}
+        for k, v in fix.items():
+            if not k.startswith("arm_a.") and not k.startswith("arm_b."):
+                base_config[k] = v
+
+        base_coord = None
+        if base_config:
+            base_coord = Coordinate(
+                substrate=base_config.get("substrate", "digital"),
+                geometry=base_config.get("geometry", "feedforward"),
+                dynamics=base_config.get("dynamics", "instantaneous"),
+                plasticity=base_config.get("plasticity", "null"),
+                credit=base_config.get("credit", "gradient"),
+                update=base_config.get("update", "euclidean"),
+                params={},
+            )
+
+        vary_params = vary if vary else ["hidden_dims", "param_budget", "settle_horizon"]
+
+        spec = ScalingSpec(
+            vary=vary_params,
+            log_scale=True,
+            n_points_per_dim=4,
+            base_config=base_coord,
+            n_seeds=seeds,
+            budget_seconds=budget,
+            metric=metric,
+            task=task,
+        )
+        runner = ScalingRunner(spec, store=store, backend=backend)
+        result = await runner.run()
+        runner.print_results(result)
+
     else:
         raise ValueError(f"Inline mode not supported for type: {type}")
 
@@ -230,6 +288,12 @@ Examples:
     --fix arm_a.geometry=feedforward --fix arm_a.dynamics=instantaneous --fix arm_a.credit=gradient \\
     --fix arm_b.geometry=recurrent --fix arm_b.dynamics=energy_minimization --fix arm_b.credit=thermodynamic_contrast \\
     --seeds 10 --budget 2h
+
+  # Run scaling inline
+  uv run python -m computronium.experiment.cli run \\
+    --type scaling --vary hidden_dims --vary param_budget \\
+    --fix geometry=feedforward --fix dynamics=instantaneous --fix credit=gradient --fix update=euclidean \\
+    --budget 1h --seeds 5
         """,
     )
 

@@ -98,6 +98,7 @@ class ScalingConfig:
     log_scale: bool = True
     n_points_per_dim: int = 4
     base_config: Coordinate | None = None
+    metric: str = "validation_accuracy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +186,11 @@ class ExperimentSpec(BaseModel):
     @model_validator(mode="after")
     def _validate_type_config(self) -> ExperimentSpec:
         """Validate that the correct config is present for the experiment type."""
+        # Ensure registries are seeded for metric validation
+        from computronium.experiment.schema.seed_registries import seed_all_registries
+
+        seed_all_registries()
+
         if self.type == ExperimentType.ABLATION and self.ablation is None:
             raise ValueError("ablation config required for type=ablation")
         if self.type == ExperimentType.SCALING and self.scaling is None:
@@ -199,6 +205,8 @@ class ExperimentSpec(BaseModel):
             raise ValueError(f"Unknown metric: {self.ablation.metric}")
         if self.comparison and self.comparison.metric not in OBJECTIVES_REGISTRY:
             raise ValueError(f"Unknown metric: {self.comparison.metric}")
+        if self.scaling and self.scaling.metric not in OBJECTIVES_REGISTRY:
+            raise ValueError(f"Unknown metric: {self.scaling.metric}")
 
         return self
 

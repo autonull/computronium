@@ -52,6 +52,95 @@ _search_space_cache: dict[tuple, SearchSpace] = {}
 _filter_axes_cache: dict[tuple, dict[str, list[str]]] = {}
 
 
+def _void_cache_key(coordinate: Coordinate) -> tuple[str, ...]:
+    """Create a cache key for a coordinate based on structural axes only."""
+    return (
+        coordinate.substrate,
+        coordinate.geometry,
+        coordinate.dynamics,
+        coordinate.plasticity,
+        coordinate.credit,
+        coordinate.update,
+    )
+
+
+class VoidCache:
+    """Persists void combinations across experiment runs.
+
+    A void combination is a 6-axis coordinate that is known to be invalid
+    (e.g., fails void constraints). By caching these, we avoid re-evaluating
+    them in future runs.
+
+    The cache is persisted to a JSON file for durability across processes.
+    When no db_path is provided, the cache is in-memory only and not shared
+    between instances (suitable for testing).
+    """
+
+    def __init__(self, db_path: str | None = None) -> None:
+        self._db_path = db_path
+        self._void_combos: set[tuple[str, ...]] = set()
+        if db_path is not None:
+            self._load()
+
+    def _load(self) -> None:
+        """Load void cache from disk."""
+        if self._db_path is None:
+            return
+        import json
+        from pathlib import Path
+
+        path = Path(self._db_path)
+        if path.exists():
+            try:
+                data = json.loads(path.read_text())
+                self._void_combos = {tuple(k) for k in data.get("void_combos", [])}
+            except (json.JSONDecodeError, KeyError, TypeError):
+                self._void_combos = set()
+
+    def _save(self) -> None:
+        """Save void cache to disk."""
+        if self._db_path is None:
+            return
+        import json
+        from pathlib import Path
+
+        path = Path(self._db_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {"void_combos": [list(k) for k in self._void_combos]}
+        path.write_text(json.dumps(data))
+
+    def is_known_void(self, coord: Coordinate) -> bool:
+        """Check if a coordinate is a known void combination."""
+        return _void_cache_key(coord) in self._void_combos
+
+    def record_void(self, coord: Coordinate) -> None:
+        """Record a void combination."""
+        self._void_combos.add(_void_cache_key(coord))
+        self._save()
+
+    def get_void_count(self) -> int:
+        """Get the number of known void combinations."""
+        return len(self._void_combos)
+
+    def clear(self) -> None:
+        """Clear the void cache."""
+        self._void_combos.clear()
+        if self._db_path is not None:
+            from pathlib import Path
+
+            Path(self._db_path).unlink(missing_ok=True)
+
+
+def get_void_cache(db_path: str | None = None) -> VoidCache:
+    """Get a void cache instance.
+
+    If db_path is provided, the cache is persisted to/loaded from that file.
+    If db_path is None, an in-memory-only cache is returned (not shared between
+    instances, suitable for testing).
+    """
+    return VoidCache(db_path)
+
+
 def _search_space_cache_key(spec: RunSpec, tasks: Sequence[str] | None) -> tuple:
     """Create a cache key for search_space_from_spec."""
     # Key includes: selected primitives per axis, tasks, objectives
@@ -841,6 +930,7 @@ def iter_candidates(  # ruff: ignore[complex-structure]
     check_composable: bool = True,
     offset: int = 0,
     page_size: int = _PAGE_SIZE,
+    use_void_cache: bool = True,
 ) -> Iterator[tuple[Coordinate, Schedule]]:
     """Walk the harvested schema under the spec, yielding legal cells.
 
@@ -867,9 +957,11 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             ``None`` and takes the module's page size.
         check_composable: If True (default), verify that configs compose and
             validate via ``_composable``. If False, skip this check for faster
-            candidate generation (validation will happen at Gate/Compose stages).
+candidate generation (validation will happen at Gate/Compose stages).
         offset: Number of candidates to skip before yielding (for paging).
         page_size: Maximum candidates to examine per page (default 50k).
+        use_void_cache: Whether to use the persistent void cache (default True).
+            Disable for tests that need a clean search space.
 
     Yields:
         ``(coordinate, schedule)`` pairs, in a deterministic order.
@@ -881,6 +973,10 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         evaluate,
     )
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+    from computronium.experiment.execution.search_space import (
+        _void_cache_key,
+        get_void_cache,
+    )
 
     def _references_params(expr: Expr) -> bool:
         """Check if expression references params.* variables."""
@@ -908,6 +1004,9 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         and not _references_params(c.predicate)
     ]
 
+    # Get void cache for this run (persisted across runs)
+    void_cache = get_void_cache() if use_void_cache else None
+
     seen: set[str] = set()
     scanned = 0
     yielded = 0
@@ -924,6 +1023,10 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             continue
         seen.add(coordinate.measurement_key(schedule))
 
+        # Check void cache first (fast path - avoids DSL evaluation)
+        if use_void_cache and void_cache and void_cache.is_known_void(coordinate):
+            continue
+
         # Fast void constraint check (DSL evaluation, no composition)
         if void_constraints:
             ctx = CoordinateContext(coordinate, task=task)
@@ -936,6 +1039,9 @@ def iter_candidates(  # ruff: ignore[complex-structure]
                     failed = True
                     break
             if failed:
+                # Record in void cache for future runs
+                if use_void_cache and void_cache:
+                    void_cache.record_void(coordinate)
                 continue
 
         if (
@@ -959,10 +1065,16 @@ def generate_candidates(
     cost_model=None,
     shape: ShapeResolver | None = None,
     limit: int = 10,
+    use_void_cache: bool = True,
 ) -> list[tuple[Coordinate, Schedule]]:
     """The first ``limit`` cells of :func:`iter_candidates`."""
     stream = iter_candidates(
-        spec, search_space, deadline=deadline, cost_model=cost_model, shape=shape
+        spec,
+        search_space,
+        deadline=deadline,
+        cost_model=cost_model,
+        shape=shape,
+        use_void_cache=use_void_cache,
     )
     return list(islice(stream, limit))
 
@@ -970,8 +1082,10 @@ def generate_candidates(
 __all__ = [
     "SearchSpace",
     "ShapeResolver",
+    "VoidCache",
     "declared_cell_count",
     "generate_candidates",
+    "get_void_cache",
     "iter_candidates",
     "narrow_domain",
     "search_space_from_spec",

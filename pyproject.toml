@@ -200,6 +200,7 @@ markers = [
     "timeout: marks tests with a timeout (requires pytest-timeout)",
     "full_multi_axis: run full multi-axis execute_spec (slow)",
     "probe: probe measurement script converted to test; run with -m probe",
+    "experiment: requires an experiment database; run with --experiment-db",
 ]
 addopts = "-n 4 --strict-markers --durations=25 -m 'not slow and not benchmark and not llm and not demo' -p no:warnings"
 # pytest-timeout is the kill, and its signal method already dumps the stack of
