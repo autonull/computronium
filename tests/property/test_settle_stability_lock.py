@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 import torch
+
 from computronium.experiment.kernel.compose import _dry_run_trainable
 from computronium.experiment.schema import Coordinate
-from computronium.experiment.kernel.evaluate import task_shape
 
 
 def test_error_predictive_coding_nan_guard() -> None:
@@ -186,11 +186,6 @@ def test_guard_removal_regression_predictive_settling() -> None:
             # NO NaN/Inf CHECK
             iterate.data = new_acts
 
-        from computronium.ontology.dynamics._settle_driver import (
-            run_settle_loop,
-            SettleIterate,
-        )
-
         PredictiveSettlingDynamics._eager_layered_steps = no_nan_check_eager
 
         try:
@@ -250,8 +245,8 @@ def test_guard_removal_regression_pc_alm() -> None:
     ):
         """Relaxation loop without NaN/Inf check."""
         from computronium.ontology.dynamics._settle_driver import (
-            run_settle_loop,
             SettleIterate,
+            run_settle_loop,
         )
 
         iterate = SettleIterate((acts, dual_vars, []))
@@ -261,7 +256,6 @@ def test_guard_removal_regression_pc_alm() -> None:
 
         from computronium.ontology.dynamics._settle_driver import (
             checkpointed_every,
-            checkpointed,
         )
 
         advance = (

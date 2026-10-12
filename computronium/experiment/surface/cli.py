@@ -17,24 +17,26 @@ import shutil
 import statistics
 import subprocess  # ruff: ignore[suspicious-subprocess-import] -- used for controlled CLI subprocess calls (repro, docker)
 import sys
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.execution.budget import Budget, SimpleCostModel
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.execution.policy import (
     create_policy,
     policy_context,
 )
 from computronium.experiment.execution.stage import StageId
-from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.reporters import (
+    generate_html_report as generate_html_report_v2,
+)
+from computronium.experiment.schema.axis import Domain, Scale, StructuralAxis
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilitySpec,
@@ -53,10 +55,6 @@ from computronium.experiment.surface.report import (
     export_to_json,
     export_to_parquet,
     generate_run_report,
-)
-from computronium.experiment.reporters import (
-    generate_html_report as generate_html_report_v2,
-    generate_json_report,
 )
 
 logger = get_logger()
@@ -83,6 +81,25 @@ class RunProfile:
     deep_tier: bool  # Whether to run deep-tier claim-grade
     axes: tuple[AxisSelection, ...] = ()
     checkpoint_every_n: int = 0  # Save checkpoint every N epochs (0 = disabled)
+    # The hyperparameters this profile searches, keyed canonically
+    # ``"{axis}.{name}"``. Empty means "structural axes only" — a profile that
+    # searches no knob (a smoke, a geometry sweep) declares none. A profile that
+    # measures learning declares the knobs it varies, so the policy has something
+    # to optimise and the cells carry their identity (TODO61 §0 B2).
+    hyperparameters: Mapping[str, Domain] = field(default_factory=dict)
+
+
+# The hyperparameters the search profiles vary. A single shared stride walks
+# these diagonally (`_walk`'s ``steps`` is the longest ladder), so declaring
+# several knobs adds one axis of length ``sweep_steps``, not a product. The
+# chosen knobs are the ones the campaign found decisive; ``geometry.hidden_dim``
+# is deliberately absent — ``RunSpec`` auto-narrows it to the ceiling.
+_SEARCH_SWEEP: dict[str, Domain] = {
+    "update.step_size": Domain(lo=1e-4, hi=1e-1, scale=Scale.LOG),
+    "dynamics.step_size": Domain(lo=0.01, hi=0.5, scale=Scale.LOG),
+    "dynamics.beta": Domain(lo=0.1, hi=1.0, scale=Scale.LOG),
+    "dynamics.max_steps": Domain(lo=10, hi=100, scale=Scale.LINEAR),
+}
 
 
 # Run profiles as data — single source of truth for CLI behavior
@@ -170,6 +187,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         promotion_threshold=0.7,
         maturation=True,
         deep_tier=True,
+        hyperparameters=dict(_SEARCH_SWEEP),
     ),
     "maturation": RunProfile(
         name="maturation",
@@ -196,6 +214,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         promotion_threshold=0.8,
         maturation=False,
         deep_tier=False,
+        hyperparameters=dict(_SEARCH_SWEEP),
     ),
     "claim": RunProfile(
         name="claim",
@@ -227,6 +246,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         promotion_threshold=0.9,
         maturation=False,
         deep_tier=True,
+        hyperparameters=dict(_SEARCH_SWEEP),
     ),
 }
 
@@ -1383,6 +1403,7 @@ def _apply_overrides(profile: RunProfile, overrides: dict[str, Any]) -> RunProfi
         maturation=overrides.get("maturation", profile.maturation),
         deep_tier=overrides.get("deep_tier", profile.deep_tier),
         axes=overrides.get("axes", profile.axes),
+        hyperparameters=overrides.get("hyperparameters", profile.hyperparameters),
     )
 
 
@@ -1406,8 +1427,8 @@ def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
     Computed from the spec through the same builders the runner uses, so a dry
     run is evidence the spec is executable rather than a restatement of it.
     """
-    from computronium.experiment.kernel.evaluate import task_shape
     from computronium.experiment.execution.pipeline import _resolve_tasks
+    from computronium.experiment.kernel.evaluate import task_shape
     from computronium.experiment.kernel.search_space import (
         iter_candidates,
         search_space_from_spec,
@@ -1510,6 +1531,7 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
         param_budget=profile.param_budget,
         policy=profile.policy,
         axes=profile.axes,
+        hyperparameters=dict(profile.hyperparameters),
         checkpoint_every_n=profile.checkpoint_every_n,
         device=args.device,
     )
@@ -1668,8 +1690,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if args.dry_run:
         if args.format == "json":
             # Build a JSON representation of the dry run plan
-            from computronium.experiment.kernel.evaluate import task_shape
             from computronium.experiment.execution.pipeline import _resolve_tasks
+            from computronium.experiment.kernel.evaluate import task_shape
             from computronium.experiment.kernel.search_space import (
                 iter_candidates,
                 search_space_from_spec,
@@ -4473,7 +4495,6 @@ def _cmd_axis_attribution(args: argparse.Namespace) -> int:
 
         from computronium.experiment.analysis import (
             AxisAttributionAnalyzer,
-            AttributionConfig,
         )
 
         analyzer = AxisAttributionAnalyzer(store, run_id)
@@ -4537,7 +4558,6 @@ def _cmd_counterfactual(args: argparse.Namespace) -> int:
 
         from computronium.experiment.analysis import (
             CounterfactualAnalyzer,
-            CounterfactualConfig,
         )
 
         analyzer = CounterfactualAnalyzer(store, run_id)
@@ -5155,7 +5175,6 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
     from computronium.experiment.data.dataset_registry import (
         DatasetRegistration,
         DatasetRegistry,
-        create_dataset_manifest,
     )
     from computronium.experiment.evidence.store import RecordStore, StoreConfig
 
@@ -5243,7 +5262,7 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
                 print(f"  Digest: {version.digest}")
                 print(f"  Created: {version.created_at}")
                 print(f"  Description: {version.description}")
-                print(f"  Splits:")
+                print("  Splits:")
                 for k, v in version.splits.items():
                     print(
                         f"    {k}: {v.num_samples} samples, {v.size_bytes} bytes, hash={v.hash[:12]}..."
@@ -5330,7 +5349,6 @@ def _cmd_environment(args: argparse.Namespace) -> int:
 
     from computronium.experiment.environment.snapshots import (
         ContainerManager,
-        EnvironmentCapture,
         create_environment_snapshot,
         verify_environment,
     )
@@ -5379,7 +5397,7 @@ def _cmd_environment(args: argparse.Namespace) -> int:
                             f"    Python version: expected {m['expected']}, got {m['actual']}"
                         )
                     elif m["type"] == "uv_lock":
-                        print(f"    uv.lock hash mismatch")
+                        print("    uv.lock hash mismatch")
                     elif m["type"] == "git_commit":
                         print(
                             f"    Git commit: expected {m['expected'][:12]}, got {m['actual'][:12]}"
@@ -5454,15 +5472,11 @@ def _cmd_quality(args: argparse.Namespace) -> int:
     """Quality gates commands (Phase F1)."""
     from pathlib import Path
 
+    from computronium.experiment.evidence.store import RecordStore, StoreConfig
     from computronium.experiment.quality.gates import (
         DataIntegrityGate,
-        NarrativeCoherenceGate,
         ReportQualityGate,
         run_all_quality_gates,
-    )
-    from computronium.experiment.evidence.store import RecordStore, StoreConfig
-    from computronium.experiment.templates.report.generator import (
-        generate_report_from_store,
     )
 
     cmd = args.quality_command
@@ -5516,7 +5530,6 @@ def _cmd_quality(args: argparse.Namespace) -> int:
 def _output_result(result, args):
     """Output quality gate result."""
     if args.format == "json":
-        import json
 
         output = result.to_json()
     else:

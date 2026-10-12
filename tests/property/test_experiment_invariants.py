@@ -181,8 +181,8 @@ class TestExperimentInvariants:
 
     def test_seed_consistency(self):
         """Cells with same coordinate but different seeds should have similar metrics."""
-        from collections import defaultdict
         import statistics
+        from collections import defaultdict
 
         coord_groups = defaultdict(list)
         for record in self.records:
@@ -230,7 +230,7 @@ class TestExperimentInvariants:
         """Pareto frontier should be monotonic (no dominated points on frontier)."""
         # This is implicitly tested by the pareto computation, but we can verify
         # by checking that for any two points on the frontier, one doesn't dominate both
-        pass  # Pareto property is mathematical; frontier generation ensures it
+        # Pareto property is mathematical; frontier generation ensures it
 
 
 # CLI integration for running against experiment DB

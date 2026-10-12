@@ -223,7 +223,7 @@ class FastWeightPlasticity:
         self,
         activations: list[Tensor] | Tensor,
         psi: dict[str, Tensor],
-        layout: "ActivationLayout | None" = None,
+        layout: ActivationLayout | None = None,
     ) -> list[Tensor] | Tensor:
         """Apply fast weights as additive per-sample modulation.
 

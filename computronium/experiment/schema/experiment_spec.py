@@ -11,13 +11,13 @@ import json
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from computronium.experiment.schema.axis import StructuralAxis, Domain
-from computronium.experiment.schema.run_spec import AxisSelection, Fidelity, RunSpec
+from computronium.experiment.schema.axis import Domain, StructuralAxis
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+from computronium.experiment.schema.run_spec import AxisSelection, Fidelity, RunSpec
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate

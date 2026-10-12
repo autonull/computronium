@@ -1,22 +1,23 @@
 """Lock: experiment runner outputs real-time cell progress with full axis values."""
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 import sys
 
+import pytest
+
 sys.path.insert(0, "/home/me/computronium/scripts")
+import asyncio
+import tempfile
+
 from run_experiment import _run_loop
+
+from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.backends import LocalBackend
+from computronium.experiment.execution.deadline import Deadline
+from computronium.experiment.kernel.search_space import search_space_from_spec
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
-from computronium.experiment.kernel.search_space import search_space_from_spec
-from computronium.experiment.execution.deadline import Deadline
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.schema.coordinate import Coordinate, Schedule, Provenance
-import tempfile
-import asyncio
 
 
 class TestRunnerTransparencyLock:
@@ -63,9 +64,9 @@ class TestRunnerTransparencyLock:
                 # Mock backend.submit to return quickly
                 async def mock_submit(coord, sched, prov, params, store):
                     from computronium.experiment.schema.record import (
+                        GateVerdict,
                         Record,
                         Status,
-                        GateVerdict,
                     )
 
                     return [
@@ -168,9 +169,9 @@ class TestRunnerTransparencyLock:
 
                 async def mock_submit(coord, sched, prov, params, store):
                     from computronium.experiment.schema.record import (
+                        GateVerdict,
                         Record,
                         Status,
-                        GateVerdict,
                     )
 
                     return [

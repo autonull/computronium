@@ -22,7 +22,6 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.kernel.search_space import search_space_from_spec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate
 from computronium.experiment.schema.run_spec import AxisSelection, RunSpec
@@ -111,7 +110,6 @@ class ScalingRunner:
 
     def _generate_parameter_grid(self) -> list[dict[str, Any]]:
         """Generate the grid of parameter values to sweep."""
-        import math
 
         grid = [{}]
         for param in self.spec.vary:
@@ -372,7 +370,6 @@ async def _run_scaling_cli(
     n_points: int,
 ) -> ScalingResult:
     """Run scaling from CLI arguments."""
-    from computronium.experiment.schema.axis import StructuralAxis
 
     base_coord = None
     if base_config:

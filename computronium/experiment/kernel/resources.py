@@ -11,7 +11,7 @@ import logging
 import re
 import threading
 import time
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
@@ -574,14 +574,14 @@ def estimate_campaign_cost(
 
 
 __all__ = [
-    "Budget",
-    "CostModel",
-    "SimpleCostModel",
-    "ResourceUsage",
-    "CostTracker",
-    "CampaignCostTracker",
-    "estimate_campaign_cost",
     "CARBON_INTENSITY",
     "GPU_POWER_WATTS",
     "GPU_PRICING_USD_PER_HOUR",
+    "Budget",
+    "CampaignCostTracker",
+    "CostModel",
+    "CostTracker",
+    "ResourceUsage",
+    "SimpleCostModel",
+    "estimate_campaign_cost",
 ]

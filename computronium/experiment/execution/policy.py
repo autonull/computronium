@@ -24,15 +24,15 @@ from optuna.distributions import (
 )
 from optuna.study import StudyDirection
 
-from computronium.experiment.kernel import Budget
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.optuna_adapter import OptunaDistributionAdapter
+from computronium.experiment.execution.stage import Proposal
+from computronium.experiment.kernel import Budget
 from computronium.experiment.kernel.search_space import (
     ShapeResolver,
-    iter_candidates,
     declared_cell_count,
+    iter_candidates,
 )
-from computronium.experiment.execution.stage import Proposal
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.metrics import objective_metric, objective_values
@@ -458,7 +458,7 @@ class ModelBasedPolicy:
     for the credit×update combinations before falling back to standard samplers.
     """
 
-    def __init__(  # ruff: ignore[PLR0913]
+    def __init__(  # ruff: ignore[too-many-arguments]
         self,
         *,
         sampler: str = "tpe",  # "tpe", "nsga2", "gp", "random", "icu_guided"

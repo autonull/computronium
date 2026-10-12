@@ -9,17 +9,13 @@ from pathlib import Path
 import pytest
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
-from computronium.experiment.kernel.search_space import (
-    iter_candidates,
-    search_space_from_spec,
-)
 from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from scripts.run_experiment import _run_loop
-from computronium.experiment.execution.backends import LocalBackend
 
 
 @pytest.mark.asyncio

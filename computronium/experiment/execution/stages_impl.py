@@ -9,12 +9,12 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.execution.stage import (
         Fragment,
         Proposal,
         StageContext,
     )
+    from computronium.experiment.kernel.search_space import SearchSpace
 
 logger = logging.getLogger(__name__)
 

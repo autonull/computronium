@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 try:
     import torch.distributed as dist
-    from torch.nn.parallel import DistributedDataParallel as DDP
     from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
     from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
+    from torch.nn.parallel import DistributedDataParallel as DDP
 
     HAS_DDP = True
 except ImportError:
@@ -685,6 +685,8 @@ class DDPBackend:
 
 
 __all__ = [
+    "DDPBackend",
+    "DDPConfig",
     "EvaluationResult",
     "EvaluationTask",
     "ExecutionBackend",
@@ -692,6 +694,4 @@ __all__ = [
     "LocalBackend",
     "MultiprocessBackend",
     "Success",
-    "DDPBackend",
-    "DDPConfig",
 ]

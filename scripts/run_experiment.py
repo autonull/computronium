@@ -33,8 +33,8 @@ from computronium.experiment.reporters import (
     generate_html_report,
     generate_json_report,
 )
-from computronium.experiment.schema import RunSpec
-from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema import RunSpec, harvest_schema
+from computronium.experiment.schema.axis import AxisKind, StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
 from computronium.experiment.surface.report import ReportGenerator
@@ -107,6 +107,7 @@ def _build_spec(config: Config, device: str) -> RunSpec:
         param_budget=config.param_budget or profile.param_budget,
         policy=config.policy,
         axes=axes,
+        hyperparameters=dict(profile.hyperparameters),
         checkpoint_every_n=profile.checkpoint_every_n,
         seed=config.seed,
         device=device,
@@ -115,8 +116,6 @@ def _build_spec(config: Config, device: str) -> RunSpec:
 
 def _print_experiment(spec: RunSpec, space) -> None:
     """Name the experiment being run and its search space, before any cell."""
-    from computronium.experiment.schema.axis import StructuralAxis
-
     print("=" * 70, flush=True)
     print(f"EXPERIMENT  profile={spec.profile}  task={spec.task}", flush=True)
     print(
@@ -133,6 +132,15 @@ def _print_experiment(spec: RunSpec, space) -> None:
     total = declared_cell_count(spec, space)
     print(f"  declared cells: {total:,}", flush=True)
     print("=" * 70, flush=True)
+
+
+def _format_hp(value: object) -> str:
+    """Compact, readable rendering of one hyperparameter value."""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int | float):
+        return f"{value:.4g}"
+    return str(value)
 
 
 async def _run_loop(  # ruff: ignore[complex-structure, too-many-locals]
@@ -190,20 +198,33 @@ async def _run_loop(  # ruff: ignore[complex-structure, too-many-locals]
             if key in completed:
                 continue
 
-            # Include hyperparameters in output
-            params_str = ""
-            if coord.params:
-                param_items = [f"{k}={v}" for k, v in sorted(coord.params.items())]
-                params_str = f" [{', '.join(param_items)}]"
-            else:
-                params_str = " [no hyperparams]"
-            
+            # Show EVERY hyperparameter the cell actually uses: the swept
+            # overrides plus each active knob's resolved value (prior/default).
+            # Structural knobs (input_dim/output_dim) are task-derived, not
+            # chosen, so they are excluded — showing their default of 1 would
+            # misrepresent the shape the geometry actually builds.
+            active = harvest_schema().active(coord)
+            structural = {
+                f"{s.axis_name}.{s.name}"
+                for s in active.specs
+                if s.axis_kind is AxisKind.STRUCTURAL
+            }
+            effective = {
+                k: v
+                for k, v in {**active.values, **coord.params}.items()
+                if k not in structural
+            }
+            hp_items = ", ".join(
+                f"{k}={_format_hp(v)}" for k, v in sorted(effective.items())
+            )
+
             print(
                 f"  Cell {count + 1}: substrate={coord.substrate} geometry={coord.geometry} "
                 f"dynamics={coord.dynamics} credit={coord.credit} update={coord.update} "
-                f"plasticity={coord.plasticity} (seed={sched.seed}){params_str}",
+                f"plasticity={coord.plasticity} (seed={sched.seed})",
                 flush=True,
             )
+            print(f"      hp: {hp_items or '[none]'}", flush=True)
 
             from computronium.experiment.schema.coordinate import Provenance
 
@@ -216,7 +237,7 @@ async def _run_loop(  # ruff: ignore[complex-structure, too-many-locals]
                 links={"run_id": run_id},
             )
             params = {}
-            try:  # ruff: ignore[PLW0717]
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 records = await backend.submit(coord, sched, prov, params, store)
                 for r in records:
                     store.append(r)

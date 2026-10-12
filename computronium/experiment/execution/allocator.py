@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from computronium.experiment.schema.coordinate import Coordinate
 
 if TYPE_CHECKING:
-    from computronium.experiment.execution.deadline import Deadline
     from computronium.experiment.schema.coordinate import Schedule
     from computronium.experiment.schema.record import Record
 

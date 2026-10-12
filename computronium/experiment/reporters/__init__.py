@@ -17,10 +17,10 @@ from computronium.experiment.reporters.json import (
 )
 
 __all__ = [
+    "JSONReportConfig",
     "ReportConfig",
     "generate_html_report",
-    "generate_report_from_db",
-    "JSONReportConfig",
     "generate_json_report",
     "generate_json_report_from_db",
+    "generate_report_from_db",
 ]

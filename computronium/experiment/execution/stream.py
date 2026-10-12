@@ -17,7 +17,7 @@ the store's own history, not deferred to a downstream screen.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -25,13 +25,13 @@ from computronium.experiment.kernel.search_space import (
     SearchSpace,
     iter_candidates,
 )
-from computronium.experiment.schema.coordinate import Coordinate, Schedule
-from computronium.experiment.schema.run_spec import RunSpec
 
 if TYPE_CHECKING:
     from computronium.experiment.execution.deadline import Deadline
-    from computronium.experiment.kernel.evaluate import TaskShape
     from computronium.experiment.execution.policy import Policy
+    from computronium.experiment.kernel.evaluate import TaskShape
+    from computronium.experiment.schema.coordinate import Coordinate, Schedule
+    from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +99,9 @@ class CellStream:
         self._page_size = page_size
         self._is_measured = is_measured or (lambda _key: False)
         self._state = CellStreamState(page_size=page_size)
-        self._pending: list[tuple[Coordinate, Schedule]] = []
         self._rejected_keys: set[str] = set()
         self._exploit_policy: Policy | None = None
+        self._iterator: Iterator[tuple[Coordinate, Schedule]] | None = None
 
     def set_exploit_policy(self, policy: Policy) -> None:
         """Set the exploit policy (reserved for the hyperparameter ladder)."""
@@ -113,6 +113,13 @@ class CellStream:
         Returns fewer than ``k`` only when the deadline expires or the declared
         space is exhausted. Never raises for exhaustion: the pipeline reads
         :attr:`is_exhausted` and stops.
+
+        The candidate page is pulled **lazily**: a cell is returned as soon as it
+        is reached, not after the whole page is buffered. Buffering the page
+        first meant the first cell waited on every legal candidate in a 50 000
+        candidate page — and each legal candidate runs a composition dry-run —
+        so a large space (the 3.3M-cell maturation grid) spent minutes before
+        Cell 1 while consuming its own wall-clock budget.
 
         Args:
             k: Number of fresh cells to return.
@@ -126,51 +133,56 @@ class CellStream:
 
         results: list[tuple[Coordinate, Schedule]] = []
         while len(results) < k and not self._state.exhausted:
-            if not self._pending:
-                self._refill()
-                if not self._pending:
+            if self._iterator is None:
+                self._open_page()
+            iterator = self._iterator
+            assert iterator is not None
+            examined = False
+            for coordinate, schedule in iterator:
+                examined = True
+                if self._deadline and self._deadline.soft_expired():
+                    return results[:k]
+                key = coordinate.measurement_key(schedule)
+                if key in self._rejected_keys or self._is_measured(key):
+                    continue
+                results.append((coordinate, schedule))
+                if len(results) >= k:
                     break
-            self._drain(results, k)
-            if self._deadline and self._deadline.soft_expired():
-                break
+            else:
+                # The page is spent; advance to the next one. The iterator lived
+                # just long enough to serve this call, and is reopened at the
+                # next page's offset so resume stays offset-indexed.
+                self._iterator = None
+                self._finish_page(examined)
+                continue
+            break
         return results[:k]
 
-    def _refill(self) -> None:
-        """Buffer the next page of legal cells; mark exhausted on an empty page."""
-        page = list(
-            iter_candidates(
-                self._spec,
-                self._space,
-                deadline=self._deadline,
-                shape=self._shape,
-                check_composable=True,
-                offset=self._state.offset,
-                page_size=self._page_size,
-            )
+    def _open_page(self) -> None:
+        """Open the candidate iterator at the current page offset."""
+        self._iterator = iter_candidates(
+            self._spec,
+            self._space,
+            deadline=self._deadline,
+            shape=self._shape,
+            check_composable=True,
+            offset=self._state.offset,
+            page_size=self._page_size,
         )
-        self._state.offset += self._page_size
-        if not page:
+
+    def _finish_page(self, examined: bool) -> None:
+        """Advance past a spent page, or mark the space exhausted when it was empty."""
+        if not examined:
             self._state.exhausted = True
             logger.info(
                 "Cell stream exhausted after offset=%d (no fresh cells in page)",
                 self._state.offset,
             )
             return
-        self._pending.extend(page)
+        self._state.offset += self._page_size
         logger.debug(
-            "Cell stream buffered %d cell(s) at offset=%d",
-            len(page),
-            self._state.offset,
+            "Cell stream advanced to offset=%d", self._state.offset
         )
-
-    def _drain(self, results: list[tuple[Coordinate, Schedule]], k: int) -> None:
-        """Pop fresh cells off the buffer into ``results`` until it fills."""
-        while self._pending and len(results) < k:
-            coordinate, schedule = self._pending.pop(0)
-            key = coordinate.measurement_key(schedule)
-            if key in self._rejected_keys or self._is_measured(key):
-                continue
-            results.append((coordinate, schedule))
 
     def add_rejected_key(self, key: str) -> None:
         """Add a key to the durable rejected set (admission gate)."""
@@ -183,11 +195,12 @@ class CellStream:
     def set_state(self, state: CellStreamState) -> None:
         """Restore state for checkpoint/resume."""
         self._state = state
+        self._iterator = None
 
     @property
     def is_exhausted(self) -> bool:
         """Whether the declared structural space has been fully walked."""
-        return self._state.exhausted and not self._pending
+        return self._state.exhausted
 
     @property
     def offset(self) -> int:

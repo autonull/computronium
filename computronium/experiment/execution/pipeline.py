@@ -62,12 +62,12 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.execution.budget import CostModel
     from computronium.experiment.execution.policy import Policy
-    from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.execution.stage import (
         Fragment,
         Proposal,
         StageContext,
     )
+    from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 

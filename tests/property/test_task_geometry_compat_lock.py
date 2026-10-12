@@ -13,8 +13,8 @@ from computronium.experiment.kernel.compose import (
     ProposalComposeError,
     compose_cell_system,
 )
-from computronium.experiment.kernel.search_space import search_space_from_spec
 from computronium.experiment.kernel.evaluate import task_shape
+from computronium.experiment.kernel.search_space import search_space_from_spec
 from computronium.experiment.schema import (
     Coordinate,
     RunSpec,

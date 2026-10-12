@@ -6,6 +6,61 @@
 
 ---
 
+## 0. RUN-BLOCKERS — must all be green before the next run
+
+These are the defects that make a run slow or uninformative. None requires a
+rewrite; each is a targeted fix with a lock. A run may not be attempted until
+every row is ✅.
+
+| # | Defect | Root cause | Fix | Status |
+|---|--------|-----------|-----|--------|
+| **B1** | Several minutes before `Cell 1` (burns the run's own wall-clock budget) | `CellStream._refill` did `list(iter_candidates(...))`, buffering a whole 50 000-candidate page — and every legal candidate runs a composition dry-run — before yielding the first cell | Stream the page lazily: pull only what `next(k)` needs; advance the page offset on exhaustion | ✅ `execution/stream.py`; measured **0.16 s** to first cell (was minutes). Needs lock + end-to-end re-verify |
+| **B2** | Learning rate / `beta` / `max_steps` are **never searched** | `RunProfile` had no `hyperparameters` field; the profile→spec builders passed none, so `ModelBasedPolicy` sampled only `spec.hyperparameters` (the auto-added width) | `RunProfile.hyperparameters` + `_SEARCH_SWEEP`; set on `production-map`/`maturation`/`claim`; passed in both builders + `_apply_overrides` | ✅ wired in `surface/cli.py` + `scripts/run_experiment.py`. Needs lock + verify |
+| **B3** | Learning rate / `beta` / `max_steps` are **never displayed**, even though resolved and applied | The runner printed `coord.params` (only the *swept* keys), not the *effective* values | Print every active knob's resolved value (swept win), excluding structural (task-derived) knobs | ✅ `scripts/run_experiment.py::_run_loop` prints a full `hp:` line; verified by inspection (lr/`beta`/`max_steps` present). Needs end-to-end re-verify |
+| **B4** | `cli.py` was mid-edit and untrustworthy | an edit matched an indented local import and de-indented it | repair the import; parse-check | ✅ `cli.py`, `stream.py`, `scripts/run_experiment.py` all parse |
+
+**Verified by inspection (this session's last run of `quick-verify`):** `Cell 1`
+was printed immediately and the `hp:` line showed e.g.
+`dynamics.step_size=0.03162, dynamics.beta=0.5, dynamics.max_steps=30,
+update.step_size=0.001, update.momentum=0.9, …` for every cell.
+
+### 0.1 Session handoff (resume here)
+
+**Uncommitted working-tree changes** (all parse; feature-complete for B1–B4 but
+**not yet locked or committed**):
+`TODO61.md`, `computronium/experiment/execution/stream.py`,
+`computronium/experiment/surface/cli.py`, `scripts/run_experiment.py`.
+Baseline committed refactor: `67413277`.
+
+**Remaining before the next run (do in this order):**
+1. **Re-verify end-to-end** (B3's structural filter was added after the last run):
+   `uv run python scripts/run_experiment.py --hours 0.01 --profile quick-verify
+   --device cpu --store /tmp/v3.duckdb`
+   Expect: `Cell 1` within seconds; `hp:` line lists the knobs (no
+   `geometry.input_dim`/`output_dim`); records carry them.
+2. **Add locks** in `tests/property/` (no shortcuts):
+   - every `RUN_PROFILES[...].hyperparameters` key is a canonical harvested key
+     within its harvested domain (ask `narrow_domain` to prove it);
+   - a spec from a search profile carries the declared knobs in `coord.params`;
+   - `_run_loop` output contains `update.step_size=` (extend
+     `test_hyperparameter_display_lock`, which drives the real search space);
+   - `CellStream.next(1)` returns within ~1 s on a large space (B1 lock).
+3. **Run the targeted property set** for the touched modules, then **commit**.
+4. Only then attempt the maturation run (§2, §4).
+
+**Known-good details for the fresh session:**
+- `_SEARCH_SWEEP` (in `surface/cli.py`) = `update.step_size`,
+  `dynamics.step_size`, `dynamics.beta`, `dynamics.max_steps`. `geometry.hidden_dim`
+  is intentionally absent (auto-narrowed by `RunSpec`).
+- The `quick-verify` profile declares **no** sweep, so it exercises B3 (display of
+  resolved values) without B2; `production-map`/`maturation`/`claim` exercise both.
+- `_walk`'s shared stride means declaring several knobs adds one axis of length
+  `sweep_steps`, not a product — no space explosion.
+
+
+
+---
+
 ## Progress Summary (2026-10-12)
 
 **Phase A (Bug Fixes): ✅ COMPLETED**

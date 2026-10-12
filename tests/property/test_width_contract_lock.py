@@ -10,15 +10,15 @@ from __future__ import annotations
 
 import pytest
 import torch
+
 from computronium.core.plasticity.fast_weights import FastWeightPlasticity
 from computronium.experiment.kernel.compose import compose_cell_system
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import _composable
 from computronium.experiment.schema import Coordinate
-from computronium.experiment.kernel.evaluate import task_shape
 from computronium.ontology.geometry import (
-    GeometryConfig,
     ActivationLayout,
-    LayerLayout,
+    GeometryConfig,
     geometry_from_config,
 )
 
@@ -332,8 +332,8 @@ def test_void_constraint_removal_regression_nca_ntm() -> None:
     AND removes the void constraint, then asserts the search space
     then includes NCA+fast_weights for digits.
     """
-    from computronium.ontology.system import SystemConfig
     from computronium.experiment.schema.seed_registries import CONSTRAINTS_REGISTRY
+    from computronium.ontology.system import SystemConfig
 
     # Save originals
     original_validate = SystemConfig._validate_nca_ntm_fast_weight_plasticity
@@ -398,8 +398,8 @@ def test_void_constraint_removal_regression_tile() -> None:
     AND removes the void constraint, then asserts the search space
     then includes Tile+fast_weights for digits.
     """
-    from computronium.ontology.system import SystemConfig
     from computronium.experiment.schema.seed_registries import CONSTRAINTS_REGISTRY
+    from computronium.ontology.system import SystemConfig
 
     # Save originals
     original_validate = SystemConfig._validate_tile_fast_weight_plasticity

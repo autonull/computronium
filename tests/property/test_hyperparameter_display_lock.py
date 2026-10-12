@@ -1,4 +1,9 @@
-"""Lock: hyperparameter display in cell output."""
+"""Lock: hyperparameter display in cell output.
+
+The runner prints ALL resolved hyperparameters for each cell (swept values win
+over defaults), excluding structural knobs (input_dim/output_dim) which are
+task-derived. This lock drives the real search space — no injected params.
+"""
 
 import sys
 
@@ -21,11 +26,11 @@ from computronium.experiment.surface.cli import RUN_PROFILES
 
 
 class TestHyperparameterDisplayLock:
-    """Runner must print hyperparameters when available for a cell."""
+    """Runner must print resolved hyperparameters in cell output."""
 
     @pytest.mark.timeout(300)
-    def test_run_loop_prints_hyperparameters_when_available(self, capsys):
-        """_run_loop prints hyperparameters in cell output when coord.params is non-empty."""
+    def test_run_loop_prints_all_resolved_hyperparameters(self, capsys):
+        """_run_loop prints all resolved hyperparameters (swept + defaults)."""
         profile = RUN_PROFILES["production-map"]
         spec = RunSpec(
             profile=profile.name,
@@ -168,14 +173,30 @@ class TestHyperparameterDisplayLock:
                 captured = capsys.readouterr()
                 output = captured.out
 
-                # Verify hyperparameters are printed in cell output
-                assert "[geometry.hidden_dim=" in output, (
-                    f"Hyperparameters not printed in output: {output}"
+                # Verify ALL resolved hyperparameters are printed (not just swept)
+                # Swept geometry width
+                assert "geometry.hidden_dim=" in output, (
+                    f"Swept geometry.hidden_dim not printed in output: {output}"
+                )
+                # Resolved update step_size (from _SEARCH_SWEEP)
+                assert "update.step_size=" in output, (
+                    f"Resolved update.step_size not printed in output: {output}"
+                )
+                # Resolved dynamics step_size (from _SEARCH_SWEEP)
+                assert "dynamics.step_size=" in output, (
+                    f"Resolved dynamics.step_size not printed in output: {output}"
+                )
+                # Structural knobs (input_dim/output_dim) must NOT appear
+                assert "geometry.input_dim=" not in output, (
+                    f"Structural geometry.input_dim should be excluded: {output}"
+                )
+                assert "geometry.output_dim=" not in output, (
+                    f"Structural geometry.output_dim should be excluded: {output}"
                 )
 
     @pytest.mark.timeout(300)
-    def test_run_loop_shows_no_hyperparams_when_none(self, capsys):
-        """_run_loop shows '[no hyperparams]' when coord.params is empty."""
+    def test_run_loop_prints_hyperparams_even_with_no_swept(self, capsys):
+        """_run_loop prints resolved defaults even when no params are swept."""
         profile = RUN_PROFILES["quick-verify"]
         spec = RunSpec(
             profile=profile.name,
@@ -187,7 +208,7 @@ class TestHyperparameterDisplayLock:
             epochs=profile.epochs,
             batch_limit=profile.batch_limit,
             budget_seconds=300.0,
-            param_budget=0,  # no ceiling: nothing is auto-swept, params stay empty
+            param_budget=0,  # no ceiling: nothing is auto-swept
             policy=profile.policy,
             axes=(
                 AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
@@ -227,9 +248,8 @@ class TestHyperparameterDisplayLock:
                         Status,
                     )
 
-                    assert coord.params == {}, (
-                        f"Expected empty params, got: {coord.params}"
-                    )
+                    # Even with param_budget=0, coord.params may have defaults
+                    # from the harvest; the display shows resolved values
                     return [
                         Record(
                             record_id="test",
@@ -244,7 +264,7 @@ class TestHyperparameterDisplayLock:
                             plasticity=coord.plasticity,
                             credit=coord.credit,
                             update=coord.update,
-                            params={},
+                            params=dict(coord.params),
                             schedule=sched,
                             provenance=prov,
                             status=Status(
@@ -273,7 +293,7 @@ class TestHyperparameterDisplayLock:
                                 "param_count": 1000,
                                 "param_budget": 50000,
                             },
-                            effective_params={},
+                            effective_params=dict(coord.params),
                             unknown={},
                         )
                     ]
@@ -295,9 +315,19 @@ class TestHyperparameterDisplayLock:
                 captured = capsys.readouterr()
                 output = captured.out
 
-                assert "[no hyperparams]" in output, (
-                    f"Expected '[no hyperparams]' in output: {output}"
+                # Even with no swept params, resolved defaults are printed
+                assert "dynamics.step_size=" in output, (
+                    f"Resolved dynamics.step_size not printed: {output}"
                 )
+                assert "update.step_size=" in output, (
+                    f"Resolved update.step_size not printed: {output}"
+                )
+                assert "geometry.hidden_dim=" in output, (
+                    f"Resolved geometry.hidden_dim not printed: {output}"
+                )
+                # Structural knobs still excluded
+                assert "geometry.input_dim=" not in output
+                assert "geometry.output_dim=" not in output
 
 
 if __name__ == "__main__":

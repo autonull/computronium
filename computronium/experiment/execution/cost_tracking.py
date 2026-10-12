@@ -115,7 +115,7 @@ class CostTracker:
 
     def _init_nvml(self) -> None:
         """Initialize NVML for energy tracking."""
-        import pynvml  # ruff: ignore[import-outside-toplevel]
+        import pynvml
 
         try:
             pynvml.nvmlInit()

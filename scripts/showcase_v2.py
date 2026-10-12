@@ -20,23 +20,18 @@ from pathlib import Path
 from typing import Any
 
 import torch
-import yaml
 
+from computronium.core.logging import get_logger
+from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.execution.policy import RoundRobinGridPolicy
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.schema import RunSpec, StageId
 from computronium.experiment.surface.cli import (
     _CELL_WORKERS,
-    _resolve_spec,
     _settle_maturity,
-    create_policy,
-    policy_context,
 )
-from computronium.experiment.kernel.evaluate import task_shape
-from computronium.core.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -241,8 +236,9 @@ def _generate_report(
     device: str,
 ) -> None:
     """Generate a simple but complete HTML report."""
-    from computronium.experiment.surface.report import ReportGenerator
     from datetime import datetime
+
+    from computronium.experiment.surface.report import ReportGenerator
 
     generator = ReportGenerator(store)
 

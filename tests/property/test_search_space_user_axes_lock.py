@@ -7,14 +7,15 @@ are subject to validity filtering.
 """
 
 import pytest
+
+from computronium.experiment.kernel.search_space import (
+    _filter_axes_cache,
+    search_space_from_spec,
+)
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
-from computronium.experiment.kernel.search_space import (
-    search_space_from_spec,
-    _filter_axes_cache,
-)
 
 
 class TestSearchSpaceUserAxesLock:

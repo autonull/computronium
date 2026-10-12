@@ -23,7 +23,7 @@ Machine-readable output for downstream analysis:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -135,22 +135,21 @@ def _compute_pareto_frontier_json(
                     y_metric: y_val,
                 })
                 best_y = y_val
-        else:
-            if y_val < best_y:
-                pareto.append({
-                    "cell_key": r.cell_key,
-                    "coordinate": {
-                        "substrate": r.substrate,
-                        "geometry": r.geometry,
-                        "dynamics": r.dynamics,
-                        "plasticity": r.plasticity,
-                        "credit": r.credit,
-                        "update": r.update,
-                    },
-                    x_metric: x_val,
-                    y_metric: y_val,
-                })
-                best_y = y_val
+        elif y_val < best_y:
+            pareto.append({
+                "cell_key": r.cell_key,
+                "coordinate": {
+                    "substrate": r.substrate,
+                    "geometry": r.geometry,
+                    "dynamics": r.dynamics,
+                    "plasticity": r.plasticity,
+                    "credit": r.credit,
+                    "update": r.update,
+                },
+                x_metric: x_val,
+                y_metric: y_val,
+            })
+            best_y = y_val
 
     return pareto
 
@@ -225,7 +224,7 @@ def _compute_summary_json(records: list[Record]) -> dict[str, Any]:
 
 
 def generate_json_report(
-    store: "RecordStore",
+    store: RecordStore,
     run_id: str,
     config: JSONReportConfig | None = None,
 ) -> Path:
