@@ -107,21 +107,22 @@ class OptunaDistributionAdapter:
         active = harvest_schema().active(coordinate)
         distributions: dict[str, BaseDistribution] = {}
         for hyper in active.specs:
-            if swept and hyper.name not in swept:
+            key = f"{hyper.axis_name}.{hyper.name}"
+            if swept and key not in swept:
                 continue
             narrowed = (
                 None
-                if hyper.name not in swept
+                if key not in swept
                 else replace(
                     hyper,
-                    domain=narrow_domain(swept[hyper.name], hyper.domain, hyper.name),
+                    domain=narrow_domain(swept[key], hyper.domain, key),
                 )
             )
             distribution = OptunaDistributionAdapter.distribution(
                 hyper if narrowed is None else narrowed
             )
             if distribution is not None:
-                distributions[hyper.name] = distribution
+                distributions[key] = distribution
         return distributions
 
 

@@ -44,8 +44,8 @@ class Coordinate:
             if field.name == "params" and not isinstance(value, dict):
                 raise TypeError("Coordinate.params must be dict")
         if isinstance(self.params, dict):
-            for name, value in self.params.items():
-                validate_rate_value(name, value)
+            for key, value in self.params.items():
+                validate_rate_value(key.split(".", 1)[-1], value)
 
     def cell_key(self) -> str:
         """Compute the cell key: SHA256 of structural axes only (no schedule)."""

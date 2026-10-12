@@ -1,22 +1,23 @@
 """Lock: hyperparameter display in cell output."""
 
-import pytest
-from unittest.mock import AsyncMock, patch
 import sys
 
+import pytest
+
 sys.path.insert(0, "/home/me/computronium/scripts")
+import asyncio
+import tempfile
+
 from run_experiment import _run_loop
+
+from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.backends import LocalBackend
+from computronium.experiment.execution.deadline import Deadline
+from computronium.experiment.kernel.search_space import search_space_from_spec
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
-from computronium.experiment.kernel.search_space import search_space_from_spec
-from computronium.experiment.execution.deadline import Deadline
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.schema.coordinate import Coordinate, Schedule, Provenance
-import tempfile
-import asyncio
 
 
 class TestHyperparameterDisplayLock:
@@ -79,23 +80,20 @@ class TestHyperparameterDisplayLock:
                 captured_coords = []
 
                 async def mock_submit(coord, sched, prov, params, store):
-                    # Inject hyperparameters into the coordinate for testing display
-                    # (The real search space does this via _cell_params)
-                    if not coord.params:
-                        coord = Coordinate(
-                            substrate=coord.substrate,
-                            geometry=coord.geometry,
-                            dynamics=coord.dynamics,
-                            plasticity=coord.plasticity,
-                            credit=coord.credit,
-                            update=coord.update,
-                            params={"beta": 0.5, "max_steps": 30},
-                        )
+                    # No injection: the real search space must populate the
+                    # coordinate's swept hyperparameters (TODO61 §11.1).
                     captured_coords.append(coord)
 
                     from computronium.experiment.schema.record import (
-                        Record, Status, GateVerdict, FailureCause, Severity, Maturity, ReproducibilityClass
+                        FailureCause,
+                        GateVerdict,
+                        Maturity,
+                        Record,
+                        ReproducibilityClass,
+                        Severity,
+                        Status,
                     )
+
                     return [
                         Record(
                             record_id="test",
@@ -158,20 +156,22 @@ class TestHyperparameterDisplayLock:
                     )
                 )
 
-                # Verify hyperparameters were injected
+                # Verify hyperparameters were injected by the real search space
                 assert len(captured_coords) > 0, "No cells processed"
                 coord = captured_coords[0]
-                assert coord.params, f"Expected hyperparameters, got empty params"
-                assert "beta" in coord.params or "max_steps" in coord.params, \
-                    f"Expected beta/max_steps in params, got: {coord.params}"
+                assert coord.params, "Expected hyperparameters, got empty params"
+                assert any(k.startswith("geometry.") for k in coord.params), (
+                    f"Expected a swept geometry width, got: {coord.params}"
+                )
 
                 # Capture output
                 captured = capsys.readouterr()
                 output = captured.out
 
                 # Verify hyperparameters are printed in cell output
-                assert "[beta=" in output or "[max_steps=" in output, \
+                assert "[geometry.hidden_dim=" in output, (
                     f"Hyperparameters not printed in output: {output}"
+                )
 
     @pytest.mark.timeout(300)
     def test_run_loop_shows_no_hyperparams_when_none(self, capsys):
@@ -187,12 +187,16 @@ class TestHyperparameterDisplayLock:
             epochs=profile.epochs,
             batch_limit=profile.batch_limit,
             budget_seconds=300.0,
-            param_budget=profile.param_budget,
+            param_budget=0,  # no ceiling: nothing is auto-swept, params stay empty
             policy=profile.policy,
             axes=(
                 AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
-                AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)),
-                AxisSelection(axis=StructuralAxis.DYNAMICS, primitives=("instantaneous",)),
+                AxisSelection(
+                    axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)
+                ),
+                AxisSelection(
+                    axis=StructuralAxis.DYNAMICS, primitives=("instantaneous",)
+                ),
                 AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null",)),
                 AxisSelection(axis=StructuralAxis.CREDIT, primitives=("gradient",)),
                 AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean",)),
@@ -214,9 +218,18 @@ class TestHyperparameterDisplayLock:
 
                 async def mock_submit(coord, sched, prov, params, store):
                     from computronium.experiment.schema.record import (
-                        Record, Status, GateVerdict, FailureCause, Severity, Maturity, ReproducibilityClass
+                        FailureCause,
+                        GateVerdict,
+                        Maturity,
+                        Record,
+                        ReproducibilityClass,
+                        Severity,
+                        Status,
                     )
-                    assert coord.params == {}, f"Expected empty params, got: {coord.params}"
+
+                    assert coord.params == {}, (
+                        f"Expected empty params, got: {coord.params}"
+                    )
                     return [
                         Record(
                             record_id="test",
@@ -282,8 +295,9 @@ class TestHyperparameterDisplayLock:
                 captured = capsys.readouterr()
                 output = captured.out
 
-                assert "[no hyperparams]" in output, \
+                assert "[no hyperparams]" in output, (
                     f"Expected '[no hyperparams]' in output: {output}"
+                )
 
 
 if __name__ == "__main__":

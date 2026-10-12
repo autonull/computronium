@@ -45,30 +45,35 @@ def test_exactly_one_priors_registry_definition() -> None:
     assert definitions == ["experiment/schema/registries.py"], definitions
 
 
-def test_no_hyperparameter_name_is_declared_by_two_axes() -> None:
-    """Q3's gate: walk ``by_axis_specs``; a shared name is a seam defect."""
+def test_a_name_may_be_shared_across_axes_and_keyed_canonically() -> None:
+    """A hyperparameter's identity is ``(axis, name)``.
+
+    ``step_size`` is read by dynamics settling *and* the parameter update — two
+    different quantities. Names are scoped to their axis and the canonical key is
+    ``"{axis}.{name}"``; that key, not the bare name, is the declaration's
+    identity, so it must be unique.
+    """
+    schema = harvest_schema()
     shared: dict[str, set[str]] = {}
-    for spec in harvest_schema().hyperparameters:
+    for spec in schema.hyperparameters:
         shared.setdefault(spec.name, set()).add(spec.axis_name)
-    doubled = {n: axes for n, axes in shared.items() if len(axes) > 1}
-    assert not doubled, f"names declared by two axes: {doubled}"
+    assert len(shared["step_size"]) > 1, "step_size should span dynamics and update"
+    keys = [f"{s.axis_name}.{s.name}" for s in schema.hyperparameters]
+    assert len(keys) == len(set(keys)), "canonical keys collide"
 
 
-def test_per_axis_names_are_the_declared_canonicals() -> None:
-    """The split names exist on their axes — the rename is locked, not assumed."""
+def test_declared_names_are_the_config_fields_they_feed() -> None:
+    """No translation: a declared name is the config field the component reads."""
     schema = harvest_schema()
     by_axis = {
         axis: {s.name for s in specs} for axis, specs in schema.by_axis_specs.items()
     }
-    assert {"settle_step", "settle_beta", "settle_momentum"} <= by_axis[
-        StructuralAxis.DYNAMICS
-    ]
-    assert "update_lr" in by_axis[StructuralAxis.UPDATE]
-    assert "credit_beta" in by_axis[StructuralAxis.CREDIT]
-    for legacy in ("step_size", "beta"):
+    assert {"step_size", "beta", "momentum"} <= by_axis[StructuralAxis.DYNAMICS]
+    assert "step_size" in by_axis[StructuralAxis.UPDATE]
+    assert "beta" in by_axis[StructuralAxis.CREDIT]
+    for legacy in ("settle_step", "settle_beta", "settle_momentum", "update_lr"):
         assert legacy not in by_axis[StructuralAxis.DYNAMICS]
-        assert legacy not in by_axis[StructuralAxis.CREDIT]
-    assert "step_size" not in by_axis[StructuralAxis.UPDATE]
+        assert legacy not in by_axis[StructuralAxis.UPDATE]
 
 
 def test_every_value_has_a_source_and_none_resolves_to_the_domain_edge() -> None:
@@ -194,23 +199,21 @@ def _config_cls(axis: StructuralAxis) -> type:
     return cls
 
 
-def test_alias_map_targets_real_config_fields() -> None:
-    """Each alias maps to a dataclass field the axis's factories accept.
+def test_declared_names_target_real_consumers() -> None:
+    """Each declared name is a dataclass field (or factory kwarg) its axis reads.
 
     Geometry is excluded: it is built by its own normalizer (``_fit_geometry``),
-    whose key aliases live there.
+    whose key vocabulary lives in ``geometry_keys`` and is checked there.
     """
-    from computronium.experiment.schema import CONFIG_FIELD_ALIASES
-
     schema = harvest_schema()
     for spec in schema.hyperparameters:
         if spec.axis_name == StructuralAxis.GEOMETRY.value:
             continue
-        field_name = CONFIG_FIELD_ALIASES.get(spec.name, spec.name)
+        field_name = spec.name
         cls = _config_cls(StructuralAxis(spec.axis_name))
         if spec.axis_name not in {StructuralAxis.PLASTICITY.value}:
             assert field_name in {f.name for f in fields(cls)}, (
-                f"{spec.axis_name}.{spec.name} aliases to missing field {field_name}"
+                f"{spec.axis_name}.{spec.name} is not a config field"
             )
         consumers = [
             n

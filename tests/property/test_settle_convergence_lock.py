@@ -112,7 +112,7 @@ def _shipped_settle_step() -> tuple[float, float]:
     """The first shipped spec's declared ``settle_step`` band."""
     from computronium.experiment.schema import RunSpec
 
-    domain = RunSpec.load(SHIPPED_SPECS[0]).hyperparameters["settle_step"]
+    domain = RunSpec.load(SHIPPED_SPECS[0]).hyperparameters["dynamics.step_size"]
     assert domain is not None and domain.lo is not None and domain.hi is not None, (
         f"{SHIPPED_SPECS[0].name} declares no bounded settle_step band"
     )

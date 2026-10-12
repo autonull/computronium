@@ -19,9 +19,12 @@ from computronium.core.system_trainer import (
 from computronium.core.system_trainer.factory import param_count
 from computronium.experiment.learning.prior import apply_dynamics_step_size
 from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema.geometry_keys import (
+    TOPOLOGY_KEYS,
+    allowed_geometry_keys,
+)
 from computronium.experiment.schema.harvest import (
     ActiveSpace,
-    config_field_name,
     harvest_schema,
 )
 from computronium.ontology import GeometryConfig
@@ -86,34 +89,7 @@ GRID_UPDATES: tuple[str, ...] = (
     "spectral_constrained",
 )
 
-_COMMON_GEOMETRY_KEYS: Final[frozenset[str]] = frozenset({
-    "hidden_dim",
-    "depth",
-    "init_scheme",
-    "init_scale",
-})
-
 _DEFAULT_NUM_HEADS: Final[int] = 8
-
-_TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
-    "feedforward": frozenset({"residual"}),
-    "recurrent": frozenset(),
-    "tile": frozenset({"neurons_per_tile", "tiles_per_layer"}),
-    "tile_mesh": frozenset({"neurons_per_tile", "tiles_per_layer"}),
-    "attention": frozenset({"num_heads", "head_dim"}),
-    "spatial_lattice": frozenset({"lattice_dims", "connectivity_radius"}),
-    "nca": frozenset({"grid_hw", "delta_scale", "mask_prob"}),
-    "ntm": frozenset({"mem_slots", "mem_width"}),
-    "conv": frozenset({
-        "conv_channels",
-        "kernel_size",
-        "in_channels",
-        "input_hw",
-        "pool_hw",
-    }),
-    "graph": frozenset({"edge_index"}),
-    "causal_transformer": frozenset({"num_heads", "seq_len"}),
-}
 
 # Required input type per geometry topology
 _TOPOLOGY_REQUIRED_INPUT: Final[dict[str, str]] = {
@@ -469,7 +445,7 @@ def _fit_geometry(
 
 
 def _allowed_keys(topology: str) -> frozenset[str]:
-    return _COMMON_GEOMETRY_KEYS | _TOPOLOGY_KEYS.get(topology, frozenset())
+    return allowed_geometry_keys(topology)
 
 
 _TILE_TOPOLOGIES: Final[frozenset[str]] = frozenset({"tile", "tile_mesh"})
@@ -559,8 +535,8 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
     """
     input_dim = math.prod(input_shape)
-    if topology not in _TOPOLOGY_KEYS:
-        msg = f"Unknown topology {topology!r}; allowed: {sorted(_TOPOLOGY_KEYS)}"
+    if topology not in TOPOLOGY_KEYS:
+        msg = f"Unknown topology {topology!r}; allowed: {sorted(TOPOLOGY_KEYS)}"
         raise ProposalComposeError(msg)
 
     # Check geometry-task input compatibility
@@ -586,8 +562,8 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
         raise ProposalComposeError(msg)
 
     explicit_hidden = "hidden_dim" in geometry
-    explicit_depth = "depth" in geometry
-    depth = max(_as_int(geometry.get("depth"), 2), 1)
+    explicit_depth = "num_layers" in geometry
+    depth = max(_as_int(geometry.get("num_layers"), 2), 1)
     hidden = _as_int(geometry.get("hidden_dim"), 64)
 
     # Sizing is derived per component: a swept width is honoured while the
@@ -847,13 +823,6 @@ class ComposedCell:
     param_count: int
 
 
-# Harvested geometry names that mean the same thing as the composer's key.
-_GEOMETRY_ALIASES: Final[Mapping[str, str]] = {"num_layers": "depth"}
-
-# Geometry values the task determines; never taken from a hyperparameter.
-_TASK_SHAPED: Final[frozenset[str]] = frozenset({"input_dim", "output_dim"})
-
-
 def _geometry_mapping(
     active: ActiveSpace,
     geometry: Mapping[str, object],
@@ -867,14 +836,17 @@ def _geometry_mapping(
     sizing question the parameter ceiling owns: ``build_geometry_config``
     treats an explicit ``hidden_dim``/``depth`` as a request to skip derived
     sizing, so a prior of 64 would silently defeat a 10 000-parameter ceiling.
+
+    The values come from ``ActiveSpace.for_axis`` — the same predicate that
+    decides, in the search space, which swept values a cell may carry — so a
+    value the space carries is exactly one composition reads. Geometry
+    hyperparameters are named for the keys the normalizer reads, so no
+    translation is applied.
     """
-    allowed = _allowed_keys(topology)
     harvested = {
-        _GEOMETRY_ALIASES.get(name, name): value
-        for name, value in active.by_axis(StructuralAxis.GEOMETRY).items()
-        if name in swept
-        and name not in _TASK_SHAPED
-        and (_GEOMETRY_ALIASES.get(name, name) in allowed)
+        name: value
+        for name, value in active.for_axis(StructuralAxis.GEOMETRY, topology).items()
+        if f"geometry.{name}" in swept
     }
     return {**harvested, **geometry}
 
@@ -976,7 +948,9 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     dcfg = d_factory(**{
         **active.for_axis(StructuralAxis.DYNAMICS, dynamics_name),
         "step_size": apply_dynamics_step_size(
-            active.values.get("settle_step", _config_default_step_size(d_factory)),
+            active.values.get(
+                "dynamics.step_size", _config_default_step_size(d_factory)
+            ),
             dynamics_name,
         ),
     })
@@ -1080,8 +1054,8 @@ def _effective_params(
 ) -> dict[str, Any]:
     """Record what each composed config actually holds, keyed ``axis.name``.
 
-    Names are per-axis (``dynamics.settle_step`` vs ``update.update_lr``), so
-    each axis records the value its own config actually holds.
+    Names are per-axis (``dynamics.step_size`` vs ``update.step_size``), so each
+    axis records the value its own config actually holds under its own name.
     """
     by_axis = {
         StructuralAxis.GEOMETRY: gcfg,
@@ -1093,7 +1067,7 @@ def _effective_params(
     for axis, config in by_axis.items():
         for spec in active.by_axis_specs_for(axis):
             effective[f"{axis.value}.{spec.name}"] = getattr(
-                config, config_field_name(spec.name), active.values[spec.name]
+                config, spec.name, active.values[f"{axis.value}.{spec.name}"]
             )
     return effective
 

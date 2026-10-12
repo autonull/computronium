@@ -301,7 +301,9 @@ class TestDistributionsComeFromTheHarvest:
         active = harvest_schema().active(coordinate)
 
         assert distributions, "a digits cell has continuous hyperparameters"
-        assert set(distributions) <= {spec.name for spec in active.specs}
+        assert set(distributions) <= {
+            f"{spec.axis_name}.{spec.name}" for spec in active.specs
+        }
         for name, value in coordinate.params.items():
             if name in distributions:
                 assert _within(distributions[name], value)
@@ -318,10 +320,10 @@ class TestDistributionsComeFromTheHarvest:
         )
         gradient = OptunaDistributionAdapter.distributions(_coordinate("gradient"))
 
-        assert "ema_beta" in contrastive
-        assert "train_biases" in gradient
-        assert "ema_beta" not in gradient
-        assert "train_biases" not in contrastive
+        assert "credit.ema_beta" in contrastive
+        assert "credit.train_biases" in gradient
+        assert "credit.ema_beta" not in gradient
+        assert "credit.train_biases" not in contrastive
 
     def test_a_spec_narrows_and_never_widens(self) -> None:
         from computronium.experiment.schema import Domain, RunSpec, Scale
@@ -330,13 +332,13 @@ class TestDistributionsComeFromTheHarvest:
             task=_TASK_ID,
             objectives=("validation_accuracy",),
             hyperparameters={
-                "settle_step": Domain(lo=1e-3, hi=1e-1, scale=Scale.LOG),
+                "dynamics.step_size": Domain(lo=1e-3, hi=1e-1, scale=Scale.LOG),
             },
         )
         narrow = OptunaDistributionAdapter.distributions(_coordinate(), spec=spec)
 
-        assert set(narrow) == {"settle_step"}
-        bounds = cast("FloatDistribution", narrow["settle_step"])
+        assert set(narrow) == {"dynamics.step_size"}
+        bounds = cast("FloatDistribution", narrow["dynamics.step_size"])
         assert bounds.low == pytest.approx(1e-3)
         assert bounds.high == pytest.approx(1e-1)
 
@@ -346,7 +348,7 @@ class TestDistributionsComeFromTheHarvest:
         spec = RunSpec(
             task=_TASK_ID,
             objectives=("validation_accuracy",),
-            hyperparameters={"settle_step": Domain(lo=10.0, hi=100.0)},
+            hyperparameters={"dynamics.step_size": Domain(lo=10.0, hi=100.0)},
         )
         with pytest.raises(ValueError, match="outside the harvested"):
             OptunaDistributionAdapter.distributions(_coordinate(), spec=spec)
@@ -357,9 +359,9 @@ class TestStructuralKnobsAreNotDimensions:
         """Shape is derived from the task (TODO46 §3.0), never searched."""
         distributions = OptunaDistributionAdapter.distributions(_coordinate())
 
-        assert "input_dim" not in distributions
-        assert "output_dim" not in distributions
-        assert "device" not in distributions
+        assert "geometry.input_dim" not in distributions
+        assert "geometry.output_dim" not in distributions
+        assert "substrate.device" not in distributions
 
     def test_a_spec_may_not_sweep_a_structural_knob(self) -> None:
         from computronium.experiment.schema import Domain, RunSpec
@@ -368,7 +370,7 @@ class TestStructuralKnobsAreNotDimensions:
             RunSpec(
                 task=_TASK_ID,
                 objectives=("validation_accuracy",),
-                hyperparameters={"input_dim": Domain(lo=8, hi=64)},
+                hyperparameters={"geometry.input_dim": Domain(lo=8, hi=64)},
             )
 
 
@@ -378,8 +380,8 @@ class TestTheStudyLearns:
         policy = ModelBasedPolicy(seed=0, objectives=("validation_accuracy",))
         coordinate, _ = _proposal_cell(policy)
 
-        assert "settle_step" in coordinate.params
-        assert coordinate.params["settle_step"] > 0.0
+        assert "dynamics.step_size" in coordinate.params
+        assert coordinate.params["dynamics.step_size"] > 0.0
 
     def test_asked_values_stay_inside_the_declared_domains(self) -> None:
         policy = ModelBasedPolicy(seed=3, objectives=("validation_accuracy",))
@@ -449,7 +451,7 @@ class TestTheStudyLearns:
         values: list[float] = []
         for _ in range(24):
             coordinate, schedule = _proposal_cell(policy)
-            score = _log_parabola(coordinate.params["settle_step"])
+            score = _log_parabola(coordinate.params["dynamics.step_size"])
             values.append(score)
             policy.observe(_record(coordinate, schedule, {"val_acc": score}))
 
@@ -466,9 +468,9 @@ class TestTheStudyLearns:
         )
         uniform = UniformRandomPolicy(seed=7)
 
-        sampled = [_proposal_cell(model_based)[0].params.get("settle_step")]
+        sampled = [_proposal_cell(model_based)[0].params.get("dynamics.step_size")]
         random = [
-            proposal.coordinate.params.get("settle_step")
+            proposal.coordinate.params.get("dynamics.step_size")
             for proposal in uniform.propose(_context(n_propose=10))
         ]
 

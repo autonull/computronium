@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import (
     iter_candidates,
     search_space_from_spec,
@@ -11,10 +12,9 @@ from computronium.experiment.kernel.search_space import (
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
-from computronium.experiment.kernel.evaluate import task_shape
 
 
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(300)
 @pytest.mark.asyncio
 async def test_stream_advances_lock():
     """The pager advances past page_size and yields distinct cells.

@@ -86,17 +86,19 @@ def test_unknown_hyperparameter_domain_is_named() -> None:
 
 
 def test_hyperparameter_domains_belong_to_the_run_not_to_an_axis() -> None:
-    """``update_lr`` is read by dynamics and update; its owner is not an axis."""
+    """``step_size`` is read by dynamics and update; its key names the axis."""
     with pytest.raises(ValidationError, match="Extra inputs"):
         RunSpec.model_validate({
             "task": "digits",
             "axes": [
-                {"axis": "credit", "domains": {"update_lr": {"lo": 1e-4, "hi": 1e-1}}}
+                {"axis": "credit", "domains": {"step_size": {"lo": 1e-4, "hi": 1e-1}}}
             ],
         })
     RunSpec.model_validate({
         "task": "digits",
-        "hyperparameters": {"update_lr": {"lo": 1e-4, "hi": 1e-1, "scale": "log"}},
+        "hyperparameters": {
+            "update.step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"}
+        },
     })
 
 
@@ -208,12 +210,12 @@ def test_axis_selection_narrows_and_defaults_to_every_primitive() -> None:
     )
     narrowed = _spec(
         axes=[{"axis": "credit", "primitives": ["gradient"]}],
-        hyperparameters={"update_lr": {"lo": 1e-4, "hi": 1e-1, "scale": "log"}},
+        hyperparameters={"update.step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"}},
     )
     assert narrowed.selected_primitives(StructuralAxis.CREDIT) == ("gradient",)
     selection = narrowed.selection(StructuralAxis.CREDIT)
     assert selection is not None
     assert narrowed.selection(StructuralAxis.UPDATE) is None
-    domain = narrowed.hyperparameters["update_lr"]
+    domain = narrowed.hyperparameters["update.step_size"]
     assert isinstance(domain, Domain)
     assert (domain.lo, domain.hi, domain.scale) == (1e-4, 1e-1, "log")

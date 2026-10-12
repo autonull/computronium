@@ -75,9 +75,9 @@ def _build_narrowed_spec_path(tmp_path: Path) -> Path:
             AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)),
         ),
         hyperparameters={
-            "hidden_dim": Domain(lo=32, hi=64, scale=Scale.LOG),
-            "settle_step": Domain(lo=0.01, hi=0.1, scale=Scale.LOG),
-            "update_lr": Domain(lo=0.01, hi=0.1, scale=Scale.LOG),
+            "geometry.hidden_dim": Domain(lo=32, hi=64, scale=Scale.LOG),
+            "dynamics.step_size": Domain(lo=0.01, hi=0.1, scale=Scale.LOG),
+            "update.step_size": Domain(lo=0.01, hi=0.1, scale=Scale.LOG),
         },
     )
     spec_path = tmp_path / "d2_spec.yaml"

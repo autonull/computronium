@@ -119,7 +119,11 @@ def test_device_cuda_recorded_in_store(tmp_path) -> None:
             plasticity="fast_weights",
             credit="gradient",
             update="euclidean",
-            params={"depth": 2, "hidden_dim": 32, "settle_step": 0.03162},
+            params={
+                "geometry.num_layers": 2,
+                "geometry.hidden_dim": 32,
+                "dynamics.step_size": 0.03162,
+            },
         ),
         Schedule(
             fidelity="L0",
@@ -172,7 +176,11 @@ def test_device_auto_defaults_to_cpu_when_no_cuda(tmp_path, monkeypatch) -> None
                 plasticity="fast_weights",
                 credit="gradient",
                 update="euclidean",
-                params={"depth": 2, "hidden_dim": 32, "settle_step": 0.03162},
+                params={
+                    "geometry.num_layers": 2,
+                    "geometry.hidden_dim": 32,
+                    "dynamics.step_size": 0.03162,
+                },
             ),
             Schedule(
                 fidelity="L0",

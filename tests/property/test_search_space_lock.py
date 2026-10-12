@@ -100,12 +100,14 @@ def test_unspecified_axis_keeps_every_available_primitive() -> None:
 def test_a_swept_hyperparameter_yields_more_than_one_value() -> None:
     """TODO43 R2: a searched coordinate is expressible and actually varies."""
     spec = _narrowed_spec(
-        hyperparameters={"settle_step": Domain(lo=1e-4, hi=1e-1, scale=Scale.LOG)}
+        hyperparameters={
+            "dynamics.step_size": Domain(lo=1e-4, hi=1e-1, scale=Scale.LOG)
+        }
     )
     space = search_space_from_spec(spec)
     cells = generate_candidates(spec, space, limit=20)
-    values = {c.params["settle_step"] for c, _ in cells}
-    assert len(values) > 1, f"settle_step never varied: {values}"
+    values = {c.params["dynamics.step_size"] for c, _ in cells}
+    assert len(values) > 1, f"dynamics.step_size never varied: {values}"
     assert min(values) == pytest.approx(1e-4)
     assert max(values) == pytest.approx(1e-1)
 
@@ -127,7 +129,7 @@ def test_a_swept_value_reaches_only_cells_that_can_use_it() -> None:
     spec = _narrowed_spec(
         dynamics=("instantaneous", "energy_minimization"),
         credit=("gradient",),
-        hyperparameters={"settle_beta": Domain(lo=0.01, hi=0.5, scale=Scale.LOG)},
+        hyperparameters={"dynamics.beta": Domain(lo=0.01, hi=0.5, scale=Scale.LOG)},
     )
     space = search_space_from_spec(spec)
     cells = generate_candidates(spec, space, limit=12)
@@ -137,8 +139,8 @@ def test_a_swept_value_reaches_only_cells_that_can_use_it() -> None:
         assert not set(coordinate.params) & active.inactive
     settling = [c for c, _ in cells if c.dynamics == "energy_minimization"]
     plain = [c for c, _ in cells if c.dynamics == "instantaneous"]
-    assert settling and all("settle_beta" in c.params for c in settling)
-    assert plain and all("settle_beta" not in c.params for c in plain)
+    assert settling and all("dynamics.beta" in c.params for c in settling)
+    assert plain and all("dynamics.beta" not in c.params for c in plain)
 
 
 def test_schedule_comes_from_the_spec() -> None:
@@ -240,10 +242,10 @@ def test_every_declared_primitive_reaches_the_stream() -> None:
 
 def test_a_spec_domain_outside_the_harvested_one_is_rejected() -> None:
     """The harvested declaration is the primitive's truth; a spec may only narrow."""
-    harvested = harvest_schema().by_name()["settle_step"].domain
+    harvested = harvest_schema().by_name()["dynamics.step_size"].domain
     spec = _narrowed_spec(
         hyperparameters={
-            "settle_step": Domain(lo=1e9, hi=1e12, scale=Scale.LOG),
+            "dynamics.step_size": Domain(lo=1e9, hi=1e12, scale=Scale.LOG),
         }
     )
     assert float(harvested.hi) < 1e9  # type: ignore[arg-type]
@@ -307,10 +309,20 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
     if topology == "graph":
         geometry_params = {"edge_index": [[0, 1], [1, 0]]}
 
-    # recurrent geometry needs compatible dynamics/credit (not instantaneous+gradient)
-    if topology == "recurrent":
-        dynamics = "energy_minimization"
-        credit = "thermodynamic_contrast"
+    # Topologies with a separate output projection cannot receive gradient under
+    # instantaneous dynamics (the settle is detached); a local credit
+    # (target_inversion) reaches those weights instead (TODO61 §1.1).
+    if topology in {
+        "recurrent",
+        "attention",
+        "causal_transformer",
+        "tile",
+        "tile_mesh",
+        "conv",
+        "spatial_lattice",
+    }:
+        dynamics = "instantaneous"
+        credit = "target_inversion"
     else:
         dynamics = "instantaneous"
         credit = "gradient"

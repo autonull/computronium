@@ -60,12 +60,12 @@ def _system(hidden: int, layers: int = 3, step_size: float | None = None):
         credit="thermodynamic_contrast",
         update="euclidean",
         params={
-            "hidden_dim": hidden,
-            "num_layers": layers,
-            "settle_step": step_size if step_size is not None else 0.1,
-            "settle_beta": 0.5,
-            "feedback_scale": 0.5,
-            "precision": "float32",
+            "geometry.hidden_dim": hidden,
+            "geometry.num_layers": layers,
+            "dynamics.step_size": step_size if step_size is not None else 0.1,
+            "dynamics.beta": 0.5,
+            "credit.feedback_scale": 0.5,
+            "substrate.precision": "float32",
         },
     )
     cell = compose_cell_system(
@@ -366,7 +366,7 @@ def _system_for_dynamics(dynamics: str, geometry: str, credit: str):
             plasticity="null",
             credit=credit,
             update="euclidean",
-            params={"hidden_dim": 64, "num_layers": 3},
+            params={"geometry.hidden_dim": 64, "geometry.num_layers": 3},
         ),
         geometry={},
         input_shape=(64,),

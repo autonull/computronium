@@ -584,13 +584,13 @@ class StateDynamicsConfig:
                 "prior": None,
                 "override_scope": "coordinate",
             },
-            "settle_step": {
+            "step_size": {
                 "domain": (1e-5, 1.0, "log"),
                 "availability": None,
                 "prior": "step_size_energy_minimization_backprop",
                 "override_scope": "coordinate",
             },
-            "settle_beta": {
+            "beta": {
                 "domain": (1e-3, 1.0, "log"),
                 "availability": expr_from_string(
                     'dynamics in ["energy_minimization", "predictive_settling", "error_predictive_coding", "spike_integration", "pc_alm"]'
@@ -598,7 +598,7 @@ class StateDynamicsConfig:
                 "prior": None,
                 "override_scope": "coordinate",
             },
-            "settle_momentum": {
+            "momentum": {
                 "domain": (0.0, 0.99, "linear"),
                 "availability": expr_from_string('dynamics == "energy_minimization"'),
                 "prior": None,
@@ -1532,16 +1532,27 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         # Dispatch to appropriate settling strategy based on geometry
         self._note_settle_start()
         if hasattr(geometry, "_graph"):
-            return self._settle_tile(state, x, geometry, substrate, target, on_step, effective_step_size)
+            return self._settle_tile(
+                state, x, geometry, substrate, target, on_step, effective_step_size
+            )
 
         layered = extract_layered_params(geometry)
         if layered is not None and len(layered.weights) > 0:
             return self._settle_layered(
-                state, x, geometry, layered, substrate, target, on_step, effective_step_size
+                state,
+                x,
+                geometry,
+                layered,
+                substrate,
+                target,
+                on_step,
+                effective_step_size,
             )
 
         # Fallback: standard predictive coding for recurrent geometries
-        return self._settle_recurrent(state, x, geometry, substrate, target, on_step, effective_step_size)
+        return self._settle_recurrent(
+            state, x, geometry, substrate, target, on_step, effective_step_size
+        )
 
     def _init_free_energy_history(self) -> None:
         """Initialize free energy history tracking."""
@@ -1640,7 +1651,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         previous layer's activity. Returns activations for all layers.
         """
         op = substrate.get_forward_operator()
-        effective_step_size = step_size if step_size is not None else self.config.step_size
+        effective_step_size = (
+            step_size if step_size is not None else self.config.step_size
+        )
 
         # Initialize layer states from a feedforward pass
         # This gives us the correct shapes for each layer
@@ -1730,7 +1743,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         (any substrate, per-iteration energy tracking).
         """
         iterate = SettleIterate(acts)
-        effective_step_size = step_size if step_size is not None else self.config.step_size
+        effective_step_size = (
+            step_size if step_size is not None else self.config.step_size
+        )
 
         def _step(step: int) -> None:
             acts_ = iterate.value
@@ -1792,7 +1807,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         step_size: float | None = None,
     ) -> SettableState:
         """Block-view relaxation over the tile mesh via the settle kernel."""
-        effective_step_size = step_size if step_size is not None else self.config.step_size
+        effective_step_size = (
+            step_size if step_size is not None else self.config.step_size
+        )
         kernel = SubstrateSettleKernel(
             substrate=substrate,
             params=self._tile_layered_params(geometry),

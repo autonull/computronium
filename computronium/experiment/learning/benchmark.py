@@ -143,7 +143,7 @@ def coordinate_to_vector(
             spec = dims[i]
             lo = spec.domain.lo or 0.0
             hi = spec.domain.hi or 1.0
-            raw = coord.params.get(spec.name, (lo + hi) / 2)
+            raw = coord.params.get(f"{spec.axis_name}.{spec.name}", (lo + hi) / 2)
             try:
                 v = float(raw)  # type: ignore[arg-type]
             except TypeError, ValueError:

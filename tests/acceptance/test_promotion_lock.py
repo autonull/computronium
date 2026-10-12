@@ -53,8 +53,8 @@ _SPEC = {
         {"axis": "geometry", "primitives": ["feedforward"]},
     ],
     "hyperparameters": {
-        "hidden_dim": {"lo": 64, "hi": 64.9},
-        "update_lr": {"lo": 0.0316, "hi": 0.0317, "scale": "log"},
+        "geometry.hidden_dim": {"lo": 64, "hi": 64.9},
+        "update.step_size": {"lo": 0.0316, "hi": 0.0317, "scale": "log"},
     },
 }
 

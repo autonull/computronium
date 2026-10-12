@@ -633,7 +633,7 @@ class GeometryConfig:
                 "kind": "structural",
                 "default": 1,
             },
-            "hidden_dim": {"domain": (8, 4096, "log"), "prior": "hidden_width"},
+            "hidden_dim": {"domain": (8, 4096, "log_int"), "prior": "hidden_width"},
             "num_layers": {"domain": (1, 12, "int"), "prior": "hidden_depth"},
             "init_scale": {"domain": (1e-3, 10.0, "log")},
             "init_scheme": {"domain": ["default", "mupc", "innocenti"]},

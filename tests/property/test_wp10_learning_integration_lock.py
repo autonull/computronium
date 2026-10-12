@@ -394,7 +394,7 @@ class TestBenchmarkHarness:
             plasticity="NullPlasticity",
             credit="Backprop",
             update="Euclidean",
-            params={spec.name: (lo + hi) / 2 + 0.01 * (hi - lo)},
+            params={f"{spec.axis_name}.{spec.name}": (lo + hi) / 2 + 0.01 * (hi - lo)},
         )
         vec = coordinate_to_vector(nudged, 6, dims)
         dist = float(np.linalg.norm(np.subtract(vec, base)))
@@ -456,7 +456,9 @@ class TestSurrogateFeatures:
                 credit="Backprop",
                 update="Euclidean",
                 params={
-                    s.name: float(rng.uniform(s.domain.lo or 0.0, s.domain.hi or 1.0))
+                    f"{s.axis_name}.{s.name}": float(
+                        rng.uniform(s.domain.lo or 0.0, s.domain.hi or 1.0)
+                    )
                     for s in dims
                 },
             )

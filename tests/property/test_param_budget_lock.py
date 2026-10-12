@@ -22,7 +22,7 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment.execution import (
-    _GEOMETRY_ALIASES,
+    TaskShape,
     cell_record,
     compose_cell_system,
     generate_candidates,
@@ -73,14 +73,26 @@ def _spec(param_budget: int = MEASURED_PARAM_BUDGET) -> RunSpec:
 
 
 def _coordinate(topology: str, **params: object) -> Coordinate:
+    # Topologies with a separate output projection cannot receive gradient under
+    # instantaneous dynamics; a local credit reaches those weights (TODO61 §1.1).
+    output_proj = {
+        "recurrent",
+        "attention",
+        "causal_transformer",
+        "tile",
+        "tile_mesh",
+        "conv",
+        "spatial_lattice",
+    }
+    credit = "target_inversion" if topology in output_proj else "gradient"
     return Coordinate(
         substrate="digital",
         geometry=topology,
         dynamics="instantaneous",
         plasticity="null",
-        credit="gradient",
+        credit=credit,
         update="euclidean",
-        params=dict(params),
+        params={f"geometry.{k}": v for k, v in params.items()},
     )
 
 
@@ -111,7 +123,12 @@ def _provenance() -> Provenance:
 @pytest.mark.parametrize("topology", _TRAINABLE_TOPOLOGIES)
 def test_a_ceiling_bounds_every_trainable_geometry(topology: str) -> None:
     """Derived sizing is fitted to the built module, so every cell fits."""
-    shape = task_shape("digits")
+    # causal_transformer is token-only; it cannot build against an image shape.
+    shape = (
+        TaskShape((128,), 65)
+        if topology == "causal_transformer"
+        else task_shape("digits")
+    )
     cell = compose_cell_system(
         coordinate=_coordinate(topology),
         geometry={},
@@ -210,6 +227,16 @@ def test_a_registered_geometry_is_composable(name: str) -> None:
     assert cell.config.geometry.topology_type == name
 
 
-def test_the_geometry_alias_table_does_not_grow() -> None:
-    """``_GEOMETRY_ALIASES`` is a §3.0 violation in miniature; hold it at one."""
-    assert _GEOMETRY_ALIASES == {"num_layers": "depth"}
+def test_geometry_has_no_name_translation_table() -> None:
+    """Geometry hyperparameters are named for the keys the normalizer reads.
+
+    ``_GEOMETRY_ALIASES`` was a translation table; it is gone (TODO61 §11.1), so
+    ``num_layers`` reaches the builder as ``num_layers`` and ``hidden_dim`` as
+    ``hidden_dim``. A re-introduced alias would be a name that can miss its
+    consumer again.
+    """
+    from computronium.experiment.schema import geometry_keys
+
+    assert not hasattr(geometry_keys, "GEOMETRY_ALIASES")
+    assert "num_layers" in geometry_keys.allowed_geometry_keys("feedforward")
+    assert "depth" not in geometry_keys.allowed_geometry_keys("feedforward")

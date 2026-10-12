@@ -25,6 +25,29 @@ All four critical bugs from the 1h production-map run have been fixed and verifi
 - Convergence curves recorded (3 epochs each)
 - Zero GradientCredit shape mismatch failures
 
+**Phase A+ (Hyperparameter-Flow Refactor): ✅ COMPLETED — done as a single source of truth**
+
+The `params={}` mystery (§11) is fixed permanently, not patched. See §11 for the
+full root cause and the design. In short:
+
+- A hyperparameter's **identity is `(axis, name)`** and its **name is the config
+  field the component reads**. The canonical key is `"{axis}.{name}"`.
+- **Both alias tables are deleted** (`CONFIG_FIELD_ALIASES`, `GEOMETRY_ALIASES`).
+  The geometry normalizer now reads `num_layers`/`hidden_dim` directly; the
+  dynamics/credit/update declarations were renamed to their config fields
+  (`step_size`, `beta`, `momentum`). `step_size` is shared by dynamics and update
+  and each resolves independently under its axis.
+- **`AxisSpec.accepted_params` is the one authority** for "what a primitive
+  reads"; composition and the search space both go through
+  `ActiveSpace.for_axis`. A new `geometry_keys.py` is the single vocabulary the
+  schema and composer share, so drift is impossible by construction.
+- Also fixed: log-spaced **integer** domains (`"log_int"` scale) so widths sweep
+  as integers, and `max_hidden_dim` sizing now uses the **flattened** input width.
+
+**Verification:** `quick-verify` 40 cells, all PASS, ~41s wall, params displayed
+(`[geometry.hidden_dim=33]`) and stored, ρ ∈ [0.97, 1.007], zero failures. The
+property tier is 1719 passed; the residual failures are pre-existing (§9.2).
+
 ---
 
 ## 1. Critical Bug Fixes (from 1h analysis)
@@ -236,11 +259,24 @@ These are pre-existing issues unrelated to the kernel move, tracked for future h
 | `energy_clamped` metric not in objectives registry | `computronium/experiment/kernel/evaluate.py` | `test_every_evaluator_metric_is_nameable_by_an_objective` | ⏳ Pending |
 | Sole type assertions in test | `tests/property/test_settle_stability_lock.py:40,61,82` | `test_no_vacuous_sole_assertion` | ⏳ Pending |
 
-### 9.2 Property Lock Failures (Known)
+### 9.2 Property Lock Failures (Known — pre-existing, verified on the prior commit)
 ```bash
 uv run python -m pytest tests/property/ -q -k \
-  "not (test_mnist_shape_literals or test_every_evaluator_metric or test_coupling_needs_no_axis_name_branch or test_no_vacuous_sole_assertion)"
+  "not (test_mnist_shape_literals or test_every_evaluator_metric or test_no_vacuous_sole_assertion)"
 ```
+After the §11 refactor the property tier is **1719 passed / 24 skipped** with the
+following **pre-existing** failures (each reproduced on the prior commit with
+this work stashed, so none is a regression here):
+
+| Test | Nature |
+|------|--------|
+| `test_active_space_lock::test_mnist_shape_literals_do_not_return` | `784` literal in `execution/adaptive_budget.py` |
+| `test_assertion_quality_lock::test_no_vacuous_sole_assertion` | sole type-assert test |
+| `test_stability_energy_metrics_lock::test_every_evaluator_metric...` | `energy_clamped` not in objectives registry |
+| `test_undefined_name_lock::test_no_undefined_names_in_tree` | `pd` F821 in `reporters/html.py` |
+| `test_lazy_export_lock[execution]` (×3) | `BatchSizer`/`CellStream` map rows not in `__all__`; `compose`/`search_space` stale submodule refs |
+| `test_dry_run_gate_lock`, `test_price_oracle_lock`, `test_task_geometry_compat_lock`, `test_width_contract_lock`, `test_settle_stability_lock`, `test_run_ledger_lock`, `test_state_algebra_lock`, `test_readme_build_lock`, `test_lint_count_ratchet` | kernel-move + report/build residuals |
+
 
 ### 9.3 Architecture Notes (from TODO60)
 - The `evidence/` rigor stack (claims, significance, protocol, procedures, status, limitations, failure, statistics, artifacts, model_registry) is **already complete per SPEC-43**. This plan does not touch it.
@@ -276,44 +312,118 @@ uv run python -m pytest tests/property/ -q -k \
   - Adding the compatibility matrix to `RunSpec` for policy-aware sampling
   - Using the validation results to guide the `model_based` policy
 
----
-
-## 11. Critical Architectural Fix (Priority #1 for Fresh Session)
-
-### 11.1 Hyperparameter Flow Broken in Search Space
-**Problem:** Coordinates produced by the search space have empty `params` dict even when valid hyperparameters exist for the primitive combination. The display code works (`[no hyperparams]` prints correctly), but `_cell_params` / `_swept` / availability predicate evaluation isn't populating hyperparameters.
-
-**Impact:** 
-- Cannot track which hyperparameters were used in each cell
-- Experiment records lack essential configuration data
-- Impossible to analyze hyperparameter effects post-hoc
-- Undermines the entire search/optimization pipeline
-
-**Root Cause Analysis Needed:**
-1. `_swept()` builds ladders per hyperparameter name - verify it's called with correct spec
-2. `_cell_params()` filters by `active.for_axis(axis, primitive)` - verify availability predicates match
-3. `harvest_schema().active(coord)` - verify axis/primitive mapping
-4. Hyperparameter `availability` expressions - check they evaluate correctly for the coordinate
-
-**Files to Investigate:**
-- `computronium/experiment/kernel/search_space.py` — `_cell_params()`, `_swept()`, `_walk()`
-- `computronium/experiment/schema/harvest.py` — `HarvestedSchema.active()`, `for_axis()`
-- `computronium/ontology/dynamics/_dynamics.py` — `hyperparameters()` availability predicates
-- `computronium/ontology/credit.py` — `CreditAssignmentConfig.hyperparameters()`
-- `computronium/ontology/geometry.py` — `GeometryConfig.hyperparameters()`
-- `computronium/ontology/update.py` — `ParameterUpdateConfig.hyperparameters()`
-
-**Fix Strategy:**
-1. Add debug logging to trace hyperparameter flow from spec → ladders → coord.params
-2. Fix availability predicate evaluation (likely expr_from_string parsing issue)
-3. Ensure `_cell_params` is called for every coordinate yielded by iter_candidates
-4. Add property lock test that fails when hyperparameters are missing for valid combos
-
-**Success Criteria:**
-- Every cell output shows `[beta=0.5, max_steps=30, ...]` or appropriate hyperparameters
-- `coord.params` populated in all records for L1/L2 runs
-- Property lock: `test_hyperparameter_flow_lock` passes
+### 10.5 Hyperparameter-Flow Follow-ups (post §11 refactor)
+- `_TOPOLOGY_KEYS` still lists composer-only keys the harvest never declares
+  (`edge_index`, `in_channels`, `pool_hw`, …). Harmless — `for_axis` intersects
+  with declared specs — but a `topology → declared-keys` view would make the
+  vocabulary auditable against the harvest directly.
+- `active.for_axis` is recomputed per cell in `_cell_params` and again in
+  `compose_configs`; the dry-run gate already caches composition, but the active
+  space itself is not memoised. A per-coordinate cache would cut L0 scan cost
+  (the `quick-verify` smoke scanned ~75s of dry-runs for 40 measured cells).
+- The property tier still carries pre-existing failures unrelated to this work
+  (see §9.2); a hygiene pass should close them before Phase B is treated as a
+  clean gate.
 
 ---
 
-**Status:** Phase A complete. Phase A+ (hyperparameter flow refactor) is #1 priority. Then Phase B (maturation) and Phase C (ablation).
+## 11. Hyperparameter Flow — Root Cause & Design (✅ FIXED, done permanently)
+
+### 11.1 What was actually wrong
+
+The symptom was `coord.params == {}` for every cell, even budgeted runs whose
+`spec.hyperparameters` non-empty (the auto-narrowed `hidden_dim`). The plan's
+first hypothesis — "availability predicate parsing" — was **wrong**:
+availability evaluated fine.
+
+The real defect: **"which swept values does this cell read?" was answered in
+three places that had drifted apart.**
+
+1. `HyperparameterSpec.availability` — predicates said a knob is *active*.
+2. `AxisSpec.accepted_params` — the config **factory signature** (config field
+   names) said a knob is *accepted*.
+3. The composer's own geometry key-sets (`_COMMON_GEOMETRY_KEYS`,
+   `_TOPOLOGY_KEYS`) + `_GEOMETRY_ALIASES` said what geometry *actually reads*.
+
+`_cell_params` filtered by (2); composition read geometry through (3). For every
+axis but geometry those agree. Geometry is built by a **normalizer**, not a
+factory: its harvested names were bridged to composer keys (`num_layers` →
+`depth`, `hidden_dim` → *passthrough*), so `accepted_params` — the factory
+signature `hidden_dims` — named **nothing** a swept width reached. Every swept
+`hidden_dim` was therefore dropped, silently, and records lost the width they
+trained at. `CONFIG_FIELD_ALIASES` was the same disease on the other axes
+(`settle_step`→`step_size`, …): a hand-maintained rename layer over the field a
+config reads, forced by a flat, globally-unique hyperparameter namespace.
+
+### 11.2 The permanent design (single source of truth)
+
+**A hyperparameter's identity is `(axis, name)`; its name is the config field
+the component reads; the canonical key is `"{axis}.{name}"`.** No translation
+layer exists anywhere.
+
+- **Declarations** (`GeometryConfig`, `StateDynamicsConfig`,
+  `CreditAssignmentConfig`, `ParameterUpdateConfig`, `PlasticityConfig`
+  `.hyperparameters()`) declare each knob under the exact name it consumes.
+  Dynamics/credit/update were renamed to their fields (`step_size`, `beta`,
+  `momentum`); the geometry normalizer now reads `num_layers` (not `depth`).
+- **`AxisSpec.accepted_params` is the one authority** for "what a primitive
+  reads". Non-geometry: the factory signature (now matching the declared names).
+  Geometry: `geometry_accepted_params(topology)` from the new
+  `computronium/experiment/schema/geometry_keys.py`, the one vocabulary the
+  schema, composer, and search space share.
+- **`ActiveSpace.for_axis(axis, primitive)` is the one filter.** Composition
+  (`compose_configs`) and the search space (`_cell_params`) both read it, so a
+  carried value is exactly one composition applies.
+- **Names may repeat across axes** (`step_size` on dynamics *and* update) — the
+  schema no longer forbids it; `step_size` resolves independently per axis.
+- Deleted: `CONFIG_FIELD_ALIASES`, `config_field_name`, `GEOMETRY_ALIASES`,
+  `_GEOMETRY_ALIASES`. Added: `qualified_name`, `geometry_keys.py`.
+
+### 11.3 Correlated fixes made on the way
+
+- **`"log_int"` domain scale** (`harvest._domain_and_kind`): a log-spaced
+  **integer** domain. `hidden_dim` was declared `(8, 4096, "log")` → parsed
+  CONTINUOUS → the sweep emitted fractional widths (`34.068…`). It is now
+  `(8, 4096, "log_int")` → integer ladder.
+- **`max_hidden_dim` sizing** (`RunSpec._max_hidden_dim_for_budget`, `_swept`)
+  used `input_shape[-1]` (8 for digits) instead of the flattened `input_dim`
+  (64), over-estimating the fitting width ~3.5×. Now uses `TaskShape.input_dim`.
+
+### 11.4 Files (this refactor)
+
+| File | Change |
+|------|--------|
+| `computronium/experiment/schema/geometry_keys.py` | **NEW** — the composer key vocabulary + `geometry_accepted_params` / `geometry_consumes_name` |
+| `computronium/experiment/schema/harvest.py` | `qualified_name`; canonical-keyed `ActiveSpace.values`/`by_name`; deleted alias map; log_int |
+| `computronium/experiment/schema/run_spec.py` | canonical keys; auto-narrow `geometry.hidden_dim`; flattened input width |
+| `computronium/experiment/schema/seed_registries.py` | `_accepted_params` uses the geometry vocabulary |
+| `computronium/experiment/schema/coordinate.py` | rate check strips the axis prefix |
+| `computronium/experiment/schema/registries.py` | `RATE_PARAMETERS` = fields (`step_size`, `beta`, …) |
+| `computronium/experiment/kernel/search_space.py` | `_swept`/`_cell_params` canonical-keyed; composition parity |
+| `computronium/experiment/kernel/compose.py` | geometry reads `num_layers`; `_geometry_mapping` via `for_axis`; no alias |
+| `computronium/experiment/execution/optuna_adapter.py` | distributions keyed canonically |
+| `computronium/experiment/learning/benchmark.py` | encoder reads canonical keys |
+| `computronium/ontology/{geometry,dynamics/_dynamics,credit,update}.py` | declarations renamed to config fields; `log_int` |
+| `examples/learning-rules-and-geometry-digits.yaml` | canonical hyperparameter keys |
+| `tests/property/test_hyperparameter_flow_lock.py` | **NEW** — real flow lock (no mock injection) |
+
+### 11.5 Locks
+
+- `tests/property/test_hyperparameter_flow_lock.py` — a swept width reaches
+  every cell it can size and composition honours it; a knob a topology cannot
+  size is dropped, not carried.
+- `tests/property/test_hyperparameter_display_lock.py` — rewritten to drive the
+  **real** search space (no injected params), so it can fail.
+- `test_active_space_lock`, `test_schema_seam_lock` — now assert identity is
+  `(axis, name)`, names are the config fields, and no translation exists.
+
+**Success criteria (§11 prior text): MET** — cells display and store their
+hyperparameters; `test_hyperparameter_flow_lock` passes (the display shows the
+axis-qualified key, e.g. `[geometry.hidden_dim=33]`).
+
+---
+
+**Status:** Phase A **and** Phase A+ complete — the experiment system runs
+end-to-end with populated, identity-carrying records. Next: Phase B (maturation)
+and Phase C (ablation), which still require an environment without the ~6-minute
+watchdog (§9.4).

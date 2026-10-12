@@ -82,16 +82,16 @@ GATE_2_UNION = frozenset({
 
 # Map legacy names to canonical ontology names
 LEGACY_TO_CANONICAL = {
-    "learning_rate": "update_lr",
-    "layer_lr": "update_lr",  # per-layer would be an override
-    "classifier_lr": "update_lr",
-    "target_lr": "update_lr",
+    "learning_rate": "step_size",
+    "layer_lr": "step_size",  # per-layer would be an override
+    "classifier_lr": "step_size",
+    "target_lr": "step_size",
     "weight_decay": "ewc_lambda",  # EWC-style regularization
     "cube_size": "lattice_dims",
-    "damping": "settle_momentum",
+    "damping": "momentum",
     "tol": "convergence_threshold",
-    "update_scale": "update_lr",
-    "update_scale_by_depth": "update_lr",
+    "update_scale": "step_size",
+    "update_scale_by_depth": "step_size",
     "w_rec_init": "init_scale",
     "w_rec_gain": "init_scale",
     "feedback_gain": "feedback_scale",
@@ -148,11 +148,9 @@ def test_harvest_schema_covers_gate_2_legacy_names() -> None:
     # Check that we have canonical names for the key hyperparameters
     # Core params that must be present (availability predicates don't matter for presence)
     core_params = {
-        "settle_step",
-        "update_lr",
+        "step_size",
         "momentum",
-        "settle_beta",
-        "credit_beta",
+        "beta",
         "max_steps",
         "convergence_threshold",
         "hidden_dim",
@@ -259,8 +257,8 @@ def test_harvest_schema_availability_predicates() -> None:
         "a_minus",
         "tau_pre",
         "tau_post",  # temporal_trace only
-        "settle_beta",  # settling dynamics
-        "credit_beta",  # thermodynamic_contrast, pc_alm
+        "beta",  # settling dynamics (dynamics.beta)
+        "beta",  # thermodynamic_contrast, pc_alm (credit.beta)
         "ema_beta",
         "stream_norm",  # local_contrastive only
         "train_biases",  # gradient only

@@ -75,12 +75,10 @@ FIXED_RUN_COST_SECONDS: Final[float] = 30.0
 # this set is not thereby valid — it is simply not a rate this registry claims
 # to know about.
 RATE_PARAMETERS: Final[frozenset[str]] = frozenset({
-    "credit_beta",
+    "beta",
     "feedback_scale",
     "init_scale",
-    "settle_beta",
-    "settle_step",
-    "update_lr",
+    "step_size",
 })
 
 

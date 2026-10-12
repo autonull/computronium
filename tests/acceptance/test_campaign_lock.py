@@ -163,7 +163,11 @@ def test_gate_2b_the_reference_cell_learns() -> None:
             plasticity="fast_weights",
             credit="gradient",
             update="euclidean",
-            params={"depth": 2, "hidden_dim": 64, "settle_step": 0.03162},
+            params={
+                "geometry.num_layers": 2,
+                "geometry.hidden_dim": 64,
+                "dynamics.step_size": 0.03162,
+            },
         ),
         Schedule(
             fidelity="L0",

@@ -34,11 +34,12 @@ from computronium.experiment.schema import (
     Scale,
     StructuralAxis,
     UnresolvedHyperparameterError,
-    config_field_name,
     harvest_schema,
     load_axis_config,
     prior_value,
+    qualified_name,
 )
+from computronium.experiment.schema.geometry_keys import geometry_accepted_params
 from computronium.ontology.credit import CreditAssignmentConfig
 from computronium.ontology.dynamics import StateDynamicsConfig
 from computronium.ontology.geometry import GeometryConfig
@@ -123,13 +124,16 @@ def test_composition_never_reflects_on_a_config_factory() -> None:
 
 @pytest.mark.parametrize("axis", list(StructuralAxis))
 def test_no_primitive_is_handed_a_keyword_it_rejects(axis: StructuralAxis) -> None:
-    """No primitive may be handed a keyword its factory does not accept.
+    """No primitive may be handed a keyword it does not read.
 
     This is the D5 failure made executable: a value admitted by availability but
-    rejected by the factory is a value composition would drop. Only the extra-
-    keyword direction is an invariant — several primitives (``role_split``,
-    ``graph``, ``causal_transformer``) require structural arguments the
-    composer supplies separately, and geometry is built by its own normalizer.
+    dropped by the consumer is a value composition would silently discard.
+
+    Every axis but geometry reads its knobs through a config factory, so the
+    factory signature *is* the accepted set. Geometry reads its knobs through
+    the composer's normalizer, whose key vocabulary (``geometry_keys``) is the
+    accepted set — a factory signature names nothing a swept geometry value
+    reaches (TODO61 §11.1).
     """
     config_cls = _AXIS_CONFIG_CLASSES[axis]
     problems: list[str] = []
@@ -137,9 +141,12 @@ def test_no_primitive_is_handed_a_keyword_it_rejects(axis: StructuralAxis) -> No
         factory = getattr(config_cls, name, None)
         if not callable(factory):
             continue
-        accepted = set(inspect.signature(factory).parameters)
+        if axis is StructuralAxis.GEOMETRY:
+            accepted = set(geometry_accepted_params(name))
+        else:
+            accepted = set(inspect.signature(factory).parameters)
         assert axis_spec.accepted_params == accepted, (
-            f"{axis.value}/{name}: accepted_params drifted from the factory"
+            f"{axis.value}/{name}: accepted_params drifted from its consumer"
         )
         kwargs = (
             harvest_schema()
@@ -148,7 +155,7 @@ def test_no_primitive_is_handed_a_keyword_it_rejects(axis: StructuralAxis) -> No
         )
         extra = sorted(set(kwargs) - accepted)
         if extra:
-            problems.append(f"{axis.value}/{name}: would reject {extra}")
+            problems.append(f"{axis.value}/{name}: would drop {extra}")
     assert not problems, "\n".join(problems)
 
 
@@ -206,7 +213,11 @@ def test_active_values_reach_the_composed_configs() -> None:
         plasticity="null",
         credit="gradient",
         update="adam",
-        params={"update_lr": 0.03125, "hidden_dim": 48, "num_layers": 3},
+        params={
+            "update.step_size": 0.03125,
+            "geometry.hidden_dim": 48,
+            "geometry.num_layers": 3,
+        },
     )
     cell = compose_cell_system(
         coordinate=coordinate,
@@ -215,9 +226,9 @@ def test_active_values_reach_the_composed_configs() -> None:
         output_dim=10,
     )
     assert cell.params["geometry.hidden_dim"] == 48
-    assert cell.params["update.update_lr"] == pytest.approx(0.03125)
+    assert cell.params["update.step_size"] == pytest.approx(0.03125)
     # Effective values are recorded, so a prior or an override that wins is visible.
-    assert "dynamics.settle_step" in cell.params
+    assert "dynamics.step_size" in cell.params
 
 
 def test_coupling_needs_no_axis_name_branch() -> None:
@@ -233,53 +244,56 @@ def test_coupling_needs_no_axis_name_branch() -> None:
     energy = harvest_schema().active(
         _coordinate(dynamics="energy_minimization", credit="thermodynamic_contrast")
     )
-    assert energy.values["settle_beta"] > 0, (
-        "settle_beta must be active for the EM×TC pairing"
+    assert energy.values["dynamics.beta"] > 0, (
+        "dynamics.beta must be active for the EM×TC pairing"
     )
-    assert energy.values["credit_beta"] > 0, (
-        "credit_beta must be active for the EM×TC pairing"
+    assert energy.values["credit.beta"] > 0, (
+        "credit.beta must be active for the EM×TC pairing"
     )
 
 
-def test_no_name_is_declared_by_two_axes() -> None:
-    """Q3 (TODO48): names are per-axis; a second claim is a seam defect.
+def test_a_name_is_scoped_to_its_axis() -> None:
+    """Two axes may both read ``step_size`` and mean different quantities.
 
-    ``step_size`` was declared by dynamics and update — each pair a different
-    physical quantity — and the resolve-once preference rule existed to paper
-    over it. The names are split (``settle_step``, ``update_lr``, ...); a
-    re-introduced shared name fails here and in the schema seam lock.
+    A hyperparameter's identity is ``(axis, name)``; the canonical key is
+    ``"{axis}.{name}"``. Names are not required to be globally unique, so no
+    rename table is needed and the config field is the name.
     """
     schema = harvest_schema()
-    seen: dict[str, str] = {}
-    shared = []
+    per_axis: dict[str, set[str]] = {}
     for spec in schema.hyperparameters:
-        if spec.name in seen and seen[spec.name] != spec.axis_name:
-            shared.append(f"{spec.name}: {seen[spec.name]} + {spec.axis_name}")
-        seen[spec.name] = spec.axis_name
-    assert not shared, f"names declared by two axes: {shared}"
+        per_axis.setdefault(spec.name, set()).add(spec.axis_name)
+    assert {"dynamics", "update"} <= per_axis["step_size"]
+    keys = schema.by_name()
+    assert qualified_name("dynamics", "step_size") in keys
+    assert qualified_name("update", "step_size") in keys
+    assert len(keys) == len(schema.hyperparameters), "canonical keys collide"
 
 
-def test_unswept_values_have_a_declared_source() -> None:
-    """Q4 (TODO48): override → prior → config default, and nothing else.
+def test_no_hyperparameter_name_is_translated() -> None:
+    """A hyperparameter is declared under the name its consumer accepts; no alias.
 
-    The declaration audit inside ``harvest_schema()`` already rejected any row
-    with no prior and no config default — reaching this line is the first
-    half of the proof. The second half: the per-axis rename keeps its field
-    alias map total, so a schema name reaches the config field the factory
-    reads.
+    ``settle_step``/``update_lr``/``credit_beta`` and the geometry ``depth``
+    rename were a translation layer over the name a config reads. A name that
+    needs translating is a name that can silently miss its consumer
+    (TODO61 §11.1), so none exists: every declared name is accepted by at least
+    one primitive on its axis (geometry is checked against its normalizer keys
+    in ``test_param_budget_lock``).
     """
-    renamed = [
-        name
-        for name in (
-            "settle_step",
-            "settle_beta",
-            "settle_momentum",
-            "update_lr",
-            "credit_beta",
-        )
-        if config_field_name(name) == name
-    ]
-    assert not renamed, f"renamed schema names lost their field alias: {renamed}"
+    schema = harvest_schema()
+    unaccepted = []
+    for spec in schema.hyperparameters:
+        axis = StructuralAxis(spec.axis_name)
+        if axis is StructuralAxis.GEOMETRY:
+            continue
+        consumers = [
+            name
+            for name, axis_spec in AXES_REGISTRIES[axis].items()
+            if spec.name in axis_spec.accepted_params
+        ]
+        if not consumers:
+            unaccepted.append(f"{spec.axis_name}.{spec.name}")
+    assert not unaccepted, f"declared names no primitive accepts: {unaccepted}"
 
 
 def test_a_continuous_value_with_no_source_raises() -> None:
@@ -308,13 +322,11 @@ def test_axis_kinds_are_honoured_by_the_schema() -> None:
 
 
 def test_per_axis_values_resolve_independently() -> None:
-    """``settle_step`` (dynamics, prior-backed) and ``update_lr`` (update,
+    """``dynamics.step_size`` (prior-backed) and ``update.step_size`` (update,
     factory-default) are different quantities and resolve separately.
 
-    Before the split, one ``step_size`` name was declared by both axes and a
-    resolve-once preference rule decided who owned it; last-writer-wins once
-    trained every unswept cell at 1e-5 (TODO47 §6.1). Each axis now carries
-    its own name, its own source, its own value.
+    Both axes read ``step_size``; the shared name is scoped by the canonical key
+    ``"{axis}.{name}"``, so each carries its own source and its own value.
     """
     schema = harvest_schema()
     coordinate = Coordinate(
@@ -327,13 +339,17 @@ def test_per_axis_values_resolve_independently() -> None:
         params={},
     )
     space = schema.active(coordinate)
-    settle_spec = next(s for s in space.specs if s.name == "settle_step")
+    settle_spec = next(
+        s for s in space.specs if s.axis_name == "dynamics" and s.name == "step_size"
+    )
     center, _, _ = prior_value(settle_spec.prior)  # type: ignore[arg-type]
-    assert space.values["settle_step"] == center
+    assert space.values["dynamics.step_size"] == center
     # The update axis resolves from its own factory default, not the dynamics prior.
-    update_spec = next(s for s in space.specs if s.name == "update_lr")
+    update_spec = next(
+        s for s in space.specs if s.axis_name == "update" and s.name == "step_size"
+    )
     assert update_spec.prior is None
-    assert space.values["update_lr"] == pytest.approx(
+    assert space.values["update.step_size"] == pytest.approx(
         inspect
         .signature(ParameterUpdateConfig.euclidean)
         .parameters["step_size"]

@@ -641,42 +641,42 @@ def _swept(
 ) -> dict[str, tuple[Any, ...]]:
     """Every hyperparameter the spec narrowed, with its ladder of legal values.
 
-    Un-swept hyperparameters stay absent from the coordinate and are resolved
-    by ``harvest_schema().active()`` at composition time, from prior and domain.
+    Keys are canonical ``"{axis}.{name}"``. Un-swept hyperparameters stay absent
+    from the coordinate and are resolved by ``harvest_schema().active()`` at
+    composition time, from prior and domain.
     """
-    specs_by_name = schema.by_name()
+    specs_by_key = schema.by_name()
 
     # Compute task shape for param_budget-aware domain narrowing
     task_shape = None
     if shape is not None and spec.task_names:
         task_shape = shape(spec.task_names[0])
 
-    # Build effective domains, narrowing hidden_dim by param_budget if possible
-    effective_domains: dict[str, Domain] = {}
-    for name, domain in spec.hyperparameters.items():
-        effective_domains[name] = domain
+    # Build effective domains, narrowing geometry.hidden_dim by param_budget
+    effective_domains: dict[str, Domain] = dict(spec.hyperparameters)
 
-    # If hidden_dim is not explicitly swept but param_budget is set, add a constraint
     if (
-        "hidden_dim" not in effective_domains
+        "geometry.hidden_dim" not in effective_domains
         and spec.param_budget > 0
         and task_shape is not None
     ):
         max_h = _max_hidden_dim(
-            spec.param_budget, task_shape.input_shape[-1], task_shape.output_dim
+            spec.param_budget, task_shape.input_dim, task_shape.output_dim
         )
         from computronium.experiment.schema.axis import Domain, Scale
 
-        effective_domains["hidden_dim"] = Domain(lo=8, hi=max_h, scale=Scale.LOG)
+        effective_domains["geometry.hidden_dim"] = Domain(
+            lo=8, hi=max_h, scale=Scale.LOG
+        )
 
     sweep_steps = getattr(spec, "sweep_steps", 5)
     return {
-        name: _ladder(
-            narrow_domain(domain, specs_by_name[name].domain, name),
-            specs_by_name[name].axis_kind,
+        key: _ladder(
+            narrow_domain(domain, specs_by_key[key].domain, key),
+            specs_by_key[key].axis_kind,
             steps=sweep_steps,
         )
-        for name, domain in effective_domains.items()
+        for key, domain in effective_domains.items()
     }
 
 
@@ -686,25 +686,24 @@ def _cell_params(
     ladders: dict[str, tuple[Any, ...]],
     stride: int,
 ) -> dict[str, Any]:
-    """The swept values this coordinate can actually use.
+    """The swept values this coordinate can actually use, by canonical key.
 
     A value is carried only when the coordinate's own selection both activates
     the hyperparameter and reads it: carrying it otherwise is dead config,
-    which the harvest already refuses elsewhere.
+    which the harvest already refuses elsewhere. "Reads it" is asked of the one
+    authority that declares it — ``ActiveSpace.for_axis`` over
+    ``AxisSpec.accepted_params`` — which composition reads the same way, so a
+    carried value is exactly one composition applies.
     """
-    from computronium.experiment.schema.harvest import config_field_name
-
     active = schema.active(coordinate)
-    axis_of = {
-        spec.name: StructuralAxis(spec.axis_name) for spec in schema.hyperparameters
-    }
+    by_key = {f"{spec.axis_name}.{spec.name}": spec for spec in schema.hyperparameters}
     usable: dict[str, Any] = {}
-    for name, ladder in ladders.items():
-        axis = axis_of[name]
-        config_name = config_field_name(name)
-        if config_name not in active.for_axis(axis, getattr(coordinate, axis.value)):
+    for key, ladder in ladders.items():
+        spec = by_key[key]
+        axis = StructuralAxis(spec.axis_name)
+        if spec.name not in active.for_axis(axis, getattr(coordinate, axis.value)):
             continue
-        usable[name] = ladder[stride % len(ladder)]
+        usable[key] = ladder[stride % len(ladder)]
     return usable
 
 
@@ -749,7 +748,8 @@ def _composable(
     validity_params = frozenset(
         (k, v)
         for k, v in coordinate.params.items()
-        if k in {"hidden_dim", "num_layers", "max_steps", "beta", "residual"}
+        if k.split(".", 1)[-1]
+        in {"hidden_dim", "num_layers", "max_steps", "beta", "residual"}
     )
     cache_key = (
         coordinate.substrate,

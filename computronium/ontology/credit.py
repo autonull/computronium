@@ -494,7 +494,7 @@ class CreditAssignmentConfig:
         from computronium.experiment.legality.dsl import expr_from_string
 
         return {
-            "credit_beta": {
+            "beta": {
                 "domain": (1e-3, 1.0, "log"),
                 "availability": expr_from_string(
                     'credit in ["thermodynamic_contrast", "pc_alm"]'

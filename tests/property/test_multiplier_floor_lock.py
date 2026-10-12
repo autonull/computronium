@@ -111,7 +111,7 @@ def test_the_table_has_rows_to_audit() -> None:
 def test_no_registered_multiplier_strangles_its_rule() -> None:
     """The claim: every row composes an lr at or above the learning floor."""
     seed_all_registries()
-    swept_floor = harvest_schema().by_name()["update_lr"].domain.lo
+    swept_floor = harvest_schema().by_name()["update.step_size"].domain.lo
     assert swept_floor is not None and swept_floor <= LEARNING_FLOOR, (
         "the floor sits below the swept domain; the lock would be vacuous"
     )

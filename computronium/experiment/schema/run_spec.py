@@ -123,17 +123,20 @@ def _check_axes_distinct(axes: tuple[AxisSelection, ...]) -> None:
 def _check_declared_rates(hyperparameters: dict[str, Domain]) -> None:
     """Every declared bound of a rate parameter must be positive.
 
-    ``update_lr: {lo: 0}`` is not a small sweep, it is a sweep that trains
-    nothing and reports a plausible number. Rejected at the declaration,
-    beside the other declaration errors, rather than diagnosed after training.
+    ``update.step_size: {lo: 0}`` is not a small sweep, it is a sweep that trains
+    nothing and reports a plausible number. Rejected at the declaration, beside
+    the other declaration errors, rather than diagnosed after training.
+
+    Keys are canonical ``"{axis}.{name}"``; the rate check is on the bare name.
 
     Args:
-        hyperparameters: The spec's swept hyperparameters, by name.
+        hyperparameters: The spec's swept hyperparameters, by canonical key.
 
     Raises:
         ValueError: If a rate parameter declares a non-positive bound.
     """
-    for name, domain in hyperparameters.items():
+    for key, domain in hyperparameters.items():
+        name = key.split(".", 1)[-1]
         for bound in (domain.lo, domain.hi):
             if bound is not None:
                 validate_rate_value(name, bound)
@@ -293,10 +296,10 @@ class RunSpec(BaseModel):
             )
             raise ValueError(msg)
 
-        # Auto-narrow hidden_dim domain based on param_budget
+        # Auto-narrow geometry.hidden_dim domain based on param_budget
         if (
             self.param_budget > 0
-            and "hidden_dim" not in self.hyperparameters
+            and "geometry.hidden_dim" not in self.hyperparameters
             and self.task_names
         ):
             from computronium.experiment.kernel.evaluate import task_shape
@@ -305,12 +308,12 @@ class RunSpec(BaseModel):
                 task_shape_obj = task_shape(self.task_names[0])
                 max_h = self._max_hidden_dim_for_budget(
                     self.param_budget,
-                    task_shape_obj.input_shape[-1],
+                    task_shape_obj.input_dim,
                     task_shape_obj.output_dim,
                 )
                 # Create a new dict with the narrowed domain
                 narrowed_hyperparameters = dict(self.hyperparameters)
-                narrowed_hyperparameters["hidden_dim"] = Domain(
+                narrowed_hyperparameters["geometry.hidden_dim"] = Domain(
                     lo=8, hi=max_h, scale=Scale.LOG
                 )
                 object.__setattr__(self, "hyperparameters", narrowed_hyperparameters)

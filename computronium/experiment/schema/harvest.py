@@ -64,22 +64,17 @@ AXIS_KIND_ORDER: tuple[StructuralAxis, ...] = (
     StructuralAxis.UPDATE,
 )
 
-# Schema hyperparameter name -> the config dataclass field that consumes it.
-# Names are per-axis (no name is declared by two axes — the schema seam lock
-# enforces this), so a schema name may spell a config field differently where
-# that field predates the schema name.
-CONFIG_FIELD_ALIASES: dict[str, str] = {
-    "settle_step": "step_size",
-    "settle_beta": "beta",
-    "settle_momentum": "momentum",
-    "update_lr": "step_size",
-    "credit_beta": "beta",
-}
+# A hyperparameter's name is the config field it feeds, and its identity is the
+# pair (axis, name): two axes may both read ``step_size`` (dynamics settling and
+# the parameter update) and mean different quantities. The canonical key is
+# ``"{axis}.{name}"`` — the same spelling ``_effective_params`` records and the
+# coordinate's ``params`` carries. No rename table exists: the component that
+# needs a knob declares it under the name it reads, so nothing is translated.
 
 
-def config_field_name(name: str) -> str:
-    """The config dataclass field a schema hyperparameter feeds."""
-    return CONFIG_FIELD_ALIASES.get(name, name)
+def qualified_name(axis_name: str, name: str) -> str:
+    """The canonical hyperparameter key: ``"{axis}.{name}"``."""
+    return f"{axis_name}.{name}"
 
 
 def load_axis_config(axis: StructuralAxis) -> Any | None:
@@ -98,6 +93,9 @@ class ActiveSpace:
 
     Produced by availability predicates alone, so composition never has to ask
     which knobs a factory happens to accept.
+
+    ``values`` is keyed by the canonical ``"{axis}.{name}"``; the per-axis
+    accessors below return the bare names a config factory reads.
     """
 
     values: Mapping[str, Any]
@@ -105,18 +103,16 @@ class ActiveSpace:
     inactive: frozenset[str]
 
     def values_for_axis(self, axis: StructuralAxis) -> dict[str, Any]:
-        """Effective values belonging to one structural axis."""
+        """Effective values belonging to one structural axis, by bare name."""
         return {
-            s.name: self.values[s.name] for s in self.specs if s.axis_name == axis.value
+            s.name: self.values[qualified_name(s.axis_name, s.name)]
+            for s in self.specs
+            if s.axis_name == axis.value
         }
 
     def by_axis(self, axis: StructuralAxis) -> dict[str, Any]:
         """Effective values for one axis, keyed by the config field each feeds."""
-        return {
-            config_field_name(s.name): self.values[s.name]
-            for s in self.specs
-            if s.axis_name == axis.value
-        }
+        return self.values_for_axis(axis)
 
     def by_axis_specs_for(self, axis: StructuralAxis) -> tuple[HyperparameterSpec, ...]:
         """The active specs belonging to one structural axis."""
@@ -127,17 +123,16 @@ class ActiveSpace:
 
         The restriction is a harvested fact (``AxisSpec.accepted_params``), not a
         signature inspection, so composition never asks a factory what it takes.
+        Names are the config fields, so the result is passed to the factory as-is.
         """
         axis_spec = get_axis_spec(axis, primitive)
         if axis_spec is None:
             return {}
-        values = self.by_axis(axis)
-        # Map hyperparameter names to config field names for accepted_params check
-        accepted_config_names = axis_spec.accepted_params
+        accepted = axis_spec.accepted_params
         return {
-            k: v
-            for k, v in values.items()
-            if config_field_name(k) in accepted_config_names
+            name: value
+            for name, value in self.values_for_axis(axis).items()
+            if name in accepted
         }
 
 
@@ -153,8 +148,8 @@ class HarvestedSchema:
     )
 
     def by_name(self) -> dict[str, HyperparameterSpec]:
-        """Hyperparameter specs keyed by name."""
-        return {h.name: h for h in self.hyperparameters}
+        """Hyperparameter specs keyed by the canonical ``"{axis}.{name}"``."""
+        return {qualified_name(h.axis_name, h.name): h for h in self.hyperparameters}
 
     def active(self, coordinate: Coordinate) -> ActiveSpace:
         """Resolve the active space for a coordinate's primitive selection.
@@ -182,16 +177,18 @@ class HarvestedSchema:
                 if _available(spec, coordinate, ctx):
                     active.append(spec)
                 else:
-                    inactive.add(spec.name)
+                    inactive.add(qualified_name(spec.axis_name, spec.name))
 
         dead = tuple(sorted(n for n in coordinate.params if n in inactive))
         if dead:
             raise InactiveHyperparameterError(dead, coordinate)
 
-        # Names are per-axis (the declaration audit rejects a second axis
-        # claiming one), so each active spec resolves independently.
+        # A name is scoped to its axis, so two axes may both read ``step_size``
+        # and each resolves independently under ``"{axis}.{name}"``.
         values = {
-            spec.name: _resolve_value(spec, coordinate.params, coordinate)
+            qualified_name(spec.axis_name, spec.name): _resolve_value(
+                spec, coordinate.params, coordinate
+            )
             for spec in active
         }
         return ActiveSpace(
@@ -288,10 +285,9 @@ class UnresolvedHyperparameterError(ValueError):
 def _config_default(spec: HyperparameterSpec, coordinate: Coordinate) -> Any:
     """The default a hyperparameter resolves to when unswept and unprior'd."""
     axis = StructuralAxis(spec.axis_name)
-    field_name = config_field_name(spec.name)
     if spec.default is not NO_DEFAULT:
         return spec.default
-    return _config_default_inner(axis, field_name, coordinate)
+    return _config_default_inner(axis, spec.name, coordinate)
 
 
 def _config_default_inner(
@@ -338,9 +334,14 @@ def _any_factory_default_value(config_cls: Any, field_name: str) -> Any:
 def _resolve_value(
     spec: HyperparameterSpec, overrides: Mapping[str, Any], coordinate: Coordinate
 ) -> Any:
-    """Resolve a hyperparameter's effective value: override, then prior, then config default."""
-    if spec.name in overrides:
-        return overrides[spec.name]
+    """Resolve a hyperparameter's effective value: override, then prior, then config default.
+
+    Overrides are keyed by the canonical ``"{axis}.{name}"``, so two axes reading
+    ``step_size`` never shadow each other.
+    """
+    key = qualified_name(spec.axis_name, spec.name)
+    if key in overrides:
+        return overrides[key]
     if spec.prior:
         from computronium.experiment.schema.registries import prior_value
 
@@ -364,27 +365,21 @@ def _audit_declared(
     hp: HyperparameterSpec,
     axis_kind: StructuralAxis,
     config_cls: Any,
-    declared: dict[str, HyperparameterSpec],
 ) -> None:
     """Declaration-time seam audit for one hyperparameter row.
 
-    Two rules, both loud at harvest instead of silent at resolve:
+    One rule, loud at harvest instead of silent at resolve: a value has a source
+    — a registered prior, a config field default, or a factory signature default.
+    The Domain.lo fallback is deleted; an unswept value with no source trained
+    every unswept cell at 1e-5 (TODO47 §6.1).
 
-    - a name is declared by exactly one axis (a second claim raises);
-    - a value has a source: a registered prior, a config field default, or a
-      factory signature default. The Domain.lo fallback is deleted — an
-      unswept value with no source trained every unswept cell at 1e-5
-      (TODO47 §6.1).
+    A name is scoped to its axis: two axes may both read ``step_size`` and mean
+    different quantities, so a second axis claiming a name is no longer an error.
+    Within one axis, ``hyperparameters()`` is a dict and cannot repeat a key.
     """
-    if hp.name in declared and declared[hp.name].axis_name != axis_kind.value:
-        msg = (
-            f"hyperparameter '{hp.name}' declared by two axes: "
-            f"{declared[hp.name].axis_name} and {axis_kind.value}"
-        )
-        raise UnresolvedHyperparameterError(msg)
     if hp.prior or hp.default is not NO_DEFAULT:
         return
-    field_name = config_field_name(hp.name)
+    field_name = hp.name
     for f in fields(config_cls):
         if f.name == field_name and (
             f.default is not MISSING or f.default_factory is not MISSING
@@ -447,12 +442,23 @@ def _from_dict(name: str, spec: dict[str, Any], axis_name: str) -> Hyperparamete
 
 
 def _domain_and_kind(name: str, domain_spec: Any) -> tuple[Domain, AxisKind]:
-    """A declared domain and the kind of axis it is sampled on."""
+    """A declared domain and the kind of axis it is sampled on.
+
+    The scale token names both spacing and kind: ``"int"``/``"log_int"`` are
+    integer axes (linear/log spaced), ``"linear"``/``"log"`` continuous, a list
+    is categorical. A width is a log-spaced integer, so ``"log_int"`` exists —
+    without it a dimension knob parsed continuous and the sweep emitted
+    fractional sizes.
+    """
     if isinstance(domain_spec, tuple) and len(domain_spec) == 3:
         lo, hi, scale = domain_spec
-        if scale == "int":
-            return _domain_from_range(lo, hi, "linear"), AxisKind.INTEGER
-        return _domain_from_range(lo, hi, scale), AxisKind.CONTINUOUS
+        match scale:
+            case "int":
+                return _domain_from_range(lo, hi, "linear"), AxisKind.INTEGER
+            case "log_int":
+                return _domain_from_range(lo, hi, "log"), AxisKind.INTEGER
+            case _:
+                return _domain_from_range(lo, hi, scale), AxisKind.CONTINUOUS
     if isinstance(domain_spec, list):
         return _domain_from_enum(domain_spec), AxisKind.CATEGORICAL
     msg = f"invalid domain spec for {name}: {domain_spec}"
@@ -474,26 +480,15 @@ def _parse_hyperparameters(
     specs = []
     for name, spec in hp_dict.items():
         if isinstance(spec, tuple) and len(spec) == 3:
-            # Simple range: (lo, hi, scale)
-            lo, hi, scale = spec
-            if scale == "int":
-                specs.append(
-                    HyperparameterSpec(
-                        name=name,
-                        domain=_domain_from_range(lo, hi, "linear"),
-                        axis_kind=AxisKind.INTEGER,
-                        axis_name=axis_name,
-                    )
+            domain, kind = _domain_and_kind(name, spec)
+            specs.append(
+                HyperparameterSpec(
+                    name=name,
+                    domain=domain,
+                    axis_kind=kind,
+                    axis_name=axis_name,
                 )
-            else:
-                specs.append(
-                    HyperparameterSpec(
-                        name=name,
-                        domain=_domain_from_range(lo, hi, scale),
-                        axis_kind=AxisKind.CONTINUOUS,
-                        axis_name=axis_name,
-                    )
-                )
+            )
         elif isinstance(spec, list):
             # Categorical
             specs.append(
@@ -529,7 +524,7 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
             config default — declaration-time, not a silent domain-edge value.
     """
     per_axis: dict[StructuralAxis, tuple[HyperparameterSpec, ...]] = {}
-    declared: dict[str, HyperparameterSpec] = {}
+    declared: list[HyperparameterSpec] = []
 
     for axis_kind in AXIS_KIND_ORDER:
         config_cls = load_axis_config(axis_kind)
@@ -537,12 +532,12 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
             continue
         specs = _parse_hyperparameters(config_cls.hyperparameters(), axis_kind.value)
         for hp in specs:
-            _audit_declared(hp, axis_kind, config_cls, declared)
-            declared[hp.name] = hp
+            _audit_declared(hp, axis_kind, config_cls)
+        declared.extend(specs)
         per_axis[axis_kind] = tuple(specs)
 
     return HarvestedSchema(
-        hyperparameters=tuple(declared.values()),
+        hyperparameters=tuple(declared),
         axis_kind_order=AXIS_KIND_ORDER,
         version=version,
         by_axis_specs=per_axis,
@@ -550,29 +545,25 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
 
 
 def get_hyperparameter_names() -> frozenset[str]:
-    """Get the set of all harvested hyperparameter names."""
+    """Get the set of all harvested hyperparameter keys (``"{axis}.{name}"``)."""
     schema = harvest_schema()
-    return frozenset(t.name for t in schema.hyperparameters)
+    return frozenset(
+        qualified_name(t.axis_name, t.name) for t in schema.hyperparameters
+    )
 
 
-def get_hyperparameter_spec(name: str) -> HyperparameterSpec | None:
-    """Get the specification for a specific hyperparameter."""
-    schema = harvest_schema()
-    for t in schema.hyperparameters:
-        if t.name == name:
-            return t
-    return None
+def get_hyperparameter_spec(key: str) -> HyperparameterSpec | None:
+    """Get the specification for a canonical ``"{axis}.{name}"`` key."""
+    return harvest_schema().by_name().get(key)
 
 
 __all__ = [
     "AXIS_KIND_ORDER",
-    "CONFIG_FIELD_ALIASES",
     "ActiveSpace",
     "HarvestedSchema",
     "InactiveHyperparameterError",
     "UnresolvedHyperparameterError",
     "_config_default",
-    "config_field_name",
     "get_hyperparameter_names",
     "get_hyperparameter_spec",
     "harvest_schema",

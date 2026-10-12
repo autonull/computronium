@@ -60,7 +60,9 @@ def _spec(**overrides: Any) -> RunSpec:
         "n_seeds": 1,
         "epochs": 2,
         "seed": 7,
-        "hyperparameters": {"settle_step": Domain(lo=1e-4, hi=1e-1, scale=Scale.LOG)},
+        "hyperparameters": {
+            "dynamics.step_size": Domain(lo=1e-4, hi=1e-1, scale=Scale.LOG)
+        },
         "axes": (
             AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)),
             AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null",)),

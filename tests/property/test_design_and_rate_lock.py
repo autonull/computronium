@@ -78,7 +78,7 @@ def _coordinate(**overrides: object) -> Coordinate:
         "plasticity": "fast_weights",
         "credit": "gradient",
         "update": "euclidean",
-        "params": {"hidden_dim": 64},
+        "params": {"geometry.hidden_dim": 64},
     }
     fields.update(overrides)
     return Coordinate(**fields)  # type: ignore[arg-type]
@@ -117,13 +117,15 @@ class TestRateParameters:
         for name in sorted(RATE_PARAMETERS):
             for bad in (0.0, -0.1):
                 with pytest.raises(ValueError, match="is not a rate"):
-                    _coordinate(params={"hidden_dim": 64, name: bad})
+                    _coordinate(
+                        params={"geometry.hidden_dim": 64, f"dynamics.{name}": bad}
+                    )
 
     def test_a_declaration_refuses_a_non_positive_rate(self) -> None:
-        """The declaration seam: `update_lr: {lo: 0}` is refused at the spec."""
+        """The declaration seam: `update.step_size: {lo: 0}` is refused at the spec."""
         with pytest.raises(ValueError, match="is not a rate"):
-            _spec(hyperparameters={"update_lr": Domain(lo=0.0, hi=0.1)})
-        _spec(hyperparameters={"update_lr": Domain(lo=1e-3, hi=0.1)})
+            _spec(hyperparameters={"update.step_size": Domain(lo=0.0, hi=0.1)})
+        _spec(hyperparameters={"update.step_size": Domain(lo=1e-3, hi=0.1)})
 
     def test_the_registry_is_about_rates_not_about_names(self) -> None:
         """Membership is a claim per parameter, and absence is not validity.
@@ -136,18 +138,18 @@ class TestRateParameters:
         validate_rate_value("momentum", 0.0)  # no raise
         validate_rate_value("hidden_dim", 0)  # not a rate this registry claims
         with pytest.raises(ValueError, match="is not a rate"):
-            validate_rate_value("update_lr", 0)
+            validate_rate_value("step_size", 0)
 
     def test_a_zero_learning_rate_is_rejected_not_trained(self) -> None:
         """The claim this exists for, stated as the value that motivated it.
 
-        Falsifiable in one line: remove ``RATE_PARAMETERS.update_lr`` and this
+        Falsifiable in one line: remove ``RATE_PARAMETERS.step_size`` and this
         still passes, which is the point — it documents the *case*, while the
         tests above hold the *mechanism*.
         """
-        assert "update_lr" in RATE_PARAMETERS
-        with pytest.raises(ValueError, match="update_lr"):
-            _coordinate(params={"update_lr": 0.0})
+        assert "step_size" in RATE_PARAMETERS
+        with pytest.raises(ValueError, match="step_size"):
+            _coordinate(params={"update.step_size": 0.0})
 
 
 class TestContrastGroupsAreHonest:

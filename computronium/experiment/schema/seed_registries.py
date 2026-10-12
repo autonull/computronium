@@ -319,12 +319,25 @@ def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]],
 
 
 def _accepted_params(axis: StructuralAxis, primitive: str) -> frozenset[str]:
-    """The knob names a primitive's config factory accepts.
+    """The knob names a primitive's composed config reads.
 
     Harvested once, here, so composition never reflects on a signature. Every
     factory mirrors its config dataclass, so a wide signature is not evidence of
     use; this is the narrower truth about which names a call may carry.
+
+    Geometry is the exception: its config is built by a normalizer, not a
+    factory, so a factory signature names nothing a swept value reaches. The
+    normalizer's key vocabulary (``geometry_keys``) is the truth there, and it
+    is the same vocabulary composition and the search space read — so a geometry
+    knob this set omits is one no cell can use (TODO61 §11.1).
     """
+    if axis is StructuralAxis.GEOMETRY:
+        from computronium.experiment.schema.geometry_keys import (
+            geometry_accepted_params,
+        )
+
+        return geometry_accepted_params(primitive)
+
     from computronium.experiment.schema.harvest import load_axis_config
 
     config_cls = load_axis_config(axis)
