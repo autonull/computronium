@@ -22,7 +22,7 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.search_space import search_space_from_spec
+from computronium.experiment.kernel.search_space import search_space_from_spec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate
 from computronium.experiment.schema.run_spec import AxisSelection, RunSpec

@@ -95,7 +95,7 @@ def replay_survives(record: Record, tolerance: float) -> bool:
     a fresh measurement. A claimed metric that the replay cannot reproduce
     within the registered tolerance fails the gate.
     """
-    from computronium.experiment.execution.evaluate import cell_record
+    from computronium.experiment.kernel.evaluate import cell_record
 
     claimed = _claimed_metrics(record)
     if not claimed:

@@ -11,7 +11,7 @@ import pytest
 import torch
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.execution import cell_record
+from computronium.experiment.kernel import cell_record
 from computronium.experiment.schema import (
     Coordinate,
     Provenance,

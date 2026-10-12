@@ -111,7 +111,6 @@ __all__ = [
     "capture_environment_snapshot",
     "cell_record",
     "complete_run",
-    "compose",
     "compose_cell_system",
     "compose_configs",
     "compute_energy_metrics",
@@ -148,7 +147,6 @@ __all__ = [
     "pricing",
     "replay",
     "resolve_objectives",
-    "search_space",
     "search_space_from_spec",
     "stream",
     "batch_sizer",
@@ -185,18 +183,18 @@ _symbol_to_module: dict[str, str] = {
     "Budget": "budget",
     "CostModel": "budget",
     "SimpleCostModel": "budget",
-    # compose
-    "GRID_CREDITS": "compose",
-    "GRID_DYNAMICS": "compose",
-    "GRID_UPDATES": "compose",
-    "ComposedCell": "compose",
-    "ProposalComposeError": "compose",
-    "_fit_geometry": "compose",
-    "build_geometry_config": "compose",
-    "compose_cell_system": "compose",
-    "compose_configs": "compose",
-    "geometry_param_count": "compose",
-    "_GEOMETRY_ALIASES": "compose",
+    # compose (moved to kernel)
+    "GRID_CREDITS": "kernel.compose",
+    "GRID_DYNAMICS": "kernel.compose",
+    "GRID_UPDATES": "kernel.compose",
+    "ComposedCell": "kernel.compose",
+    "ProposalComposeError": "kernel.compose",
+    "_fit_geometry": "kernel.compose",
+    "build_geometry_config": "kernel.compose",
+    "compose_cell_system": "kernel.compose",
+    "compose_configs": "kernel.compose",
+    "geometry_param_count": "kernel.compose",
+    "_GEOMETRY_ALIASES": "kernel.compose",
     # contrast_design
     "ContrastAssignment": "contrast_design",
     "ContrastDesign": "contrast_design",
@@ -216,15 +214,15 @@ _symbol_to_module: dict[str, str] = {
     "create_decision": "decision",
     "pause_run": "decision",
     "stop_run": "decision",
-    # evaluate
-    "CellEvaluation": "evaluate",
-    "TaskShape": "evaluate",
-    "cell_record": "evaluate",
-    "compute_energy_metrics": "evaluate",
-    "compute_stability_metrics": "evaluate",
-    "evaluate_cell": "evaluate",
-    "history_metrics": "evaluate",
-    "task_shape": "evaluate",
+    # evaluate (moved to kernel)
+    "CellEvaluation": "kernel.evaluate",
+    "TaskShape": "kernel.evaluate",
+    "cell_record": "kernel.evaluate",
+    "compute_energy_metrics": "kernel.evaluate",
+    "compute_stability_metrics": "kernel.evaluate",
+    "evaluate_cell": "kernel.evaluate",
+    "history_metrics": "kernel.evaluate",
+    "task_shape": "kernel.evaluate",
     # optuna_adapter
     "OptunaDistributionAdapter": "optuna_adapter",
     # pipeline
@@ -252,14 +250,14 @@ _symbol_to_module: dict[str, str] = {
     "price_plan": "pricing",
     # replay
     "compute_run_replay_hash": "replay",
-    # search_space
-    "SearchSpace": "search_space",
-    "ShapeResolver": "search_space",
-    "declared_cell_count": "search_space",
-    "generate_candidates": "search_space",
-    "iter_candidates": "search_space",
-    "narrow_domain": "search_space",
-    "search_space_from_spec": "search_space",
+    # search_space (moved to kernel)
+    "SearchSpace": "kernel.search_space",
+    "ShapeResolver": "kernel.search_space",
+    "declared_cell_count": "kernel.search_space",
+    "generate_candidates": "kernel.search_space",
+    "iter_candidates": "kernel.search_space",
+    "narrow_domain": "kernel.search_space",
+    "search_space_from_spec": "kernel.search_space",
     # stream
     "CellStream": "stream",
     "CellStreamState": "stream",
@@ -335,16 +333,13 @@ def __getattr__(name: str) -> Any:
         "backends",
         "budget",
         "batch_sizer",
-        "compose",
         "contrast_design",
         "decision",
-        "evaluate",
         "optuna_adapter",
         "pipeline",
         "policy",
         "pricing",
         "replay",
-        "search_space",
         "settle_operator",
         "stage",
         "stages_impl",
@@ -356,9 +351,12 @@ def __getattr__(name: str) -> Any:
     # Symbols from specific submodules
     if name in _symbol_to_module:
         submodule_name = _symbol_to_module[name]
-        submodule = _get_submodule(
-            f"computronium.experiment.execution.{submodule_name}"
-        )
+        if submodule_name.startswith("kernel."):
+            # Kernel modules moved to computronium.experiment.kernel
+            full_name = f"computronium.experiment.{submodule_name}"
+        else:
+            full_name = f"computronium.experiment.execution.{submodule_name}"
+        submodule = _get_submodule(full_name)
         return getattr(submodule, name)
 
     raise AttributeError(

@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from computronium.experiment.execution.backends import ExecutionBackend
-    from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.kernel.search_space import SearchSpace
 
 pytestmark = pytest.mark.timeout(300)
 

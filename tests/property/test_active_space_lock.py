@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.execution import compose_cell_system
+from computronium.experiment.kernel.compose import compose_cell_system
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
     PRIORS_REGISTRY,
@@ -114,7 +114,7 @@ def test_composition_never_reflects_on_a_config_factory() -> None:
     """
     source = (
         Path(__file__).resolve().parents[2]
-        / "computronium/experiment/execution/compose.py"
+        / "computronium/experiment/kernel/compose.py"
     ).read_text()
     assert "inspect.signature" not in source, (
         "compose must read AxisSpec.accepted_params, not inspect a factory"
@@ -224,7 +224,7 @@ def test_coupling_needs_no_axis_name_branch() -> None:
     """The D5 couplings are availability, so a spec row alone carries them."""
     source = (
         Path(__file__).resolve().parents[2]
-        / "computronium/experiment/execution/compose.py"
+        / "computronium/experiment/kernel/compose.py"
     ).read_text()
     for comparison in ("dynamics_type ==", "credit_type ==", "update_type =="):
         assert comparison not in source, (

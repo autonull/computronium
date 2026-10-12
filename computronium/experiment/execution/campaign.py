@@ -21,7 +21,7 @@ from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
-from computronium.experiment.execution.evaluate import task_shape
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.schema import RunSpec, StageId
 from computronium.experiment.surface.cli import (

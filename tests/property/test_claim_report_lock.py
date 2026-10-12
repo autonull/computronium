@@ -43,7 +43,7 @@ from computronium.experiment.evidence import (
     replication_keys_of,
     strongest_axis,
 )
-from computronium.experiment.execution import cell_record
+from computronium.experiment.kernel import cell_record
 from computronium.experiment.schema import (
     MEASURED_PARAM_BUDGET,
     Coordinate,

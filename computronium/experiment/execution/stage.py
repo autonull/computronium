@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.backends import ExecutionBackend
     from computronium.experiment.execution.deadline import Deadline, DeadlineEnforcer
     from computronium.experiment.execution.policy import Policy
-    from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.execution.stream import CellStream
     from computronium.experiment.execution.sysctx import SystemContext
     from computronium.experiment.schema.coordinate import Coordinate, Schedule

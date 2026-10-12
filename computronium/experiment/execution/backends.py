@@ -164,7 +164,7 @@ class _ThreadedBackend:
         resume_checkpoint_path: str | None = None,
     ) -> Record:
         """Train one cell and wrap the measurement as a Record."""
-        from computronium.experiment.execution.evaluate import cell_record
+        from computronium.experiment.kernel.evaluate import cell_record
 
         return cell_record(
             coordinate,
@@ -507,7 +507,7 @@ class DDPBackend:
         resume_checkpoint_path: str | None = None,
     ) -> Record:
         """Train one cell using DDP/FSDP."""
-        from computronium.experiment.execution.evaluate import cell_record
+        from computronium.experiment.kernel.evaluate import cell_record
 
         # Initialize distributed if not already done
         self._init_distributed()

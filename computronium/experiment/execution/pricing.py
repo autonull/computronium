@@ -38,7 +38,7 @@ _PRICE_SCAN: Final = 5000
 _PRICE_SAMPLE: Final = 24
 
 if TYPE_CHECKING:
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.kernel.search_space import (
         SearchSpace,
         ShapeResolver,
     )
@@ -132,8 +132,8 @@ def price_plan(
         The declaration's price, where a declared budget stops it, and which
         declared primitives no legal cell offers.
     """
-    from computronium.experiment.execution.evaluate import task_shape as default_shape
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.kernel.evaluate import task_shape as default_shape
+    from computronium.experiment.kernel.search_space import (
         declared_cell_count,
         iter_candidates,
     )

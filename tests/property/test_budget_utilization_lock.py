@@ -10,7 +10,7 @@ import pytest
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.deadline import Deadline
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.kernel.search_space import (
     iter_candidates,
     search_space_from_spec,
 )

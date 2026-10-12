@@ -52,8 +52,11 @@ from computronium.experiment.surface.report import (
     RunSummary,
     export_to_json,
     export_to_parquet,
-    generate_html_report,
     generate_run_report,
+)
+from computronium.experiment.reporters import (
+    generate_html_report as generate_html_report_v2,
+    generate_json_report,
 )
 
 logger = get_logger()
@@ -1403,9 +1406,9 @@ def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
     Computed from the spec through the same builders the runner uses, so a dry
     run is evidence the spec is executable rather than a restatement of it.
     """
-    from computronium.experiment.execution.evaluate import task_shape
+    from computronium.experiment.kernel.evaluate import task_shape
     from computronium.experiment.execution.pipeline import _resolve_tasks
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.kernel.search_space import (
         iter_candidates,
         search_space_from_spec,
     )
@@ -1552,7 +1555,7 @@ def execute_spec(
 
         # The spec is the only place a policy\'s arguments come from, so the
         # sampler learns on the run\'s objectives and its own swept domains.
-        from computronium.experiment.execution.evaluate import task_shape
+        from computronium.experiment.kernel.evaluate import task_shape
 
         policy = create_policy(
             policy_name,
@@ -1665,9 +1668,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if args.dry_run:
         if args.format == "json":
             # Build a JSON representation of the dry run plan
-            from computronium.experiment.execution.evaluate import task_shape
+            from computronium.experiment.kernel.evaluate import task_shape
             from computronium.experiment.execution.pipeline import _resolve_tasks
-            from computronium.experiment.execution.search_space import (
+            from computronium.experiment.kernel.search_space import (
                 iter_candidates,
                 search_space_from_spec,
             )
@@ -1791,7 +1794,10 @@ def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struct
 
         elif args.format == "html":
             output_path = args.output or f"{run_id}.report.html"
-            generate_html_report(store, run_id, output_path)
+            from computronium.experiment.reporters import ReportConfig
+
+            config = ReportConfig(output_dir=str(Path(output_path).parent))
+            generate_html_report_v2(store, run_id, config)
             logger.info(f"HTML report written to {output_path}")
             return 0
 
@@ -2574,7 +2580,7 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
             print(f"  Seeds per coordinate: {args.seeds}")
             print(f"  Epochs: {args.epochs}")
             print(f"  Budget: {args.budget_seconds}s")
-            from computronium.experiment.execution.search_space import (
+            from computronium.experiment.kernel.search_space import (
                 iter_candidates,
                 search_space_from_spec,
             )
@@ -4132,7 +4138,7 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
 
         # Recompose the cell system
         from computronium.domains.factory import create_task
-        from computronium.experiment.execution.compose import compose_cell_system
+        from computronium.experiment.kernel.compose import compose_cell_system
         from computronium.experiment.schema.coordinate import Coordinate
 
         # Build coordinate from record fields
@@ -4152,7 +4158,7 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
         )
         task.setup()
 
-        from computronium.experiment.execution.evaluate import task_shape
+        from computronium.experiment.kernel.evaluate import task_shape
 
         shape = task_shape(schedule.task_id, device)
         cell = compose_cell_system(
@@ -4242,7 +4248,7 @@ def _cmd_energy_landscape(args: argparse.Namespace) -> int:
 
         # Recompose the cell system
         from computronium.domains.factory import create_task
-        from computronium.experiment.execution.compose import compose_cell_system
+        from computronium.experiment.kernel.compose import compose_cell_system
         from computronium.experiment.schema.coordinate import Coordinate
 
         coordinate = Coordinate(
@@ -4261,7 +4267,7 @@ def _cmd_energy_landscape(args: argparse.Namespace) -> int:
         )
         task.setup()
 
-        from computronium.experiment.execution.evaluate import task_shape
+        from computronium.experiment.kernel.evaluate import task_shape
 
         shape = task_shape(schedule.task_id, device)
         cell = compose_cell_system(
@@ -4355,7 +4361,7 @@ def _cmd_nonnormality(args: argparse.Namespace) -> int:
             return 1
 
         from computronium.domains.factory import create_task
-        from computronium.experiment.execution.compose import compose_cell_system
+        from computronium.experiment.kernel.compose import compose_cell_system
         from computronium.experiment.schema.coordinate import Coordinate
 
         coordinate = Coordinate(
@@ -4374,7 +4380,7 @@ def _cmd_nonnormality(args: argparse.Namespace) -> int:
         )
         task.setup()
 
-        from computronium.experiment.execution.evaluate import task_shape
+        from computronium.experiment.kernel.evaluate import task_shape
 
         shape = task_shape(schedule.task_id, device)
         cell = compose_cell_system(

@@ -21,8 +21,8 @@ import torch
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.kernel.evaluate import task_shape
+from computronium.experiment.kernel.search_space import (
     declared_cell_count,
     search_space_from_spec,
 )
@@ -31,7 +31,13 @@ from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
-from computronium.experiment.surface.report import ReportGenerator, generate_html_report
+from computronium.experiment.surface.report import ReportGenerator
+from computronium.experiment.reporters import (
+    generate_html_report,
+    generate_json_report,
+    JSONReportConfig,
+    ReportConfig,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,8 +311,15 @@ def _generate_report(config: Config, run_id: str) -> Path:
         print(f"Failure taxonomy: {failures}", flush=True)
 
         report_path = Path(config.store).with_suffix(".html")
-        generate_html_report(store, run_id, report_path)
+        html_config = ReportConfig(output_dir=str(report_path.parent))
+        generate_html_report(store, run_id, html_config)
         print(f"HTML report:      {report_path}", flush=True)
+
+        # Also generate JSON report
+        json_path = Path(config.store).with_suffix(".json")
+        json_config = JSONReportConfig(output_dir=str(json_path.parent))
+        generate_json_report(store, run_id, json_config)
+        print(f"JSON report:      {json_path}", flush=True)
 
     return report_path
 

@@ -19,10 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from computronium.experiment.execution import cell_record, evaluate_cell, task_shape
+from computronium.experiment.kernel import cell_record, evaluate_cell, task_shape
 from computronium.experiment.schema import Coordinate, GateVerdict, Provenance, Schedule
 
-_BACKENDS = Path(__file__).resolve().parents[2] / "computronium/experiment/execution"
+_EXECUTION = Path(__file__).resolve().parents[2] / "computronium/experiment/execution"
+_KERNEL = Path(__file__).resolve().parents[2] / "computronium/experiment/kernel"
 _TASK_ID = "digits"
 
 
@@ -118,7 +119,7 @@ def test_record_carries_measurement_and_a_derived_verdict() -> None:
 
 def test_evaluation_has_exactly_one_implementation() -> None:
     """Both backends delegate; neither holds its own evaluation body."""
-    tree = ast.parse((_BACKENDS / "backends.py").read_text())
+    tree = ast.parse((_EXECUTION / "backends.py").read_text())
 
     evaluators = [
         node.name
@@ -140,7 +141,7 @@ def test_evaluation_has_exactly_one_implementation() -> None:
 
     assert evaluators, "no backend delegates to cell_record"
 
-    for source in ("backends.py", "stages_impl.py", "search_space.py"):
-        text = (_BACKENDS / source).read_text()
+    for source in ("compose.py", "evaluate.py", "search_space.py"):
+        text = (_KERNEL / source).read_text()
         assert "This is a placeholder" not in text, f"{source} still holds a stub"
         assert "actual evaluation would" not in text, f"{source} still holds a stub"

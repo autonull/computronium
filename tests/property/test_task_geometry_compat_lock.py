@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.execution import (
+from computronium.experiment.kernel.compose import (
     ProposalComposeError,
     compose_cell_system,
-    search_space_from_spec,
-    task_shape,
 )
+from computronium.experiment.kernel.search_space import search_space_from_spec
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.schema import (
     Coordinate,
     RunSpec,
@@ -51,7 +51,7 @@ def test_digits_excludes_causal_transformer() -> None:
     _digits_spec()
     # The primitives() returns all available; filtering happens in _composable during iteration
     # Check that candidates for digits don't include causal_transformer
-    from computronium.experiment.execution.search_space import _composable
+    from computronium.experiment.kernel.search_space import _composable
 
     coord = Coordinate(
         substrate="digital",

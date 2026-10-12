@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.execution import search_space_from_spec, task_shape
+from computronium.experiment.kernel.search_space import search_space_from_spec
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.schema import (
     MEASURED_BATCH_LIMIT,
     MEASURED_OBJECTIVES,

@@ -103,7 +103,7 @@ def _compute_stability_metrics(
     Errors are caught and logged; an empty dict is returned on failure
     so stability metrics never break a probe.
     """
-    from computronium.experiment.execution.evaluate import (
+    from computronium.experiment.kernel.evaluate import (
         compute_stability_metrics as _compute_stability_metrics_impl,
     )
 

@@ -21,7 +21,7 @@ budget:
   param_budget: 10000
 
 gates: ["dry_run", "property_locks"]
-reporters: ["json", "sqlite"]
+reporters: ["json"]
 
 seeds: 3
 fidelity: "L1"

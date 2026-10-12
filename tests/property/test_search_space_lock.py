@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.execution import (
+from computronium.experiment.kernel import (
     ProposalComposeError,
     TaskShape,
     compose_cell_system,

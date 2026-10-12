@@ -33,7 +33,8 @@ moved cannot hide behind a nominal 1.0.
 
 from __future__ import annotations
 
-from computronium.experiment.execution import compose_configs, task_shape
+from computronium.experiment.kernel.compose import compose_configs
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.schema import (
     AXES_REGISTRIES,
     MEASURED_PARAM_BUDGET,

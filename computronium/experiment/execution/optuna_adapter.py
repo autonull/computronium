@@ -100,7 +100,7 @@ class OptunaDistributionAdapter:
                 own selection cannot use.
             ValueError: The spec sweeps a domain the primitive does not declare.
         """
-        from computronium.experiment.execution.search_space import narrow_domain
+        from computronium.experiment.kernel.search_space import narrow_domain
         from computronium.experiment.schema.harvest import harvest_schema
 
         swept = {} if spec is None else dict(spec.hyperparameters)

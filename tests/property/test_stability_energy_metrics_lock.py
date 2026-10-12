@@ -197,7 +197,7 @@ def test_backend_bounds_its_own_concurrency() -> None:
 
 def test_every_evaluator_metric_is_nameable_by_an_objective() -> None:
     """A payload key the objectives registry cannot name reaches no study."""
-    from computronium.experiment.execution import evaluate
+    from computronium.experiment.kernel import evaluate
 
     source = inspect.getsource(evaluate)
     written = {

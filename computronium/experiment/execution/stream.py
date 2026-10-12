@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.kernel.search_space import (
     SearchSpace,
     iter_candidates,
 )
@@ -30,7 +30,7 @@ from computronium.experiment.schema.run_spec import RunSpec
 
 if TYPE_CHECKING:
     from computronium.experiment.execution.deadline import Deadline
-    from computronium.experiment.execution.evaluate import TaskShape
+    from computronium.experiment.kernel.evaluate import TaskShape
     from computronium.experiment.execution.policy import Policy
 
 logger = logging.getLogger(__name__)

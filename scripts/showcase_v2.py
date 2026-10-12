@@ -35,7 +35,7 @@ from computronium.experiment.surface.cli import (
     create_policy,
     policy_context,
 )
-from computronium.experiment.execution.evaluate import task_shape
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.core.logging import get_logger
 
 logger = get_logger(__name__)

@@ -7,9 +7,9 @@ Removing the gate must make the fixture fail (TODO46 D25).
 
 from __future__ import annotations
 
-from computronium.experiment.execution.compose import compose_cell_system
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.search_space import _composable
+from computronium.experiment.kernel.compose import compose_cell_system
+from computronium.experiment.kernel.evaluate import task_shape
+from computronium.experiment.kernel.search_space import _composable
 from computronium.experiment.schema import Coordinate
 
 
@@ -83,7 +83,7 @@ def test_compose_dry_run_catches_failure() -> None:
     assert cell is not None
 
     # But the dry-run function should catch it
-    from computronium.experiment.execution.compose import _dry_run_trainable
+    from computronium.experiment.kernel.compose import _dry_run_trainable
 
     ok, reason = _dry_run_trainable(
         coord, {}, shape.input_shape, shape.output_dim, 50000

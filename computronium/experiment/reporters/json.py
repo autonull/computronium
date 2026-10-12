@@ -196,7 +196,9 @@ def _compute_summary_json(records: list[Record]) -> dict[str, Any]:
     for r in records:
         if r.status.gate_verdict.value == "PASS":
             key = (r.substrate, r.geometry, r.dynamics, r.plasticity, r.credit, r.update)
-            coord_groups[key].append(r.payload.get("validation_accuracy", 0))
+            # Use val_acc or validation_accuracy
+            acc_val = r.payload.get("val_acc") or r.payload.get("validation_accuracy", 0)
+            coord_groups[key].append(acc_val)
 
     multi_seed_coords = sum(1 for v in coord_groups.values() if len(v) > 1)
     total_coords = len(coord_groups)
@@ -253,18 +255,33 @@ def generate_json_report(
         report["axis_coverage"] = _compute_axis_coverage_json(records)
 
     if config.include_pareto:
+        # Determine metric names from actual data
+        accuracy_metric = "validation_accuracy"
+        walltime_metric = "walltime_total"
+        # Check first record for available metrics
+        for r in records:
+            if "val_acc" in r.payload:
+                accuracy_metric = "val_acc"
+            elif "validation_accuracy" in r.payload:
+                accuracy_metric = "validation_accuracy"
+            if "walltime_s" in r.payload:
+                walltime_metric = "walltime_s"
+            elif "walltime_total" in r.payload:
+                walltime_metric = "walltime_total"
+            break
+        
         report["pareto_frontiers"] = {
-            "validation_accuracy_vs_walltime": _compute_pareto_frontier_json(
-                records, "walltime_total", "validation_accuracy"
+            f"{accuracy_metric}_vs_{walltime_metric}": _compute_pareto_frontier_json(
+                records, walltime_metric, accuracy_metric
             ),
-            "validation_accuracy_vs_params": _compute_pareto_frontier_json(
-                records, "param_count", "validation_accuracy"
+            f"{accuracy_metric}_vs_params": _compute_pareto_frontier_json(
+                records, "param_count", accuracy_metric
             ),
-            "validation_accuracy_vs_flops": _compute_pareto_frontier_json(
-                records, "flops", "validation_accuracy"
+            f"{accuracy_metric}_vs_flops": _compute_pareto_frontier_json(
+                records, "flops", accuracy_metric
             ),
-            "walltime_vs_params": _compute_pareto_frontier_json(
-                records, "param_count", "walltime_total", maximize_y=False
+            f"{walltime_metric}_vs_params": _compute_pareto_frontier_json(
+                records, "param_count", walltime_metric, maximize_y=False
             ),
         }
 

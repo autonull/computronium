@@ -15,9 +15,9 @@ from typing import Any, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+from computronium.experiment.schema.axis import StructuralAxis, Domain
 from computronium.experiment.schema.run_spec import AxisSelection, Fidelity, RunSpec
+from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate
@@ -60,7 +60,6 @@ class Reporter(StrEnum):
 
     HTML = "html"
     JSON = "json"
-    SQLITE = "sqlite"
     TENSORBOARD = "tensorboard"
 
 
@@ -166,12 +165,22 @@ class ExperimentSpec(BaseModel):
 
     # Output
     reporters: list[Reporter] = Field(
-        default_factory=lambda: [Reporter.HTML, Reporter.JSON, Reporter.SQLITE]
+        default_factory=lambda: [Reporter.HTML, Reporter.JSON]
     )
     output_dir: str = "experiments/output"
 
     # Seeds
     seeds: int | list[int] = 1
+
+    # Dataset
+    dataset: str = "unknown"
+    dataset_version: str = "1.0"
+
+    # Hyperparameters
+    hyperparameters: dict[str, Domain] = Field(default_factory=dict)
+    operating_points: dict[str, Any] = Field(default_factory=dict)
+    sweep_steps: int = 5
+    axis_objectives: dict[str, tuple[str, ...]] = Field(default_factory=dict)
 
     # Runtime
     fidelity: Fidelity = "L1"
@@ -278,6 +287,30 @@ class ExperimentSpec(BaseModel):
 
         n_seeds = self.seeds if isinstance(self.seeds, int) else self.seeds[0]
 
+        # Map search strategy to policy
+        search_to_policy = {
+            SearchStrategy.GRID: "round_robin_grid",
+            SearchStrategy.ROUND_ROBIN: "round_robin_grid",
+            SearchStrategy.RANDOM: "uniform_random",
+            SearchStrategy.BAYESIAN: "model_based",
+        }
+        policy = search_to_policy.get(self.search, "round_robin_grid")
+
+        # Get code SHA
+        code_sha = "unknown"
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                code_sha = result.stdout.strip()
+        except Exception:
+            pass
+
         return RunSpec(
             profile=self.profile or f"experiment_{self.type.value}",
             task=self.tasks[0] if self.tasks else "digits",
@@ -296,6 +329,14 @@ class ExperimentSpec(BaseModel):
             num_workers=self.num_workers,
             deterministic=self.deterministic,
             checkpoint_every_n=self.checkpoint_every_n,
+            policy=policy,
+            hyperparameters=self.hyperparameters,
+            dataset=self.dataset,
+            dataset_version=self.dataset_version,
+            code_sha=code_sha,
+            operating_points=self.operating_points,
+            sweep_steps=self.sweep_steps,
+            axis_objectives=self.axis_objectives,
         )
 
     def to_dict(self) -> dict[str, Any]:

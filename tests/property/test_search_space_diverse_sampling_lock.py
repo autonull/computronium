@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.experiment.execution.evaluate import task_shape
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.kernel.evaluate import task_shape
+from computronium.experiment.kernel.search_space import (
     declared_cell_count,
     iter_candidates,
     search_space_from_spec,

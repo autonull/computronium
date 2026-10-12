@@ -151,7 +151,7 @@ class ReplayRunner:
 
     async def _replay_cell(self, record, coordinate: Coordinate) -> dict[str, Any]:
         """Replay a single cell from the source database."""
-        from computronium.experiment.execution.evaluate import evaluate_cell
+        from computronium.experiment.kernel.evaluate import evaluate_cell
 
         schedule = record.schedule
 

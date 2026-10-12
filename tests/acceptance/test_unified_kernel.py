@@ -42,7 +42,7 @@ from computronium.experiment.schema import (
 )
 
 if TYPE_CHECKING:
-    from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.kernel.search_space import SearchSpace
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record

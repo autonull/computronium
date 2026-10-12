@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.execution.budget import CostModel
     from computronium.experiment.execution.policy import Policy
-    from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.execution.stage import (
         Fragment,
         Proposal,
@@ -566,7 +566,7 @@ class PipelineRunner:
 
         # Create CellStream for unbounded candidate generation
         if self._config.deadline is not None and self._state.search_space is not None:
-            from computronium.experiment.execution.evaluate import task_shape
+            from computronium.experiment.kernel.evaluate import task_shape
 
             self._state.cell_stream = CellStream(
                 spec=self._config.run_spec,
@@ -893,7 +893,7 @@ class PipelineRunner:
 
     def _build_search_space(self) -> SearchSpace:
         """Build the run's active space from its spec (TODO46 §3.3)."""
-        from computronium.experiment.execution.search_space import (
+        from computronium.experiment.kernel.search_space import (
             search_space_from_spec,
         )
 
@@ -1110,8 +1110,8 @@ class PipelineRunner:
         (via compose_configs) at the batch boundary. Invalid cells are added
         to rejected_keys and never reach the trainer.
         """
-        from computronium.experiment.execution.compose import compose_configs
-        from computronium.experiment.execution.evaluate import task_shape
+        from computronium.experiment.kernel.compose import compose_configs
+        from computronium.experiment.kernel.evaluate import task_shape
 
         seen: set[str] = set(self._state.completed_measurement_keys)
         rejected: set[str] = set(self._state.rejected_keys)
@@ -1146,7 +1146,7 @@ class PipelineRunner:
                         param_budget=schedule.param_budget,
                     )
                     # Param budget check (R25 fairness rule)
-                    from computronium.experiment.execution.compose import (
+                    from computronium.experiment.kernel.compose import (
                         geometry_param_count,
                     )
                     from computronium.experiment.schema.registries import (

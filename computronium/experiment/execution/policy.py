@@ -24,12 +24,13 @@ from optuna.distributions import (
 )
 from optuna.study import StudyDirection
 
-from computronium.experiment.execution.budget import Budget
+from computronium.experiment.kernel import Budget
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.optuna_adapter import OptunaDistributionAdapter
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.kernel.search_space import (
     ShapeResolver,
     iter_candidates,
+    declared_cell_count,
 )
 from computronium.experiment.execution.stage import Proposal
 from computronium.experiment.schema.axis import StructuralAxis
@@ -40,7 +41,7 @@ from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 
@@ -278,7 +279,7 @@ class ProposalContext:
         first _POOL cells gives representative coverage without striding through
         the entire declared space.
         """
-        from computronium.experiment.execution.search_space import declared_cell_count
+        # declared_cell_count already imported from kernel.search_space at module level
 
         total = declared_cell_count(self.spec, self._scoped_space)
         # Take first _POOL cells for efficiency; round-robin interleaving

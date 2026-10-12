@@ -40,7 +40,7 @@ from computronium.experiment.evidence.significance import (
     Significance,
     paired_significance,
 )
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.kernel.search_space import (
     declared_cell_count,
     search_space_from_spec,
 )

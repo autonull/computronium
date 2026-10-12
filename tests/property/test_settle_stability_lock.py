@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 import torch
-from computronium.experiment.execution.compose import _dry_run_trainable
+from computronium.experiment.kernel.compose import _dry_run_trainable
 from computronium.experiment.schema import Coordinate
-from computronium.experiment.execution.evaluate import task_shape
+from computronium.experiment.kernel.evaluate import task_shape
 
 
 def test_error_predictive_coding_nan_guard() -> None:

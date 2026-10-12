@@ -224,7 +224,7 @@ class TestObjectivesAreMeasurements:
         Family-specific energy metrics for other dynamics (pc_alm, predictive_settling,
         spike_integration, instantaneous) are correctly absent.
         """
-        from computronium.experiment.execution import cell_record
+        from computronium.experiment.kernel import cell_record
 
         record = cell_record(
             _coordinate(),

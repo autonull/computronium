@@ -11,10 +11,10 @@ from __future__ import annotations
 import pytest
 import torch
 from computronium.core.plasticity.fast_weights import FastWeightPlasticity
-from computronium.experiment.execution.compose import compose_cell_system
-from computronium.experiment.execution.search_space import _composable
+from computronium.experiment.kernel.compose import compose_cell_system
+from computronium.experiment.kernel.search_space import _composable
 from computronium.experiment.schema import Coordinate
-from computronium.experiment.execution.evaluate import task_shape
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.ontology.geometry import (
     GeometryConfig,
     ActivationLayout,

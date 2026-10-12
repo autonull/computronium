@@ -12,7 +12,7 @@ from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
-from computronium.experiment.execution.search_space import (
+from computronium.experiment.kernel.search_space import (
     search_space_from_spec,
     _filter_axes_cache,
 )

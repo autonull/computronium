@@ -81,6 +81,7 @@ def _compute_pareto_frontier(
     minimize_x: bool = True,
 ) -> "pd.DataFrame":
     """Compute Pareto frontier for two metrics."""
+    import pandas as pd
     # Filter to measured cells with valid metrics
     valid = df.dropna(subset=[x_metric, y_metric])
     if valid.empty:
@@ -448,7 +449,7 @@ def _generate_scaling_laws(
 
 def _generate_seed_stability(
     df: "pd.DataFrame",
-    metric: str = "validation_accuracy",
+    metric: str = "val_acc",
 ) -> str:
     """Generate seed stability analysis."""
     try:
@@ -547,15 +548,21 @@ def generate_html_report(
     # Generate plots
     plots = {}
 
-    if config.include_pareto:
+    # Determine metric names from actual data
+    accuracy_metrics = [c for c in df.columns if c in ("validation_accuracy", "val_acc", "val_accuracy")]
+    walltime_metrics = [c for c in df.columns if c in ("walltime_total", "walltime_s", "walltime")]
+    acc_metric = accuracy_metrics[0] if accuracy_metrics else "val_acc"
+    wt_metric = walltime_metrics[0] if walltime_metrics else "walltime_s"
+
+    if config.include_pareto and acc_metric in df.columns:
         plots["pareto_acc_walltime"] = _generate_pareto_plot(
-            df, "walltime_total", "validation_accuracy"
+            df, wt_metric, acc_metric
         )
         plots["pareto_params_acc"] = _generate_pareto_plot(
-            df, "param_count", "validation_accuracy"
+            df, "param_count", acc_metric
         )
         plots["pareto_flops_acc"] = _generate_pareto_plot(
-            df, "flops", "validation_accuracy"
+            df, "flops", acc_metric
         )
 
     if config.include_heatmaps:
@@ -582,7 +589,7 @@ def generate_html_report(
         plots["scaling_laws"] = _generate_scaling_laws(df)
 
     if config.include_seed_stability:
-        plots["seed_stability"] = _generate_seed_stability(df)
+        plots["seed_stability"] = _generate_seed_stability(df, acc_metric)
 
     # Generate HTML report
     html = _render_html_template(config.title, summary, plots)

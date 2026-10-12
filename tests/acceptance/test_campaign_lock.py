@@ -145,7 +145,7 @@ def test_gate_2b_the_reference_cell_learns() -> None:
     ``active()`` resolve-once fix returns this gate to a frozen loss at
     chance.
     """
-    from computronium.experiment.execution import cell_record
+    from computronium.experiment.kernel import cell_record
     from computronium.experiment.schema import (
         MEASURED_PARAM_BUDGET,
         Coordinate,

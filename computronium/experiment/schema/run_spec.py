@@ -299,7 +299,7 @@ class RunSpec(BaseModel):
             and "hidden_dim" not in self.hyperparameters
             and self.task_names
         ):
-            from computronium.experiment.execution.evaluate import task_shape
+            from computronium.experiment.kernel.evaluate import task_shape
 
             try:
                 task_shape_obj = task_shape(self.task_names[0])
