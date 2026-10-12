@@ -118,6 +118,49 @@ def settle_step_operator(
     return step, sum(h.shape[1] for h in _initial_acts(system, x)[1:-1])
 
 
+def settle_step_operator_at_state(
+    system: Any,
+    settled_acts: list[Tensor],
+) -> tuple[Callable[[Tensor], Tensor], int] | None:
+    """``(step operator, hidden width)`` at a given settled state.
+
+    Uses the settled activations for input/output clamping and returns the
+    step operator whose fixed point is the settled hidden activations.
+    """
+    from computronium.ontology._settle_kernel import SubstrateSettleKernel
+
+    params = _layered(system.geometry)
+    if params is None:
+        return None
+    config = system.dynamics.config
+    kernel = SubstrateSettleKernel(
+        substrate=system.substrate,
+        params=params,
+        step_size=config.step_size,
+        momentum=config.momentum,
+        residual=params.residual,
+    )
+
+    hidden = settled_acts[1:-1]
+    if not hidden:
+        return None
+    widths = tuple(h.shape[1] for h in hidden)
+    input_act = settled_acts[0]
+    output_act = settled_acts[-1]
+
+    def step(flat: Tensor) -> Tensor:
+        acts = [input_act]
+        offset = 0
+        for width in widths:
+            acts.append(flat[offset : offset + width].unsqueeze(0))
+            offset += width
+        acts.append(output_act)
+        advanced, _ = kernel.step(acts, 0.0, None, None)
+        return torch.cat([h[0] for h in advanced[1:-1]])
+
+    return step, sum(widths)
+
+
 def layer_weight_shapes(geometry: Any) -> list[tuple[int, int]]:
     """``(out_features, in_features)`` per linear layer, in forward order.
 

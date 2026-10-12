@@ -432,6 +432,7 @@ class SystemConfig:
         # Special case validations
         self._validate_gradient_credit_beta_clamp()
         self._validate_gradient_credit_instantaneous_recurrent()
+        self._validate_gradient_credit_instantaneous_output_proj()
         self._validate_per_element_displacement_step_size()
         self._validate_energy_minimization_momentum_update()
 
@@ -586,8 +587,8 @@ class SystemConfig:
             and self.credit.credit_type == "target_inversion"
         ):
             raise ValueError(
-                f"NCA geometry with instantaneous dynamics incompatible with "
-                f"target_inversion credit (cell-mode activations)"
+                "NCA geometry with instantaneous dynamics incompatible with "
+                "target_inversion credit (cell-mode activations)"
             )
 
     def _validate_nca_instantaneous_homeostatic(self) -> None:
@@ -598,8 +599,8 @@ class SystemConfig:
             and self.credit.credit_type == "homeostatic"
         ):
             raise ValueError(
-                f"NCA geometry with instantaneous dynamics incompatible with "
-                f"homeostatic credit (cell-mode activations)"
+                "NCA geometry with instantaneous dynamics incompatible with "
+                "homeostatic credit (cell-mode activations)"
             )
 
     def _validate_nca_instantaneous_pc_alm(self) -> None:
@@ -610,8 +611,8 @@ class SystemConfig:
             and self.credit.credit_type == "pc_alm"
         ):
             raise ValueError(
-                f"NCA geometry with instantaneous dynamics incompatible with "
-                f"pc_alm credit (cell-mode activations)"
+                "NCA geometry with instantaneous dynamics incompatible with "
+                "pc_alm credit (cell-mode activations)"
             )
 
     def _validate_tile_mesh_pc_alm_dynamics(self) -> None:
@@ -621,7 +622,7 @@ class SystemConfig:
             and self.dynamics.dynamics_type == "pc_alm"
         ):
             raise ValueError(
-                f"tile_mesh geometry with pc_alm dynamics has layer width mismatch"
+                "tile_mesh geometry with pc_alm dynamics has layer width mismatch"
             )
 
     def _validate_nca_ntm_fast_weight_plasticity(self) -> None:
@@ -878,9 +879,44 @@ class SystemConfig:
             and self.credit.credit_type in {"gradient", "backprop"}
         ):
             raise ValueError(
-                f"GradientCredit/BackpropCredit with instantaneous dynamics on recurrent "
-                f"geometry cannot compute gradients for recurrent weights (not in "
-                f"feedforward pass). Use energy_minimization, predictive_settling, "
+                "GradientCredit/BackpropCredit with instantaneous dynamics on recurrent "
+                "geometry cannot compute gradients for recurrent weights (not in "
+                "feedforward pass). Use energy_minimization, predictive_settling, "
+                "error_predictive_coding, pc_alm, or diffusion dynamics instead."
+            )
+
+    def _validate_gradient_credit_instantaneous_output_proj(self) -> None:
+        """Gradient/backprop credit with instantaneous dynamics on geometries with
+        separate output projections (head/output_proj) fails because the projection
+        weights are not connected in the feedforward loss graph when settle is detached.
+
+        Standard FeedforwardGeometry and RecurrentGeometry do NOT have separate
+        output projections - their output layer is the last Linear layer in the
+        stack. Only these geometries have separate heads:
+        - ConvGeometry: has _head
+        - AttentionGeometry: has _output_projection
+        - CausalTransformerGeometry: has _output_projection
+        - SpatialLattice3DGeometry: has _output_projection
+        - TileGeometry/TileMesh: have output projection
+        """
+        if (
+            self.dynamics.dynamics_type == "instantaneous"
+            and self.geometry.topology_type
+            in {
+                "attention",
+                "causal_transformer",
+                "spatial_lattice",
+                "tile",
+                "tile_mesh",
+                "conv",
+            }
+            and self.credit.credit_type in {"gradient", "backprop"}
+        ):
+            raise ValueError(
+                f"GradientCredit/BackpropCredit with instantaneous dynamics on "
+                f"{self.geometry.topology_type!r} geometry cannot compute gradients "
+                f"for output projection/head weights (not in feedforward pass when "
+                f"settle is detached). Use energy_minimization, predictive_settling, "
                 f"error_predictive_coding, pc_alm, or diffusion dynamics instead."
             )
 
@@ -981,6 +1017,20 @@ class SystemConfig:
             (
                 dyn_type == "predictive_settling",
                 cred_type in _PREDICTIVE_SETTLING_CREDITS,
+            ),
+            (
+                dyn_type == "instantaneous"
+                and geo_type
+                in {
+                    "attention",
+                    "causal_transformer",
+                    "spatial_lattice",
+                    "tile",
+                    "tile_mesh",
+                    "conv",
+                }
+                and cred_type in {"gradient", "backprop"},
+                False,
             ),
         ]
 

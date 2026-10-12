@@ -1523,21 +1523,25 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         if x is None:
             raise ValueError("State must contain input 'x'")
 
+        # Clamp step_size for numerical stability (prevents NaN/Inf at step 0)
+        max_step_size = 0.5
+        effective_step_size = min(self.config.step_size, max_step_size)
+
         self._init_free_energy_history()
 
         # Dispatch to appropriate settling strategy based on geometry
         self._note_settle_start()
         if hasattr(geometry, "_graph"):
-            return self._settle_tile(state, x, geometry, substrate, target, on_step)
+            return self._settle_tile(state, x, geometry, substrate, target, on_step, effective_step_size)
 
         layered = extract_layered_params(geometry)
         if layered is not None and len(layered.weights) > 0:
             return self._settle_layered(
-                state, x, geometry, layered, substrate, target, on_step
+                state, x, geometry, layered, substrate, target, on_step, effective_step_size
             )
 
         # Fallback: standard predictive coding for recurrent geometries
-        return self._settle_recurrent(state, x, geometry, substrate, target, on_step)
+        return self._settle_recurrent(state, x, geometry, substrate, target, on_step, effective_step_size)
 
     def _init_free_energy_history(self) -> None:
         """Initialize free energy history tracking."""
@@ -1554,6 +1558,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None,
         on_step: Callable[[int, float], None] | None,
+        step_size: float,
     ) -> SettableState:
         """Standard predictive coding settling for recurrent geometries."""
         h = substrate.initial_state(x)
@@ -1564,7 +1569,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             prediction = geometry.route(iterate.value)
             prediction = self._match_prediction_shape(prediction, iterate.value)
             error = x - prediction
-            iterate.value = iterate.value + self.config.step_size * op(
+            iterate.value = iterate.value + step_size * op(
                 error,
                 geometry.params.get(
                     "weight", torch.eye(iterate.value.shape[-1], device=h.device)
@@ -1626,6 +1631,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None,
         on_step: Callable[[int, float], None] | None = None,
+        step_size: float | None = None,
     ) -> SettableState:
         """Layer-wise predictive coding settle over the geometry's Linear transitions.
 
@@ -1634,6 +1640,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         previous layer's activity. Returns activations for all layers.
         """
         op = substrate.get_forward_operator()
+        effective_step_size = step_size if step_size is not None else self.config.step_size
 
         # Initialize layer states from a feedforward pass
         # This gives us the correct shapes for each layer
@@ -1657,6 +1664,14 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                 h = torch.zeros(out_shape, device=h.device, dtype=h.dtype)
                 acts.append(h)
 
+        # NaN/Inf guard on initial activations (prevents step 0 failures)
+        for a in acts:
+            if not torch.isfinite(a).all():
+                raise RuntimeError(
+                    "NaN/Inf detected in initial activations "
+                    "(predictive_settling layered settle)"
+                )
+
         # Track free energy per iteration across all layers
         layer_free_energy: list[float] | None = (
             [] if self.config.track_free_energy_per_iter else None
@@ -1672,13 +1687,13 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             acts = _compiled_layered_settle(
                 acts,
                 layered.weights,
-                self.config.step_size,
+                effective_step_size,
                 self.config.max_steps,
             )
             acts = list(acts)
         else:
             acts = self._eager_layered_steps(
-                acts, layered, op, layer_free_energy, on_step
+                acts, layered, op, layer_free_energy, on_step, effective_step_size
             )
 
         if target is not None:
@@ -1706,6 +1721,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         op: object,
         layer_free_energy: list[float] | None,
         on_step: Callable[[int, float], None] | None = None,
+        step_size: float | None = None,
     ) -> list[Tensor]:
         """Eager settle loop: top-down prediction, bottom-up error correction.
 
@@ -1714,6 +1730,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         (any substrate, per-iteration energy tracking).
         """
         iterate = SettleIterate(acts)
+        effective_step_size = step_size if step_size is not None else self.config.step_size
 
         def _step(step: int) -> None:
             acts_ = iterate.value
@@ -1729,7 +1746,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                 h_upper = acts_[i + 1]
                 prediction = op(h_upper, weight.T)  # type: ignore[operator]
                 error = acts_[i] - prediction
-                h_upper_new = h_upper + self.config.step_size * op(error, weight)  # type: ignore[operator]
+                h_upper_new = h_upper + effective_step_size * op(error, weight)  # type: ignore[operator]
                 new_acts.append(h_upper_new)
 
                 if (
@@ -1744,7 +1761,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             if layered.recurrent_weight is not None and len(new_acts) >= 3:
                 hidden_idx = len(new_acts) - 2
                 h_hidden = new_acts[hidden_idx]
-                new_acts[hidden_idx] = h_hidden + self.config.step_size * op(
+                new_acts[hidden_idx] = h_hidden + effective_step_size * op(
                     h_hidden, layered.recurrent_weight
                 )  # type: ignore[operator]
 
@@ -1772,12 +1789,14 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None,
         on_step: Callable[[int, float], None] | None = None,
+        step_size: float | None = None,
     ) -> SettableState:
         """Block-view relaxation over the tile mesh via the settle kernel."""
+        effective_step_size = step_size if step_size is not None else self.config.step_size
         kernel = SubstrateSettleKernel(
             substrate=substrate,
             params=self._tile_layered_params(geometry),
-            step_size=self.config.step_size,
+            step_size=effective_step_size,
             momentum=self.config.momentum,
         )
         beta = self.config.beta if target is not None else 0.0

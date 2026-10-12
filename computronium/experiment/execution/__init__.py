@@ -137,6 +137,7 @@ __all__ = [
     "history_metrics",
     "iter_candidates",
     "layer_weight_shapes",
+    "settle_step_operator_at_state",
     "narrow_domain",
     "optuna_adapter",
     "pause_run",
@@ -267,6 +268,7 @@ _symbol_to_module: dict[str, str] = {
     "hidden_stack_operator": "settle_operator",
     "layer_weight_shapes": "settle_operator",
     "settle_step_operator": "settle_operator",
+    "settle_step_operator_at_state": "settle_operator",
     # stage
     "S1_FRAME": "stage",
     "S2_SPACE": "stage",
