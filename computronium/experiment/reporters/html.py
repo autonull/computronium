@@ -11,9 +11,7 @@ Generates rich interactive reports with:
 
 from __future__ import annotations
 
-import json
-import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -36,7 +34,7 @@ class ReportConfig:
     include_seed_stability: bool = True
 
 
-def _records_to_dataframe(records: list[Record]) -> "pd.DataFrame":
+def _records_to_dataframe(records: list[Record]) -> pd.DataFrame:
     """Convert records to a pandas DataFrame for analysis."""
     import pandas as pd
 
@@ -74,14 +72,15 @@ def _records_to_dataframe(records: list[Record]) -> "pd.DataFrame":
 
 
 def _compute_pareto_frontier(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
     x_metric: str,
     y_metric: str,
     maximize_y: bool = True,
     minimize_x: bool = True,
-) -> "pd.DataFrame":
+) -> pd.DataFrame:
     """Compute Pareto frontier for two metrics."""
     import pandas as pd
+
     # Filter to measured cells with valid metrics
     valid = df.dropna(subset=[x_metric, y_metric])
     if valid.empty:
@@ -99,24 +98,23 @@ def _compute_pareto_frontier(
             if y_val > best_y:
                 pareto.append(row)
                 best_y = y_val
-        else:
-            if y_val < best_y:
-                pareto.append(row)
-                best_y = y_val
+        elif y_val < best_y:
+            pareto.append(row)
+            best_y = y_val
 
     return pd.DataFrame(pareto) if pareto else pd.DataFrame()
 
 
 def _generate_pareto_plot(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
     x_metric: str,
     y_metric: str,
     color_by: str | None = None,
 ) -> str:
     """Generate a Plotly pareto frontier plot as HTML."""
     try:
-        import plotly.graph_objects as go
         import plotly.express as px
+        import plotly.graph_objects as go
 
         pareto_df = _compute_pareto_frontier(df, x_metric, y_metric)
 
@@ -166,21 +164,23 @@ def _generate_pareto_plot(
             height=500,
         )
 
-        return fig.to_html(include_plotlyjs="cdn", div_id=f"pareto-{x_metric}-{y_metric}")
+        return fig.to_html(
+            include_plotlyjs="cdn", div_id=f"pareto-{x_metric}-{y_metric}"
+        )
     except ImportError:
         return f"<div class='warning'>Plotly not available for Pareto plot: {x_metric} vs {y_metric}</div>"
 
 
 def _generate_coverage_heatmap(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
     axis_x: str,
     axis_y: str,
     metric: str = "validation_accuracy",
 ) -> str:
     """Generate a coverage heatmap for two axes."""
     try:
-        import plotly.graph_objects as go
         import numpy as np
+        import plotly.graph_objects as go
 
         # Filter measured cells
         measured = df[df["gate_verdict"] == "PASS"]
@@ -239,7 +239,7 @@ def _generate_coverage_heatmap(
                         dict(
                             x=x_val,
                             y=y_val,
-                            text=f"V:{void_counts[i,j]}",
+                            text=f"V:{void_counts[i, j]}",
                             showarrow=False,
                             font=dict(color="red", size=10),
                             bgcolor="rgba(255,255,255,0.8)",
@@ -261,12 +261,13 @@ def _generate_coverage_heatmap(
 
 
 def _generate_failure_clustering(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
 ) -> str:
     """Generate failure mode clustering visualization."""
     try:
-        import plotly.graph_objects as go
         import numpy as np
+        import plotly.express as px
+        import plotly.graph_objects as go
         from sklearn.decomposition import PCA
         from sklearn.manifold import TSNE
 
@@ -280,7 +281,14 @@ def _generate_failure_clustering(
         for _, row in failed.iterrows():
             # One-hot encode structural axes
             feat = []
-            for axis in ["substrate", "geometry", "dynamics", "plasticity", "credit", "update"]:
+            for axis in [
+                "substrate",
+                "geometry",
+                "dynamics",
+                "plasticity",
+                "credit",
+                "update",
+            ]:
                 vals = sorted(df[axis].unique())
                 one_hot = [1 if row[axis] == v else 0 for v in vals]
                 feat.extend(one_hot)
@@ -297,7 +305,11 @@ def _generate_failure_clustering(
             if features.shape[0] > 50:
                 reducer = PCA(n_components=2)
             else:
-                reducer = TSNE(n_components=2, random_state=42, perplexity=min(5, len(features) - 1))
+                reducer = TSNE(
+                    n_components=2,
+                    random_state=42,
+                    perplexity=min(5, len(features) - 1),
+                )
             coords = reducer.fit_transform(features)
         else:
             coords = features
@@ -305,7 +317,11 @@ def _generate_failure_clustering(
         fig = go.Figure()
 
         unique_labels = list(set(labels))
-        colors = px.colors.qualitative.Set1 if len(unique_labels) <= 9 else px.colors.qualitative.Alphabet
+        colors = (
+            px.colors.qualitative.Set1
+            if len(unique_labels) <= 9
+            else px.colors.qualitative.Alphabet
+        )
 
         for i, label in enumerate(unique_labels):
             mask = [l == label for l in labels]
@@ -353,7 +369,9 @@ def _generate_convergence_curves(
         fig = go.Figure()
 
         for r in records[:20]:  # Limit to first 20 for readability
-            trajectory = r.payload.get("trajectory") or r.payload.get("convergence_curve")
+            trajectory = r.payload.get("trajectory") or r.payload.get(
+                "convergence_curve"
+            )
             if trajectory and isinstance(trajectory, list):
                 fig.add_trace(
                     go.Scatter(
@@ -380,15 +398,17 @@ def _generate_convergence_curves(
 
 
 def _generate_scaling_laws(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
 ) -> str:
     """Generate resource scaling law plots."""
     try:
-        import plotly.graph_objects as go
         import numpy as np
+        import plotly.graph_objects as go
         from scipy import stats
 
-        measured = df[df["gate_verdict"] == "PASS"].dropna(subset=["param_count", "walltime_s"])
+        measured = df[df["gate_verdict"] == "PASS"].dropna(
+            subset=["param_count", "walltime_s"]
+        )
         if measured.empty or len(measured) < 3:
             return "<div class='info'>Insufficient data for scaling laws</div>"
 
@@ -448,21 +468,33 @@ def _generate_scaling_laws(
 
 
 def _generate_seed_stability(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
     metric: str = "val_acc",
 ) -> str:
     """Generate seed stability analysis."""
     try:
-        import plotly.graph_objects as go
         import pandas as pd
+        import plotly.graph_objects as go
 
         measured = df[df["gate_verdict"] == "PASS"].dropna(subset=[metric])
         if measured.empty:
             return f"<div class='info'>No measured cells for seed stability: {metric}</div>"
 
         # Group by coordinate (excluding seed) and compute statistics
-        coord_cols = ["substrate", "geometry", "dynamics", "plasticity", "credit", "update"]
-        grouped = measured.groupby(coord_cols)[metric].agg(["mean", "std", "count"]).reset_index()
+        coord_cols = [
+            "substrate",
+            "geometry",
+            "dynamics",
+            "plasticity",
+            "credit",
+            "update",
+        ]
+        grouped = (
+            measured
+            .groupby(coord_cols)[metric]
+            .agg(["mean", "std", "count"])
+            .reset_index()
+        )
         grouped = grouped[grouped["count"] > 1]  # Only coordinates with multiple seeds
 
         if grouped.empty:
@@ -477,7 +509,10 @@ def _generate_seed_stability(
                 mode="markers",
                 name="Coordinates",
                 marker=dict(size=8, opacity=0.7),
-                text=[f"{row['geometry']}/{row['dynamics']}/{row['credit']}/{row['update']}" for _, row in grouped.iterrows()],
+                text=[
+                    f"{row['geometry']}/{row['dynamics']}/{row['credit']}/{row['update']}"
+                    for _, row in grouped.iterrows()
+                ],
                 hovertemplate="Config: %{text}<br>Mean: %{x:.4f}<br>Std: %{y:.4f}<extra></extra>",
             )
         )
@@ -527,7 +562,7 @@ def _generate_summary_stats(records: list[Record]) -> dict[str, Any]:
 
 
 def generate_html_report(
-    store: "RecordStore",
+    store: RecordStore,
     run_id: str,
     config: ReportConfig | None = None,
 ) -> Path:
@@ -549,21 +584,21 @@ def generate_html_report(
     plots = {}
 
     # Determine metric names from actual data
-    accuracy_metrics = [c for c in df.columns if c in ("validation_accuracy", "val_acc", "val_accuracy")]
-    walltime_metrics = [c for c in df.columns if c in ("walltime_total", "walltime_s", "walltime")]
+    accuracy_metrics = [
+        c for c in df.columns if c in ("validation_accuracy", "val_acc", "val_accuracy")
+    ]
+    walltime_metrics = [
+        c for c in df.columns if c in ("walltime_total", "walltime_s", "walltime")
+    ]
     acc_metric = accuracy_metrics[0] if accuracy_metrics else "val_acc"
     wt_metric = walltime_metrics[0] if walltime_metrics else "walltime_s"
 
     if config.include_pareto and acc_metric in df.columns:
-        plots["pareto_acc_walltime"] = _generate_pareto_plot(
-            df, wt_metric, acc_metric
-        )
+        plots["pareto_acc_walltime"] = _generate_pareto_plot(df, wt_metric, acc_metric)
         plots["pareto_params_acc"] = _generate_pareto_plot(
             df, "param_count", acc_metric
         )
-        plots["pareto_flops_acc"] = _generate_pareto_plot(
-            df, "flops", acc_metric
-        )
+        plots["pareto_flops_acc"] = _generate_pareto_plot(df, "flops", acc_metric)
 
     if config.include_heatmaps:
         plots["heatmap_geom_dyn"] = _generate_coverage_heatmap(
@@ -639,20 +674,20 @@ def _render_html_template(
         <div class="summary-grid">
             <div class="stat-card">
                 <h3>Total Cells</h3>
-                <div class="value">{summary['total_cells']}</div>
+                <div class="value">{summary["total_cells"]}</div>
             </div>
             <div class="stat-card measured">
                 <h3>Measured</h3>
-                <div class="value">{summary['measured']}</div>
-                <div>({summary['measured_rate']:.1%})</div>
+                <div class="value">{summary["measured"]}</div>
+                <div>({summary["measured_rate"]:.1%})</div>
             </div>
             <div class="stat-card void">
                 <h3>Void</h3>
-                <div class="value">{summary['void']}</div>
+                <div class="value">{summary["void"]}</div>
             </div>
             <div class="stat-card failed">
                 <h3>Failed</h3>
-                <div class="value">{summary['failed']}</div>
+                <div class="value">{summary["failed"]}</div>
             </div>
         </div>
 
@@ -664,8 +699,8 @@ def _render_html_template(
         html += f"""
             <div class="axis-card">
                 <h4>{axis}</h4>
-                <div class="coverage">{cov['coverage']:.0%}</div>
-                <div class="detail">{cov['measured']} / {cov['total']} primitives</div>
+                <div class="coverage">{cov["coverage"]:.0%}</div>
+                <div class="detail">{cov["measured"]} / {cov["total"]} primitives</div>
             </div>
 """
 
@@ -712,10 +747,14 @@ def generate_report_from_db(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate HTML report from experiment database")
+    parser = argparse.ArgumentParser(
+        description="Generate HTML report from experiment database"
+    )
     parser.add_argument("--db", required=True, help="Path to experiment database")
     parser.add_argument("--run-id", help="Run ID (default: latest)")
-    parser.add_argument("--output", default="experiments/reports", help="Output directory")
+    parser.add_argument(
+        "--output", default="experiments/reports", help="Output directory"
+    )
 
     args = parser.parse_args()
 

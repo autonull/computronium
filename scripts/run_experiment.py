@@ -163,7 +163,10 @@ async def _run_loop(
     while not deadline.soft_expired() and not cell_stream.is_exhausted:
         if _shutdown_requested[0]:
             if _shutdown_signum[0]:
-                print(f"\nSignal {_shutdown_signum[0]} received, requesting graceful shutdown...", flush=True)
+                print(
+                    f"\nSignal {_shutdown_signum[0]} received, requesting graceful shutdown...",
+                    flush=True,
+                )
             else:
                 print("Shutdown requested, stopping...", flush=True)
             break
