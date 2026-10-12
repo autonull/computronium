@@ -1428,7 +1428,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             if clamped_val != energy_val:
                 import logging
 
-                logging.getLogger(__name__).warning(
+                logging.getLogger(__name__).debug(
                     "Energy clamped: %s -> %s (max_energy=%s). Consider reducing step_size or increasing max_energy.",
                     energy_val,
                     clamped_val,
@@ -1477,7 +1477,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             if not torch.allclose(clamped, energy_val):
                 import logging
 
-                logging.getLogger(__name__).warning(
+                logging.getLogger(__name__).debug(
                     "Energy clamped in compute_energy: %s -> %s (max_energy=%s)",
                     energy_val.item(),
                     clamped.item(),

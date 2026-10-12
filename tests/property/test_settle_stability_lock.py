@@ -25,7 +25,12 @@ def test_error_predictive_coding_nan_guard() -> None:
         plasticity="null",
         credit="thermodynamic_contrast",
         update="euclidean",
-        params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 10.0},  # Large step_size to trigger instability
+        params={
+            "hidden_dim": 64,
+            "num_layers": 3,
+            "max_steps": 10,
+            "step_size": 10.0,
+        },  # Large step_size to trigger instability
     )
     dry_ok, dry_reason = _dry_run_trainable(
         coordinate=coord,
@@ -70,7 +75,13 @@ def test_pc_alm_nan_guard() -> None:
         plasticity="null",
         credit="pc_alm",
         update="euclidean",
-        params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 10.0, "rho": 10.0},
+        params={
+            "hidden_dim": 64,
+            "num_layers": 3,
+            "max_steps": 10,
+            "step_size": 10.0,
+            "rho": 10.0,
+        },
     )
     dry_ok, dry_reason = _dry_run_trainable(
         coordinate=coord,
@@ -91,7 +102,13 @@ def test_energy_minimization_max_energy_clamp() -> None:
         plasticity="null",
         credit="thermodynamic_contrast",
         update="euclidean",
-        params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 10.0, "max_energy": 1.0},
+        params={
+            "hidden_dim": 64,
+            "num_layers": 3,
+            "max_steps": 10,
+            "step_size": 10.0,
+            "max_energy": 1.0,
+        },
     )
     dry_ok, dry_reason = _dry_run_trainable(
         coordinate=coord,
@@ -113,7 +130,13 @@ def test_stable_configuration_passes() -> None:
         plasticity="null",
         credit="thermodynamic_contrast",
         update="euclidean",
-        params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 0.1, "beta": 0.5},
+        params={
+            "hidden_dim": 64,
+            "num_layers": 3,
+            "max_steps": 10,
+            "step_size": 0.1,
+            "beta": 0.5,
+        },
     )
     dry_ok, dry_reason = _dry_run_trainable(
         coordinate=coord,
@@ -163,11 +186,18 @@ def test_guard_removal_regression_predictive_settling() -> None:
             # NO NaN/Inf CHECK
             iterate.data = new_acts
 
-        from computronium.ontology.dynamics._settle_driver import run_settle_loop, SettleIterate
+        from computronium.ontology.dynamics._settle_driver import (
+            run_settle_loop,
+            SettleIterate,
+        )
+
         PredictiveSettlingDynamics._eager_layered_steps = no_nan_check_eager
 
         try:
-            from computronium.experiment.execution import search_space as search_space_module
+            from computronium.experiment.execution import (
+                search_space as search_space_module,
+            )
+
             search_space_module._composable_cache.clear()
 
             # Use a configuration that would produce NaN with large step_size
@@ -178,7 +208,12 @@ def test_guard_removal_regression_predictive_settling() -> None:
                 plasticity="null",
                 credit="thermodynamic_contrast",
                 update="euclidean",
-                params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 100.0},
+                params={
+                    "hidden_dim": 64,
+                    "num_layers": 3,
+                    "max_steps": 10,
+                    "step_size": 100.0,
+                },
             )
             dry_ok, dry_reason = _dry_run_trainable(
                 coordinate=coord,
@@ -201,16 +236,34 @@ def test_guard_removal_regression_pc_alm() -> None:
     # Save original _observe
     original_observe = PCALMDynamics._run_relaxation_loop
 
-    def no_nan_check_relaxation(self, acts, dual_vars, step_fn, use_checkpointing, checkpoint_every, layered, op, current_rho, on_step):
+    def no_nan_check_relaxation(
+        self,
+        acts,
+        dual_vars,
+        step_fn,
+        use_checkpointing,
+        checkpoint_every,
+        layered,
+        op,
+        current_rho,
+        on_step,
+    ):
         """Relaxation loop without NaN/Inf check."""
-        from computronium.ontology.dynamics._settle_driver import run_settle_loop, SettleIterate
+        from computronium.ontology.dynamics._settle_driver import (
+            run_settle_loop,
+            SettleIterate,
+        )
 
         iterate = SettleIterate((acts, dual_vars, []))
 
         def _step_fn(step: int):
             return step_fn(iterate.value[0], iterate.value[1], step)
 
-        from computronium.ontology.dynamics._settle_driver import checkpointed_every, checkpointed
+        from computronium.ontology.dynamics._settle_driver import (
+            checkpointed_every,
+            checkpointed,
+        )
+
         advance = (
             checkpointed_every(_step_fn, checkpoint_every)
             if use_checkpointing
@@ -236,7 +289,10 @@ def test_guard_removal_regression_pc_alm() -> None:
     PCALMDynamics._run_relaxation_loop = no_nan_check_relaxation
 
     try:
-        from computronium.experiment.execution import search_space as search_space_module
+        from computronium.experiment.execution import (
+            search_space as search_space_module,
+        )
+
         search_space_module._composable_cache.clear()
 
         coord = Coordinate(
@@ -246,7 +302,13 @@ def test_guard_removal_regression_pc_alm() -> None:
             plasticity="null",
             credit="pc_alm",
             update="euclidean",
-            params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 100.0, "rho": 10.0},
+            params={
+                "hidden_dim": 64,
+                "num_layers": 3,
+                "max_steps": 10,
+                "step_size": 100.0,
+                "rho": 10.0,
+            },
         )
         dry_ok, dry_reason = _dry_run_trainable(
             coordinate=coord,
@@ -273,6 +335,7 @@ def test_guard_removal_regression_error_predictive_coding() -> None:
             raise ValueError("State must contain input 'x'")
 
         from computronium.ontology.dynamics._dynamics import extract_layered_params
+
         layered = extract_layered_params(geometry)
         if layered is None or not layered.transitions:
             raise TypeError("ePC settling requires a layer-structured geometry")
@@ -290,6 +353,7 @@ def test_guard_removal_regression_error_predictive_coding() -> None:
 
         self._note_settle_start()
         from computronium.ontology.dynamics._settle_driver import SettleIterate
+
         eps_box = SettleIterate(eps)
         delta_box = SettleIterate(0.0)
 
@@ -335,6 +399,7 @@ def test_guard_removal_regression_error_predictive_coding() -> None:
             return False
 
         from computronium.ontology.dynamics._settle_driver import run_settle_loop
+
         self._settle_steps_used = run_settle_loop(
             _step, max_steps=self.config.max_steps, after_step=_observe
         )
@@ -343,23 +408,30 @@ def test_guard_removal_regression_error_predictive_coding() -> None:
             xf, transitions, substrate, eps, residual=layered.residual
         )
         from computronium.ontology.dynamics._dynamics import _apply_gain_control
+
         states = _apply_gain_control(states, self.config.gain_control)
         self._last_errors = eps
 
         if target is None:
             from computronium.ontology.dynamics._state import set_state_field
+
             set_state_field(state, "free_state", states)
         else:
             from computronium.ontology.dynamics._state import set_state_field
+
             set_state_field(state, "nudged_state", states)
         from computronium.ontology.dynamics._state import set_state_field
+
         set_state_field(state, "activations", states)
         return state
 
     ErrorPredictiveCodingDynamics.settle = no_nan_check_settle
 
     try:
-        from computronium.experiment.execution import search_space as search_space_module
+        from computronium.experiment.execution import (
+            search_space as search_space_module,
+        )
+
         search_space_module._composable_cache.clear()
 
         coord = Coordinate(
@@ -369,7 +441,12 @@ def test_guard_removal_regression_error_predictive_coding() -> None:
             plasticity="null",
             credit="thermodynamic_contrast",
             update="euclidean",
-            params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 100.0},
+            params={
+                "hidden_dim": 64,
+                "num_layers": 3,
+                "max_steps": 10,
+                "step_size": 100.0,
+            },
         )
         dry_ok, dry_reason = _dry_run_trainable(
             coordinate=coord,

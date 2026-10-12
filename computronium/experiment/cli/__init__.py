@@ -246,7 +246,9 @@ async def _run_inline(
                 params={},
             )
 
-        vary_params = vary if vary else ["hidden_dims", "param_budget", "settle_horizon"]
+        vary_params = (
+            vary if vary else ["hidden_dims", "param_budget", "settle_horizon"]
+        )
 
         spec = ScalingSpec(
             vary=vary_params,

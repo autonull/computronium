@@ -300,6 +300,7 @@ class ExperimentSpec(BaseModel):
         code_sha = "unknown"
         try:
             import subprocess
+
             result = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 capture_output=True,

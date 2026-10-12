@@ -30,7 +30,7 @@ from computronium.experiment.schema.harvest import (
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 
 if TYPE_CHECKING:
-    from computronium.experiment.execution.evaluate import TaskShape
+    from computronium.experiment.kernel.evaluate import TaskShape
     from computronium.experiment.schema.axis import AxisSpec
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
     from computronium.experiment.schema.run_spec import RunSpec
@@ -733,11 +733,11 @@ def _composable(
     The cache key includes hyperparameters that affect validity checks in
     SystemConfig.validate(): hidden_dim, num_layers, max_steps, beta, residual.
     """
-    from computronium.experiment.execution.compose import (
+    from computronium.experiment.kernel.compose import (
         compose_configs,
         geometry_param_count,
     )
-    from computronium.experiment.execution.evaluate import _task
+    from computronium.experiment.kernel.evaluate import _task
 
     # Create cache key from structural axes + task + param_budget + relevant hyperparameters
     # Hyperparameters that affect validity (checked in void constraints):
@@ -796,7 +796,7 @@ def _composable(
 
     # Dry-run gate: verify the cell can actually train (catches detached graphs,
     # FA contract failures, no-gradient-reached, etc.)
-    from computronium.experiment.execution.compose import _dry_run_trainable
+    from computronium.experiment.kernel.compose import _dry_run_trainable
 
     dry_ok, _dry_reason = _dry_run_trainable(
         coordinate=coordinate,
@@ -938,41 +938,38 @@ def iter_candidates(  # ruff: ignore[complex-structure]
 ) -> Iterator[tuple[Coordinate, Schedule]]:
     """Walk the harvested schema under the spec, yielding legal cells.
 
-        The active space is computed, never tabulated: each axis offers the
-        primitives the spec permits, the harvested availability predicates decide
-        which hyperparameters a selection can use, and the spec's own domains are
-        swept, as a Cartesian product over the axes rather than a diagonal.
+            The active space is computed, never tabulated: each axis offers the
+            primitives the spec permits, the harvested availability predicates decide
+            which hyperparameters a selection can use, and the spec's own domains are
+            swept, as a Cartesian product over the axes rather than a diagonal.
 
-        Supports paging via ``offset`` and ``page_size`` for unbounded traversal.
+            Supports paging via ``offset`` and ``page_size`` for unbounded traversal.
 
-        Args:
-            spec: The run declaration; names the task, fidelity, seed plan and the
-                hyperparameters to sweep.
-            search_space: The run's active space.
-            deadline: Optional hard deadline; if soft-expired, no cells are yielded.
-            cost_model: Optional cost model (not used in deadline system).
-            shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
-                cell whose configs cannot compose or validate for that shape is
-                skipped instead of proposed.
-            max_scan: Stop after this many candidates *examined*, not yielded. A
-                caller that prices or samples a factorial — where the illegal
-                candidates are the expensive majority — bounds the examination; a
-                caller that walks the space for what it can measure leaves it
-                ``None`` and takes the module's page size.
-            check_composable: If True (default), verify that configs compose and
-                validate via ``_composable``. If False, skip this check for faster
-    candidate generation (validation will happen at Gate/Compose stages).
-            offset: Number of candidates to skip before yielding (for paging).
-            page_size: Maximum candidates to examine per page (default 50k).
-            use_void_cache: Whether to use the persistent void cache (default True).
-                Disable for tests that need a clean search space.
+            Args:
+                spec: The run declaration; names the task, fidelity, seed plan and the
+                    hyperparameters to sweep.
+                search_space: The run's active space.
+                deadline: Optional hard deadline; if soft-expired, no cells are yielded.
+                cost_model: Optional cost model (not used in deadline system).
+                shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
+                    cell whose configs cannot compose or validate for that shape is
+                    skipped instead of proposed.
+                max_scan: Stop after this many candidates *examined*, not yielded. A
+                    caller that prices or samples a factorial — where the illegal
+                    candidates are the expensive majority — bounds the examination; a
+                    caller that walks the space for what it can measure leaves it
+                    ``None`` and takes the module's page size.
+                check_composable: If True (default), verify that configs compose and
+                    validate via ``_composable``. If False, skip this check for faster
+        candidate generation (validation will happen at Gate/Compose stages).
+                offset: Number of candidates to skip before yielding (for paging).
+                page_size: Maximum candidates to examine per page (default 50k).
+                use_void_cache: Whether to use the persistent void cache (default True).
+    Disable for tests that need a clean search space.
 
-        Yields:
-            ``(coordinate, schedule)`` pairs, in a deterministic order.
+            Yields:
+                ``(coordinate, schedule)`` pairs, in a deterministic order.
     """
-    from computronium.experiment.execution.search_space import (
-        get_void_cache,
-    )
     from computronium.experiment.legality.dsl import (
         CoordinateContext,
         Expr,

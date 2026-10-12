@@ -192,12 +192,22 @@ def _compute_summary_json(records: list[Record]) -> dict[str, Any]:
 
     # Group by coordinate (excluding seed) for seed statistics
     from collections import defaultdict
+
     coord_groups = defaultdict(list)
     for r in records:
         if r.status.gate_verdict.value == "PASS":
-            key = (r.substrate, r.geometry, r.dynamics, r.plasticity, r.credit, r.update)
+            key = (
+                r.substrate,
+                r.geometry,
+                r.dynamics,
+                r.plasticity,
+                r.credit,
+                r.update,
+            )
             # Use val_acc or validation_accuracy
-            acc_val = r.payload.get("val_acc") or r.payload.get("validation_accuracy", 0)
+            acc_val = r.payload.get("val_acc") or r.payload.get(
+                "validation_accuracy", 0
+            )
             coord_groups[key].append(acc_val)
 
     multi_seed_coords = sum(1 for v in coord_groups.values() if len(v) > 1)
@@ -243,9 +253,15 @@ def generate_json_report(
             "spec_version": run_info.spec_version if run_info else None,
             "status": run_info.status if run_info else "unknown",
             "budget_consumed_s": run_info.budget_consumed_s if run_info else None,
-            "started_at": run_info.started_at.isoformat() if run_info and run_info.started_at else None,
-            "finished_at": run_info.finished_at.isoformat() if run_info and run_info.finished_at else None,
-        } if run_info else None,
+            "started_at": run_info.started_at.isoformat()
+            if run_info and run_info.started_at
+            else None,
+            "finished_at": run_info.finished_at.isoformat()
+            if run_info and run_info.finished_at
+            else None,
+        }
+        if run_info
+        else None,
     }
 
     if config.include_summary:
@@ -269,7 +285,7 @@ def generate_json_report(
             elif "walltime_total" in r.payload:
                 walltime_metric = "walltime_total"
             break
-        
+
         report["pareto_frontiers"] = {
             f"{accuracy_metric}_vs_{walltime_metric}": _compute_pareto_frontier_json(
                 records, walltime_metric, accuracy_metric
@@ -318,10 +334,14 @@ def generate_json_report_from_db(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate JSON report from experiment database")
+    parser = argparse.ArgumentParser(
+        description="Generate JSON report from experiment database"
+    )
     parser.add_argument("--db", required=True, help="Path to experiment database")
     parser.add_argument("--run-id", help="Run ID (default: latest)")
-    parser.add_argument("--output", default="experiments/reports", help="Output directory")
+    parser.add_argument(
+        "--output", default="experiments/reports", help="Output directory"
+    )
     parser.add_argument("--compact", action="store_true", help="Compact JSON output")
 
     args = parser.parse_args()

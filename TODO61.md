@@ -278,4 +278,42 @@ uv run python -m pytest tests/property/ -q -k \
 
 ---
 
-**Status:** Phase A complete. Ready for Phase B (maturation experiment) and Phase C (targeted ablation). Execute in environment without 6-minute watchdog limit.
+## 11. Critical Architectural Fix (Priority #1 for Fresh Session)
+
+### 11.1 Hyperparameter Flow Broken in Search Space
+**Problem:** Coordinates produced by the search space have empty `params` dict even when valid hyperparameters exist for the primitive combination. The display code works (`[no hyperparams]` prints correctly), but `_cell_params` / `_swept` / availability predicate evaluation isn't populating hyperparameters.
+
+**Impact:** 
+- Cannot track which hyperparameters were used in each cell
+- Experiment records lack essential configuration data
+- Impossible to analyze hyperparameter effects post-hoc
+- Undermines the entire search/optimization pipeline
+
+**Root Cause Analysis Needed:**
+1. `_swept()` builds ladders per hyperparameter name - verify it's called with correct spec
+2. `_cell_params()` filters by `active.for_axis(axis, primitive)` - verify availability predicates match
+3. `harvest_schema().active(coord)` - verify axis/primitive mapping
+4. Hyperparameter `availability` expressions - check they evaluate correctly for the coordinate
+
+**Files to Investigate:**
+- `computronium/experiment/kernel/search_space.py` — `_cell_params()`, `_swept()`, `_walk()`
+- `computronium/experiment/schema/harvest.py` — `HarvestedSchema.active()`, `for_axis()`
+- `computronium/ontology/dynamics/_dynamics.py` — `hyperparameters()` availability predicates
+- `computronium/ontology/credit.py` — `CreditAssignmentConfig.hyperparameters()`
+- `computronium/ontology/geometry.py` — `GeometryConfig.hyperparameters()`
+- `computronium/ontology/update.py` — `ParameterUpdateConfig.hyperparameters()`
+
+**Fix Strategy:**
+1. Add debug logging to trace hyperparameter flow from spec → ladders → coord.params
+2. Fix availability predicate evaluation (likely expr_from_string parsing issue)
+3. Ensure `_cell_params` is called for every coordinate yielded by iter_candidates
+4. Add property lock test that fails when hyperparameters are missing for valid combos
+
+**Success Criteria:**
+- Every cell output shows `[beta=0.5, max_steps=30, ...]` or appropriate hyperparameters
+- `coord.params` populated in all records for L1/L2 runs
+- Property lock: `test_hyperparameter_flow_lock` passes
+
+---
+
+**Status:** Phase A complete. Phase A+ (hyperparameter flow refactor) is #1 priority. Then Phase B (maturation) and Phase C (ablation).

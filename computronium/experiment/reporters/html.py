@@ -638,7 +638,7 @@ def _render_html_template(
     title: str, summary: dict[str, Any], plots: dict[str, str]
 ) -> str:
     """Render the HTML report template."""
-    return f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">

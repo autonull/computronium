@@ -1,0 +1,54 @@
+# geometry-coverage: Exercise all 11 geometries across 3 tasks
+# Run: uv run python -m computronium.experiment.cli run --spec computronium/experiment/profiles/geometry-coverage.yaml --budget 1h --device cpu
+
+name: "geometry-coverage"
+version: 1
+type: "showcase"  # Full grid across axes
+
+tasks:
+  - "digits"
+  - "sequential_mnist"
+  - "copy_task"
+
+# Vary all 6 structural axes for full coverage
+vary:
+  - "geometry"
+  - "dynamics"
+  - "credit"
+  - "update"
+  - "plasticity"
+  - "substrate"
+
+# Fix nothing - sweep everything
+fix: {}
+
+# Search strategy
+search: "round_robin"  # Round-robin across tasks
+
+# Budget
+budget:
+  seconds: 3600  # 1 hour
+  max_cells: 200
+  param_budget: 10000
+
+# Gates to run
+gates:
+  - "dry_run"
+  - "property_locks"
+
+# Output
+reporters:
+  - "html"
+  - "json"
+output_dir: "experiments/output"
+
+# Runtime
+seeds: 1
+fidelity: "L1"
+epochs: 1
+batch_limit: 2
+device: "auto"
+precision: "fp32"
+num_workers: 0
+deterministic: false
+checkpoint_every_n: 0

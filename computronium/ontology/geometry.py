@@ -2203,7 +2203,9 @@ class GraphGeometry(nn.Module):
                 "GraphGeometry requires config.connectivity with 'edge_index' key"
             )
         edge_index = config.connectivity["edge_index"]
-        self.register_buffer("_edge_index", torch.tensor(edge_index, dtype=torch.long), persistent=False)
+        self.register_buffer(
+            "_edge_index", torch.tensor(edge_index, dtype=torch.long), persistent=False
+        )
 
         # Build layers
         c_in = config.input_dim
@@ -3056,7 +3058,9 @@ class SpatialLattice3DGeometry(nn.Module):
         d, h, w = self._lattice_dims
         num_sites = d * h * w
         first_hidden = (
-            self.config.hidden_dims[0] if self.config.hidden_dims else self.config.output_dim
+            self.config.hidden_dims[0]
+            if self.config.hidden_dims
+            else self.config.output_dim
         )
 
         layers: list[LayerLayout] = []
@@ -3631,11 +3635,18 @@ class NtmGeometry(nn.Module):
             if self._state_h.numel() == 0 or self._state_h.shape[1] != x.shape[0]:
                 self._state_h, self._state_c = self.init_state(x.shape[0])
                 self._mem = self.init_mem(x.shape[0])
-                self._read = torch.zeros(x.shape[0], self.config.mem_width, device=x.device, dtype=x.dtype)
+                self._read = torch.zeros(
+                    x.shape[0], self.config.mem_width, device=x.device, dtype=x.dtype
+                )
             prev_read = self._read if self._read.numel() > 0 else None
-            logits, self._read, self._mem, _a_w, _a_r, (self._state_h, self._state_c) = self.step(
-                x, (self._state_h, self._state_c), self._mem, prev_read
-            )
+            (
+                logits,
+                self._read,
+                self._mem,
+                _a_w,
+                _a_r,
+                (self._state_h, self._state_c),
+            ) = self.step(x, (self._state_h, self._state_c), self._mem, prev_read)
             return logits
         logits, _mem = self.episode(x)
         return logits

@@ -121,14 +121,26 @@ class ScalingRunner:
                     lo * (hi / lo) ** (i / (self.spec.n_points_per_dim - 1))
                     for i in range(self.spec.n_points_per_dim)
                 ]
-                if param in {"hidden_dims", "param_budget", "num_layers", "max_steps", "settle_horizon"}:
+                if param in {
+                    "hidden_dims",
+                    "param_budget",
+                    "num_layers",
+                    "max_steps",
+                    "settle_horizon",
+                }:
                     values = [int(round(v)) for v in values]
             else:
                 values = [
                     lo + (hi - lo) * i / (self.spec.n_points_per_dim - 1)
                     for i in range(self.spec.n_points_per_dim)
                 ]
-                if param in {"hidden_dims", "param_budget", "num_layers", "max_steps", "settle_horizon"}:
+                if param in {
+                    "hidden_dims",
+                    "param_budget",
+                    "num_layers",
+                    "max_steps",
+                    "settle_horizon",
+                }:
                     values = [int(round(v)) for v in values]
 
             new_grid = []
@@ -163,7 +175,9 @@ class ScalingRunner:
                     sorted(n for n, s in registry.items() if s.available)
                 )
                 axes.append(
-                    AxisSelection(axis=axis, primitives=primitives if primitives else None)
+                    AxisSelection(
+                        axis=axis, primitives=primitives if primitives else None
+                    )
                 )
 
         task = self.spec.task or "digits"
@@ -325,7 +339,9 @@ class ScalingRunner:
 
         # Print header
         param_names = result.vary_params
-        header = " | ".join(f"{p:>12}" for p in param_names) + " |  Mean      Std       N"
+        header = (
+            " | ".join(f"{p:>12}" for p in param_names) + " |  Mean      Std       N"
+        )
         print(header)
         print(f"{'-' * 80}")
 
@@ -395,7 +411,10 @@ if __name__ == "__main__":
         "--vary", action="append", default=[], help="Parameters to sweep"
     )
     parser.add_argument(
-        "--base-config", action="append", default=[], help="Base config axis=value pairs"
+        "--base-config",
+        action="append",
+        default=[],
+        help="Base config axis=value pairs",
     )
     parser.add_argument("--budget", type=float, default=3600, help="Budget in seconds")
     parser.add_argument("--seeds", type=int, default=5, help="Seeds per configuration")
@@ -403,13 +422,13 @@ if __name__ == "__main__":
         "--metric", default="validation_accuracy", help="Primary metric"
     )
     parser.add_argument("--task", help="Task name")
-    parser.add_argument("--log-scale", action="store_true", default=True, help="Log scale")
+    parser.add_argument(
+        "--log-scale", action="store_true", default=True, help="Log scale"
+    )
     parser.add_argument(
         "--linear-scale", action="store_false", dest="log_scale", help="Linear scale"
     )
-    parser.add_argument(
-        "--n-points", type=int, default=4, help="Points per dimension"
-    )
+    parser.add_argument("--n-points", type=int, default=4, help="Points per dimension")
 
     args = parser.parse_args()
 
@@ -419,7 +438,9 @@ if __name__ == "__main__":
             k, v = pair.split("=", 1)
             base_config_dict[k] = v
 
-    vary_params = args.vary if args.vary else ["hidden_dims", "param_budget", "settle_horizon"]
+    vary_params = (
+        args.vary if args.vary else ["hidden_dims", "param_budget", "settle_horizon"]
+    )
 
     asyncio.run(
         _run_scaling_cli(

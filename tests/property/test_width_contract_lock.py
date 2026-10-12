@@ -57,25 +57,61 @@ def _minimal_config_for_topology(topology_type: str) -> GeometryConfig | None:
     """Create a minimal valid config for a topology type."""
     match topology_type:
         case "feedforward":
-            return GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(16,))
+            return GeometryConfig.feedforward(
+                input_dim=10, output_dim=5, hidden_dims=(16,)
+            )
         case "causal_transformer":
-            return GeometryConfig.causal_transformer(vocab_size=32, d_model=64, n_layers=2, n_heads=4, seq_len=16)
+            return GeometryConfig.causal_transformer(
+                vocab_size=32, d_model=64, n_layers=2, n_heads=4, seq_len=16
+            )
         case "recurrent" | "recurrent_attractor":
-            return GeometryConfig.recurrent(input_dim=10, output_dim=5, hidden_dims=(16,))
+            return GeometryConfig.recurrent(
+                input_dim=10, output_dim=5, hidden_dims=(16,)
+            )
         case "tile" | "tile_mesh":
-            return GeometryConfig.tile_mesh(input_dim=10, output_dim=5, num_layers=3, neurons_per_tile=8, tiles_per_layer=2)
+            return GeometryConfig.tile_mesh(
+                input_dim=10,
+                output_dim=5,
+                num_layers=3,
+                neurons_per_tile=8,
+                tiles_per_layer=2,
+            )
         case "conv":
-            return GeometryConfig.conv(input_dim=784, output_dim=10, conv_channels=(8, 16), kernel_size=3, in_channels=1, input_hw=(28, 28), pool_hw=(4, 4))
+            return GeometryConfig.conv(
+                input_dim=784,
+                output_dim=10,
+                conv_channels=(8, 16),
+                kernel_size=3,
+                in_channels=1,
+                input_hw=(28, 28),
+                pool_hw=(4, 4),
+            )
         case "graph":
-            return GeometryConfig.graph(input_dim=16, output_dim=5, edge_index=[[0, 1], [1, 0]], hidden_dims=(32,))
+            return GeometryConfig.graph(
+                input_dim=16,
+                output_dim=5,
+                edge_index=[[0, 1], [1, 0]],
+                hidden_dims=(32,),
+            )
         case "attention":
-            return GeometryConfig.attention(input_dim=64, output_dim=10, hidden_dim=64, num_layers=2, num_heads=4)
+            return GeometryConfig.attention(
+                input_dim=64, output_dim=10, hidden_dim=64, num_layers=2, num_heads=4
+            )
         case "spatial_lattice":
-            return GeometryConfig.spatial_lattice(input_dim=64, output_dim=10, lattice_dims=(4, 4, 4), hidden_dims=(32, 32))
+            return GeometryConfig.spatial_lattice(
+                input_dim=64,
+                output_dim=10,
+                lattice_dims=(4, 4, 4),
+                hidden_dims=(32, 32),
+            )
         case "nca":
-            return GeometryConfig.nca(channels=8, hidden=16, grid_hw=(8, 8), output_dim=10)
+            return GeometryConfig.nca(
+                channels=8, hidden=16, grid_hw=(8, 8), output_dim=10
+            )
         case "ntm":
-            return GeometryConfig.ntm(input_dim=16, output_dim=10, hidden=32, mem_slots=16, mem_width=8)
+            return GeometryConfig.ntm(
+                input_dim=16, output_dim=10, hidden=32, mem_slots=16, mem_width=8
+            )
         case _:
             return None
 
@@ -104,12 +140,16 @@ def test_nca_activation_layout_cell_mode() -> None:
 
 def test_ntm_activation_layout_sample_mode() -> None:
     """NTM geometry must use sample-mode batch for all layers."""
-    config = GeometryConfig.ntm(input_dim=16, output_dim=10, hidden=32, mem_slots=16, mem_width=8)
+    config = GeometryConfig.ntm(
+        input_dim=16, output_dim=10, hidden=32, mem_slots=16, mem_width=8
+    )
     geom = geometry_from_config(config)
     layout = geom.activation_layout(batch_size=4)
 
     for layer in layout.layers:
-        assert layer.batch_mode == "sample", f"NTM layer {layer.name} must be sample-mode"
+        assert layer.batch_mode == "sample", (
+            f"NTM layer {layer.name} must be sample-mode"
+        )
 
     # No spatial dims for NTM
     assert layout.spatial_dims is None
@@ -117,12 +157,16 @@ def test_ntm_activation_layout_sample_mode() -> None:
 
 def test_tile_activation_layout_sample_mode() -> None:
     """Tile geometry must use sample-mode batch for all layers."""
-    config = GeometryConfig.tile_mesh(input_dim=10, output_dim=5, num_layers=3, neurons_per_tile=8, tiles_per_layer=2)
+    config = GeometryConfig.tile_mesh(
+        input_dim=10, output_dim=5, num_layers=3, neurons_per_tile=8, tiles_per_layer=2
+    )
     geom = geometry_from_config(config)
     layout = geom.activation_layout(batch_size=4)
 
     for layer in layout.layers:
-        assert layer.batch_mode == "sample", f"Tile layer {layer.name} must be sample-mode"
+        assert layer.batch_mode == "sample", (
+            f"Tile layer {layer.name} must be sample-mode"
+        )
 
 
 def test_void_constraint_nca_ntm_fast_weights() -> None:
@@ -180,13 +224,17 @@ def test_void_constraint_tile_fast_weights() -> None:
         params={},
     )
     result = _composable(coord, "digits", task_shape, 50000)
-    assert result is False, "Tile_mesh + fast_weights must be rejected by void constraint"
+    assert result is False, (
+        "Tile_mesh + fast_weights must be rejected by void constraint"
+    )
 
 
 def test_fast_weights_modulate_with_layout() -> None:
     """FastWeightPlasticity.modulate must use layout for feature matching and batch tiling."""
     # Create a geometry with sample-mode layers
-    config = GeometryConfig.feedforward(input_dim=64, output_dim=10, hidden_dims=(32, 32))
+    config = GeometryConfig.feedforward(
+        input_dim=64, output_dim=10, hidden_dims=(32, 32)
+    )
     geom = geometry_from_config(config)
     layout = geom.activation_layout(batch_size=4)
 
@@ -210,7 +258,9 @@ def test_fast_weights_modulate_with_layout() -> None:
     assert isinstance(modulated, list)
     assert len(modulated) == len(activations)
     for i, (orig, mod) in enumerate(zip(activations, modulated)):
-        assert orig.shape == mod.shape, f"Layer {i}: shape mismatch {orig.shape} vs {mod.shape}"
+        assert orig.shape == mod.shape, (
+            f"Layer {i}: shape mismatch {orig.shape} vs {mod.shape}"
+        )
 
 
 def test_fast_weights_modulate_cell_mode_tiling() -> None:
@@ -241,19 +291,28 @@ def test_fast_weights_modulate_cell_mode_tiling() -> None:
     assert isinstance(modulated, list)
     assert len(modulated) == len(activations)
     for i, (orig, mod) in enumerate(zip(activations, modulated)):
-        assert orig.shape == mod.shape, f"Layer {i}: shape mismatch {orig.shape} vs {mod.shape}"
+        assert orig.shape == mod.shape, (
+            f"Layer {i}: shape mismatch {orig.shape} vs {mod.shape}"
+        )
 
 
 def test_fast_weights_modulate_feature_truncate_pad() -> None:
     """FastWeightPlasticity.modulate must truncate/pad fast_weights to match feature dim."""
-    config = GeometryConfig.feedforward(input_dim=64, output_dim=10, hidden_dims=(32, 32))
+    config = GeometryConfig.feedforward(
+        input_dim=64, output_dim=10, hidden_dims=(32, 32)
+    )
     geom = geometry_from_config(config)
     layout = geom.activation_layout(batch_size=4)
 
     # Fast weight dim smaller than feature dim -> pad
     fw = FastWeightPlasticity(fast_weight_dim=16, decay=0.9, learning_rate=0.1)
     psi = fw.initial_psi(None, batch_size=4)
-    activations = [torch.randn(4, 64), torch.randn(4, 32), torch.randn(4, 32), torch.randn(4, 10)]
+    activations = [
+        torch.randn(4, 64),
+        torch.randn(4, 32),
+        torch.randn(4, 32),
+        torch.randn(4, 10),
+    ]
     modulated = fw.modulate(activations, psi, layout=layout)
     assert all(m.shape == a.shape for m, a in zip(modulated, activations))
 
@@ -294,7 +353,10 @@ def test_void_constraint_removal_regression_nca_ntm() -> None:
         # Patch validation
         SystemConfig._validate_nca_ntm_fast_weight_plasticity = no_op_validate
 
-        from computronium.experiment.execution import search_space as search_space_module
+        from computronium.experiment.execution import (
+            search_space as search_space_module,
+        )
+
         search_space_module._composable_cache.clear()
         search_space_module._filter_axes_cache.clear()
 
@@ -319,7 +381,10 @@ def test_void_constraint_removal_regression_nca_ntm() -> None:
         SystemConfig._validate_nca_ntm_fast_weight_plasticity = original_validate
         if original_constraint is not None:
             CONSTRAINTS_REGISTRY.register(original_constraint)
-        from computronium.experiment.execution import search_space as search_space_module
+        from computronium.experiment.execution import (
+            search_space as search_space_module,
+        )
+
         search_space_module._composable_cache.clear()
         search_space_module._filter_axes_cache.clear()
 
@@ -354,7 +419,10 @@ def test_void_constraint_removal_regression_tile() -> None:
         # Patch validation
         SystemConfig._validate_tile_fast_weight_plasticity = no_op_validate
 
-        from computronium.experiment.execution import search_space as search_space_module
+        from computronium.experiment.execution import (
+            search_space as search_space_module,
+        )
+
         search_space_module._composable_cache.clear()
         search_space_module._filter_axes_cache.clear()
 
@@ -378,7 +446,10 @@ def test_void_constraint_removal_regression_tile() -> None:
         SystemConfig._validate_tile_fast_weight_plasticity = original_validate
         if original_constraint is not None:
             CONSTRAINTS_REGISTRY.register(original_constraint)
-        from computronium.experiment.execution import search_space as search_space_module
+        from computronium.experiment.execution import (
+            search_space as search_space_module,
+        )
+
         search_space_module._composable_cache.clear()
         search_space_module._filter_axes_cache.clear()
 

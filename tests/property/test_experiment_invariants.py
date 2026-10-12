@@ -123,25 +123,36 @@ class TestExperimentInvariants:
                 param_count = record.payload.get("param_count", 0)
                 param_budget = record.schedule.param_budget
                 if param_budget > 0:
-                    from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
-                    assert param_count <= param_budget * (1 + PARAM_BUDGET_TOLERANCE), \
+                    from computronium.experiment.schema.registries import (
+                        PARAM_BUDGET_TOLERANCE,
+                    )
+
+                    assert param_count <= param_budget * (1 + PARAM_BUDGET_TOLERANCE), (
                         f"Cell {record.cell_key} exceeds param budget: {param_count} > {param_budget}"
+                    )
 
     def test_no_critical_failures_in_measured_cells(self):
         """No measured cells should have critical failures."""
         critical_measured = [
-            r for r in self.records
+            r
+            for r in self.records
             if r.status.gate_verdict.value == "PASS"
             and r.status.severity.value == "critical"
         ]
-        assert len(critical_measured) == 0, \
+        assert len(critical_measured) == 0, (
             f"Critical failures in measured cells: {[r.cell_key for r in critical_measured]}"
+        )
 
     def test_coverage_targets_met(self):
         """At least one measured cell per geometry/update/credit axis."""
-        for axis in [StructuralAxis.GEOMETRY, StructuralAxis.UPDATE, StructuralAxis.CREDIT]:
+        for axis in [
+            StructuralAxis.GEOMETRY,
+            StructuralAxis.UPDATE,
+            StructuralAxis.CREDIT,
+        ]:
             measured = {
-                getattr(r, axis.value) for r in self.records
+                getattr(r, axis.value)
+                for r in self.records
                 if r.status.gate_verdict.value == "PASS"
             }
             available = set(AXES_REGISTRIES[axis].keys())
@@ -156,12 +167,17 @@ class TestExperimentInvariants:
     def test_measured_cells_have_valid_metrics(self):
         """All measured cells should have valid (non-NaN, non-inf) metrics."""
         import math
+
         for record in self.records:
             if record.status.gate_verdict.value == "PASS":
                 for key, val in record.payload.items():
                     if isinstance(val, float):
-                        assert not math.isnan(val), f"NaN metric {key} in {record.cell_key}"
-                        assert not math.isinf(val), f"Inf metric {key} in {record.cell_key}"
+                        assert not math.isnan(val), (
+                            f"NaN metric {key} in {record.cell_key}"
+                        )
+                        assert not math.isinf(val), (
+                            f"Inf metric {key} in {record.cell_key}"
+                        )
 
     def test_seed_consistency(self):
         """Cells with same coordinate but different seeds should have similar metrics."""
@@ -190,21 +206,25 @@ class TestExperimentInvariants:
                 # Std should be reasonable (not more than 50% of mean for classification)
                 if mean_acc > 0:
                     cv = std_acc / mean_acc  # Coefficient of variation
-                    assert cv < 0.5, \
+                    assert cv < 0.5, (
                         f"High seed variance for {coord}: mean={mean_acc:.4f}, std={std_acc:.4f}, CV={cv:.2f}"
+                    )
 
     def test_monotonic_improvement_over_time(self):
         """For cells with convergence curves, metrics should generally improve."""
         for record in self.records:
             if record.status.gate_verdict.value == "PASS":
-                trajectory = record.payload.get("trajectory") or record.payload.get("convergence_curve")
+                trajectory = record.payload.get("trajectory") or record.payload.get(
+                    "convergence_curve"
+                )
                 if trajectory and isinstance(trajectory, list) and len(trajectory) > 1:
                     # Check that final value is not significantly worse than peak
                     peak = max(trajectory)
                     final = trajectory[-1]
                     # Allow 10% drop from peak (some noise expected)
-                    assert final >= peak * 0.9, \
+                    assert final >= peak * 0.9, (
                         f"Significant drop in convergence for {record.cell_key}: peak={peak:.4f}, final={final:.4f}"
+                    )
 
     def test_pareto_frontier_monotonic(self):
         """Pareto frontier should be monotonic (no dominated points on frontier)."""

@@ -21,23 +21,23 @@ import torch
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
+from computronium.experiment.execution.stream import CellStream
 from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import (
     declared_cell_count,
     search_space_from_spec,
 )
-from computronium.experiment.execution.stream import CellStream
+from computronium.experiment.reporters import (
+    JSONReportConfig,
+    ReportConfig,
+    generate_html_report,
+    generate_json_report,
+)
 from computronium.experiment.schema import RunSpec
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import AxisSelection
 from computronium.experiment.surface.cli import RUN_PROFILES
 from computronium.experiment.surface.report import ReportGenerator
-from computronium.experiment.reporters import (
-    generate_html_report,
-    generate_json_report,
-    JSONReportConfig,
-    ReportConfig,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,13 +45,14 @@ class Config:
     hours: float
     device: str
     store: str
-    policy: str = "round_robin_grid"
+    policy: str = "model_based"
     profile: str = "production-map"
     seed: int = 42
     epochs: int | None = None
     n_seeds: int | None = None
     param_budget: int | None = None
     axes: dict[str, list[str]] | None = None
+    verbose: bool = False
 
 
 _shutdown_requested = [False]
@@ -134,13 +135,14 @@ def _print_experiment(spec: RunSpec, space) -> None:
     print("=" * 70, flush=True)
 
 
-async def _run_loop(
+async def _run_loop(  # ruff: ignore[complex-structure, too-many-locals]
     spec: RunSpec,
     store: RecordStore,
     run_id: str,
     deadline: Deadline,
     backend,
     device: str,
+    verbose: bool = False,
 ) -> int:
     """Run cells until deadline. Return records stored."""
     tasks = spec.task_names
@@ -188,10 +190,18 @@ async def _run_loop(
             if key in completed:
                 continue
 
+            # Include hyperparameters in output
+            params_str = ""
+            if coord.params:
+                param_items = [f"{k}={v}" for k, v in sorted(coord.params.items())]
+                params_str = f" [{', '.join(param_items)}]"
+            else:
+                params_str = " [no hyperparams]"
+            
             print(
                 f"  Cell {count + 1}: substrate={coord.substrate} geometry={coord.geometry} "
                 f"dynamics={coord.dynamics} credit={coord.credit} update={coord.update} "
-                f"plasticity={coord.plasticity} (seed={sched.seed})",
+                f"plasticity={coord.plasticity} (seed={sched.seed}){params_str}",
                 flush=True,
             )
 
@@ -206,12 +216,28 @@ async def _run_loop(
                 links={"run_id": run_id},
             )
             params = {}
-            try:
+            try:  # ruff: ignore[PLW0717]
                 records = await backend.submit(coord, sched, prov, params, store)
                 for r in records:
                     store.append(r)
                     completed.add(r.measurement_key)
                     cell_stream.add_rejected_key(r.measurement_key)
+                    # Print results for this cell
+                    m = r.payload
+                    acc = m.get("val_acc", 0.0)
+                    loss = m.get("val_loss", 0.0)
+                    time_s = m.get("walltime_s", 0.0)
+                    params = m.get("param_count", 0)
+                    spectral = m.get("spectral_radius", 0.0)
+                    lyap = m.get("lyapunov_exponent", 0.0)
+                    verdict = r.status.gate_verdict.value
+                    if verbose:
+                        print(
+                            f"    → {verdict} | val_acc={acc:.4f} val_loss={loss:.4f} "
+                            f"walltime={time_s:.2f}s params={params} "
+                            f"ρ={spectral:.4f} λ={lyap:.4f}",
+                            flush=True,
+                        )
                 count += 1
             except Exception as e:
                 print(f"  Cell {count + 1} FAILED: {e}", flush=True)
@@ -241,6 +267,7 @@ def _build_config(args: argparse.Namespace, axes: dict[str, list[str]]) -> Confi
         n_seeds=args.n_seeds,
         param_budget=args.param_budget,
         axes=axes or None,
+        verbose=args.verbose,
     )
 
 
@@ -271,7 +298,7 @@ def _run_experiment(
         start = time.time()
         interrupted = False
         try:
-            n = asyncio.run(_run_loop(spec, store, run_id, deadline, backend, device))
+            n = asyncio.run(_run_loop(spec, store, run_id, deadline, backend, device, config.verbose))
         except Exception as e:
             print(f"Experiment crashed: {e}", flush=True)
             traceback.print_exc()
@@ -332,7 +359,8 @@ def main() -> int:
     parser.add_argument("--hours", type=float, required=True)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--store", default="results/experiment.db")
-    parser.add_argument("--policy", default="round_robin_grid")
+    parser.add_argument("--policy", default="model_based")
+    parser.add_argument("--verbose", action="store_true", help="Show detailed per-cell results")
     parser.add_argument("--profile", default="production-map")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=None)
