@@ -53,6 +53,8 @@ class Config:
     param_budget: int | None = None
     axes: dict[str, list[str]] | None = None
     verbose: bool = False
+    fidelity: str | None = None
+    batch_limit: int | None = None
 
 
 _shutdown_requested = [False]
@@ -99,10 +101,10 @@ def _build_spec(config: Config, device: str) -> RunSpec:
         task=profile.task,
         objectives=profile.objectives,
         stages=tuple(profile.stages),
-        fidelity=profile.fidelity,
+        fidelity=config.fidelity or profile.fidelity,
         n_seeds=config.n_seeds or profile.n_seeds,
         epochs=config.epochs or profile.epochs,
-        batch_limit=profile.batch_limit,
+        batch_limit=config.batch_limit if config.batch_limit is not None else profile.batch_limit,
         budget_seconds=config.hours * 3600.0,
         param_budget=config.param_budget or profile.param_budget,
         policy=config.policy,
@@ -289,6 +291,8 @@ def _build_config(args: argparse.Namespace, axes: dict[str, list[str]]) -> Confi
         param_budget=args.param_budget,
         axes=axes or None,
         verbose=args.verbose,
+        fidelity=args.fidelity,
+        batch_limit=args.batch_limit,
     )
 
 
@@ -387,6 +391,8 @@ def main() -> int:
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--n-seeds", type=int, default=None)
     parser.add_argument("--param-budget", type=int, default=None)
+    parser.add_argument("--fidelity", choices=["L0", "L1", "L2"], default=None)
+    parser.add_argument("--batch-limit", type=int, default=None)
     parser.add_argument("--substrates", type=str)
     parser.add_argument("--geometries", type=str)
     parser.add_argument("--dynamics", type=str)
