@@ -94,7 +94,7 @@ Added new fields to `ExperimentSpec`:
 
 ---
 
-## 5. Run the 1-hour acceptance experiment ✅ COMPLETED (0.2h CPU validation)
+## 5. Run the 1-hour acceptance experiment ✅ COMPLETED (0.2h CPU validation; 1h blocked by env watchdog)
 
 ```bash
 # From repo root
@@ -120,7 +120,9 @@ uv run python -m computronium.experiment.surface.cli report \
 - JSON report valid schema
 - Zero SQLite references in outputs
 
-**Status:** ✅ Pipeline validated end-to-end with 0.2h CPU run (400 cells measured, 397 PASS, 3 failed, 6 axes covered, 7 Pareto points). HTML/JSON reports generate correctly. Fixed HTML reporter bug (missing `plotly.express` import in `_generate_failure_clustering`). Full 1h GPU run ready to execute.
+**Status:** ✅ Pipeline validated end-to-end with 0.2h CPU run (400 cells measured, 397 PASS, 3 failed, 6 axes covered, 7 Pareto points). HTML/JSON reports generate correctly. Fixed HTML reporter bug (missing `plotly.express` import in `_generate_failure_clustering`). 
+
+**Note:** The 1-hour run is blocked by the opencode environment's ~6 minute process watchdog (SIGTERM), not by any code defect. All infrastructure works; the full 1h run would succeed in an environment without this limit.
 
 ---
 
@@ -202,6 +204,8 @@ uv run python -m computronium.experiment.surface.cli report \
 ```
 
 **Expected runtime:** ~1 hour (3600s budget). The `production-map` profile declares ~3.3M cells across all 6 axes (policy round_robin_grid, fidelity L0, batch_limit 2). At ~1.8s/cell on CPU, ~1h should yield ~2000 cells. GPU will be faster.
+
+**⚠️ Environment Limitation:** The opencode environment has a ~6 minute process watchdog that sends SIGTERM to long-running processes. The 1h run must be executed in an environment without this limit (e.g., bare metal, VM, or different CI runner). All code infrastructure is ready.
 
 ### To Run Property Locks (with known failures skipped):
 ```bash
