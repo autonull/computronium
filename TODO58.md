@@ -1,6 +1,6 @@
 # TODO58 — Experiment System Hardening & Generalization
 
-**Status: IN PROGRESS — Session 1 complete**
+**Status: IN PROGRESS — Session 2 complete**
 
 **Carries forward from TODO57:**
 - 1h gate run `exp_todo57_1h_v3` complete: 2070 cells, failure rate <1%, 6/6 axes covered
@@ -82,30 +82,33 @@ reporters: [html, json, sqlite]
 
 ---
 
-## C. Experiment Types Beyond Showcase (P1 — Scientific Utility)
+## C. Experiment Types Beyond Showcase (P1 — Scientific Utility) ✅ **SESSION 2 COMPLETE**
 
-### C1. Ablation Runner
+### C1. Ablation Runner ✅ **DONE**
+**File:** `computronium/experiment/runners/ablation.py`
 **Purpose:** Compare single axis while holding others fixed.
-```python
+```bash
 # Usage: uv run python -m computronium.experiment.runners.ablation \
 #   --vary update --fix geometry=feedforward dynamics=instantaneous \
 #   --budget 1h --seeds 5
 ```
 **Config:**
 ```python
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AblationSpec:
     vary: StructuralAxis
     fix: dict[StructuralAxis, str]
     n_seeds: int = 5
     budget_seconds: float = 3600
     metric: str = "validation_accuracy"
+    task: str | None = None
 ```
+**Verified:** Runs ablation on `update` axis with 3 seeds, produces statistical summary (mean ± std) across update primitives.
 
 ### C2. Scaling Runner
 **Purpose:** Sweep depth, width, param_budget, settle_horizon.
 ```python
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScalingSpec:
     vary: list[str]  # e.g., ["hidden_dims", "param_budget", "settle_horizon"]
     log_scale: bool = True
@@ -113,26 +116,40 @@ class ScalingSpec:
     base_config: Coordinate
 ```
 
-### C3. Comparison Runner (A/B Testing)
+### C3. Comparison Runner (A/B Testing) ✅ **DONE**
+**File:** `computronium/experiment/runners/comparison.py`
 **Purpose:** Statistical comparison of two configurations.
+```bash
+# Usage: uv run python -m computronium.experiment.runners.comparison \
+#   --arm-a geometry=feedforward,dynamics=instantaneous,credit=gradient,update=euclidean \
+#   --arm-b geometry=feedforward,dynamics=instantaneous,credit=gradient,update=adam \
+#   --seeds 1 --budget 60
+```
+**Config:**
 ```python
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ComparisonSpec:
-    arm_a: Coordinate
-    arm_b: Coordinate
+    arm_a: dict[StructuralAxis, str]
+    arm_b: dict[StructuralAxis, str]
     n_seeds: int = 10
+    budget_seconds: float = 3600
     metric: str = "validation_accuracy"
     test: str = "mann_whitney_u"  # or t_test, bootstrap
+    task: str | None = None
 ```
+**Verified:** Runs A/B comparison with Mann-Whitney U test, reports p-value and significance.
 
-### C4. Replay/Regression Runner
+### C4. Replay/Regression Runner ✅ **DONE**
+**File:** `computronium/experiment/runners/replay.py`
 **Purpose:** Re-run known-good cells from previous experiment DB.
 ```python
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ReplaySpec:
-    source_db: str  # path to experiment.db
-    check_metrics: list[str] = ["validation_accuracy", "walltime_total"]
-    tolerance: float = 0.02  # 2% regression threshold
+    source_db: str
+    check_metrics: list[str] = field(default_factory=lambda: ["validation_accuracy", "walltime_total"])
+    tolerance: float = 0.02
+    budget_seconds: float = 3600
+    task: str | None = None
 ```
 
 ---
@@ -238,56 +255,44 @@ def test_coverage_targets_met(experiment_db):
 
 ---
 
-## G. Declarative Experiment Specification (P3 — Composability)
+## G. Declarative Experiment Specification (P3 — Composability) ✅ **SESSION 2 COMPLETE**
 
-### G1. Unified ExperimentSpec
+### G1. Unified ExperimentSpec ✅ **DONE**
 **File:** `computronium/experiment/schema/experiment_spec.py`
-```python
-from dataclasses import dataclass
-from computronium.experiment.schema.coordinate import StructuralAxis
-
-@dataclass(frozen=True)
-class ExperimentSpec:
-    name: str
-    # Profile OR inline definition
-    profile: str | None = None
-    tasks: list[str] = field(default_factory=lambda: ["digits"])
-    
-    # Axes control
-    vary: list[StructuralAxis] = field(default_factory=list)
-    fix: dict[StructuralAxis, str] = field(default_factory=dict)
-    
-    # Search strategy
-    search: SearchStrategy = SearchStrategy.GRID
-    search_params: dict = field(default_factory=dict)
-    
-    # Budget
-    budget: Budget = field(default_factory=Budget.default)
-    
-    # Gates (must pass before/during/after)
-    gates: list[Gate] = field(default_factory=lambda: [
-        Gate.DRY_RUN, Gate.PROPERTY_LOCKS
-    ])
-    
-    # Output
-    reporters: list[Reporter] = field(default_factory=lambda: [
-        Reporter.HTML, Reporter.JSON, Reporter.SQLITE
-    ])
-    
-    # Seeds
-    seeds: int | list[int] = 1
+Declarative YAML/JSON spec for all experiment types:
+```yaml
+name: "ablation_update"
+type: "ablation"
+tasks: ["digits"]
+ablation:
+  vary: "update"
+  fix:
+    geometry: "feedforward"
+    dynamics: "instantaneous"
+    credit: "gradient"
+    substrate: "digital"
+    plasticity: "null"
+  n_seeds: 3
+  metric: "validation_accuracy"
+budget:
+  seconds: 600
+gates: ["dry_run", "property_locks"]
+reporters: ["json", "sqlite"]
 ```
 
-### G2. CLI Unification
+### G2. CLI Unification ✅ **DONE**
+**File:** `computronium/experiment/cli/__init__.py`, `computronium/experiment/cli/__main__.py`
+Single entry point for all experiment types:
 ```bash
-# Single entry point for all experiment types
+# From spec file
 uv run python -m computronium.experiment.cli run \
   --spec experiment_specs/ablation_update.yaml \
   --device auto
 
 # Or inline
 uv run python -m computronium.experiment.cli run \
-  --type ablation --vary update --fix geometry=feedforward \
+  --type ablation --vary update \
+  --fix geometry=feedforward --fix dynamics=instantaneous \
   --budget 1h --seeds 5
 ```
 
@@ -377,10 +382,10 @@ CREATE INDEX idx_cells_coordinate ON cells(run_id, coordinate_json);
 - [x] B2: Add 3 new tasks (sequential_mnist, copy_task, graph_classification)
 
 ### Week 2: Experiment Types
-- [ ] C1: Implement `AblationRunner`
-- [ ] C2: Implement `ComparisonRunner` (A/B)
-- [ ] C3: Implement `ReplayRunner` (regression)
-- [ ] G1: Create `ExperimentSpec` schema + CLI
+- [x] C1: Implement `AblationRunner`
+- [x] C2: Implement `ComparisonRunner` (A/B)
+- [x] C3: Implement `ReplayRunner` (regression)
+- [x] G1: Create `ExperimentSpec` schema + CLI
 
 ### Week 3: Intelligence & Reporting
 - [ ] D1: Bayesian search strategy (or at least void caching)
@@ -441,15 +446,15 @@ CREATE INDEX idx_cells_coordinate ON cells(run_id, coordinate_json);
 
 ---
 
-## L2. Next Session Scope (Session 2)
+## L2. Next Session Scope (Session 2) ✅ **COMPLETE**
 
 **Session 2 goals:**
-1. Implement `AblationRunner` (C1) — 2h
-2. Implement `ComparisonRunner` (C3) — 1.5h
-3. Create `ExperimentSpec` schema + CLI (G1) — 2h
-4. Run ablation experiment to validate — 30 min
+1. ✅ Implement `AblationRunner` (C1) — 2h
+2. ✅ Implement `ComparisonRunner` (C3) — 1.5h
+3. ✅ Create `ExperimentSpec` schema + CLI (G1) — 2h
+4. ✅ Run ablation experiment to validate — 30 min
 
-**Total: ~6h**
+**Total: ~6h** — completed in one focused session.
 
 ---
 
@@ -494,9 +499,9 @@ CREATE INDEX idx_cells_coordinate ON cells(run_id, coordinate_json);
 | Task registry | `domains/registry.py:SUPPORTED_TASKS` ✅, `domains/factory.py` ✅ (3 new DomainTask subclasses) |
 | Search space | `search_space.py:SearchStrategy`, `iter_candidates` |
 | Reporters | `reporters/html.py`, `reporters/json.py`, `reporters/sqlite.py` |
-| Runners | `runners/ablation.py`, `runners/comparison.py`, `runners/replay.py` (new) |
-| Schema | `schema/experiment_spec.py` (new), `schema/coordinate.py` |
-| CLI | `cli.py` |
+| Runners | `runners/ablation.py` ✅, `runners/comparison.py` ✅, `runners/replay.py` ✅ |
+| Schema | `schema/experiment_spec.py` ✅, `schema/coordinate.py` |
+| CLI | `cli.py` ✅ |
 | Property tests | `tests/property/test_experiment_invariants.py` (new) |
 | Database | `kernel/database.py` (new) |
 | Profiles | `profiles/geometry-coverage.yaml` ✅ (new) |
@@ -504,4 +509,8 @@ CREATE INDEX idx_cells_coordinate ON cells(run_id, coordinate_json);
 
 ---
 
-**Next session starts here.** Priority order: C1 → C3 → G1 → C2 → D2.
+## N. Session 2 Summary
+
+**Completed:** All Session 2 goals achieved. Ablation, Comparison, and Replay runners implemented with full store integration. ExperimentSpec schema and unified CLI operational. Validation runs successful.
+
+**Next:** Session 3 starts with ScalingRunner (C2), void caching (D2), and experiment-aware property tests (F1).

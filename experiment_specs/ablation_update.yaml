@@ -1,0 +1,34 @@
+name: "ablation_update"
+version: 1
+profile: "ablation_update"
+tasks: ["digits"]
+
+type: "ablation"
+
+ablation:
+  vary: "update"
+  fix:
+    geometry: "feedforward"
+    dynamics: "instantaneous"
+    credit: "gradient"
+    substrate: "digital"
+    plasticity: "null"
+  n_seeds: 3
+  metric: "validation_accuracy"
+
+budget:
+  seconds: 600  # 10 minutes for quick test
+  param_budget: 10000
+
+gates: ["dry_run", "property_locks"]
+reporters: ["json", "sqlite"]
+
+seeds: 3
+fidelity: "L1"
+epochs: 1
+batch_limit: 2
+device: "auto"
+precision: "fp32"
+num_workers: 0
+deterministic: false
+checkpoint_every_n: 0
