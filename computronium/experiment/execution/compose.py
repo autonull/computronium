@@ -888,6 +888,22 @@ def _axis_factory(config_cls: Any, primitive: str) -> Any:
     return factory
 
 
+def _extract_graph_edge_index(task: Any) -> list[list[int]] | None:
+    """Extract edge_index from a graph task if available."""
+    # GraphTask (node classification) has _data.edge_index
+    if hasattr(task, "_data") and hasattr(task._data, "edge_index"):
+        return task._data.edge_index.tolist()
+    # GraphClassificationTask uses TUDataset - use first graph's edge_index as representative
+    if hasattr(task, "_train_loader") and task._train_loader is not None:
+        try:
+            batch = next(iter(task._train_loader))
+            if hasattr(batch, "edge_index"):
+                return batch.edge_index.tolist()
+        except StopIteration, AttributeError:
+            pass
+    return None
+
+
 def compose_configs(  # ruff: ignore[too-many-locals]
     *,
     coordinate: Coordinate,
@@ -895,6 +911,7 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     input_shape: tuple[int, ...],
     output_dim: int,
     param_budget: int = 0,
+    task: Any | None = None,
 ) -> Any:
     """Compose and validate the configs of one cell, building no ``System``.
 
@@ -911,6 +928,8 @@ def compose_configs(  # ruff: ignore[too-many-locals]
         input_shape: The task's own input shape, channels first.
         output_dim: Class count, derived from the task.
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
+        task: Optional task instance for extracting task-specific geometry data
+            (e.g., edge_index for graph tasks).
 
     Returns:
         The validated ``SystemConfig`` for the cell.
@@ -932,8 +951,21 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     substrate_name = coordinate.substrate
     dynamics_name = coordinate.dynamics
 
+    # Auto-extract graph edge_index from task if not provided in geometry
+    geometry_dict = dict(geometry)
+    if (
+        coordinate.geometry == "graph"
+        and "edge_index" not in geometry_dict
+        and task is not None
+    ):
+        edge_index = _extract_graph_edge_index(task)
+        if edge_index is not None:
+            geometry_dict["edge_index"] = edge_index
+
     gcfg = _fit_geometry(
-        _geometry_mapping(active, geometry, coordinate.geometry, coordinate.params),
+        _geometry_mapping(
+            active, geometry_dict, coordinate.geometry, coordinate.params
+        ),
         topology=coordinate.geometry,
         input_shape=input_shape,
         output_dim=output_dim,
@@ -984,6 +1016,7 @@ def compose_cell_system(
     input_shape: tuple[int, ...],
     output_dim: int,
     param_budget: int = 0,
+    task: Any | None = None,
 ) -> ComposedCell:
     """Compose a full grid cell and build its ``System``.
 
@@ -993,6 +1026,8 @@ def compose_cell_system(
         input_shape: The task's own input shape, channels first.
         output_dim: Class count, derived from the task.
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
+        task: Optional task instance for extracting task-specific geometry data
+            (e.g., edge_index for graph tasks).
 
     Returns:
         ComposedCell carrying the system, its validated declaration, and the
@@ -1004,6 +1039,7 @@ def compose_cell_system(
         input_shape=input_shape,
         output_dim=output_dim,
         param_budget=param_budget,
+        task=task,
     )
     active = harvest_schema().active(coordinate)
     # Use joint system (6-D) when plasticity is not null, otherwise 5-D system

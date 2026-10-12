@@ -92,9 +92,9 @@ class VoidCache:
         path = Path(self._db_path)
         if path.exists():
             try:
-                data = json.loads(path.read_text())
+                data = json.loads(path.read_text(encoding="utf-8"))
                 self._void_combos = {tuple(k) for k in data.get("void_combos", [])}
-            except (json.JSONDecodeError, KeyError, TypeError):
+            except json.JSONDecodeError, KeyError, TypeError:
                 self._void_combos = set()
 
     def _save(self) -> None:
@@ -107,7 +107,7 @@ class VoidCache:
         path = Path(self._db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {"void_combos": [list(k) for k in self._void_combos]}
-        path.write_text(json.dumps(data))
+        path.write_text(json.dumps(data), encoding="utf-8")
 
     def is_known_void(self, coord: Coordinate) -> bool:
         """Check if a coordinate is a known void combination."""
@@ -737,6 +737,7 @@ def _composable(
         compose_configs,
         geometry_param_count,
     )
+    from computronium.experiment.execution.evaluate import _task
 
     # Create cache key from structural axes + task + param_budget + relevant hyperparameters
     # Hyperparameters that affect validity (checked in void constraints):
@@ -766,6 +767,8 @@ def _composable(
         return _composable_cache[cache_key]
 
     task_shape = shape(task)
+    # Get task instance for graph edge_index extraction (cached)
+    task_instance = _task(task, "cpu")
     try:
         config = compose_configs(
             coordinate=coordinate,
@@ -773,6 +776,7 @@ def _composable(
             input_shape=task_shape.input_shape,
             output_dim=task_shape.output_dim,
             param_budget=param_budget,
+            task=task_instance,
         )
     except ValueError, TypeError, KeyError:
         _composable_cache[cache_key] = False
@@ -934,38 +938,41 @@ def iter_candidates(  # ruff: ignore[complex-structure]
 ) -> Iterator[tuple[Coordinate, Schedule]]:
     """Walk the harvested schema under the spec, yielding legal cells.
 
-    The active space is computed, never tabulated: each axis offers the
-    primitives the spec permits, the harvested availability predicates decide
-    which hyperparameters a selection can use, and the spec's own domains are
-    swept, as a Cartesian product over the axes rather than a diagonal.
+        The active space is computed, never tabulated: each axis offers the
+        primitives the spec permits, the harvested availability predicates decide
+        which hyperparameters a selection can use, and the spec's own domains are
+        swept, as a Cartesian product over the axes rather than a diagonal.
 
-    Supports paging via ``offset`` and ``page_size`` for unbounded traversal.
+        Supports paging via ``offset`` and ``page_size`` for unbounded traversal.
 
-    Args:
-        spec: The run declaration; names the task, fidelity, seed plan and the
-            hyperparameters to sweep.
-        search_space: The run's active space.
-        deadline: Optional hard deadline; if soft-expired, no cells are yielded.
-        cost_model: Optional cost model (not used in deadline system).
-        shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
-            cell whose configs cannot compose or validate for that shape is
-            skipped instead of proposed.
-        max_scan: Stop after this many candidates *examined*, not yielded. A
-            caller that prices or samples a factorial — where the illegal
-            candidates are the expensive majority — bounds the examination; a
-            caller that walks the space for what it can measure leaves it
-            ``None`` and takes the module's page size.
-        check_composable: If True (default), verify that configs compose and
-            validate via ``_composable``. If False, skip this check for faster
-candidate generation (validation will happen at Gate/Compose stages).
-        offset: Number of candidates to skip before yielding (for paging).
-        page_size: Maximum candidates to examine per page (default 50k).
-        use_void_cache: Whether to use the persistent void cache (default True).
-            Disable for tests that need a clean search space.
+        Args:
+            spec: The run declaration; names the task, fidelity, seed plan and the
+                hyperparameters to sweep.
+            search_space: The run's active space.
+            deadline: Optional hard deadline; if soft-expired, no cells are yielded.
+            cost_model: Optional cost model (not used in deadline system).
+            shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
+                cell whose configs cannot compose or validate for that shape is
+                skipped instead of proposed.
+            max_scan: Stop after this many candidates *examined*, not yielded. A
+                caller that prices or samples a factorial — where the illegal
+                candidates are the expensive majority — bounds the examination; a
+                caller that walks the space for what it can measure leaves it
+                ``None`` and takes the module's page size.
+            check_composable: If True (default), verify that configs compose and
+                validate via ``_composable``. If False, skip this check for faster
+    candidate generation (validation will happen at Gate/Compose stages).
+            offset: Number of candidates to skip before yielding (for paging).
+            page_size: Maximum candidates to examine per page (default 50k).
+            use_void_cache: Whether to use the persistent void cache (default True).
+                Disable for tests that need a clean search space.
 
-    Yields:
-        ``(coordinate, schedule)`` pairs, in a deterministic order.
+        Yields:
+            ``(coordinate, schedule)`` pairs, in a deterministic order.
     """
+    from computronium.experiment.execution.search_space import (
+        get_void_cache,
+    )
     from computronium.experiment.legality.dsl import (
         CoordinateContext,
         Expr,
@@ -973,10 +980,6 @@ candidate generation (validation will happen at Gate/Compose stages).
         evaluate,
     )
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
-    from computronium.experiment.execution.search_space import (
-        _void_cache_key,
-        get_void_cache,
-    )
 
     def _references_params(expr: Expr) -> bool:
         """Check if expression references params.* variables."""

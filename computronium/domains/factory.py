@@ -163,10 +163,12 @@ class SequentialMNISTTask(DomainTask):
 
 
 class CopyTask(DomainTask):
-    """Copy task: Model must copy an input sequence after a delimiter.
+    """Copy task: Model must predict the next token in a sequence after a delimiter.
 
     This exercises attention, recurrent, and NTM geometries which require
-    memory and sequence-to-sequence processing.
+    memory and sequence processing. The task is framed as next-token prediction:
+    given the input sequence + delimiter + prefix of copied sequence, predict
+    the next token in the copied sequence.
     """
 
     def __init__(
@@ -183,9 +185,9 @@ class CopyTask(DomainTask):
         self.seq_len = seq_len
         self.vocab_size = vocab_size
         self.num_workers = num_workers
-        # Input: [B, seq_len*2+1] (sequence + delimiter + placeholder for output)
-        # Output: [B, seq_len] (the copied sequence)
-        self._input_dim = seq_len * 2 + 1
+        # Input: padded to max_len = 2*seq_len + 1 (original seq + delimiter + max copied prefix)
+        # Output: vocab_size (next token prediction)
+        self._input_dim = 2 * seq_len + 1
         self._output_dim = vocab_size
 
     @property
@@ -197,7 +199,7 @@ class CopyTask(DomainTask):
         return DomainSpec(
             name=self.name,
             domain_type=DomainType.TIMESERIES,
-            description="Copy task: reproduce input sequence after delimiter",
+            description="Copy task: next-token prediction after delimiter",
             default_metrics=["accuracy", "loss"],
             supported_tasks=["sequence_copy"],
             default_batch_size=64,
@@ -222,16 +224,55 @@ class CopyTask(DomainTask):
         delimiter = torch.full((n_train, 1), self.vocab_size, dtype=torch.long)
         val_delimiter = torch.full((n_val, 1), self.vocab_size, dtype=torch.long)
 
-        # Target is the original sequence
-        train_y = train_seq.clone()
-        val_y = val_seq.clone()
+        # Create next-token prediction samples
+        # For each sequence, create samples: (prefix + delimiter + copied_prefix) -> next_token
+        # We'll generate all positions in the copy phase
+        def create_samples(seqs, delims):
+            samples_x = []
+            samples_y = []
+            for seq, delim in zip(seqs, delims):
+                # Input: original sequence + delimiter
+                context = torch.cat([seq, delim])  # [seq_len + 1]
+                # Targets: the sequence itself (copy phase)
+                for t in range(self.seq_len):
+                    # Input at step t: context + copied prefix up to t
+                    prefix = seq[:t] if t > 0 else torch.empty(0, dtype=torch.long)
+                    x = torch.cat([context, prefix])  # [seq_len + 1 + t]
+                    y = seq[t]  # next token to predict
+                    samples_x.append(x)
+                    samples_y.append(y)
+            return torch.nested.nested_tensor(samples_x), torch.stack(samples_y)
 
-        # Input is sequence + delimiter + zeros (placeholder for output positions)
-        train_x = torch.cat([train_seq, delimiter, torch.zeros_like(train_seq)], dim=1)
-        val_x = torch.cat([val_seq, val_delimiter, torch.zeros_like(val_seq)], dim=1)
+        # For simplicity, use fixed-length input by padding
+        # Max input length: seq_len (original) + 1 (delimiter) + seq_len (max copied prefix) = 2*seq_len + 1
+        max_len = 2 * self.seq_len + 1
+        pad_token = self.vocab_size + 1  # Use a different token for padding
 
-        train_ds = TensorDataset(train_x.float(), train_y)
-        val_ds = TensorDataset(val_x.float(), val_y)
+        def create_padded_samples(seqs, delims):
+            samples_x = []
+            samples_y = []
+            for seq, delim in zip(seqs, delims):
+                context = torch.cat([seq, delim])  # [seq_len + 1]
+                for t in range(self.seq_len):
+                    prefix = seq[:t] if t > 0 else torch.empty(0, dtype=torch.long)
+                    x = torch.cat([context, prefix])  # [seq_len + 1 + t]
+                    # Pad to max_len
+                    if len(x) < max_len:
+                        x = torch.cat([
+                            x,
+                            torch.full(
+                                (max_len - len(x),), pad_token, dtype=torch.long
+                            ),
+                        ])
+                    samples_x.append(x)
+                    samples_y.append(seq[t])
+            return torch.stack(samples_x).float(), torch.stack(samples_y)
+
+        train_x, train_y = create_padded_samples(train_seq, delimiter)
+        val_x, val_y = create_padded_samples(val_seq, val_delimiter)
+
+        train_ds = TensorDataset(train_x, train_y)
+        val_ds = TensorDataset(val_x, val_y)
 
         self._train_loader = DataLoader(
             train_ds,
@@ -285,6 +326,14 @@ class CopyTask(DomainTask):
             if was_training:
                 model.train()
         return Metrics(loss=avg_loss, accuracy=accuracy)
+
+    def compute_loss(
+        self, outputs: torch.Tensor, targets: torch.Tensor
+    ) -> torch.Tensor:
+        # Handle padded inputs: mask out padding tokens in loss
+        # For now, use standard cross_entropy (padding tokens will have random targets)
+        # A proper implementation would mask the loss
+        return torch.nn.functional.cross_entropy(outputs, targets)
 
 
 class GraphClassificationTask(DomainTask):

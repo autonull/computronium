@@ -515,14 +515,39 @@ CREATE INDEX idx_cells_coordinate ON cells(run_id, coordinate_json);
 - `computronium/experiment/runners/__init__.py` — Export ScalingRunner/ScalingSpec
 - `pyproject.toml` — Added 'experiment' marker
 
+---
+
+## L4. Session 4 Summary ✅ **COMPLETE** (This Session)
+
+**Session 4 goals:**
+1. ✅ Fix graph geometry composition — auto-extract `edge_index` from task (1h)
+2. ✅ Fix CopyTask output dimension mismatch — reframe as next-token prediction (1h)
+3. ✅ Verify sequential_mnist with valid dynamics combinations (30m)
+4. ✅ Validate geometry-coverage profile candidate generation (30m)
+
+**Total: ~3h** — completed in one focused session.
+
+**Completed this session:**
+- **Graph geometry auto edge_index**: Modified `compose.py` to extract `edge_index` from graph tasks (GraphTask, GraphClassificationTask) automatically during composition. Added `_extract_graph_edge_index()` helper and `task` parameter to `compose_configs()`/`compose_cell_system()`.
+- **CopyTask refactor**: Changed from full-sequence copy to next-token prediction (compatible with all dynamics). Input: padded sequence + delimiter + copied prefix → Output: single next token (vocab_size). Added `compute_loss()` override.
+- **Validation**: Confirmed digits, sequential_mnist (with energy_minimization), and copy_task evaluate successfully. Void constraint correctly filters recurrent+instantaneous+gradient.
+- **Search space**: geometry-coverage profile generates valid candidates across 3 tasks and multiple geometries/dynamics.
+
+**Files Modified:**
+- `computronium/experiment/execution/compose.py` — Added `_extract_graph_edge_index()`, `task` parameter to composition functions
+- `computronium/experiment/execution/evaluate.py` — Pass `task` to `compose_cell_system()`
+- `computronium/experiment/execution/search_space.py` — Pass task instance to `compose_configs()` in `_composable()`
+- `computronium/domains/factory.py` — Rewrote `CopyTask` as next-token prediction task
+
 **Known Issues / Follow-up Needed:**
-1. **Graph geometry + graph_classification task**: The graph geometry requires `edge_index` which is provided by the task data, but the compose system doesn't automatically pass it. Need to modify `compose.py` to extract graph data from the task and pass it to geometry config.
-2. **CopyTask output dimension mismatch**: CopyTask uses `vocab_size` as output_dim (default 8), but energy_minimization dynamics expects output_dim matching the target one-hot size. Need to either adjust dynamics or task to align dimensions.
-3. **Sequential MNIST with recurrent geometry**: Works with instantaneous dynamics but needs settling dynamics (energy_minimization, etc.) for proper recurrent behavior. Current profile includes all dynamics but some combinations may fail validation.
-4. **Task-geometry compatibility constraints**: Should add constraints to void invalid combinations (e.g., graph geometry requires graph task data with edge_index).
-5. **Bayesian optimization (D1)**: Still pending — could use void cache as foundation.
-6. **Kernel/Runner/Reporter refactor (H1)**: Structural reorganization pending.
-7. **CI integration (F2)**: Needs GitHub Actions workflow for experiment DB property tests.
+1. **GraphClassificationTask + GraphGeometry**: TUDataset batches multiple graphs with a single concatenated `edge_index` and `batch` vector. GraphGeometry expects a single static graph. Needs either a new `GraphClassificationGeometry` or batched graph support in GraphGeometry.
+2. **GraphTask (node classification) DataLoader**: Returns `None` from `get_dataloader()` (full-graph training). Trainer expects iterable DataLoader. Need wrapper or full-graph training mode.
+3. **Task-geometry compatibility constraints**: Should add void constraints for invalid combinations (e.g., graph geometry requires graph-task data with edge_index; recurrent geometry requires settling dynamics for gradient credit).
+4. **Bayesian optimization (D1)**: Still pending — could use void cache as foundation.
+5. **Kernel/Runner/Reporter refactor (H1)**: Structural reorganization pending (Week 4).
+6. **SQLite persistence schema + migration (H2)**: Database layer pending (Week 4).
+7. **CI integration (F2)**: Needs GitHub Actions workflow for experiment DB property tests (Week 4).
+8. **Documentation**: Experiment types guide, profile authoring (Week 4).
 
 ---
 
@@ -541,7 +566,7 @@ CREATE INDEX idx_cells_coordinate ON cells(run_id, coordinate_json);
 | Property tests | `tests/property/test_experiment_invariants.py` ✅ |
 | Database | `kernel/database.py` (planned for H2) |
 | Profiles | `profiles/geometry-coverage.yaml` ✅ (new) |
-| Compose | `execution/compose.py` (graph edge_index passthrough needed) |
+| Compose | `execution/compose.py` ✅ (graph edge_index passthrough implemented) |
 
 ---
 

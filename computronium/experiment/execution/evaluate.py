@@ -663,6 +663,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         input_shape=shape.input_shape,
         output_dim=shape.output_dim,
         param_budget=schedule.param_budget,
+        task=task,
     )
 
     limit = schedule.batch_limit or None
