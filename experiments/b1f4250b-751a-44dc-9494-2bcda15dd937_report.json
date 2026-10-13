@@ -1,0 +1,580 @@
+{
+  "run_id": "b1f4250b-751a-44dc-9494-2bcda15dd937",
+  "generated_at": "2026-10-12T19:36:08.535689",
+  "run_info": {
+    "run_id": "b1f4250b-751a-44dc-9494-2bcda15dd937",
+    "spec_version": 2,
+    "status": "completed",
+    "budget_consumed_s": 157.23059511184692,
+    "started_at": "2026-10-12T19:33:30.380343",
+    "finished_at": "2026-10-12T19:36:07.615278"
+  },
+  "summary": {
+    "total_cells": 3,
+    "measured_cells": 3,
+    "void_cells": 0,
+    "failed_cells": 0,
+    "measured_rate": 1.0,
+    "unique_coordinates": 1,
+    "multi_seed_coordinates": 1
+  },
+  "axis_coverage": {
+    "substrate": {
+      "measured": [
+        "sparse"
+      ],
+      "void": [],
+      "failed": [],
+      "total_available": [
+        "sparse"
+      ],
+      "coverage_ratio": 1.0
+    },
+    "geometry": {
+      "measured": [
+        "tile"
+      ],
+      "void": [],
+      "failed": [],
+      "total_available": [
+        "tile"
+      ],
+      "coverage_ratio": 1.0
+    },
+    "dynamics": {
+      "measured": [
+        "energy_minimization"
+      ],
+      "void": [],
+      "failed": [],
+      "total_available": [
+        "energy_minimization"
+      ],
+      "coverage_ratio": 1.0
+    },
+    "plasticity": {
+      "measured": [
+        "null"
+      ],
+      "void": [],
+      "failed": [],
+      "total_available": [
+        "null"
+      ],
+      "coverage_ratio": 1.0
+    },
+    "credit": {
+      "measured": [
+        "pc_alm"
+      ],
+      "void": [],
+      "failed": [],
+      "total_available": [
+        "pc_alm"
+      ],
+      "coverage_ratio": 1.0
+    },
+    "update": {
+      "measured": [
+        "local_adam"
+      ],
+      "void": [],
+      "failed": [],
+      "total_available": [
+        "local_adam"
+      ],
+      "coverage_ratio": 1.0
+    }
+  },
+  "pareto_frontiers": {
+    "val_acc_vs_walltime_s": [
+      {
+        "cell_key": "13b405de006cfe63bd72de3e0f3211018d3ef1e6d110bdada2e4b19d62722032",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "walltime_s": 17.16925130801974,
+        "val_acc": 0.12777777777777777
+      },
+      {
+        "cell_key": "09e2886f5728c13e0910419c96b348beb5ad0b1d6378e579c0afc1412ed115ae",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "walltime_s": 79.06618519301992,
+        "val_acc": 0.15
+      }
+    ],
+    "val_acc_vs_params": [
+      {
+        "cell_key": "460e2149dc4881b60acffa50e8e1c4d7cd2ac4da7e34f90671f0bf752893af03",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "param_count": 17240.0,
+        "val_acc": 0.09166666666666666
+      },
+      {
+        "cell_key": "09e2886f5728c13e0910419c96b348beb5ad0b1d6378e579c0afc1412ed115ae",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "param_count": 36950.0,
+        "val_acc": 0.15
+      }
+    ],
+    "val_acc_vs_flops": [
+      {
+        "cell_key": "460e2149dc4881b60acffa50e8e1c4d7cd2ac4da7e34f90671f0bf752893af03",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "flops": 542080.0,
+        "val_acc": 0.09166666666666666
+      },
+      {
+        "cell_key": "09e2886f5728c13e0910419c96b348beb5ad0b1d6378e579c0afc1412ed115ae",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "flops": 1169152.0,
+        "val_acc": 0.15
+      }
+    ],
+    "walltime_s_vs_params": [
+      {
+        "cell_key": "460e2149dc4881b60acffa50e8e1c4d7cd2ac4da7e34f90671f0bf752893af03",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "param_count": 17240.0,
+        "walltime_s": 57.8402424689848
+      },
+      {
+        "cell_key": "13b405de006cfe63bd72de3e0f3211018d3ef1e6d110bdada2e4b19d62722032",
+        "coordinate": {
+          "substrate": "sparse",
+          "geometry": "tile",
+          "dynamics": "energy_minimization",
+          "plasticity": "null",
+          "credit": "pc_alm",
+          "update": "local_adam"
+        },
+        "param_count": 39416.0,
+        "walltime_s": 17.16925130801974
+      }
+    ]
+  },
+  "cells": [
+    {
+      "coordinate": {
+        "substrate": "sparse",
+        "geometry": "tile",
+        "dynamics": "energy_minimization",
+        "plasticity": "null",
+        "credit": "pc_alm",
+        "update": "local_adam",
+        "params": {
+          "update.step_size": 0.0031622776601683794,
+          "dynamics.step_size": 0.07071067811865475,
+          "dynamics.beta": 0.31622776601683794,
+          "dynamics.max_steps": 55,
+          "geometry.hidden_dim": 73
+        }
+      },
+      "metrics": {
+        "status": "evaluated",
+        "train_loss": 1.851167372804428,
+        "train_acc": 0.10090466249130133,
+        "train_energy": -58.67845592087312,
+        "val_loss": 2.437603007422553,
+        "val_acc": 0.09166666666666666,
+        "epochs_run": 135.0,
+        "flops": 542080.0,
+        "macs_per_step": 1084160.0,
+        "memory_usage": 8.5712890625,
+        "latency_ms": 388.8143604453136,
+        "energy_per_step": 33.562261186459246,
+        "settle_steps": 55.0,
+        "settle_converged": 0.0,
+        "settle_horizon": 55.0,
+        "hopfield_energy": -61.46553421020508,
+        "free_energy": -61.46553421020508,
+        "spectral_radius": 1.0421639680862427,
+        "max_singular_value": 1.0421961545944214,
+        "min_singular_value": 0.8164343237876892,
+        "lyapunov_exponent": 0.04129928995945561,
+        "stability_margin": -0.042163968086242676,
+        "nonnormality": 1.000030884303396,
+        "drift_spectral_radius": 2.596264600753784,
+        "drift_max_singular_value": 2.596327304840088,
+        "drift_nonnormality": 1.0000241516547603,
+        "settle_step_size": 0.07071067811865475,
+        "contraction_rate": 0.8164163695052415,
+        "forward_energy_per_batch": 1.4907199999999997e-07,
+        "update_energy_per_batch": 1.4907199999999997e-07,
+        "energy_per_batch": 2.9814399999999995e-07,
+        "energy_per_sample": 9.316999999999998e-09,
+        "energy_per_mac": 2.7499999999999994e-13,
+        "settle_steps_used": 55.0,
+        "free_energy_final": -61.46553421020508,
+        "walltime_s": 57.8402424689848,
+        "memory_mb": 8.5712890625,
+        "energy_efficiency": 9838646.202282567,
+        "epochs_completed": 3,
+        "epochs_requested": 3,
+        "seed": 42,
+        "fidelity": "L1",
+        "task_id": "digits",
+        "params": {
+          "geometry.input_dim": 64,
+          "geometry.output_dim": 10,
+          "geometry.hidden_dim": 73,
+          "geometry.num_layers": 6,
+          "geometry.init_scale": 0.1,
+          "geometry.init_scheme": "default",
+          "geometry.residual": false,
+          "geometry.neurons_per_tile": 18,
+          "geometry.tiles_per_layer": 3,
+          "dynamics.max_steps": 55,
+          "dynamics.convergence_threshold": 0.0001,
+          "dynamics.convergence_start": 5,
+          "dynamics.step_size": 0.07071067811865475,
+          "dynamics.beta": 0.31622776601683794,
+          "dynamics.momentum": 0.0,
+          "credit.beta": 0.5,
+          "credit.feedback_scale": 0.01,
+          "credit.credit_norm": "none",
+          "credit.local_objective": "ff",
+          "credit.orthogonal_init": false,
+          "credit.readout_error": false,
+          "credit.learned_feedback": false,
+          "credit.feedback_lr": 0.05,
+          "credit.feedback_update_every": 1,
+          "update.step_size": 0.0031622776601683794,
+          "update.momentum": 0.9,
+          "update.grad_clip": 1.0,
+          "update.beta2": 0.999,
+          "update.eps": 1e-08
+        },
+        "param_count": 17240,
+        "param_budget": 50000,
+        "convergence_curve": [
+          {
+            "train_loss": 1.851167380270563,
+            "train_acc": 0.10090466248870891,
+            "val_loss": 2.437603007422553,
+            "val_acc": 0.09166666666666666
+          },
+          {
+            "train_loss": 1.8511673888151399,
+            "train_acc": 0.10090466248093169,
+            "val_loss": 2.437603007422553,
+            "val_acc": 0.09166666666666666
+          },
+          {
+            "train_loss": 1.851167372804428,
+            "train_acc": 0.10090466249130133,
+            "val_loss": 2.437603007422553,
+            "val_acc": 0.09166666666666666
+          }
+        ]
+      },
+      "status": "measured",
+      "failure_class": null,
+      "defect": "",
+      "seed": 42,
+      "walltime_s": 0,
+      "task_id": "digits",
+      "fidelity": "L1",
+      "param_budget": 50000,
+      "measurement_key": "ef19eacc285343733b069ad282e5a9439e3ff68289650f24d0b9d307f17e7298",
+      "cell_key": "460e2149dc4881b60acffa50e8e1c4d7cd2ac4da7e34f90671f0bf752893af03"
+    },
+    {
+      "coordinate": {
+        "substrate": "sparse",
+        "geometry": "tile",
+        "dynamics": "energy_minimization",
+        "plasticity": "null",
+        "credit": "pc_alm",
+        "update": "local_adam",
+        "params": {
+          "update.step_size": 0.0001,
+          "dynamics.step_size": 0.01,
+          "dynamics.beta": 0.1,
+          "dynamics.max_steps": 10,
+          "geometry.hidden_dim": 8
+        }
+      },
+      "metrics": {
+        "status": "evaluated",
+        "train_loss": 2.2281065985985573,
+        "train_acc": 0.0939457202479295,
+        "train_energy": -3.909868042918652,
+        "val_loss": 2.314668814341227,
+        "val_acc": 0.12777777777777777,
+        "epochs_run": 135.0,
+        "flops": 1246336.0,
+        "macs_per_step": 2492672.0,
+        "memory_usage": 16.99755859375,
+        "latency_ms": 117.49014026588864,
+        "energy_per_step": 10.116018567033278,
+        "settle_steps": 10.0,
+        "settle_converged": 0.0,
+        "settle_horizon": 10.0,
+        "hopfield_energy": -3.7820918560028076,
+        "free_energy": -3.7820918560028076,
+        "spectral_radius": 1.005091905593872,
+        "max_singular_value": 1.005133867263794,
+        "min_singular_value": 0.9749420881271362,
+        "lyapunov_exponent": 0.005078985682004938,
+        "stability_margin": -0.00509190559387207,
+        "nonnormality": 1.0000417490875095,
+        "drift_spectral_radius": 2.509554147720337,
+        "drift_max_singular_value": 2.5096640586853027,
+        "drift_nonnormality": 1.00004379700875,
+        "settle_step_size": 0.01,
+        "contraction_rate": 0.9749044585227966,
+        "forward_energy_per_batch": 3.427424e-07,
+        "update_energy_per_batch": 3.427424e-07,
+        "energy_per_batch": 6.854848e-07,
+        "energy_per_sample": 2.14214e-08,
+        "energy_per_mac": 2.75e-13,
+        "settle_steps_used": 10.0,
+        "free_energy_final": -3.7820918560028076,
+        "walltime_s": 17.16925130801974,
+        "memory_mb": 16.99755859375,
+        "energy_efficiency": 5964959.235987273,
+        "epochs_completed": 3,
+        "epochs_requested": 3,
+        "seed": 42,
+        "fidelity": "L1",
+        "task_id": "digits",
+        "params": {
+          "geometry.input_dim": 64,
+          "geometry.output_dim": 10,
+          "geometry.hidden_dim": 8,
+          "geometry.num_layers": 6,
+          "geometry.init_scale": 0.1,
+          "geometry.init_scheme": "default",
+          "geometry.residual": false,
+          "geometry.neurons_per_tile": 16,
+          "geometry.tiles_per_layer": 6,
+          "dynamics.max_steps": 10,
+          "dynamics.convergence_threshold": 0.0001,
+          "dynamics.convergence_start": 5,
+          "dynamics.step_size": 0.01,
+          "dynamics.beta": 0.1,
+          "dynamics.momentum": 0.0,
+          "credit.beta": 0.5,
+          "credit.feedback_scale": 0.01,
+          "credit.credit_norm": "none",
+          "credit.local_objective": "ff",
+          "credit.orthogonal_init": false,
+          "credit.readout_error": false,
+          "credit.learned_feedback": false,
+          "credit.feedback_lr": 0.05,
+          "credit.feedback_update_every": 1,
+          "update.step_size": 0.0001,
+          "update.momentum": 0.9,
+          "update.grad_clip": 1.0,
+          "update.beta2": 0.999,
+          "update.eps": 1e-08
+        },
+        "param_count": 39416,
+        "param_budget": 50000,
+        "convergence_curve": [
+          {
+            "train_loss": 2.228106588477796,
+            "train_acc": 0.0939457202479295,
+            "val_loss": 2.314668814341227,
+            "val_acc": 0.12777777777777777
+          },
+          {
+            "train_loss": 2.228106614526312,
+            "train_acc": 0.09394572024533711,
+            "val_loss": 2.314668814341227,
+            "val_acc": 0.12777777777777777
+          },
+          {
+            "train_loss": 2.2281065985985573,
+            "train_acc": 0.0939457202479295,
+            "val_loss": 2.314668814341227,
+            "val_acc": 0.12777777777777777
+          }
+        ]
+      },
+      "status": "measured",
+      "failure_class": null,
+      "defect": "",
+      "seed": 42,
+      "walltime_s": 0,
+      "task_id": "digits",
+      "fidelity": "L1",
+      "param_budget": 50000,
+      "measurement_key": "d03de5e8403a13cba40b11552412852c3525d7f53c10e003a1fcf52fa76966cd",
+      "cell_key": "13b405de006cfe63bd72de3e0f3211018d3ef1e6d110bdada2e4b19d62722032"
+    },
+    {
+      "coordinate": {
+        "substrate": "sparse",
+        "geometry": "tile",
+        "dynamics": "energy_minimization",
+        "plasticity": "null",
+        "credit": "pc_alm",
+        "update": "local_adam",
+        "params": {
+          "update.step_size": 0.01778279410038923,
+          "dynamics.step_size": 0.18803015465431966,
+          "dynamics.beta": 0.5623413251903491,
+          "dynamics.max_steps": 78,
+          "geometry.hidden_dim": 220
+        }
+      },
+      "metrics": {
+        "status": "evaluated",
+        "train_loss": 11.620078728608814,
+        "train_acc": 0.13639526798149407,
+        "train_energy": -418708.74854297144,
+        "val_loss": 67.01632859971788,
+        "val_acc": 0.15,
+        "epochs_run": 135.0,
+        "flops": 1169152.0,
+        "macs_per_step": 2338304.0,
+        "memory_usage": 16.95263671875,
+        "latency_ms": 482.14639619950003,
+        "energy_per_step": 41.560537206000696,
+        "settle_steps": 78.0,
+        "settle_converged": 0.0,
+        "settle_horizon": 78.0,
+        "hopfield_energy": -429943.875,
+        "free_energy": -429943.875,
+        "spectral_radius": 1.1672207117080688,
+        "max_singular_value": 1.1672515869140625,
+        "min_singular_value": 0.45674192905426025,
+        "lyapunov_exponent": 0.15462546284973275,
+        "stability_margin": -0.16722071170806885,
+        "nonnormality": 1.0000264519003852,
+        "drift_spectral_radius": 2.8893280029296875,
+        "drift_max_singular_value": 2.8893954753875732,
+        "drift_nonnormality": 1.0000233523012332,
+        "settle_step_size": 0.18803015465431966,
+        "contraction_rate": 0.4567192087620743,
+        "forward_energy_per_batch": 3.215168e-07,
+        "update_energy_per_batch": 3.215168e-07,
+        "energy_per_batch": 6.430336e-07,
+        "energy_per_sample": 2.00948e-08,
+        "energy_per_mac": 2.7500000000000004e-13,
+        "settle_steps_used": 78.0,
+        "free_energy_final": -429943.875,
+        "walltime_s": 79.06618519301992,
+        "memory_mb": 16.95263671875,
+        "energy_efficiency": 7464617.712044907,
+        "epochs_completed": 3,
+        "epochs_requested": 3,
+        "seed": 42,
+        "fidelity": "L1",
+        "task_id": "digits",
+        "params": {
+          "geometry.input_dim": 64,
+          "geometry.output_dim": 10,
+          "geometry.hidden_dim": 220,
+          "geometry.num_layers": 5,
+          "geometry.init_scale": 0.1,
+          "geometry.init_scheme": "default",
+          "geometry.residual": false,
+          "geometry.neurons_per_tile": 55,
+          "geometry.tiles_per_layer": 2,
+          "dynamics.max_steps": 78,
+          "dynamics.convergence_threshold": 0.0001,
+          "dynamics.convergence_start": 5,
+          "dynamics.step_size": 0.18803015465431966,
+          "dynamics.beta": 0.5623413251903491,
+          "dynamics.momentum": 0.0,
+          "credit.beta": 0.5,
+          "credit.feedback_scale": 0.01,
+          "credit.credit_norm": "none",
+          "credit.local_objective": "ff",
+          "credit.orthogonal_init": false,
+          "credit.readout_error": false,
+          "credit.learned_feedback": false,
+          "credit.feedback_lr": 0.05,
+          "credit.feedback_update_every": 1,
+          "update.step_size": 0.01778279410038923,
+          "update.momentum": 0.9,
+          "update.grad_clip": 1.0,
+          "update.beta2": 0.999,
+          "update.eps": 1e-08
+        },
+        "param_count": 36950,
+        "param_budget": 50000,
+        "convergence_curve": [
+          {
+            "train_loss": 11.620078858685478,
+            "train_acc": 0.13639526783631922,
+            "val_loss": 67.01632859971788,
+            "val_acc": 0.15
+          },
+          {
+            "train_loss": 11.620078804265647,
+            "train_acc": 0.13639526804371185,
+            "val_loss": 67.01632859971788,
+            "val_acc": 0.15
+          },
+          {
+            "train_loss": 11.620078728608814,
+            "train_acc": 0.13639526798149407,
+            "val_loss": 67.01632859971788,
+            "val_acc": 0.15
+          }
+        ]
+      },
+      "status": "measured",
+      "failure_class": null,
+      "defect": "",
+      "seed": 42,
+      "walltime_s": 0,
+      "task_id": "digits",
+      "fidelity": "L1",
+      "param_budget": 50000,
+      "measurement_key": "f3358ae5bb4eafe92a346799f189b84858bc010b5ca1df0517a89e42143ab3c4",
+      "cell_key": "09e2886f5728c13e0910419c96b348beb5ad0b1d6378e579c0afc1412ed115ae"
+    }
+  ]
+}

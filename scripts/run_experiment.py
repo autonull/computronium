@@ -55,6 +55,7 @@ class Config:
     verbose: bool = False
     fidelity: str | None = None
     batch_limit: int | None = None
+    sweep_steps: int | None = None
 
 
 _shutdown_requested = [False]
@@ -113,6 +114,7 @@ def _build_spec(config: Config, device: str) -> RunSpec:
         checkpoint_every_n=profile.checkpoint_every_n,
         seed=config.seed,
         device=device,
+        sweep_steps=config.sweep_steps if config.sweep_steps is not None else 5,
     )
 
 
@@ -293,6 +295,7 @@ def _build_config(args: argparse.Namespace, axes: dict[str, list[str]]) -> Confi
         verbose=args.verbose,
         fidelity=args.fidelity,
         batch_limit=args.batch_limit,
+        sweep_steps=args.sweep_steps,
     )
 
 
@@ -393,6 +396,7 @@ def main() -> int:
     parser.add_argument("--param-budget", type=int, default=None)
     parser.add_argument("--fidelity", choices=["L0", "L1", "L2"], default=None)
     parser.add_argument("--batch-limit", type=int, default=None)
+    parser.add_argument("--sweep-steps", type=int, default=None, help="Number of diagonal steps through hyperparameter space")
     parser.add_argument("--substrates", type=str)
     parser.add_argument("--geometries", type=str)
     parser.add_argument("--dynamics", type=str)

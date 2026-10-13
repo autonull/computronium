@@ -879,8 +879,8 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     if schedule.fidelity in {"L1", "L2", "L3"} and history:
         curve_keys = {"train_loss", "val_loss", "train_acc", "val_acc", "learning_rate"}
         convergence_curve = [
-            {k: float(v) for k, v in epoch.items() if k in curve_keys}
-            for epoch in history
+            {**{k: float(v) for k, v in epoch.items() if k in curve_keys}, "epoch": i + 1}
+            for i, epoch in enumerate(history)
         ]
 
     return CellEvaluation(
