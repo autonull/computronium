@@ -1,170 +1,232 @@
-# TODO62: Improvements from Quick Maturation Findings
+# TODO62: Continuous Experiment Loop & System Self-Improvement
 
-**Source:** Quick maturation run (10 min, L1 fidelity, 3 epochs, 1 seed) on 5 Pareto configs from 1h production-map run.
+**Goal:** A continuous, self-driving experiment process: **propose → run → analyze → fix → repeat**.
+Each iteration either finds a better configuration or exposes a defect; both feed back
+into the system so the next iteration is stronger. No human in the loop to start a run.
 
-**Key Finding:** 2/5 Pareto configs confirmed at **89% L1 accuracy** (vs 64%/30% L0):
-1. `optical/tile_mesh/energy_minimization/thermodynamic_contrast/ortho_adam/conflict_adaptive` — 89.2%
-2. `memristive/tile_mesh/instantaneous/target_inversion/mean_norm/routing` — 88.9%
-
-3 false positives: 13-15% at L1 (different plasticity: rule_state, null).
-
----
-
-## 1. Search Space Priors & Pruning (High Impact, Low Effort)
-
-### 1.1 Add Tile Mesh + Plasticity Priors
-**File:** `computronium/experiment/surface/cli.py` → `RUN_PROFILES`
-- Add `tile_mesh` as primary geometry for maturation/claim profiles
-- Add `conflict_adaptive`, `routing` as primary plasticities
-- Add `optical`, `memristive` as primary substrates
-- Add `energy_minimization`, `instantaneous` as primary dynamics for tile_mesh
-
-### 1.2 Compatibility Matrix in RunSpec
-**File:** `computronium/experiment/schema/run_spec.py`
-- Add `compatibility_matrix: dict[str, list[str]]` field
-- Encode known invalid combos:
-  - `instantaneous` + geometries with separate output_proj (attention, causal_transformer, spatial_lattice, tile, tile_mesh, conv) + `gradient` credit
-  - `predictive_settling` + non-layered geometries
-- Use in `ModelBasedPolicy` for smart sampling
-
-### 1.3 Prune Quick-Verify Profile
-**File:** `computronium/experiment/surface/cli.py`
-- Focus quick-verify on `tile_mesh` × `{conflict_adaptive, routing}` × `{optical, memristive}`
-- Reduce from 450 → ~50 cells, faster feedback
+**Seed finding (TODO61):** full 2h maturation reached **95.8%** on digits with
+`memristive/tile_mesh/instantaneous/target_inversion/ortho_adam/conflict_adaptive`.
 
 ---
 
-## 2. Stability Metrics Enhancement (Medium Impact)
+## 0. The Loop (what "continuous" means here)
 
-### 2.1 Basin Stability Estimation
-**File:** `computronium/experiment/kernel/evaluate.py`
-- Multi-start perturbation: run settle from N random initial states
-- Measure fraction converging to same fixed point
-- Add `basin_stability` to payload
+```
+        ┌──────────────────────────────────────────────┐
+        │  propose(spec)  ← prior knowledge + last top │
+        │      ↓                                        │
+        │  run(bounded)   ← resumable, watchdog-safe    │
+        │      ↓                                        │
+        │  analyze(store) ← diff vs best, classify      │
+        │      ↓                                        │
+        │  update(priors, ledger)                       │
+        │      ↓                                        │
+        │  defect? ──yes──> fix → verify → resume       │
+        └──────────────┬───────────────────────────────┘
+                       │ no
+                       └──────────────> next cycle
+```
 
-### 2.2 Transient Amplification Tracking
-**File:** `computronium/experiment/execution/settle_operator.py`
-- Track `||J_F^k||_2` during settle iterations
-- Add `max_transient_amplification` to payload
-- Correlate with generalization gap
+Two outputs per cycle, both durable:
+1. **Evidence** — cells measured, Pareto front updated (`store` + `ledger.jsonl`).
+2. **System delta** — a bug fixed, a capability added, a prior sharpened.
 
-### 2.3 Condition Number of Step Jacobian
-**File:** `computronium/experiment/kernel/evaluate.py`
-- Compute `κ(J_F) = σ_max / σ_min` at settled state
-- Add `jacobian_condition_number` to payload
-
----
-
-## 3. Predictive Settling Robustness (Medium Impact)
-
-### 3.1 Adaptive Step Size from Lipschitz Constant
-**File:** `computronium/ontology/dynamics/_dynamics.py`
-- Estimate local Lipschitz constant during settle
-- `step_size = min(0.5, 1.0 / L_local)` instead of fixed clamp
-- Add gradient clipping for error correction step
-
-### 3.2 Convergence Monitoring
-- Add `settle_convergence_rate` metric
-- Early exit if `||x_{t+1} - x_t|| < ε`
+The controller (`scripts/continuous_experiment.py`) already implements the outer
+shell (propose → run → analyze → state/ledger, resumable). This plan is about
+**making it trustworthy and self-improving**, then running it unattended.
 
 ---
 
-## 4. Convergence Curve Analysis (High Impact)
+## 1. Current State
 
-### 4.1 Early Stopping Detection
-**File:** `computronium/experiment/kernel/evaluate.py`
-- Detect plateau: `val_acc` change < 0.1% for 3 epochs
-- Add `early_stopped_at_epoch` to payload
-- Save compute on converged runs
+### 1.1 Confirmed results (TODO61)
 
-### 4.2 Plateau Detection for Adaptive Epoch Budget
-- If converged by epoch 3, don't run epochs 4-10
-- Dynamic `batch_limit` based on convergence speed
+| Config | L0 | L1 (3 ep) | L1 (10 ep, 5 seeds) |
+|--------|-----|-----------|---------------------|
+| memristive/tile_mesh/instantaneous/target_inversion/ortho_adam/conflict_adaptive | 30% | 89% | **95.8%** |
+| optical/tile_mesh/instantaneous/target_inversion/ortho_adam/conflict_adaptive | — | — | **95.3%** |
+| memristive/tile_mesh/energy_minimization/target_inversion/ortho_adam/routing | 64% | 89% | **95.3%** |
+| digital/tile/energy_minimization/temporal_trace/lion/rule_state | 23% | 15% | false positive |
+| sparse/tile/energy_minimization/pc_alm/local_adam/null | 23% | 15% | false positive |
+| complex/tile/energy_minimization/target_inversion/muon/rule_state | 23% | 13% | false positive |
 
-### 4.3 Generalization Gap Tracking
-- Track `train_acc - val_acc` per epoch
-- Flag runs where gap > 10% (overfitting)
+**Signal:** `tile_mesh` geometry + `target_inversion` (local credit) + `ortho_adam`
++ `conflict_adaptive`/`routing` plasticity. Learning converges by epoch 3–4.
+`ρ ≈ 1.0–1.1` throughout.
 
----
+### 1.2 The controller (built, smoke-tested)
 
-## 5. Bug Fixes (Critical)
+`scripts/continuous_experiment.py` — outer loop over `run_experiment.py`.
+- **Ladder:** `explore` (L0, broad, cheap) ↔ `exploit` (L1, axes restricted to
+  cumulative top-K primitives).
+- **Durable state:** `experiments/continuous/{state.json, ledger.jsonl, continuous.duckdb}`.
+- **Resumable:** re-running continues from `state["cycle"]`.
+- **Seeded** with `KNOWN_GOOD` (the 3 confirmed configs above) so exploit starts
+  in a productive region instead of narrowing onto L0 noise.
 
-### 5.1 JSON Report Generator Bug
-**File:** `computronium/experiment/reporters/json.py` or report CLI
-- Ablation JSON export shows `val_acc: 0%` for all records
-- DB has correct values (e.g., 48.4%), export is broken
-- Root cause: payload field mapping issue
+### 1.3 Known defects (found while building the loop)
 
-### 5.2 Convergence Curve Schema
-- Curve entries missing `epoch` field (only has train/val loss/acc)
-- Fix serializer to include epoch number
-
----
-
-## 6. Experiment Infrastructure (Medium Impact)
-
-### 6.1 Default Maturation to Confirmed Configs
-**File:** `experiment.sh` (DONE in TODO61)
-- Default `--maturation-hours 2` targets 2 confirmed configs
-- Quick test: `--maturation-hours 0.15 --ablation-hours 0.02`
-
-### 6.2 Claim-Grade Profile Automation
-**File:** `computronium/experiment/surface/cli.py`
-- Add `--claim` flag: auto-run confirmed configs at 10 seeds × 20 epochs
-- CEEC governance integration
-
-### 6.3 Pareto Frontier Export
-**File:** `computronium/experiment/surface/cli.py report`
-- Export top-N configs as CSV/JSON for downstream use
-- Include: coordinate, mean/std accuracy, walltime, params, ρ, learning curve summary
+| # | Defect | Evidence | Impact |
+|---|--------|----------|--------|
+| **D1** | `gradient` (backprop) credit × `tile_mesh` geometry fails the forward pass | `RuntimeError: mat1 and mat2 shapes cannot be multiplied (16x8 and 64x108)`, independent of dynamics | **Blocks every backprop baseline** — cannot compare local credit vs global on the winning architecture |
+| **D2** | L0 explore signal is near-chance (12.8%) | 1 epoch × batch_limit=2000 on random configs = noise | Explore cannot discriminate; exploit only works because it is *seeded* |
+| **D3** | `_composable` uses `except ValueError, TypeError, KeyError:` | `search_space.py:781` (Python-2 syntax; parses under 3.14 but is a latent trap) | Fragile; must be `except (ValueError, TypeError, KeyError):` |
+| **D4** | `gradient` × `tile_mesh` passes `SystemConfig.validate()` but fails at train | `_validate_gradient_credit_instantaneous_output_proj` only rejects `instantaneous` | Validation gap: energy_minimization + gradient + tile_mesh also broken, not rejected |
 
 ---
 
-## 7. Physical Substrate Validation (Future)
+## 2. Make the Loop Trustworthy (P0 — before unattended runs)
 
-### 7.1 Memristive Hardware Mapping
-- Map `ortho_adam` update to memristive conductance updates
-- IR-drop noise model validation
+### 2.1 Fix D1/D4 — the `gradient × tile_mesh` forward break
+- **Root:** tile_mesh's forward/settle path mis-shapes the input projection when
+  composed with backprop credit (`mat1 (16x8) @ mat2 (64x108)`).
+- **Fix path:** trace the tile_mesh forward in `compose.py` / `geometry/tile_mesh`;
+  the first-layer projection expects `input_dim` (64) but receives a tile-width (8).
+- **Validation:** extend `_validate_gradient_credit_instantaneous_output_proj` to
+  reject `gradient × tile_mesh` under **all** dynamics until the path is fixed,
+  so the search space never proposes an untrainable cell (D4).
+- **Lock:** a property test that `gradient × tile_mesh` either composes **and**
+  dry-run-trains, or is rejected by validation — never passes one and fails the other.
 
-### 7.2 Optical Phase Encoding
-- Map `tile_mesh` to optical phase/amplitude
-- Coherent interference benefits
+### 2.2 Fix D3 — the exception clause
+- One-line: `except (ValueError, TypeError, KeyError):`.
+- Lock: the dry-run gate's exception handling is exercised by a case that raises.
 
----
+### 2.3 Fix D2 — make explore discriminate
+- Explore currently uses `batch_limit=2000`, 1 epoch → chance. Options:
+  - **a.** Explore at L1 (3 epochs, full batch) on a *small* cell budget — more
+    signal per cell, fewer cells.
+  - **b.** Rank explore cells by a *stability-aware* score (ρ near 1, finite
+    metrics) rather than raw accuracy, so noise doesn't dominate.
+  - **c.** Keep L0 for breadth but require **multi-seed** agreement before a cell
+    is promoted to the exploit set.
+- **Recommendation:** (b) + (c): cheap L0 scan, promote only cells whose ρ is in
+  band and whose score is stable across the sweep steps.
 
-## Priority Order for Implementation
-
-| Priority | Item | Effort | Impact |
-|----------|------|--------|--------|
-| **P0** | Fix JSON report val_acc bug | 1h | Critical |
-| **P0** | Add search priors to RUN_PROFILES | 30m | High |
-| **P0** | Prune quick-verify profile | 30m | High |
-| **P1** | Compatibility matrix in RunSpec | 2h | High |
-| **P1** | Convergence curve early stopping | 2h | High |
-| **P2** | Basin stability estimation | 4h | Medium |
-| **P2** | Adaptive step_size predictive settling | 4h | Medium |
-| **P2** | Pareto CSV/JSON export | 2h | Medium |
-| **P3** | Claim-grade automation | 4h | Medium |
-| **P3** | Memristive/optical hardware mapping | 1w | Future |
-
----
-
-## Success Criteria for TODO62
-
-| Criterion | Target |
-|-----------|--------|
-| Quick-verify runs in <30s | 50 cells → <30s wall |
-| Search space pruned by 10x | 450 → 50 cells |
-| JSON reports show correct val_acc | 0% bug fixed |
-| Early stopping saves 30% compute | Converged runs stop at epoch 3-5 |
-| Compatibility matrix blocks invalid combos | 0 GradientCredit shape mismatches |
-| Pareto export works | CSV/JSON with top-N configs |
+### 2.4 Resume hardening
+- `CellStreamState` already supports checkpoint/resume; wire it into the
+  controller so a killed cycle resumes mid-page rather than restarting the run.
+- Verify: kill mid-cycle, re-run, assert no cell is measured twice.
 
 ---
 
-## Notes
+## 3. Make the Loop Self-Improving (P1)
 
-- Full 2h maturation run (`./experiment.sh` on bare metal) will provide statistical rigor (5 seeds × 10 epochs)
-- The improvements above can be implemented **in parallel** with the full run
-- After TODO62, the system will be optimized for the confirmed winning configurations
-- Physical substrate validation remains future work (requires hardware access)
+### 3.1 Analysis that classifies, not just ranks
+Each cycle should emit, per promoted cell, one of:
+- **win** — improved on the prior best at the same fidelity
+- **validated** — L0 winner held at L1
+- **false-positive** — L0 winner collapsed at L1
+- **regressed** — previously good cell got worse (shouldn't happen; flag it)
+
+The ledger already records `best_acc` + `improvement`; add the classification so
+the prior update is mechanical.
+
+### 3.2 Prior update rule
+- Boost axes/primitives that appear in wins.
+- Prune primitives that only ever produce false-positives.
+- Widen an axis when a cycle's best is flat (no improvement for K cycles).
+
+### 3.3 Fix-feed loop
+- When `analyze` detects a **defect signature** (exception in the cycle log,
+  e.g. the D1 shape error), the controller:
+  1. records it in the ledger as a defect, not a cell failure;
+  2. narrows the space away from it (compatibility matrix, §4);
+  3. surfaces it for a code fix.
+- This is the "can be fixed" half of the loop: defects become first-class outputs.
+
+### 3.4 Compatibility matrix in `RunSpec`
+- Encode known-broken combinations (D1/D4) so `ModelBasedPolicy` never samples them.
+- Single source of truth; the search space and the validator read the same table.
+
+---
+
+## 4. Capability Improvements (P2 — as cycles reveal need)
+
+| Item | Trigger | Fix |
+|------|---------|-----|
+| Early stopping from convergence curve | Optical converges by epoch 2–3 | Stop when `val_acc` plateau < 0.1% for 3 epochs; add `early_stopped_at_epoch` |
+| Basin stability | ρ near 1 but generalization varies | Multi-start perturbation; add `basin_stability` |
+| Adaptive step_size (predictive settling) | Fixed 0.5 clamp is heuristic | `step_size = min(0.5, 1/L_local)` |
+| Pareto CSV/JSON export | Reports exist but no downstream feed | Export top-N with coordinate + mean/std + curve summary |
+| Claim-grade automation | After a config survives N cycles | `--claim`: 10 seeds × 20 epochs + CEEC governance |
+
+---
+
+## 5. Execution Plan
+
+### Phase 0 — Trust (P0)
+1. Fix D3 (exception clause). 2. Fix D1/D4 (gradient × tile_mesh + validation gap).
+3. Fix D2 (explore discrimination). 4. Resume hardening.
+5. Property locks for each (D1/D4 lock is the key one).
+
+### Phase 1 — Run unattended (P1)
+```bash
+# On bare metal (no 6-min watchdog):
+nohup uv run python scripts/continuous_experiment.py --hours 8 --device cuda \
+  > logs/continuous_main.log 2>&1 &
+# Poll every ≤2 min; ledger is the live artifact:
+tail -f experiments/continuous/ledger.jsonl
+```
+- 8h budget → ~80 cycles at ~5 min each (explore+exploit pairs).
+- Controller resumes if killed; state is durable.
+
+### Phase 2 — Analyze & fix (P1)
+- After each poll: read `ledger.jsonl`; classify wins/false-positives; if a defect
+  signature appears, fix it and resume.
+- Expected defects: D1 shape errors (now caught by §3.4), memory blowups on large
+  geometries, slow cells.
+
+### Phase 3 — Promote & claim (P2)
+- Any config surviving 3+ cycles at ≥95% → claim-grade run (10 seeds × 20 epochs).
+
+---
+
+## 6. Success Metrics
+
+| Metric | Target |
+|--------|--------|
+| Controller runs unattended | ≥ 8h, ≥ 50 cycles, survives kill/resume |
+| Best accuracy found | ≥ 96% (beat 95.8%) |
+| Backprop baseline available | D1 fixed; local vs global compared on tile_mesh |
+| False-positive rate | < 20% of L0-promoted cells collapse at L1 |
+| Defect capture | Every cycle exception recorded + classified, not silently dropped |
+| Reproducibility | Same seed + device → bitwise-equal best (L5 lock) |
+
+---
+
+## 7. Open Questions
+
+- **Is 95.8% the ceiling for digits?** The task is small; saturation may be near.
+  Scale to a harder task (CIFAR-10 subset, or a longer-sequence task) once the
+  loop is trusted.
+- **Does the win transfer across substrates?** optical and memristive both hit
+  ~95%; is the mechanism substrate-independent (tile_mesh + local credit) or does
+  the substrate matter?
+- **What does `target_inversion` do that `thermodynamic_contrast` doesn't?** Both
+  are local credits; the winner uses target_inversion. Ablate the credit on the
+  winning cell at high fidelity.
+- **Can the loop find the win from scratch?** Currently seeded. Test whether
+  explore + stability-ranking (§2.3) rediscovers the tile_mesh region without the
+  `KNOWN_GOOD` seed.
+
+---
+
+## 8. Files
+
+| File | Role |
+|------|------|
+| `scripts/continuous_experiment.py` | Outer controller (propose/run/analyze/state) |
+| `experiments/continuous/state.json` | Resumable state (cycle, best, top-K) |
+| `experiments/continuous/ledger.jsonl` | Durable per-cycle record |
+| `experiments/continuous/continuous.duckdb` | Cumulative evidence store |
+| `logs/continuous_cycle_NNN.log` | Per-cycle raw output |
+| `computronium/experiment/kernel/search_space.py` | D3 fix; `_composable` |
+| `computronium/ontology/system.py` | D4 fix; `_validate_gradient_credit_*` |
+| `computronium/experiment/kernel/compose.py` | D1 fix; tile_mesh forward |
+
+---
+
+**Status:** Controller built + smoke-tested (2 cycles: explore→exploit, state +
+ledger + resume). Seeded with TODO61 priors. **Next: Phase 0 (fix D1–D4), then
+launch unattended on bare metal.**
