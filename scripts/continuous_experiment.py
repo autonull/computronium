@@ -149,34 +149,43 @@ def available_primitives() -> dict[str, list[str]]:
 
 
 def query_best(k: int = 10) -> list[dict]:
-    """Cumulative top-K cells by validation accuracy from the store."""
+    """Cumulative top-K cells by validation accuracy from the store (with retry)."""
     import duckdb
+    import time
 
     if not STORE_FILE.exists():
         return []
-    conn = duckdb.connect(str(STORE_FILE), read_only=True)
-    try:
-        rows = conn.execute(
-            """
-            SELECT substrate, geometry, dynamics, credit, update, plasticity,
-                   MAX(CAST(json_extract(payload, '$.val_acc') AS REAL)) AS acc
-            FROM records
-            WHERE CAST(json_extract(payload, '$.val_acc') AS REAL) IS NOT NULL
-            GROUP BY 1, 2, 3, 4, 5, 6
-            ORDER BY acc DESC
-            LIMIT ?
-            """,
-            [k],
-        ).fetchall()
-    finally:
-        conn.close()
-    return [
-        {
-            "substrate": r[0], "geometry": r[1], "dynamics": r[2],
-            "credit": r[3], "update": r[4], "plasticity": r[5], "acc": float(r[6]),
-        }
-        for r in rows
-    ]
+    for attempt in range(10):
+        try:
+            conn = duckdb.connect(str(STORE_FILE), read_only=True)
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT substrate, geometry, dynamics, credit, update, plasticity,
+                           MAX(CAST(json_extract(payload, '$.val_acc') AS REAL)) AS acc
+                    FROM records
+                    WHERE CAST(json_extract(payload, '$.val_acc') AS REAL) IS NOT NULL
+                    GROUP BY 1, 2, 3, 4, 5, 6
+                    ORDER BY acc DESC
+                    LIMIT ?
+                    """,
+                    [k],
+                ).fetchall()
+            finally:
+                conn.close()
+            return [
+                {
+                    "substrate": r[0], "geometry": r[1], "dynamics": r[2],
+                    "credit": r[3], "update": r[4], "plasticity": r[5], "acc": float(r[6]),
+                }
+                for r in rows
+            ]
+        except duckdb.IOException as e:
+            if "Could not set lock" in str(e) and attempt < 9:
+                time.sleep(0.2 * (attempt + 1))
+                continue
+            raise
+    return []
 
 
 # ── cycle classification ─────────────────────────────────────────────────────
