@@ -106,10 +106,15 @@ run_maturation() {
     info "Target configurations (CONFIRMED at 89% L1 in quick run):"
     info "  1. optical/tile_mesh/energy_minimization/thermodynamic_contrast/ortho_adam/conflict_adaptive (89.2%)"
     info "  2. memristive/tile_mesh/instantaneous/target_inversion/mean_norm/routing (88.9%)"
+    info ""
+    info "Enhancements:"
+    info "  - Hyperparameter sweep (sweep_steps=20) around confirmed configs"
+    info "  - Backprop baseline on same architectures for comparison"
 
     local start_time=$(date +%s)
 
-    # Run targeted production-map with ONLY the 2 confirmed Pareto configurations
+    # Run 1: Main maturation with hyperparameter sweep
+    info "Running main maturation with hp sweep (sweep_steps=20)..."
     run_cmd "uv run python scripts/run_experiment.py \
         --hours ${MATURATION_HOURS} \
         --profile production-map \
@@ -122,8 +127,27 @@ run_maturation() {
         --geometries tile_mesh \
         --dynamics energy_minimization,instantaneous \
         --credits thermodynamic_contrast,target_inversion \
-        --updates ortho_adam,mean_norm \
+        --updates ortho_adam,mean_norm,euclidean,adam,lion \
         --plasticities conflict_adaptive,routing \
+        --store ${MATURATION_STORE} \
+        --verbose"
+
+    # Run 2: Backprop baseline on same architectures
+    info "Running backprop baseline on confirmed architectures..."
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.5 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --fidelity L1 \
+        --epochs 10 \
+        --n-seeds 5 \
+        --batch-limit 0 \
+        --substrates optical,memristive \
+        --geometries tile_mesh \
+        --dynamics energy_minimization,instantaneous \
+        --credits gradient \
+        --updates euclidean,adam \
+        --plasticities null \
         --store ${MATURATION_STORE} \
         --verbose"
 
@@ -133,18 +157,28 @@ run_maturation() {
 }
 
 # ============================================================
-# Phase C: QUICK Targeted Ablation
+# Phase C: FULL Targeted Ablation with Single-Axis Swaps
 # ============================================================
 run_ablation() {
     info "========================================"
-    info "PHASE C: Quick Targeted Ablation (${ABLATION_HOURS}h = ~1 min)"
+    info "PHASE C: Full Targeted Ablation (${ABLATION_HOURS}h)"
     info "========================================"
     info "Profile: production-map (L0 fidelity, 1 epoch, batch_limit=2)"
-    info "Subspace filter matching Pareto subspace for fast screening"
+    info "Subspace filter: Pareto subspace around confirmed configs"
     info "Store: ${ABLATION_STORE}"
+    info ""
+    info "Single-axis ablations (swap one axis at a time):"
+    info "  - Substrate: optical ↔ memristive"
+    info "  - Geometry: tile_mesh ↔ tile"
+    info "  - Dynamics: energy_minimization ↔ instantaneous"
+    info "  - Credit: thermodynamic_contrast ↔ target_inversion"
+    info "  - Update: ortho_adam ↔ mean_norm"
+    info "  - Plasticity: conflict_adaptive ↔ routing"
 
     local start_time=$(date +%s)
 
+    # Full Pareto subspace screen
+    info "Running Pareto subspace screen..."
     run_cmd "uv run python scripts/run_experiment.py \
         --hours ${ABLATION_HOURS} \
         --profile production-map \
@@ -155,6 +189,180 @@ run_ablation() {
         --credits thermodynamic_contrast,target_inversion,temporal_trace,pc_alm \
         --updates ortho_adam,muon,euclidean,natural_gradient,lion,local_adam,mean_norm \
         --plasticities conflict_adaptive,rule_state,routing,null \
+        --store ${ABLATION_STORE} \
+        --verbose"
+
+    # Single-axis ablations around config 1: optical/tile_mesh/energy_minimization/thermodynamic_contrast/ortho_adam/conflict_adaptive
+    info "Running single-axis ablations for Config 1 (optical/energy_minimization/thermodynamic_contrast/ortho_adam/conflict_adaptive)..."
+    
+    # Swap substrate
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates memristive \
+        --geometries tile_mesh \
+        --dynamics energy_minimization \
+        --credits thermodynamic_contrast \
+        --updates ortho_adam \
+        --plasticities conflict_adaptive \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap geometry
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates optical \
+        --geometries tile \
+        --dynamics energy_minimization \
+        --credits thermodynamic_contrast \
+        --updates ortho_adam \
+        --plasticities conflict_adaptive \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap dynamics
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates optical \
+        --geometries tile_mesh \
+        --dynamics instantaneous \
+        --credits thermodynamic_contrast \
+        --updates ortho_adam \
+        --plasticities conflict_adaptive \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap credit
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates optical \
+        --geometries tile_mesh \
+        --dynamics energy_minimization \
+        --credits target_inversion \
+        --updates ortho_adam \
+        --plasticities conflict_adaptive \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap update
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates optical \
+        --geometries tile_mesh \
+        --dynamics energy_minimization \
+        --credits thermodynamic_contrast \
+        --updates mean_norm \
+        --plasticities conflict_adaptive \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap plasticity
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates optical \
+        --geometries tile_mesh \
+        --dynamics energy_minimization \
+        --credits thermodynamic_contrast \
+        --updates ortho_adam \
+        --plasticities routing \
+        --store ${ABLATION_STORE} \
+        --verbose"
+
+    # Single-axis ablations around config 2: memristive/tile_mesh/instantaneous/target_inversion/mean_norm/routing
+    info "Running single-axis ablations for Config 2 (memristive/instantaneous/target_inversion/mean_norm/routing)..."
+    
+    # Swap substrate
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates optical \
+        --geometries tile_mesh \
+        --dynamics instantaneous \
+        --credits target_inversion \
+        --updates mean_norm \
+        --plasticities routing \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap geometry
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates memristive \
+        --geometries tile \
+        --dynamics instantaneous \
+        --credits target_inversion \
+        --updates mean_norm \
+        --plasticities routing \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap dynamics
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates memristive \
+        --geometries tile_mesh \
+        --dynamics energy_minimization \
+        --credits target_inversion \
+        --updates mean_norm \
+        --plasticities routing \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap credit
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates memristive \
+        --geometries tile_mesh \
+        --dynamics instantaneous \
+        --credits thermodynamic_contrast \
+        --updates mean_norm \
+        --plasticities routing \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap update
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates memristive \
+        --geometries tile_mesh \
+        --dynamics instantaneous \
+        --credits target_inversion \
+        --updates ortho_adam \
+        --plasticities routing \
+        --store ${ABLATION_STORE} \
+        --verbose"
+    
+    # Swap plasticity
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours 0.05 \
+        --profile production-map \
+        --device ${DEVICE} \
+        --substrates memristive \
+        --geometries tile_mesh \
+        --dynamics instantaneous \
+        --credits target_inversion \
+        --updates mean_norm \
+        --plasticities conflict_adaptive \
         --store ${ABLATION_STORE} \
         --verbose"
 
