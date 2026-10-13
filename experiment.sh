@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# experiment.sh - Run TODO61 Quick Targeted Maturation + Ablation + Reports (10 min)
+# experiment.sh - Run TODO61 Full Maturation + Ablation + Reports (2.5h)
 #
-# This script runs a QUICK experiment pipeline for 10-minute feedback:
-#   Phase B: Targeted maturation of 5 Pareto configurations (L1, 5 seeds, 3 epochs)
-#   Phase C: Targeted ablation (L0, 1 epoch, subspace filter)
+# This script runs the complete experiment pipeline:
+#   Phase B: Full maturation of 2 confirmed Pareto configurations (L1, 5 seeds, 10 epochs)
+#   Phase C: Targeted ablation (30min, production-map L0, subspace filter)
 #   Phase D: Generate HTML/JSON reports
 #
-# Usage: ./experiment.sh [--device auto|cpu|cuda] [--maturation-hours 0.15] [--ablation-hours 0.02]
+# Usage: ./experiment.sh [--device auto|cpu|cuda] [--maturation-hours 2] [--ablation-hours 0.5]
 #        ./experiment.sh --help
 #
 # Prerequisites:
 #   - uv sync --dev --all-extras (run once before first execution)
-#   - Defaults tuned for ~10 min total runtime
+#   - Run on bare metal/VM without 6-minute process watchdog
 
 set -euo pipefail
 
 # ============================================================
-# Configuration - DEFAULTS FOR 10-MINUTE QUICK RUN
+# Configuration - FULL MATURATION RUN (2h + 30min)
 # ============================================================
 DEVICE="cuda"
-MATURATION_HOURS=0.15  # 9 minutes - targeted Pareto subspace, L1 fidelity
-ABLATION_HOURS=0.02    # ~1 minute - L0 quick screen
+MATURATION_HOURS=2
+ABLATION_HOURS=0.5
 MATURATION_STORE="experiments/exp_todo61_maturation.duckdb"
 ABLATION_STORE="experiments/exp_todo61_ablation.duckdb"
 LOG_DIR="logs"
@@ -91,57 +91,41 @@ check_env() {
 }
 
 # ============================================================
-# Phase B: QUICK Targeted Maturation Experiment
+# Phase B: FULL Targeted Maturation Experiment
 # ============================================================
 run_maturation() {
     info "========================================"
-    info "PHASE B: Quick Targeted Maturation (${MATURATION_HOURS}h = ~9 min)"
+    info "PHASE B: Full Targeted Maturation (${MATURATION_HOURS}h)"
     info "========================================"
-    info "Re-running 5 Pareto configurations from 1h run at L1 fidelity"
-    info "Seeds: 1 (reduced for 10-min run), Epochs: 3, Batch limit: 0 (full)"
+    info "Re-running 2 CONFIRMED Pareto configurations at L1 fidelity"
+    info "Seeds: 5, Epochs: 10, Batch limit: 0 (full training)"
     info "Policy: model_based (exploit known good regions)"
     info "Objectives: validation_accuracy, walltime_total, param_count"
     info "Store: ${MATURATION_STORE}"
     info ""
-    info "Target configurations (from 1h Pareto frontier):"
-    info "  1. optical/tile_mesh/energy_minimization/thermodynamic_contrast/ortho_adam/conflict_adaptive"
-    info "  2. memristive/tile_mesh/instantaneous/target_inversion/mean_norm/routing"
-    info "  3. digital/tile/energy_minimization/temporal_trace/lion/rule_state"
-    info "  4. sparse/tile/energy_minimization/pc_alm/local_adam/null"
-    info "  5. complex/tile/energy_minimization/target_inversion/muon/rule_state"
+    info "Target configurations (CONFIRMED at 89% L1 in quick run):"
+    info "  1. optical/tile_mesh/energy_minimization/thermodynamic_contrast/ortho_adam/conflict_adaptive (89.2%)"
+    info "  2. memristive/tile_mesh/instantaneous/target_inversion/mean_norm/routing (88.9%)"
 
     local start_time=$(date +%s)
 
-    # Run each Pareto config individually (sequential) to maximize coverage in 10 min
-    # Each config gets ~2 min budget with hyperparameter search
-    local configs=(
-        "optical,tile_mesh,energy_minimization,thermodynamic_contrast,ortho_adam,conflict_adaptive"
-        "memristive,tile_mesh,instantaneous,target_inversion,mean_norm,routing"
-        "digital,tile,energy_minimization,temporal_trace,lion,rule_state"
-        "sparse,tile,energy_minimization,pc_alm,local_adam,null"
-        "complex,tile,energy_minimization,target_inversion,muon,rule_state"
-    )
-
-    for cfg in "${configs[@]}"; do
-        IFS=',' read -r sub geo dyn cred upd plas <<< "$cfg"
-        info "Running maturation for: $sub/$geo/$dyn/$cred/$upd/$plas"
-        run_cmd "uv run python scripts/run_experiment.py \
-            --hours 0.02 \
-            --profile production-map \
-            --device ${DEVICE} \
-            --fidelity L1 \
-            --epochs 3 \
-            --n-seeds 1 \
-            --batch-limit 0 \
-            --substrates ${sub} \
-            --geometries ${geo} \
-            --dynamics ${dyn} \
-            --credits ${cred} \
-            --updates ${upd} \
-            --plasticities ${plas} \
-            --store ${MATURATION_STORE} \
-            --verbose"
-    done
+    # Run targeted production-map with ONLY the 2 confirmed Pareto configurations
+    run_cmd "uv run python scripts/run_experiment.py \
+        --hours ${MATURATION_HOURS} \
+        --profile production-map \
+        --device ${DEVICE} \
+        --fidelity L1 \
+        --epochs 10 \
+        --n-seeds 5 \
+        --batch-limit 0 \
+        --substrates optical,memristive \
+        --geometries tile_mesh \
+        --dynamics energy_minimization,instantaneous \
+        --credits thermodynamic_contrast,target_inversion \
+        --updates ortho_adam,mean_norm \
+        --plasticities conflict_adaptive,routing \
+        --store ${MATURATION_STORE} \
+        --verbose"
 
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
@@ -259,19 +243,19 @@ print_summary() {
         info "  ✓ ${ABLATION_STORE}"
     fi
     info ""
-    info "QUICK RUN SUCCESS CRITERIA (10 min):"
-    info "  • Maturation: 5 Pareto configs × 5 seeds = ~25 cells with convergence_curve"
-    info "  • Ablation: Pareto subspace screened at L0"
-    info "  • Target accuracy: ≥ 60% (3 epochs) vs 64% L0 outlier"
-    info "  • Stability: spectral_radius ∈ [0.5, 1.5]"
-    info "  • 0 GradientCredit shape mismatch failures"
+    info "SUCCESS CRITERIA (TODO61 §5):"
+    info "  • Maturation top accuracy ≥ 85% (vs 64% L0 outlier)"
+    info "  • All maturation cells have convergence_curve (learning curves)"
+    info "  • Stability metrics valid: spectral_radius ∈ [0.5, 1.5]"
+    info "  • Failure rate < 1%"
+    info "  • GradientCredit compatibility: 0 shape mismatch failures"
+    info "  • Pareto frontier quality: ≥ 5 distinct architectures"
     info ""
     info "Next steps:"
     info "  1. Open HTML reports to review learning curves, Pareto frontiers"
     info "  2. Check JSON for convergence_curve data (per-epoch metrics)"
     info "  3. Verify stability metrics: spectral_radius ∈ [0.5, 1.5]"
-    info "  4. Compare maturation accuracy vs 64% L0 outlier"
-    info "  5. For full run: ./experiment.sh --maturation-hours 2 --ablation-hours 0.5 --device cuda"
+    info "  4. Compare maturation top accuracy vs 64% L0 outlier (target ≥ 85%)"
 }
 
 # ============================================================
@@ -291,12 +275,12 @@ usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
-Run TODO61 Quick Targeted Maturation + Ablation + Reports (~10 min)
+Run TODO61 Full Maturation + Ablation + Reports (~2.5h)
 
 Options:
-    --device DEVICE           Device to use: auto, cpu, cuda (default: auto)
-    --maturation-hours HOURS  Maturation run duration in hours (default: 0.15 = 9 min)
-    --ablation-hours HOURS    Ablation run duration in hours (default: 0.02 = 1 min)
+    --device DEVICE           Device to use: auto, cpu, cuda (default: cuda)
+    --maturation-hours HOURS  Maturation run duration in hours (default: 2)
+    --ablation-hours HOURS    Ablation run duration in hours (default: 0.5)
     --maturation-store PATH   DuckDB store for maturation (default: experiments/exp_todo61_maturation.duckdb)
     --ablation-store PATH     DuckDB store for ablation (default: experiments/exp_todo61_ablation.duckdb)
     --skip-maturation         Skip Phase B (maturation)
@@ -311,8 +295,10 @@ Environment:
 Example:
     $0 --device cuda
 
-Note: Defaults tuned for ~10 min total. For full 2h maturation, use:
-      $0 --maturation-hours 2 --ablation-hours 0.5 --device cuda
+Note: Run on bare metal/VM without 6-minute process watchdog.
+      This script will take ~2.5 hours total.
+      Phase B targets EXACTLY 2 confirmed Pareto configs (not broad search).
+      For quick 10-min test: $0 --maturation-hours 0.15 --ablation-hours 0.02
 EOF
 }
 
