@@ -597,7 +597,12 @@ a legacy store migrates and is queryable through the new registry.
 Critical path to a meaningful 24h run; reorder freely — workstreams are decoupled.
 
 0. **O** Foundations — provenance, deterministic seeds, store migration, checkpointing. **First**;
-   everything below writes through it.
+   everything below writes through it. ✅ **COMPLETED**
+   - `computronium/experiment/registry/provenance.py` — ProvenanceRecord, ProvenanceBuilder, validation
+   - `computronium/experiment/registry/seed.py` — SeedContext, SeedContextManager, CellSeedPlan
+   - `computronium/experiment/registry/checkpoint.py` — CycleCheckpoint, RunCheckpoint, CheckpointManager
+   - `computronium/experiment/registry/__init__.py` — ExperimentRegistry unified integration
+   - `computronium/experiment/evidence/store.py` — provenance enforcement on write, store migration, checkpoint transaction
 1. **A** One Orchestrator (delete the mini-system) — everything hangs off it.
 2. **G** CLI Consolidation (delete shell scripts) — do with A.
 3. **H** Campaign engine as driver — do with A.
@@ -637,7 +642,7 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
     hypothesis (e.g. *"local credit ≥ backprop at matched compute budget on ≥ 2 non-vision
     domains"*) and emits a CEEC-governed claim with a definitive verdict, **whether confirmed
     or falsified**. Exported to the CEEC boundary (§8), not decided inside the kernel.
-14. [ ] Every record carries immutable **provenance** (`code_git_sha`, `config_sha256`,
+14. [✅] Every record carries immutable **provenance** (`code_git_sha`, `config_sha256`,
     `seed_list`, `env_fingerprint`, `hardware_hash`); a **mid-run crash resumes exactly** from
     the last checkpoint; `computronium experiment replay` reproduces a claimed metric.
 

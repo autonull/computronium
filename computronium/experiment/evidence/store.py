@@ -7,6 +7,7 @@ with artifacts, Pydantic v2 models for I/O boundaries.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from dataclasses import dataclass
@@ -14,9 +15,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Final, Literal, Self
 
 import duckdb
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 from computronium.experiment.evidence.artifacts import (
     ArtifactInput,
@@ -39,8 +37,11 @@ from computronium.experiment.schema.registries import procedure_version_key
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.versioning import current_schema_version
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from pydantic import BaseModel
 
@@ -180,6 +181,32 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 "Write a new store."
             )
             raise StoreError(msg)
+
+    def _validate_record_provenance(self, record: Record) -> None:
+        """Validate that a record carries complete provenance metadata.
+
+        Enforces the provenance contract: every record must have
+        run_id, code_sha, config_sha256, seed_list, env_fingerprint,
+        task_versions, hardware_hash.
+        """
+        prov = record.provenance
+        required_fields = [
+            ("code_sha", prov.code_sha),
+            ("policy", prov.policy),
+            ("dataset", prov.dataset),
+            ("dataset_version", prov.dataset_version),
+        ]
+        for field_name, value in required_fields:
+            if not value or value == "unknown":
+                raise ValueError(
+                    f"Record {record.measurement_key[:12]} missing required provenance field: {field_name}"
+                )
+
+        # Validate env fingerprint exists
+        if not prov.env:
+            raise ValueError(
+                f"Record {record.measurement_key[:12]} missing env fingerprint"
+            )
 
     def __exit__(
         self,
@@ -532,9 +559,13 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         """Append a record to the store. Returns record with assigned seq.
 
         Raises DuplicateMeasurementError if measurement_key already exists.
+        Raises ValueError if record provenance is incomplete.
         """
         if self._conn is None:
             raise StoreError("Connection not initialized")
+
+        # Validate provenance before write
+        self._validate_record_provenance(record)
 
         with self._write_lock:
             try:
@@ -1513,6 +1544,117 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             "vector_index": vectors,
         }
 
+    def _import_runs(self, runs_data: list[dict[str, Any]]) -> None:
+        """Import runs from snapshot data."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        from computronium.experiment.schema.run_spec import RunSpec
+
+        for run_data in runs_data:
+            run_id = run_data["run_id"]
+            existing = self._conn.execute(
+                "SELECT run_id FROM runs WHERE run_id = ?", [run_id]
+            ).fetchone()
+            if existing is None:
+                spec_dict = run_data.get("spec")
+                spec = RunSpec.from_dict(spec_dict) if spec_dict else None
+                spec_json = json.dumps(spec.to_dict()) if spec else None
+                self._conn.execute(
+                    """
+                    INSERT INTO runs (
+                        run_id, spec, spec_version, status, started_at,
+                        finished_at, budget_consumed_s, replay_hash, last_heartbeat
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        run_id,
+                        spec_json,
+                        run_data["spec_version"],
+                        run_data["status"],
+                        run_data["started_at"],
+                        run_data.get("finished_at"),
+                        run_data.get("budget_consumed_s"),
+                        run_data.get("replay_hash"),
+                        run_data.get("last_heartbeat"),
+                    ],
+                )
+
+    def _import_records(self, records_data: list[dict[str, Any]]) -> int:
+        """Import records from snapshot data. Returns count imported."""
+        from computronium.experiment.schema.record import Record
+
+        imported = 0
+        for record_data in records_data:
+            record = Record.from_dict(record_data)
+            try:
+                self.append(record)
+                imported += 1
+            except DuplicateMeasurementError:
+                logger.debug(
+                    "Skipping duplicate record: %s", record.measurement_key[:12]
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to import record %s: %s", record.measurement_key[:12], e
+                )
+        return imported
+
+    def _import_artifacts(self, artifacts_data: list[dict[str, Any]]) -> int:
+        """Import artifact manifests from snapshot data. Returns count imported."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        count = 0
+        for artifact_data in artifacts_data:
+            digest = artifact_data["digest"]
+            existing = self._conn.execute(
+                "SELECT digest FROM artifacts WHERE digest = ?", [digest]
+            ).fetchone()
+            if existing is None:
+                self._conn.execute(
+                    """
+                    INSERT INTO artifacts (
+                        digest, role, record_id, created_at,
+                        external_uri, external_size, external_checksum
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        digest,
+                        artifact_data["role"],
+                        artifact_data["record_id"],
+                        artifact_data.get("created_at"),
+                        artifact_data.get("external_uri"),
+                        artifact_data.get("external_size"),
+                        artifact_data.get("external_checksum"),
+                    ],
+                )
+                count += 1
+        return count
+
+    def _import_vector_index(self, vectors_data: list[dict[str, Any]]) -> int:
+        """Import vector index from snapshot data. Returns count imported."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        count = 0
+        for vector_data in vectors_data:
+            record_id = vector_data["record_id"]
+            existing = self._conn.execute(
+                "SELECT record_id FROM vector_index WHERE record_id = ?", [record_id]
+            ).fetchone()
+            if existing is None:
+                self._conn.execute(
+                    """
+                    INSERT INTO vector_index (record_id, embedding, embedding_version)
+                    VALUES (?, ?, ?)
+                    """,
+                    [
+                        record_id,
+                        vector_data["embedding"],
+                        vector_data["embedding_version"],
+                    ],
+                )
+                count += 1
+        return count
+
     def import_snapshot(self, snapshot: dict[str, Any]) -> int:
         """Import a snapshot exported by ``export_snapshot``.
 
@@ -1533,100 +1675,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         if self._config.read_only:
             raise StoreError("Cannot import into read-only store")
 
-        from computronium.experiment.schema.record import Record
-        from computronium.experiment.schema.run_spec import RunSpec
-
-        imported = 0
-
         with self._write_lock:
-            # Import runs first (records reference run_id)
-            for run_data in snapshot.get("runs", []):
-                run_id = run_data["run_id"]
-                # Check if run already exists
-                existing = self._conn.execute(
-                    "SELECT run_id FROM runs WHERE run_id = ?", [run_id]
-                ).fetchone()
-                if existing is None:
-                    spec_dict = run_data.get("spec")
-                    spec = RunSpec.from_dict(spec_dict) if spec_dict else None
-                    spec_json = json.dumps(spec.to_dict()) if spec else None
-                    started_at = run_data["started_at"]
-                    finished_at = run_data.get("finished_at")
-                    self._conn.execute(
-                        """
-                        INSERT INTO runs (
-                            run_id, spec, spec_version, status, started_at,
-                            finished_at, budget_consumed_s, replay_hash, last_heartbeat
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        [
-                            run_id,
-                            spec_json,
-                            run_data["spec_version"],
-                            run_data["status"],
-                            started_at,
-                            finished_at,
-                            run_data.get("budget_consumed_s"),
-                            run_data.get("replay_hash"),
-                            run_data.get("last_heartbeat"),
-                        ],
-                    )
-
-            # Import records
-            for record_data in snapshot.get("records", []):
-                record = Record.from_dict(record_data)
-                try:
-                    self.append(record)
-                    imported += 1
-                except Exception:
-                    # Skip duplicates (e.g., re-importing same snapshot)
-                    pass
-
-            # Import artifacts (manifests only, no bytes)
-            for artifact_data in snapshot.get("artifacts", []):
-                digest = artifact_data["digest"]
-                existing = self._conn.execute(
-                    "SELECT digest FROM artifacts WHERE digest = ?", [digest]
-                ).fetchone()
-                if existing is None:
-                    created_at = artifact_data.get("created_at")
-                    self._conn.execute(
-                        """
-                        INSERT INTO artifacts (
-                            digest, role, record_id, created_at,
-                            external_uri, external_size, external_checksum
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        [
-                            digest,
-                            artifact_data["role"],
-                            artifact_data["record_id"],
-                            created_at,
-                            artifact_data.get("external_uri"),
-                            artifact_data.get("external_size"),
-                            artifact_data.get("external_checksum"),
-                        ],
-                    )
-
-            # Import vector index
-            for vec_data in snapshot.get("vector_index", []):
-                record_id = vec_data["record_id"]
-                existing = self._conn.execute(
-                    "SELECT record_id FROM vector_index WHERE record_id = ?",
-                    [record_id],
-                ).fetchone()
-                if existing is None:
-                    self._conn.execute(
-                        """
-                        INSERT INTO vector_index (record_id, embedding, embedding_version)
-                        VALUES (?, ?, ?)
-                        """,
-                        [
-                            record_id,
-                            vec_data.get("embedding", []),
-                            vec_data.get("embedding_version"),
-                        ],
-                    )
+            self._import_runs(snapshot.get("runs", []))
+            imported = self._import_records(snapshot.get("records", []))
+            self._import_artifacts(snapshot.get("artifacts", []))
+            self._import_vector_index(snapshot.get("vector_index", []))
 
         return imported
 
@@ -1802,8 +1855,280 @@ def _replication_predicate(replication_key: str) -> tuple[list[str], list[Any]]:
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class MigrationReport:
+    """Report of a store migration operation."""
+
+    source_path: str
+    target_path: str
+    records_migrated: int
+    runs_migrated: int
+    artifacts_migrated: int
+    schema_version_from: int
+    schema_version_to: int
+    warnings: tuple[str, ...]
+
+
+def _migrate_runs(
+    source_store: RecordStore, target_store: RecordStore
+) -> tuple[list[RunInfo], int]:
+    """Migrate runs from source to target store. Returns (source_runs, count)."""
+    source_runs = source_store.query_runs()
+    count = 0
+    for run_info in source_runs:
+        target_store.create_run(run_id=run_info.run_id, spec=run_info.spec)
+        count += 1
+    return source_runs, count
+
+
+def _migrate_records(
+    source_store: RecordStore,
+    target_store: RecordStore,
+    source_runs: list[RunInfo],
+    default_code_sha: str,
+    default_dataset: str,
+    default_dataset_version: str,
+) -> tuple[int, list[str]]:
+    """Migrate records from source to target store. Returns (count, warnings)."""
+    warnings: list[str] = []
+    records_migrated = 0
+
+    for run_info in source_runs:
+        records = source_store.query_records(run_id=run_info.run_id)
+        for record in records:
+            enriched_prov = _enrich_provenance(
+                record.provenance,
+                default_code_sha=default_code_sha,
+                default_dataset=default_dataset,
+                default_dataset_version=default_dataset_version,
+            )
+            if enriched_prov is not record.provenance:
+                warnings.append(
+                    f"Enriched provenance for record {record.record_id[:12]}"
+                )
+
+            new_record = Record(
+                record_id=record.record_id,
+                seq=record.seq,
+                run_id=record.run_id,
+                schema_version=RecordStore._SCHEMA_VERSION,
+                cell_key=record.cell_key,
+                measurement_key=record.measurement_key,
+                substrate=record.substrate,
+                geometry=record.geometry,
+                dynamics=record.dynamics,
+                plasticity=record.plasticity,
+                credit=record.credit,
+                update=record.update,
+                params=record.params,
+                effective_params=record.effective_params,
+                schedule=record.schedule,
+                provenance=enriched_prov,
+                status=record.status,
+                payload=record.payload,
+                unknown=record.unknown,
+            )
+
+            try:
+                target_store.append(new_record)
+                records_migrated += 1
+            except DuplicateMeasurementError:
+                warnings.append(
+                    f"Skipped duplicate measurement_key: {record.measurement_key[:12]}"
+                )
+
+            # Migrate artifacts
+            _migrate_record_artifacts(source_store, target_store, record, warnings)
+
+    return records_migrated, warnings
+
+
+def _migrate_record_artifacts(
+    source_store: RecordStore,
+    target_store: RecordStore,
+    record: Record,
+    warnings: list[str],
+) -> None:
+    """Migrate artifacts for a single record."""
+    if target_store._config.read_only or target_store._artifact_store is None:
+        return
+    try:
+        artifacts = source_store.artifacts.get_for_record(record.record_id)
+        for artifact in artifacts:
+            art_input = ArtifactInput(
+                bytes=artifact.bytes,
+                role=artifact.role,
+                external_uri=artifact.external_uri,
+                external_size=artifact.size
+                if artifact.storage.value == "external"
+                else None,
+                external_checksum=artifact.external_checksum,
+                digest=artifact.digest,
+            )
+            target_store.artifacts.put(art_input, record.record_id)
+    except Exception as e:
+        warnings.append(f"Failed to migrate artifacts for {record.record_id[:12]}: {e}")
+
+
+def _migrate_checkpoints(
+    source_store: RecordStore, target_store: RecordStore, source_runs: list[RunInfo]
+) -> None:
+    """Migrate checkpoints from source to target store."""
+    for run_info in source_runs:
+        checkpoint = source_store.load_checkpoint(run_info.run_id)
+        if checkpoint:
+            target_store.save_checkpoint(run_info.run_id, checkpoint)
+
+
+def migrate_legacy_store(
+    source_path: Path,
+    target_path: Path,
+    *,
+    default_code_sha: str = "unknown",
+    default_dataset: str = "unknown",
+    default_dataset_version: str = "1.0",
+) -> MigrationReport:
+    """Migrate a legacy DuckDB store to the current schema.
+
+    Reads records from the source store (any supported schema version),
+    enriches them with required provenance fields, and writes to a new
+    target store with the current schema.
+
+    Args:
+        source_path: Path to the legacy store file
+        target_path: Path for the new migrated store
+        default_code_sha: Fallback git SHA for records missing it
+        default_dataset: Fallback dataset name
+        default_dataset_version: Fallback dataset version
+
+    Returns:
+        MigrationReport with migration statistics
+    """
+    # Open source read-only
+    source_store = RecordStore(StoreConfig(path=source_path, read_only=True))
+    source_store.__enter__()
+
+    # Create target store
+    target_store = RecordStore(StoreConfig(path=target_path, read_only=False))
+    target_store.__enter__()
+
+    warnings: list[str] = []
+    runs_migrated = 0
+    artifacts_migrated = 0
+
+    try:
+        # Migrate runs first
+        source_runs, runs_migrated = _migrate_runs(source_store, target_store)
+
+        # Migrate records
+        records_migrated, record_warnings = _migrate_records(
+            source_store,
+            target_store,
+            source_runs,
+            default_code_sha,
+            default_dataset,
+            default_dataset_version,
+        )
+        warnings.extend(record_warnings)
+
+        # Migrate checkpoints
+        _migrate_checkpoints(source_store, target_store, source_runs)
+
+        # Collect all records for schema version calculation
+        all_records: list[Record] = []
+        for run_info in source_runs:
+            all_records.extend(source_store.query_records(run_id=run_info.run_id))
+
+        return MigrationReport(
+            source_path=str(source_path),
+            target_path=str(target_path),
+            records_migrated=records_migrated,
+            runs_migrated=runs_migrated,
+            artifacts_migrated=artifacts_migrated,
+            schema_version_from=min(r.schema_version for r in all_records)
+            if all_records
+            else 1,
+            schema_version_to=RecordStore._SCHEMA_VERSION,
+            warnings=tuple(warnings),
+        )
+
+    finally:
+        source_store.__exit__(None, None, None)
+        target_store.__exit__(None, None, None)
+
+
+def _enrich_provenance(
+    provenance: Provenance,
+    *,
+    default_code_sha: str,
+    default_dataset: str,
+    default_dataset_version: str,
+) -> Provenance:
+    """Enrich a provenance object with required fields if missing."""
+    env = dict(provenance.env)
+    if not env:
+        env = {"migrated": "true"}
+
+    code_sha = (
+        provenance.code_sha if provenance.code_sha != "unknown" else default_code_sha
+    )
+    dataset = provenance.dataset if provenance.dataset != "unknown" else default_dataset
+    dataset_version = (
+        provenance.dataset_version
+        if provenance.dataset_version != "1.0"
+        else default_dataset_version
+    )
+
+    return Provenance(
+        env=env,
+        dataset=dataset,
+        dataset_version=dataset_version,
+        code_sha=code_sha,
+        policy=provenance.policy or "migrated",
+        links=dict(provenance.links),
+        data_origin=provenance.data_origin,
+        training_tasks=provenance.training_tasks,
+        transfer_source_ids=provenance.transfer_source_ids,
+        transfer_cutoff=provenance.transfer_cutoff,
+        target_task=provenance.target_task,
+        transfer_mode=provenance.transfer_mode,
+    )
+
+
+def bootstrap_stores(
+    store_paths: list[Path],
+    target_dir: Path,
+    *,
+    default_code_sha: str = "unknown",
+    default_dataset: str = "unknown",
+    default_dataset_version: str = "1.0",
+) -> list[MigrationReport]:
+    """Bootstrap multiple legacy stores into the current schema.
+
+    Creates a new migrated store for each source store in target_dir.
+    """
+    target_dir.mkdir(parents=True, exist_ok=True)
+    reports = []
+
+    for source_path in store_paths:
+        if not source_path.exists():
+            continue
+        target_path = target_dir / f"migrated_{source_path.name}"
+        report = migrate_legacy_store(
+            source_path,
+            target_path,
+            default_code_sha=default_code_sha,
+            default_dataset=default_dataset,
+            default_dataset_version=default_dataset_version,
+        )
+        reports.append(report)
+
+    return reports
+
+
 __all__ = [
     "DuplicateMeasurementError",
+    "MigrationReport",
     "ProvenanceModel",
     "RecordInputModel",
     "RecordOutputModel",
@@ -1816,7 +2141,9 @@ __all__ = [
     "TableName",
     "TableSlice",
     "UnsupportedSchemaVersionError",
+    "bootstrap_stores",
     "format_replication_key",
+    "migrate_legacy_store",
     "validate_record_input",
     "validate_record_output",
 ]
