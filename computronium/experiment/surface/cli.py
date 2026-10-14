@@ -460,6 +460,95 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
 
+    # Loop command — continuous autonomous experiment controller
+    p_loop = sub.add_parser(
+        "loop",
+        help="Continuous autonomous experiment loop: explore→exploit cycles with time budget (replaces scripts/continuous_experiment.py and scripts/run_autonomous.py)",
+    )
+    p_loop.add_argument(
+        "--hours",
+        type=float,
+        default=8.0,
+        help="Total time budget in hours (default: 8)",
+    )
+    p_loop.add_argument(
+        "--cycles",
+        type=int,
+        default=0,
+        help="Stop after N cycles (0 = run until time budget exhausted)",
+    )
+    p_loop.add_argument(
+        "--device",
+        choices=["auto", "cpu", "cuda"],
+        default="auto",
+        help="Device: auto (CUDA if available), cpu, cuda",
+    )
+    p_loop.add_argument(
+        "--store",
+        default="experiments/loop/loop.duckdb",
+        help="DuckDB store path",
+    )
+    p_loop.add_argument(
+        "--state-dir",
+        default="experiments/loop",
+        help="Directory for loop state (ledger, defects, report, checkpoints)",
+    )
+    p_loop.add_argument(
+        "--profile",
+        default="production-map",
+        help="Run profile for individual cycles (default: production-map)",
+    )
+    p_loop.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Master seed for deterministic seed hierarchy (random if omitted)",
+    )
+    p_loop.add_argument(
+        "--explore-fidelity",
+        choices=["L0", "L1"],
+        default="L0",
+        help="Fidelity for explore cycles (default: L0)",
+    )
+    p_loop.add_argument(
+        "--exploit-fidelity",
+        choices=["L1", "L2"],
+        default="L1",
+        help="Fidelity for exploit cycles (default: L1)",
+    )
+    p_loop.add_argument(
+        "--explore-hours",
+        type=float,
+        default=0.5,
+        help="Hours per explore cycle (default: 0.5)",
+    )
+    p_loop.add_argument(
+        "--exploit-hours",
+        type=float,
+        default=0.5,
+        help="Hours per exploit cycle (default: 0.5)",
+    )
+    p_loop.add_argument(
+        "--explore-sweep-steps",
+        type=int,
+        default=30,
+        help="Sweep steps for explore cycles (default: 30)",
+    )
+    p_loop.add_argument(
+        "--exploit-sweep-steps",
+        type=int,
+        default=15,
+        help="Sweep steps for exploit cycles (default: 15)",
+    )
+    p_loop.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show plan without executing",
+    )
+    p_loop.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
     # Hypothesis campaign command
     p_hypothesis = sub.add_parser(
         "hypothesis-campaign",
@@ -2412,6 +2501,530 @@ def _cmd_campaign(args: argparse.Namespace) -> int:
             logger.info(f"Results written to {args.output}")
 
     return 0 if result["failed"] == 0 else 1
+
+
+def _cmd_loop(args: argparse.Namespace) -> int:
+    """Continuous autonomous experiment loop: explore/exploit cycles with time budget."""
+    import asyncio
+    import json
+    import signal
+    import time
+    from pathlib import Path
+
+    from computronium.experiment.evidence.store import RecordStore, StoreConfig
+    from computronium.experiment.execution.backends import LocalBackend
+    from computronium.experiment.execution.deadline import Deadline
+    from computronium.experiment.execution.pipeline import (
+        PipelineConfig,
+        PipelineRunner,
+    )
+    from computronium.experiment.kernel.evaluate import task_shape
+    from computronium.experiment.kernel.search_space import (
+        declared_cell_count,
+        iter_candidates,
+        search_space_from_spec,
+    )
+    from computronium.experiment.registry import (
+        ExperimentConfig,
+        ExperimentRegistry,
+        create_registry,
+    )
+    from computronium.experiment.registry.checkpoint import compute_spec_hash
+    from computronium.experiment.registry.seed import SeedContextManager
+    from computronium.experiment.schema import RunSpec, StageId
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.run_spec import AxisSelection
+    from computronium.experiment.surface.cli import (
+        RUN_PROFILES,
+        _CELL_WORKERS,
+        _consumed,
+        _settle_maturity,
+        create_policy,
+        policy_context,
+    )
+    from computronium.experiment.surface.report import (
+        ReportGenerator,
+        generate_run_report,
+    )
+
+    # Ensure registries are seeded
+    from computronium.experiment.schema import _ensure_registries_seeded
+
+    _ensure_registries_seeded()
+
+    # Resolve device
+    import torch
+
+    device = (
+        "cuda"
+        if args.device == "auto" and torch.cuda.is_available()
+        else ("cpu" if args.device == "auto" else args.device)
+    )
+
+    # Setup paths
+    state_dir = Path(args.state_dir)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    store_path = Path(args.store)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # State files
+    ledger_file = state_dir / "ledger.jsonl"
+    defects_file = state_dir / "defects.jsonl"
+    report_file = state_dir / "report.md"
+    checkpoint_file = state_dir / "checkpoint.json"
+
+    # Load existing checkpoint if resuming
+    checkpoint = {}
+    if checkpoint_file.exists():
+        checkpoint = json.loads(checkpoint_file.read_text())
+
+    cycle = checkpoint.get("cycle", 0)
+    best_acc = checkpoint.get("best_acc", 0.0)
+    top_cells = checkpoint.get("top_cells", [])
+    history = checkpoint.get("history", [])
+    master_seed = checkpoint.get("master_seed", args.seed)
+
+    # If no master seed in checkpoint, use provided seed or generate one
+    if master_seed is None:
+        import random
+
+        master_seed = random.SystemRandom().randint(0, 2**31 - 1)
+
+    # Initialize seed context manager
+    seed_manager = SeedContextManager(master_seed=master_seed)
+
+    # Get profile for axis selections
+    profile = RUN_PROFILES[args.profile]
+
+    # Get available primitives for explore cycles
+    from computronium.experiment.schema.axis import AXES_REGISTRIES
+
+    available_primitives = {
+        axis.value: sorted(
+            name for name, spec in AXES_REGISTRIES[axis].items() if spec.available
+        )
+        for axis in StructuralAxis
+    }
+
+    def propose_axes(
+        kind: str, force_explore: bool = False
+    ) -> tuple[list[AxisSelection], dict]:
+        """Propose axis selections and run knobs for the next cycle."""
+        if kind == "explore" or force_explore:
+            # Explore: all available primitives on all axes
+            axes = []
+            for axis in StructuralAxis:
+                prims = available_primitives[axis.value]
+                if prims:
+                    axes.append(AxisSelection(axis=axis, primitives=tuple(prims)))
+            knobs = {
+                "fidelity": args.explore_fidelity,
+                "epochs": 1,
+                "n_seeds": 1,
+                "batch_limit": 2000,
+                "hours": args.explore_hours,
+                "sweep_steps": args.explore_sweep_steps,
+            }
+            return axes, knobs
+
+        # Exploit: union of axes from top cells
+        if not top_cells:
+            return propose_axes("explore")
+
+        union: dict[StructuralAxis, set[str]] = {axis: set() for axis in StructuralAxis}
+        for cell in top_cells:
+            for axis in StructuralAxis:
+                val = cell.get(axis.value)
+                if val:
+                    union[axis].add(val)
+        axes = []
+        for axis in StructuralAxis:
+            values = sorted(union[axis])
+            if values:
+                axes.append(AxisSelection(axis=axis, primitives=tuple(values)))
+        knobs = {
+            "fidelity": args.exploit_fidelity,
+            "epochs": 3,
+            "n_seeds": 1,
+            "batch_limit": 0,
+            "hours": args.exploit_hours,
+            "sweep_steps": args.exploit_sweep_steps,
+        }
+        return axes, knobs
+
+    def classify_cycle_log(log_path: Path) -> dict:
+        """Parse a cycle's log into structured result."""
+        text = log_path.read_text() if log_path.exists() else ""
+        import re
+
+        m = re.search(r"Cells measured:\s*(\d+)", text)
+        n_cells = int(m.group(1)) if m else 0
+        failures = re.findall(r"Cell \d+ FAILED: (.+)", text)
+        return {
+            "n_cells": n_cells,
+            "n_failures": len(failures),
+            "failures": failures[:5],
+            "empty": n_cells == 0,
+        }
+
+    async def run_one_cycle(
+        cycle_idx: int, axes: list[AxisSelection], knobs: dict, kind: str
+    ) -> tuple[int, dict]:
+        """Run a single experiment cycle."""
+        log_dir = state_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / f"loop_cycle_{cycle_idx:03d}.log"
+
+        # Build spec for this cycle
+        spec = RunSpec(
+            profile=f"{args.profile}-{kind}",
+            task=profile.task,
+            objectives=profile.objectives,
+            stages=tuple(profile.stages),
+            fidelity=knobs["fidelity"],
+            n_seeds=knobs["n_seeds"],
+            epochs=knobs["epochs"],
+            batch_limit=knobs["batch_limit"],
+            budget_seconds=knobs["hours"] * 3600.0,
+            param_budget=profile.param_budget,
+            policy=profile.policy,
+            axes=tuple(axes),
+            hyperparameters=dict(profile.hyperparameters),
+            checkpoint_every_n=profile.checkpoint_every_n,
+            seed=seed_manager.master_seed,
+            device=device,
+            sweep_steps=knobs["sweep_steps"],
+        )
+
+        # Run the cycle using the pipeline
+        with RecordStore(StoreConfig(path=store_path)) as store:
+            run_id = store.create_run(spec=spec)
+            logger.info(f"Cycle {cycle_idx} ({kind}): run_id={run_id[:8]}")
+
+            deadline = (
+                Deadline.from_seconds(spec.budget_seconds)
+                if spec.budget_seconds
+                else None
+            )
+
+            policy = create_policy(
+                spec.policy or "round_robin_grid",
+                **policy_context(
+                    spec,
+                    spec.policy or "round_robin_grid",
+                    shape=task_shape,
+                    deadline=deadline,
+                ),
+            )
+
+            max_rounds = None
+            if spec.stages and StageId.S10_DECIDE not in spec.stages:
+                max_rounds = 1
+
+            runner = PipelineRunner(
+                PipelineConfig(
+                    run_id=run_id,
+                    run_spec=spec,
+                    deadline=deadline,
+                    cost_model=None,
+                    policy=policy,
+                    backend=LocalBackend(max_workers=_CELL_WORKERS),
+                    seed=spec.seed,
+                    max_rounds=max_rounds,
+                ),
+                store,
+            )
+
+            try:
+                outcomes = await runner.run()
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                logger.error(f"Cycle {cycle_idx} failed: {e}")
+                return 1, {
+                    "n_cells": 0,
+                    "n_failures": 1,
+                    "failures": [str(e)],
+                    "empty": True,
+                }
+
+            # Classify results
+            cls = classify_cycle_log(log_path)
+            return 0, cls
+
+    def write_report(state: dict, last: dict | None = None) -> None:
+        """Write markdown report."""
+        lines = [
+            "# Continuous Experiment Loop Report",
+            "",
+            f"- **cycle**: {state['cycle']}",
+            f"- **best accuracy**: {state['best_acc']:.4f}",
+            f"- **store**: `{store_path.relative_to(Path.cwd())}`",
+            f"- **master seed**: {state['master_seed']}",
+            "",
+        ]
+        if last:
+            lines += [
+                "## Last cycle",
+                f"- kind: {last['kind']}  fidelity: {last['fidelity']}",
+                f"- cells measured: {last['n_cells']}  failures: {last['n_failures']}",
+                f"- empty space: {last['empty']}",
+                "",
+            ]
+        lines += [
+            "## Top cells",
+            "",
+            "| acc | substrate | geometry | dynamics | credit | update | plasticity |",
+            "|----:|---|---|---|---|---|---|",
+        ]
+        for c in state.get("top_cells", [])[:20]:
+            lines.append(
+                f"| {c['acc']:.4f} | {c['substrate']} | {c['geometry']} | {c['dynamics']} "
+                f"| {c['credit']} | {c['update']} | {c['plasticity']} |"
+            )
+        lines += [
+            "",
+            "## Cycle history",
+            "",
+            "| cycle | kind | best | Δ | cells | empty |",
+            "|------:|------|-----:|--:|------:|-------|",
+        ]
+        prev = 0.0
+        for h in state.get("history", []):
+            delta = h["best"] - prev
+            prev = h["best"]
+            lines.append(
+                f"| {h['cycle']} | {h['kind']} | {h['best']:.4f} | {delta:+.4f} "
+                f"| {h.get('n_cells', '?')} | {h.get('empty', '?')} |"
+            )
+        if defects_file.exists():
+            defects = [
+                json.loads(l)
+                for l in defects_file.read_text().splitlines()
+                if l.strip()
+            ]
+            lines += ["", "## Defects (fix-data)", ""]
+            seen: set[str] = set()
+            for d in defects:
+                sig = d["signature"]
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                lines.append(f"- `{sig}`")
+                if d.get("hint"):
+                    lines.append(f"  - {d['hint']}")
+        report_file.write_text("\n".join(lines) + "\n")
+
+    def save_checkpoint(state: dict) -> None:
+        """Save checkpoint for resumption."""
+        checkpoint_file.write_text(json.dumps(state, indent=2))
+
+    def load_best_from_store() -> list[dict]:
+        """Query best cells from store."""
+        if not store_path.exists():
+            return []
+        import duckdb
+
+        conn = duckdb.connect(str(store_path), read_only=True)
+        try:
+            rows = conn.execute(
+                """
+                SELECT substrate, geometry, dynamics, credit, update, plasticity,
+                       MAX(CAST(json_extract(payload, '$.val_acc') AS REAL)) AS acc
+                FROM records
+                WHERE CAST(json_extract(payload, '$.val_acc') AS REAL) IS NOT NULL
+                GROUP BY 1, 2, 3, 4, 5, 6
+                ORDER BY acc DESC
+                LIMIT 20
+                """,
+            ).fetchall()
+            return [
+                {
+                    "substrate": r[0],
+                    "geometry": r[1],
+                    "dynamics": r[2],
+                    "credit": r[3],
+                    "update": r[4],
+                    "plasticity": r[5],
+                    "acc": float(r[6]),
+                }
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+    def merge_top(measured: list[dict], k: int = 20) -> list[dict]:
+        """Merge prior knowledge with measured cells, best accuracy per cell."""
+
+        def _cell_key(cell: dict) -> tuple:
+            return (
+                cell.get("substrate"),
+                cell.get("geometry"),
+                cell.get("dynamics"),
+                cell.get("credit"),
+                cell.get("update"),
+                cell.get("plasticity"),
+            )
+
+        merged: dict[tuple, dict] = {}
+        for cell in list(top_cells) + measured:
+            key = _cell_key(cell)
+            if key not in merged or cell["acc"] > merged[key]["acc"]:
+                merged[key] = cell
+        return sorted(merged.values(), key=lambda c: c["acc"], reverse=True)[:k]
+
+    # Dry run
+    if args.dry_run:
+        axes_explore, knobs_explore = propose_axes("explore")
+        axes_exploit, knobs_exploit = propose_axes("exploit", force_explore=True)
+        print("DRY RUN: Continuous Experiment Loop")
+        print(f"  Store: {store_path}")
+        print(f"  State dir: {state_dir}")
+        print(f"  Master seed: {master_seed}")
+        print(f"  Budget: {args.hours}h  Max cycles: {args.cycles or 'unlimited'}")
+        print(
+            f"  Explore: {args.explore_fidelity}, {args.explore_hours}h, sweep={args.explore_sweep_steps}"
+        )
+        print(
+            f"  Exploit: {args.exploit_fidelity}, {args.exploit_hours}h, sweep={args.exploit_sweep_steps}"
+        )
+        print(f"  Axes (explore): {len(axes_explore)} structural axes")
+        print(f"  Axes (exploit): {len(axes_exploit)} structural axes")
+        return 0
+
+    # Main loop
+    deadline_time = time.time() + args.hours * 3600
+    start_cycle = cycle
+
+    print("=" * 70, flush=True)
+    print("CONTINUOUS EXPERIMENT LOOP", flush=True)
+    print(f"  Store:   {store_path}", flush=True)
+    print(f"  State:   {state_dir}", flush=True)
+    print(f"  Seed:    {master_seed}", flush=True)
+    print(
+        f"  Budget:  {args.hours}h ({'cycles' if args.cycles else 'time'}-limited)",
+        flush=True,
+    )
+    print(f"  Resume:  cycle {cycle}, best_acc {best_acc:.4f}", flush=True)
+    print("=" * 70, flush=True)
+
+    _ABORT = [False]
+
+    def _handle_signal(signum, frame):
+        _ABORT[0] = True
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+
+    last = None
+    while not _ABORT[0]:
+        if args.cycles and (cycle - start_cycle) >= args.cycles:
+            print("Cycle limit reached.", flush=True)
+            break
+        if time.time() >= deadline_time:
+            print("Budget exhausted.", flush=True)
+            break
+
+        kind = "explore" if cycle % 2 == 0 else "exploit"
+        force_explore = checkpoint.get("force_explore", False)
+        axes, knobs = propose_axes(kind, force_explore)
+
+        print(
+            f"\n[cycle {cycle}] {kind} ({knobs['fidelity']}, {knobs['hours'] * 60:.1f} min, sweep={knobs['sweep_steps']})",
+            flush=True,
+        )
+        rc, cls = asyncio.run(run_one_cycle(cycle, axes, knobs, kind))
+
+        if cls["empty"]:
+            checkpoint["force_explore"] = True
+        else:
+            checkpoint["force_explore"] = False
+
+        # Record defects from failures
+        FIX_HINTS = {
+            "shapes cannot be multiplied": "D1: geometry×credit shape mismatch — fix tile_mesh forward for gradient credit, or reject combo in SystemConfig.validate",
+            "yielded nothing": "D2/D4: search space empty for this axis config — widen axes, or combo silently filtered by dry-run gate",
+            "no cells measured": "D2/D4: whole cycle produced no cells — axis config too narrow or fully broken. Widened to explore.",
+            "NaN": "D3: NaN in dynamics — step_size too large or missing clamp",
+            "spectral radius": "D3: stability metric explosion — Jacobian at wrong point",
+        }
+        for failure in cls["failures"]:
+            for sig, hint in FIX_HINTS.items():
+                if sig in failure:
+                    with defects_file.open("a") as f:
+                        f.write(
+                            json.dumps({
+                                "cycle": cycle,
+                                "signature": sig,
+                                "axis_config": " ".join(
+                                    f"--{a.axis.value}s={','.join(a.primitives)}"
+                                    for a in axes
+                                ),
+                                "hint": hint,
+                                "ts": time.time(),
+                            })
+                            + "\n"
+                        )
+                    break
+
+        # Update best from store
+        measured = load_best_from_store()
+        top_cells = merge_top(measured)
+        best = max((c["acc"] for c in top_cells), default=0.0)
+        improvement = best - best_acc
+        best_acc = max(best, best_acc)
+
+        # Update state
+        cycle += 1
+        checkpoint.update({
+            "cycle": cycle,
+            "best_acc": best_acc,
+            "top_cells": top_cells,
+            "master_seed": master_seed,
+            "force_explore": checkpoint.get("force_explore", False),
+        })
+        history.append({
+            "cycle": cycle - 1,
+            "kind": kind,
+            "best": best,
+            "rc": rc,
+            "n_cells": cls["n_cells"],
+            "empty": cls["empty"],
+        })
+        checkpoint["history"] = history
+        save_checkpoint(checkpoint)
+
+        last = {
+            "cycle": cycle - 1,
+            "kind": kind,
+            "fidelity": knobs["fidelity"],
+            "rc": rc,
+            "best": best,
+            "n_cells": cls["n_cells"],
+            "n_failures": cls["n_failures"],
+            "empty": cls["empty"],
+        }
+        with ledger_file.open("a") as f:
+            f.write(
+                json.dumps({**last, "top": top_cells[:5], "ts": time.time()}) + "\n"
+            )
+        write_report(checkpoint, last)
+
+        print(
+            f"  → best={best:.4f} (Δ{improvement:+.4f})  cells={cls['n_cells']} "
+            f"failures={cls['n_failures']}  empty={cls['empty']}  rc={rc}",
+            flush=True,
+        )
+        if cls["failures"]:
+            print(f"  ⚠ failures: {', '.join(cls['failures'][:3])}", flush=True)
+
+    write_report(checkpoint, last)
+    print("\n" + "=" * 70, flush=True)
+    print(f"LOOP STOPPED at cycle {cycle}  best_acc={best_acc:.4f}", flush=True)
+    print(f"Report: {report_file}", flush=True)
+    print(f"Checkpoint: {checkpoint_file}", flush=True)
+    print("=" * 70, flush=True)
+    return 0
 
 
 def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-statements, too-many-locals, complex-structure]
@@ -5118,6 +5731,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "dataset": _cmd_dataset,
         "environment": _cmd_environment,
         "quality": _cmd_quality,
+        "loop": _cmd_loop,
     }
     try:
         handler = command_handlers.get(args.command)
@@ -5530,7 +6144,6 @@ def _cmd_quality(args: argparse.Namespace) -> int:
 def _output_result(result, args):
     """Output quality gate result."""
     if args.format == "json":
-
         output = result.to_json()
     else:
         output = f"Quality Gate: {'PASSED' if result.passed else 'FAILED'}\n"

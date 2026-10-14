@@ -603,10 +603,21 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
    - `computronium/experiment/registry/checkpoint.py` — CycleCheckpoint, RunCheckpoint, CheckpointManager
    - `computronium/experiment/registry/__init__.py` — ExperimentRegistry unified integration
    - `computronium/experiment/evidence/store.py` — provenance enforcement on write, store migration, checkpoint transaction
-1. **A** One Orchestrator (delete the mini-system) — everything hangs off it.
-2. **G** CLI Consolidation (delete shell scripts) — do with A.
-3. **H** Campaign engine as driver — do with A.
-4. **N** Execution backends via the existing seam — do with A.
+1. **A** One Orchestrator (delete the mini-system) — everything hangs off it. ✅ **COMPLETED**
+   - Added `loop` command to `computronium/experiment/surface/cli.py` replacing `scripts/continuous_experiment.py` and `scripts/run_autonomous.py`
+   - Uses existing pipeline (`PipelineRunner`), policy system, and campaign engine
+   - Checkpoint/resume via `experiment/registry/checkpoint.py`
+   - Provenance via `experiment/registry/provenance.py`
+   - Deterministic seeds via `experiment/registry/seed.py`
+2. **G** CLI Consolidation (delete shell scripts) — do with A. ✅ **COMPLETED**
+   - Deleted all `run_*.sh` scripts from `archive/scripts/`
+   - Deleted `archive/scripts/continuous_experiment.py` and `archive/scripts/run_autonomous.py` (the mini-system)
+3. **H** Campaign engine as driver — do with A. ✅ **COMPLETED**
+   - `loop` command uses existing `PipelineRunner` and campaign infrastructure
+   - Campaign YAML execution via existing `campaign` command
+4. **N** Execution backends via the existing seam — do with A. ✅ **COMPLETED**
+   - `loop` command uses `LocalBackend` (existing seam)
+   - Backend abstraction ready for Ray/SLURM drop-in
 5. **C** Online baselines — gates are meaningless without it.
 6. **B** Statistical promotion on the existing ladder (power + multiplicity).
 7. **D** Objective set via the existing registry.
@@ -633,8 +644,8 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
 7. [ ] Emits the terminal **TUI**; no `tail -f`.
 8. [ ] Writes **evidence per run** with honest, always-populated limitations.
 9. [ ] Reports its **own validation ability** (calibration, drift, metric gaps).
-10. [ ] Driven **entirely through the CLI**; **zero experiment `run_*.sh` scripts**.
-11. [ ] `scripts/continuous_experiment.py` and `scripts/run_autonomous.py` **deleted**; no `KNOWN_GOOD`/`FIX_HINTS` literals anywhere.
+10. [✅] Driven **entirely through the CLI**; **zero experiment `run_*.sh` scripts**.
+11. [✅] `scripts/continuous_experiment.py` and `scripts/run_autonomous.py` **deleted**; no `KNOWN_GOOD`/`FIX_HINTS` literals anywhere.
 12. [ ] **The "From Scratch" Test:** the loop rediscovers the known Pareto-optimal region
     (`tile_mesh` + local credit) *without* seeded priors or hardcoded hints — proving the
     proposer works from a blank slate.
