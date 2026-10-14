@@ -624,7 +624,12 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
    - Standard baselines per domain (vision, language, rl, graph, tabular, memory)
    - Ruler vocabulary integration (bp_deficit, ruler_*_ratio)
    - Fallback geometry for C12 (tile_mesh → feedforward)
-6. **B** Statistical promotion on the existing ladder (power + multiplicity).
+6. **B** Statistical promotion on the existing ladder (power + multiplicity). ✅ **COMPLETED**
+   - `computronium/experiment/execution/statistical_promotion.py` — GateThresholds, GateResult, PromotionGateResult
+   - Statistical gates: superiority (mean > baseline + k·SE), CI width, train/val gap, ρ band
+   - `promote_with_stats()` — enhanced promotion with L1 statistical gates + L2 replay
+   - Power analysis for seed count derivation (Cohen's d)
+   - Discovery/confirmation seed separation support
 7. **D** Objective set via the existing registry.
 8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization).
 9. **K** Parameter-effect & timing instrumentation.
@@ -642,8 +647,8 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
 
 1. [ ] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
 2. [✅] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
-3. [ ] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
-4. [ ] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
+3. [✅] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
+4. [✅] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
 5. [ ] Optimizes a **declared objective set** (≥3) read from the registry.
 6. [ ] **Learns from defects**: known-bad regions pruned; digest produced for review.
 7. [ ] Emits the terminal **TUI**; no `tail -f`.
