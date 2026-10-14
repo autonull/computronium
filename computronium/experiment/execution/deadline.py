@@ -157,6 +157,23 @@ class CheckpointData:
     timestamp: float
     cell_stream_state: dict[str, Any] | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dict."""
+        return {
+            "run_id": self.run_id,
+            "completed_measurement_keys": list(self.completed_measurement_keys),
+            "pending_proposals": self.pending_proposals,
+            "in_progress": self.in_progress,
+            "current_round": self.current_round,
+            "round_controller_state": self.round_controller_state,
+            "policy_state": self.policy_state,
+            "allocator_state": self.allocator_state,
+            "system_context_snapshot": self.system_context_snapshot,
+            "cell_timing": self.cell_timing,
+            "cell_stream_state": self.cell_stream_state,
+            "timestamp": self.timestamp,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class _PipelineStateSnapshot:

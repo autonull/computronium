@@ -1467,10 +1467,8 @@ class PipelineRunner:
 
             # Save to store (convert CheckpointData to dict)
             if self._store.is_open:
-                import dataclasses
-
                 self._store.save_checkpoint(
-                    self._config.run_id, dataclasses.asdict(checkpoint_data)
+                    self._config.run_id, checkpoint_data.to_dict()
                 )
                 logger.info(
                     "Checkpoint saved for run %s (round %d, %d completed)",

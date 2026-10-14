@@ -319,10 +319,12 @@ class LoopDriver:
 
         try:
             result = asyncio.run(self._execute(cycle, spec, task))
+            print(f"DEBUG: _execute returned n_records={result.n_records}, run_id={result.run_id}", flush=True)
         except KeyboardInterrupt:
             raise
         except Exception as exc:  # ruff: ignore[blind-except] - one bad cycle must not kill the loop
             logger.error("Cycle %d (%s) failed: %s", cycle, task, exc, exc_info=True)
+            print(f"DEBUG: Exception caught in _run_cycle: {exc}", flush=True)
             result = CycleResult(
                 cycle=cycle,
                 task=task,
@@ -732,10 +734,8 @@ class LoopDriver:
     ) -> tuple[AxisSelection, ...]:
         if kind == "explore" or store is None:
             return self._explore_axes()
-        try:
+        with store:
             return self._exploit_axes(store, task)
-        finally:
-            store.__exit__(None, None, None)
 
     def _explore_axes(self) -> tuple[AxisSelection, ...]:
         selections = []
