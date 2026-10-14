@@ -630,7 +630,15 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
    - `promote_with_stats()` — enhanced promotion with L1 statistical gates + L2 replay
    - Power analysis for seed count derivation (Cohen's d)
    - Discovery/confirmation seed separation support
-7. **D** Objective set via the existing registry.
+7. **D** Multi-Objective Optimization via the Existing Registry. ✅ **COMPLETED**
+   - `computronium/experiment/optimization/multi_objective.py` — NormalizedObjective, ParetoPoint, ParetoFrontier, MultiObjectiveOptimizer
+   - Wires ~90 declared objectives from `schema/metrics.py` and `schema/seed_registries.py`
+   - Normalization: minmax, log, zscore per ObjectiveSpec.normalizer
+   - Pareto frontier with NSGA-II non-dominated sorting + crowding distance
+   - Hypervolume indicator (Monte Carlo) for quality measurement
+   - Scalarization for Optuna single-objective optimization
+   - Task-specific objective sets via `get_task_objective_set()`
+   - Optuna directions from ObjectiveSpec.direction
 8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization).
 9. **K** Parameter-effect & timing instrumentation.
 10. **I** Defect → constraint loop (versioned, revocable).
@@ -649,7 +657,7 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
 2. [✅] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
 3. [✅] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
 4. [✅] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
-5. [ ] Optimizes a **declared objective set** (≥3) read from the registry.
+5. [✅] Optimizes a **declared objective set** (≥3) read from the registry.
 6. [ ] **Learns from defects**: known-bad regions pruned; digest produced for review.
 7. [ ] Emits the terminal **TUI**; no `tail -f`.
 8. [ ] Writes **evidence per run** with honest, always-populated limitations.
