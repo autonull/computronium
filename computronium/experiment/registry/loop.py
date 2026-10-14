@@ -39,7 +39,11 @@ from computronium.experiment.optimization.multi_objective import (
     compute_pareto_frontier,
 )
 from computronium.experiment.registry import ExperimentConfig, ExperimentRegistry
-from computronium.experiment.registry.baseline import BaselineRecord, BaselineRegistry
+from computronium.experiment.registry.baseline import (
+    BaselineGate,
+    BaselineRecord,
+    BaselineRegistry,
+)
 from computronium.experiment.registry.seed import SeedContext
 from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.schema.axis import AXES_REGISTRIES, Domain, StructuralAxis
@@ -152,6 +156,7 @@ class LoopDriver:
         self._hardware_fp: str | None = None
         self._git_sha = self._resolve_git_sha()
         self._legality = LegalityEngine()
+        self._baseline_gate = BaselineGate(BaselineRegistry())
 
     # ------------------------------------------------------------------ public
 
@@ -350,7 +355,7 @@ class LoopDriver:
             for outcome in outcomes:
                 registry.complete_cell(outcome.measurement_key)
 
-            baselines = self._baselines(store, run_id, spec, task)
+            baselines = await self._baselines(store, run_id, spec, task)
             self._settle(store, run_id, spec, baselines)
 
             from computronium.experiment.surface.report import generate_run_report
@@ -523,7 +528,7 @@ class LoopDriver:
         )
         return history
 
-    def _baselines(
+    async def _baselines(
         self,
         store: RecordStore,
         run_id: str,
@@ -534,9 +539,11 @@ class LoopDriver:
 
         The loop's own axis sweep measures ``gradient × instantaneous`` cells;
         those *are* the backprop baseline for that task/budget, so the ruler is
-        read from the store rather than re-run (TODO63 Phase 2).
+        read from the store rather than re-run (TODO63 Phase 2). If absent, run
+        discovery via ``BaselineGate.check_or_run``.
         """
         from computronium.experiment.execution.promotion import eligible_cells
+        from computronium.experiment.registry.seed import SeedContext
 
         if spec.budget_seconds is None:
             return None
@@ -546,11 +553,19 @@ class LoopDriver:
         )
         if baseline is None:
             logger.info(
-                "No backprop baseline in store for task %s; superiority gate "
-                "runs without a ruler",
+                "No backprop baseline in store for task %s; running discovery",
                 task,
             )
-            return None
+            # Use the cycle's seed context for deterministic discovery
+            seed_ctx = SeedContext(spec.seed)
+            baseline, reason = await self._baseline_gate.check_or_run(
+                task, spec.budget_seconds, spec.n_seeds, seed_ctx
+            )
+            if baseline is None:
+                logger.warning("Baseline discovery failed for %s: %s", task, reason)
+                return None
+            # Cache the discovered baseline in the registry for subsequent cycles
+            registry._cache[baseline.key()] = baseline
         keys = eligible_cells(store.query_records(run_id=run_id), spec.n_seeds).keys()
         return dict.fromkeys(keys, baseline)
 

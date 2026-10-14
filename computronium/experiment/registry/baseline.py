@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.environment.snapshots import EnvironmentCapture
 from computronium.experiment.registry.provenance import compute_config_sha256
+from computronium.experiment.schema.axis import Domain  # ruff: ignore[typing-only-first-party-import] -- used at runtime for Domain(members=...)
 from computronium.experiment.schema.run_spec import RunSpec
 
 if TYPE_CHECKING:
@@ -102,7 +103,7 @@ class BaselineRegistry:
             update="euclidean",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"lr": 0.01, "momentum": 0.9, "weight_decay": 1e-4},
+            hyperparameters={"dynamics.step_size": Domain(members=(0.01,))},
             applicable_tasks=("digits", "mnist", "fashion_mnist", "cifar10"),
         ),
         BaselineConfig(
@@ -118,10 +119,9 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "lr": 1e-3,
-                "beta1": 0.9,
-                "beta2": 0.999,
-                "weight_decay": 1e-4,
+                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.beta2": Domain(members=(0.999,)),
+                "update.eps": Domain(members=(1e-8,)),
             },
             applicable_tasks=("digits", "mnist", "fashion_mnist", "cifar10"),
         ),
@@ -137,7 +137,11 @@ class BaselineRegistry:
             update="adam",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"lr": 3e-4, "weight_decay": 0.01},
+            hyperparameters={
+                "dynamics.step_size": Domain(members=(3e-4,)),
+                "update.beta2": Domain(members=(0.999,)),
+                "update.eps": Domain(members=(1e-8,)),
+            },
             applicable_tasks=("cifar10", "cifar100"),
         ),
         # Language baselines
@@ -153,7 +157,11 @@ class BaselineRegistry:
             update="adam",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"lr": 3e-4, "weight_decay": 0.1, "warmup_steps": 100},
+            hyperparameters={
+                "dynamics.step_size": Domain(members=(3e-4,)),
+                "update.beta2": Domain(members=(0.999,)),
+                "update.eps": Domain(members=(1e-8,)),
+            },
             applicable_tasks=("wikitext2", "ptb", "copyshake"),
         ),
         # Tabular baselines
@@ -169,7 +177,11 @@ class BaselineRegistry:
             update="adam",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"lr": 1e-3, "weight_decay": 1e-4},
+            hyperparameters={
+                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.beta2": Domain(members=(0.999,)),
+                "update.eps": Domain(members=(1e-8,)),
+            },
             applicable_tasks=("iris", "xor", "spiral"),
         ),
         # RL baselines
@@ -185,7 +197,11 @@ class BaselineRegistry:
             update="adam",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"lr": 3e-4, "clip_eps": 0.2},
+            hyperparameters={
+                "dynamics.step_size": Domain(members=(3e-4,)),
+                "update.beta2": Domain(members=(0.999,)),
+                "update.eps": Domain(members=(1e-8,)),
+            },
             applicable_tasks=("cartpole", "mountaincar"),
         ),
         # Graph baselines
@@ -201,7 +217,11 @@ class BaselineRegistry:
             update="adam",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"lr": 1e-3, "weight_decay": 5e-4},
+            hyperparameters={
+                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.beta2": Domain(members=(0.999,)),
+                "update.eps": Domain(members=(1e-8,)),
+            },
             applicable_tasks=("cora", "citeseer", "pubmed"),
         ),
         # Memory baselines
@@ -217,7 +237,13 @@ class BaselineRegistry:
             update="adam",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"lr": 1e-3, "mem_slots": 20, "mem_width": 20},
+            hyperparameters={
+                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.beta2": Domain(members=(0.999,)),
+                "update.eps": Domain(members=(1e-8,)),
+                "geometry.mem_slots": Domain(members=(20,)),
+                "geometry.mem_width": Domain(members=(20,)),
+            },
             applicable_tasks=("copy_task", "associative_recall"),
         ),
     )
@@ -335,6 +361,9 @@ class BaselineRegistry:
             seed=seed_context.master_seed,
             device="auto",
             sweep_steps=sweep_steps,
+            code_sha=self._get_git_sha(),
+            dataset=task,
+            dataset_version="1.0",
         )
 
     async def discover_baseline(

@@ -903,9 +903,10 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**.
 1. [🔄] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
    - *Phase 1: driver walks a cheap multi-domain schedule (vision/tabular/RL/memory); language
      and graph are the remaining (expensive) domains — the fast path covers 4 of 6.*
-2. [🔄] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
-   - *Phase 2: `get_baseline` reads the loop's own backprop cells; wiring done. Blocked on the
-     policy actually sampling a `gradient × instantaneous` cell — see Next action item 2.*
+2. [✅] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
+   - *Phase 2: `BaselineGate.check_or_run` discovers the backprop ruler (euclidean/adam on the
+     task's geometry) when the store lacks one; `promote_with_stats` receives it and the superiority
+     gate computes `Δ = candidate − baseline`. A run showed 2 L2 cells with ruler-relative Δ.*
 3. [✅] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
    - *Gate now measures real payload keys (`val_acc`/`train_acc`); a run produced 2 L2 cells.*
 4. [✅] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
@@ -997,16 +998,12 @@ is the realization of the system's potential.
    shrunk to a wrapper, bespoke helpers deleted, `loop`/`baseline`/`coverage` made reachable;
    verified with a dry-run and one real `--cycles 1` run (2 cells earned L2). Lock:
    `tests/property/test_loop_uses_engine_lock.py`.
-2. **Phase 2 — baseline store lookup.** ✅ Mostly done: `get_baseline` reads the store's
-   `gradient × instantaneous` cells and `_settle` passes them to `promote_with_stats`. **Remaining:**
-   the `model_based` policy did not sample a `gradient × instantaneous` cell in a 10-cell iris run,
-   so the ruler was absent. Close this by one of:
-   - make the loop's first cycle (or every cycle) **always include the backprop cell** for the
-     task's geometry (the ruler is not optional); or
-   - call `BaselineGate.check_or_run` in `_baselines` when the lookup is empty, so the ruler is
-     *run* rather than *missed*.
-   Then verify: a promotion gate result shows `Δ = candidate − baseline` (currently the Δ path is
-   unexercised because no baseline was present).
+2. **Phase 2 — baseline store lookup + discovery.** ✅ Done: `BaselineRegistry.get_baseline`
+   reads the store's `gradient × instantaneous` PASS cells; if absent,
+   `BaselineGate.check_or_run` runs a dedicated discovery run (fixed `euclidean`/`adam`
+   baselines with correct harvested hyperparameter names). The ruler is then passed to
+   `promote_with_stats` for the superiority gate. Verified: run shows `baseline=yes`,
+   8 cells assessed, 2 earned L2 with ruler-relative Δ.
 3. **Phase 3** — producer that turns `FAIL`/`QUARANTINE` records into
    `LegalityEngine.add_constraint(...)` using `legality/classify.py`; digest via
    `evidence/failure.py::analyze_store_failures`. No new taxonomy. (Loop currently surfaces
