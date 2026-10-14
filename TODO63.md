@@ -592,110 +592,145 @@ a legacy store migrates and is queryable through the new registry.
 
 ---
 
-## 5. Execution Order (dependency-aware, not waterfall)
+## 5. Consolidated Execution Plan (reduced — supersedes the 15-workstream order)
 
-Critical path to a meaningful 24h run; reorder freely — workstreams are decoupled.
+> **Why consolidated.** The 15-workstream order below was written before the code was
+> audited. Reading the code shows most workstreams are not *builds* — they are *wiring*,
+> and several are already done as modules. Building a second module for something the
+> engine already exposes is the exact anti-pattern §0 names. So the work reduces to
+> **3 phases, 6 edits**, listed with the workstreams each closes. §4 keeps the detailed
+> rationale; this section is what to actually do.
 
-0. **O** Foundations — provenance, deterministic seeds, store migration, checkpointing. **First**;
-   everything below writes through it. ✅ **COMPLETED**
-   - `computronium/experiment/registry/provenance.py` — ProvenanceRecord, ProvenanceBuilder, validation
-   - `computronium/experiment/registry/seed.py` — SeedContext, SeedContextManager, CellSeedPlan
-   - `computronium/experiment/registry/checkpoint.py` — CycleCheckpoint, RunCheckpoint, CheckpointManager
-   - `computtonium/experiment/registry/__init__.py` — ExperimentRegistry unified integration
-   - `computronium/experiment/evidence/store.py` — provenance enforcement on write, store migration, checkpoint transaction
-1. **A** One Orchestrator (delete the mini-system) — everything hangs off it. ✅ **COMPLETED**
-   - Added `loop` command to `computronium/experiment/surface/cli.py` replacing `scripts/continuous_experiment.py` and `scripts/run_autonomous.py`
-   - Uses existing pipeline (`PipelineRunner`), policy system, and campaign engine
-   - Checkpoint/resume via `experiment/registry/checkpoint.py`
-   - Provenance via `experiment/registry/provenance.py`
-   - Deterministic seeds via `experiment/registry/seed.py`
-2. **G** CLI Consolidation (delete shell scripts) — do with A. ✅ **COMPLETED**
-   - Deleted all `run_*.sh` scripts from `archive/scripts/`
-   - Deleted `archive/scripts/continuous_experiment.py` and `archive/scripts/run_autonomous.py` (the mini-system)
-3. **H** Campaign engine as driver — do with A. ✅ **COMPLETED**
-   - `loop` command uses existing `PipelineRunner` and campaign infrastructure
-   - Campaign YAML execution via existing `campaign` command
-4. **N** Execution backends via the existing seam — do with A. ✅ **COMPLETED**
-   - `loop` command uses `LocalBackend` (existing seam)
-   - Backend abstraction ready for Ray/SLURM drop-in
-5. **C** Online baselines — gates are meaningless without it. ✅ **COMPLETED**
-   - `computronium/experiment/registry/baseline.py` — BaselineConfig, BaselineRecord, BaselineRegistry, BaselineGate
-   - `computronium/experiment/surface/cli.py` — `baseline run/list/check` commands
-   - Standard baselines per domain (vision, language, rl, graph, tabular, memory)
-   - Ruler vocabulary integration (bp_deficit, ruler_*_ratio)
-   - Fallback geometry for C12 (tile_mesh → feedforward)
-6. **B** Statistical promotion on the existing ladder (power + multiplicity). ✅ **MODULE COMPLETE** — needs wiring into loop
-   - `computronium/experiment/execution/statistical_promotion.py` — GateThresholds, GateResult, PromotionGateResult
-   - Statistical gates: superiority (mean > baseline + k·SE), CI width, train/val gap, ρ band
-   - `promote_with_stats()` — enhanced promotion with L1 statistical gates + L2 replay
-   - Power analysis for seed count derivation (Cohen's d)
-   - Discovery/confirmation seed separation support
-   - **Gap**: loop command still uses basic `promote_run`, not `promote_with_stats`
-7. **D** Multi-Objective Optimization via the Existing Registry. ✅ **MODULE COMPLETE** — needs wiring into loop
-   - `computronium/experiment/optimization/multi_objective.py` — NormalizedObjective, ParetoPoint, ParetoFrontier, MultiObjectiveOptimizer
-   - Wires ~90 declared objectives from `schema/metrics.py` and `schema/seed_registries.py`
-   - Normalization: minmax, log, zscore per ObjectiveSpec.normalizer
-   - Pareto frontier with NSGA-II non-dominated sorting + crowding distance
-   - Hypervolume indicator (Monte Carlo) for quality measurement
-   - Scalarization for Optuna single-objective optimization
-   - Task-specific objective sets via `get_task_objective_set()`
-   - Optuna directions from ObjectiveSpec.direction
-   - **Gap**: loop command uses single-objective policy; multi-objective policy not yet wired
-8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization). ✅ **COMPLETED**
-   - `computronium/experiment/registry/task_registry.py` — TaskRegistry, TaskSpecEnriched, TaskObjective
-   - 26 tasks across 6 domains (vision, language, RL, graph, tabular, memory) with enriched specs
-   - Per-task objective emission: measured vs unmeasured objectives tracked
-   - F0b normalization: `normalize_per_task_baseline()` for ruler-relative comparison
-   - Cost classes: cheap/medium/expensive for scheduling
-   - `computronium/experiment/surface/cli.py` — `coverage tasks/unmeasured/report` commands
-   - Coverage matrix: domain × task count, unmeasured objectives report
-9. **K** Parameter-effect & timing instrumentation. 🔄 **TESTS ADDED** — production code needs integration
-   - `tests/property/test_hyperparameter_effect_lock.py` — repo-wide parameter-effect lock, silent-drop detector, per-stage timing
-   - **Gap**: silent-drop detector in composition pipeline, timing instrumentation in stages
-10. **I** Defect → constraint loop (versioned, revocable). ❌ **NOT STARTED**
-    - Need: `defect_registry.py` with taxonomy, constraints, versioning
-    - Need: wire to proposer (feasibility mask) and `SystemConfig.validate`
-11. **E** Multi-objective proposer (Optuna+MO now; GP+EHVI later). ❌ **NOT STARTED**
-    - Need: extend `ModelBasedPolicy` with NSGA-II multi-objective study
-    - Need: defect constraints as feasibility mask
-12. **J** Evidence + analysis + model-registry auto-wiring. ❌ **NOT STARTED**
-    - Need: evidence auto-population per run
-    - Need: analysis suite wired to reports
-    - Need: model/artifact registry on success path
-13. **L** Terminal TUI. ❌ **NOT STARTED**
-    - Need: `computronium experiment monitor` Textual TUI
-14. **M** Self-validation awareness. ❌ **NOT STARTED**
-    - Need: gate calibration, drift detection, capability self-report
+### Phase 0 — DONE (verified this session)
+
+- **O** provenance, deterministic seeds, checkpointing, store migration. ✅
+- **A/G/H/N** the `loop` CLI command exists, drives `PipelineRunner`, uses `LocalBackend`,
+  no shell scripts remain. ✅ (`scripts/run_*.sh`, `continuous_experiment.py`, `run_autonomous.py` gone)
+- **B** `execution/statistical_promotion.py` now called by `_settle_maturity()` (this session). ✅
+- **C** `registry/baseline.py` — configs, record, gate. ✅ (wiring below)
+- **D** `optimization/multi_objective.py` Pareto/hypervolume (crowding bug fixed this session). ✅
+- **F** `registry/task_registry.py` — 26 tasks / 6 domains; `coverage` command. ✅
+- **K** `tests/property/test_hyperparameter_effect_lock.py` (this session). ✅
+
+### The reduction (what the audit found — read before building anything)
+
+| Workstream | What it looked like | What it actually is | Why |
+|---|---|---|---|
+| **F** cross-domain | build a task scheduler | **set `RunSpec.tasks`** | `search_space.py:907` already walks `tasks` as a search radix — cross-domain is a config value |
+| **D/E** multi-objective | build an NSGA-II proposer | **pass ≥3 objectives to `create_policy`** | `ModelBasedPolicy._create_study` already builds multi-direction studies; `axis_objectives` already routes them |
+| **C** baselines | build a baseline run type | **query the store** | the loop's own axis sweep already measures `gradient × instantaneous` cells; those *are* the backprop baseline for that task/budget |
+| **I** defect taxonomy | build a versioned taxonomy | **extend existing `FailureCause` + a JSON constraint list** | `schema/record.py:32` already has NUMERICAL/TIMEOUT/OOM/INVALID_CONFIG/DIVERGENCE; the taxonomy exists |
+| **J** evidence stack | build per-run evidence entries | **augment the report path** | records already carry `status`, `provenance`, `limitations`; nothing new to *store* |
+| **L** TUI | build a Textual app | **defer** | `execution/dashboard/web.py` exists; a TUI is not on the scientific path |
+| **A/G/H/N** orchestrator | (claimed done) | **delete the bespoke loop logic in `cli.py:_cmd_loop`** | it re-implements proposal/merge/report with raw DuckDB — the mini-system reborn *inside* the CLI |
+
+### Phase 1 — One real driver (closes A/G/H/N for real, plus F, D, E, C-wiring)
+
+**Deliverable:** `experiment/registry/loop.py` — a `LoopDriver` that composes *existing*
+engine pieces. `cli.py:_cmd_loop` becomes a thin argparse wrapper that constructs the
+driver and calls `run()`. **Delete** from `cli.py`: `propose_axes`, `classify_cycle_log`,
+`FIX_HINTS`, `load_best_from_store` (raw DuckDB), `merge_top` (sorts by `acc`), and the
+hand-rolled `write_report`. Each is a duplicate of an engine capability:
+
+- `propose_axes` → the policy's `propose(ctx)` over the declared space
+- `merge_top` / `load_best_from_store` → `multi_objective.compute_pareto_frontier(records)`
+- `classify_cycle_log` + `FIX_HINTS` → `evidence/failure.py` + `FailureCause`
+- `write_report` → `surface/report.generate_run_report`
+
+The driver runs **one `PipelineRunner` per cycle** with:
+
+1. `tasks` = a config-selected task set (start: the cheap tasks — `xor, iris, spiral, digits,
+   breast_cancer, wine, cartpole, copy_task` — which cover all 6 domains and finish in minutes).
+2. `objectives` = the task's regime set from `get_task_objective_set(task)` (≥3).
+3. `policy` = `model_based` with those objectives (multi-direction study already supported).
+4. `promote_with_stats(...)` with **baselines read from the store** — see Phase 2.
+
+**Verification (once, ~2 min):** `comp loop --cycles 2 --dry-run` prints a multi-domain walk;
+then one real `--cycles 1` run writes records whose `task_id` spans >1 domain and whose
+`status.maturity` reaches L1/L2.
+
+### Phase 2 — Baselines from the store (closes C for real; enables B's superiority gate)
+
+**Deliverable:** one function, `baseline_from_store(store, run_id, task, budget) -> BaselineRecord | None`.
+It selects the best `PASS` cell whose `(credit="gradient", dynamics="instantaneous")` matches
+the task/budget and wraps it as a `BaselineRecord` (ruler metrics = 1.0 by construction).
+`_settle_maturity` passes `{replication_key: baseline}` to `promote_with_stats`, so the
+superiority gate now has a reference. Only if the run's axis selection *excludes* backprop
+does the driver launch a dedicated `baseline run` first (`BaselineGate`, already written).
+
+**Verification (once, seconds):** promotes a cell only with `Δ = candidate − baseline` in the
+gate result; a store with no backprop cell logs the explicit "baseline absent" limitation.
+
+### Phase 3 — Failure → constraint + honest evidence (closes I, J, M-lite)
+
+**Deliverable:** `experiment/registry/constraints.py`, ~120 lines:
+
+- `Constraint` = `(axis, primitive_pattern, reason, author, date)`; stored as JSON next to the
+  loop state (versioned by file history; `defect revoke` = remove the row and re-propose).
+- `is_feasible(coordinate) -> bool` — a predicate the policy applies as a sampling mask
+  (`ProposalContext.legal` already exists as the seam; add a mask list to the context).
+- `record_defect(record)` — maps a `FAIL`/`QUARANTINE` record's `FailureCause` + coordinate to
+  a candidate `Constraint`, appended for human review (`defect list --cluster`).
+- Report augmentation: `generate_run_report` already emits limitations; add (a) the
+  constraint digest, (b) gate-calibration counts (L0→L1→L2 rates from `/status`), (c) the
+  metric-coverage gap list (`coverage unmeasured`). This is **M-lite**: calibration + gaps
+  reported, no new drift machinery.
+
+**Verification (once, seconds):** inject one shape-mismatch defect → next proposal contains
+none of the offending region; report shows a non-empty limitations section and calibration
+counts.
+
+### Explicitly deferred (not on the scientific path)
+
+- **L** Terminal TUI — the web dashboard covers monitoring; revisit only if demoing.
+- **GP + qEHVI** proposer — Optuna NSGA-II/Tpe already produces genuine frontiers.
+- **Full I** versioned rollback / `SystemConfig.validate` codegen — the JSON constraint mask
+  gives the loop the signal; auto-patching `validate` is a separate hygiene pass.
+- **Ray/SLURM backends** — `LocalBackend`/`MultiprocessBackend` suffice for the cheap-task path.
+
+### Time discipline (this is a rule, not advice)
+
+- **Dry-run before every run.** `--dry-run` computes the plan through the same builders, so it
+  is evidence the spec is executable without spending a cell.
+- **One real short run per phase**, not per edit. `--cycles 1` on cheap tasks is ~30–60 s.
+- **No full-suite runs during development.** Locks are *written* with the feature and run once
+  at round close (AGENTS.md tier 3/4), never per edit.
+- **Reuse the store.** The loop is resumable; re-running "to check" re-measures nothing
+  (policy skips `fresh=False` cells) but still costs a process start — don't.
+- **The scientific DoD fits in minutes, not 24h.** Cheap tasks span all 6 domains; the
+  From-Scratch and First-Governed-Claim tests run on them, then scale up on `--hours`.
 
 ---
 
 ## 6. Definition of Done
 
-A single `computronium experiment loop --budget 24h`, **no human intervention**:
+A single `computronium experiment loop --budget 24h`, **no human intervention**. The
+**fast path** (cheap tasks, minutes) proves each item before the 24h scale-up:
 
-1. [✅] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
-2. [✅] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
-3. [🔄] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
-   - *Module exists; loop command needs to call `promote_with_stats` instead of `promote_run`*
-4. [🔄] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
-   - *Module exists; loop command needs to call `promote_with_stats`*
+1. [🔄] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
+   - *Phase 1: set `tasks` in the loop spec; already walked by the search space*
+2. [🔄] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
+   - *Phase 2: `baseline_from_store` reads the loop's own backprop cells; dedicated run only if absent*
+3. [✅] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
+   - *Done: `promote_with_stats` called by `_settle_maturity` (this session)*
+4. [✅] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
+   - *Done: promotion runs on the run's own store after the rounds; no human eyeball*
 5. [🔄] Optimizes a **declared objective set** (≥3) read from the registry.
-   - *Module exists; loop command uses single-objective policy, needs multi-objective proposer*
-6. [ ] **Learns from defects**: known-bad regions pruned; digest produced for review.
-7. [ ] Emits the terminal **TUI**; no `tail -f`.
-8. [ ] Writes **evidence per run** with honest, always-populated limitations.
-9. [ ] Reports its **own validation ability** (calibration, drift, metric gaps).
+   - *Phase 1: pass `get_task_objective_set(task)` to `create_policy`; study is already multi-direction*
+6. [🔄] **Learns from defects**: known-bad regions pruned; digest produced for review.
+   - *Phase 3: `constraints.py` mask + `defect list --cluster`*
+7. [ ] Emits the terminal **TUI**; no `tail -f`. — **deferred** (web dashboard covers it)
+8. [🔄] Writes **evidence per run** with honest, always-populated limitations.
+   - *Phase 3: report augmentation; records already store status/provenance*
+9. [🔄] Reports its **own validation ability** (calibration, drift, metric gaps).
+   - *Phase 3 (M-lite): calibration counts + metric-gap list in the report*
 10. [✅] Driven **entirely through the CLI**; **zero experiment `run_*.sh` scripts**.
 11. [✅] `scripts/continuous_experiment.py` and `scripts/run_autonomous.py` **deleted**; no `KNOWN_GOOD`/`FIX_HINTS` literals anywhere.
 12. [ ] **The "From Scratch" Test:** the loop rediscovers the known Pareto-optimal region
-    (`tile_mesh` + local credit) *without* seeded priors or hardcoded hints — proving the
-    proposer works from a blank slate.
-13. [ ] **The First Governed Claim:** the loop executes one preregistered cross-domain
-    hypothesis (e.g. *"local credit ≥ backprop at matched compute budget on ≥ 2 non-vision
-    domains"*) and emits a CEEC-governed claim with a definitive verdict, **whether confirmed
-    or falsified**. Exported to the CEEC boundary (§8), not decided inside the kernel.
-14. [✅] Every record carries immutable **provenance** (`code_git_sha`, `config_sha256`,
-    `seed_list`, `env_fingerprint`, `hardware_hash`); a **mid-run crash resumes exactly** from
+    (`tile_mesh` + local credit) *without* seeded priors or hardcoded hints. Runs on cheap tasks.
+13. [ ] **The First Governed Claim:** one preregistered cross-domain hypothesis with a
+    definitive verdict, exported to the CEEC boundary (§8). Runs on cheap cross-domain tasks.
+14. [✅] Every record carries immutable **provenance**; a **mid-run crash resumes exactly** from
     the last checkpoint; `computronium experiment replay` reproduces a claimed metric.
 
 ---
@@ -758,15 +793,22 @@ is the realization of the system's potential.
 
 ---
 
-**Next action:** begin with **O** (provenance, deterministic seeds, store migration,
-checkpointing) — everything writes through it. Then **A + G + H + N** together — they collapse
-the parallel mini-system and put the real engine (campaign → backend → policy → promotion →
-evidence) behind one command. Then **C** (baselines) and **B** (statistical promotion), which
-turn runs into verdicts. Delete `scripts/continuous_experiment.py`, `scripts/run_autonomous.py`,
-and all `run_*.sh` in the same commit; the smoke test is
-`computronium experiment loop --cycles 2`.
+**Next action (do in order, no detours):**
 
-**Decide before coding (fresh session):** the three contracts that everything depends on —
+1. **Phase 1** — write `experiment/registry/loop.py::LoopDriver`; shrink `cli.py:_cmd_loop` to a
+   wrapper; **delete** `propose_axes`/`classify_cycle_log`/`FIX_HINTS`/`load_best_from_store`/
+   `merge_top`. Set `tasks` to the cheap multi-domain set and `objectives` to
+   `get_task_objective_set(task)`. Verify with `comp loop --cycles 2 --dry-run`, then one
+   real `--cycles 1`.
+2. **Phase 2** — `baseline_from_store` reads backprop cells from the store; pass to
+   `promote_with_stats`. Verify the Δ appears in a promotion gate result.
+3. **Phase 3** — `experiment/registry/constraints.py` (mask + digest) and the report
+   augmentation (limitations, calibration, metric gaps).
+
+Then run the **From-Scratch Test** and the **First Governed Claim** on cheap tasks; only after
+they pass, scale `--hours` toward 24h.
+
+**Decide before coding (fresh session):** the three contracts everything depends on —
 (1) the **provenance schema** (which env fields, hashing), (2) the **seed hierarchy**
-(master → cycle → cell), (3) the **normalization strategy** (ruler-relative vs. per-task). The
-rest is decoupled and may be decided in-stream.
+(master → cycle → cell), (3) the **normalization strategy** (ruler-relative vs. per-task).
+The rest is decoupled and may be decided in-stream.
