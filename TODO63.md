@@ -596,10 +596,10 @@ a legacy store migrates and is queryable through the new registry.
 
 > **Why consolidated.** The 15-workstream order below was written before the code was
 > audited. Reading the code shows most workstreams are not *builds* — they are *wiring*,
-> and several are already done as modules. Building a second module for something the
-> engine already exposes is the exact anti-pattern §0 names. So the work reduces to
-> **3 phases, 6 edits**, listed with the workstreams each closes. §4 keeps the detailed
-> rationale; this section is what to actually do.
+> and many are **already complete modules that nothing calls**. Building a second module for
+> something the engine already exposes is the exact anti-pattern §0 names. So the work reduces
+> to **5 phases** plus a deferred list and a cleanup register, each phase listed with the
+> workstreams it closes. §4 keeps the detailed rationale; this section is what to actually do.
 
 ### Phase 0 — DONE (verified this session)
 
@@ -619,10 +619,35 @@ a legacy store migrates and is queryable through the new registry.
 | **F** cross-domain | build a task scheduler | **set `RunSpec.tasks`** | `search_space.py:907` already walks `tasks` as a search radix — cross-domain is a config value |
 | **D/E** multi-objective | build an NSGA-II proposer | **pass ≥3 objectives to `create_policy`** | `ModelBasedPolicy._create_study` already builds multi-direction studies; `axis_objectives` already routes them |
 | **C** baselines | build a baseline run type | **query the store** | the loop's own axis sweep already measures `gradient × instantaneous` cells; those *are* the backprop baseline for that task/budget |
-| **I** defect taxonomy | build a versioned taxonomy | **extend existing `FailureCause` + a JSON constraint list** | `schema/record.py:32` already has NUMERICAL/TIMEOUT/OOM/INVALID_CONFIG/DIVERGENCE; the taxonomy exists |
+| **I** defect taxonomy | build a versioned taxonomy | **extend existing `FailureCause` + `LegalityEngine`** | `record.py:32` has the taxonomy; `legality/engine.py::LegalityEngine` is *already wired into the S4 gate* |
 | **J** evidence stack | build per-run evidence entries | **augment the report path** | records already carry `status`, `provenance`, `limitations`; nothing new to *store* |
 | **L** TUI | build a Textual app | **defer** | `execution/dashboard/web.py` exists; a TUI is not on the scientific path |
 | **A/G/H/N** orchestrator | (claimed done) | **delete the bespoke loop logic in `cli.py:_cmd_loop`** | it re-implements proposal/merge/report with raw DuckDB — the mini-system reborn *inside* the CLI |
+
+### Leverage map — orphaned systems that already do the work (build nothing twice)
+
+The audit found these are **complete but uncalled**. Each is the intended deliverable of a
+workstream; wiring it is far cheaper than the plan assumed.
+
+| Existing module | What it provides | Closes | Caller today |
+|---|---|---|---|
+| `registry/__init__.py::ExperimentRegistry` / `create_registry` | context manager unifying store + provenance + seeds + checkpoints; `start_cycle` / `complete_cell` / `commit_cycle` / `get_resume_point` | **A/O** (the loop's bookkeeping) | **none** |
+| `legality/engine.py::LegalityEngine` + `legality/dsl.py` | `Constraint(expr, origin, scope, enforcement, kind)`; `add_constraint` / `evaluate_record` / `get_constraints_for_record`. **Already enforced at S4 gate** (`stages_impl.py`) | **I** (constraint storage + enforcement) | S4 gate only |
+| `legality/classify.py::DEFECT_REGISTRY` + `classify_record` | void/hard/soft defect taxonomy, pre-seeded void axis-pairs | **I** (taxonomy) | tests only |
+| `evidence/failure.py::analyze_store_failures` / `cluster_failures` / `emit_reproducer` / `FixLinkageStore` | failure clustering, reproducer emission, fix linkage, digest | **I** (the digest) | none |
+| `evidence/limitations.py::derive_limitations` | limitation lines **auto-populated** into text/latex/pdf reports | **J** (honest limitations) | `ReportGenerator.limitations` (done) |
+| `evidence/model_registry.py::ModelRegistry.register_from_record` | pull a `MODEL_CHECKPOINT` artifact from a record, version it | **J** (model wiring) | **none** |
+| `analysis/*` (11 analyzers) | each takes `(store, run_id)` → serializable result | **J/M** (analysis in report) | CLI-only |
+| `reporters/{html,json}.py` + `surface/report.generate_run_report` + `templates/report/` | full report: text/json/html/latex/pdf + Jinja publication report | **J** (reporting) | `comp report` (done) |
+| `design/hypothesis.py::HypothesisRegistry` | pre-registered hypothesis specs, power calc, status lifecycle, JSON persistence | **DoD §6.13** (First Governed Claim) | legacy CLI only |
+| `learning/surrogate.py::GaussianProcessSurrogate` + `SurrogatePolicy` | real sklearn GP; acquisition wrapper over any policy | **E** (GP proposer — deps already present) | probes only |
+| `learning/icu.py::ICUModel.ingest_measurements` | I(C,U) metamodel; wired to `icu_guided` but never fed records | **E** (guided search) | constructs empty, falls back |
+| `execution/campaign_queue.py` | priority/deps/quota queue; `submit_campaign` / `run_campaign_queue_worker` | **H** (real driver, optional) | dashboard read-only |
+| `evidence/procedures.py` / `status.py` | content-addressed assessment procedures; three-tier status | **J** (assessment provenance) | none |
+| `schema/experiment_spec.py::ExperimentSpec` | unified declarative spec → `RunSpec` (showcase/ablation/scaling/comparison/replay/multi_task) | **G** (CLI surface) | legacy CLI |
+
+**Rule from the map:** before writing any module for I/J/E/M, check the table. If a row exists,
+the deliverable is *call it*, not *build it*.
 
 ### Phase 1 — One real driver (closes A/G/H/N for real, plus F, D, E, C-wiring)
 
@@ -636,57 +661,121 @@ hand-rolled `write_report`. Each is a duplicate of an engine capability:
 - `merge_top` / `load_best_from_store` → `multi_objective.compute_pareto_frontier(records)`
 - `classify_cycle_log` + `FIX_HINTS` → `evidence/failure.py` + `FailureCause`
 - `write_report` → `surface/report.generate_run_report`
+- hand-rolled cycle/checkpoint bookkeeping → **`registry.ExperimentRegistry`** (already built)
 
 The driver runs **one `PipelineRunner` per cycle** with:
 
-1. `tasks` = a config-selected task set (start: the cheap tasks — `xor, iris, spiral, digits,
-   breast_cancer, wine, cartpole, copy_task` — which cover all 6 domains and finish in minutes).
-2. `objectives` = the task's regime set from `get_task_objective_set(task)` (≥3).
+1. **one task per cycle** (chosen by a task schedule that cycles the cheap set below, so each
+   cycle has a single objective regime and the loop covers all 6 domains across cycles):
+   `xor, iris, spiral, digits, breast_cancer, wine, cartpole, copy_task`. (Running several tasks
+   in one spec is possible — `tasks` is a search radix — but objectives are per-spec, so a
+   multi-task spec needs the union of their objective sets. One task per cycle sidesteps that.)
+2. `objectives` = `get_task_objective_set(task)` (≥3, read from the registry).
 3. `policy` = `model_based` with those objectives (multi-direction study already supported).
-4. `promote_with_stats(...)` with **baselines read from the store** — see Phase 2.
+4. **`n_seeds ≥ 2`** so the statistical gates have something to measure (n=1 promotes only via
+   the skipped-gate path).
+5. `promote_with_stats(...)` with **baselines read from the store** — see Phase 2.
 
 **Verification (once, ~2 min):** `comp loop --cycles 2 --dry-run` prints a multi-domain walk;
-then one real `--cycles 1` run writes records whose `task_id` spans >1 domain and whose
-`status.maturity` reaches L1/L2.
+then one real `--cycles 1` run writes records whose `task_id` matches the cycle's task and
+includes **at least one cell at `status.maturity ≥ L1`**.
 
 ### Phase 2 — Baselines from the store (closes C for real; enables B's superiority gate)
 
-**Deliverable:** one function, `baseline_from_store(store, run_id, task, budget) -> BaselineRecord | None`.
-It selects the best `PASS` cell whose `(credit="gradient", dynamics="instantaneous")` matches
-the task/budget and wraps it as a `BaselineRecord` (ruler metrics = 1.0 by construction).
-`_settle_maturity` passes `{replication_key: baseline}` to `promote_with_stats`, so the
-superiority gate now has a reference. Only if the run's axis selection *excludes* backprop
-does the driver launch a dedicated `baseline run` first (`BaselineGate`, already written).
+**Deliverable:** implement the **one stub** `BaselineRegistry.get_baseline`'s store lookup
+(`baseline.py:534` is a literal `pass`). It selects the best `PASS` cell whose
+`(credit="gradient", dynamics="instantaneous")` matches the task/budget and wraps it as a
+`BaselineRecord` (ruler metrics = 1.0 by construction). `_settle_maturity` passes
+`{replication_key: baseline}` to `promote_with_stats`, so the superiority gate now has a
+reference. `BaselineGate.check_or_run` already exists for the case where the axis selection
+*excludes* backprop.
 
 **Verification (once, seconds):** promotes a cell only with `Δ = candidate − baseline` in the
 gate result; a store with no backprop cell logs the explicit "baseline absent" limitation.
 
-### Phase 3 — Failure → constraint + honest evidence (closes I, J, M-lite)
+### Phase 3 — Failure → constraint (closes I — mostly wiring, no new taxonomy)
 
-**Deliverable:** `experiment/registry/constraints.py`, ~120 lines:
+**Deliverable:** a ~60-line producer in `experiment/registry/` that turns failures into
+constraints on the **existing** `LegalityEngine`:
 
-- `Constraint` = `(axis, primitive_pattern, reason, author, date)`; stored as JSON next to the
-  loop state (versioned by file history; `defect revoke` = remove the row and re-propose).
-- `is_feasible(coordinate) -> bool` — a predicate the policy applies as a sampling mask
-  (`ProposalContext.legal` already exists as the seam; add a mask list to the context).
-- `record_defect(record)` — maps a `FAIL`/`QUARANTINE` record's `FailureCause` + coordinate to
-  a candidate `Constraint`, appended for human review (`defect list --cluster`).
-- Report augmentation: `generate_run_report` already emits limitations; add (a) the
-  constraint digest, (b) gate-calibration counts (L0→L1→L2 rates from `/status`), (c) the
-  metric-coverage gap list (`coverage unmeasured`). This is **M-lite**: calibration + gaps
-  reported, no new drift machinery.
+- `record_defect(record, engine)` — for a `FAIL`/`QUARANTINE` record, use
+  `legality/classify.py::classify_record` + `FailureCause` to build a
+  `Constraint.create(expr, origin=ConstraintOrigin.OBSERVED_DEFECT, scope=..., kind=...)`
+  and `engine.add_constraint(...)`. The S4 gate then prunes the region on the next cycle —
+  **enforcement already exists**.
+- **Versioned & revocable** = the `Constraint` already carries `origin`/`description`/`tags`;
+  add `author`/`date` and persist `engine.all_constraints()` to JSON beside loop state.
+  `defect revoke <id>` removes the row and re-proposes.
+- **Digest** = `evidence/failure.py::analyze_store_failures(store)` (already built); expose via
+  `comp defect list --cluster`.
 
-**Verification (once, seconds):** inject one shape-mismatch defect → next proposal contains
-none of the offending region; report shows a non-empty limitations section and calibration
-counts.
+**Verification (once, seconds):** inject one shape-mismatch defect → the next cycle's S4 gate
+prunes the offending region; digest lists it.
+
+### Phase 4 — Evidence, analysis, models wired to the report (closes J; M-lite)
+
+**Deliverable:** the report machinery already exists; add ~40 lines:
+
+- **Limitations** — already auto-populated for text/latex/pdf (`ReportGenerator.limitations`).
+  Add the same call to the Jinja path (`templates/report/generator.build_context_from_store`
+  takes `limitations=` but nothing supplies it).
+- **Analysis** — invoke `analysis/{pareto,seed_variability,hardware_variance,reproducibility}.py`
+  from `generate_run_report` (each is `(store, run_id)` → serializable as-is).
+- **Models** — on a `PASS` record carrying a `MODEL_CHECKPOINT` artifact, call
+  `ModelRegistry.register_from_record(...)`; this makes `analysis/weight_evolution.py` and
+  `replay` usable.
+- **M-lite** — gate-calibration counts (L0→L1→L2 rates) and the metric-gap list
+  (`coverage unmeasured`) appended to the report; both are store queries, no new machinery.
+
+**Verification (once, seconds):** one `comp report --format text` shows non-empty limitations,
+a baseline Δ, seed variance, hardware fingerprint, calibration counts, and metric gaps.
+
+### Phase 5 — Governed claims & guided search (closes DoD §6.13 + finishes E)
+
+**Deliverable:** activate the two orphaned learners:
+
+- **Hypothesis → claim:** `design/hypothesis.py::HypothesisRegistry` already has pre-registration,
+  power, and status lifecycle. Attach its `hypothesis.id`s to loop cycles (the campaign DSL
+  already has `CampaignMeta.hypotheses`); after a run, evaluate and `record_result`. Export the
+  `ceec_link` at the §8 boundary — **do not** decide the verdict in the kernel.
+- **Guided search:** call `ICUModel.ingest_measurements(store, run_id)` before proposing (it is
+  wired to `icu_guided` but starved); optionally wrap the policy in
+  `learning/surrogate.py::SurrogatePolicy` (real GP already present — the "enable when deps
+  allow" case is *now*).
+
+**Verification (once):** a registered hypothesis gets CONFIRMED/REJECTED; an `icu_guided` run
+records non-empty `scored_pairs`.
 
 ### Explicitly deferred (not on the scientific path)
 
-- **L** Terminal TUI — the web dashboard covers monitoring; revisit only if demoing.
-- **GP + qEHVI** proposer — Optuna NSGA-II/Tpe already produces genuine frontiers.
-- **Full I** versioned rollback / `SystemConfig.validate` codegen — the JSON constraint mask
-  gives the loop the signal; auto-patching `validate` is a separate hygiene pass.
-- **Ray/SLURM backends** — `LocalBackend`/`MultiprocessBackend` suffice for the cheap-task path.
+- **L** Terminal TUI — the dashboard's accessors are private async methods coupled to FastAPI;
+  a TUI needs a data-layer refactor, not a new app. Revisit only if demoing.
+- **`campaign_queue` as the loop's driver** — real, but it wraps `run_campaign` (YAML round-trip)
+  and duplicates `CampaignRunner`'s scheduling; direct `PipelineRunner` per cycle is simpler and
+  already correct. Adopt only for multi-campaign resource sharing.
+- **`runners/{ablation,scaling,comparison,replay}.py` as cycle kinds** — they hardcode their own
+  `RunSpec`/store/run_id and `comparison` duplicates `statistical_promotion`. Fold their semantics
+  into `LoopDriver` cycle kinds only if a concrete need appears.
+- **Full `SystemConfig.validate` codegen from defects** — the `LegalityEngine` mask gives the loop
+  the signal; auto-patching ontology `validate` is a separate hygiene pass.
+- **Ray/SLURM backends; `DDPBackend`** — `LocalBackend`/`MultiprocessBackend` suffice for cheap tasks.
+
+### Cleanup register (hygiene pass, not a blocker — do at round close)
+
+The audit found dead duplicates. None block the phases; delete in a single hygiene commit:
+
+- `execution/budget.py` ≡ `kernel/resources.py` (`Budget`/`CostModel`/`SimpleCostModel`
+  AST-identical; two live import paths).
+- `execution/cost_tracking.py` ≡ dead clone of `kernel/resources.py` (0 importers).
+- `execution/promotion.py::promote_run` — dead; superseded by `promote_with_stats`.
+- `execution/allocator.py::EvidenceDrivenAllocator` — wired but disabled (`_run_allocator` no-op).
+- `backends.MultiprocessBackend` (empty alias of `LocalBackend`); `DDPBackend` (orphaned).
+- Two round loops: `PipelineRunner._run_round_loop` vs `scripts/run_experiment.py:_run_loop`.
+- Triplicated hardware-fingerprint logic; two `EnvironmentSnapshot` classes.
+- Three hypothesis notions: `design/hypothesis.py` (keep), `learning/reasoning.py` (fold into
+  `evidence/`), `legality` `Template` (keep, the wired one).
+- `schema/primitives.py`, `schema/builder.py`, `evidence/status.py`, `evidence/procedures.py` —
+  orphaned dead-ends.
 
 ### Time discipline (this is a rule, not advice)
 
@@ -718,12 +807,12 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**.
 5. [🔄] Optimizes a **declared objective set** (≥3) read from the registry.
    - *Phase 1: pass `get_task_objective_set(task)` to `create_policy`; study is already multi-direction*
 6. [🔄] **Learns from defects**: known-bad regions pruned; digest produced for review.
-   - *Phase 3: `constraints.py` mask + `defect list --cluster`*
+   - *Phase 3: `LegalityEngine` constraint producer (S4 gate already enforces) + `defect list --cluster`*
 7. [ ] Emits the terminal **TUI**; no `tail -f`. — **deferred** (web dashboard covers it)
 8. [🔄] Writes **evidence per run** with honest, always-populated limitations.
-   - *Phase 3: report augmentation; records already store status/provenance*
+   - *Phase 4: report augmentation; `derive_limitations` already populates text/latex/pdf*
 9. [🔄] Reports its **own validation ability** (calibration, drift, metric gaps).
-   - *Phase 3 (M-lite): calibration counts + metric-gap list in the report*
+   - *Phase 4 (M-lite): calibration counts + metric-gap list in the report*
 10. [✅] Driven **entirely through the CLI**; **zero experiment `run_*.sh` scripts**.
 11. [✅] `scripts/continuous_experiment.py` and `scripts/run_autonomous.py` **deleted**; no `KNOWN_GOOD`/`FIX_HINTS` literals anywhere.
 12. [ ] **The "From Scratch" Test:** the loop rediscovers the known Pareto-optimal region
@@ -793,22 +882,30 @@ is the realization of the system's potential.
 
 ---
 
-**Next action (do in order, no detours):**
+**Next action (do in order, no detours — each phase ends in a dry-run or one short run):**
 
-1. **Phase 1** — write `experiment/registry/loop.py::LoopDriver`; shrink `cli.py:_cmd_loop` to a
-   wrapper; **delete** `propose_axes`/`classify_cycle_log`/`FIX_HINTS`/`load_best_from_store`/
-   `merge_top`. Set `tasks` to the cheap multi-domain set and `objectives` to
-   `get_task_objective_set(task)`. Verify with `comp loop --cycles 2 --dry-run`, then one
-   real `--cycles 1`.
-2. **Phase 2** — `baseline_from_store` reads backprop cells from the store; pass to
-   `promote_with_stats`. Verify the Δ appears in a promotion gate result.
-3. **Phase 3** — `experiment/registry/constraints.py` (mask + digest) and the report
-   augmentation (limitations, calibration, metric gaps).
+1. **Phase 1** — write `experiment/registry/loop.py::LoopDriver` **on top of the existing
+   `registry.ExperimentRegistry`**; shrink `cli.py:_cmd_loop` to a wrapper; **delete**
+   `propose_axes`/`classify_cycle_log`/`FIX_HINTS`/`load_best_from_store`/`merge_top`. Set
+   `tasks` to the cheap multi-domain set and `objectives` to `get_task_objective_set(task)`.
+   Verify with `comp loop --cycles 2 --dry-run`, then one real `--cycles 1`.
+2. **Phase 2** — implement the `BaselineRegistry.get_baseline` store lookup (the one stub);
+   pass baselines to `promote_with_stats`. Verify the Δ appears in a promotion gate result.
+3. **Phase 3** — producer that turns `FAIL`/`QUARANTINE` records into
+   `LegalityEngine.add_constraint(...)` using `legality/classify.py`; digest via
+   `evidence/failure.py::analyze_store_failures`. No new taxonomy.
+4. **Phase 4** — wire `analysis/*` + `derive_limitations` + `ModelRegistry.register_from_record`
+   into the report path; add calibration counts + metric gaps (M-lite).
+5. **Phase 5** — attach `design/hypothesis.py` specs to cycles for the First Governed Claim;
+   feed `ICUModel.ingest_measurements` and optionally enable `SurrogatePolicy` (GP present).
 
 Then run the **From-Scratch Test** and the **First Governed Claim** on cheap tasks; only after
-they pass, scale `--hours` toward 24h.
+they pass, scale `--hours` toward 24h. Do the **Cleanup register** as one hygiene commit at
+round close, not during a phase.
 
 **Decide before coding (fresh session):** the three contracts everything depends on —
 (1) the **provenance schema** (which env fields, hashing), (2) the **seed hierarchy**
 (master → cycle → cell), (3) the **normalization strategy** (ruler-relative vs. per-task).
-The rest is decoupled and may be decided in-stream.
+All three are **already implemented** (`registry/provenance.py`, `registry/seed.py`,
+`registry/task_registry.normalize_per_task_baseline`) — the decision is whether the driver
+uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
