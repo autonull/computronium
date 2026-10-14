@@ -12,9 +12,25 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from computronium.experiment.analysis import (
+    SeedVariabilityConfig,
+    compare_hardware_performance,
+    compute_hypervolume,
+    compute_scalarization_sweep,
+    compute_seed_variability,
+    verify_bitwise_reproducibility,
+)
+from computronium.experiment.analysis import (
+    compute_pareto_frontier as analysis_compute_pareto_frontier,
+)
+from computronium.experiment.analysis.hardware_variance import HardwareVarianceConfig
+from computronium.experiment.evidence.limitations import derive_limitations
 from computronium.experiment.evidence.store import RecordStore
 from computronium.experiment.surface.report import (
     ReportGenerator as SurfaceReportGenerator,
+)
+from computronium.experiment.surface.report import (
+    _maximizes,
 )
 from computronium.experiment.templates.report.models import (
     AblationResult,
@@ -134,6 +150,10 @@ class JinjaReportGenerator:
         # Ablation results
         ablation_results = self._compute_ablation_results(generator, run_id)
 
+        # Advanced Analysis (Phase 4)
+        statistical_results = self._extract_statistical_results(generator, run_id)
+        limitations = self._extract_limitations(generator, run_id)
+
         return ReportContext(
             metadata=metadata,
             axis_coverage=axis_coverage,
@@ -141,14 +161,160 @@ class JinjaReportGenerator:
             stability_metrics=stability_metrics,
             failure_taxonomy=failure_taxonomy,
             hypotheses=hypotheses or [],
-            statistical_results=statistical_results or [],
+            statistical_results=statistical_results,
             ablation_results=ablation_results,
             campaign_config=campaign_config,
             reproducibility=reproducibility,
             executive_summary=executive_summary,
             key_findings=key_findings or [],
-            limitations=limitations or [],
+            limitations=limitations,
         )
+
+    def _extract_limitations(
+        self, generator: SurfaceReportGenerator, run_id: str
+    ) -> list[str]:
+        """Extract limitations from the run records."""
+
+        records = generator._store.query_records(run_id=run_id)
+        if not records:
+            return []
+
+        spec = generator._spec(run_id)
+        achieved = generator.achieved_seeds(run_id)
+        claims = generator.claims(run_id)
+
+        limitations = derive_limitations(
+            records,
+            achieved=achieved,
+            n_seeds=spec.n_seeds if spec else None,
+            fidelity=spec.fidelity if spec else None,
+            objectives=spec.objectives if spec else (),
+            claim_count=len(claims),
+        )
+        return [f"[{lim.kind}] {lim.detail}" for lim in limitations]
+
+    def _extract_statistical_results(
+        self, generator: SurfaceReportGenerator, run_id: str
+    ) -> list[StatisticalResult]:
+        """Extract statistical analysis results from the run."""
+
+        records = generator.claim_eligible_records(run_id)
+        if not records:
+            return []
+
+        results = []
+
+        # Pareto Analysis with Hypervolume
+        spec = generator._spec(run_id)
+        if spec and spec.objectives:
+            objectives = list(spec.objectives[:3])
+            maximize = tuple(_maximizes(obj) for obj in objectives)
+            try:
+                pareto_points, dominated = analysis_compute_pareto_frontier(
+                    records, objectives, list(maximize)
+                )
+                if pareto_points:
+                    hv = compute_hypervolume(pareto_points, objectives, list(maximize))
+                    scalarization = compute_scalarization_sweep(
+                        records, objectives, list(maximize), n_weight_samples=10
+                    )
+                    results.append(
+                        StatisticalResult(
+                            hypothesis_id="pareto_analysis",
+                            test_name="hypervolume",
+                            p_value=None,
+                            effect_size=float(hv),
+                            effect_size_type="hypervolume",
+                            confidence_interval=None,
+                            significant=hv > 0,
+                            power_achieved=None,
+                            n_samples=len(records),
+                            notes=f"Pareto points: {len(pareto_points)}/{len(pareto_points) + len(dominated)}; Scalarization sweeps: {len(scalarization)}",
+                        )
+                    )
+            except Exception:
+                pass
+
+        # Seed Variability
+        try:
+            for metric in ["val_acc", "walltime_total"]:
+                if any(metric in r.payload for r in records):
+                    sv_result = compute_seed_variability(
+                        records,
+                        metric,
+                        SeedVariabilityConfig(min_seeds_per_group=2, confidence_level=0.95),
+                    )
+                    results.append(
+                        StatisticalResult(
+                            hypothesis_id=f"seed_variability_{metric}",
+                            test_name="anova_seed_effect",
+                            p_value=sv_result.seed_effect_pvalue,
+                            effect_size=sv_result.coefficient_of_variation,
+                            effect_size_type="coefficient_of_variation",
+                            confidence_interval=(
+                                sv_result.overall_mean - 1.96 * sv_result.overall_std,
+                                sv_result.overall_mean + 1.96 * sv_result.overall_std,
+                            ),
+                            significant=sv_result.seed_effect_pvalue < 0.05,
+                            power_achieved=None,
+                            n_samples=len(records),
+                            notes=f"Groups: {sv_result.metadata.get('n_groups', 0)}",
+                        )
+                    )
+        except Exception:
+            pass
+
+        # Hardware Variance
+        try:
+            device_field = "device"
+            records_by_device: dict[str, list] = {}
+            for r in records:
+                device = getattr(r, device_field, "unknown")
+                records_by_device.setdefault(device, []).append(r)
+            if len(records_by_device) > 1:
+                hv_result = compare_hardware_performance(
+                    records_by_device,
+                    "val_acc",
+                    HardwareVarianceConfig(min_seeds_per_device=2, confidence_level=0.95),
+                )
+                results.append(
+                    StatisticalResult(
+                        hypothesis_id="hardware_variance",
+                        test_name="anova_device_effect",
+                        p_value=hv_result.device_effect_pvalue,
+                        effect_size=None,
+                        effect_size_type=None,
+                        confidence_interval=None,
+                        significant=hv_result.device_effect_pvalue < 0.05,
+                        power_achieved=None,
+                        n_samples=len(records),
+                        notes=f"Devices: {len(hv_result.devices)}",
+                    )
+                )
+        except Exception:
+            pass
+
+        # Reproducibility
+        try:
+            rep_result = verify_bitwise_reproducibility(run_id, generator._store)
+            results.append(
+                StatisticalResult(
+                    hypothesis_id="reproducibility",
+                    test_name="bitwise_replay",
+                    p_value=None,
+                    effect_size=1.0 if rep_result.metrics_match else 0.0,
+                    effect_size_type="match_rate",
+                    confidence_interval=None,
+                    significant=rep_result.metrics_match,
+                    power_achieved=None,
+                    n_samples=1,
+                    notes=f"Replay hash: {rep_result.metadata.get('has_replay_hash', False)}; Bitwise: {rep_result.bitwise_match}",
+                )
+            )
+        except Exception:
+            pass
+
+        return results
 
     def _extract_stability_metrics(
         self, generator: SurfaceReportGenerator, run_id: str

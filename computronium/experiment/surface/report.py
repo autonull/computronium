@@ -19,6 +19,18 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 
+from computronium.experiment.analysis import (
+    SeedVariabilityConfig,
+    compare_hardware_performance,
+    compute_hypervolume,
+    compute_scalarization_sweep,
+    compute_seed_variability,
+    verify_bitwise_reproducibility,
+)
+from computronium.experiment.analysis import (
+    compute_pareto_frontier as analysis_compute_pareto_frontier,
+)
+from computronium.experiment.analysis.hardware_variance import HardwareVarianceConfig
 from computronium.experiment.evidence.claims import (
     DEFAULT_MIN_SEEDS,
     Alert,
@@ -819,6 +831,149 @@ def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
     return lines
 
 
+def _pareto_analysis_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Pareto analysis with hypervolume and scalarization sweep."""
+
+    lines = _section("Pareto Analysis (hypervolume, scalarization):")
+
+    # Get claim-eligible records for analysis
+    records = generator.claim_eligible_records(run_id)
+    if not records:
+        return [*lines, "  (no claim-eligible records)"]
+
+    # Use the run's declared objectives
+    spec = generator._spec(run_id)
+    if not spec or not spec.objectives:
+        return [*lines, "  (no objectives declared)"]
+
+    objectives = list(spec.objectives[:3])  # Limit to first 3 for tractability
+    maximize = tuple(_maximizes(obj) for obj in objectives)
+
+    try:
+        pareto_points, dominated = analysis_compute_pareto_frontier(
+            records, objectives, list(maximize)
+        )
+        if not pareto_points:
+            return [*lines, "  (no valid points for frontier)"]
+
+        hv = compute_hypervolume(pareto_points, objectives, list(maximize))
+        lines.append(f"  Hypervolume: {hv:.4g}")
+        lines.append(f"  Pareto points: {len(pareto_points)} / {len(pareto_points) + len(dominated)} total")
+
+        # Scalarization sweep
+        scalarization = compute_scalarization_sweep(
+            records, objectives, list(maximize), n_weight_samples=10
+        )
+        if scalarization:
+            lines.append(f"  Scalarization sweeps: {len(scalarization)} weight vectors")
+            # Show top result from first sweep
+            first_sweep = next(iter(scalarization.values()))
+            if first_sweep:
+                top = first_sweep[0]
+                coords = top["coordinate"]
+                obj_str = " ".join(f"{k}={v:.4g}" for k, v in top["objectives"].items())
+                lines.append(
+                    f"    Top (first sweep): {coords['dynamics']}/{coords['credit']}/{coords['update']} {obj_str}"
+                )
+    except Exception as e:
+        lines.append(f"  (analysis failed: {e})")
+
+    return lines
+
+
+def _seed_variability_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Seed variability analysis with confidence intervals."""
+    lines = _section("Seed Variability Analysis:")
+
+    records = generator.claim_eligible_records(run_id)
+    if not records:
+        return [*lines, "  (no claim-eligible records)"]
+
+    # Analyze primary metrics
+    metrics_to_analyze = ["val_acc", "walltime_total", "param_count", "energy_per_step"]
+    available_metrics = [m for m in metrics_to_analyze if any(m in r.payload for r in records)]
+
+    if not available_metrics:
+        return [*lines, "  (no measurable metrics found)"]
+
+    try:
+        for metric in available_metrics[:2]:  # Limit to 2 metrics
+            result = compute_seed_variability(
+                records,
+                metric,
+                SeedVariabilityConfig(min_seeds_per_group=2, confidence_level=0.95),
+            )
+            lines.append(f"  {metric}:")
+            lines.append(f"    Overall: mean={result.overall_mean:.4g}, std={result.overall_std:.4g}, CV={result.coefficient_of_variation:.4g}")
+            lines.append(f"    Seed effect p-value: {result.seed_effect_pvalue:.4g}")
+            for group_name, stats in result.groups.items():
+                lines.append(
+                    f"    {group_name}: mean={stats['mean']:.4g}, "
+                    f"CI=[{stats['ci_lower']:.4g}, {stats['ci_upper']:.4g}], n={stats['n_seeds']}"
+                )
+    except Exception as e:
+        lines.append(f"  (analysis failed: {e})")
+
+    return lines
+
+
+def _hardware_variance_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Hardware variance analysis across devices."""
+    lines = _section("Hardware Variance Analysis:")
+
+    records = generator.claim_eligible_records(run_id)
+    if not records:
+        return [*lines, "  (no claim-eligible records)"]
+
+    # Group by device
+    device_field = "device"
+    records_by_device: dict[str, list] = {}
+    for r in records:
+        device = getattr(r, device_field, "unknown")
+        records_by_device.setdefault(device, []).append(r)
+
+    if len(records_by_device) <= 1:
+        return [*lines, "  (single device - no variance to analyze)"]
+
+    try:
+        result = compare_hardware_performance(
+            records_by_device,
+            "val_acc",
+            HardwareVarianceConfig(min_seeds_per_device=2, confidence_level=0.95),
+        )
+        lines.append(f"  Device effect p-value: {result.device_effect_pvalue:.4g}")
+        for device, stats in result.devices.items():
+            lines.append(
+                f"  {device}: mean={stats['mean']:.4g}, "
+                f"CI=[{stats['ci_lower']:.4g}, {stats['ci_upper']:.4g}], n={stats['n']}"
+            )
+        for pair, pval in result.pairwise_comparisons.items():
+            lines.append(f"  {pair}: p={pval:.4g}")
+    except Exception as e:
+        lines.append(f"  (analysis failed: {e})")
+
+    return lines
+
+
+def _reproducibility_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Reproducibility verification."""
+    lines = _section("Reproducibility Verification:")
+
+    try:
+        result = verify_bitwise_reproducibility(run_id, generator._store)
+        lines.append(f"  Replay hash available: {result.metadata.get('has_replay_hash', False)}")
+        lines.append(f"  Metrics match: {result.metrics_match}")
+        lines.append(f"  Bitwise match: {result.bitwise_match}")
+        if result.mismatched_keys:
+            lines.append(f"  Mismatches: {', '.join(result.mismatched_keys[:5])}")
+        if not result.metrics_match:
+            lines.append(f"  Note: {result.metadata.get('note', 'No replay hash available')}")
+    except Exception as e:
+        lines.append(f"  (verification failed: {e})")
+
+    return lines
+
+
 def _alerts_section(generator: ReportGenerator, run_id: str) -> list[str]:
     """Records carrying an alert, with the alert kinds."""
     lines = _section("Records with Alerts:")
@@ -919,6 +1074,10 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
         *_pareto_section(generator, run_id),
         *_axis_frontiers_section(generator, run_id),
         *_ablation_section(store, run_id),
+        *_pareto_analysis_section(generator, run_id),
+        *_seed_variability_section(generator, run_id),
+        *_hardware_variance_section(generator, run_id),
+        *_reproducibility_section(generator, run_id),
         *_alerts_section(generator, run_id),
     ]
     return "\n".join(lines)
@@ -2252,6 +2411,114 @@ def _generate_latex_report(
                     f"& {obj_vals} & {escape_latex(coord_str)} \\"
                 )
             lines.extend([r"\end{longtable}", ""])
+
+    # Advanced Analysis (Phase 4)
+    # Pareto Analysis with Hypervolume
+    records = generator.claim_eligible_records(run_id)
+    if records:
+        spec = generator._spec(run_id)
+        if spec and spec.objectives:
+            objectives = list(spec.objectives[:3])
+            maximize = tuple(_maximizes(obj) for obj in objectives)
+            try:
+                pareto_points, dominated = analysis_compute_pareto_frontier(
+                    records, objectives, list(maximize)
+                )
+                if pareto_points:
+                    hv = compute_hypervolume(pareto_points, objectives, list(maximize))
+                    lines.extend([
+                        r"\section{Pareto Analysis}",
+                        f"  Hypervolume: {hv:.4g} \\",
+                        f"  Pareto points: {len(pareto_points)} / {len(pareto_points) + len(dominated)} total \\",
+                        "",
+                    ])
+                    scalarization = compute_scalarization_sweep(
+                        records, objectives, list(maximize), n_weight_samples=10
+                    )
+                    if scalarization:
+                        lines.append(f"  Scalarization sweeps: {len(scalarization)} weight vectors \\")
+                        first_sweep = next(iter(scalarization.values()))
+                        if first_sweep:
+                            top = first_sweep[0]
+                            coords = top["coordinate"]
+                            obj_str = " ".join(f"{k}={v:.4g}" for k, v in top["objectives"].items())
+                            lines.append(
+                                f"  Top (first sweep): {escape_latex(coords['dynamics'])}/{escape_latex(coords['credit'])}/{escape_latex(coords['update'])} {escape_latex(obj_str)} \\"
+                            )
+                        lines.append("")
+            except Exception:
+                pass  # Silently skip analysis failures
+
+    # Seed Variability
+    if records:
+        try:
+            for metric in ["val_acc", "walltime_total"]:
+                if any(metric in r.payload for r in records):
+                    result = compute_seed_variability(
+                        records,
+                        metric,
+                        SeedVariabilityConfig(min_seeds_per_group=2, confidence_level=0.95),
+                    )
+                    lines.extend([
+                        r"\subsection{Seed Variability: " + escape_latex(metric) + "}",
+                        f"  Overall: mean={result.overall_mean:.4g}, std={result.overall_std:.4g}, CV={result.coefficient_of_variation:.4g} \\",
+                        f"  Seed effect p-value: {result.seed_effect_pvalue:.4g} \\",
+                        "",
+                    ])
+                    for group_name, stats in result.groups.items():
+                        lines.append(
+                            f"  {escape_latex(group_name)}: mean={stats['mean']:.4g}, "
+                            f"CI=[{stats['ci_lower']:.4g}, {stats['ci_upper']:.4g}], n={stats['n_seeds']} \\"
+                        )
+                    lines.append("")
+        except Exception:
+            pass
+
+    # Hardware Variance
+    if records:
+        device_field = "device"
+        records_by_device: dict[str, list] = {}
+        for r in records:
+            device = getattr(r, device_field, "unknown")
+            records_by_device.setdefault(device, []).append(r)
+        if len(records_by_device) > 1:
+            try:
+                result = compare_hardware_performance(
+                    records_by_device,
+                    "val_acc",
+                    HardwareVarianceConfig(min_seeds_per_device=2, confidence_level=0.95),
+                )
+                lines.extend([
+                    r"\subsection{Hardware Variance}",
+                    f"  Device effect p-value: {result.device_effect_pvalue:.4g} \\",
+                    "",
+                ])
+                for device, stats in result.devices.items():
+                    lines.append(
+                        f"  {escape_latex(device)}: mean={stats['mean']:.4g}, "
+                        f"CI=[{stats['ci_lower']:.4g}, {stats['ci_upper']:.4g}], n={stats['n']} \\"
+                    )
+                for pair, pval in result.pairwise_comparisons.items():
+                    lines.append(f"  {escape_latex(pair)}: p={pval:.4g} \\")
+                lines.append("")
+            except Exception:
+                pass
+
+    # Reproducibility
+    try:
+        result = verify_bitwise_reproducibility(run_id, generator._store)
+        lines.extend([
+            r"\subsection{Reproducibility}",
+            f"  Replay hash available: {result.metadata.get('has_replay_hash', False)} \\",
+            f"  Metrics match: {result.metrics_match} \\",
+            f"  Bitwise match: {result.bitwise_match} \\",
+            "",
+        ])
+        if result.mismatched_keys:
+            lines.append(f"  Mismatches: {', '.join(escape_latex(k) for k in result.mismatched_keys[:5])} \\")
+            lines.append("")
+    except Exception:
+        pass
 
     # Distribution tables
     for title, dist in [

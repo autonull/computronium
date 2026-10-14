@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from computronium.experiment.evidence.model_registry import ModelRegistry
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import ExecutionBackend, LocalBackend
 from computronium.experiment.execution.deadline import Deadline
@@ -162,6 +163,8 @@ class LoopDriver:
         self._legality = LegalityEngine()
         self._defect_registry = create_defect_registry(self._legality, config.state_dir)
         self._baseline_gate = BaselineGate(BaselineRegistry())
+        # Model registry for checkpoint tracking
+        self._model_registry: ModelRegistry | None = None
 
     # ------------------------------------------------------------------ public
 
@@ -368,6 +371,15 @@ class LoopDriver:
             self._write_cycle_report(cycle, generate_run_report(store, run_id))
 
             records = store.query_records(run_id=run_id)
+
+            # Initialize model registry and register checkpoints for PASS records
+            if self._model_registry is None and store._conn is not None:
+                self._model_registry = ModelRegistry(
+                    store._conn, store._write_lock, store.artifacts
+                )
+            if self._model_registry is not None:
+                self._register_model_checkpoints(records, store)
+
             budget = self._elapsed(deadline)
             registry.commit_cycle(budget)
 
@@ -395,6 +407,38 @@ class LoopDriver:
             baseline_present=bool(baselines),
             duration_s=0.0,
         )
+
+    def _register_model_checkpoints(self, records: list, store: RecordStore) -> None:
+        """Register model checkpoints for PASS records."""
+        if self._model_registry is None:
+            return
+        for record in records:
+            if (
+                record.status.gate_verdict is GateVerdict.PASS_
+                and not record.status.quarantine
+            ):
+                # Check if record has a checkpoint artifact
+                artifacts = store.artifacts.get_for_record(record.record_id)
+                has_checkpoint = any(
+                    a.role.value == "model_checkpoint" for a in artifacts
+                )
+                if has_checkpoint:
+                    try:
+                        model_id = f"{record.task}_{record.dynamics}_{record.credit}_{record.update}"
+                        version = f"v{record.seq}"
+                        self._model_registry.register_from_record(
+                            record,
+                            model_id=model_id,
+                            version=version,
+                            stage="development",
+                            description=f"Cycle {record.cycle if hasattr(record, 'cycle') else 'unknown'} PASS",
+                        )
+                    except Exception as exc:  # ruff: ignore[blind-except] - best effort
+                        logger.warning(
+                            "Failed to register model checkpoint for %s: %s",
+                            record.record_id,
+                            exc,
+                        )
 
     def _record_cycle_defects(self, records: list) -> None:
         """Process failed/quarantined records into LegalityEngine constraints."""
@@ -677,6 +721,28 @@ class LoopDriver:
             for task in self._config.task_schedule
             for name in _objectives_for(task)
         })
+
+        # Compute gate calibration counts across all cycles
+        total_l0 = sum(r.n_records for r in history)
+        total_l1 = sum(r.n_l1 for r in history)
+        total_l2 = sum(r.n_l2 for r in history)
+        l0_to_l1_rate = (total_l1 / total_l0 * 100) if total_l0 > 0 else 0
+        l1_to_l2_rate = (total_l2 / total_l1 * 100) if total_l1 > 0 else 0
+
+        # Compute metric gaps (unmeasured objectives per task)
+        from computronium.experiment.schema.metrics import measured_objectives
+        from computronium.experiment.registry.task_registry import get_task_registry
+
+        measured_set = set(measured_objectives())
+        task_registry = get_task_registry()
+        metric_gaps = []
+        for task_name in self._config.task_schedule:
+            task_spec = task_registry.get(task_name)
+            declared = {o.name for o in task_spec.measured_objectives()}
+            unmeasured = declared - measured_set
+            if unmeasured:
+                metric_gaps.append(f"{task_name}: {', '.join(sorted(unmeasured))}")
+
         lines = [
             "# Computronium Experiment Loop",
             "",
@@ -692,6 +758,22 @@ class LoopDriver:
                 f"| {r.cycle} | {r.task} | {r.kind} | {r.n_records} | {r.n_pass} "
                 f"| {r.n_l1} | {r.n_l2} | {'yes' if r.baseline_present else 'no'} |"
             )
+        lines += [
+            "",
+            "## Gate Calibration",
+            "",
+            f"- L0→L1 promotion rate: {l0_to_l1_rate:.1f}% ({total_l1}/{total_l0})",
+            f"- L1→L2 promotion rate: {l1_to_l2_rate:.1f}% ({total_l2}/{total_l1})",
+            "- Threshold guidance: >90% ⇒ too loose; <5% ⇒ too strict",
+            "",
+            "## Metric Gaps (Unmeasured Objectives)",
+            "",
+        ]
+        if metric_gaps:
+            for gap in metric_gaps:
+                lines.append(f"- {gap}")
+        else:
+            lines.append("- (all declared objectives are measured)")
         lines += [
             "",
             "## Limitations",

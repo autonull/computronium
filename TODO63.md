@@ -1052,9 +1052,35 @@ is the realization of the system's potential.
    `comp defect list [--include-revoked]`, `comp defect cluster`, `comp defect revoke <id>`.
    Loop driver now calls `_record_cycle_defects` after each cycle. Verified: dry-run works,
    lock `test_loop_uses_engine_lock.py` passes.
-4. **Phase 4** — wire `analysis/*` + `derive_limitations` + `ModelRegistry.register_from_record`
-   into the report path; add calibration counts + metric gaps (M-lite). (Per-cycle reports already
-   run through `generate_run_report`, which carries a limitations section.)
+4. **Phase 4 — Evidence, Analysis, Models Wired to Report.** ✅ Done this session:
+   - **Text report** (`generate_run_report`): added `_pareto_analysis_section`, `_seed_variability_section`,
+     `_hardware_variance_section`, `_reproducibility_section` — hypervolume, scalarization sweep,
+     seed ANOVA, hardware ANOVA, bitwise replay verification.
+   - **LaTeX report** (`_generate_latex_report`): added same four analysis blocks with `try`/`except`
+     guards so report never crashes.
+   - **Jinja report** (`JinjaReportGenerator.build_context_from_store`): added
+     `_extract_limitations` (calls `derive_limitations` from store) and `_extract_statistical_results`
+     (returns `StatisticalResult` list with Pareto hypervolume, seed variability, hardware variance,
+     reproducibility) — these feed the Pydantic `ReportContext` for templated output.
+   - **Model Registry**: `LoopDriver._execute` now initializes `ModelRegistry` on first cycle and
+     calls `_register_model_checkpoints` for every PASS record carrying a `MODEL_CHECKPOINT` artifact.
+   - **Loop-level report** (`_write_loop_report`): added **Gate Calibration** (L0→L1, L1→L2 rates
+     with threshold guidance) and **Metric Gaps** (unmeasured objectives per task) sections.
+
+   **Files modified:**
+   - `computronium/experiment/surface/report.py` — new section functions, wired into `generate_run_report`
+     and `_generate_latex_report`
+   - `computronium/experiment/templates/report/generator.py` — `_extract_limitations`,
+     `_extract_statistical_results` added to `build_context_from_store`
+   - `computronium/experiment/registry/loop.py` — `ModelRegistry` init, `_register_model_checkpoints`,
+     `_write_loop_report` with calibration + gaps
+
+   **Verification:**
+   - `comp loop --dry-run --cycles 2` prints multi-domain walk with objectives
+   - `test_loop_uses_engine_lock.py` passes (4 tests)
+   - `test_cli_surface_lock.py` passes for `loop`, `baseline`, `coverage`, `defect` commands
+   - All analysis imports resolve; no new test failures introduced (pre-existing provenance test
+     failure in `TestAssessmentProcedureVersion` unrelated)
 5. **Phase 5** — attach `design/hypothesis.py` specs to cycles for the First Governed Claim;
    feed `ICUModel.ingest_measurements` and optionally enable `SurrogatePolicy` (GP present).
 
@@ -1086,8 +1112,22 @@ uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
 - `comp defect cluster` works (requires store with failures)
 - `comp defect revoke <id>` works
 
-**Remaining work for Phase 4:**
-- Wire `analysis/*` modules (pareto, seed_variability, hardware_variance, reproducibility) into `generate_run_report`
-- Call `evidence/limitations.py::derive_limitations` in Jinja report path
-- Register model checkpoints via `evidence/model_registry.py::ModelRegistry.register_from_record` on PASS records
-- Add gate-calibration counts (L0→L1→L2 rates) and metric-gap list to loop report
+**Phase 4 Completion Notes (this session)**
+
+**Files modified:**
+- `computronium/experiment/surface/report.py` — new section functions (`_pareto_analysis_section`,
+  `_seed_variability_section`, `_hardware_variance_section`, `_reproducibility_section`), wired
+  into `generate_run_report` and `_generate_latex_report`
+- `computronium/experiment/templates/report/generator.py` — `_extract_limitations`,
+  `_extract_statistical_results` added to `build_context_from_store`
+- `computronium/experiment/registry/loop.py` — `ModelRegistry` init, `_register_model_checkpoints`,
+  `_write_loop_report` with calibration + gaps
+
+**Verification:**
+- `comp loop --dry-run --cycles 2` prints multi-domain walk with objectives
+- `test_loop_uses_engine_lock.py` passes (4 tests)
+- `test_cli_surface_lock.py` passes for `loop`, `baseline`, `coverage`, `defect` commands
+- All analysis imports resolve; no new test failures introduced (pre-existing provenance test
+  failure in `TestAssessmentProcedureVersion` unrelated)
+
+**Remaining work for Phase 5:**
