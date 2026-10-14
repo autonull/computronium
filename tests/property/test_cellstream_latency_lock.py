@@ -81,7 +81,11 @@ class TestCellStreamLatencyLock:
             # Any valid substrate/geometry from the profile's axes
             assert coordinate.substrate in {"digital"}
             assert coordinate.geometry in {"feedforward", "recurrent"}
-            assert coordinate.dynamics in {"energy_minimization", "instantaneous", "lazy"}
+            assert coordinate.dynamics in {
+                "energy_minimization",
+                "instantaneous",
+                "lazy",
+            }
 
 
 if __name__ == "__main__":

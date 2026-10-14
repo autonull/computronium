@@ -19,9 +19,9 @@ from __future__ import annotations
 from typing import cast
 
 import torch
+from computronium.experiment.execution.compose import compose_cell_system
 from torch import Tensor
 
-from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.ontology import SystemState
 

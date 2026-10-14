@@ -13,9 +13,9 @@ Run: uv run python -m scripts.probes.t51_nonnormality_verification_probe
 from __future__ import annotations
 
 import torch
-
 from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.execution.evaluate import compute_stability_metrics
+
 from computronium.experiment.execution.settle_operator import settle_step_operator
 from computronium.experiment.schema.coordinate import Coordinate
 

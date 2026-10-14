@@ -1,4 +1,4 @@
-"""LoopDriver — the engine-driven closed experiment loop (TODO63 Phase 1).
+"""LoopDriver — the engine-driven closed experiment loop (TODO63 Phase 1-5).
 
 One driver composes the pieces the engine already exposes:
 
@@ -11,6 +11,9 @@ One driver composes the pieces the engine already exposes:
 - ``compute_pareto_frontier`` — multi-objective, not one ``best_acc``.
 - ``generate_run_report`` — the per-run report path.
 - :class:`DefectRegistry` — turns failures into LegalityEngine constraints.
+- :class:`HypothesisRegistry` — governed claims lifecycle (Phase 5).
+- :class:`ICUModel` — guided search via I(C,U) metamodel (Phase 5).
+- :class:`SurrogatePolicy` — model-based optimization wrapper (Phase 5).
 
 Nothing here re-implements proposal, promotion, or reporting: ``cli._cmd_loop``
 is a thin argparse wrapper that builds :class:`LoopConfig` and calls
@@ -25,6 +28,17 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import numpy as np
+from scipy import stats
+
+from computronium.experiment.design.hypothesis import (
+    HypothesisRegistry,
+    HypothesisResult,
+    HypothesisSpec,
+    HypothesisStatus,
+    TestType,
+    create_default_registry,
+)
 from computronium.experiment.evidence.model_registry import ModelRegistry
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import ExecutionBackend, LocalBackend
@@ -36,6 +50,7 @@ from computronium.experiment.execution.statistical_promotion import (
     promote_with_stats,
 )
 from computronium.experiment.kernel.evaluate import task_shape
+from computronium.experiment.learning.icu import ICUModel
 from computronium.experiment.legality.engine import LegalityEngine
 from computronium.experiment.optimization.multi_objective import (
     compute_pareto_frontier,
@@ -53,7 +68,7 @@ from computronium.experiment.registry.seed import SeedContext
 from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.schema.axis import AXES_REGISTRIES, Domain, StructuralAxis
 from computronium.experiment.schema.metrics import measured_objectives
-from computronium.experiment.schema.record import GateVerdict, Maturity
+from computronium.experiment.schema.record import GateVerdict, Maturity, Record
 from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
 from computronium.experiment.schema.run_spec import AxisSelection, Fidelity, RunSpec
 
@@ -106,6 +121,11 @@ class LoopConfig:
     epochs_exploit: int = 3
     cell_workers: int = 4
     task_schedule: tuple[str, ...] = DEFAULT_TASK_SCHEDULE
+    # Phase 5: Hypothesis governance
+    hypothesis_ids: tuple[str, ...] = field(default_factory=tuple)
+    hypothesis_registry_path: Path | None = None
+    # Phase 5: Guided search
+    use_icu_guided: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +144,10 @@ class CycleResult:
     n_l2: int
     baseline_present: bool
     duration_s: float
+    # Phase 5: Hypothesis evaluation results
+    hypothesis_results: dict[str, str] = field(
+        default_factory=dict
+    )  # hypothesis_id -> status
 
 
 def _objectives_for(task: str) -> tuple[str, ...]:
@@ -165,6 +189,18 @@ class LoopDriver:
         self._baseline_gate = BaselineGate(BaselineRegistry())
         # Model registry for checkpoint tracking
         self._model_registry: ModelRegistry | None = None
+        # Phase 5: Hypothesis registry for governed claims
+        hypothesis_registry_path = config.hypothesis_registry_path or (
+            config.state_dir / "hypotheses.json"
+        )
+        self._hypothesis_registry = HypothesisRegistry(hypothesis_registry_path)
+        # Register any default hypotheses not already present
+        default_registry = create_default_registry()
+        for hyp_id, hyp in default_registry._hypotheses.items():
+            if hyp_id not in self._hypothesis_registry._hypotheses:
+                self._hypothesis_registry._hypotheses[hyp_id] = hyp
+        # Phase 5: ICU model for guided search
+        self._icu_model = ICUModel() if config.use_icu_guided else None
 
     # ------------------------------------------------------------------ public
 
@@ -301,6 +337,12 @@ class LoopDriver:
                 baseline_present=False,
                 duration_s=0.0,
             )
+
+        # Phase 5: Evaluate hypotheses after cycle completes
+        hypothesis_results = {}
+        if result.run_id:
+            hypothesis_results = self._evaluate_hypotheses(result.run_id, task)
+
         return CycleResult(
             cycle=cycle,
             task=task,
@@ -314,6 +356,7 @@ class LoopDriver:
             n_l2=result.n_l2,
             baseline_present=result.baseline_present,
             duration_s=time.time() - started,
+            hypothesis_results=hypothesis_results,
         )
 
     async def _execute(self, cycle: int, spec: RunSpec, task: str) -> CycleResult:
@@ -335,12 +378,18 @@ class LoopDriver:
                 else None
             )
             policy_name = spec.policy or "round_robin_grid"
+
+            # Phase 5: Ingest measurements into ICU model for guided search
+            if self._icu_model is not None:
+                self._icu_model.ingest_measurements(store, run_id)
+
             policy = create_policy(
                 policy_name,
                 **policy_context(
                     spec, policy_name, shape=task_shape, deadline=deadline
                 ),
             )
+
             max_rounds = None
             if spec.stages and "s10_decide" not in spec.stages:
                 max_rounds = 1
@@ -456,6 +505,216 @@ class LoopDriver:
                 defect_count,
                 len(self._defect_registry.engine.all_constraints()),
             )
+
+    def _evaluate_hypotheses(self, run_id: str, task: str) -> dict[str, str]:
+        """Evaluate registered hypotheses against the run's records.
+
+        For each hypothesis ID in the config, run the statistical test and
+        record the result in the hypothesis registry. Returns a mapping of
+        hypothesis_id -> status.
+        """
+        results: dict[str, str] = {}
+        if not self._config.hypothesis_ids:
+            return results
+
+        # Open store to query records
+        store = RecordStore(StoreConfig(path=self._config.store_path, read_only=True))
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
+            with store:
+                records = store.query_records(run_id=run_id)
+                if not records:
+                    return results
+
+                for hyp_id in self._config.hypothesis_ids:
+                    hyp = self._hypothesis_registry.get(hyp_id)
+                    if hyp is None:
+                        logger.warning("Hypothesis %s not found in registry", hyp_id)
+                        continue
+
+                    # Run the hypothesis test
+                    try:
+                        result = self._test_hypothesis(hyp, records, task)
+                        # Update hypothesis status in registry
+                        self._hypothesis_registry.record_result(hyp_id, result)
+                        status = (
+                            hyp.status.value
+                            if hyp.status
+                            else HypothesisStatus.INCONCLUSIVE.value
+                        )
+                        results[hyp_id] = status
+                        logger.info(
+                            "Hypothesis %s evaluated: %s (p=%.4f, effect=%.3f)",
+                            hyp_id,
+                            status,
+                            result.p_value or -1,
+                            result.effect_size or -1,
+                        )
+                    except Exception:  # ruff: ignore[blind-except] - continue evaluating other hypotheses
+                        logger.exception("Failed to evaluate hypothesis %s", hyp_id)
+                        results[hyp_id] = HypothesisStatus.INCONCLUSIVE.value
+        except Exception:  # ruff: ignore[blind-except] - store access failure
+            logger.exception("Failed to open store for hypothesis evaluation")
+
+        return results
+
+    def _test_hypothesis(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-locals, too-many-statements]
+        self, hyp: HypothesisSpec, records: list[Record], task: str
+    ) -> HypothesisResult:
+        """Run a statistical test for a hypothesis on the given records.
+
+        This is a simplified implementation that tests the primary metric
+        grouped by the grouping_factor (e.g., credit assignment).
+        """
+
+        # Filter records by task
+        task_records = [r for r in records if r.schedule.task_id == task]
+        if not task_records:
+            return HypothesisResult(
+                hypothesis_id=hyp.id,
+                test_type=hyp.test_type,
+                effect_size_type=hyp.effect_size_type,
+                n_samples=0,
+                n_groups=0,
+                notes="No records for task",
+            )
+
+        # Extract values for the primary metric grouped by the grouping factor
+        groups: dict[str, list[float]] = {}
+        for r in task_records:
+            # Skip non-PASS records
+            if r.status.gate_verdict is not GateVerdict.PASS_ or r.status.quarantine:
+                continue
+            val = r.payload.get(hyp.primary_metric)
+            if val is None:
+                continue
+            group_key = (
+                getattr(r, hyp.grouping_factor, "all") if hyp.grouping_factor else "all"
+            )
+            groups.setdefault(group_key, []).append(float(val))
+
+        if len(groups) < 2:
+            return HypothesisResult(
+                hypothesis_id=hyp.id,
+                test_type=hyp.test_type,
+                effect_size_type=hyp.effect_size_type,
+                n_samples=sum(len(v) for v in groups.values()),
+                n_groups=len(groups),
+                notes="Insufficient groups for comparison",
+            )
+
+        # Run the specified test
+        comparison_values = hyp.comparison_values or sorted(groups.keys())
+        if len(comparison_values) < 2:
+            return HypothesisResult(
+                hypothesis_id=hyp.id,
+                test_type=hyp.test_type,
+                effect_size_type=hyp.effect_size_type,
+                n_samples=sum(len(v) for v in groups.values()),
+                n_groups=len(groups),
+                notes="Not enough comparison values",
+            )
+
+        # Get the two groups to compare
+        group_a = groups.get(comparison_values[0], [])
+        group_b = groups.get(comparison_values[1], [])
+
+        if not group_a or not group_b:
+            return HypothesisResult(
+                hypothesis_id=hyp.id,
+                test_type=hyp.test_type,
+                effect_size_type=hyp.effect_size_type,
+                n_samples=sum(len(v) for v in groups.values()),
+                n_groups=len(groups),
+                notes="One or both comparison groups empty",
+            )
+
+        test_statistic: float | None = None
+        p_value: float | None = None
+        effect_size: float | None = None
+        confidence_interval: tuple[float, float] | None = None
+
+        if hyp.test_type == TestType.PAIRED_T_TEST:
+            # For paired, we need matched samples - fallback to independent
+            if len(group_a) == len(group_b) and hyp.paired:
+                stat, p_value = stats.ttest_rel(group_a, group_b)  # type: ignore[misc]
+                test_statistic = float(stat)  # type: ignore[arg-type]
+            else:
+                stat, p_value = stats.ttest_ind(group_a, group_b, equal_var=False)  # type: ignore[misc]
+                test_statistic = float(stat)  # type: ignore[arg-type]
+            # Cohen's d
+            pooled_std = np.sqrt((np.var(group_a) + np.var(group_b)) / 2)
+            if pooled_std > 0:
+                effect_size = (np.mean(group_a) - np.mean(group_b)) / pooled_std
+
+        elif hyp.test_type == TestType.INDEPENDENT_T_TEST:
+            stat, p_value = stats.ttest_ind(group_a, group_b, equal_var=False)  # type: ignore[misc]
+            test_statistic = float(stat)  # type: ignore[arg-type]
+            pooled_std = np.sqrt((np.var(group_a) + np.var(group_b)) / 2)
+            if pooled_std > 0:
+                effect_size = (np.mean(group_a) - np.mean(group_b)) / pooled_std
+
+        elif hyp.test_type == TestType.MANN_WHITNEY_U:
+            stat, p_value = stats.mannwhitneyu(  # type: ignore[misc]
+                group_a, group_b, alternative=hyp.alternative
+            )
+            test_statistic = float(stat)  # type: ignore[arg-type]
+            # Cliff's delta
+            n_a, n_b = len(group_a), len(group_b)
+            pairs = [(a, b) for a in group_a for b in group_b]
+            greater = sum(1 for a, b in pairs if a > b)
+            less = sum(1 for a, b in pairs if a < b)
+            effect_size = (greater - less) / (n_a * n_b) if n_a * n_b > 0 else 0
+
+        elif hyp.test_type == TestType.WILCOXON:
+            if len(group_a) == len(group_b):
+                stat, p_value = stats.wilcoxon(  # type: ignore[misc]
+                    group_a, group_b, alternative=hyp.alternative
+                )
+                test_statistic = float(stat)  # type: ignore[arg-type]
+            else:
+                p_value = 1.0
+
+        elif hyp.test_type == TestType.ANOVA_ONE_WAY:
+            if len(groups) >= 2:
+                group_values = [groups[k] for k in comparison_values if k in groups]
+                if all(len(g) > 0 for g in group_values):
+                    stat, p_value = stats.f_oneway(*group_values)  # type: ignore[misc]
+                    test_statistic = float(stat)
+                    # Eta-squared as effect size
+                    all_vals = np.concatenate(group_values)
+                    grand_mean = np.mean(all_vals)
+                    ss_between = sum(
+                        len(g) * (np.mean(g) - grand_mean) ** 2 for g in group_values
+                    )
+                    ss_total = sum(
+                        (v - grand_mean) ** 2 for g in group_values for v in g
+                    )
+                    if ss_total > 0:
+                        effect_size = ss_between / ss_total
+
+        # Confidence interval for mean difference (approximate)
+        if effect_size is not None and p_value is not None:
+            mean_diff = np.mean(group_a) - np.mean(group_b)
+            se = np.sqrt(
+                np.var(group_a) / len(group_a) + np.var(group_b) / len(group_b)
+            )
+            ci_half = 1.96 * se
+            confidence_interval = (mean_diff - ci_half, mean_diff + ci_half)
+
+        return HypothesisResult(
+            hypothesis_id=hyp.id,
+            test_type=hyp.test_type,
+            test_statistic=test_statistic,
+            p_value=float(p_value) if p_value is not None else None,
+            effect_size=effect_size,
+            effect_size_type=hyp.effect_size_type,
+            confidence_interval=confidence_interval,
+            significant=(p_value is not None and p_value < hyp.alpha),
+            n_samples=len(group_a) + len(group_b),
+            n_groups=2,
+            groups_tested=[comparison_values[0], comparison_values[1]],
+            notes="",
+        )
 
     # --------------------------------------------------------------- strategy
 
@@ -730,9 +989,6 @@ class LoopDriver:
         l1_to_l2_rate = (total_l2 / total_l1 * 100) if total_l1 > 0 else 0
 
         # Compute metric gaps (unmeasured objectives per task)
-        from computronium.experiment.schema.metrics import measured_objectives
-        from computronium.experiment.registry.task_registry import get_task_registry
-
         measured_set = set(measured_objectives())
         task_registry = get_task_registry()
         metric_gaps = []

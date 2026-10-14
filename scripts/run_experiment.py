@@ -105,7 +105,9 @@ def _build_spec(config: Config, device: str) -> RunSpec:
         fidelity=config.fidelity or profile.fidelity,
         n_seeds=config.n_seeds or profile.n_seeds,
         epochs=config.epochs or profile.epochs,
-        batch_limit=config.batch_limit if config.batch_limit is not None else profile.batch_limit,
+        batch_limit=config.batch_limit
+        if config.batch_limit is not None
+        else profile.batch_limit,
         budget_seconds=config.hours * 3600.0,
         param_budget=config.param_budget or profile.param_budget,
         policy=config.policy,
@@ -326,7 +328,11 @@ def _run_experiment(
         start = time.time()
         interrupted = False
         try:
-            n = asyncio.run(_run_loop(spec, store, run_id, deadline, backend, device, config.verbose))
+            n = asyncio.run(
+                _run_loop(
+                    spec, store, run_id, deadline, backend, device, config.verbose
+                )
+            )
         except Exception as e:
             print(f"Experiment crashed: {e}", flush=True)
             traceback.print_exc()
@@ -388,7 +394,9 @@ def main() -> int:
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--store", default="results/experiment.db")
     parser.add_argument("--policy", default="model_based")
-    parser.add_argument("--verbose", action="store_true", help="Show detailed per-cell results")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Show detailed per-cell results"
+    )
     parser.add_argument("--profile", default="production-map")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=None)
@@ -396,7 +404,12 @@ def main() -> int:
     parser.add_argument("--param-budget", type=int, default=None)
     parser.add_argument("--fidelity", choices=["L0", "L1", "L2"], default=None)
     parser.add_argument("--batch-limit", type=int, default=None)
-    parser.add_argument("--sweep-steps", type=int, default=None, help="Number of diagonal steps through hyperparameter space")
+    parser.add_argument(
+        "--sweep-steps",
+        type=int,
+        default=None,
+        help="Number of diagonal steps through hyperparameter space",
+    )
     parser.add_argument("--substrates", type=str)
     parser.add_argument("--geometries", type=str)
     parser.add_argument("--dynamics", type=str)

@@ -15,10 +15,10 @@ from __future__ import annotations
 import time
 
 import torch
+from computronium.experiment.execution.compose import compose_cell_system
 
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.factory import create_task
-from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.schema.coordinate import Coordinate
 
 

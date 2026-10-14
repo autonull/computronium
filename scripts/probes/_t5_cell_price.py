@@ -11,6 +11,7 @@ from __future__ import annotations
 import time
 
 from computronium.experiment.execution.evaluate import cell_record
+
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET
 from computronium.experiment.schema.seed_registries import seed_all_registries

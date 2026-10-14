@@ -180,9 +180,7 @@ class CellStream:
             )
             return
         self._state.offset += self._page_size
-        logger.debug(
-            "Cell stream advanced to offset=%d", self._state.offset
-        )
+        logger.debug("Cell stream advanced to offset=%d", self._state.offset)
 
     def add_rejected_key(self, key: str) -> None:
         """Add a key to the durable rejected set (admission gate)."""

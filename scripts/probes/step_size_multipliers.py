@@ -34,6 +34,7 @@ from __future__ import annotations
 import time
 
 from computronium.experiment.execution.evaluate import cell_record
+
 from computronium.experiment.schema.coordinate import (
     Coordinate,
     Provenance,

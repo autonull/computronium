@@ -17,8 +17,8 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-
 from computronium.experiment.execution.evaluate import evaluate_cell
+
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
 

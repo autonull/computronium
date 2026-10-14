@@ -289,9 +289,7 @@ class DefectRegistry:
                     tags=frozenset(["defect", defect.defect_class.value]),
                 )
             except Exception as exc:
-                logger.debug(
-                    "Failed to parse violation constraint expr: %s", exc
-                )
+                logger.debug("Failed to parse violation constraint expr: %s", exc)
 
         # Fallback: constrain the failing coordinate axis
         expr = Var(f"coordinate.{record.credit}")  # generic fallback

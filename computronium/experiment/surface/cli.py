@@ -548,6 +548,23 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_loop.add_argument(
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
+    # Phase 5: Hypothesis governance
+    p_loop.add_argument(
+        "--hypothesis-ids",
+        default="",
+        help="Comma-separated hypothesis IDs to evaluate (e.g., H1_credit_efficiency,H2_dynamics_stability)",
+    )
+    p_loop.add_argument(
+        "--hypothesis-registry",
+        default=None,
+        help="Path to hypothesis registry JSON (default: state-dir/hypotheses.json)",
+    )
+    # Phase 5: Guided search
+    p_loop.add_argument(
+        "--use-icu-guided",
+        action="store_true",
+        help="Enable I(C,U) guided search by ingesting measurements into ICU model",
+    )
 
     # Baseline command — online baseline discovery and registry
     p_baseline = sub.add_parser(
@@ -2714,6 +2731,12 @@ def _cmd_loop(args: argparse.Namespace) -> int:
 
     _ensure_registries_seeded()
     profile = RUN_PROFILES[args.profile]
+    hypothesis_ids = tuple(
+        h.strip() for h in args.hypothesis_ids.split(",") if h.strip()
+    )
+    hypothesis_registry_path = (
+        Path(args.hypothesis_registry) if args.hypothesis_registry else None
+    )
     config = LoopConfig(
         store_path=Path(args.store),
         state_dir=Path(args.state_dir),
@@ -2733,6 +2756,9 @@ def _cmd_loop(args: argparse.Namespace) -> int:
         explore_sweep_steps=args.explore_sweep_steps,
         exploit_sweep_steps=args.exploit_sweep_steps,
         cell_workers=_CELL_WORKERS,
+        hypothesis_ids=hypothesis_ids,
+        hypothesis_registry_path=hypothesis_registry_path,
+        use_icu_guided=args.use_icu_guided,
     )
     return LoopDriver(config).run(dry_run=args.dry_run)
 

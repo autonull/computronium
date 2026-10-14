@@ -78,5 +78,6 @@ __all__ = [
     "StoreConfig",
     "RunInfo",
     "DuplicateMeasurementError",
-    "StoreError", "generate_candidates",
+    "StoreError",
+    "generate_candidates",
 ]

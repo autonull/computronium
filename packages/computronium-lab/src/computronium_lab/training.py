@@ -10,11 +10,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
+from computronium.experiment.execution.evaluate import history_metrics
 from torch import Tensor
 
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.trainer import SystemTrainer
-from computronium.experiment.execution.evaluate import history_metrics
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

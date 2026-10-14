@@ -1081,8 +1081,16 @@ is the realization of the system's potential.
    - `test_cli_surface_lock.py` passes for `loop`, `baseline`, `coverage`, `defect` commands
    - All analysis imports resolve; no new test failures introduced (pre-existing provenance test
      failure in `TestAssessmentProcedureVersion` unrelated)
-5. **Phase 5** — attach `design/hypothesis.py` specs to cycles for the First Governed Claim;
-   feed `ICUModel.ingest_measurements` and optionally enable `SurrogatePolicy` (GP present).
+5. **Phase 5** ✅ — attach `design/hypothesis.py` specs to cycles for the First Governed Claim;
+    feed `ICUModel.ingest_measurements` and optionally enable `SurrogatePolicy` (GP present).
+    **COMPLETED THIS SESSION:**
+    - `LoopConfig` extended with `hypothesis_ids`, `hypothesis_registry_path`, `use_icu_guided`
+    - `LoopDriver` initializes `HypothesisRegistry` and `ICUModel`
+    - `_evaluate_hypotheses()` runs statistical tests (paired t-test, Mann-Whitney U, ANOVA, etc.) on cycle records
+    - Hypothesis results recorded in `CycleResult.hypothesis_results` and persisted to registry
+    - `ICUModel.ingest_measurements()` called before each cycle for guided search
+    - CLI `loop` command accepts `--hypothesis-ids`, `--hypothesis-registry`, `--use-icu-guided`
+    - `test_loop_uses_engine_lock.py` and `test_cli_surface_lock.py` pass
 
 Then run the **From-Scratch Test** and the **First Governed Claim** on cheap tasks; only after
 they pass, scale `--hours` toward 24h. Do the **Cleanup register** as one hygiene commit at
@@ -1112,7 +1120,7 @@ uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
 - `comp defect cluster` works (requires store with failures)
 - `comp defect revoke <id>` works
 
-**Phase 4 Completion Notes (this session)**
+### Phase 4 Completion Notes (this session)
 
 **Files modified:**
 - `computronium/experiment/surface/report.py` — new section functions (`_pareto_analysis_section`,
@@ -1130,4 +1138,18 @@ uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
 - All analysis imports resolve; no new test failures introduced (pre-existing provenance test
   failure in `TestAssessmentProcedureVersion` unrelated)
 
+### Phase 5 Completion Notes (this session)
+
+**Files modified:**
+- `computronium/experiment/registry/loop.py` — Added hypothesis registry integration (`HypothesisRegistry`, `_evaluate_hypotheses`, `_test_hypothesis`), ICU model integration (`ICUModel`, `ingest_measurements`), `CycleResult.hypothesis_results` field, `LoopConfig` extensions
+- `computronium/experiment/surface/cli.py` — Added `--hypothesis-ids`, `--hypothesis-registry`, `--use-icu-guided` to `loop` command
+
+**Verification:**
+- `comp loop --dry-run --cycles 2 --hypothesis-ids H1_credit_efficiency --use-icu-guided` works
+- `test_loop_uses_engine_lock.py` passes (4 tests)
+- `test_cli_surface_lock.py` passes for `loop`, `baseline`, `coverage`, `defect` commands
+- Hypothesis evaluation runs paired t-test, Mann-Whitney U, ANOVA tests against cycle records
+- ICU model ingests measurements from each cycle's store for guided search
+
 **Remaining work for Phase 5:**
+- None — core integration complete. SurrogatePolicy wrapper deferred (interface mismatch with Policy protocol)

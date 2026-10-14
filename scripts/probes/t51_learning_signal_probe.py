@@ -12,11 +12,11 @@ Run: uv run python -m scripts.probes.t51_learning_signal_probe
 from __future__ import annotations
 
 import torch
+from computronium.experiment.execution.compose import compose_cell_system
+from computronium.experiment.execution.evaluate import compute_stability_metrics
 
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.factory import create_task
-from computronium.experiment.execution.compose import compose_cell_system
-from computronium.experiment.execution.evaluate import compute_stability_metrics
 from computronium.experiment.schema.coordinate import Coordinate
 
 
