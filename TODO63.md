@@ -601,7 +601,7 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
    - `computronium/experiment/registry/provenance.py` — ProvenanceRecord, ProvenanceBuilder, validation
    - `computronium/experiment/registry/seed.py` — SeedContext, SeedContextManager, CellSeedPlan
    - `computronium/experiment/registry/checkpoint.py` — CycleCheckpoint, RunCheckpoint, CheckpointManager
-   - `computronium/experiment/registry/__init__.py` — ExperimentRegistry unified integration
+   - `computtonium/experiment/registry/__init__.py` — ExperimentRegistry unified integration
    - `computronium/experiment/evidence/store.py` — provenance enforcement on write, store migration, checkpoint transaction
 1. **A** One Orchestrator (delete the mini-system) — everything hangs off it. ✅ **COMPLETED**
    - Added `loop` command to `computronium/experiment/surface/cli.py` replacing `scripts/continuous_experiment.py` and `scripts/run_autonomous.py`
@@ -624,13 +624,14 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
    - Standard baselines per domain (vision, language, rl, graph, tabular, memory)
    - Ruler vocabulary integration (bp_deficit, ruler_*_ratio)
    - Fallback geometry for C12 (tile_mesh → feedforward)
-6. **B** Statistical promotion on the existing ladder (power + multiplicity). ✅ **COMPLETED**
+6. **B** Statistical promotion on the existing ladder (power + multiplicity). ✅ **MODULE COMPLETE** — needs wiring into loop
    - `computronium/experiment/execution/statistical_promotion.py` — GateThresholds, GateResult, PromotionGateResult
    - Statistical gates: superiority (mean > baseline + k·SE), CI width, train/val gap, ρ band
    - `promote_with_stats()` — enhanced promotion with L1 statistical gates + L2 replay
    - Power analysis for seed count derivation (Cohen's d)
    - Discovery/confirmation seed separation support
-7. **D** Multi-Objective Optimization via the Existing Registry. ✅ **COMPLETED**
+   - **Gap**: loop command still uses basic `promote_run`, not `promote_with_stats`
+7. **D** Multi-Objective Optimization via the Existing Registry. ✅ **MODULE COMPLETE** — needs wiring into loop
    - `computronium/experiment/optimization/multi_objective.py` — NormalizedObjective, ParetoPoint, ParetoFrontier, MultiObjectiveOptimizer
    - Wires ~90 declared objectives from `schema/metrics.py` and `schema/seed_registries.py`
    - Normalization: minmax, log, zscore per ObjectiveSpec.normalizer
@@ -639,20 +640,32 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
    - Scalarization for Optuna single-objective optimization
    - Task-specific objective sets via `get_task_objective_set()`
    - Optuna directions from ObjectiveSpec.direction
+   - **Gap**: loop command uses single-objective policy; multi-objective policy not yet wired
 8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization). ✅ **COMPLETED**
    - `computronium/experiment/registry/task_registry.py` — TaskRegistry, TaskSpecEnriched, TaskObjective
-   - 23 tasks across 6 domains (vision, language, RL, graph, tabular, memory) with enriched specs
+   - 26 tasks across 6 domains (vision, language, RL, graph, tabular, memory) with enriched specs
    - Per-task objective emission: measured vs unmeasured objectives tracked
    - F0b normalization: `normalize_per_task_baseline()` for ruler-relative comparison
    - Cost classes: cheap/medium/expensive for scheduling
    - `computronium/experiment/surface/cli.py` — `coverage tasks/unmeasured/report` commands
    - Coverage matrix: domain × task count, unmeasured objectives report
-9. **K** Parameter-effect & timing instrumentation.
-10. **I** Defect → constraint loop (versioned, revocable).
-11. **E** Multi-objective proposer (Optuna+MO now; GP+EHVI later).
-12. **J** Evidence + analysis + model-registry auto-wiring.
-13. **L** Terminal TUI.
-14. **M** Self-validation awareness.
+9. **K** Parameter-effect & timing instrumentation. 🔄 **TESTS ADDED** — production code needs integration
+   - `tests/property/test_hyperparameter_effect_lock.py` — repo-wide parameter-effect lock, silent-drop detector, per-stage timing
+   - **Gap**: silent-drop detector in composition pipeline, timing instrumentation in stages
+10. **I** Defect → constraint loop (versioned, revocable). ❌ **NOT STARTED**
+    - Need: `defect_registry.py` with taxonomy, constraints, versioning
+    - Need: wire to proposer (feasibility mask) and `SystemConfig.validate`
+11. **E** Multi-objective proposer (Optuna+MO now; GP+EHVI later). ❌ **NOT STARTED**
+    - Need: extend `ModelBasedPolicy` with NSGA-II multi-objective study
+    - Need: defect constraints as feasibility mask
+12. **J** Evidence + analysis + model-registry auto-wiring. ❌ **NOT STARTED**
+    - Need: evidence auto-population per run
+    - Need: analysis suite wired to reports
+    - Need: model/artifact registry on success path
+13. **L** Terminal TUI. ❌ **NOT STARTED**
+    - Need: `computronium experiment monitor` Textual TUI
+14. **M** Self-validation awareness. ❌ **NOT STARTED**
+    - Need: gate calibration, drift detection, capability self-report
 
 ---
 
@@ -662,9 +675,12 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
 
 1. [✅] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
 2. [✅] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
-3. [✅] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
-4. [✅] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
-5. [✅] Optimizes a **declared objective set** (≥3) read from the registry.
+3. [🔄] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
+   - *Module exists; loop command needs to call `promote_with_stats` instead of `promote_run`*
+4. [🔄] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
+   - *Module exists; loop command needs to call `promote_with_stats`*
+5. [🔄] Optimizes a **declared objective set** (≥3) read from the registry.
+   - *Module exists; loop command uses single-objective policy, needs multi-objective proposer*
 6. [ ] **Learns from defects**: known-bad regions pruned; digest produced for review.
 7. [ ] Emits the terminal **TUI**; no `tail -f`.
 8. [ ] Writes **evidence per run** with honest, always-populated limitations.

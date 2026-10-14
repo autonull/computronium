@@ -363,9 +363,6 @@ def compute_crowding_distance(front: list[ParetoPoint]) -> None:
         return
 
     # Get all objective names
-    obj_names = list(
-        front[0].objectives[0].__dict__.keys()
-    )  # Not right, need to get names
     obj_names = list({o.name for p in front for o in p.objectives})
 
     for name in obj_names:

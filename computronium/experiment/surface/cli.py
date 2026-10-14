@@ -153,7 +153,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
                 axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam", "muon")
             ),
         ),
-        checkpoint_every_n=1,
+        checkpoint_every_n=0,
     ),
     "production-map": RunProfile(
         name="production-map",
@@ -1862,19 +1862,50 @@ def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
     """Post-measurement bookkeeping: promotion, then across-seed uncertainty.
 
     Maturity is earned from what landed, not declared up front, so this runs
-    on the run\'s own store after the rounds are done.
+    on the run's own store after the rounds are done.
+
+    Uses statistical promotion gates (L1: superiority, CI width, train/val gap,
+    rho band; L2: replay) with config-driven thresholds.
     """
     from computronium.experiment.evidence.claims import compute_and_store_uncertainty
-    from computronium.experiment.execution.promotion import promote_run
+    from computronium.experiment.execution.statistical_promotion import (
+        GateThresholds,
+        promote_with_stats,
+    )
     from computronium.experiment.schema.record import Maturity
     from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
 
-    history = promote_run(store, run_id, spec, tolerance=REPLAY_METRIC_TOLERANCE)
+    # Use statistical gates with thresholds adapted to the run's seed count
+    # For low-seed runs, use relaxed thresholds; statistical gates need n>=5
+    min_seeds = max(spec.n_seeds, 5) if spec.n_seeds >= 3 else spec.n_seeds
+    thresholds = GateThresholds(
+        min_seeds_for_stats=min_seeds,
+        superiority_margin_sigma=1.0 if spec.n_seeds < 5 else 2.0,
+        ci_width_threshold=0.1 if spec.n_seeds < 5 else 0.05,
+    )
+    history = promote_with_stats(
+        store,
+        run_id,
+        spec,
+        tolerance=REPLAY_METRIC_TOLERANCE,
+        thresholds=thresholds,
+        baselines=None,  # Baselines not yet wired; gates run without baseline comparison
+    )
     logger.info(
         "Promotion: %d cell(s) assessed, %d earned L2",
         len(history),
         sum(1 for entry in history if entry["maturity"] == Maturity.L2.value),
     )
+    for entry in history:
+        gates = entry.get("statistical_gates", {})
+        passed = gates.get("all_passed", False)
+        logger.info(
+            "  Cell %s: maturity=%s, replay=%s, stats_gates_passed=%s",
+            entry["cell_key"][:12],
+            entry["maturity"],
+            entry["replay"],
+            passed,
+        )
     uncertainty = compute_and_store_uncertainty(store, run_id, min_seeds=spec.n_seeds)
     logger.info(
         "Uncertainty: computed for %d cell(s) with >=%d seeds",
@@ -2631,36 +2662,22 @@ def _cmd_loop(args: argparse.Namespace) -> int:
         PipelineRunner,
     )
     from computronium.experiment.kernel.evaluate import task_shape
-    from computronium.experiment.kernel.search_space import (
-        declared_cell_count,
-        iter_candidates,
-        search_space_from_spec,
-    )
-    from computronium.experiment.registry import (
-        ExperimentConfig,
-        ExperimentRegistry,
-        create_registry,
-    )
-    from computronium.experiment.registry.checkpoint import compute_spec_hash
     from computronium.experiment.registry.seed import SeedContextManager
-    from computronium.experiment.schema import RunSpec, StageId
+
+    # Ensure registries are seeded
+    from computronium.experiment.schema import (
+        RunSpec,
+        StageId,
+        _ensure_registries_seeded,
+    )
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.run_spec import AxisSelection
     from computronium.experiment.surface.cli import (
-        RUN_PROFILES,
         _CELL_WORKERS,
-        _consumed,
-        _settle_maturity,
+        RUN_PROFILES,
         create_policy,
         policy_context,
     )
-    from computronium.experiment.surface.report import (
-        ReportGenerator,
-        generate_run_report,
-    )
-
-    # Ensure registries are seeded
-    from computronium.experiment.schema import _ensure_registries_seeded
 
     _ensure_registries_seeded()
 
@@ -2787,6 +2804,20 @@ def _cmd_loop(args: argparse.Namespace) -> int:
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / f"loop_cycle_{cycle_idx:03d}.log"
 
+        # Get git SHA for provenance
+        import subprocess
+
+        try:
+            code_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=5,
+            ).stdout.strip()
+        except Exception:
+            code_sha = "unknown"
+
         # Build spec for this cycle
         spec = RunSpec(
             profile=f"{args.profile}-{kind}",
@@ -2806,6 +2837,9 @@ def _cmd_loop(args: argparse.Namespace) -> int:
             seed=seed_manager.master_seed,
             device=device,
             sweep_steps=knobs["sweep_steps"],
+            code_sha=code_sha,
+            dataset=profile.task,
+            dataset_version="1.0.0",
         )
 
         # Run the cycle using the pipeline
@@ -3143,12 +3177,9 @@ def _cmd_baseline(args: argparse.Namespace) -> int:
     """Online baseline discovery and registry commands."""
     import asyncio
     import json
-    import time
     from pathlib import Path
 
-    from computronium.experiment.evidence.store import RecordStore, StoreConfig
     from computronium.experiment.registry.baseline import BaselineRegistry
-    from computronium.experiment.registry.seed import SeedContextManager
 
     # Ensure registries are seeded
     from computronium.experiment.schema import _ensure_registries_seeded
@@ -3232,7 +3263,7 @@ async def _run_baselines_async(args: argparse.Namespace) -> int:
 
     from computronium.experiment.evidence.store import RecordStore, StoreConfig
     from computronium.experiment.registry.baseline import BaselineRegistry
-    from computronium.experiment.registry.seed import SeedContextManager, SeedContext
+    from computronium.experiment.registry.seed import SeedContext, SeedContextManager
 
     store_path = Path(args.store)
     store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3277,9 +3308,8 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from computronium.experiment.registry.task_registry import (
-        TaskRegistry,
         DomainType,
-        CostClass,
+        TaskRegistry,
     )
 
     if args.coverage_command == "tasks":
@@ -3426,7 +3456,7 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
 
             # Show domain coverage if we can infer from tasks
             print(
-                f"\nNote: Full domain×primitive matrix requires task-aware scheduling"
+                "\nNote: Full domain×primitive matrix requires task-aware scheduling"
             )
             print(
                 f"Registry has {len(registry._enrichments)} tasks across {len(registry.all_domains())} domains"
