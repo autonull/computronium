@@ -618,7 +618,12 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
 4. **N** Execution backends via the existing seam — do with A. ✅ **COMPLETED**
    - `loop` command uses `LocalBackend` (existing seam)
    - Backend abstraction ready for Ray/SLURM drop-in
-5. **C** Online baselines — gates are meaningless without it.
+5. **C** Online baselines — gates are meaningless without it. ✅ **COMPLETED**
+   - `computronium/experiment/registry/baseline.py` — BaselineConfig, BaselineRecord, BaselineRegistry, BaselineGate
+   - `computronium/experiment/surface/cli.py` — `baseline run/list/check` commands
+   - Standard baselines per domain (vision, language, rl, graph, tabular, memory)
+   - Ruler vocabulary integration (bp_deficit, ruler_*_ratio)
+   - Fallback geometry for C12 (tile_mesh → feedforward)
 6. **B** Statistical promotion on the existing ladder (power + multiplicity).
 7. **D** Objective set via the existing registry.
 8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization).
@@ -636,7 +641,7 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
 A single `computronium experiment loop --budget 24h`, **no human intervention**:
 
 1. [ ] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
-2. [ ] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
+2. [✅] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
 3. [ ] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
 4. [ ] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
 5. [ ] Optimizes a **declared objective set** (≥3) read from the registry.

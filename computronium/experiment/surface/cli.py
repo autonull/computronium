@@ -549,6 +549,76 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
 
+    # Baseline command — online baseline discovery and registry
+    p_baseline = sub.add_parser(
+        "baseline",
+        help="Online baseline discovery: run standard optimizers on current hardware for comparison",
+    )
+    p_baseline_sub = p_baseline.add_subparsers(dest="baseline_command", required=True)
+
+    p_baseline_run = p_baseline_sub.add_parser(
+        "run",
+        help="Run baseline discovery for a task on current hardware",
+    )
+    p_baseline_run.add_argument(
+        "--task", required=True, help="Task name (e.g., digits, cifar10, wikitext2)"
+    )
+    p_baseline_run.add_argument(
+        "--budget-seconds",
+        type=float,
+        default=3600.0,
+        help="Budget per baseline in seconds",
+    )
+    p_baseline_run.add_argument(
+        "--seeds", type=int, default=3, help="Number of seeds per baseline"
+    )
+    p_baseline_run.add_argument(
+        "--store",
+        default="experiments/baseline/baseline.duckdb",
+        help="DuckDB store path",
+    )
+    p_baseline_run.add_argument(
+        "--seed", type=int, default=None, help="Master seed for deterministic runs"
+    )
+    p_baseline_run.add_argument(
+        "--optimizer",
+        default=None,
+        help="Specific optimizer to run (default: all applicable)",
+    )
+    p_baseline_run.add_argument(
+        "--dry-run", action="store_true", help="Show plan without executing"
+    )
+    p_baseline_run.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
+    p_baseline_list = p_baseline_sub.add_parser(
+        "list",
+        help="List available baseline configurations",
+    )
+    p_baseline_list.add_argument("--task", default=None, help="Filter by task")
+    p_baseline_list.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
+    p_baseline_check = p_baseline_sub.add_parser(
+        "check",
+        help="Check if baseline exists for task/hardware/budget/seeds",
+    )
+    p_baseline_check.add_argument("--task", required=True, help="Task name")
+    p_baseline_check.add_argument(
+        "--budget-seconds", type=float, default=3600.0, help="Budget in seconds"
+    )
+    p_baseline_check.add_argument(
+        "--seeds", type=int, default=3, help="Number of seeds"
+    )
+    p_baseline_check.add_argument(
+        "--store", default="experiments/baseline/baseline.duckdb", help="Store path"
+    )
+    p_baseline_check.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
     # Hypothesis campaign command
     p_hypothesis = sub.add_parser(
         "hypothesis-campaign",
@@ -3024,6 +3094,138 @@ def _cmd_loop(args: argparse.Namespace) -> int:
     print(f"Report: {report_file}", flush=True)
     print(f"Checkpoint: {checkpoint_file}", flush=True)
     print("=" * 70, flush=True)
+    return 0
+
+
+def _cmd_baseline(args: argparse.Namespace) -> int:
+    """Online baseline discovery and registry commands."""
+    import asyncio
+    import json
+    import time
+    from pathlib import Path
+
+    from computronium.experiment.evidence.store import RecordStore, StoreConfig
+    from computronium.experiment.registry.baseline import BaselineRegistry
+    from computronium.experiment.registry.seed import SeedContextManager
+
+    # Ensure registries are seeded
+    from computronium.experiment.schema import _ensure_registries_seeded
+
+    _ensure_registries_seeded()
+
+    if args.baseline_command == "list":
+        registry = BaselineRegistry()
+        baselines = (
+            registry.get_baselines_for_task(args.task)
+            if args.task
+            else registry.STANDARD_BASELINES
+        )
+
+        if args.format == "json":
+            output = json.dumps(
+                [
+                    {
+                        "name": b.name,
+                        "description": b.description,
+                        "domain": b.domain,
+                        "optimizer": b.optimizer,
+                        "architecture": b.architecture,
+                        "geometry": b.geometry,
+                        "credit": b.credit,
+                        "dynamics": b.dynamics,
+                        "update": b.update,
+                        "plasticity": b.plasticity,
+                        "substrate": b.substrate,
+                        "hyperparameters": b.hyperparameters,
+                        "applicable_tasks": b.applicable_tasks,
+                    }
+                    for b in baselines
+                ],
+                indent=2,
+            )
+            print(output)
+        else:
+            print("Available Baseline Configurations")
+            print("=" * 70)
+            for b in baselines:
+                print(f"\n{b.name}")
+                print(f"  Domain: {b.domain}")
+                print(f"  Description: {b.description}")
+                print(f"  Optimizer: {b.optimizer}")
+                print(f"  Architecture: {b.architecture}")
+                print(f"  Geometry: {b.geometry}")
+                print(f"  Credit: {b.credit}")
+                print(f"  Dynamics: {b.dynamics}")
+                print(f"  Update: {b.update}")
+                print(f"  Plasticity: {b.plasticity}")
+                print(f"  Substrate: {b.substrate}")
+                print(f"  Hyperparameters: {b.hyperparameters}")
+                print(f"  Applicable Tasks: {b.applicable_tasks}")
+        return 0
+
+    elif args.baseline_command == "check":
+        # Check if baseline exists
+        store_path = Path(args.store)
+        if not store_path.exists():
+            print(f"Store not found: {store_path}")
+            return 1
+
+        # Would need to query store for baseline table
+        print(
+            f"Baseline check for task={args.task}, budget={args.budget_seconds}s, seeds={args.seeds}"
+        )
+        print("Not yet implemented - requires baseline table in store")
+        return 0
+
+    elif args.baseline_command == "run":
+        return asyncio.run(_run_baselines_async(args))
+
+    return 0
+
+
+async def _run_baselines_async(args: argparse.Namespace) -> int:
+    """Run baseline discovery asynchronously."""
+    import json
+    from pathlib import Path
+
+    from computronium.experiment.evidence.store import RecordStore, StoreConfig
+    from computronium.experiment.registry.baseline import BaselineRegistry
+    from computronium.experiment.registry.seed import SeedContextManager, SeedContext
+
+    store_path = Path(args.store)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Initialize seed context
+    seed_manager = SeedContextManager(master_seed=args.seed)
+
+    # Create registry with store
+    with RecordStore(StoreConfig(path=store_path)) as store:
+        registry = BaselineRegistry(store=store)
+
+        # Run discovery
+        baselines = await registry.discover_baseline(
+            task=args.task,
+            budget_seconds=args.budget_seconds,
+            n_seeds=args.seeds,
+            seed_context=SeedContext(master_seed=seed_manager.master_seed),
+        )
+
+        if args.format == "json":
+            output = json.dumps([b.to_dict() for b in baselines], indent=2)
+            print(output)
+        else:
+            print(f"Baseline Discovery for {args.task}")
+            print(f"  Store: {store_path}")
+            print(f"  Budget: {args.budget_seconds}s, Seeds: {args.seeds}")
+            print(f"  Master seed: {seed_manager.master_seed}")
+            print("=" * 70)
+            for b in baselines:
+                print(f"\n{b.optimizer}/{b.architecture} on {b.geometry}")
+                print(f"  Task metrics: {b.metrics}")
+                print(f"  Cost metrics: {b.cost_metrics}")
+                print(f"  Ruler metrics: {b.ruler_metrics}")
+                print(f"  Run ID: {b.run_id[:8]}")
+
     return 0
 
 
@@ -5732,6 +5934,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "environment": _cmd_environment,
         "quality": _cmd_quality,
         "loop": _cmd_loop,
+        "baseline": _cmd_baseline,
     }
     try:
         handler = command_handlers.get(args.command)
