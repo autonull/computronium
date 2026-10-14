@@ -661,6 +661,61 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
 
+    # Defect command — failure constraint registry (TODO63 Phase 3)
+    p_defect = sub.add_parser(
+        "defect",
+        help="Defect constraint registry: list, cluster, and revoke defect-derived constraints",
+    )
+    p_defect_sub = p_defect.add_subparsers(dest="defect_command", required=True)
+
+    p_defect_list = p_defect_sub.add_parser(
+        "list",
+        help="List active defect constraints",
+    )
+    p_defect_list.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_defect_list.add_argument(
+        "--state-dir", default="experiments/loop", help="Loop state directory"
+    )
+    p_defect_list.add_argument(
+        "--include-revoked", action="store_true", help="Include revoked constraints"
+    )
+    p_defect_list.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_defect_list.add_argument("--output", default=None, help="Output file path")
+
+    p_defect_cluster = p_defect_sub.add_parser(
+        "cluster",
+        help="Cluster failures and show patterns (uses evidence/failure.py)",
+    )
+    p_defect_cluster.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_defect_cluster.add_argument(
+        "--run-id", default=None, help="Run ID to analyze (latest if omitted)"
+    )
+    p_defect_cluster.add_argument(
+        "--min-cluster-size", type=int, default=2, help="Minimum cluster size"
+    )
+    p_defect_cluster.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_defect_cluster.add_argument("--output", default=None, help="Output file path")
+
+    p_defect_revoke = p_defect_sub.add_parser(
+        "revoke",
+        help="Revoke a defect constraint by ID",
+    )
+    p_defect_revoke.add_argument("constraint_id", help="Constraint ID to revoke")
+    p_defect_revoke.add_argument(
+        "--state-dir", default="experiments/loop", help="Loop state directory"
+    )
+    p_defect_revoke.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
     # Hypothesis campaign command
     p_hypothesis = sub.add_parser(
         "hypothesis-campaign",
@@ -2972,6 +3027,167 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
         finally:
             conn.close()
 
+        return 0
+
+    return 0
+
+
+def _cmd_defect(args: argparse.Namespace) -> int:
+    """Defect constraint registry commands (TODO63 Phase 3)."""
+    import json
+    from datetime import datetime
+    from pathlib import Path
+
+    from computronium.experiment.evidence.store import RecordStore, StoreConfig
+    from computronium.experiment.legality.engine import LegalityEngine
+    from computronium.experiment.registry.defect_registry import create_defect_registry
+
+    # Ensure registries are seeded
+    from computronium.experiment.schema import _ensure_registries_seeded
+
+    _ensure_registries_seeded()
+
+    if args.defect_command == "list":
+        engine = LegalityEngine()
+        defect_registry = create_defect_registry(engine, Path(args.state_dir))
+        constraints = defect_registry.list_constraints(
+            include_revoked=args.include_revoked
+        )
+
+        if args.format == "json":
+            output = json.dumps(
+                [c.to_dict() for c in constraints], indent=2, default=str
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+            else:
+                print(output)
+        else:
+            print("Active Defect Constraints")
+            print("=" * 70)
+            if not constraints:
+                print("  (none)")
+            else:
+                for c in constraints:
+                    status = "REVOKED" if c.revoked else "ACTIVE"
+                    print(
+                        f"\n{c.constraint_id} [{status}]"
+                        f"\n  Defect: {c.defect_cause} ({c.defect_class})"
+                        f"\n  Cell: {c.cell_key[:16]}"
+                        f"\n  Measurement: {c.measurement_key}"
+                        f"\n  Origin: {c.constraint.origin.value}"
+                        f"\n  Scope: {c.constraint.scope.value}"
+                        f"\n  Enforcement: {c.constraint.enforcement.value}"
+                        f"\n  Kind: {c.constraint.kind.value}"
+                        f"\n  Description: {c.constraint.description}"
+                        f"\n  Tags: {', '.join(c.constraint.tags)}"
+                        f"\n  Author: {c.author}"
+                        f"\n  Created: {datetime.fromtimestamp(c.created_at).isoformat()}"
+                    )
+                    if c.revoked and c.revoked_at is not None:
+                        print(
+                            f"  Revoked by: {c.revoked_by} at {datetime.fromtimestamp(c.revoked_at).isoformat()}"
+                        )
+        return 0
+
+    elif args.defect_command == "cluster":
+        store_path = Path(args.store)
+        if not store_path.exists():
+            print(f"Store not found: {store_path}")
+            return 1
+
+        with RecordStore(StoreConfig(path=store_path)) as store:
+            from computronium.experiment.evidence.failure import (
+                analyze_store_failures,
+                cluster_failures,
+                detect_failure_patterns,
+            )
+
+            # Determine run_id
+            run_id = args.run_id
+            if run_id is None:
+                run_id = store.latest_run_id()
+                if run_id is None:
+                    print("No runs found in store")
+                    return 0
+
+            all_records = list(store.query_records(run_id=run_id))
+            failed_records = [
+                r
+                for r in all_records
+                if r.status.gate_verdict.value == "FAIL"
+                or r.status.cause.value != "unknown"
+            ]
+
+            if not failed_records:
+                print(f"No failed records found for run {run_id[:12]}")
+                return 0
+
+            clusters = cluster_failures(
+                failed_records, min_cluster_size=args.min_cluster_size
+            )
+            patterns = detect_failure_patterns(failed_records)
+
+            if args.format == "json":
+                output = json.dumps(
+                    {
+                        "run_id": run_id,
+                        "total_failures": len(failed_records),
+                        "clusters": [c.__dict__ for c in clusters],
+                        "patterns": [p.__dict__ for p in patterns],
+                    },
+                    indent=2,
+                    default=str,
+                )
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                else:
+                    print(output)
+            else:
+                print(f"Failure Analysis for run {run_id[:12]}")
+                print("=" * 70)
+                print(f"Total failures: {len(failed_records)}")
+                print(f"Clusters: {len(clusters)}")
+                print(f"Patterns: {len(patterns)}")
+                print()
+                for cluster in clusters:
+                    print(
+                        f"Cluster {cluster.cluster_id}: {cluster.failure_cause.value}"
+                        f" ({cluster.count} occurrences, severity={cluster.severity})"
+                    )
+                    print(
+                        f"  Cells: {', '.join(c[:12] for c in cluster.cell_keys[:5])}"
+                    )
+                    if cluster.common_params:
+                        print(f"  Common params: {cluster.common_params}")
+                    print(f"  {cluster.description}")
+                    print()
+                for pattern in patterns:
+                    print(
+                        f"Pattern {pattern.pattern_id}: {pattern.name}"
+                        f" (confidence={pattern.confidence:.2f}, freq={pattern.frequency})"
+                    )
+                    if pattern.suggested_fix:
+                        print(f"  Suggested fix: {pattern.suggested_fix}")
+                    print()
+        return 0
+
+    elif args.defect_command == "revoke":
+        engine = LegalityEngine()
+        defect_registry = create_defect_registry(engine, Path(args.state_dir))
+        success = defect_registry.revoke(args.constraint_id)
+
+        if args.format == "json":
+            output = json.dumps(
+                {"constraint_id": args.constraint_id, "revoked": success}, indent=2
+            )
+            print(output)
+        else:
+            if success:
+                print(f"Revoked constraint {args.constraint_id}")
+            else:
+                print(f"Constraint {args.constraint_id} not found")
+                return 1
         return 0
 
     return 0
@@ -5684,6 +5900,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "loop": _cmd_loop,
         "baseline": _cmd_baseline,
         "coverage": _cmd_coverage,
+        "defect": _cmd_defect,
     }
     try:
         handler = command_handlers.get(args.command)

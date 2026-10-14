@@ -34,6 +34,7 @@ class ConstraintOrigin(StrEnum):
     DYNAMICS_COMPAT = "dynamics_compat"  # Cross-axis compatibility (R63)
     CREDIT_COMPAT = "credit_compat"  # Credit assignment compatibility
     MANUAL = "manual"  # Manually added
+    OBSERVED_DEFECT = "observed_defect"  # From defect classification
 
 
 class ConstraintScope(StrEnum):

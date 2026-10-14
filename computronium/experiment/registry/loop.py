@@ -10,6 +10,7 @@ One driver composes the pieces the engine already exposes:
 - :class:`BaselineRegistry` — the same-hardware, same-budget ruler.
 - ``compute_pareto_frontier`` — multi-objective, not one ``best_acc``.
 - ``generate_run_report`` — the per-run report path.
+- :class:`DefectRegistry` — turns failures into LegalityEngine constraints.
 
 Nothing here re-implements proposal, promotion, or reporting: ``cli._cmd_loop``
 is a thin argparse wrapper that builds :class:`LoopConfig` and calls
@@ -43,6 +44,9 @@ from computronium.experiment.registry.baseline import (
     BaselineGate,
     BaselineRecord,
     BaselineRegistry,
+)
+from computronium.experiment.registry.defect_registry import (
+    create_defect_registry,
 )
 from computronium.experiment.registry.seed import SeedContext
 from computronium.experiment.registry.task_registry import get_task_registry
@@ -146,8 +150,8 @@ class LoopDriver:
 
     Choose work (explore/exploit) → run one ``PipelineRunner`` over the
     registry's store → settle maturity with statistical gates and a discovered
-    baseline → record evidence → repeat. No hardcoded seeds, hints, or
-    ``best_acc`` sorts.
+    baseline → record defects → update constraints → repeat. No hardcoded seeds,
+    hints, or ``best_acc`` sorts.
     """
 
     def __init__(self, config: LoopConfig) -> None:
@@ -156,6 +160,7 @@ class LoopDriver:
         self._hardware_fp: str | None = None
         self._git_sha = self._resolve_git_sha()
         self._legality = LegalityEngine()
+        self._defect_registry = create_defect_registry(self._legality, config.state_dir)
         self._baseline_gate = BaselineGate(BaselineRegistry())
 
     # ------------------------------------------------------------------ public
@@ -366,6 +371,9 @@ class LoopDriver:
             budget = self._elapsed(deadline)
             registry.commit_cycle(budget)
 
+            # Record defects from failed/quarantined records into the LegalityEngine
+            self._record_cycle_defects(records)
+
         return CycleResult(
             cycle=cycle,
             task=task,
@@ -387,6 +395,23 @@ class LoopDriver:
             baseline_present=bool(baselines),
             duration_s=0.0,
         )
+
+    def _record_cycle_defects(self, records: list) -> None:
+        """Process failed/quarantined records into LegalityEngine constraints."""
+        defect_count = 0
+        for record in records:
+            if (
+                record.status.gate_verdict is not GateVerdict.PASS_
+                or record.status.quarantine
+            ):
+                new_constraints = self._defect_registry.record_defect(record)
+                defect_count += len(new_constraints)
+        if defect_count:
+            logger.info(
+                "Cycle recorded %d new defect constraints (engine now has %d active)",
+                defect_count,
+                len(self._defect_registry.engine.all_constraints()),
+            )
 
     # --------------------------------------------------------------- strategy
 

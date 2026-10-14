@@ -1045,10 +1045,13 @@ is the realization of the system's potential.
    baselines with correct harvested hyperparameter names). The ruler is then passed to
    `promote_with_stats` for the superiority gate. Verified: run shows `baseline=yes`,
    8 cells assessed, 2 earned L2 with ruler-relative Δ.
-3. **Phase 3** — producer that turns `FAIL`/`QUARANTINE` records into
-   `LegalityEngine.add_constraint(...)` using `legality/classify.py`; digest via
-   `evidence/failure.py::analyze_store_failures`. No new taxonomy. (Loop currently surfaces
-   failures only as counts in the report; the `LegalityEngine` is constructed but unused.)
+3. **Phase 3 — Defect → Constraint Loop.** ✅ Done: implemented `registry/defect_registry.py`
+   with `DefectRegistry` that turns `FAIL`/`QUARANTINE` records into `LegalityEngine`
+   constraints via `legality/classify.py::classify_record`. Constraints are versioned,
+   revocable (`defect revoke <id>`), and persisted to JSON. CLI commands added:
+   `comp defect list [--include-revoked]`, `comp defect cluster`, `comp defect revoke <id>`.
+   Loop driver now calls `_record_cycle_defects` after each cycle. Verified: dry-run works,
+   lock `test_loop_uses_engine_lock.py` passes.
 4. **Phase 4** — wire `analysis/*` + `derive_limitations` + `ModelRegistry.register_from_record`
    into the report path; add calibration counts + metric gaps (M-lite). (Per-cycle reports already
    run through `generate_run_report`, which carries a limitations section.)
@@ -1065,3 +1068,26 @@ round close, not during a phase.
 All three are **already implemented** (`registry/provenance.py`, `registry/seed.py`,
 `registry/task_registry.normalize_per_task_baseline`) — the decision is whether the driver
 uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
+
+### Phase 3 Completion Notes (this session)
+
+**Files created:**
+- `computronium/experiment/registry/defect_registry.py` — DefectConstraint, DefectRegistry, create_defect_registry
+
+**Files modified:**
+- `computronium/experiment/registry/loop.py` — Added DefectRegistry integration, `_record_cycle_defects` method
+- `computronium/experiment/legality/engine.py` — Added `OBSERVED_DEFECT` to ConstraintOrigin enum
+- `computronium/experiment/surface/cli.py` — Added `defect` command with `list`, `cluster`, `revoke` subcommands
+
+**Verification:**
+- `test_loop_uses_engine_lock.py` passes (4 tests)
+- `comp loop --dry-run --cycles 1` works
+- `comp defect list` works
+- `comp defect cluster` works (requires store with failures)
+- `comp defect revoke <id>` works
+
+**Remaining work for Phase 4:**
+- Wire `analysis/*` modules (pareto, seed_variability, hardware_variance, reproducibility) into `generate_run_report`
+- Call `evidence/limitations.py::derive_limitations` in Jinja report path
+- Register model checkpoints via `evidence/model_registry.py::ModelRegistry.register_from_record` on PASS records
+- Add gate-calibration counts (L0→L1→L2 rates) and metric-gap list to loop report
