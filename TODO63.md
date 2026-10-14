@@ -601,7 +601,55 @@ a legacy store migrates and is queryable through the new registry.
 > to **5 phases** plus a deferred list and a cleanup register, each phase listed with the
 > workstreams it closes. §4 keeps the detailed rationale; this section is what to actually do.
 
-### Phase 0 — DONE (verified this session)
+### Phase 0 — Leverage re-audit (MANDATORY FIRST ACTION, before any other phase)
+
+> The last audit cut the work from 15 workstreams to 5 phases. It only covered
+> `experiment/{execution,registry,analysis,evidence,reporters,surface,design,learning,runners,
+> legality,quality,data,environment,schema}`. **Re-audit before writing anything** — more
+> orphans, generalizable refactors, and hardcoded→parameter conversions almost certainly
+> remain, and each one removed is a phase made smaller.
+
+**Deliverable:** an updated **Leverage map** (below) plus, for each finding, a note on whether
+it *deletes* work, *reduces* it (refactor/parameter), or is a dead-end to ignore.
+
+**Method (repeat the one that worked):** launch parallel `explore` subagents, one per
+un-audited area, each returning a table of `file | purpose | public callables | caller status
+(wired / CLI-only / orphaned) | duplication`. Then verify the highest-value leads by reading
+the module and one caller.
+
+**Areas NOT yet audited — hunt here first:**
+
+- `computronium/` top level: `core/`, `ontology/`, `algorithms/`, `acceleration/`, `data/`,
+  `domains/` (task definitions + `TaskSpec` capabilities), `benchmarks/`, `distributed/`,
+  `deployment/`, `verification/`, `visualization/`.
+- `packages/` — `ceec-core`, `local-feedback`, `psi-peft`, `stability`, `computronium-lab`.
+  (`stability/` in particular exposes spectral-radius/settling/basin/calibration that the
+  `analysis/*` stability code may duplicate or should call.)
+- `surface/{operations,service,conformance,codegen,profiles,evidence}.py` — the run-control,
+  service-loop, conformance, and codegen surfaces may already implement lifecycle the loop
+  needs.
+- `scripts/probes/` — probes document measured regimes and may contain working integration
+  snippets for surrogate/ICU/campaign wiring.
+- `tests/` locks — an existing lock names an intended invariant we can satisfy by wiring
+  rather than building (e.g. `test_up10_learning_integration_lock`, `test_round_loop_mechanism_lock`).
+- `kernel/evaluate.py` internal seams and `domains/` metric emitters (F0 emission).
+
+**Four patterns to look for (in priority order):**
+
+1. **Complete-but-uncalled modules** (orphaned) — the highest-value find: the deliverable is a
+   call site, not a module. (How Phase 3/4/5 were reduced.)
+2. **Hardcoded → parameter.** A path that works for one case but hardcodes task/axis/threshold
+   should become a config value so the loop reuses it unchanged. (How F/D/E were reduced.)
+3. **Generalizable refactor.** An existing path already does 80% of a needed function; a small
+   signature change (accept `store`/`run_id`/`spec`) turns it into the deliverable.
+4. **Collapsible duplication.** Two modules doing the same thing mean one is deletable *and*
+   signals the survivor is the integration point.
+
+**Then stop auditing and proceed to Phase 1.** Fold every finding into the leverage map and the
+reduction table; if a finding removes a phase's need, say so and skip it. Do not build anything
+during the audit.
+
+### Already done (verified this session)
 
 - **O** provenance, deterministic seeds, checkpointing, store migration. ✅
 - **A/G/H/N** the `loop` CLI command exists, drives `PipelineRunner`, uses `LocalBackend`,
@@ -884,6 +932,13 @@ is the realization of the system's potential.
 
 **Next action (do in order, no detours — each phase ends in a dry-run or one short run):**
 
+0. **Phase 0 — Leverage re-audit (FIRST).** Parallel `explore` agents over the un-audited areas
+   (`computronium/{core,ontology,algorithms,acceleration,data,domains,benchmarks,distributed,deployment,verification,visualization}`,
+   `packages/`, `surface/{operations,service,conformance,codegen,profiles,evidence}.py`,
+   `scripts/probes/`, `tests/` locks). Hunt the four patterns: complete-but-uncalled modules,
+   hardcoded→parameter, generalizable refactors, collapsible duplication. Update the
+   **Leverage map** and **reduction table**; drop any phase a finding makes unnecessary.
+   **Then stop auditing and start Phase 1.**
 1. **Phase 1** — write `experiment/registry/loop.py::LoopDriver` **on top of the existing
    `registry.ExperimentRegistry`**; shrink `cli.py:_cmd_loop` to a wrapper; **delete**
    `propose_axes`/`classify_cycle_log`/`FIX_HINTS`/`load_best_from_store`/`merge_top`. Set
