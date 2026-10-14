@@ -363,7 +363,7 @@ def compute_required_seeds_power(
     return max(math.ceil(n), 3)  # Minimum 3 seeds
 
 
-def run_l1_statistical_gates(
+def run_l1_statistical_gates(  # ruff: ignore[too-many-locals] - one accumulator per gate metric
     cell_records: list[Record],
     baseline: BaselineRecord | None,
     thresholds: GateThresholds,
@@ -393,8 +393,14 @@ def run_l1_statistical_gates(
         else cell_key
     )
 
-    # Extract metric values from records
+    # Extract metric values from records. Objectives are named in the registry;
+    # payloads carry their metric_key (e.g. val_acc), never the objective name —
+    # reading the objective name here left every gate measuring nothing (TODO63).
+    from computronium.experiment.schema.metrics import HISTORY_METRICS, objective_metric
+
     metric_key = "validation_accuracy"  # Primary metric
+    val_key = objective_metric(metric_key)
+    train_key = "train_acc" if "train_acc" in HISTORY_METRICS else val_key
     cell_values = []
     train_values = []
     val_values = []
@@ -402,16 +408,16 @@ def run_l1_statistical_gates(
 
     for record in cell_records:
         # Validation accuracy
-        val = record.payload.get(metric_key)
+        val = record.payload.get(val_key)
         if isinstance(val, (int, float)) and not isinstance(val, bool):
             cell_values.append(float(val))
 
         # Train accuracy
-        train = record.payload.get("train_accuracy")
+        train = record.payload.get(train_key)
         if isinstance(train, (int, float)) and not isinstance(train, bool):
             train_values.append(float(train))
 
-        val = record.payload.get("validation_accuracy")
+        val = record.payload.get(val_key)
         if isinstance(val, (int, float)) and not isinstance(val, bool):
             val_values.append(float(val))
 

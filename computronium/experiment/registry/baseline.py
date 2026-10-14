@@ -532,10 +532,94 @@ class BaselineRegistry:
 
         # Try to load from store if available
         if self._store:
-            # Query store for baseline records (would need a baseline table)
-            pass
+            record = self._lookup_store_baseline(
+                task, hardware_fp, budget_seconds, n_seeds, optimizer
+            )
+            if record is not None:
+                self._cache[key] = record
+                return record
 
         return None
+
+    def _lookup_store_baseline(
+        self,
+        task: str,
+        hardware_fp: str,
+        budget_seconds: float,
+        n_seeds: int,
+        optimizer: str | None,
+    ) -> BaselineRecord | None:
+        """Derive the backprop ruler from the store's own gradient×instantaneous cells.
+
+        The loop's axis sweep already measures ``credit=gradient`` with
+        ``dynamics=instantaneous`` cells on the same task and hardware; those
+        *are* the backprop baseline, so no separate discovery run is needed when
+        they exist (TODO63 Phase 2). Costs carry through as the ruler's own
+        cost metrics; the ruler-relative metrics are 1.0 by construction.
+        """
+        from computronium.experiment.schema.metrics import objective_metric
+        from computronium.experiment.schema.record import GateVerdict
+
+        store = self._store
+        if store is None:
+            return None
+        records = [
+            r
+            for r in store.query_records()
+            if r.schedule.task_id == task
+            and r.credit == "gradient"
+            and r.dynamics == "instantaneous"
+            and r.status.gate_verdict is GateVerdict.PASS_
+            and not r.status.quarantine
+        ]
+        if not records:
+            return None
+
+        val_key = objective_metric("validation_accuracy")
+        scored = [
+            (float(r.payload[val_key]), r)
+            for r in records
+            if isinstance(r.payload.get(val_key), int | float)
+            and not isinstance(r.payload.get(val_key), bool)
+        ]
+        if not scored:
+            return None
+        _, best = max(scored, key=lambda pair: pair[0])
+        task_metrics = {
+            name: float(best.payload[key])
+            for name, key in (
+                ("validation_accuracy", val_key),
+                ("validation_loss", objective_metric("validation_loss")),
+                ("walltime_total", objective_metric("walltime_total")),
+                ("param_count", objective_metric("param_count")),
+            )
+            if isinstance(best.payload.get(key), int | float)
+            and not isinstance(best.payload.get(key), bool)
+        }
+        return BaselineRecord(
+            task=task,
+            hardware_fingerprint=hardware_fp,
+            budget_seconds=budget_seconds,
+            n_seeds=n_seeds,
+            optimizer=optimizer or "sgd",
+            architecture="mlp",
+            geometry=best.geometry,
+            metrics={"validation_accuracy": task_metrics["validation_accuracy"]},
+            cost_metrics={
+                key: value
+                for key, value in task_metrics.items()
+                if key != "validation_accuracy"
+            },
+            ruler_metrics={
+                "bp_deficit": 0.0,
+                "ruler_walltime_ratio": 1.0,
+                "ruler_energy_ratio": 1.0,
+                "ruler_param_ratio": 1.0,
+            },
+            run_id=best.run_id,
+            config_sha256=compute_config_sha256({"source": "store", "task": task}),
+            git_sha=self._get_git_sha(),
+        )
 
     def _get_git_sha(self) -> str:
         """Get current git commit SHA."""

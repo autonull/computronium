@@ -660,7 +660,63 @@ during the audit.
 - **F** `registry/task_registry.py` — 26 tasks / 6 domains; `coverage` command. ✅
 - **K** `tests/property/test_hyperparameter_effect_lock.py` (this session). ✅
 
+### Phase 1–2 progress (session 2 — the real driver)
+
+- **Phase 1 — `registry/loop.py::LoopDriver` shipped.** The bespoke logic is out of the CLI:
+  `cli._cmd_loop` is now a ~35-line argparse wrapper that builds `LoopConfig` from the profile
+  and calls `LoopDriver.run()`. Deleted from `cli.py`: `propose_axes`, `classify_cycle_log`,
+  `FIX_HINTS`, `load_best_from_store` (raw DuckDB), `merge_top` (sorted by `acc`), and the
+  hand-rolled `write_report`. The driver composes `ExperimentRegistry` (per cycle),
+  `PipelineRunner`, `create_policy`/`policy_context`, `promote_with_stats`,
+  `BaselineRegistry.get_baseline`, `compute_pareto_frontier`, and
+  `surface/report.generate_run_report`.
+- **Phase 1 CLI gap fixed (was a real defect).** `loop`, `baseline`, and `coverage` existed in
+  the surface parser but were **absent from `cli/__main__._SUBCOMMANDS`**, so `comp loop` was
+  unreachable — the command the whole plan turns on could not be typed. All three are now
+  dispatched; `test_cli_surface_lock` reaches them.
+- **Phase 2 — `BaselineRegistry.get_baseline` store lookup implemented** (was a literal `pass`).
+  It selects the best `gate_verdict=PASS`, `credit=gradient`, `dynamics=instantaneous` cell for
+  the task and wraps it as a `BaselineRecord` (ruler metrics 1.0), which `_settle` passes to
+  `promote_with_stats` keyed by the cycle's replication keys. Absent ⇒ logged limitation, never a
+  silent pass.
+- **Defect found + fixed in `statistical_promotion.run_l1_statistical_gates`.** The gates read
+  payload keys `"validation_accuracy"` / `"train_accuracy"`, but the evaluator emits `val_acc` /
+  `train_acc` (`metrics.objective_metric`). Every real cell therefore measured an empty vector and
+  failed the train/val gate, so **L2 was unreachable** — "B done" was true only of the caller, not
+  the gate. Now driven from the registry's payload-key mapping.
+- **Verification (fast path, cheap tasks).**
+  - `comp loop --cycles 2 --dry-run` prints a multi-domain walk (xor→iris) with ≥3 objectives each.
+  - One real run (`--cycles 1 --profile quick-verify`) produced 20 records, 18 L1, **2 L2** — the
+    statistical gate is live end-to-end.
+  - `BaselineRegistry.get_baseline` returns `None` cleanly when no backprop cell was sampled.
+  - New lock: `tests/property/test_loop_uses_engine_lock.py` (4 tests, passes).
+- **New finding (feeds Phase 2/3).** The `model_based` policy sampled 10 cells and **none was
+  `gradient × instantaneous`**, so the store-derived ruler was absent. Phase 2's premise ("the
+  loop's sweep already measures the backprop cell") holds only if the policy is made to *always*
+  include it, or `BaselineGate.check_or_run` is invoked when absent. See "Remaining" below.
+- **Pre-existing failure (not introduced here).** `test_cli_surface_lock.py::
+  TestAssessmentProcedureVersion::test_the_store_excludes_records_predating_a_procedure_change`
+  fails: the F4 test builds `Provenance(env={})`, which the O provenance contract now rejects
+  ("missing env fingerprint"). The test needs a non-empty `env`; it is unrelated to this session.
+
+**New improvement opportunities (from this session):**
+
+- **Loop-level resume is still `checkpoint.json`, not the transactional store.** `LoopDriver`
+  opens a fresh `ExperimentRegistry` (and thus a new run) per cycle, so `CheckpointManager`'s
+  per-run cycle commits do not span the loop. One long-lived registry across cycles, or a
+  loop-cycle row in the store, would make Phase O's crash-safe resume hold at the loop level.
+- **`ExperimentRegistry._collect_all_seeds` is an estimate** (`n_seeds * 10`), so a record's
+  provenance `seed_list` is approximate. Enumerating the actual cell `SeedContext` plans would make
+  provenance exact and the From-Scratch test stricter.
+- **`get_task_objective_set` (the plan's cited function) is unused by the driver** — the driver
+  reads `TaskRegistry.measured_objectives()` instead (it is task-specific and bounded). Either
+  route the driver through the plan's function or note it as superseded.
+- **The exploit-axis union is weak with few cells.** All 20 iris cells were non-dominated on 3
+  objectives, so the "exploit" axes equaled nearly the full space. A crowding/smaller-front
+  selection (or seeding the next cycle from the top-*k* front) would sharpen exploitation.
+
 ### The reduction (what the audit found — read before building anything)
+
 
 | Workstream | What it looked like | What it actually is | Why |
 |---|---|---|---|
@@ -845,20 +901,24 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**.
 **fast path** (cheap tasks, minutes) proves each item before the 24h scale-up:
 
 1. [🔄] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
-   - *Phase 1: set `tasks` in the loop spec; already walked by the search space*
+   - *Phase 1: driver walks a cheap multi-domain schedule (vision/tabular/RL/memory); language
+     and graph are the remaining (expensive) domains — the fast path covers 4 of 6.*
 2. [🔄] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
-   - *Phase 2: `baseline_from_store` reads the loop's own backprop cells; dedicated run only if absent*
+   - *Phase 2: `get_baseline` reads the loop's own backprop cells; wiring done. Blocked on the
+     policy actually sampling a `gradient × instantaneous` cell — see Next action item 2.*
 3. [✅] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
-   - *Done: `promote_with_stats` called by `_settle_maturity` (this session)*
+   - *Gate now measures real payload keys (`val_acc`/`train_acc`); a run produced 2 L2 cells.*
 4. [✅] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.
-   - *Done: promotion runs on the run's own store after the rounds; no human eyeball*
-5. [🔄] Optimizes a **declared objective set** (≥3) read from the registry.
-   - *Phase 1: pass `get_task_objective_set(task)` to `create_policy`; study is already multi-direction*
+   - *Done: `promote_with_stats` runs on the run's own store after the rounds; no human eyeball*
+5. [✅] Optimizes a **declared objective set** (≥3) read from the registry.
+   - *Phase 1: driver reads `TaskRegistry.measured_objectives()` (completed to ≥3 with cost
+     objectives) and passes it to `create_policy`; study is already multi-direction.*
 6. [🔄] **Learns from defects**: known-bad regions pruned; digest produced for review.
    - *Phase 3: `LegalityEngine` constraint producer (S4 gate already enforces) + `defect list --cluster`*
 7. [ ] Emits the terminal **TUI**; no `tail -f`. — **deferred** (web dashboard covers it)
 8. [🔄] Writes **evidence per run** with honest, always-populated limitations.
-   - *Phase 4: report augmentation; `derive_limitations` already populates text/latex/pdf*
+   - *Phase 1: every cycle runs through `generate_run_report` (limitations section present); loop
+     report carries explicit limitations. Phase 4: full `analysis/*` + `derive_limitations` wiring.*
 9. [🔄] Reports its **own validation ability** (calibration, drift, metric gaps).
    - *Phase 4 (M-lite): calibration counts + metric-gap list in the report*
 10. [✅] Driven **entirely through the CLI**; **zero experiment `run_*.sh` scripts**.
@@ -932,25 +992,28 @@ is the realization of the system's potential.
 
 **Next action (do in order, no detours — each phase ends in a dry-run or one short run):**
 
-0. **Phase 0 — Leverage re-audit (FIRST).** Parallel `explore` agents over the un-audited areas
-   (`computronium/{core,ontology,algorithms,acceleration,data,domains,benchmarks,distributed,deployment,verification,visualization}`,
-   `packages/`, `surface/{operations,service,conformance,codegen,profiles,evidence}.py`,
-   `scripts/probes/`, `tests/` locks). Hunt the four patterns: complete-but-uncalled modules,
-   hardcoded→parameter, generalizable refactors, collapsible duplication. Update the
-   **Leverage map** and **reduction table**; drop any phase a finding makes unnecessary.
-   **Then stop auditing and start Phase 1.**
-1. **Phase 1** — write `experiment/registry/loop.py::LoopDriver` **on top of the existing
-   `registry.ExperimentRegistry`**; shrink `cli.py:_cmd_loop` to a wrapper; **delete**
-   `propose_axes`/`classify_cycle_log`/`FIX_HINTS`/`load_best_from_store`/`merge_top`. Set
-   `tasks` to the cheap multi-domain set and `objectives` to `get_task_objective_set(task)`.
-   Verify with `comp loop --cycles 2 --dry-run`, then one real `--cycles 1`.
-2. **Phase 2** — implement the `BaselineRegistry.get_baseline` store lookup (the one stub);
-   pass baselines to `promote_with_stats`. Verify the Δ appears in a promotion gate result.
+0. **Phase 0 — Leverage re-audit.** ✅ Done (leverage map + reduction above).
+1. **Phase 1 — `registry/loop.py::LoopDriver`.** ✅ Done this session: driver shipped, CLI
+   shrunk to a wrapper, bespoke helpers deleted, `loop`/`baseline`/`coverage` made reachable;
+   verified with a dry-run and one real `--cycles 1` run (2 cells earned L2). Lock:
+   `tests/property/test_loop_uses_engine_lock.py`.
+2. **Phase 2 — baseline store lookup.** ✅ Mostly done: `get_baseline` reads the store's
+   `gradient × instantaneous` cells and `_settle` passes them to `promote_with_stats`. **Remaining:**
+   the `model_based` policy did not sample a `gradient × instantaneous` cell in a 10-cell iris run,
+   so the ruler was absent. Close this by one of:
+   - make the loop's first cycle (or every cycle) **always include the backprop cell** for the
+     task's geometry (the ruler is not optional); or
+   - call `BaselineGate.check_or_run` in `_baselines` when the lookup is empty, so the ruler is
+     *run* rather than *missed*.
+   Then verify: a promotion gate result shows `Δ = candidate − baseline` (currently the Δ path is
+   unexercised because no baseline was present).
 3. **Phase 3** — producer that turns `FAIL`/`QUARANTINE` records into
    `LegalityEngine.add_constraint(...)` using `legality/classify.py`; digest via
-   `evidence/failure.py::analyze_store_failures`. No new taxonomy.
+   `evidence/failure.py::analyze_store_failures`. No new taxonomy. (Loop currently surfaces
+   failures only as counts in the report; the `LegalityEngine` is constructed but unused.)
 4. **Phase 4** — wire `analysis/*` + `derive_limitations` + `ModelRegistry.register_from_record`
-   into the report path; add calibration counts + metric gaps (M-lite).
+   into the report path; add calibration counts + metric gaps (M-lite). (Per-cycle reports already
+   run through `generate_run_report`, which carries a limitations section.)
 5. **Phase 5** — attach `design/hypothesis.py` specs to cycles for the First Governed Claim;
    feed `ICUModel.ingest_measurements` and optionally enable `SurrogatePolicy` (GP present).
 
