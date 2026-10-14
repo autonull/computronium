@@ -715,6 +715,47 @@ during the audit.
   objectives, so the "exploit" axes equaled nearly the full space. A crowding/smaller-front
   selection (or seeding the next cycle from the top-*k* front) would sharpen exploitation.
 
+### Systemic risks & session findings (read before next session)
+
+- **Gate/measurement validation gap.** `run_l1_statistical_gates` read objective names (`validation_accuracy`)
+  instead of payload keys (`val_acc`/`train_acc`). Every real cell measured empty vectors → train/val
+  gate always failed → **L2 was unreachable**. Any new gate/measurement *must* verify it reads real
+  payload data, not objective names. Add a regression check: assert `gate_values` non-empty on a
+  known-good cell.
+
+- **Baseline hyperparameter name mismatch.** `STANDARD_BASELINES` used generic names (`lr`,
+  `weight_decay`) but the harvester requires axis-prefixed names (`dynamics.step_size`,
+  `update.beta2`, `update.eps`). Baseline configs must use harvested parameter names from
+  `seed_registries.py`. Audit existing configs against `_accepted_params`.
+
+- **CLI reachability silent defect.** `loop`, `baseline`, `coverage` existed in surface parser but
+  were missing from `__main__._SUBCOMMANDS`. The plan's core command could not be typed. Add a
+  CI check: every surface command must appear in dispatcher.
+
+- **Baseline ruler discovery.** The `model_based` policy did not sample `gradient × instantaneous`
+  in 10 cells. Phase 2's premise ("the loop's sweep already measures the backprop cell") holds
+  only if the policy is made to *always* include it, or `BaselineGate.check_or_run` is invoked
+  when absent. We chose the latter — it works.
+
+### Next session: repeat leverage audit (Phase 0) before Phase 3
+
+The first session's audit found workstreams F/D/E/C/I/J/L/A/G/H/N/K. With Phases 1-2 done,
+the landscape has changed:
+
+- `registry/loop.py` is the new integration point (replaces `cli._cmd_loop` bespoke logic)
+- `BaselineRegistry.get_baseline` + `BaselineGate.check_or_run` is the baseline path
+- `promote_with_stats` is the promotion path
+- `LegalityEngine` is constructed but unused — Phase 3's integration point
+
+Run a fresh parallel audit over:
+1. `computronium/experiment/legality/` — how does `LegalityEngine` / `classify.py` / `Constraint` actually work? What's already wired vs. what needs wiring?
+2. `computronium/experiment/evidence/failure.py` — `analyze_store_failures`, `cluster_failures`, `emit_reproducer` — what's the contract?
+3. `computronium/experiment/analysis/` — what exists, what's callable from the driver?
+4. `computronium/design/hypothesis.py` — hypothesis spec format, `ICUModel`, `SurrogatePolicy` — what's ready?
+5. Any new "complete-but-uncalled" modules since the first audit?
+
+Update the leverage map and reduction table before building Phase 3.
+
 ### The reduction (what the audit found — read before building anything)
 
 
