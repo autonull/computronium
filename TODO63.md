@@ -94,6 +94,8 @@ generalization · **[BUILD]** = genuinely absent.
 | Dataset versioning | `data/dataset_registry.py` | **[WIRE]** | F |
 | Environment capture | `experiment/environment/` | **[WIRE]** baseline fingerprint | C |
 | 26-task / 6-domain registry | `domains/registry.py` | **[WIRE]** `RunSpec.tasks` | F |
+| Per-domain objectives (perplexity / F1 / RL-return) | registered but **unmeasured** (`seed_registries.py:448`, `_measured` @385) | **[BUILD]** objective emission | F0 |
+| Backprop-relative comparison vocabulary ("ruler") | `seed_registries.py` (`bp_deficit`, `ruler_*_ratio`) | **[WIRE]** as baseline reference | C |
 | CLI command tree (~40 cmds) | `surface/cli.py`, `cli/hypothesis_campaign.py` | **[WIRE]**; delete shell scripts | G |
 | Execution backends (Local/Multiprocess/DDP) | `execution/backends.py::ExecutionBackend` | **[WIRE]** as the default seam; Ray/SLURM **[BUILD]** later | N |
 | **Online baseline discovery** | comparison only (`evidence/claims.py::beats_baseline`, `status.beats_baseline`); no producer | **[BUILD]** discovery run type | C |
@@ -104,6 +106,13 @@ generalization · **[BUILD]** = genuinely absent.
 | **Terminal TUI** | web dashboard only | **[BUILD]** | L |
 | **Per-stage timing instrumentation** | none | **[BUILD]** | K |
 | **Gate calibration / self-grading** | none | **[BUILD]** | M |
+| Provenance metadata (`env`, `code_sha`, `dataset`) | `schema/coordinate.py:289` `Provenance`; `environment/snapshots.py` | **[EXTEND]** populate + enforce per record | O |
+| Deterministic seed hierarchy | per-schedule `seed`/`n_seeds` (`execution/budget.py`); no master→cycle→cell RNG | **[BUILD]** `SeedContext` | O |
+| Store migration / schema upgrade | `evidence/store.py` (versioning); `schema/versioning.py` | **[EXTEND]** bootstrap migration | O |
+| Cycle checkpoint / crash recovery | none (loop restarts from `state.json`) | **[BUILD]** transactional cycle commit | O |
+| Model/artifact registry wiring | `evidence/model_registry.py` (exists, unused) | **[WIRE]** on the success path | J |
+| Cross-domain metric normalization | `analysis/pareto_analysis.py`; `ObjectiveSpec.normalizer` | **[EXTEND]** per-task + ruler-relative | F |
+| Constraint versioning / rollback | none | **[BUILD]** | I |
 
 > **This table is the plan's spine.** A workstream that says "[WIRE] X" must *delete* any
 > duplicate of X in the loop, not add alongside it.
@@ -125,6 +134,7 @@ generalization · **[BUILD]** = genuinely absent.
 | **C9** | Silent drops / no-effect params (history: `params={}`, alias drift) | Declaration vs consumption drift | §4 K |
 | **C10** | Evidence/discovery loop disconnected | Manual publish only | §4 J |
 | **C11** | Loop can't grade its own gates/env | No calibration | §4 M |
+| **C12** | Backprop baseline scope limited on the winning geometry | D1 (`gradient × tile_mesh` forward shape mismatch) was handled by a *rejection* (`_validate_gradient_credit_instantaneous_output_proj`, `system.py:435`), not a fix — so a backprop ruler cannot run on `tile_mesh` | §4 C (fallback ruler geometries + explicit evidence limitation) |
 
 ---
 
@@ -181,6 +191,14 @@ screening has no statistical gate, so noise promotes.
 Thresholds (`δ, g, band, margin`) are **config-driven**; `GateResult` records statistic,
 threshold, and reason so the registry explains *why* a config stopped.
 
+**Hardening at scale (multiplicity + power):** screening thousands of cells and promoting at a
+fixed `2·SE` manufactures false positives through selection effects (the winner's curse). Gate
+thresholds and seed counts must be **derived from a power analysis over measured seed variance**
+(`analysis/seed_variability.py`), not hardcoded. A **multiplicity-control** protocol — or a
+strict **discovery-seed vs. confirmation-seed separation** (promote only on fresh seeds, never
+the seeds that selected the cell) — must be enforced so the autonomous loop cannot inflate its
+false-positive rate. L2's replay rung is the natural confirmation stage.
+
 **Integration points:** `execution/promotion.py`, `execution/decision.py`,
 `schema/metrics.py`, `analysis/seed_variability.py`.
 
@@ -192,14 +210,16 @@ the failing statistic and the matching baseline.
 
 ---
 
-### C — Online Baselines (the genuine build) · fixes C3
+### C — Online Baselines (the genuine build) · fixes C3, C12
 
 **Problem:** No reference for any number. Hardware varies, so a shipped suite would be wrong.
 
 **What exists:** the *comparison* primitive — `evidence/claims.py::beats_baseline(record,
-baseline_accuracy, margin)` and the `beats_baseline` derived claim (`evidence/status.py`) —
-plus `experiment/environment/` (fingerprinting). What is missing is any **producer** of the
-baseline itself.
+baseline_accuracy, margin)` and the `beats_baseline` derived claim (`evidence/status.py`) — a
+**"ruler" objective family** (`bp_deficit`, `ruler_walltime_ratio`, `ruler_energy_ratio`,
+`ruler_param_ratio` in `seed_registries.py`) that already names backprop-relative objectives —
+and `experiment/environment/` (fingerprinting). What is missing is any **producer** of the
+baseline itself. Build on the ruler vocabulary; do not invent a second one.
 
 **Deliverable:** baselines are a **discovered run type**, not a constant:
 
@@ -210,6 +230,10 @@ baseline itself.
 - `BaselineGate` looks up the match; if absent it **runs one** (or blocks promotion with an
   explicit reason — never silently passes).
 - The baseline *set* is config, extensible per domain.
+- **Ruler geometry fallback (C12):** where the backprop ruler cannot run on the winning
+  geometry (`tile_mesh`), define an equivalent-capacity fallback geometry (e.g. `feedforward`)
+  and record the substitution — the evidence must **explicitly state** this limitation rather
+  than present a matched-geometry claim that cannot be made.
 
 **Integration points:** new `experiment/registry/baseline_registry.py`;
 `experiment/environment/` for fingerprint; `execution/promotion.py` consumes it;
@@ -280,6 +304,16 @@ constraints from §4 I visibly shrink the proposal feasibility set.
 **What exists:** `domains/registry.py::SUPPORTED_TASKS` (+`TaskSpec`, `resolve_task`),
 `schema/run_spec.py` (`tasks`, `task_names`), `data/dataset_registry.py`.
 
+**Prerequisite (F0) — per-domain objective *emission* (the "coverage lie"):**
+`MEASURED_OBJECTIVES` (`schema/metrics.py`) measures only `val_acc`/`val_loss` for tasks.
+`f1_score`, `perplexity`, `bleu_score`, `test_accuracy` are **registered but unmeasured** —
+`_measured()` (`seed_registries.py:385`) stamps them `"registered ahead of measurement"` — and
+there is **no RL-return objective at all**. Sweeping language/RL/graph without emitting their
+metrics yields a coverage matrix of *meaningless numbers*. So **before** coverage scheduling:
+extend the evaluator payloads and `MEASURED_OBJECTIVES` to emit domain metrics (perplexity,
+return, F1). **Lock:** a coverage cell may not be populated unless the corresponding
+domain-specific objective is measured (a cell whose task has no measured objective fails).
+
 **Deliverable:**
 
 - `TaskRegistry` over `SUPPORTED_TASKS` enriched with **domain, shape, objective defaults,
@@ -287,6 +321,11 @@ constraints from §4 I visibly shrink the proposal feasibility set.
 - The orchestrator **populates `RunSpec.tasks`**; proposer sweeps `task × config`.
 - **Coverage-driven scheduling**: un-measured `(task × primitive)` pairs get priority; cheap
   tasks (xor/iris/spiral) get more cycles, expensive ones budgeted from measured walltime.
+- **Normalization before Pareto (F0b):** raw values across vision/language/RL/graph are not
+  comparable, so a frontier over them is meaningless. Normalize **per task against that task's
+  online baseline** (ruler-relative) using `ObjectiveSpec.normalizer` + the `ruler_*` family;
+  until baselines exist (workstream C), the frontier is comparable **within-task only** and the
+  report must state that limitation explicitly.
 
 **Integration points:** `domains/registry.py`, `schema/run_spec.py`, `execution/allocator.py`,
 new `experiment/registry/task_registry.py`, `surface/cli.py` `registry coverage`.
@@ -364,7 +403,11 @@ attach when present (optional per principle 9).
   (2) candidate `SystemConfig.validate` rules (patches for human review); (3) compatibility
   matrix for policy-aware sampling; (4) a human-reviewable digest (`defect list --cluster`).
 - **Never silent:** unknown failures are parsed and surfaced.
-- Loop *collects*; human *decides*; result is *applied and locked*.
+- **Versioned & reversible:** every constraint and validate-rule carries an
+  author/reason/date. `defect approve` records the PR; `defect revoke <id>` removes the
+  constraint and re-runs the affected proposal to confirm the region is safe again. A wrong
+  constraint must never be permanent.
+- Loop *collects*; human *decides*; result is *applied, versioned, and locked*.
 
 **Integration points:** new `experiment/registry/defect_registry.py`; `ontology/system.py`
 (validate); `execution/policy.py` (mask); `evidence/failure.py`.
@@ -389,6 +432,10 @@ energy_landscape,gradient_stats,weight_evolution}.py`.
 **Deliverable:** every run materializes an evidence entry automatically: procedures = resolved
 config; statistics = gate results; artifacts = store/logs/curves; status = gate outcome;
 limitations = the un-tested regime. The analysis suite is invoked **by the report**, not by hand.
+
+- **Model/artifact wiring:** the `ExecutionBackend` success path registers trained artifacts
+  via `evidence/model_registry.py` (present but unused), so replay and weight-evolution
+  analysis (`analysis/weight_evolution.py`) have the models to analyze.
 
 **Honesty constraint:** nothing is "validated" merely because it ran; status reflects *gates
 passed*, and limitations are always populated. Publishing (LaTeX/PDF) stays a deliberate human act.
@@ -504,22 +551,65 @@ Protocol runs the same cycle unchanged.
 
 ---
 
+### O — Foundations: Provenance, Determinism & Recovery · enables DoD §6, C7
+
+**Problem:** The scientific DoD (exact replay, From-Scratch, discovery/confirmation seed
+separation) presupposes three guarantees the loop does **not** yet provide: an immutable
+provenance record, a deterministic seed hierarchy, and crash-safe resumption. The registry must
+also read the stores that already exist, or history is lost. These are cross-cutting and must
+land **before** the loop runs.
+
+**What exists:** `schema/coordinate.py:289` `Provenance` (env, `code_sha`, dataset, dataset_version,
+policy, links, data_origin, transfer fields); `environment/snapshots.py` (`EnvironmentCapture`,
+`EnvironmentSnapshot`, `verify_environment` — Python/System/Git/Container); `schema/versioning.py`
+and `evidence/store.py` (schema versioning); per-schedule `seed`/`n_seeds` (`execution/budget.py`).
+
+**Deliverable:**
+
+1. **Provenance contract.** Every record carries an immutable provenance row — `run_id`,
+   `code_git_sha`, `config_sha256`, `seed_list`, `env_fingerprint` (via `EnvironmentCapture`),
+   `task_versions`, `hardware_hash` — **enforced on write**; a record without it fails to commit.
+2. **Deterministic seed hierarchy.** A single `SeedContext`: master seed → per-cycle sub-seed →
+   per-cell deterministic sub-seed. No scattered `torch`/`random`/`numpy` seeding in stages;
+   a cell's identity includes `(master, cycle, cell)`. This is what makes the From-Scratch test
+   and discovery/confirmation separation meaningful.
+3. **Store migration.** Registry bootstrap migrates existing DuckDB stores
+   (`exp_autonomous_*.duckdb`, `continuous.duckdb`, …) to the current schema; history is not
+   lost. Verified against the three stores produced this session.
+4. **Transactional cycle commit / checkpoint.** "Cycle N complete" becomes durable only after
+   **all** its records commit; on crash the loop resumes from the last checkpoint
+   (`cycle`, `last_completed_cell`). Replaces the fragile `state.json` as source of truth.
+
+**Integration points:** `schema/coordinate.py` (`Provenance`), `environment/snapshots.py`,
+`schema/versioning.py`, `evidence/store.py`, new `experiment/registry/{provenance,seed,checkpoint}.py`,
+`experiment/registry/loop.py`.
+
+**Lock:** a record lacking provenance fails to write; replay from a checkpoint reproduces
+post-crash state exactly; two runs sharing a `SeedContext` produce identical cell seeds.
+
+**Verification:** kill a cycle mid-flight, restart, and the cycle completes from its checkpoint;
+a legacy store migrates and is queryable through the new registry.
+
+---
+
 ## 5. Execution Order (dependency-aware, not waterfall)
 
 Critical path to a meaningful 24h run; reorder freely — workstreams are decoupled.
 
+0. **O** Foundations — provenance, deterministic seeds, store migration, checkpointing. **First**;
+   everything below writes through it.
 1. **A** One Orchestrator (delete the mini-system) — everything hangs off it.
 2. **G** CLI Consolidation (delete shell scripts) — do with A.
 3. **H** Campaign engine as driver — do with A.
 4. **N** Execution backends via the existing seam — do with A.
 5. **C** Online baselines — gates are meaningless without it.
-6. **B** Statistical promotion on the existing ladder.
+6. **B** Statistical promotion on the existing ladder (power + multiplicity).
 7. **D** Objective set via the existing registry.
-8. **F** Cross-domain coverage.
+8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization).
 9. **K** Parameter-effect & timing instrumentation.
-10. **I** Defect → constraint loop.
+10. **I** Defect → constraint loop (versioned, revocable).
 11. **E** Multi-objective proposer (Optuna+MO now; GP+EHVI later).
-12. **J** Evidence + analysis auto-wiring.
+12. **J** Evidence + analysis + model-registry auto-wiring.
 13. **L** Terminal TUI.
 14. **M** Self-validation awareness.
 
@@ -540,6 +630,16 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
 9. [ ] Reports its **own validation ability** (calibration, drift, metric gaps).
 10. [ ] Driven **entirely through the CLI**; **zero experiment `run_*.sh` scripts**.
 11. [ ] `scripts/continuous_experiment.py` and `scripts/run_autonomous.py` **deleted**; no `KNOWN_GOOD`/`FIX_HINTS` literals anywhere.
+12. [ ] **The "From Scratch" Test:** the loop rediscovers the known Pareto-optimal region
+    (`tile_mesh` + local credit) *without* seeded priors or hardcoded hints — proving the
+    proposer works from a blank slate.
+13. [ ] **The First Governed Claim:** the loop executes one preregistered cross-domain
+    hypothesis (e.g. *"local credit ≥ backprop at matched compute budget on ≥ 2 non-vision
+    domains"*) and emits a CEEC-governed claim with a definitive verdict, **whether confirmed
+    or falsified**. Exported to the CEEC boundary (§8), not decided inside the kernel.
+14. [ ] Every record carries immutable **provenance** (`code_git_sha`, `config_sha256`,
+    `seed_list`, `env_fingerprint`, `hardware_hash`); a **mid-run crash resumes exactly** from
+    the last checkpoint; `computronium experiment replay` reproduces a claimed metric.
 
 ---
 
@@ -556,6 +656,8 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
 - ❌ Shell scripts that duplicate the CLI.
 - ❌ Repeating a known-bad region the defect registry already knows about.
 - ❌ Un-instrumented slow paths.
+- ❌ A committed run without immutable provenance, or a nondeterministic seed path.
+- ❌ A crash that loses an already-completed cycle (no transactional checkpoint).
 
 ---
 
@@ -569,12 +671,45 @@ A single `computronium experiment loop --budget 24h`, **no human intervention**:
 - **Config-driven thresholds.** Gate/budget/objective policy is data, so policy change is a
   config change.
 - **Fail-open visibility.** Anything the system cannot yet do is *reported*, never hidden.
+- **Epistemic boundary (kernel vs. CEEC).** Two epistemic systems coexist: the kernel's
+  `evidence/` stack and the standalone CEEC ledger (`packages/ceec-core`, with its
+  `test_ceec_boundary.py`). The **evidence stack governs *measurement* and *gates* — what
+  happened**; the **CEEC ledger governs *beliefs* and *decisions* — what we now think**. TODO63
+  must **not** re-implement CEEC's decision logic inside the kernel. Workstreams J and M end at
+  the boundary of a valid **`ceec_link` export**; the governed verdict (DoD §6.13) is rendered
+  by CEEC, not by the loop.
 - **Decoupled workstreams.** Any may pause/reorder/split. This is a living backlog, not a contract.
 
 ---
 
-**Next action:** begin with **A + G + H + N** together — they collapse the parallel
-mini-system and put the real engine (campaign → backend → policy → promotion → evidence) behind
-one command. Then **C** (baselines) and **B** (statistical promotion), which turn runs into
-verdicts. Delete `scripts/continuous_experiment.py`, `scripts/run_autonomous.py`, and all
-`run_*.sh` in the same commit; the smoke test is `computronium experiment loop --cycles 2`.
+## 9. The Ultimate Result (why this is a scientific mandate, not a maintenance one)
+
+The historical failure mode of this repository is **infrastructure accretion without scientific
+payoff** — six-axis ontologies, acceleration registries, and an epistemic ledger, with the
+README itself conceding that *no campaign has yet produced evidence about which credit rule or
+topology is better on a scientific question*. Workstreams A/G/H/N are necessary but not
+sufficient: a loop that runs itself and optimizes `val_acc` on `digits` is still a telescope
+never pointed at the sky.
+
+With the §6 scientific criteria (the **From-Scratch Test** and the **First Governed Claim**),
+the §4 F0 emission fix, the §4 B power/multiplicity hardening, and the §8 epistemic boundary,
+`computronium experiment loop --budget 24h` no longer reports merely that a loop ran cleanly.
+It reports a **first empirical verdict** on whether physically-native local learning genuinely
+outperforms backpropagation under resource constraints — measured, baseline-relative,
+statistically governed, and handed to CEEC as a claim rather than asserted by the loop. *That*
+is the realization of the system's potential.
+
+---
+
+**Next action:** begin with **O** (provenance, deterministic seeds, store migration,
+checkpointing) — everything writes through it. Then **A + G + H + N** together — they collapse
+the parallel mini-system and put the real engine (campaign → backend → policy → promotion →
+evidence) behind one command. Then **C** (baselines) and **B** (statistical promotion), which
+turn runs into verdicts. Delete `scripts/continuous_experiment.py`, `scripts/run_autonomous.py`,
+and all `run_*.sh` in the same commit; the smoke test is
+`computronium experiment loop --cycles 2`.
+
+**Decide before coding (fresh session):** the three contracts that everything depends on —
+(1) the **provenance schema** (which env fields, hashing), (2) the **seed hierarchy**
+(master → cycle → cell), (3) the **normalization strategy** (ruler-relative vs. per-task). The
+rest is decoupled and may be decided in-stream.
