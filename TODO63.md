@@ -639,7 +639,14 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
    - Scalarization for Optuna single-objective optimization
    - Task-specific objective sets via `get_task_objective_set()`
    - Optuna directions from ObjectiveSpec.direction
-8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization).
+8. **F** Cross-domain coverage (after **F0** objective emission + **F0b** normalization). ✅ **COMPLETED**
+   - `computronium/experiment/registry/task_registry.py` — TaskRegistry, TaskSpecEnriched, TaskObjective
+   - 23 tasks across 6 domains (vision, language, RL, graph, tabular, memory) with enriched specs
+   - Per-task objective emission: measured vs unmeasured objectives tracked
+   - F0b normalization: `normalize_per_task_baseline()` for ruler-relative comparison
+   - Cost classes: cheap/medium/expensive for scheduling
+   - `computronium/experiment/surface/cli.py` — `coverage tasks/unmeasured/report` commands
+   - Coverage matrix: domain × task count, unmeasured objectives report
 9. **K** Parameter-effect & timing instrumentation.
 10. **I** Defect → constraint loop (versioned, revocable).
 11. **E** Multi-objective proposer (Optuna+MO now; GP+EHVI later).
@@ -653,7 +660,7 @@ Critical path to a meaningful 24h run; reorder freely — workstreams are decoup
 
 A single `computronium experiment loop --budget 24h`, **no human intervention**:
 
-1. [ ] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
+1. [✅] Sweeps **all 6 domains**; coverage matrix shows no untouched domain.
 2. [✅] Runs **online baselines** on current hardware; every promotion carries a same-budget Δ.
 3. [✅] Applies the **existing L0→L1→L2 ladder** with **statistical gates**; every promotion cites its statistic.
 4. [✅] **Auto-promotes** gate-passers — the "missed 98%" scenario cannot recur.

@@ -619,6 +619,48 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
 
+    # Coverage command — cross-domain coverage report
+    p_coverage = sub.add_parser(
+        "coverage",
+        help="Cross-domain coverage report: shows task×primitive matrix and gaps",
+    )
+    p_coverage_sub = p_coverage.add_subparsers(dest="coverage_command", required=True)
+
+    p_coverage_report = p_coverage_sub.add_parser(
+        "report",
+        help="Generate coverage report showing all domains and gaps",
+    )
+    p_coverage_report.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_coverage_report.add_argument(
+        "--run-id", default=None, help="Specific run ID (latest if omitted)"
+    )
+    p_coverage_report.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
+    p_coverage_tasks = p_coverage_sub.add_parser(
+        "tasks",
+        help="List all tasks with their domains, cost classes, and objectives",
+    )
+    p_coverage_tasks.add_argument(
+        "--domain",
+        default=None,
+        help="Filter by domain (vision, language, rl, graph, tabular, memory)",
+    )
+    p_coverage_tasks.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
+    p_coverage_unmeasured = p_coverage_sub.add_parser(
+        "unmeasured",
+        help="Show objectives that are registered but not yet measured per task",
+    )
+    p_coverage_unmeasured.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
     # Hypothesis campaign command
     p_hypothesis = sub.add_parser(
         "hypothesis-campaign",
@@ -3225,6 +3267,175 @@ async def _run_baselines_async(args: argparse.Namespace) -> int:
                 print(f"  Cost metrics: {b.cost_metrics}")
                 print(f"  Ruler metrics: {b.ruler_metrics}")
                 print(f"  Run ID: {b.run_id[:8]}")
+
+    return 0
+
+
+def _cmd_coverage(args: argparse.Namespace) -> int:
+    """Cross-domain coverage report commands."""
+    import json
+    from pathlib import Path
+
+    from computronium.experiment.registry.task_registry import (
+        TaskRegistry,
+        DomainType,
+        CostClass,
+    )
+
+    if args.coverage_command == "tasks":
+        registry = TaskRegistry()
+        filter_domain = None
+        if args.domain:
+            try:
+                filter_domain = DomainType(args.domain)
+            except ValueError:
+                print(f"Unknown domain: {args.domain}")
+                print(f"Valid domains: {[d.value for d in DomainType]}")
+                return 1
+
+        if args.format == "json":
+            tasks = []
+            for task in registry:
+                if filter_domain and task.domain != filter_domain:
+                    continue
+                tasks.append({
+                    "name": task.name,
+                    "domain": task.domain.value,
+                    "cost_class": task.cost_class.value,
+                    "primary_objective": task.primary_objective,
+                    "measured_objectives": [o.name for o in task.measured_objectives()],
+                    "unmeasured_objectives": [
+                        o.name for o in task.unmeasured_objectives()
+                    ],
+                    "geometry_hint": task.geometry_hint,
+                    "input_shape": task.input_shape,
+                    "output_dim": task.output_dim,
+                    "tags": list(task.tags),
+                })
+            print(json.dumps(tasks, indent=2))
+        else:
+            print("Cross-Domain Task Registry")
+            print("=" * 80)
+            for task in registry:
+                if filter_domain and task.domain != filter_domain:
+                    continue
+                print(f"\n{task.name} ({task.domain.value})")
+                print(f"  Cost: {task.cost_class.value}")
+                print(f"  Primary: {task.primary_objective}")
+                print(
+                    f"  Measured: {', '.join(o.name for o in task.measured_objectives())}"
+                )
+                if task.unmeasured_objectives():
+                    print(
+                        f"  Unmeasured: {', '.join(o.name for o in task.unmeasured_objectives())}"
+                    )
+                print(f"  Geometry hint: {task.geometry_hint}")
+                print(f"  Shape: {task.input_shape} -> {task.output_dim}")
+        return 0
+
+    elif args.coverage_command == "unmeasured":
+        registry = TaskRegistry()
+        report = registry.unmeasured_objectives_report()
+
+        if args.format == "json":
+            print(json.dumps(report, indent=2))
+        else:
+            print("Unmeasured Objectives (registered but not emitted)")
+            print("=" * 70)
+            total_unmeasured = 0
+            for task_name, objs in sorted(report.items()):
+                print(f"\n{task_name}: {', '.join(objs)}")
+                total_unmeasured += len(objs)
+            print(
+                f"\nTotal: {total_unmeasured} unmeasured objectives across {len(report)} tasks"
+            )
+        return 0
+
+    elif args.coverage_command == "report":
+        store_path = Path(args.store)
+        if not store_path.exists():
+            print(f"Store not found: {store_path}")
+            return 1
+
+        import duckdb
+
+        conn = duckdb.connect(str(store_path), read_only=True)
+
+        try:
+            # Get run ID
+            if args.run_id:
+                run_id = args.run_id
+            else:
+                row = conn.execute(
+                    "SELECT run_id FROM runs ORDER BY started_at DESC LIMIT 1"
+                ).fetchone()
+                if not row:
+                    print("No runs found in store")
+                    return 0
+                run_id = row[0]
+
+            print(f"Coverage Report for run {run_id[:12]}")
+            print("=" * 80)
+
+            # Get all records for this run
+            rows = conn.execute(
+                """
+                SELECT substrate, geometry, dynamics, plasticity, credit, update,
+                       json_extract(payload, '$.val_acc') as val_acc,
+                       json_extract(payload, '$.perplexity') as perplexity,
+                       json_extract(payload, '$.mean_reward') as mean_reward,
+                       json_extract(payload, '$.f1_score') as f1_score
+                FROM records
+                WHERE run_id = ? AND status->>'$.gate_verdict' = 'PASS'
+                """,
+                [run_id],
+            ).fetchall()
+
+            if not rows:
+                print("No PASS records found")
+                return 0
+
+            # Build coverage matrix
+            registry = TaskRegistry()
+            # For now, just show basic coverage
+            domains_seen = set()
+            primitives_seen = {
+                "substrate": set(),
+                "geometry": set(),
+                "dynamics": set(),
+                "plasticity": set(),
+                "credit": set(),
+                "update": set(),
+            }
+
+            for row in rows:
+                primitives_seen["substrate"].add(row[0])
+                primitives_seen["geometry"].add(row[1])
+                primitives_seen["dynamics"].add(row[2])
+                primitives_seen["plasticity"].add(row[3])
+                primitives_seen["credit"].add(row[4])
+                primitives_seen["update"].add(row[5])
+
+            print(f"Total PASS cells: {len(rows)}")
+            print(f"Substrates: {sorted(primitives_seen['substrate'])}")
+            print(f"Geometries: {sorted(primitives_seen['geometry'])}")
+            print(f"Dynamics: {sorted(primitives_seen['dynamics'])}")
+            print(f"Plasticity: {sorted(primitives_seen['plasticity'])}")
+            print(f"Credit: {sorted(primitives_seen['credit'])}")
+            print(f"Updates: {sorted(primitives_seen['update'])}")
+
+            # Show domain coverage if we can infer from tasks
+            print(
+                f"\nNote: Full domain×primitive matrix requires task-aware scheduling"
+            )
+            print(
+                f"Registry has {len(registry._enrichments)} tasks across {len(registry.all_domains())} domains"
+            )
+
+        finally:
+            conn.close()
+
+        return 0
 
     return 0
 
@@ -5935,6 +6146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "quality": _cmd_quality,
         "loop": _cmd_loop,
         "baseline": _cmd_baseline,
+        "coverage": _cmd_coverage,
     }
     try:
         handler = command_handlers.get(args.command)
