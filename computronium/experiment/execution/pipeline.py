@@ -140,7 +140,9 @@ class PipelineConfig:
             from computronium.experiment.execution.deadline import Deadline
             from computronium.experiment.kernel.resources import Budget as LegacyBudget
 
-            if isinstance(self.budget, LegacyBudget) or isinstance(self.budget, ExecBudget):
+            if isinstance(self.budget, LegacyBudget) or isinstance(
+                self.budget, ExecBudget
+            ):
                 object.__setattr__(
                     self,
                     "deadline",

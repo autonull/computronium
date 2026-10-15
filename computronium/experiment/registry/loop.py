@@ -231,7 +231,9 @@ class LoopDriver:
                 break
 
             result = self._execute_cycle(cycle, master_seed)
-            cycle = self._process_cycle_result(cycle, master_seed, result, history, checkpoint)
+            cycle = self._process_cycle_result(
+                cycle, master_seed, result, history, checkpoint
+            )
 
         self._write_loop_report(history)
         self._print_loop_footer(cfg, cycle)

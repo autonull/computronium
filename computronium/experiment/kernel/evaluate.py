@@ -1065,7 +1065,9 @@ def cell_record(
     passed = complete and within_ceiling
 
     # Determine procedure metadata for assessment stamping (WP5)
-    procedure_name, procedure_version, procedure_code_hash = _determine_procedure_metadata()
+    procedure_name, procedure_version, procedure_code_hash = (
+        _determine_procedure_metadata()
+    )
 
     # Build legacy status and convert to schema Status with procedure metadata
     status = _build_status_with_procedures(
