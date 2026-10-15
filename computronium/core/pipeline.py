@@ -207,22 +207,6 @@ def _global_norm_clip(grads: list[Tensor], max_norm: float = 1.0) -> list[Tensor
     return grads
 
 
-def _update_handles_own_clipping(update: ParameterUpdate) -> bool:
-    """Check if the update type has its own gradient clipping."""
-    # These update types have internal _clip methods:
-    # - EuclideanUpdate (global-norm)
-    # - AdamUpdate (global-norm, inherited by OrthoAdamUpdate, LionUpdate)
-    # Return False for types that lack internal clipping:
-    # - RiemannianOrthogonalUpdate (Muon)
-    # - SpectralConstrainedUpdate
-    # - UnitRMSUpdate
-    # - LocalAdamUpdate
-    # - MeanNormUpdate
-    # - NaturalGradientUpdate
-    update_type = getattr(update.config, "update_type", "")
-    return update_type in {"euclidean", "adam", "ortho_adam", "lion"}
-
-
 def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
     substrate: Substrate,
     geometry: Geometry,
@@ -304,14 +288,8 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
         )
 
         # Safety net: global-norm clip pseudo-gradients before update.
-        # Only apply for update types that lack internal clipping:
-        # - RiemannianOrthogonalUpdate (Muon)
-        # - SpectralConstrainedUpdate
-        # - UnitRMSUpdate
-        # - LocalAdamUpdate
-        # - MeanNormUpdate
-        # - NaturalGradientUpdate
-        if not _update_handles_own_clipping(update):
+        # Only apply for update types that lack internal clipping (config flag).
+        if not getattr(update.config, "handles_own_clipping", False):
             clip_val = getattr(update.config, "grad_clip", 0.5)
             pseudo_grads = _global_norm_clip(pseudo_grads, clip_val)
 

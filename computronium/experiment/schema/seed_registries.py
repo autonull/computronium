@@ -1113,13 +1113,15 @@ CONSTRAINTS = [
     # Geometry-Dynamics-Credit: recurrent geometry with instantaneous dynamics
     # fails gradient credit because instantaneous pass doesn't settle recurrent
     # connections, leaving some weights disconnected from the loss graph.
+    # Both "recurrent" and "recurrent_attractor" are registered names for this
+    # geometry (see ontology/geometry.py:1281).
     ConstraintSpec(
         name="recurrent_instantaneous_gradient_credit",
         kind=ConstraintKind.VOID,
         description="Recurrent geometry with instantaneous dynamics incompatible with gradient/backprop credit (weights disconnected from loss)",
         predicate=not_(
             and_(
-                eq(var("geometry"), const("recurrent")),
+                in_(var("geometry"), const(["recurrent", "recurrent_attractor"])),
                 eq(var("dynamics"), const("instantaneous")),
                 in_(var("credit"), const(["gradient", "backprop"])),
             )

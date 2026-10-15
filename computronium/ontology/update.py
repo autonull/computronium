@@ -85,6 +85,8 @@ class ParameterUpdateConfig:
         fisher_damping: Damping for natural gradient
         ewc_lambda: EWC regularization strength
         grad_clip: Gradient clipping norm (for euclidean)
+        handles_own_clipping: Whether the update rule implements its own
+            gradient clipping (pipeline will skip global-norm clip if True)
     """
 
     update_type: str
@@ -100,6 +102,7 @@ class ParameterUpdateConfig:
     ortho_lr: float = 0.003
     role_names: tuple[str, ...] = ()
     sub_rules: RoleSplitSpec | None = None
+    handles_own_clipping: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "role_names", tuple(self.role_names))
@@ -134,6 +137,7 @@ class ParameterUpdateConfig:
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
             grad_clip=grad_clip,
+            handles_own_clipping=True,
         )
 
     @classmethod
@@ -168,6 +172,7 @@ class ParameterUpdateConfig:
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+            handles_own_clipping=False,
         )
 
     @classmethod
@@ -198,6 +203,7 @@ class ParameterUpdateConfig:
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+            handles_own_clipping=False,
         )
 
     @classmethod
@@ -222,6 +228,7 @@ class ParameterUpdateConfig:
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+            handles_own_clipping=False,
         )
 
     @classmethod
@@ -246,6 +253,7 @@ class ParameterUpdateConfig:
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+            handles_own_clipping=False,
         )
 
     @classmethod
@@ -269,6 +277,7 @@ class ParameterUpdateConfig:
             fisher_damping=1e-3,
             ewc_lambda=1000.0,
             grad_clip=grad_clip,
+            handles_own_clipping=False,
         )
 
     @classmethod
@@ -294,6 +303,7 @@ class ParameterUpdateConfig:
             ewc_lambda=1000.0,
             grad_clip=grad_clip,
             beta2=beta2,
+            handles_own_clipping=False,
         )
 
     @classmethod
@@ -318,6 +328,7 @@ class ParameterUpdateConfig:
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+            handles_own_clipping=False,
         )
 
     @classmethod
@@ -356,6 +367,7 @@ class ParameterUpdateConfig:
             grad_clip=grad_clip,
             beta2=beta2,
             eps=eps,
+            handles_own_clipping=True,
         )
 
     @classmethod
@@ -392,6 +404,7 @@ class ParameterUpdateConfig:
             grad_clip=grad_clip,
             beta2=beta2,
             eps=eps,
+            handles_own_clipping=True,
         )
 
     @classmethod
@@ -440,6 +453,7 @@ class ParameterUpdateConfig:
             ewc_lambda=1000.0,
             grad_clip=grad_clip,
             beta2=beta2,
+            handles_own_clipping=True,
         )
 
     @classmethod
@@ -488,6 +502,7 @@ class ParameterUpdateConfig:
             beta2=beta2,
             eps=eps,
             ortho_lr=ortho_lr,
+            handles_own_clipping=True,
         )
 
     @classmethod
@@ -512,6 +527,7 @@ class ParameterUpdateConfig:
             ewc_lambda=1000.0,
             role_names=tuple(role_names),
             sub_rules=RoleSplitSpec(on_role=on_role, other=other),
+            handles_own_clipping=False,
         )
 
     @classmethod
