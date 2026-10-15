@@ -60,7 +60,7 @@ if TYPE_CHECKING:
         EvaluationResult,
         ExecutionBackend,
     )
-    from computronium.experiment.execution.budget import CostModel
+    from computronium.experiment.kernel.resources import CostModel
     from computronium.experiment.execution.policy import Policy
     from computronium.experiment.execution.stage import (
         Fragment,
@@ -136,7 +136,7 @@ class PipelineConfig:
     def __post_init__(self) -> None:
         # Convert legacy Budget to Deadline if provided
         if self.budget is not None and self.deadline is None:
-            from computronium.experiment.execution.budget import Budget as LegacyBudget
+            from computronium.experiment.kernel.resources import Budget as LegacyBudget
             from computronium.experiment.execution.deadline import Deadline
 
             if isinstance(self.budget, LegacyBudget):
@@ -704,6 +704,11 @@ class PipelineRunner:
             else:
                 # Zero-yield batch - check for uniform failure cause
                 self._check_zero_yield()
+
+            # Periodic checkpointing (gated by checkpoint_every_n in RunSpec)
+            checkpoint_every_n = self._config.run_spec.checkpoint_every_n
+            if checkpoint_every_n > 0 and self._state.current_round % checkpoint_every_n == 0:
+                self._checkpoint()
 
         if pbar_rounds:
             pbar_rounds.close()

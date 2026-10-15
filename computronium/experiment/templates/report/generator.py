@@ -242,7 +242,9 @@ class JinjaReportGenerator:
                     sv_result = compute_seed_variability(
                         records,
                         metric,
-                        SeedVariabilityConfig(min_seeds_per_group=2, confidence_level=0.95),
+                        SeedVariabilityConfig(
+                            min_seeds_per_group=2, confidence_level=0.95
+                        ),
                     )
                     results.append(
                         StatisticalResult(
@@ -275,7 +277,9 @@ class JinjaReportGenerator:
                 hv_result = compare_hardware_performance(
                     records_by_device,
                     "val_acc",
-                    HardwareVarianceConfig(min_seeds_per_device=2, confidence_level=0.95),
+                    HardwareVarianceConfig(
+                        min_seeds_per_device=2, confidence_level=0.95
+                    ),
                 )
                 results.append(
                     StatisticalResult(

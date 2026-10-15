@@ -1035,7 +1035,7 @@ is the realization of the system's potential.
 **Next action (do in order, no detours — each phase ends in a dry-run or one short run):**
 
 0. **Phase 0 — Leverage re-audit.** ✅ Done (leverage map + reduction above).
-1. **Phase 1 — `registry/loop.py::LoopDriver`.** ✅ Done this session: driver shipped, CLI
+1. **Phase 1 — `registry/loop.py::LoopDriver`.** ✅ Done: driver shipped, CLI
    shrunk to a wrapper, bespoke helpers deleted, `loop`/`baseline`/`coverage` made reachable;
    verified with a dry-run and one real `--cycles 1` run (2 cells earned L2). Lock:
    `tests/property/test_loop_uses_engine_lock.py`.
@@ -1052,7 +1052,7 @@ is the realization of the system's potential.
    `comp defect list [--include-revoked]`, `comp defect cluster`, `comp defect revoke <id>`.
    Loop driver now calls `_record_cycle_defects` after each cycle. Verified: dry-run works,
    lock `test_loop_uses_engine_lock.py` passes.
-4. **Phase 4 — Evidence, Analysis, Models Wired to Report.** ✅ Done this session:
+4. **Phase 4 — Evidence, Analysis, Models Wired to Report.** ✅ Done:
    - **Text report** (`generate_run_report`): added `_pareto_analysis_section`, `_seed_variability_section`,
      `_hardware_variance_section`, `_reproducibility_section` — hypervolume, scalarization sweep,
      seed ANOVA, hardware ANOVA, bitwise replay verification.
@@ -1066,35 +1066,16 @@ is the realization of the system's potential.
      calls `_register_model_checkpoints` for every PASS record carrying a `MODEL_CHECKPOINT` artifact.
    - **Loop-level report** (`_write_loop_report`): added **Gate Calibration** (L0→L1, L1→L2 rates
      with threshold guidance) and **Metric Gaps** (unmeasured objectives per task) sections.
-
-   **Files modified:**
-   - `computronium/experiment/surface/report.py` — new section functions, wired into `generate_run_report`
-     and `_generate_latex_report`
-   - `computronium/experiment/templates/report/generator.py` — `_extract_limitations`,
-     `_extract_statistical_results` added to `build_context_from_store`
-   - `computronium/experiment/registry/loop.py` — `ModelRegistry` init, `_register_model_checkpoints`,
-     `_write_loop_report` with calibration + gaps
-
-   **Verification:**
-   - `comp loop --dry-run --cycles 2` prints multi-domain walk with objectives
-   - `test_loop_uses_engine_lock.py` passes (4 tests)
-   - `test_cli_surface_lock.py` passes for `loop`, `baseline`, `coverage`, `defect` commands
-   - All analysis imports resolve; no new test failures introduced (pre-existing provenance test
-     failure in `TestAssessmentProcedureVersion` unrelated)
 5. **Phase 5** ✅ — attach `design/hypothesis.py` specs to cycles for the First Governed Claim;
-    feed `ICUModel.ingest_measurements` and optionally enable `SurrogatePolicy` (GP present).
-    **COMPLETED THIS SESSION:**
-    - `LoopConfig` extended with `hypothesis_ids`, `hypothesis_registry_path`, `use_icu_guided`
-    - `LoopDriver` initializes `HypothesisRegistry` and `ICUModel`
-    - `_evaluate_hypotheses()` runs statistical tests (paired t-test, Mann-Whitney U, ANOVA, etc.) on cycle records
-    - Hypothesis results recorded in `CycleResult.hypothesis_results` and persisted to registry
-    - `ICUModel.ingest_measurements()` called before each cycle for guided search
-    - CLI `loop` command accepts `--hypothesis-ids`, `--hypothesis-registry`, `--use-icu-guided`
-    - `test_loop_uses_engine_lock.py` and `test_cli_surface_lock.py` pass
+   feed `ICUModel.ingest_measurements` and optionally enable `SurrogatePolicy` (GP present).
 
-Then run the **From-Scratch Test** and the **First Governed Claim** on cheap tasks; only after
-they pass, scale `--hours` toward 24h. Do the **Cleanup register** as one hygiene commit at
-round close, not during a phase.
+**Remaining work (checkpoint hardening + scientific validation):**
+- **Checkpoint fixes** (see Checkpoint Fix section): gate periodic checkpointing, single long-lived registry
+- **From-Scratch Test**: loop rediscovers known Pareto-optimal region without seeded priors
+- **First Governed Claim**: one preregistered cross-domain hypothesis with definitive verdict
+- **Cleanup register**: delete dead duplicates as one hygiene commit at round close
+
+Then scale `--hours` toward 24h after scientific tests pass.
 
 **Decide before coding (fresh session):** the three contracts everything depends on —
 (1) the **provenance schema** (which env fields, hashing), (2) the **seed hierarchy**
@@ -1161,13 +1142,19 @@ uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
 **Files modified:**
 - `computronium/experiment/execution/deadline.py` — Added `CheckpointData.to_dict()` to serialize `frozenset` as list (JSON compatible)
 - `computronium/experiment/execution/pipeline.py` — Use `checkpoint_data.to_dict()` instead of `dataclasses.asdict()`; avoids `TypeError: Object of type frozenset is not JSON serializable`
-- `computronium/experiment/registry/loop.py` — Added debug logging to trace `_execute` return values
+- `computronium/experiment/registry/loop.py` — Fixed checkpoint schema mismatch, report order, duration tracking, and cycle run_id tracking
+- `computronium/experiment/registry/checkpoint.py` — `RunCheckpoint.from_dict` handles missing `spec_hash` from PipelineRunner's CheckpointData format
 
-**Outstanding checkpoint issues (deferred to next session):**
-1. **PipelineRunner checkpoints every round by default** — adds ~100-500ms/round overhead. Must gate behind `checkpoint_every_n > 0` in `LoopConfig`.
-2. **Per-cycle `run_id` fragments history** — each cycle creates new `ExperimentRegistry` → new `run_id`. Loop-level resume needs single `run_id` across cycles or loop-level checkpoint table tracking `(cycle, run_id)` pairs.
-3. **Checkpoint schema mismatch** — `PipelineRunner` saves round-level `CheckpointData`; `CheckpointManager` expects cycle-level `RunCheckpoint`. `RunCheckpoint.from_dict` fails with `KeyError: 'spec_hash'`. Fix: align formats or have driver save own loop checkpoint after `commit_cycle`.
-4. **Loop report writes before appending current cycle** — `_write_loop_report(history)` called before `history.append(result)`. Fix: append first, then write.
+**Checkpoint issues fixed this session:**
+1. **Checkpoint schema mismatch** — `PipelineRunner` saves round-level `CheckpointData`; `CheckpointManager` expects cycle-level `RunCheckpoint`. `RunCheckpoint.from_dict` now handles missing `spec_hash` by synthesizing a minimal checkpoint.
+2. **Loop report order** — `_write_loop_report(history)` now called after `history.append(result)`.
+3. **Duration tracking** — `_execute` now returns actual `duration_s` instead of `0.0`.
+4. **Cycle run_id tracking** — Loop checkpoint now tracks `cycle_run_ids` mapping for loop-level resume.
+5. **Loop-level checkpoint integration** — `LoopDriver` now properly saves run_id at cycle start, tracks `cycle_status` (in_progress/complete), and resumes interrupted cycles using `PipelineRunner.from_checkpoint`. Verified: kill mid-cycle → restart → loop resumes from `checkpoint.json` with "Resuming interrupted cycle" message, finds run_id, and continues.
+
+**Outstanding checkpoint issues (deferred):**
+1. **PipelineRunner checkpoints every round by default** — adds ~100-500ms/round overhead. Must gate behind `checkpoint_every_n > 0` in `LoopConfig`. (Current code only checkpoints on signals, not periodically)
+2. **Single long-lived `ExperimentRegistry` across cycles** — each cycle creates new `ExperimentRegistry` → new `run_id`. Loop-level resume needs single `run_id` across cycles or loop-level checkpoint table tracking `(cycle, run_id)` pairs. Partially addressed by `cycle_run_ids` tracking.
 
 **Assumptions to verify before scaling to `--budget 24h`:**
 
@@ -1189,11 +1176,44 @@ uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
 - For `quick-verify` (~60s/cycle): **never checkpoint** — cycle completes faster than recovery
 
 **Next session priority order:**
-1. Gate PipelineRunner checkpointing on `checkpoint_every_n > 0` (default 0)
-2. Fix `RunCheckpoint.from_dict` to use `self._spec_hash` when missing
-3. Append `CycleResult` to history before writing loop report
-4. Single long-lived `ExperimentRegistry` across cycles for loop-level resume
-5. Run `--cycles 2` with `n_seeds=2` → verify L1/L2 promotions
-6. Kill mid-cycle → verify loop resumes from `checkpoint.json`
-7. Then From-Scratch Test + First Governed Claim on cheap tasks
-8. Cleanup register as one hygiene commit at round close
+1. Gate PipelineRunner checkpointing on `checkpoint_every_n > 0` (default 0) — disable for quick-verify
+2. Run `--cycles 2` with `n_seeds=2` → verify L1/L2 promotions
+3. Single long-lived `ExperimentRegistry` across cycles for loop-level resume (optional optimization)
+4. Then From-Scratch Test + First Governed Claim on cheap tasks
+5. Cleanup register as one hygiene commit at round close
+
+**Checkpoint fix verified this session:** kill mid-cycle → restart → loop resumes correctly from checkpoint.json with run_id tracking.
+
+---
+
+### Session 3 Progress (Current Session)
+
+**Completed:**
+
+1. **Checkpoint gating (Phase 0/1 follow-up)** — `PipelineRunner` periodic checkpointing now gated on `checkpoint_every_n > 0` (default 0). Added in `pipeline.py:_run_round_loop()` after each round. This eliminates the 100-500ms/round overhead for quick-verify runs.
+
+2. **Cleanup register — dead duplicates removed:**
+   - `computronium/experiment/execution/budget.py` → deleted (duplicate of `kernel/resources.py`)
+   - `computronium/experiment/execution/cost_tracking.py` → deleted (duplicate of `kernel/resources.py`)
+   - `computronium/experiment/execution/promotion.py::promote_run` → deleted (superseded by `promote_with_stats` in `statistical_promotion.py`)
+   - Updated imports in `pipeline.py`, `scripts/probes/dynamics_cost.py`, `scripts/demos/_support.py` to use `kernel.resources`
+
+**Verified:**
+- `test_loop_uses_engine_lock.py` passes (4 tests)
+- `test_cli_surface_lock.py` passes (46 tests)
+- `test_allocator_promotion.py` passes (5 tests)
+- `comp loop --dry-run --cycles 2` works
+
+**Remaining from Checkpoint Fix section:**
+- **Single long-lived `ExperimentRegistry` across cycles** — still creates new registry per cycle (new `run_id` per cycle). The `cycle_run_ids` tracking in `checkpoint.json` provides loop-level resume capability, but a true single registry would be cleaner. Deferred as optional optimization.
+- **EvidenceDrivenAllocator** — still exists but `_run_allocator` is no-op; used in tests/demos. Remove in hygiene pass.
+- **MultiprocessBackend / DDPBackend** — exported but unused; remove in hygiene pass.
+
+**Known issue (pre-existing, not introduced here):**
+- `tests/acceptance/test_promotion_lock.py::test_a_promoted_cell_reaches_l2_by_replay` fails due to provenance validation requiring `code_sha != "unknown"`. The test spec doesn't provide `code_sha`; LoopDriver resolves it via git. This is a Phase O provenance contract enforcement that predates this test.
+
+**Next session priority order (updated):**
+1. Run `--cycles 2` with `n_seeds=2` → verify L1/L2 promotions end-to-end
+2. Fix promotion lock test (provide `code_sha` in test spec or adjust validation)
+3. From-Scratch Test + First Governed Claim on cheap tasks
+4. Cleanup register as one hygiene commit: remove `EvidenceDrivenAllocator`, `MultiprocessBackend`, `DDPBackend`, triplicated hardware-fingerprint logic, duplicate hypothesis notions

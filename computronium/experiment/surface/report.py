@@ -858,7 +858,9 @@ def _pareto_analysis_section(generator: ReportGenerator, run_id: str) -> list[st
 
         hv = compute_hypervolume(pareto_points, objectives, list(maximize))
         lines.append(f"  Hypervolume: {hv:.4g}")
-        lines.append(f"  Pareto points: {len(pareto_points)} / {len(pareto_points) + len(dominated)} total")
+        lines.append(
+            f"  Pareto points: {len(pareto_points)} / {len(pareto_points) + len(dominated)} total"
+        )
 
         # Scalarization sweep
         scalarization = compute_scalarization_sweep(
@@ -891,7 +893,9 @@ def _seed_variability_section(generator: ReportGenerator, run_id: str) -> list[s
 
     # Analyze primary metrics
     metrics_to_analyze = ["val_acc", "walltime_total", "param_count", "energy_per_step"]
-    available_metrics = [m for m in metrics_to_analyze if any(m in r.payload for r in records)]
+    available_metrics = [
+        m for m in metrics_to_analyze if any(m in r.payload for r in records)
+    ]
 
     if not available_metrics:
         return [*lines, "  (no measurable metrics found)"]
@@ -904,7 +908,9 @@ def _seed_variability_section(generator: ReportGenerator, run_id: str) -> list[s
                 SeedVariabilityConfig(min_seeds_per_group=2, confidence_level=0.95),
             )
             lines.append(f"  {metric}:")
-            lines.append(f"    Overall: mean={result.overall_mean:.4g}, std={result.overall_std:.4g}, CV={result.coefficient_of_variation:.4g}")
+            lines.append(
+                f"    Overall: mean={result.overall_mean:.4g}, std={result.overall_std:.4g}, CV={result.coefficient_of_variation:.4g}"
+            )
             lines.append(f"    Seed effect p-value: {result.seed_effect_pvalue:.4g}")
             for group_name, stats in result.groups.items():
                 lines.append(
@@ -961,13 +967,17 @@ def _reproducibility_section(generator: ReportGenerator, run_id: str) -> list[st
 
     try:
         result = verify_bitwise_reproducibility(run_id, generator._store)
-        lines.append(f"  Replay hash available: {result.metadata.get('has_replay_hash', False)}")
+        lines.append(
+            f"  Replay hash available: {result.metadata.get('has_replay_hash', False)}"
+        )
         lines.append(f"  Metrics match: {result.metrics_match}")
         lines.append(f"  Bitwise match: {result.bitwise_match}")
         if result.mismatched_keys:
             lines.append(f"  Mismatches: {', '.join(result.mismatched_keys[:5])}")
         if not result.metrics_match:
-            lines.append(f"  Note: {result.metadata.get('note', 'No replay hash available')}")
+            lines.append(
+                f"  Note: {result.metadata.get('note', 'No replay hash available')}"
+            )
     except Exception as e:
         lines.append(f"  (verification failed: {e})")
 
@@ -2436,12 +2446,16 @@ def _generate_latex_report(
                         records, objectives, list(maximize), n_weight_samples=10
                     )
                     if scalarization:
-                        lines.append(f"  Scalarization sweeps: {len(scalarization)} weight vectors \\")
+                        lines.append(
+                            f"  Scalarization sweeps: {len(scalarization)} weight vectors \\"
+                        )
                         first_sweep = next(iter(scalarization.values()))
                         if first_sweep:
                             top = first_sweep[0]
                             coords = top["coordinate"]
-                            obj_str = " ".join(f"{k}={v:.4g}" for k, v in top["objectives"].items())
+                            obj_str = " ".join(
+                                f"{k}={v:.4g}" for k, v in top["objectives"].items()
+                            )
                             lines.append(
                                 f"  Top (first sweep): {escape_latex(coords['dynamics'])}/{escape_latex(coords['credit'])}/{escape_latex(coords['update'])} {escape_latex(obj_str)} \\"
                             )
@@ -2457,7 +2471,9 @@ def _generate_latex_report(
                     result = compute_seed_variability(
                         records,
                         metric,
-                        SeedVariabilityConfig(min_seeds_per_group=2, confidence_level=0.95),
+                        SeedVariabilityConfig(
+                            min_seeds_per_group=2, confidence_level=0.95
+                        ),
                     )
                     lines.extend([
                         r"\subsection{Seed Variability: " + escape_latex(metric) + "}",
@@ -2486,7 +2502,9 @@ def _generate_latex_report(
                 result = compare_hardware_performance(
                     records_by_device,
                     "val_acc",
-                    HardwareVarianceConfig(min_seeds_per_device=2, confidence_level=0.95),
+                    HardwareVarianceConfig(
+                        min_seeds_per_device=2, confidence_level=0.95
+                    ),
                 )
                 lines.extend([
                     r"\subsection{Hardware Variance}",
@@ -2515,7 +2533,9 @@ def _generate_latex_report(
             "",
         ])
         if result.mismatched_keys:
-            lines.append(f"  Mismatches: {', '.join(escape_latex(k) for k in result.mismatched_keys[:5])} \\")
+            lines.append(
+                f"  Mismatches: {', '.join(escape_latex(k) for k in result.mismatched_keys[:5])} \\"
+            )
             lines.append("")
     except Exception:
         pass

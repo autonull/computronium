@@ -165,7 +165,7 @@ class TestTheCommandSurface:
 class TestAssessmentProcedureVersion:
     def _records(self, run_id: str) -> list[Record]:
         provenance = Provenance(
-            env={},
+            env={"python": "3.14", "torch": "2.0", "platform": "linux"},
             dataset="digits",
             dataset_version="1.0",
             code_sha="test",

@@ -1,0 +1,11 @@
+{
+  "cycle_run_ids": {
+    "0": "4eed0519-a9ba-44d5-a61d-e0b745df7aab",
+    "1": "b6b84a6f-c391-4dd0-8e09-911f9a55c50c"
+  },
+  "cycle": 1,
+  "master_seed": 1382928432,
+  "cycle_status": {
+    "1": "in_progress"
+  }
+}

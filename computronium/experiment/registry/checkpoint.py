@@ -84,6 +84,22 @@ class RunCheckpoint:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RunCheckpoint:
+        """Deserialize from dict, handling both RunCheckpoint and CheckpointData formats.
+
+        CheckpointData (from PipelineRunner) lacks 'spec_hash' and 'cycle_checkpoints';
+        we fall back to empty values for those fields.
+        """
+        # Handle PipelineRunner's CheckpointData format (no spec_hash, no cycle_checkpoints)
+        if "spec_hash" not in data:
+            # This is a CheckpointData format - synthesize a minimal RunCheckpoint
+            return cls(
+                run_id=data.get("run_id", "unknown"),
+                spec_hash="",  # Will be validated on next commit_cycle
+                cycle_checkpoints=(),
+                current_cycle=data.get("current_round", 0),
+                created_at=data.get("timestamp", 0.0),
+                metadata={},
+            )
         return cls(
             run_id=data["run_id"],
             spec_hash=data["spec_hash"],

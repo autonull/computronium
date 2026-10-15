@@ -26,7 +26,7 @@ import logging
 import signal
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from scipy import stats
@@ -202,7 +202,7 @@ class LoopDriver:
         # Phase 5: ICU model for guided search
         self._icu_model = ICUModel() if config.use_icu_guided else None
 
-    # ------------------------------------------------------------------ public
+# ------------------------------------------------------------------ public
 
     def run(self, *, dry_run: bool = False) -> int:
         """Run the loop until the cycle limit or time budget is exhausted.
@@ -246,8 +246,24 @@ class LoopDriver:
                 print("Budget exhausted.", flush=True)
                 break
 
-            result = self._run_cycle(cycle, master_seed)
+            # Check if this cycle was interrupted and needs resume
+            checkpoint = self._load_checkpoint_typed()
+            cycle_status = checkpoint.get("cycle_status", {})
+            if cycle_status.get(str(cycle)) == "in_progress":
+                print(f"  Resuming interrupted cycle {cycle}...", flush=True)
+                result = self._resume_cycle(cycle, master_seed, checkpoint)
+            else:
+                result = self._run_cycle(cycle, master_seed, checkpoint)
+
             history.append(result)
+            # Track run_id for this cycle for loop-level resume
+            cycle_run_ids: dict[str, str] = checkpoint.get("cycle_run_ids", {})
+            cycle_run_ids[str(cycle)] = result.run_id
+            checkpoint["cycle_run_ids"] = cycle_run_ids
+            # Mark cycle as complete
+            cycle_status = checkpoint.get("cycle_status", {})
+            cycle_status[str(cycle)] = "complete"
+            checkpoint["cycle_status"] = cycle_status
             cycle += 1
             checkpoint.update({"cycle": cycle, "master_seed": master_seed})
             self._save_checkpoint(checkpoint)
@@ -301,7 +317,9 @@ class LoopDriver:
 
     # ----------------------------------------------------------------- cycles
 
-    def _run_cycle(self, cycle: int, master_seed: int) -> CycleResult:
+    def _run_cycle(
+        self, cycle: int, master_seed: int, checkpoint: dict[str, Any]
+    ) -> CycleResult:
         cfg = self._config
         task = cfg.task_schedule[cycle % len(cfg.task_schedule)]
         kind = "explore" if cycle % 2 == 0 else "exploit"
@@ -315,11 +333,20 @@ class LoopDriver:
             flush=True,
         )
 
+        # Mark cycle as in_progress before starting
+        cycle_status: dict[str, str] = checkpoint.get("cycle_status", {})
+        cycle_status[str(cycle)] = "in_progress"
+        checkpoint["cycle_status"] = cycle_status
+        self._save_checkpoint(checkpoint)
+
         import asyncio
 
         try:
-            result = asyncio.run(self._execute(cycle, spec, task))
-            print(f"DEBUG: _execute returned n_records={result.n_records}, run_id={result.run_id}", flush=True)
+            result = asyncio.run(self._execute(cycle, spec, task, checkpoint))
+            print(
+                f"DEBUG: _execute returned n_records={result.n_records}, run_id={result.run_id}",
+                flush=True,
+            )
         except KeyboardInterrupt:
             raise
         except Exception as exc:  # ruff: ignore[blind-except] - one bad cycle must not kill the loop
@@ -361,8 +388,189 @@ class LoopDriver:
             hypothesis_results=hypothesis_results,
         )
 
-    async def _execute(self, cycle: int, spec: RunSpec, task: str) -> CycleResult:
+    def _resume_cycle(
+        self, cycle: int, master_seed: int, checkpoint: dict[str, Any]
+    ) -> CycleResult:
+        """Resume an interrupted cycle from its checkpoint."""
         cfg = self._config
+        task = cfg.task_schedule[cycle % len(cfg.task_schedule)]
+        kind = "explore" if cycle % 2 == 0 else "exploit"
+        started = time.time()
+
+        axes = self._axes_for(kind, task, self._probe_store())
+        spec = self._build_spec(task, kind, cycle, axes, master_seed)
+
+        # Get the run_id from the checkpoint
+        cycle_run_ids: dict[str, str] = checkpoint.get("cycle_run_ids", {})
+        run_id = cycle_run_ids.get(str(cycle))
+        if not run_id:
+            logger.warning("No run_id found for cycle %d, starting fresh", cycle)
+            return self._run_cycle(cycle, master_seed, checkpoint)
+
+        print(
+            f"\n[cycle {cycle}] {kind} task={task} "
+            f"fidelity={spec.fidelity} objectives={list(spec.objectives)} (RESUMING run_id={run_id[:8]})",
+            flush=True,
+        )
+
+        import asyncio
+
+        try:
+            result = asyncio.run(self._execute_resume(cycle, spec, task, run_id))
+            print(
+                f"DEBUG: _execute_resume returned n_records={result.n_records}, run_id={result.run_id}",
+                flush=True,
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:  # ruff: ignore[blind-except] - one bad cycle must not kill the loop
+            logger.error("Cycle %d (%s) resume failed: %s", cycle, task, exc, exc_info=True)
+            print(f"DEBUG: Exception caught in _resume_cycle: {exc}", flush=True)
+            result = CycleResult(
+                cycle=cycle,
+                task=task,
+                kind=kind,
+                fidelity=spec.fidelity,
+                run_id=run_id,
+                n_records=0,
+                n_pass=0,
+                n_failures=1,
+                n_l1=0,
+                n_l2=0,
+                baseline_present=False,
+                duration_s=0.0,
+            )
+
+        # Phase 5: Evaluate hypotheses after cycle completes
+        hypothesis_results = {}
+        if result.run_id:
+            hypothesis_results = self._evaluate_hypotheses(result.run_id, task)
+
+        return CycleResult(
+            cycle=cycle,
+            task=task,
+            kind=kind,
+            fidelity=spec.fidelity,
+            run_id=result.run_id,
+            n_records=result.n_records,
+            n_pass=result.n_pass,
+            n_failures=result.n_failures,
+            n_l1=result.n_l1,
+            n_l2=result.n_l2,
+            baseline_present=result.baseline_present,
+            duration_s=time.time() - started,
+            hypothesis_results=hypothesis_results,
+        )
+
+    async def _execute_resume(
+        self, cycle: int, spec: RunSpec, task: str, run_id: str
+    ) -> CycleResult:
+        """Execute a resumed cycle using the existing run_id."""
+        cfg = self._config
+        started = time.time()
+        with ExperimentRegistry(
+            ExperimentConfig(
+                store_path=cfg.store_path,
+                spec=spec,
+                master_seed=cfg.master_seed,
+                run_id=run_id,
+            )
+        ) as registry:
+            store = registry.store
+            registry.start_cycle(cycle)
+
+            deadline = (
+                Deadline.from_seconds(spec.budget_seconds)
+                if spec.budget_seconds
+                else None
+            )
+            policy_name = spec.policy or "round_robin_grid"
+
+            # Phase 5: Ingest measurements into ICU model for guided search
+            if self._icu_model is not None:
+                self._icu_model.ingest_measurements(store, run_id)
+
+            policy = create_policy(
+                policy_name,
+                **policy_context(
+                    spec, policy_name, shape=task_shape, deadline=deadline
+                ),
+            )
+
+            max_rounds = None
+            if spec.stages and "s10_decide" not in spec.stages:
+                max_rounds = 1
+
+            # Resume PipelineRunner from checkpoint
+            runner = PipelineRunner.from_checkpoint(
+                run_id=run_id,
+                config=PipelineConfig(
+                    run_id=run_id,
+                    run_spec=spec,
+                    deadline=deadline,
+                    cost_model=None,
+                    policy=policy,
+                    backend=self._backend(),
+                    seed=spec.seed,
+                    max_rounds=max_rounds,
+                ),
+                store=store,
+            )
+
+            outcomes = await runner.run()
+            for outcome in outcomes:
+                registry.complete_cell(outcome.measurement_key)
+
+            baselines = await self._baselines(store, run_id, spec, task)
+            self._settle(store, run_id, spec, baselines)
+
+            from computronium.experiment.surface.report import generate_run_report
+
+            self._write_cycle_report(cycle, generate_run_report(store, run_id))
+
+            records = store.query_records(run_id=run_id)
+
+            # Initialize model registry and register checkpoints for PASS records
+            if self._model_registry is None and store._conn is not None:
+                self._model_registry = ModelRegistry(
+                    store._conn, store._write_lock, store.artifacts
+                )
+            if self._model_registry is not None:
+                self._register_model_checkpoints(records, store)
+
+            budget = self._elapsed(deadline)
+            registry.commit_cycle(budget)
+
+            # Record defects from failed/quarantined records into the LegalityEngine
+            self._record_cycle_defects(records)
+
+        return CycleResult(
+            cycle=cycle,
+            task=task,
+            kind=spec.profile.removeprefix("loop-"),
+            fidelity=spec.fidelity,
+            run_id=run_id,
+            n_records=len(records),
+            n_pass=sum(
+                1
+                for r in records
+                if r.status.gate_verdict is GateVerdict.PASS_
+                and not r.status.quarantine
+            ),
+            n_failures=sum(
+                1 for r in records if r.status.gate_verdict is not GateVerdict.PASS_
+            ),
+            n_l1=sum(1 for r in records if r.status.maturity is Maturity.L1),
+            n_l2=sum(1 for r in records if r.status.maturity is Maturity.L2),
+            baseline_present=bool(baselines),
+            duration_s=time.time() - started,
+        )
+
+    async def _execute(
+        self, cycle: int, spec: RunSpec, task: str, checkpoint: dict[str, Any]
+    ) -> CycleResult:
+        cfg = self._config
+        started = time.time()
         with ExperimentRegistry(
             ExperimentConfig(
                 store_path=cfg.store_path,
@@ -372,6 +580,12 @@ class LoopDriver:
         ) as registry:
             store = registry.store
             run_id = registry.run_id
+            # Save run_id to checkpoint immediately for resume capability
+            cycle_run_ids: dict[str, str] = checkpoint.get("cycle_run_ids", {})
+            cycle_run_ids[str(cycle)] = run_id
+            checkpoint["cycle_run_ids"] = cycle_run_ids
+            self._save_checkpoint(checkpoint)
+
             registry.start_cycle(cycle)
 
             deadline = (
@@ -456,7 +670,7 @@ class LoopDriver:
             n_l1=sum(1 for r in records if r.status.maturity is Maturity.L1),
             n_l2=sum(1 for r in records if r.status.maturity is Maturity.L2),
             baseline_present=bool(baselines),
-            duration_s=0.0,
+            duration_s=time.time() - started,
         )
 
     def _register_model_checkpoints(self, records: list, store: RecordStore) -> None:
@@ -960,7 +1174,18 @@ class LoopDriver:
             data = json.loads(path.read_text())
             if isinstance(data, dict):
                 return data
-        return {}
+        return {"cycle_run_ids": {}, "cycle_status": {}}
+
+    def _load_checkpoint_typed(self) -> dict[str, Any]:
+        """Load checkpoint with proper typing for mutation."""
+        from collections.abc import Mapping
+        raw = self._load_checkpoint()
+        # Ensure nested dicts are mutable Mapping
+        if "cycle_run_ids" not in raw:
+            raw["cycle_run_ids"] = {}
+        if "cycle_status" not in raw:
+            raw["cycle_status"] = {}
+        return raw  # type: ignore[return-value]
 
     def _save_checkpoint(self, state: dict[str, object]) -> None:
         import json
