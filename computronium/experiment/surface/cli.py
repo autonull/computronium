@@ -541,6 +541,12 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         help="Sweep steps for exploit cycles (default: 15)",
     )
     p_loop.add_argument(
+        "--n-seeds",
+        type=int,
+        default=None,
+        help="Number of seeds per cycle (default: profile default or 2)",
+    )
+    p_loop.add_argument(
         "--dry-run",
         action="store_true",
         help="Show plan without executing",
@@ -2737,6 +2743,8 @@ def _cmd_loop(args: argparse.Namespace) -> int:
     hypothesis_registry_path = (
         Path(args.hypothesis_registry) if args.hypothesis_registry else None
     )
+    # Use CLI --n-seeds if provided, otherwise fall back to profile default
+    n_seeds = args.n_seeds if args.n_seeds is not None else profile.n_seeds
     config = LoopConfig(
         store_path=Path(args.store),
         state_dir=Path(args.state_dir),
@@ -2749,6 +2757,7 @@ def _cmd_loop(args: argparse.Namespace) -> int:
         master_seed=args.seed,
         hours=args.hours,
         cycles=args.cycles,
+        n_seeds=n_seeds,
         explore_fidelity=args.explore_fidelity,
         exploit_fidelity=args.exploit_fidelity,
         explore_hours=args.explore_hours,

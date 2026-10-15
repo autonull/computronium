@@ -1241,3 +1241,40 @@ uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
 - From-Scratch Test on cheap tasks
 - First Governed Claim on cheap tasks
 - Cleanup register hygiene commit (EvidenceDrivenAllocator, MultiprocessBackend, DDPBackend, etc.)
+
+---
+
+### Session 5 Progress (Current Session)
+
+**Completed:**
+
+1. **CLI `defect` command wired to top-level dispatcher** — Added `defect` to `computronium/cli/__main__.py` `_SUBCOMMANDS` and `_SUMMARIES`. Verified via `test_cli_surface_lock.py` (43 tests pass, including `defect`).
+
+2. **`--n-seeds` CLI flag added to `loop` command** — Allows overriding the profile's default seed count. Falls back to profile default when not specified.
+
+3. **All property locks pass** — `test_loop_uses_engine_lock.py` (4 tests) and `test_cli_surface_lock.py` (43 tests) both pass.
+
+4. **Dry-run verification** — `comp loop --dry-run --cycles 2` shows multi-domain walk with objectives and axes across 8 tasks (xor, iris, spiral, digits, breast_cancer, wine, cartpole, copy_task).
+
+5. **Scientific validation test scaffolding** — Created `tests/acceptance/test_todo63_scientific_validation.py` with tests for:
+   - From-Scratch Test (multi-domain Pareto discovery without hardcoded hints)
+   - First Governed Claim (H1_credit_efficiency hypothesis with definitive verdict)
+   - Loop scientific integrity (evidence with limitations, self-report calibration, defect constraints)
+
+**Verification:**
+- All property locks pass
+- CLI surface lock includes `defect` command
+- Loop uses engine seams (PipelineRunner, promote_with_stats, BaselineRegistry, compute_pareto_frontier)
+- No retired helpers (KNOWN_GOOD, FIX_HINTS, propose_axes, merge_top, classify_cycle_log, load_best_from_store) in loop driver
+
+**New improvement opportunities:**
+- Single long-lived `ExperimentRegistry` across cycles for true loop-level resume
+- Remove `EvidenceDrivenAllocator` (no-op `_run_allocator`), `MultiprocessBackend`, `DDPBackend` in hygiene pass
+- Triplicated hardware-fingerprint logic consolidation
+- Duplicate hypothesis notions cleanup (`design/hypothesis.py` vs `learning/reasoning.py`)
+
+**Next session priority order:**
+1. Run From-Scratch Test on cheap tasks (verify Pareto discovery)
+2. Run First Governed Claim on cheap tasks (hypothesis with definitive verdict)
+3. Cleanup register as one hygiene commit
+4. Scale to `--budget 24h` after scientific tests pass

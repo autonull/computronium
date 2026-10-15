@@ -58,6 +58,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "loop": (_SURFACE, "main", ("loop",)),
     "baseline": (_SURFACE, "main", ("baseline",)),
     "coverage": (_SURFACE, "main", ("coverage",)),
+    "defect": (_SURFACE, "main", ("defect",)),
     "schema": (_SURFACE, "main", ("schema",)),
     "power-analysis": (_SURFACE, "main", ("power-analysis",)),
     "stability-analysis": (_SURFACE, "main", ("stability-analysis",)),
@@ -95,6 +96,7 @@ _SUMMARIES: dict[str, str] = {
     "loop": "Continuous engine-driven experiment loop (explore/exploit cycles)",
     "baseline": "Online baseline discovery and registry",
     "coverage": "Task/domain coverage: what has and has not been measured",
+    "defect": "Defect constraint registry: list, cluster, and revoke constraints",
     "schema": "Dump JSON schemas for RunSpec/Coordinate/Objectives",
     "power-analysis": "Compute statistical power for experiment design (machine-readable)",
     "stability-analysis": "Run dynamical stability analysis "
