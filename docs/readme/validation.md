@@ -3,6 +3,20 @@
 
 The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate validates the entire hypercube in seconds on CPU.
 
+### ⚠️ Notation Disambiguation
+
+This document uses three distinct "L" numbering schemes — **do not confuse them**:
+
+| Scheme | Range | Meaning | Prefix Used Here |
+|--------|-------|---------|------------------|
+| **Verification Levels** | VL1–VL5 | Evidential strength of a claim (analytical → empirical) | **VL** |
+| **Property Locks** | PL1–PL7 | Core CI-locked invariants (composition, purity, determinism, etc.) | **PL** |
+| **Fidelity Levels** | FL0–FL2 | Schedule fidelity tier for a run (quick → full) | **FL** |
+
+- **VL1–VL5** are defined in `computronium.verification` and label *claims*.
+- **PL1–PL7** are the property-lock test suites in `tests/property/` and label *invariants*.
+- **FL0–FL2** appear in `Schedule.fidelity` and label *evaluation depth*.
+
 ### Verification Status Markers
 
 | Status | Meaning |
@@ -19,17 +33,20 @@ The framework enforces **correctness by construction** through a layered verific
 A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
 </details>
 
-### ✅ Property Locks (L1–L7 + S/G/D/C/U/M Axes + J1–J7)
+### ✅ Property Locks (PL1–PL7 + S/G/D/C/U/M Axes + J1–J7)
+
+> **Notation:** "PL" = Property Lock (not to be confused with Verification Levels VL1–VL5
+> or Fidelity Levels FL0–FL2). This table uses PL1–PL7 for the core property locks.
 
 | Lock | Property | Key Assertions |
 |------|----------|----------------|
-| **L1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
-| **L2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
-| **L3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
-| **L4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
-| **L5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
-| **L6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
-| **L7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
+| **PL1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
+| **PL2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
+| **PL3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
+| **PL4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
+| **PL5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
+| **PL6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
+| **PL7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
 | **S-axis** | Neuromorphic passivity; Quantum parameter-shift equivalence | Deterministic noise cancellation; cosine ≥ 0.999 vs FD |
 | **D-axis** | SpikeIntegration Lyapunov (membrane bounded, non-diverging spike process); LazyStateDynamics | Spike counts tracked per (layer, settle step); bounded activations |
 | **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |

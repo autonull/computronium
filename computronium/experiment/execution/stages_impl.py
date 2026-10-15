@@ -865,6 +865,7 @@ class DecideStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Make promotion/continuation decisions."""
+        from computronium.experiment.execution.allocator import Promotion
         from computronium.experiment.execution.decision import (
             complete_run,
             continue_round,
@@ -873,31 +874,30 @@ class DecideStage:
 
         logger.info("S10 Decide: Making promotion/continuation decisions")
 
-        # Use allocator to get promotions
-        promotions = []
+        # Use allocator promotions from context
+        allocator_promotions = list(ctx.allocator_promotions)
         new_proposals = []
+        promotions = []
 
-        if ctx.allocator:
-            # Convert pending_proposals (Proposal objects) to (coord, sched) tuples for allocator
-            candidates = [(p.coordinate, p.schedule) for p in ctx.pending_proposals]
-
-            # Get proposals from allocator
-            allocator_proposals = ctx.allocator.propose(
-                candidates,
-                [],  # records would come from store
-                ctx.deadline,
-                None,
-            )
-
-            # Convert allocator proposals (tuples) back to Proposal objects
-            for coord, sched in allocator_proposals:
-                new_proposals.append(
-                    Proposal(
-                        coordinate=coord,
-                        schedule=sched,
-                        rationale="allocator_promotion",
-                    )
+        # Convert allocator promotions (tuples) to Proposal and Promotion objects
+        for coord, sched in allocator_promotions:
+            new_proposals.append(
+                Proposal(
+                    coordinate=coord,
+                    schedule=sched,
+                    rationale="allocator_promotion",
                 )
+            )
+            promotions.append(
+                Promotion(
+                    cell_key=coord.cell_key(),
+                    coordinate=coord,
+                    from_fidelity="L0" if sched.fidelity == "L1" else "L1",
+                    to_fidelity=sched.fidelity,
+                    rationale="allocator_promotion",
+                    score=0.0,  # Score would come from allocator state
+                )
+            )
 
         # Check deadline
         should_continue = True

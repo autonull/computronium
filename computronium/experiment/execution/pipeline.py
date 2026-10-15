@@ -138,8 +138,15 @@ class PipelineConfig:
         if self.budget is not None and self.deadline is None:
             from computronium.experiment.execution.deadline import Deadline
             from computronium.experiment.kernel.resources import Budget as LegacyBudget
+            from computronium.experiment.execution.budget import Budget as ExecBudget
 
             if isinstance(self.budget, LegacyBudget):
+                object.__setattr__(
+                    self,
+                    "deadline",
+                    Deadline.from_seconds(self.budget.soft_seconds or 3600),
+                )
+            elif isinstance(self.budget, ExecBudget):
                 object.__setattr__(
                     self,
                     "deadline",
@@ -210,6 +217,7 @@ class PipelineState:
     cell_timing: CellTiming = field(default_factory=CellTiming)
     signal_handler: SignalHandler | None = None
     allocator_state: dict[str, Any] | None = None
+    allocator_promotions: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
     last_decision: Decision | None = None
     # Coverage tracking (R18)
     coverage: dict[str, Any] = field(default_factory=dict)
@@ -897,7 +905,9 @@ class PipelineRunner:
     async def _attribute_allocation(self, records: list[Record]) -> None:
         """Re-allocate after measuring, before S10 decides (R19 allocator)."""
         if self._config.allocator and self._state.deadline:
-            await self._run_allocator(records)
+            promotions = await self._run_allocator(records)
+            # Store promotions in state for S10 Decide stage
+            self._state.allocator_promotions = promotions
 
     def _build_search_space(self) -> SearchSpace:
         """Build the run's active space from its spec (TODO46 §3.3)."""
@@ -984,6 +994,7 @@ class PipelineRunner:
             system_context=system_context,
             batch_sizer=self._state.batch_sizer,
             cell_stream=self._state.cell_stream,
+            allocator_promotions=self._state.allocator_promotions,
         )
 
     def _provenance(self, env_dict: dict[str, Any]) -> Provenance:
@@ -1070,14 +1081,17 @@ class PipelineRunner:
             else continue_round(rationale="No stage has decided yet")
         )
 
-    async def _run_allocator(self, records: list[Record]) -> None:
+    async def _run_allocator(self, records: list[Record]) -> list[tuple[Coordinate, Schedule]]:
         """Run EvidenceDrivenAllocator between rounds (R46-R51).
 
         In the deadline system, allocator uses online cell timing for
         cost estimation instead of predicted cost models.
+
+        Returns:
+            List of promoted (coordinate, schedule) pairs for the next round.
         """
         if not self._config.allocator:
-            return
+            return []
 
         logger.debug("Running allocator for run %s", self._config.run_id)
 
@@ -1085,16 +1099,96 @@ class PipelineRunner:
         deadline_enforcer = self._state.deadline_enforcer
         cell_timing = self._state.cell_timing
         if deadline_enforcer is None or cell_timing is None:
-            return
+            return []
 
         # Check if we have time for more cells
         if not deadline_enforcer.check_before_cell():
             logger.info("Deadline reached, skipping allocator proposals")
-            return
+            return []
 
-        # For now, skip allocator if it requires budget/cost_model
-        # TODO: Update allocator to work with deadline system
-        logger.debug("Allocator not yet adapted to deadline system, skipping")
+        # Get candidates from search space for promotion consideration
+        search_space = self._state.search_space
+        if search_space is None:
+            return []
+
+        # Build candidates from search space (structural coordinates at next fidelity)
+        candidates = self._build_allocator_candidates(search_space)
+        if not candidates:
+            return []
+
+        # Observe records to update allocator's evidence base
+        for record in records:
+            self._config.allocator.observe(record)
+
+        # Get promotion proposals from allocator
+        promotions = self._config.allocator.propose(
+            candidates,
+            records,
+            deadline=self._state.deadline,
+            cost_model=None,
+        )
+
+        logger.info("Allocator proposed %d promotions", len(promotions))
+        return promotions
+
+    def _build_allocator_candidates(
+        self, search_space: SearchSpace
+    ) -> list[tuple[Coordinate, Schedule]]:
+        """Build candidate coordinates for allocator to consider for promotion.
+
+        Generates structural coordinates at the next fidelity level for cells
+        that have shown promise at lower fidelity.
+        """
+        from computronium.experiment.kernel.evaluate import task_shape
+        from computronium.experiment.kernel.search_space import iter_candidates
+
+        candidates = []
+        # Use the first task for shape resolution
+        task = self._config.run_spec.task_names[0] if self._config.run_spec.task_names else "xor"
+
+        # Generate candidates at explore fidelity (L0/L1) for promotion to exploit fidelity
+        spec = self._config.run_spec
+        # Temporarily adjust fidelity for candidate generation
+        explore_fidelity = "L0"
+        original_fidelity = spec.fidelity
+
+        # We need to generate candidates without modifying the original spec
+        # Create a temporary spec-like object or use iter_candidates directly
+        for coord, sched in iter_candidates(
+            spec,
+            search_space,
+            deadline=self._state.deadline,
+            shape=task_shape,
+            max_scan=1000,  # Limit scan for allocator candidates
+            check_composable=False,  # Skip composability for speed at allocation time
+        ):
+            # Only consider cells at explore fidelity for promotion
+            if sched.fidelity in ("L0", "L1"):
+                # Create a new schedule at the next fidelity
+                next_fidelity = "L1" if sched.fidelity == "L0" else "L2"
+                from computronium.experiment.schema.coordinate import Schedule
+
+                promo_sched = Schedule(
+                    fidelity=next_fidelity,
+                    seed=sched.seed,
+                    n_seeds=sched.n_seeds,
+                    epochs=sched.epochs * 2,  # More epochs at higher fidelity
+                    batch_limit=sched.batch_limit,
+                    budget_id="promotion",
+                    task_id=sched.task_id,
+                    param_budget=sched.param_budget,
+                    device=sched.device,
+                    deterministic=sched.deterministic,
+                    num_workers=sched.num_workers,
+                    precision=sched.precision,
+                    checkpoint_every_n=sched.checkpoint_every_n,
+                )
+                candidates.append((coord, promo_sched))
+
+                if len(candidates) >= 50:  # Limit candidates
+                    break
+
+        return candidates
 
     def _fresh_batch_items(
         self, proposals: list[Proposal], provenance: Provenance

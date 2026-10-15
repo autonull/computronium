@@ -28,14 +28,17 @@ class DomainType(StrEnum):
 
     VISION = "vision"
     LM = "lm"
+    LANGUAGE = "language"  # Alias for LM
     RL = "rl"
     GRAPH = "graph"
     TIMESERIES = "timeseries"
     TABULAR = "tabular"
     SCIENTIFIC = "scientific"
+    MEMORY = "memory"
     CONTINUAL = "continual"
     MULTITASK = "multitask"
     CUSTOM = "custom"
+    UNKNOWN = "unknown"
 
 
 # Canonical alias — prefer ``TaskType`` for function signatures that

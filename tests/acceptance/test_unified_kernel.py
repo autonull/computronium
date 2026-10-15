@@ -70,6 +70,15 @@ def _make_run_spec(
     task: str = "digits", batch_limit: int = MEASURED_BATCH_LIMIT
 ) -> RunSpec:
     """A RunSpec in the measured regime: digits, one epoch, two batches."""
+    import subprocess
+    try:
+        code_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, check=False, text=True, timeout=5
+        ).stdout.strip()[:12]
+    except Exception:
+        code_sha = "test"
+
     return RunSpec(
         profile="acceptance",
         task=task,
@@ -80,6 +89,9 @@ def _make_run_spec(
         budget_seconds=60.0,
         param_budget=MEASURED_PARAM_BUDGET,
         batch_limit=batch_limit,
+        code_sha=code_sha,
+        dataset=task,
+        dataset_version="1.0",
     )
 
 

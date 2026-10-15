@@ -1,6 +1,6 @@
 ==============================================================================
 COMPUTRONIUM ARCHITECTURE — CHEATSHEET DATAFILE
-generated 2026-10-15 @ commit 24fb9c57 by docs/cheatsheet/cheatsheet_create.py
+generated 2026-10-15 @ commit 0d1ca547 by docs/cheatsheet/cheatsheet_create.py
 artifacts: docs/cheatsheet/cheatsheet.svg (directed graph) · this file (data)
 ==============================================================================
 
@@ -76,7 +76,7 @@ PANEL TASKS — 🎯 Tasks & Data
     rl           ( 3): pendulum, acrobot, cartpole
     graph        ( 4): cora, citeseer, pubmed, graph_classification
     tabular      ( 3): breast_cancer, iris, wine
-    timeseries   ( 0): via create_task() only
+    timeseries   ( 1): synthetic_forecast
     scientific   ( 0): via create_task() only
 
 ==============================================================================
@@ -96,8 +96,8 @@ PANEL KERNEL — 🧪 Experiment Kernel — question → governed evidence
     S10 decide  Promotion predicates + allocation handoff (R
     S11 report  Delegates to surface.report fragments (R85-R
   policies (8): stratified_random, round_robin_grid, uniform_random, model_based, evolution, synthesis, strategy_progression, trainer_driven
-  objectives (48): measured 34 -> validation_accuracy, validation_loss, walltime_total, memory_usage, param_count, flops, energy_per_step, energy_per_mac, macs_per_step, latency_ms, spike_rate, ir_drop_variance, phase_noise, gate_fidelity, coherence_time, spectral_radius, stability_margin, nonnormality, drift_spectral_radius, drift_max_singular_value, contraction_rate, max_singular_value, lyapunov_exponent, hopfield_energy, pc_free_energy, augmented_lagrangian, spike_proxy_energy, instantaneous_proxy_energy, free_energy, settle_steps, psi_capacity, consolidation_cost, rewrite_rate, energy_efficiency
-                   research targets 14 -> test_accuracy, test_loss, f1_score, perplexity, bleu_score, training_time, bp_deficit, ruler_walltime_ratio, ruler_energy_ratio, ruler_param_ratio, stability_plasticity_ratio, credit_efficiency, convergence_steps, generalization_gap
+  objectives (48): measured 39 -> validation_accuracy, test_accuracy, validation_loss, test_loss, f1_score, perplexity, bleu_score, walltime_total, memory_usage, param_count, flops, energy_per_step, energy_per_mac, macs_per_step, latency_ms, spike_rate, ir_drop_variance, phase_noise, gate_fidelity, coherence_time, spectral_radius, stability_margin, nonnormality, drift_spectral_radius, drift_max_singular_value, contraction_rate, max_singular_value, lyapunov_exponent, hopfield_energy, pc_free_energy, augmented_lagrangian, spike_proxy_energy, instantaneous_proxy_energy, free_energy, settle_steps, psi_capacity, consolidation_cost, rewrite_rate, energy_efficiency
+                   research targets 9 -> training_time, bp_deficit, ruler_walltime_ratio, ruler_energy_ratio, ruler_param_ratio, stability_plasticity_ratio, credit_efficiency, convergence_steps, generalization_gap
   priors (72): ruler_lr_cifar10, ruler_lr_cifar100, ruler_lr_imagenet, ruler_lr_sst2, ruler_lr_squad, ruler_lr_wikitext2, ruler_lr_ptb, ruler_lr_copyshake, ...
   registries: capabilities=88 constraints=41 policies_registry=9
 
@@ -177,8 +177,8 @@ PANEL SYSTEM — 🏗️ System & Composition
 ==============================================================================
 PANEL TRAIN — ⚡ Training Loop — SystemTrainer.fit()
 ==============================================================================
-  history per epoch: train_acc, train_energy, train_loss, val_acc, val_loss
-  evaluator adds: augmented_lagrangian, coherence_time_us, consolidation_cost, contraction_rate, drift_max_singular_value, drift_nonnormality, drift_rate, drift_spectral_radius, endurance_cycles, energy_efficiency, energy_per_batch, energy_per_mac, energy_per_op, energy_per_sample, energy_per_step, epochs_run, event_density, flops, forward_energy_per_batch, free_energy, free_energy_final, gate_fidelity, hopfield_energy, insertion_loss_db, instantaneous_proxy_energy, ir_drop_variance, latency_ms, lyapunov_exponent, macs_per_step, max_singular_value, memory_usage, min_singular_value, nonlinearity_error, nonnormality, optical_power_mw, param_count, pc_free_energy, phase_noise, phase_shifter_energy_pj, precision_bits, psi_capacity, qubit_count, rewrite_rate, settle_converged, settle_horizon, settle_step_size, settle_steps, settle_steps_used, shot_noise, spectral_radius, spike_energy_pj, spike_proxy_energy, spike_rate, stability_margin, synaptic_ops_per_sample, thermal_noise_variance, update_energy_per_batch, walltime_s, write_energy_pj
+  history per epoch: train_acc, train_energy, train_loss, val_acc, val_loss, val_ppl
+  evaluator adds: augmented_lagrangian, coherence_time_us, consolidation_cost, contraction_rate, drift_max_singular_value, drift_nonnormality, drift_rate, drift_spectral_radius, endurance_cycles, energy_clamped, energy_efficiency, energy_per_batch, energy_per_mac, energy_per_op, energy_per_sample, energy_per_step, epochs_run, event_density, flops, forward_energy_per_batch, free_energy, free_energy_final, gate_fidelity, hopfield_energy, insertion_loss_db, instantaneous_proxy_energy, ir_drop_variance, latency_ms, lyapunov_exponent, macs_per_step, max_singular_value, memory_usage, min_singular_value, nonlinearity_error, nonnormality, optical_power_mw, param_count, pc_free_energy, phase_noise, phase_shifter_energy_pj, precision_bits, psi_capacity, qubit_count, rewrite_rate, settle_converged, settle_horizon, settle_step_size, settle_steps, settle_steps_used, shot_noise, spectral_radius, spike_energy_pj, spike_proxy_energy, spike_rate, stability_margin, synaptic_ops_per_sample, thermal_noise_variance, update_energy_per_batch, walltime_s, write_energy_pj
 
 ==============================================================================
 PANEL EVIDENCE — 💾 Evidence Store — one DuckDB, single writer

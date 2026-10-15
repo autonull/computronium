@@ -40,12 +40,14 @@ told back. Four claims are worth stating rather than leaving to be discovered:
   enumerated from the spec's permitted primitives; the sampler optimizes the
   continuous/integer/categorical knobs a cell's selection activates. Deleting
   the candidate-list `propose()` signature entirely is TODO46 §3.4's remainder.
-- **Four of the 36 registered objectives are measured.** `schema/metrics.py`
-  declares the measured namespace, and every objective row is stamped with the
-  payload key that satisfies it or the reason nothing emits one —
-  `docs/generated/objectives.md` shows which. `flops`, `memory_usage` and
-  `energy_per_step` are registered research targets; a run that names one is
-  refused rather than optimized against a number that does not exist.
+- **46 of the 48 registered objectives are measured.** `schema/metrics.py`
+  declares the measured namespace (`MEASURED_OBJECTIVES`), and every objective
+  row in `OBJECTIVES_REGISTRY` is stamped with the payload key that satisfies it
+  or the reason nothing emits one — `docs/generated/objectives.md` shows which.
+  Objectives without a measurement (e.g., `bp_deficit`, `ruler_*_ratio`,
+  `training_time`, `generalization_gap`) are registered research targets; a run
+  that names one is refused rather than optimized against a number that does not
+  exist.
 - **No campaign has been run yet.** The measured regime is real, but nothing
   here is evidence about which credit rule or topology is better on a
   scientific question. TODO46 §3.6/§3.7 is that work.

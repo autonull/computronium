@@ -919,11 +919,11 @@ def _surface_rows(b: Bundle) -> tuple[Row, ...]:
     claim_steps = tuple(
         FlowStep(label=lv, sub=tier, color=COLORS["surface"], tooltip=f"{lv} {tier}")
         for lv, tier in (
-            ("L1", "analytical"),
-            ("L2", "machine-checked"),
-            ("L3", "certified-numerical"),
-            ("L4", "sampled-numerical"),
-            ("L5", "empirical"),
+            ("VL1", "analytical"),
+            ("VL2", "machine-checked"),
+            ("VL3", "certified-numerical"),
+            ("VL4", "sampled-numerical"),
+            ("VL5", "empirical"),
         )
     )
     package_chips = tuple(

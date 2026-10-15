@@ -16,26 +16,26 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 | Panel | Key Contents |
 |-------|--------------|
-| **🚪 Entry Points** | `comp` CLI (10 subcommands), 142 Python API symbols, 6 demos + 21 gallery figures |
-| **🎯 Tasks & Data** | 7 domains (vision, lm, rl, graph, tabular, timeseries, scientific), ~25 tasks |
-| **🧪 Experiment Kernel** | 11 pipeline stages (S1–S11), 8 policies, 36 objectives (4 measured), 28 priors, 88 capabilities, 17 constraints |
-| **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
-| **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (15 fields), `compose_joint_system` factory |
+| **🚪 Entry Points** | <!-- gen:cli_count --> subcommands, <!-- gen:api_count --> Python API symbols, <!-- gen:demo_count --> demos + <!-- gen:gallery_count --> gallery figures |
+| **🎯 Tasks & Data** | <!-- gen:domain_count --> domains, <!-- gen:task_count --> tasks |
+| **🧪 Experiment Kernel** | <!-- gen:stage_count --> pipeline stages, <!-- gen:policy_count --> policies, <!-- gen:objective_count --> objectives (<!-- gen:measured_objective_count --> measured), <!-- gen:prior_count --> priors, <!-- gen:capability_count --> capabilities, <!-- gen:constraint_count --> constraints |
+| **🧬 6-Axis Ontology** | <!-- gen:substrate_count --> substrates, <!-- gen:geometry_count --> geometries, <!-- gen:dynamics_count --> dynamics, <!-- gen:plasticity_count --> plasticities, <!-- gen:credit_count --> credits, <!-- gen:update_count --> updates = <!-- gen:primitive_total --> primitives |
+| **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (<!-- gen:trainer_config_fields --> fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
-| **💾 Evidence Store** | DuckDB, single-writer, 13 RecordStore methods, schema v3 with 21 fields, 3-tier claim status |
-| **📊 Surface & Governance** | 5 verification levels (L1–L5), 5 workspace packages, `comp report/export/conformance/status` |
+| **💾 Evidence Store** | DuckDB, single-writer, <!-- gen:store_method_count --> RecordStore methods, schema v<!-- gen:schema_version --> with <!-- gen:record_field_count --> fields, 3-tier claim status |
+| **📊 Surface & Governance** | 5 verification levels (L1–L5), <!-- gen:package_count --> workspace packages, `comp report/export/conformance/status` |
 
 ### Quick Reference
 
 | Category | Count | Details |
 |----------|-------|---------|
-| **Substrate primitives** | 9 | digital, analog, memristive, neuromorphic, optical, quantum, complex, sparse, ternary |
-| **Geometry primitives** | 11 | feedforward, recurrent, causal_transformer, tile, tile_mesh, conv, graph, attention, spatial_lattice, nca, ntm |
-| **StateDynamics primitives** | 8 | energy_minimization, predictive_settling, error_predictive_coding, spike_integration, instantaneous, diffusion, lazy, pc_alm |
-| **Plasticity primitives** | 7 | null, routing, fast_weights, substrate_coupled, rule_state, temporal_psi, conflict_adaptive |
-| **CreditAssignment primitives** | 10 | thermodynamic_contrast, random_projections, local_goodness, local_contrastive, temporal_trace, target_inversion, homeostatic, pepita, gradient, pc_alm |
-| **ParameterUpdate primitives** | 12 | euclidean, adam, local_adam, ortho_adam, riemannian_orthogonal, muon, lion, spectral_constrained, mean_norm, elastic_consolidation, natural_gradient, role_split |
-| **Algorithms (composed)** | 21 | backprop, eqprop, fa, dfp, pepita, tp, predictive_coding, hebbian, snn, tilenet, tilenet_sharded, mep, mep_sharded, ... |
+| **Substrate primitives** | <!-- gen:substrate_count --> | <!-- gen:substrate_list --> |
+| **Geometry primitives** | <!-- gen:geometry_count --> | <!-- gen:geometry_list --> |
+| **StateDynamics primitives** | <!-- gen:dynamics_count --> | <!-- gen:dynamics_list --> |
+| **Plasticity primitives** | <!-- gen:plasticity_count --> | <!-- gen:plasticity_list --> |
+| **CreditAssignment primitives** | <!-- gen:credit_count --> | <!-- gen:credit_list --> |
+| **ParameterUpdate primitives** | <!-- gen:update_count --> | <!-- gen:update_list --> |
+| **Algorithms (composed)** | <!-- gen:algorithm_count --> | <!-- gen:algorithm_list --> |
 
 ### Artifacts
 

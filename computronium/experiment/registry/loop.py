@@ -1044,7 +1044,16 @@ class LoopDriver:
             return self._explore_axes()
 
         objective_names = list(_objectives_for(task))
-        frontier = compute_pareto_frontier(records, objective_names)
+        
+        # Get baselines for ruler-relative normalization (F0b)
+        baselines = None
+        if self._baseline_gate and self._config.store_path:
+            from computronium.experiment.evidence.store import RecordStore, StoreConfig
+            store = RecordStore(StoreConfig(path=self._config.store_path, read_only=True))
+            with store:
+                baselines = self._get_baselines_for_pareto(store, task)
+
+        frontier = compute_pareto_frontier(records, objective_names, baselines=baselines)
         front_points = frontier.front()
         if not front_points:
             return self._explore_axes()
@@ -1193,6 +1202,32 @@ class LoopDriver:
                 logger.warning("Hardware fingerprint unavailable: %s", exc)
                 self._hardware_fp = "unknown"
         return self._hardware_fp
+
+    def _get_baselines_for_pareto(
+        self,
+        store: RecordStore,
+        task: str,
+    ) -> dict[str, dict[str, float]] | None:
+        """Get baseline metrics for ruler-relative Pareto normalization (F0b).
+
+        Returns dict mapping task_name -> {objective: baseline_value} for tasks
+        that have discovered baselines.
+        """
+        from computronium.experiment.registry.baseline import BaselineRegistry
+
+        registry = BaselineRegistry(store=store)
+        hardware_fp = self._fingerprint(registry)
+
+        # Get baselines for all tasks in the task schedule
+        baselines = {}
+        for t in self._config.task_schedule:
+            baseline = registry.get_baseline(
+                t, hardware_fp, self._config.hours * 3600, self._config.n_seeds
+            )
+            if baseline:
+                baselines[t] = baseline.metrics | baseline.cost_metrics
+
+        return baselines if baselines else None
 
     # --------------------------------------------------------------- support
 

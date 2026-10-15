@@ -95,6 +95,8 @@ __all__ = [
     "detect_failure_patterns",
     "emit_reproducer",
     "evaluation_data_allowed",
+    "export_claims_to_ceec",
+    "export_statistical_result_to_ceec",
     "failure",
     "filter_by_data_origin",
     "filter_by_maturity",
@@ -130,8 +132,6 @@ __all__ = [
     "strongest_axis",
     "training_data_allowed",
     "valid_comparison",
-    "validate_record_input",
-    "validate_record_output",
     "wilcoxon_paired",
 ]
 
@@ -260,6 +260,9 @@ _symbol_to_module: dict[str, str] = {
     "format_replication_key": "store",
     "validate_record_input": "store",
     "validate_record_output": "store",
+    # ceec_export
+    "export_claims_to_ceec": "ceec_export",
+    "export_statistical_result_to_ceec": "ceec_export",
 }
 
 

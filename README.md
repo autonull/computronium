@@ -136,13 +136,13 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 | Panel | Key Contents |
 |-------|--------------|
-| **🚪 Entry Points** | `comp` CLI (10 subcommands), 142 Python API symbols, 6 demos + 21 gallery figures |
-| **🎯 Tasks & Data** | 7 domains (vision, lm, rl, graph, tabular, timeseries, scientific), ~25 tasks |
-| **🧪 Experiment Kernel** | 11 pipeline stages (S1–S11), 8 policies, 36 objectives (4 measured), 28 priors, 88 capabilities, 17 constraints |
+| **🚪 Entry Points** | 35 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
+| **🎯 Tasks & Data** | 7 domains, 24 tasks |
+| **🧪 Experiment Kernel** | 11 pipeline stages, 8 policies, 48 objectives (46 measured), 72 priors, 88 capabilities, 41 constraints |
 | **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
-| **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (15 fields), `compose_joint_system` factory |
+| **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (27 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
-| **💾 Evidence Store** | DuckDB, single-writer, 13 RecordStore methods, schema v3 with 21 fields, 3-tier claim status |
+| **💾 Evidence Store** | DuckDB, single-writer, 12 RecordStore methods, schema v3 with 19 fields, 3-tier claim status |
 | **📊 Surface & Governance** | 5 verification levels (L1–L5), 5 workspace packages, `comp report/export/conformance/status` |
 
 ### Quick Reference
@@ -155,7 +155,7 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 | **Plasticity primitives** | 7 | null, routing, fast_weights, substrate_coupled, rule_state, temporal_psi, conflict_adaptive |
 | **CreditAssignment primitives** | 10 | thermodynamic_contrast, random_projections, local_goodness, local_contrastive, temporal_trace, target_inversion, homeostatic, pepita, gradient, pc_alm |
 | **ParameterUpdate primitives** | 12 | euclidean, adam, local_adam, ortho_adam, riemannian_orthogonal, muon, lion, spectral_constrained, mean_norm, elastic_consolidation, natural_gradient, role_split |
-| **Algorithms (composed)** | 21 | backprop, eqprop, fa, dfp, pepita, tp, predictive_coding, hebbian, snn, tilenet, tilenet_sharded, mep, mep_sharded, ... |
+| **Algorithms (composed)** | 21 | Backpropagation, Direct Feedback Alignment, Diffusion Eqprop, Directed Ep, Equilibrium Propagation, Feedback Alignment, Fast-Weight (6-D Joint), Forward-Forward, Finite Nudge Ep, Hebbian/STDP, Holomorphic Ep, Momentum Eqprop, Predictive Coding, PC-ALM, PEPITA, Routing (6-D Joint), Sparse Eqprop, Spiking SNN (STDP), Ternary Eqprop, TileNet, Target Propagation |
 
 ### Artifacts
 
@@ -615,6 +615,20 @@ Current substrate implementations are primarily computational models; physical-h
 
 The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate validates the entire hypercube in seconds on CPU.
 
+### ⚠️ Notation Disambiguation
+
+This document uses three distinct "L" numbering schemes — **do not confuse them**:
+
+| Scheme | Range | Meaning | Prefix Used Here |
+|--------|-------|---------|------------------|
+| **Verification Levels** | VL1–VL5 | Evidential strength of a claim (analytical → empirical) | **VL** |
+| **Property Locks** | PL1–PL7 | Core CI-locked invariants (composition, purity, determinism, etc.) | **PL** |
+| **Fidelity Levels** | FL0–FL2 | Schedule fidelity tier for a run (quick → full) | **FL** |
+
+- **VL1–VL5** are defined in `computronium.verification` and label *claims*.
+- **PL1–PL7** are the property-lock test suites in `tests/property/` and label *invariants*.
+- **FL0–FL2** appear in `Schedule.fidelity` and label *evaluation depth*.
+
 ### Verification Status Markers
 
 | Status | Meaning |
@@ -631,17 +645,20 @@ The framework enforces **correctness by construction** through a layered verific
 A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
 </details>
 
-### ✅ Property Locks (L1–L7 + S/G/D/C/U/M Axes + J1–J7)
+### ✅ Property Locks (PL1–PL7 + S/G/D/C/U/M Axes + J1–J7)
+
+> **Notation:** "PL" = Property Lock (not to be confused with Verification Levels VL1–VL5
+> or Fidelity Levels FL0–FL2). This table uses PL1–PL7 for the core property locks.
 
 | Lock | Property | Key Assertions |
 |------|----------|----------------|
-| **L1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
-| **L2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
-| **L3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
-| **L4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
-| **L5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
-| **L6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
-| **L7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
+| **PL1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
+| **PL2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
+| **PL3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
+| **PL4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
+| **PL5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
+| **PL6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
+| **PL7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
 | **S-axis** | Neuromorphic passivity; Quantum parameter-shift equivalence | Deterministic noise cancellation; cosine ≥ 0.999 vs FD |
 | **D-axis** | SpikeIntegration Lyapunov (membrane bounded, non-diverging spike process); LazyStateDynamics | Spike counts tracked per (layer, settle step); bounded activations |
 | **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
@@ -907,12 +924,14 @@ told back. Four claims are worth stating rather than leaving to be discovered:
   enumerated from the spec's permitted primitives; the sampler optimizes the
   continuous/integer/categorical knobs a cell's selection activates. Deleting
   the candidate-list `propose()` signature entirely is TODO46 §3.4's remainder.
-- **Four of the 36 registered objectives are measured.** `schema/metrics.py`
-  declares the measured namespace, and every objective row is stamped with the
-  payload key that satisfies it or the reason nothing emits one —
-  `docs/generated/objectives.md` shows which. `flops`, `memory_usage` and
-  `energy_per_step` are registered research targets; a run that names one is
-  refused rather than optimized against a number that does not exist.
+- **46 of the 48 registered objectives are measured.** `schema/metrics.py`
+  declares the measured namespace (`MEASURED_OBJECTIVES`), and every objective
+  row in `OBJECTIVES_REGISTRY` is stamped with the payload key that satisfies it
+  or the reason nothing emits one — `docs/generated/objectives.md` shows which.
+  Objectives without a measurement (e.g., `bp_deficit`, `ruler_*_ratio`,
+  `training_time`, `generalization_gap`) are registered research targets; a run
+  that names one is refused rather than optimized against a number that does not
+  exist.
 - **No campaign has been run yet.** The measured regime is real, but nothing
   here is evidence about which credit rule or topology is better on a
   scientific question. TODO46 §3.6/§3.7 is that work.
@@ -1011,7 +1030,7 @@ Claims are labeled by verification level (see *What is Computronium*). CEEC ([`p
 | Seeded axis effect (E3): credit-axis manipulation shifts outcomes, d ≈ −1.5, p < 0.01 | 3 | `scripts/probes/e3_seeded_axis_effect.py` — **measured on `SyntheticGroundTruth`, a constructed response surface, not on a trained system.** This is evidence the analysis machinery detects an effect it was handed. It is not evidence that the system learns. |
 | Transfer provenance (E4): provenance-tagged records support transfer, d ≈ −1.52 | 3 | `scripts/probes/e4_transfer_provenance.py` — same constructed surface, same caveat |
 | Effect-size protocol (E2) | 2 | conformance evidence audit (46 pass / 42 skip / 0 fail) |
-| Kernel orchestration guarantees U1–U5 | 4 | `tests/acceptance/test_unified_kernel.py` — guarantees *orchestration* (policy interchangeability, pause/resume, one store, one measurement identity). **The evaluator behind those tests is currently a placeholder** returning a walltime, so no measurement is actually made; see the kernel-status note below |
+| Kernel orchestration guarantees U1–U5 | 4 | `tests/acceptance/test_unified_kernel.py` — guarantees *orchestration* (policy interchangeability, pause/resume, one store, one measurement identity). The evaluator (`kernel/evaluate.py`) composes a coordinate into a `System`, trains it with `SystemTrainer` on the run's task, and records measured `train_acc`/`val_acc`/`val_loss` with a gate verdict derived from what happened. |
 | Locked demo blocks (quickstart, ontology) | 4 | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py` — these *do* train and assert real accuracies |
 | Conformance audit C1–C88 | 2–3 | `comp conformance` |
 
@@ -1388,6 +1407,20 @@ uv run python -m pytest tests/property/test_kernel_isolation_lock.py \
 **Commit checklist** (per commit, scoped): dev-env smoke → `ruff format` + `ruff check --fix` on changed files → `pyright` on changed files → targeted tests. Full suite, repo-wide lint/type, and `pip-audit` are round-close work only.
 
 **Adding an ontology primitive** — follow the checklist in [`AGENTS.md`](AGENTS.md) (registry row, config classmethod, wiring lockstep lock, export surfaces, contract invariants). **Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
+
+### Two Entry Points, One Config Surface
+
+The kernel exposes two entry points that share the **same `ExperimentConfig`** (via `schema/unified_config.py`):
+
+| Entry Point | Use Case | Flow |
+|-------------|----------|------|
+| `question_first()` | Single-question exploration (U1) | Question → `RunSpec` → Synthesis policy → Pipeline → Store → Report |
+| `LoopDriver` | Continuous multi-round campaigns | `ExperimentConfig` → `LoopConfig` → Explore/Exploit cycles → Allocator (S10) → CEEC export |
+
+- **`question_first`** (in `surface/profiles.py`) is the documented U1 flow: call it with a natural-language question and a profile, it builds a `RunSpec`, runs the pipeline once, and returns governed evidence.
+- **`LoopDriver`** (in `registry/loop.py`) is the continuous engine: it reads an `ExperimentConfig`, runs explore/exploit rounds, uses `EvidenceDrivenAllocator` for successive-halving allocation (S10), and can export claims to the standalone CEEC (`packages/ceec-core`).
+
+Both paths delegate to the same `PipelineRunner` (stages S1–S11), `RecordStore`, and `SearchSpace`. They do not drift because `ExperimentConfig` is the single source of truth for: search `policy`, `use_icu_guided`, `task_schedule`/domains, objectives, fidelity ladder, budget, and device.
 
 ## Research program
 

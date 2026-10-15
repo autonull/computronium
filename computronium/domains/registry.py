@@ -61,6 +61,8 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "breast_cancer",
     "iris",
     "wine",
+    # timeseries
+    "synthetic_forecast",
 })
 
 

@@ -12,6 +12,39 @@ order lives in :data:`_SECTIONS`, the one place it is decided.
 * ``<!-- gen:cli_table -->`` — the ``comp`` dispatcher and its summaries.
 * ``<!-- gen:policy_table -->`` — ``POLICY_CATALOG`` and each policy's docstring.
 * ``<!-- gen:demo_table -->`` — the demo scripts on disk and their docstrings.
+* ``<!-- gen:cli_count -->`` — number of CLI subcommands.
+* ``<!-- gen:api_count -->`` — number of public Python API symbols.
+* ``<!-- gen:demo_count -->`` — number of demo scripts.
+* ``<!-- gen:gallery_count -->`` — number of gallery figures.
+* ``<!-- gen:domain_count -->`` — number of domains.
+* ``<!-- gen:task_count -->`` — number of supported tasks.
+* ``<!-- gen:stage_count -->`` — number of pipeline stages.
+* ``<!-- gen:policy_count -->`` — number of policies.
+* ``<!-- gen:objective_count -->`` — number of objectives.
+* ``<!-- gen:measured_objective_count -->`` — number of measured objectives.
+* ``<!-- gen:prior_count -->`` — number of priors.
+* ``<!-- gen:capability_count -->`` — number of capabilities.
+* ``<!-- gen:constraint_count -->`` — number of constraints.
+* ``<!-- gen:substrate_count -->`` — number of substrate primitives.
+* ``<!-- gen:geometry_count -->`` — number of geometry primitives.
+* ``<!-- gen:dynamics_count -->`` — number of dynamics primitives.
+* ``<!-- gen:plasticity_count -->`` — number of plasticity primitives.
+* ``<!-- gen:credit_count -->`` — number of credit primitives.
+* ``<!-- gen:update_count -->`` — number of update primitives.
+* ``<!-- gen:primitive_total -->`` — total number of primitives.
+* ``<!-- gen:substrate_list -->`` — comma-separated substrate primitive names.
+* ``<!-- gen:geometry_list -->`` — comma-separated geometry primitive names.
+* ``<!-- gen:dynamics_list -->`` — comma-separated dynamics primitive names.
+* ``<!-- gen:plasticity_list -->`` — comma-separated plasticity primitive names.
+* ``<!-- gen:credit_list -->`` — comma-separated credit primitive names.
+* ``<!-- gen:update_list -->`` — comma-separated update primitive names.
+* ``<!-- gen:algorithm_count -->`` — number of composed algorithms.
+* ``<!-- gen:algorithm_list -->`` — comma-separated algorithm names.
+* ``<!-- gen:trainer_config_fields -->`` — number of SystemTrainerConfig fields.
+* ``<!-- gen:store_method_count -->`` — number of RecordStore methods.
+* ``<!-- gen:schema_version -->`` — current schema version.
+* ``<!-- gen:record_field_count -->`` — number of Record fields.
+* ``<!-- gen:package_count -->`` — number of workspace packages.
 
 The contents list is generated too, from the headings the section files
 actually contain, so it cannot list a section that was renamed or deleted.
@@ -85,10 +118,239 @@ def _demo_table() -> str:
     return "\n".join(rows)
 
 
+def _cli_count() -> str:
+    from computronium.cli.__main__ import _SUBCOMMANDS
+    return str(len(_SUBCOMMANDS))
+
+
+def _api_count() -> str:
+    import computronium
+    return str(len(computronium.__all__))
+
+
+def _demo_count() -> str:
+    return str(len(sorted((REPO / "scripts" / "demos").glob("demo_*.py"))))
+
+
+def _gallery_count() -> str:
+    from computronium.visualization.gallery import DEMOS
+    return str(len(DEMOS))
+
+
+def _domain_count() -> str:
+    from computronium.domains import _DOMAIN_REGISTRY
+    return str(len(_DOMAIN_REGISTRY))
+
+
+def _task_count() -> str:
+    from computronium.domains.registry import SUPPORTED_TASKS
+    return str(len(SUPPORTED_TASKS))
+
+
+def _stage_count() -> str:
+    from computronium.experiment.execution.stage import STAGE_REGISTRY
+    return str(len(STAGE_REGISTRY))
+
+
+def _policy_count() -> str:
+    from computronium.experiment.execution.policy import POLICY_CATALOG
+    return str(len(POLICY_CATALOG))
+
+
+def _ensure_seed_registries() -> None:
+    """Import seed_registries and call seed_all_registries to populate all registries."""
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+    seed_all_registries()
+
+
+def _objective_count() -> str:
+    _ensure_seed_registries()
+    from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+    return str(len(list(OBJECTIVES_REGISTRY)))
+
+
+def _measured_objective_count() -> str:
+    from computronium.experiment.schema.metrics import measured_objectives
+    return str(len(measured_objectives()))
+
+
+def _prior_count() -> str:
+    _ensure_seed_registries()
+    from computronium.experiment.schema.registries import PRIORS_REGISTRY
+    return str(len(list(PRIORS_REGISTRY)))
+
+
+def _capability_count() -> str:
+    _ensure_seed_registries()
+    from computronium.experiment.schema.registries import CAPABILITIES_REGISTRY
+    return str(len(list(CAPABILITIES_REGISTRY)))
+
+
+def _constraint_count() -> str:
+    _ensure_seed_registries()
+    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+    return str(len(list(CONSTRAINTS_REGISTRY)))
+
+
+def _axis_primitives(axis: str) -> tuple[int, list[str]]:
+    from computronium.experiment.schema.axis import AXES_REGISTRIES
+    reg = AXES_REGISTRIES[axis]
+    names = [s.name for s in reg if s.available]
+    return len(names), names
+
+
+def _substrate_count() -> str:
+    count, _ = _axis_primitives("substrate")
+    return str(count)
+
+
+def _geometry_count() -> str:
+    count, _ = _axis_primitives("geometry")
+    return str(count)
+
+
+def _dynamics_count() -> str:
+    count, _ = _axis_primitives("dynamics")
+    return str(count)
+
+
+def _plasticity_count() -> str:
+    count, _ = _axis_primitives("plasticity")
+    return str(count)
+
+
+def _credit_count() -> str:
+    count, _ = _axis_primitives("credit")
+    return str(count)
+
+
+def _update_count() -> str:
+    count, _ = _axis_primitives("update")
+    return str(count)
+
+
+def _primitive_total() -> str:
+    from computronium.experiment.schema.axis import AXES_REGISTRIES
+    total = sum(len([s for s in reg if s.available]) for reg in AXES_REGISTRIES.values())
+    return str(total)
+
+
+def _substrate_list() -> str:
+    _, names = _axis_primitives("substrate")
+    return ", ".join(names)
+
+
+def _geometry_list() -> str:
+    _, names = _axis_primitives("geometry")
+    return ", ".join(names)
+
+
+def _dynamics_list() -> str:
+    _, names = _axis_primitives("dynamics")
+    return ", ".join(names)
+
+
+def _plasticity_list() -> str:
+    _, names = _axis_primitives("plasticity")
+    return ", ".join(names)
+
+
+def _credit_list() -> str:
+    _, names = _axis_primitives("credit")
+    return ", ".join(names)
+
+
+def _update_list() -> str:
+    _, names = _axis_primitives("update")
+    return ", ".join(names)
+
+
+def _algorithm_count() -> str:
+    from computronium.acceleration.registry import algorithms
+    return str(len(algorithms()))
+
+
+def _algorithm_list() -> str:
+    from computronium.acceleration.registry import algorithms
+    names = [s.name for s in algorithms()]
+    return ", ".join(names)
+
+
+def _trainer_config_fields() -> str:
+    from computronium.core.system_trainer import SystemTrainerConfig
+    import dataclasses
+    return str(len(dataclasses.fields(SystemTrainerConfig)))
+
+
+def _store_method_count() -> str:
+    from computronium.experiment.evidence.store import RecordStore
+    methods = [
+        m for m in (
+            "create_run", "finish_run", "append", "append_with_artifacts",
+            "get_record", "get_record_by_measurement_key", "query_records",
+            "query_runs", "vector_search", "count_records", "count_achieved_seeds",
+            "latest_run_id",
+        ) if hasattr(RecordStore, m)
+    ]
+    return str(len(methods))
+
+
+def _schema_version() -> str:
+    from computronium.experiment.schema.versioning import current_schema_version
+    return str(current_schema_version())
+
+
+def _record_field_count() -> str:
+    from computronium.experiment.schema.record import Record
+    import dataclasses
+    return str(len(dataclasses.fields(Record)))
+
+
+def _package_count() -> str:
+    pkgs = [
+        d.name for d in sorted((REPO / "packages").iterdir())
+        if d.is_dir() and (d / "pyproject.toml").exists()
+    ]
+    return str(len(pkgs))
+
+
 _GENERATORS = {
     "cli_table": _cli_table,
     "policy_table": _policy_table,
     "demo_table": _demo_table,
+    "cli_count": _cli_count,
+    "api_count": _api_count,
+    "demo_count": _demo_count,
+    "gallery_count": _gallery_count,
+    "domain_count": _domain_count,
+    "task_count": _task_count,
+    "stage_count": _stage_count,
+    "policy_count": _policy_count,
+    "objective_count": _objective_count,
+    "measured_objective_count": _measured_objective_count,
+    "prior_count": _prior_count,
+    "capability_count": _capability_count,
+    "constraint_count": _constraint_count,
+    "substrate_count": _substrate_count,
+    "geometry_count": _geometry_count,
+    "dynamics_count": _dynamics_count,
+    "plasticity_count": _plasticity_count,
+    "credit_count": _credit_count,
+    "update_count": _update_count,
+    "primitive_total": _primitive_total,
+    "substrate_list": _substrate_list,
+    "geometry_list": _geometry_list,
+    "dynamics_list": _dynamics_list,
+    "plasticity_list": _plasticity_list,
+    "credit_list": _credit_list,
+    "update_list": _update_list,
+    "algorithm_count": _algorithm_count,
+    "algorithm_list": _algorithm_list,
+    "trainer_config_fields": _trainer_config_fields,
+    "store_method_count": _store_method_count,
+    "schema_version": _schema_version,
+    "record_field_count": _record_field_count,
+    "package_count": _package_count,
 }
 
 

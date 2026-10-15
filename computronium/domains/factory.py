@@ -29,6 +29,7 @@ __all__ = [
     "CopyTask",
     "GraphClassificationTask",
     "SequentialMNISTTask",
+    "TimeSeriesTask",
     "create_task",
     "logger",
 ]
@@ -681,6 +682,16 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
         case "copy_task":
             return CopyTask(
                 name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
+        case "synthetic_forecast":
+            from computronium.domains.timeseries import TimeSeriesTask
+
+            return TimeSeriesTask(
+                name=task_name,
+                dataset_name="synthetic",
+                device=str(device),
+                quick_mode=quick_mode,
+                **kwargs,
             )
         case "graph_classification":
             return GraphClassificationTask(

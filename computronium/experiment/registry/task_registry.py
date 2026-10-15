@@ -9,18 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from computronium.domains.base import DomainType
 from computronium.domains.registry import SUPPORTED_TASKS
-
-
-class DomainType(StrEnum):
-    VISION = "vision"
-    LANGUAGE = "language"
-    RL = "rl"
-    GRAPH = "graph"
-    TABULAR = "tabular"
-    MEMORY = "memory"
-    SCIENTIFIC = "scientific"
-    UNKNOWN = "unknown"
 
 
 class CostClass(StrEnum):
@@ -908,6 +898,47 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         typical_lr=1e-3,
         tags=("tabular", "sklearn", "wine"),
         description="Wine classification dataset",
+    ),
+    "synthetic_forecast": TaskSpecEnriched(
+        name="synthetic_forecast",
+        domain=DomainType.TIMESERIES,
+        input_shape=(32,),
+        output_dim=1,
+        cost_class=CostClass.CHEAP,
+        primary_objective="validation_loss",
+        objectives=(
+            TaskObjective(
+                "validation_loss",
+                "minimize",
+                "log",
+                1.0,
+                True,
+                "val_loss",
+                "task",
+                "MSE loss",
+            ),
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                0.5,
+                True,
+                "val_acc",
+                "task",
+                "Negative MSE as accuracy proxy",
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+            TaskObjective(
+                "param_count", "minimize", "minmax", 0.2, True, "param_count", "cost"
+            ),
+        ),
+        geometry_hint="recurrent",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=("timeseries", "forecasting", "synthetic"),
+        description="Synthetic sine-wave forecasting",
     ),
 }
 

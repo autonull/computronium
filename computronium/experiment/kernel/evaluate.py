@@ -923,7 +923,17 @@ def cell_record(
     The gate verdict is derived from what happened — the requested epochs ran
     and the metrics are finite — rather than stamped PENDING as the placeholder
     did.
+
+    Assessment procedures are run to stamp procedure metadata (name, version, code_hash)
+    into the record's status, implementing the three-tier evidence model (WP5).
     """
+    from computronium.experiment.evidence.procedures import (
+        ASSESSMENT_PROCEDURES,
+        get_assessment_procedure,
+    )
+    from computronium.experiment.evidence.status import (
+        build_assessments_from_legacy,
+    )
     from computronium.experiment.schema.record import (
         FailureCause,
         GateVerdict,
@@ -980,25 +990,78 @@ def cell_record(
     if evaluation.convergence_curve:
         payload["convergence_curve"] = evaluation.convergence_curve
     passed = complete and within_ceiling
+
+    # Run assessment procedures to stamp procedure metadata (WP5)
+    # Gate verdict assessment
+    gate_verdict_proc = get_assessment_procedure(
+        "gate_verdict", "1.0"
+    ) or ASSESSMENT_PROCEDURES.get(
+        "gate_verdict@1.0#" + "gate_verdict"[:8]  # Fallback key
+    )
+
+    # Maturity assessment
+    maturity_proc = get_assessment_procedure("maturity", "1.0")
+
+    # Failure classification assessment
+    failure_proc = get_assessment_procedure("failure_classification", "1.0")
+
+    # Determine which procedure to reference (use gate_verdict as primary)
+    primary_proc = gate_verdict_proc
+    if primary_proc is None:
+        # Fallback: use a default procedure identifier
+        procedure_name = "gate_verdict"
+        procedure_version = "1.0"
+        procedure_code_hash = "default"
+    else:
+        procedure_name = primary_proc.name.split("@")[0]  # Extract original name
+        procedure_version = primary_proc.version
+        procedure_code_hash = primary_proc.code_hash
+
+    # Build legacy status first (from evidence.status for assessment building)
+    from computronium.experiment.evidence.status import StatusLegacy
+    legacy_status = StatusLegacy(
+        gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
+        defect=_defect(
+            complete, within_ceiling, evaluation.param_count, schedule.param_budget
+        ),
+        cause=FailureCause.UNKNOWN if passed else FailureCause.CONSTRAINT_VIOLATION,
+        severity=Severity.LOW if passed else Severity.MEDIUM,
+        quarantine=not passed,
+        maturity=Maturity.L0,
+        uncertainty={},
+        reproducibility=ReproducibilityClass.REPLAYABLE,
+        assessment_procedure_version=procedure_version,
+        ceec_link=None,
+    )
+
+    # Build assessments with procedure metadata
+    assessments = build_assessments_from_legacy(
+        legacy_status,
+        procedure_name=procedure_name,
+        procedure_version=procedure_version,
+        procedure_code_hash=procedure_code_hash,
+    )
+
+    # Convert back to schema Status with procedure metadata
+    status = Status(
+        gate_verdict=assessments.gate_verdict,
+        defect=assessments.defect,
+        cause=assessments.failure_classification,
+        severity=assessments.severity,
+        quarantine=assessments.quarantine,
+        maturity=assessments.maturity,
+        uncertainty=assessments.uncertainty,
+        reproducibility=assessments.reproducibility,
+        assessment_procedure_version=assessments.procedure_version,
+        ceec_link=assessments.ceec_link,
+    )
+
     return Record.create(
         run_id=provenance.links.get("run_id", str(uuid.uuid4())),
         coordinate=coordinate,
         schedule=schedule,
         provenance=provenance,
-        status=Status(
-            gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
-            defect=_defect(
-                complete, within_ceiling, evaluation.param_count, schedule.param_budget
-            ),
-            cause=FailureCause.UNKNOWN if passed else FailureCause.CONSTRAINT_VIOLATION,
-            severity=Severity.LOW if passed else Severity.MEDIUM,
-            quarantine=not passed,
-            maturity=Maturity.L0,
-            uncertainty={},
-            reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
-            ceec_link=None,
-        ),
+        status=status,
         payload=payload,
         effective_params=dict(evaluation.params),
     )

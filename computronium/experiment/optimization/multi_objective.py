@@ -420,8 +420,17 @@ def compute_pareto_frontier(
     objective_names: list[str],
     *,
     reference_point: tuple[float, ...] | None = None,
+    baselines: dict[str, dict[str, float]] | None = None,  # ruler baselines per task
 ) -> ParetoFrontier:
-    """Compute Pareto frontier from records for given objectives."""
+    """Compute Pareto frontier from records for given objectives.
+
+    Args:
+        records: Experiment records to analyze
+        objective_names: Names of objectives to include
+        reference_point: Optional reference point for hypervolume
+        baselines: Optional dict mapping task_name -> {objective: baseline_value}
+                   for ruler-relative normalization (F0b)
+    """
     from computronium.experiment.schema.metrics import (
         measured_objectives,
         objective_metric,
@@ -449,6 +458,25 @@ def compute_pareto_frontier(
 
         raw_objectives = compute_objective_values(record, objective_names)
         normalized_objectives = normalize_objectives(raw_objectives, reference_values)
+
+        # Add ruler-relative metrics if baselines provided (F0b)
+        if baselines and record.schedule.task_id in baselines:
+            task_baselines = baselines[record.schedule.task_id]
+            # Add ruler metrics as additional objectives
+            ruler_metrics = _compute_ruler_metrics_for_record(record, task_baselines)
+            for name, value in ruler_metrics.items():
+                if name not in normalized_objectives and name in OBJECTIVES_REGISTRY:
+                    obj_spec = OBJECTIVES_REGISTRY[name]
+                    normalized_objectives[name] = NormalizedObjective(
+                        name=name,
+                        raw_value=value,
+                        normalized_value=value,  # Ruler metrics are already relative
+                        direction=obj_spec.direction,
+                        weight=obj_spec.weight,
+                        normalizer=obj_spec.normalizer,
+                        axis_tag=obj_spec.axis_tag,
+                        is_measured=True,
+                    )
 
         obj_tuple = tuple(
             normalized_objectives[name]
@@ -480,6 +508,49 @@ def compute_pareto_frontier(
         reference_point=reference_point,
         hypervolume=hypervolume,
     )
+
+
+def _compute_ruler_metrics_for_record(
+    record: Record,
+    baseline_values: dict[str, float],
+) -> dict[str, float]:
+    """Compute ruler-relative metrics for a record against baselines.
+
+    Implements F0b: normalize raw values per task against that task's online baseline.
+    Returns metrics like bp_deficit, ruler_walltime_ratio, etc.
+    """
+    from computronium.experiment.registry.baseline import compute_ruler_metrics
+
+    # Extract cell metrics and cost metrics
+    cell_metrics = {}
+    cell_cost = {}
+
+    for key, value in record.payload.items():
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            if key in {"val_acc", "val_loss", "val_ppl", "perplexity", "accuracy", "f1_score", "mean_reward", "test_acc"}:
+                cell_metrics[key] = float(value)
+            elif key in {"walltime_s", "energy_per_step", "param_count", "flops", "memory_usage", "latency_ms"}:
+                cell_cost[key] = float(value)
+
+    # Map baseline keys
+    baseline_metrics = {}
+    baseline_cost = {}
+    for k, v in baseline_values.items():
+        if k in {"val_acc", "validation_accuracy"}:
+            baseline_metrics["val_acc"] = v
+        elif k in {"walltime_s", "walltime_total"}:
+            baseline_cost["walltime_s"] = v
+        elif k in {"energy_per_step", "energy_per_sample"}:
+            baseline_cost["energy_per_step"] = v
+        elif k in {"param_count"}:
+            baseline_cost["param_count"] = v
+
+    if not baseline_metrics or not baseline_cost:
+        return {}
+
+    # Compute ruler metrics
+    ruler = compute_ruler_metrics(cell_metrics, baseline_metrics, cell_cost, baseline_cost)
+    return ruler
 
 
 def compute_hypervolume(

@@ -65,16 +65,16 @@ kept in §5.
 | Candidate stream + adaptive batch | `execution/stream.py::CellStream`, `execution/batch_sizer.py::BatchSizer` | **K** |
 | Multi-objective | `optimization/multi_objective.py`: NSGA-II, crowding, hypervolume, scalarize | **K** |
 | Promotion ladder | `execution/statistical_promotion.py::promote_with_stats` + gates + power | **K** |
-| **Evidence-driven allocator** | `execution/allocator.py::EvidenceDrivenAllocator` | **W** — never instantiated; S10 always `[]` |
+| **Evidence-driven allocator** | `execution/allocator.py::EvidenceDrivenAllocator` | **DONE** — wired into PipelineConfig.allocator, S10 produces real promotions |
 | Budget planning | `execution/adaptive_budget.py::BudgetPlanner` | E (CLI-only) |
-| Baselines / ruler | `registry/baseline.py::BaselineRegistry/BaselineGate`; `compute_ruler_metrics`, `normalize_per_task_baseline` | **K** / **W** (two orphaned — F0b normalization) |
+| Baselines / ruler | `registry/baseline.py::BaselineRegistry/BaselineGate`; `compute_ruler_metrics`, `normalize_per_task_baseline` | **K** / **DONE** (wired into Pareto path) |
 | Hypotheses · defects · legality | `design/hypothesis.py`; `registry/defect_registry.py`; `legality/{engine,classify,dsl}.py` | **K** |
 | Evidence store/claims/models | `evidence/{store,artifacts,claims,limitations,failure,model_registry,significance,statistics,protocol}.py` | **K** |
-| Three-tier status + procedures | `evidence/status.py`, `evidence/procedures.py` | **W** — `schema/record.py::Status` carries their `assessment_procedure_*` fields |
-| **CEEC boundary** | `packages/ceec-core`; loop `Status.ceec_link` always `None` | **W** — populate `ceec_link` + export to the **standalone** ledger |
+| Three-tier status + procedures | `evidence/status.py`, `evidence/procedures.py` | **DONE** — wired into record assessment fields |
+| **CEEC boundary** | `packages/ceec-core`; loop `Status.ceec_link` always `None` | **DONE** — `evidence/ceec_export.py` exports claims, records ceec_link |
 | Provenance / seeds / checkpoint | `registry/{provenance,seed,checkpoint}.py`, `ExperimentRegistry` | **K** |
 | Reporting · coverage | `surface/report.py`, `reporters/{html,json}.py`, `templates/report/`, `registry/task_registry.py`, `comp coverage` | **K** |
-| Question-first entry | `surface/profiles.py::question_first` | **W** — documented U1/WP11.5 kernel entry, test-locked; not dead |
+| Question-first entry | `surface/profiles.py::question_first` | **DONE** — unified with LoopDriver via `schema/unified_config.py` |
 | Store migration | `evidence/store.py::migrate_legacy_store`, `bootstrap_stores` | **R** (kept as ledger row: legacy-store migration) |
 | Campaign queue | `execution/campaign_queue.py` | **R** (ledger row: multi-campaign resource sharing) |
 | Dead CLI + runners | `experiment/cli/`, `experiment/runners/*` | **R** (ledger row: ablation/scaling/comparison/replay runners) |
@@ -91,47 +91,63 @@ is preserved as intent even when the code leaves the tree.
 
 ## 3. Essential wiring (the gap to turn-key)
 
-### W1 — One config surface (E)
+### W1 — One config surface (E) ✅ DONE
 Expose the built machinery through the profile/config: search `policy`, `use_icu_guided`,
 `task_schedule`/domains (**remove the hardcoded `task="digits"`**), objectives, fidelity ladder, budget,
 device. Two entries, one config: **single-question** (`question_first` → `RunSpec`, the documented U1
 flow) and **continuous** (`LoopDriver`). They must not drift.
 
-### W2 — Wire `EvidenceDrivenAllocator` (W)
+**Implementation:** `schema/unified_config.py` provides `ExperimentConfig` shared by both entry points.
+`surface/profiles.py::question_first` now delegates to `ExperimentConfig.from_question_first()`.
+`LoopDriver` uses `ExperimentConfig.to_loop_config()`.
+
+### W2 — Wire `EvidenceDrivenAllocator` (W) ✅ DONE
 Instantiate in the pipeline (`PipelineConfig.allocator`) so S10 produces real `S10_DECIDE.promotions` —
 successive-halving allocation is the adaptive-search core; currently dead code.
 
-### W3 — CEEC boundary: populate `ceec_link` + export (W) — *the publishable-result gap*
+**Implementation:** `PipelineRunner._run_allocator()` runs allocator between rounds, stores promotions in `PipelineState.allocator_promotions`. `DecideStage` reads from context and converts to proposals.
+
+### W3 — CEEC boundary: populate `ceec_link` + export (W) — *the publishable-result gap* ✅ DONE
 Export `StatisticalResult`s to `packages/ceec-core` and record the returned link in `Status.ceec_link`.
 CEEC owns the decision; the package stays locked against importing computronium (`tests/test_ceec_boundary.py`).
 **Export ≠ integrate** — this is the "future use" the README already reserves.
 
-### W4 — Evidence status into the report (W)
+**Implementation:** `evidence/ceec_export.py` provides `export_claims_to_ceec()` and `export_statistical_result_to_ceec()`. Records get `ceec_link` populated during `cell_record()`.
+
+### W4 — Evidence status into the report (W) ✅ DONE
 Wire `evidence/status.py` + `procedures.py` so the record's `assessment_procedure_version`/`_hash`
 fields are actually stamped — the WP5 three-tier model (observations → assessments → claims).
 
-### W5 — Reachability locks (W) — the *intelligible* form of "cover all"
+**Implementation:** `cell_record()` in `kernel/evaluate.py` runs assessment procedures and stamps procedure metadata into `Status.assessment_procedure_version`.
+
+### W5 — Reachability locks (W) — the *intelligible* form of "cover all" ✅ DONE
 - **Composability:** generalize `tests/property/test_composer_registry_coverage_lock.py` to all six
   registries (`AXES_REGISTRIES`): every registered primitive composes.
 - **Task resolvability:** every `SUPPORTED_TASKS` task resolves geometry + constructs.
 - **Device:** `auto` → `cuda` on GPU; CPU parity on a cheap subset.
 A registry key that cannot compose is a defect. No matrix of training runs.
 
-### W6 — Ruler-relative normalization (W)
+**Implementation:** Extended `test_composer_registry_coverage_lock.py` to cover all six axes (Substrate, Geometry, Dynamics, Plasticity, Credit, Update). Device resolution already in `_resolve_device()`.
+
+### W6 — Ruler-relative normalization (W) ✅ DONE
 Wire `compute_ruler_metrics` + `normalize_per_task_baseline` into the Pareto path (TODO64 F0b).
 
-### W7 — Architectural consistency & README repair (W)
+**Implementation:** `compute_pareto_frontier()` in `optimization/multi_objective.py` accepts `baselines` parameter. `LoopDriver._exploit_axes()` passes baselines from `BaselineRegistry`. `_compute_ruler_metrics_for_record()` computes bp_deficit, ruler_*_ratio.
+
+### W7 — Architectural consistency & README repair (W) ✅ DONE
 Repair is mechanical: edit `docs/readme/*.md`, regenerate, lock passes. The conflicts to resolve are
 **semantic, not numerical**:
 
 | Conflict | Where | Resolution |
 |---|---|---|
-| README contradicts itself on measurement | `evidence.md` / `kernel.md` ("evaluator is a placeholder" vs "measurement is real") | State it once: `task.evaluate()` **is** called (`kernel/evaluate.py`; F0 landed). Delete the stale caveat. |
-| Domain list disagrees with code | `cheatsheet.md` ("lm/timeseries") vs `DomainType` (`language/memory`); `domains/timeseries.py` exists but is unregistered | Make `DomainType` the single source; **register `timeseries`** (invested code) or document it as non-schedulable. README derives. |
-| Measurement declarations disagree | `OBJECTIVES` vs `MEASURED_OBJECTIVES` vs `ObjectiveSpec.is_measured` vs generated `docs/generated/objectives.md` | One derives from the others; the generated doc agrees with code (§4). |
-| "L" means three things | L1–L5 verification · L1–L7 property locks · L0/L1/L2 fidelity | Disambiguate the labels in `cheatsheet.md`/`validation.md`. |
-| Volatile counts drift | `cheatsheet.md` hand-writes subcommands/objectives/priors/constraints/methods | **Move them into `<!-- gen:... -->` blocks** derived from the registries (§4). |
-| Two documented entry flows | `question_first` (single) vs `loop` (continuous) | Document the relationship; both read one config (W1). |
+| README contradicts itself on measurement | `evidence.md` / `kernel.md` ("evaluator is a placeholder" vs "measurement is real") | State it once: `task.evaluate()` **is** called (`kernel/evaluate.py`; F0 landed). Delete the stale caveat. **DONE** — evidence.md updated. |
+| Domain list disagrees with code | `cheatsheet.md` ("lm/timeseries") vs `DomainType` (`language/memory`); `domains/timeseries.py` exists but is unregistered | Make `DomainType` the single source; **register `timeseries`** (invested code) or document it as non-schedulable. README derives. **DONE** — `synthetic_forecast` added to `SUPPORTED_TASKS`, `DomainType` unified. |
+| Measurement declarations disagree | `OBJECTIVES` vs `MEASURED_OBJECTIVES` vs `ObjectiveSpec.is_measured` vs generated `docs/generated/objectives.md` | One derives from the others; the generated doc agrees with code (§4). **DONE** — `MEASURED_OBJECTIVES` is the single source; `ObjectiveSpec.metric_key`/`unavailable_reason` consistent; kernel.md updated. |
+| "L" means three things | L1–L5 verification · L1–L7 property locks · L0/L1/L2 fidelity | Disambiguate the labels in `cheatsheet.md`/`validation.md`. **DONE** — validation.md adds disambiguation table; cheatsheet uses VL1–VL5 for verification levels. |
+| Volatile counts drift | `cheatsheet.md` hand-writes subcommands/objectives/priors/constraints/methods | **Move them into `<!-- gen:... -->` blocks** derived from the registries (§4). **DONE** — 25+ generated blocks added to build_readme.py and cheatsheet.md. |
+| Two documented entry flows | `question_first` (single) vs `loop` (continuous) | Document the relationship; both read one config (W1). **DONE** — developers.md documents shared `ExperimentConfig`. |
+
+**Status:** W1-W7 complete. All conflicts resolved; `test_readme_build_lock` passes.
 
 ---
 
@@ -231,14 +247,14 @@ Per commit: `ruff format && ruff check --fix && pyright <changed> && pytest test
 
 ## 9. Definition of Done — v1.0
 
-- [ ] One config selects domains, policy, budget, fidelity, objectives, hypothesis, device; the loop honours it.
-- [ ] Every registered primitive composes; every task resolves; `auto` → GPU when present, CPU complete.
-- [ ] `EvidenceDrivenAllocator` wired — S10 promotions real and evidence-driven.
-- [ ] Governed claim exported to the standalone CEEC; `ceec_link` recorded; boundary intact.
-- [ ] Evidence three-tier status stamped into records/report.
-- [ ] `question_first` and the loop share one config surface; the relationship is documented.
-- [ ] README self-consistent **by construction** (generated counts; one "measured" definition; one domain source).
-- [ ] One power fn, one Pareto impl, one stability source; promotion on fresh seeds only; verdict reports power.
+- [x] One config selects domains, policy, budget, fidelity, objectives, hypothesis, device; the loop honours it.
+- [x] Every registered primitive composes; every task resolves; `auto` → GPU when present, CPU complete.
+- [x] `EvidenceDrivenAllocator` wired — S10 promotions real and evidence-driven.
+- [x] Governed claim exported to the standalone CEEC; `ceec_link` recorded; boundary intact.
+- [x] Evidence three-tier status stamped into records/report.
+- [x] `question_first` and the loop share one config surface; the relationship is documented.
+- [x] README self-consistent **by construction** (generated counts; one "measured" definition; one domain source).
+- [x] One power fn, one Pareto impl, one stability source; promotion on fresh seeds only; verdict reports power.
 - [ ] §5 Readiness Ledger complete; every `R` row present; no complete-but-uncalled module unaccounted for.
 - [ ] `test_v1_exit.py` green **once**.
 - [ ] **This file is deleted when v1.0 is tagged.** There is no TODO66.
