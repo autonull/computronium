@@ -1153,3 +1153,47 @@ uses them as-is or adjusts. The rest is decoupled and may be decided in-stream.
 
 **Remaining work for Phase 5:**
 - None — core integration complete. SurrogatePolicy wrapper deferred (interface mismatch with Policy protocol)
+
+---
+
+### Checkpoint Fix & Verification Notes (this session)
+
+**Files modified:**
+- `computronium/experiment/execution/deadline.py` — Added `CheckpointData.to_dict()` to serialize `frozenset` as list (JSON compatible)
+- `computronium/experiment/execution/pipeline.py` — Use `checkpoint_data.to_dict()` instead of `dataclasses.asdict()`; avoids `TypeError: Object of type frozenset is not JSON serializable`
+- `computronium/experiment/registry/loop.py` — Added debug logging to trace `_execute` return values
+
+**Outstanding checkpoint issues (deferred to next session):**
+1. **PipelineRunner checkpoints every round by default** — adds ~100-500ms/round overhead. Must gate behind `checkpoint_every_n > 0` in `LoopConfig`.
+2. **Per-cycle `run_id` fragments history** — each cycle creates new `ExperimentRegistry` → new `run_id`. Loop-level resume needs single `run_id` across cycles or loop-level checkpoint table tracking `(cycle, run_id)` pairs.
+3. **Checkpoint schema mismatch** — `PipelineRunner` saves round-level `CheckpointData`; `CheckpointManager` expects cycle-level `RunCheckpoint`. `RunCheckpoint.from_dict` fails with `KeyError: 'spec_hash'`. Fix: align formats or have driver save own loop checkpoint after `commit_cycle`.
+4. **Loop report writes before appending current cycle** — `_write_loop_report(history)` called before `history.append(result)`. Fix: append first, then write.
+
+**Assumptions to verify before scaling to `--budget 24h`:**
+
+| Assumption | Risk if wrong | Verification |
+|------------|---------------|--------------|
+| `n_seeds=1` in quick-verify works with statistical gates | Gates silently fail (need ≥2 seeds for CI/SE) | Run `--cycles 1 --profile quick-verify --n-seeds 2` |
+| Exploit axes = Pareto frontier union works with n=20 | All cells non-dominated → no exploitation signal | Check frontier size vs. search space |
+| Baseline discovery after pipeline is acceptable | Adds latency; could run in parallel | Time baseline gate separately |
+| Dry-run ≈ real execution | Misses runtime errors (OOM, shape mismatch) | One real `--cycles 1` before any `--hours` |
+| Single `ExperimentRegistry` per cycle is correct | Provenance `seed_list` is estimate; not exact | Verify `SeedContext` enumeration |
+| Hypothesis eval per-cycle on single task works | Cross-domain hypotheses (H1, H3) need accumulation | Test H1/H3 with multi-cycle data |
+| DuckDB WAL handles concurrent access | Lock conflicts when CLI + test run simultaneously | Run CLI + pytest in parallel |
+
+**Cost model contamination risk (CRITICAL):**
+- Objectives *are* `energy_per_step`, `walltime_total`, `flops`
+- If checkpoint I/O adds 10-30% overhead, every reported number is biased
+- `RegistryCostModel` learns estimate-vs-actual from *measured* walltime
+- **Rule:** Checkpointing only when cycle time > checkpoint interval × 10 AND explicit `--checkpoint-every-n-cycles > 0`
+- For `quick-verify` (~60s/cycle): **never checkpoint** — cycle completes faster than recovery
+
+**Next session priority order:**
+1. Gate PipelineRunner checkpointing on `checkpoint_every_n > 0` (default 0)
+2. Fix `RunCheckpoint.from_dict` to use `self._spec_hash` when missing
+3. Append `CycleResult` to history before writing loop report
+4. Single long-lived `ExperimentRegistry` across cycles for loop-level resume
+5. Run `--cycles 2` with `n_seeds=2` → verify L1/L2 promotions
+6. Kill mid-cycle → verify loop resumes from `checkpoint.json`
+7. Then From-Scratch Test + First Governed Claim on cheap tasks
+8. Cleanup register as one hygiene commit at round close
