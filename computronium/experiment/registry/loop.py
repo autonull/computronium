@@ -67,7 +67,7 @@ from computronium.experiment.registry.defect_registry import (
 from computronium.experiment.registry.seed import SeedContext
 from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.schema.axis import AXES_REGISTRIES, Domain, StructuralAxis
-from computronium.experiment.schema.metrics import measured_objectives
+from computronium.experiment.schema.metrics import measured_objectives, objective_metric
 from computronium.experiment.schema.record import GateVerdict, Maturity, Record
 from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
 from computronium.experiment.schema.run_spec import AxisSelection, Fidelity, RunSpec
@@ -735,22 +735,21 @@ class LoopDriver:
             )
 
     def _evaluate_hypotheses(self, run_id: str, task: str) -> dict[str, str]:
-        """Evaluate registered hypotheses against the run's records.
+        """Evaluate registered hypotheses against accumulated records.
 
-        For each hypothesis ID in the config, run the statistical test and
-        record the result in the hypothesis registry. Returns a mapping of
-        hypothesis_id -> status.
+        For cross-domain hypotheses (domain=None), evaluates across all tasks
+        and all cycles. For domain-specific hypotheses, filters to relevant tasks.
         """
         results: dict[str, str] = {}
         if not self._config.hypothesis_ids:
             return results
 
-        # Open store to query records
+        # Open store to query ALL records (accumulated across cycles)
         store = RecordStore(StoreConfig(path=self._config.store_path, read_only=True))
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:
             with store:
-                records = store.query_records(run_id=run_id)
-                if not records:
+                all_records = store.query_records()
+                if not all_records:
                     return results
 
                 for hyp_id in self._config.hypothesis_ids:
@@ -759,9 +758,29 @@ class LoopDriver:
                         logger.warning("Hypothesis %s not found in registry", hyp_id)
                         continue
 
+                    # Filter records for this hypothesis
+                    # Cross-domain (domain=None) uses all tasks; domain-specific filters by task
+                    if hyp.domain is None:
+                        hyp_records = all_records
+                    else:
+                        # Filter to tasks in the hypothesis's domain
+                        task_registry = get_task_registry()
+                        domain_tasks = {
+                            t
+                            for t in self._config.task_schedule
+                            if task_registry.get(t).domain == hyp.domain
+                        }
+                        hyp_records = [
+                            r for r in all_records if r.schedule.task_id in domain_tasks
+                        ]
+
+                    if not hyp_records:
+                        logger.info("No records for hypothesis %s", hyp_id)
+                        continue
+
                     # Run the hypothesis test
                     try:
-                        result = self._test_hypothesis(hyp, records, task)
+                        result = self._test_hypothesis(hyp, hyp_records, task)
                         # Update hypothesis status in registry
                         self._hypothesis_registry.record_result(hyp_id, result)
                         status = (
@@ -771,11 +790,12 @@ class LoopDriver:
                         )
                         results[hyp_id] = status
                         logger.info(
-                            "Hypothesis %s evaluated: %s (p=%.4f, effect=%.3f)",
+                            "Hypothesis %s evaluated: %s (p=%.4f, effect=%.3f, power=%.2f)",
                             hyp_id,
                             status,
                             result.p_value or -1,
                             result.effect_size or -1,
+                            result.power_achieved or -1,
                         )
                     except Exception:  # ruff: ignore[blind-except] - continue evaluating other hypotheses
                         logger.exception("Failed to evaluate hypothesis %s", hyp_id)
@@ -792,27 +812,39 @@ class LoopDriver:
 
         This is a simplified implementation that tests the primary metric
         grouped by the grouping_factor (e.g., credit assignment).
+        The records passed are already filtered for the hypothesis's domain.
+        The `task` parameter is retained for compatibility but not used for filtering.
         """
 
-        # Filter records by task
-        task_records = [r for r in records if r.schedule.task_id == task]
-        if not task_records:
+        if not records:
             return HypothesisResult(
                 hypothesis_id=hyp.id,
                 test_type=hyp.test_type,
                 effect_size_type=hyp.effect_size_type,
                 n_samples=0,
                 n_groups=0,
-                notes="No records for task",
+                notes="No records for hypothesis",
             )
 
         # Extract values for the primary metric grouped by the grouping factor
+        # Resolve objective name to payload key via MEASURED_OBJECTIVES
+        metric_key = objective_metric(hyp.primary_metric)
+        if metric_key is None:
+            return HypothesisResult(
+                hypothesis_id=hyp.id,
+                test_type=hyp.test_type,
+                effect_size_type=hyp.effect_size_type,
+                n_samples=0,
+                n_groups=0,
+                notes=f"Primary metric {hyp.primary_metric} not measured",
+            )
+
         groups: dict[str, list[float]] = {}
-        for r in task_records:
+        for r in records:
             # Skip non-PASS records
             if r.status.gate_verdict is not GateVerdict.PASS_ or r.status.quarantine:
                 continue
-            val = r.payload.get(hyp.primary_metric)
+            val = r.payload.get(metric_key)
             if val is None:
                 continue
             group_key = (
@@ -929,6 +961,26 @@ class LoopDriver:
             ci_half = 1.96 * se
             confidence_interval = (mean_diff - ci_half, mean_diff + ci_half)
 
+        # Calculate achieved power
+        power_achieved: float | None = None
+        if p_value is not None and effect_size is not None:
+            try:
+                from scipy.stats import nct
+
+                n_a, n_b = len(group_a), len(group_b)
+                df = n_a + n_b - 2
+                if df > 0:
+                    # Non-centrality parameter for two-sample t-test
+                    ncp = effect_size * np.sqrt(n_a * n_b / (n_a + n_b))
+                    # Critical t-value for alpha (two-sided)
+                    t_crit = stats.t.ppf(1 - hyp.alpha / 2, df)
+                    # Achieved power = P(t > t_crit | ncp) + P(t < -t_crit | ncp)
+                    power_achieved = float(
+                        nct.sf(t_crit, df, ncp) + nct.cdf(-t_crit, df, ncp)
+                    )
+            except Exception:
+                power_achieved = None
+
         return HypothesisResult(
             hypothesis_id=hyp.id,
             test_type=hyp.test_type,
@@ -938,6 +990,7 @@ class LoopDriver:
             effect_size_type=hyp.effect_size_type,
             confidence_interval=confidence_interval,
             significant=(p_value is not None and p_value < hyp.alpha),
+            power_achieved=power_achieved,
             n_samples=len(group_a) + len(group_b),
             n_groups=2,
             groups_tested=[comparison_values[0], comparison_values[1]],

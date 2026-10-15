@@ -391,21 +391,21 @@ class HypothesisRegistry:
 # Pre-defined hypothesis templates for common experiment types
 CREDIT_EFFICIENCY_HYPOTHESIS = HypothesisSpec(
     id="H1_credit_efficiency",
-    question="Does thermodynamic_contrast achieve comparable accuracy to gradient with lower energy_per_step?",
-    prediction="thermodynamic_contrast energy_per_step < gradient energy_per_step at matched val_acc",
-    rationale="Equilibrium propagation (thermodynamic_contrast) uses local updates that may be more energy-efficient than backprop",
-    test_type=TestType.PAIRED_T_TEST,
-    primary_metric="energy_per_step",
+    question="Does thermodynamic_contrast achieve comparable accuracy to gradient with lower walltime?",
+    prediction="thermodynamic_contrast walltime_total < gradient walltime_total at matched val_acc",
+    rationale="Equilibrium propagation (thermodynamic_contrast) uses local updates that may be more time-efficient than backprop on CPU",
+    test_type=TestType.INDEPENDENT_T_TEST,
+    primary_metric="walltime_total",
     grouping_factor="credit",
     comparison_values=["gradient", "thermodynamic_contrast"],
     min_effect_size=0.5,
     required_power=0.8,
     alpha=0.05,
     n_comparisons=1,
-    paired=True,
+    paired=False,
     alternative="two-sided",
     min_samples_per_group=10,
-    tags=["credit", "energy", "efficiency"],
+    tags=["credit", "time", "efficiency"],
     status=HypothesisStatus.PRE_REGISTERED,
 )
 

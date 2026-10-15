@@ -101,6 +101,10 @@ def _make_synthetic_record(  # ruff: ignore[too-many-arguments]
 def _make_driver() -> LoopDriver:
     """Create a LoopDriver instance for testing _test_hypothesis."""
 
+    from computronium.experiment.schema import seed_all_registries
+
+    seed_all_registries()
+
     tmp = tempfile.TemporaryDirectory()
     config = LoopConfig(
         store_path=Path(tmp.name) / "store.duckdb",
@@ -239,7 +243,7 @@ class TestHypothesisEvaluation:
 
         assert result.n_samples == 0
         assert result.n_groups == 0
-        assert result.notes == "No records for task"
+        assert result.notes == "No records for hypothesis"
         assert result.p_value is None
 
     def test_test_hypothesis_mann_whitney_u(self):
