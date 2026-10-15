@@ -10,7 +10,28 @@ statistical rigor, and the hygiene/instrumentation that makes it trustworthy at 
 
 ---
 
-## 1. Done (so "remaining" is unambiguous)
+## ⚡ Fast-First Development Policy (binding)
+
+**Every change must have a fast unit test (≤30s). No experiment >10 min during development.**
+
+| Tier | What | When | Max time |
+|------|------|------|----------|
+| 1 | Unit tests (pure functions, synthetic data) | Every commit | ≤5s each |
+| 2 | Tiny probes (1 cycle, n_seeds=1, 3 sweep steps) | Per feature | ≤2 min |
+| 3 | Property tests (Hypothesis, no training) | Phase gate | ≤30s |
+| 4 | Acceptance tests (full loop) | **Once per phase gate only** | — |
+
+**Acceptance tests run ONCE per phase gate, never per commit.** The 35-min `TestFromScratchTest` is a Phase B gate — it ran once, passed, done. `TestFirstGovernedClaim` will run once at Phase B completion.
+
+Fast verification artifacts created this session:
+- `tests/unit/test_pareto_frontier_selection.py` — 6 tests, <1s
+- `scripts/probes/probe_credit_promotion.py` — 1 cycle probe, ~2 min
+
+All remaining work follows this pattern.
+
+---
+
+## 1. Done
 
 | Workstream | State |
 |---|---|
@@ -246,28 +267,26 @@ time ≫ interval; for `quick-verify` **never** checkpoint.
 
 ---
 
-## 14. Execution schedule
+## 14. Execution schedule (fast-first)
 
-Phases are ordered by dependency. Each ends in a dry-run or one short run; no full-suite during
-development. Item IDs reference the sections above.
+Phases ordered by dependency. Each phase ends in a **fast gate** (unit tests + tiny probe). Full acceptance runs **once at phase gate**.
 
-| Phase | Work | Depends on | Exit criterion |
+| Phase | Work | Fast gate (dev) | Phase gate (once) |
 |---|---|---|---|
-| **A. Honest measurement** | F0, F0b, F0c, R1, R2 | — | ✅ **COMPLETE** — `coverage` shows language/RL/graph with their own metrics; baseline Δ computes for language task; gate_values regression passes |
-| **B. Scientific acceptance** | §6.4 (exploit selection), B2 (discovery/confirmation seeds), S1, S2 | A | S1 ✅; S2 🔄 acceptance test green; hypothesis gets CONFIRMED/REJECTED; CEEC export consumed |
-| **C. Rigor & self-awareness** | B1 (power/multiplicity), M1, M2, M3, R3 | B | noisy cell not promoted; `capabilities` truthful; CLI-reachability CI green |
-| **D. Instrumentation & integrity** | K1, K2, K3, allocator (wire/delete), stability dedup | A | per-stage timings queryable; allocator either promotes or is gone |
-| **E. Hygiene / consolidation** | §10 table + remaining §1-register items; lock hygiene | — (round close) | orphans gone; ruff/pyright clean on changed; shard runs green |
-| **F. Scale** | §12 assumptions | A–D | one `--cycles 2 --n-seeds 2` clean; then `--budget 24h` |
+| **A** | Honest measurement | — | ✅ DONE |
+| **B** | S2 First Governed Claim; B2 discovery/confirmation seeds | Unit test: `test_hypothesis_evaluation.py` + probe: 1-cycle `xor` | `TestFirstGovernedClaim` green; verdict CONFIRMED/REJECTED |
+| **C** | B1 power analysis; M1–M3 self-validation | Unit tests for each (synthetic data) | Property tests pass; `capabilities` command works |
+| **D** | K1–K3 instrumentation; allocator; stability dedup | Unit tests per module | Per-stage timings queryable; allocator promotes or deleted |
+| **E** | §10 orphans delete/wire; regression locks | Delete = no test; wire = unit test | Orphans gone; ruff/pyright clean; shard runs green |
+| **F** | Scale | Deferred | `--cycles 2 --n-seeds 2` clean; then `--budget 24h` |
 
-**Suggested order if serialized:** A → B → (C ∥ D) → E → F. E is independent and can ride any round
-close.
+**Dev loop per commit**: `ruff format && ruff check --fix && pyright <changed> && pytest tests/unit/ -q` (≤60s total).
 
 ---
 
-## 15. Next action
+## 15. Next action (fast-first)
 
-1. **Phase B** — S2 (First Governed Claim): verify `TestFirstGovernedClaim` green on cheap tasks.
-2. **Phase C** — power/multiplicity analysis (B1), gate-calibration feedback (M1), drift detection (M2).
-3. Fold §10 deletions into the next round-close hygiene commit.
-4. Scale to `--budget 24h` only after S1/S2 pass on cheap tasks.
+1. **S2 Fast unit test** — `tests/unit/test_hypothesis_evaluation.py`: synthetic records → verify `_test_hypothesis` returns `StatisticalResult` with p_value/effect_size.
+2. **S2 Tiny probe** — `scripts/probes/probe_hypothesis_s2.py`: 1 cycle, n_seeds=1, 3 steps on `xor` → confirm hypothesis registry records verdict.
+3. **Phase B gate** — run `TestFirstGovernedClaim` **once** (acceptance).
+4. **Phase C** — power analysis (B1), gate-calibration (M1), drift detection (M2) — all via unit tests.
