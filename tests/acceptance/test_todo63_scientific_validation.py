@@ -21,9 +21,7 @@ import pytest
 
 from computronium.experiment.design.hypothesis import (
     HypothesisRegistry,
-    HypothesisSpec,
     HypothesisStatus,
-    create_default_registry,
 )
 from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.registry.loop import LoopConfig, LoopDriver
@@ -80,7 +78,9 @@ def _run_loop(
                 "dynamics.beta": {"lo": 0.1, "hi": 1.0, "scale": "log"},
                 "dynamics.max_steps": {"lo": 10, "hi": 100, "scale": "linear"},
                 "update.step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"},
-            } if False else {},  # type: ignore[arg-type]
+            }
+            if False
+            else {},  # type: ignore[arg-type]
             checkpoint_every_n=0,
             device="cpu",
             master_seed=42,
@@ -164,11 +164,18 @@ class TestFromScratchTest:
                 credit_types = {r.credit for r in promoted}
                 has_local_credit = any(
                     c in credit_types
-                    for c in ("thermodynamic_contrast", "random_projections", "pepita", "local_goodness")
+                    for c in (
+                        "thermodynamic_contrast",
+                        "random_projections",
+                        "pepita",
+                        "local_goodness",
+                    )
                 )
                 # At least one task should have local credit on the frontier
                 # (This is a soft assertion - the test documents the expectation)
-                print(f"Task {run.spec.task if run.spec else 'unknown'}: credits={credit_types}")
+                print(
+                    f"Task {run.spec.task if run.spec else 'unknown'}: credits={credit_types}"
+                )
 
     def test_no_hardcoded_seeds_or_hints(self, from_scratch_run):
         """Verify no KNOWN_GOOD seeds or FIX_HINTS are used."""
@@ -184,8 +191,9 @@ class TestFromScratchTest:
             assert "fix_hints" not in report.lower()
 
         # Check the driver source doesn't contain hardcoded lists
-        import computronium.experiment.registry.loop as loop_module
         import inspect
+
+        import computronium.experiment.registry.loop as loop_module
 
         source = inspect.getsource(loop_module)
         assert "KNOWN_GOOD" not in source
@@ -287,7 +295,9 @@ class TestFirstGovernedClaim:
 
             # Should have records from multiple domains
             # xor=tabular, iris=tabular, digits=vision
-            assert len(tasks_with_records) >= 2, "Hypothesis evaluated on single domain only"
+            assert len(tasks_with_records) >= 2, (
+                "Hypothesis evaluated on single domain only"
+            )
 
             # The hypothesis groups by credit assignment, so should have
             # both gradient and thermodynamic_contrast across domains

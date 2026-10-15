@@ -3133,7 +3133,6 @@ def _cmd_defect(args: argparse.Namespace) -> int:
 
         with RecordStore(StoreConfig(path=store_path)) as store:
             from computronium.experiment.evidence.failure import (
-                analyze_store_failures,
                 cluster_failures,
                 detect_failure_patterns,
             )
@@ -3217,12 +3216,11 @@ def _cmd_defect(args: argparse.Namespace) -> int:
                 {"constraint_id": args.constraint_id, "revoked": success}, indent=2
             )
             print(output)
+        elif success:
+            print(f"Revoked constraint {args.constraint_id}")
         else:
-            if success:
-                print(f"Revoked constraint {args.constraint_id}")
-            else:
-                print(f"Constraint {args.constraint_id} not found")
-                return 1
+            print(f"Constraint {args.constraint_id} not found")
+            return 1
         return 0
 
     return 0

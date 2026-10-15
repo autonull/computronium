@@ -14,9 +14,9 @@ from pathlib import Path
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.kernel.resources import Budget, SimpleCostModel
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.execution.policy import StratifiedRandomPolicy
+from computronium.experiment.kernel.resources import Budget, SimpleCostModel
 from computronium.experiment.schema.axis import Domain, StructuralAxis
 from computronium.experiment.schema.run_spec import (
     MEASURED_BATCH_LIMIT,

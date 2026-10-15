@@ -21,15 +21,9 @@ from typing import TYPE_CHECKING
 
 from computronium.experiment.evidence.claims import replication_key
 from computronium.experiment.schema.coordinate import Coordinate
-from computronium.experiment.schema.record import (
-    Maturity,
-    ReproducibilityClass,
-)
 
 if TYPE_CHECKING:
-    from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.record import Record
-    from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +107,3 @@ def replay_survives(record: Record, tolerance: float) -> bool:
         if abs(replay_value - value) > tolerance * max(abs(value), 1e-12):
             return False
     return True
-
-
-

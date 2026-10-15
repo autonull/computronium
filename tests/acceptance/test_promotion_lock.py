@@ -24,7 +24,7 @@ import pytest
 import yaml
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.schema import Maturity, ReproducibilityClass
+from computronium.experiment.schema import Maturity
 from computronium.experiment.surface import ReportGenerator, cli
 
 pytestmark = pytest.mark.timeout(600)
@@ -55,8 +55,9 @@ _SPEC = {
 @pytest.fixture(scope="module")
 def run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
     """One tiny measured run through the command surface, promotion included."""
-    from computronium.experiment.schema import seed_all_registries
     import subprocess
+
+    from computronium.experiment.schema import seed_all_registries
 
     seed_all_registries()
     # Resolve git SHA for provenance validation
@@ -91,7 +92,9 @@ def test_a_promoted_cell_reaches_l1_by_promotion(run: tuple[Path, str]) -> None:
         )
         # L1 should be earned for all eligible cells (2 seeds meets relaxed threshold)
         l1_records = [r for r in records if r.status.maturity is Maturity.L1]
-        assert l1_records, f"no cell earned L1: {[r.status.maturity.value for r in records]}"
+        assert l1_records, (
+            f"no cell earned L1: {[r.status.maturity.value for r in records]}"
+        )
         # Replay should have run (check promotion history)
         history = ReportGenerator(store).promotion_history(run_id)
         assert history, "no promotion history in report"

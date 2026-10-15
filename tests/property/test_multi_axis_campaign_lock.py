@@ -458,12 +458,15 @@ def test_multi_axis_campaign_unmeasured_objectives_fail_at_use() -> None:
 
     # These objectives are registered but unmeasured
     unmeasured = (
-        "test_accuracy",
-        "test_loss",
-        "f1_score",
-        "perplexity",
-        "bleu_score",
         "training_time",
+        "bp_deficit",
+        "ruler_walltime_ratio",
+        "ruler_energy_ratio",
+        "ruler_param_ratio",
+        "stability_plasticity_ratio",
+        "credit_efficiency",
+        "convergence_steps",
+        "generalization_gap",
     )
 
     for obj in unmeasured:
@@ -477,14 +480,14 @@ def test_multi_axis_campaign_unmeasured_objectives_fail_at_use() -> None:
     # A spec declaring an unmeasured objective should fail validation at spec creation
     spec = _multi_axis_spec(fast=True)
     spec_dict = spec.model_dump()
-    spec_dict["objectives"] = (*spec.objectives, "test_accuracy")
+    spec_dict["objectives"] = (*spec.objectives, "training_time")
     with pytest.raises(ValueError, match="have no measurement"):
         RunSpec(**spec_dict)
 
-    # But latency_ms is now measured and should work
-    spec_dict["objectives"] = (*spec.objectives, "latency_ms")
+    # But test_accuracy is now measured and should work
+    spec_dict["objectives"] = (*spec.objectives, "test_accuracy")
     spec_with_measured = RunSpec(**spec_dict)
-    assert "latency_ms" in spec_with_measured.objectives
+    assert "test_accuracy" in spec_with_measured.objectives
 
 
 __all__ = [

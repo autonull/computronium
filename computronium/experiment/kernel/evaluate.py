@@ -26,6 +26,7 @@ from computronium.core.system_trainer import (
     SystemTrainer,
     SystemTrainerConfig,
 )
+from computronium.domains.base import TaskSplit
 from computronium.experiment.kernel.compose import compose_cell_system
 from computronium.experiment.schema.metrics import HISTORY_METRICS
 from computronium.experiment.schema.registries import (
@@ -636,7 +637,7 @@ def _sample_inputs(task: Any, device: str) -> torch.Tensor:
     return flat
 
 
-def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-many-locals]
+def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-many-locals, too-many-branches]
     coordinate: Coordinate,
     schedule: Schedule,
     geometry: Mapping[str, Any] | None = None,
@@ -752,7 +753,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     trainer: SystemTrainer | None = (
         None  # Both SystemTrainer and DistributedSystemTrainer
     )
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
             # Resume from checkpoint
             trainer = trainer_class.from_checkpoint(
@@ -862,6 +863,17 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
 
     # Plasticity objectives
     metrics.update(compute_plasticity_metrics(cell.system))
+
+    # Domain-specific evaluation (perplexity, f1_score, bleu_score, mean_reward, etc.)
+    # Use the task's own evaluate() method which knows the proper metrics for its domain.
+    # The geometry is the nn.Module that the task evaluates.
+    try:
+        task_metrics = task.evaluate(
+            cell.system.geometry, split=TaskSplit.VAL, max_batches=schedule.batch_limit
+        )
+        metrics.update(task_metrics.to_dict())
+    except Exception as exc:  # ruff: ignore[blind-except] - evaluation must not fail the cell
+        logger.warning("task.evaluate() failed for %s: %s", schedule.task_id, exc)
 
     # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
     # Higher is better (more accuracy per joule)

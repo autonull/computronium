@@ -13,7 +13,6 @@ from typing import Any
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
 from computronium.experiment.execution.backends import LocalBackend
-from computronium.experiment.kernel.resources import Budget, SimpleCostModel
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.execution.policy import (
     EvolutionPolicy,
@@ -23,6 +22,7 @@ from computronium.experiment.execution.policy import (
     UniformRandomPolicy,
 )
 from computronium.experiment.execution.stage import StageId
+from computronium.experiment.kernel.resources import Budget, SimpleCostModel
 from computronium.experiment.schema.record import Record
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries

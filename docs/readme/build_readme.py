@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import ast
 import re
-import shutil
 import sys
 from pathlib import Path
 
@@ -148,10 +147,7 @@ def build_readme() -> str:
     sections = "\n\n".join(
         path.read_text(encoding="utf-8").rstrip() for path in files[1:]
     )
-    return (
-        "\n\n".join((BANNER, preamble, _substitute(sections)))
-        + "\n"
-    )
+    return "\n\n".join((BANNER, preamble, _substitute(sections))) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:

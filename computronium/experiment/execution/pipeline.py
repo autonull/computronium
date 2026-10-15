@@ -60,13 +60,13 @@ if TYPE_CHECKING:
         EvaluationResult,
         ExecutionBackend,
     )
-    from computronium.experiment.kernel.resources import CostModel
     from computronium.experiment.execution.policy import Policy
     from computronium.experiment.execution.stage import (
         Fragment,
         Proposal,
         StageContext,
     )
+    from computronium.experiment.kernel.resources import CostModel
     from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
@@ -136,8 +136,8 @@ class PipelineConfig:
     def __post_init__(self) -> None:
         # Convert legacy Budget to Deadline if provided
         if self.budget is not None and self.deadline is None:
-            from computronium.experiment.kernel.resources import Budget as LegacyBudget
             from computronium.experiment.execution.deadline import Deadline
+            from computronium.experiment.kernel.resources import Budget as LegacyBudget
 
             if isinstance(self.budget, LegacyBudget):
                 object.__setattr__(
@@ -707,7 +707,10 @@ class PipelineRunner:
 
             # Periodic checkpointing (gated by checkpoint_every_n in RunSpec)
             checkpoint_every_n = self._config.run_spec.checkpoint_every_n
-            if checkpoint_every_n > 0 and self._state.current_round % checkpoint_every_n == 0:
+            if (
+                checkpoint_every_n > 0
+                and self._state.current_round % checkpoint_every_n == 0
+            ):
                 self._checkpoint()
 
         if pbar_rounds:

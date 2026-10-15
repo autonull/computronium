@@ -510,6 +510,18 @@ class BaselineRegistry:
         task_metrics = {}
         cost_metrics = {}
 
+        # Task metric payload keys (values from MEASURED_OBJECTIVES for task-tagged objectives)
+        task_metric_keys = {
+            "val_acc",
+            "test_acc",
+            "f1_score",
+            "test_loss",
+            "val_loss",
+            "val_ppl",
+            "bleu_score",
+            "mean_reward",
+        }
+
         # Group by metric name
         metric_values: dict[str, list[float]] = {}
         for record in records:
@@ -529,15 +541,7 @@ class BaselineRegistry:
 
         for metric, values in metric_values.items():
             mean_val = statistics.mean(values)
-            if metric in {
-                "validation_accuracy",
-                "test_accuracy",
-                "f1_score",
-                "test_loss",
-                "validation_loss",
-                "perplexity",
-                "bleu_score",
-            }:
+            if metric in task_metric_keys:
                 task_metrics[metric] = mean_val
             else:
                 cost_metrics[metric] = mean_val
@@ -615,12 +619,12 @@ class BaselineRegistry:
             return None
         _, best = max(scored, key=lambda pair: pair[0])
         task_metrics = {
-            name: float(best.payload[key])
-            for name, key in (
-                ("validation_accuracy", val_key),
-                ("validation_loss", objective_metric("validation_loss")),
-                ("walltime_total", objective_metric("walltime_total")),
-                ("param_count", objective_metric("param_count")),
+            key: float(best.payload[key])
+            for key in (
+                val_key,
+                objective_metric("validation_loss"),
+                objective_metric("walltime_total"),
+                objective_metric("param_count"),
             )
             if isinstance(best.payload.get(key), int | float)
             and not isinstance(best.payload.get(key), bool)
@@ -633,11 +637,9 @@ class BaselineRegistry:
             optimizer=optimizer or "sgd",
             architecture="mlp",
             geometry=best.geometry,
-            metrics={"validation_accuracy": task_metrics["validation_accuracy"]},
+            metrics={val_key: task_metrics[val_key]},
             cost_metrics={
-                key: value
-                for key, value in task_metrics.items()
-                if key != "validation_accuracy"
+                key: value for key, value in task_metrics.items() if key != val_key
             },
             ruler_metrics={
                 "bp_deficit": 0.0,
@@ -717,15 +719,25 @@ def compute_ruler_metrics(
     cell_cost: dict[str, float],
     baseline_cost: dict[str, float],
 ) -> dict[str, float]:
-    """Compute ruler-relative metrics (bp_deficit, ruler_*_ratio)."""
+    """Compute ruler-relative metrics (bp_deficit, ruler_*_ratio).
+
+    Args:
+        cell_metrics: Payload metrics from the cell (keys like "val_acc", "val_ppl").
+        baseline_metrics: Payload metrics from the baseline (same key space).
+        cell_cost: Cost metrics from the cell.
+        baseline_cost: Cost metrics from the baseline.
+    """
+    from computronium.experiment.schema.metrics import objective_metric
+
+    val_acc_key = objective_metric("validation_accuracy")
     # bp_deficit = baseline_accuracy - cell_accuracy (lower = closer to ruler)
-    bp_deficit = baseline_metrics.get("validation_accuracy", 0.0) - cell_metrics.get(
-        "validation_accuracy", 0.0
+    bp_deficit = baseline_metrics.get(val_acc_key, 0.0) - cell_metrics.get(
+        val_acc_key, 0.0
     )
 
     # Ratios: cell / baseline (lower = better than ruler)
-    ruler_walltime_ratio = cell_cost.get("walltime_total", 1.0) / max(
-        baseline_cost.get("walltime_total", 1.0), 1e-12
+    ruler_walltime_ratio = cell_cost.get("walltime_s", 1.0) / max(
+        baseline_cost.get("walltime_s", 1.0), 1e-12
     )
     ruler_energy_ratio = cell_cost.get("energy_per_step", 1.0) / max(
         baseline_cost.get("energy_per_step", 1.0), 1e-12

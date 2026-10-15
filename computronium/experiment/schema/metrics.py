@@ -45,6 +45,7 @@ HISTORY_METRICS: Final[frozenset[str]] = frozenset({
     "train_energy",
     "val_acc",
     "val_loss",
+    "val_ppl",
 })
 
 # What a record's payload offers an objective: the history plus the cost the
@@ -113,6 +114,8 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "psi_capacity",
     "consolidation_cost",
     "rewrite_rate",
+    # Energy clamping flag
+    "energy_clamped",
 }
 
 # Objective name -> the payload key that satisfies it.
@@ -121,6 +124,12 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
 MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "validation_accuracy": "val_acc",
     "validation_loss": "val_loss",
+    "test_accuracy": "test_acc",
+    "test_loss": "test_loss",
+    "f1_score": "f1_score",
+    "perplexity": "val_ppl",
+    "bleu_score": "bleu_score",
+    "mean_reward": "mean_reward",
     "walltime_total": "walltime_s",
     "param_count": "param_count",
     "settle_steps": "settle_steps",
