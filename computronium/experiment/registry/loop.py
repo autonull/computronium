@@ -202,7 +202,7 @@ class LoopDriver:
         # Phase 5: ICU model for guided search
         self._icu_model = ICUModel() if config.use_icu_guided else None
 
-# ------------------------------------------------------------------ public
+    # ------------------------------------------------------------------ public
 
     def run(self, *, dry_run: bool = False) -> int:
         """Run the loop until the cycle limit or time budget is exhausted.
@@ -424,7 +424,9 @@ class LoopDriver:
         except KeyboardInterrupt:
             raise
         except Exception as exc:  # ruff: ignore[blind-except] - one bad cycle must not kill the loop
-            logger.error("Cycle %d (%s) resume failed: %s", cycle, task, exc, exc_info=True)
+            logger.error(
+                "Cycle %d (%s) resume failed: %s", cycle, task, exc, exc_info=True
+            )
             print(f"DEBUG: Exception caught in _resume_cycle: {exc}", flush=True)
             result = CycleResult(
                 cycle=cycle,
@@ -493,7 +495,12 @@ class LoopDriver:
             policy = create_policy(
                 policy_name,
                 **policy_context(
-                    spec, policy_name, shape=task_shape, deadline=deadline
+                    spec,
+                    policy_name,
+                    shape=task_shape,
+                    deadline=deadline,
+                    legality_engine=self._legality,
+                    icu_model=self._icu_model,
                 ),
             )
 
@@ -602,7 +609,12 @@ class LoopDriver:
             policy = create_policy(
                 policy_name,
                 **policy_context(
-                    spec, policy_name, shape=task_shape, deadline=deadline, legality_engine=self._legality
+                    spec,
+                    policy_name,
+                    shape=task_shape,
+                    deadline=deadline,
+                    legality_engine=self._legality,
+                    icu_model=self._icu_model,
                 ),
             )
 
@@ -1178,7 +1190,7 @@ class LoopDriver:
 
     def _load_checkpoint_typed(self) -> dict[str, Any]:
         """Load checkpoint with proper typing for mutation."""
-        from collections.abc import Mapping
+
         raw = self._load_checkpoint()
         # Ensure nested dicts are mutable Mapping
         if "cycle_run_ids" not in raw:

@@ -737,24 +737,70 @@ during the audit.
   only if the policy is made to *always* include it, or `BaselineGate.check_or_run` is invoked
   when absent. We chose the latter — it works.
 
-### Next session: repeat leverage audit (Phase 0) before Phase 3
+### Phase 3 progress (session 3 — failure → constraint + evidence + guided search)
 
-The first session's audit found workstreams F/D/E/C/I/J/L/A/G/H/N/K. With Phases 1-2 done,
+- **Defect → constraint loop wired (closes I).** Added `ProposalContext.legal()` that checks the
+  `LegalityEngine` at S4_EXPANSION stage. `LoopDriver` passes `legality_engine` to
+  `policy_context`, which forwards to the policy. Any cell with hard constraint violations
+  is rejected before execution. `DefectRegistry.record_defect()` converts FAIL/QUARANTINE
+  records into `Constraint` objects (origin=OBSERVED_DEFECT, scope=CELL, enforcement=S4_EXPANSION)
+  and persists them; `comp defect list` CLI works.
+- **Evidence auto-population completed (closes J).** `ModelRegistry` already wired on the
+  success path in `LoopDriver._execute` — PASS records with `MODEL_CHECKPOINT` artifacts
+  are registered automatically. Hypothesis registry evaluation (`_evaluate_hypotheses`)
+  already implemented and called after each cycle. Analysis suite callable from report path.
+- **ICU model + SurrogatePolicy connected for guided search (closes E).** `LoopDriver` creates
+  `ICUModel` (when `--use-icu-guided`), ingests measurements from the store each cycle,
+  and passes it to `policy_context`. `policy_context` now accepts `icu_model` parameter and
+  uses it for `icu_guided` sampler instead of creating a fresh prior surrogate. This enables
+  the I(C,U) metamodel to guide credit×update exploration from the first cycle.
+- **Campaign queue seam verified.** The loop uses `ExecutionBackend` protocol (LocalBackend)
+  as the default seam; the campaign queue (`execution/campaign_queue.py`) is available for
+  higher-level multi-campaign orchestration but the loop directly drives `PipelineRunner`
+  per cycle — the simpler and correct path.
+
+**Verification:**
+- `tests/property/test_loop_uses_engine_lock.py` passes (4 tests) — loop uses engine, no hardcoded seeds/hints.
+- `comp loop --cycles 2 --dry-run` produces multi-domain walk with ≥3 objectives per task.
+- Defect constraints flow: FAIL record → `DefectRegistry` → `LegalityEngine` → S4 gate prunes region.
+- ICU guided: `--use-icu-guided` enables I(C,U) ingestion and guided proposals.
+- Model registry: PASS records with checkpoints are versioned automatically.
+
+### Next session: Phase 4 — Evidence, analysis, models wired to the report (closes J; M-lite)
+
+The report machinery already exists; need to:
+- **Limitations** — already auto-populated for text/latex/pdf (`ReportGenerator.limitations`).
+  Add the same call to the Jinja path (`templates/report/generator.build_context_from_store`
+  takes `limitations=` but nothing supplies it).
+- **Analysis** — invoke `analysis/{pareto,seed_variability,hardware_variance,reproducibility}.py`
+  from `generate_run_report` (each is `(store, run_id)` → serializable as-is).
+- **M-lite** — gate-calibration counts (L0→L1→L2 rates) and the metric-gap list
+  (`coverage unmeasured`) appended to the report; both are store queries, no new machinery.
+
+**Verification (once, seconds):** one `comp report --format text` shows non-empty limitations,
+a baseline Δ, seed variance, hardware fingerprint, calibration counts, and metric gaps.
+
+### Next session: repeat leverage audit (Phase 0) before Phase 4
+
+The first session's audit found workstreams F/D/E/C/I/J/L/A/G/H/N/K. With Phases 1-3 done,
 the landscape has changed:
 
 - `registry/loop.py` is the new integration point (replaces `cli._cmd_loop` bespoke logic)
 - `BaselineRegistry.get_baseline` + `BaselineGate.check_or_run` is the baseline path
 - `promote_with_stats` is the promotion path
-- `LegalityEngine` is constructed but unused — Phase 3's integration point
+- `LegalityEngine` is now wired into proposer feasibility mask (S4 gate)
+- `ICUModel` ingests measurements and guides `icu_guided` sampler
+- `ModelRegistry` registers checkpoints from PASS records
+- `HypothesisRegistry` evaluates hypotheses per cycle
 
 Run a fresh parallel audit over:
-1. `computronium/experiment/legality/` — how does `LegalityEngine` / `classify.py` / `Constraint` actually work? What's already wired vs. what needs wiring?
+1. `computronium/experiment/analysis/` — what exists, what's callable from the driver/report?
 2. `computronium/experiment/evidence/failure.py` — `analyze_store_failures`, `cluster_failures`, `emit_reproducer` — what's the contract?
-3. `computronium/experiment/analysis/` — what exists, what's callable from the driver?
-4. `computronium/design/hypothesis.py` — hypothesis spec format, `ICUModel`, `SurrogatePolicy` — what's ready?
+3. `computronium/templates/report/` — Jinja templates, what's missing for limitations/analysis?
+4. `computronium/experiment/surface/report.py` — `generate_run_report` wiring points?
 5. Any new "complete-but-uncalled" modules since the first audit?
 
-Update the leverage map and reduction table before building Phase 3.
+Update the leverage map and reduction table before building Phase 4.
 
 ### The reduction (what the audit found — read before building anything)
 

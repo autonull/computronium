@@ -302,8 +302,11 @@ class ProposalContext:
             return False
         if self.legality_engine is not None:
             from computronium.experiment.legality.dsl import CoordinateContext
-            from computronium.experiment.legality.engine import ConstraintEnforcement, ConstraintScope
-            ctx = CoordinateContext(
+            from computronium.experiment.legality.engine import (
+                ConstraintEnforcement,
+            )
+
+            CoordinateContext(
                 Coordinate(
                     substrate=coordinate.substrate,
                     geometry=coordinate.geometry,
@@ -316,28 +319,40 @@ class ProposalContext:
             )
             hard_violations, _ = self.legality_engine.evaluate_record(
                 # Create a minimal record-like object for evaluation
-                type("_Record", (), {
-                    "record_id": "",
-                    "cell_key": coordinate.cell_key(),
-                    "measurement_key": coordinate.measurement_key(schedule),
-                    "substrate": coordinate.substrate,
-                    "geometry": coordinate.geometry,
-                    "dynamics": coordinate.dynamics,
-                    "plasticity": coordinate.plasticity,
-                    "credit": coordinate.credit,
-                    "update": coordinate.update,
-                    "params": coordinate.params,
-                    "schedule": schedule,
-                    "status": type("_Status", (), {
-                        "gate_verdict": type("_GV", (), {"value": "PASS"}),
-                        "quarantine": False,
-                    })(),
-                    "provenance": type("_Prov", (), {
-                        "code_sha": "",
-                        "data_origin": "exploration",
-                    })(),
-                })(),
-                ConstraintEnforcement.S4_EXPANSION
+                type(
+                    "_Record",
+                    (),
+                    {
+                        "record_id": "",
+                        "cell_key": coordinate.cell_key(),
+                        "measurement_key": coordinate.measurement_key(schedule),
+                        "substrate": coordinate.substrate,
+                        "geometry": coordinate.geometry,
+                        "dynamics": coordinate.dynamics,
+                        "plasticity": coordinate.plasticity,
+                        "credit": coordinate.credit,
+                        "update": coordinate.update,
+                        "params": coordinate.params,
+                        "schedule": schedule,
+                        "status": type(
+                            "_Status",
+                            (),
+                            {
+                                "gate_verdict": type("_GV", (), {"value": "PASS"}),
+                                "quarantine": False,
+                            },
+                        )(),
+                        "provenance": type(
+                            "_Prov",
+                            (),
+                            {
+                                "code_sha": "",
+                                "data_origin": "exploration",
+                            },
+                        )(),
+                    },
+                )(),
+                ConstraintEnforcement.S4_EXPANSION,
             )
             if hard_violations:
                 return False
@@ -1276,6 +1291,7 @@ def policy_context(
     shape: ShapeResolver | None = None,
     deadline: Deadline | None = None,
     legality_engine: Any | None = None,
+    icu_model: Any | None = None,
 ) -> dict[str, Any]:
     """The run arguments one policy is offered.
 
@@ -1290,10 +1306,11 @@ def policy_context(
         shape: Shape resolver for cell legality.
         deadline: Hard deadline for time enforcement.
         legality_engine: LegalityEngine for defect-derived constraints.
+        icu_model: ICUModel for guided search (I(C,U) metamodel).
 
     Returns:
         The subset of ``seed``, ``objectives``, ``axis_objectives``, ``spec``,
-        ``deadline``, and ``legality_engine`` that this policy accepts.
+        ``deadline``, ``legality_engine``, and ``icu_model`` that this policy accepts.
 
     Raises:
         ValueError: The policy name is unknown.
@@ -1313,6 +1330,7 @@ def policy_context(
         "shape": shape,
         "deadline": deadline,
         "legality_engine": legality_engine,
+        "icu_model": icu_model,
     }
 
     # Add I(C,U) model for icu_guided sampler
@@ -1321,12 +1339,25 @@ def policy_context(
         credit_primitives = spec.selected_primitives(StructuralAxis.CREDIT)
         update_primitives = spec.selected_primitives(StructuralAxis.UPDATE)
         if credit_primitives and update_primitives:
-            icu_model, credit_update_pairs = _create_icu_model_from_spec(spec)
+            # Use the provided ICU model if available, otherwise create one
             if icu_model is not None:
-                context["icu_model"] = icu_model
+                icu_model_to_use = icu_model
+                credit_update_pairs = [
+                    (c, u) for c in credit_primitives for u in update_primitives
+                ]
+                context["icu_model"] = icu_model_to_use
                 context["icu_credit_update_pairs"] = credit_update_pairs
                 # Use icu_guided sampler when I(C,U) model is available
                 context["sampler"] = "icu_guided"
+            else:
+                icu_model_created, credit_update_pairs = _create_icu_model_from_spec(
+                    spec
+                )
+                if icu_model_created is not None:
+                    context["icu_model"] = icu_model_created
+                    context["icu_credit_update_pairs"] = credit_update_pairs
+                    # Use icu_guided sampler when I(C,U) model is available
+                    context["sampler"] = "icu_guided"
 
     return {
         key: value
