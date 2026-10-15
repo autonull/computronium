@@ -47,7 +47,7 @@ if TYPE_CHECKING:
         Provenance,
         Schedule,
     )
-    from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.record import Record, Status
 
 __all__ = [
     "CellEvaluation",
@@ -910,6 +910,86 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     )
 
 
+def _determine_procedure_metadata() -> tuple[str, str, str]:
+    """Extract procedure name, version, and code_hash from assessment procedures."""
+    from computronium.experiment.evidence.procedures import (
+        ASSESSMENT_PROCEDURES,
+        get_assessment_procedure,
+    )
+
+    gate_verdict_proc = get_assessment_procedure(
+        "gate_verdict", "1.0"
+    ) or ASSESSMENT_PROCEDURES.get(
+        "gate_verdict@1.0#" + "gate_verdict"[:8]  # Fallback key
+    )
+
+    if gate_verdict_proc is None:
+        return "gate_verdict", "1.0", "default"
+    return (
+        gate_verdict_proc.name.split("@")[0],
+        gate_verdict_proc.version,
+        gate_verdict_proc.code_hash,
+    )
+
+
+def _build_status_with_procedures(
+    passed: bool,
+    complete: bool,
+    within_ceiling: bool,
+    param_count: int,
+    param_budget: int,
+    procedure_name: str,
+    procedure_version: str,
+    procedure_code_hash: str,
+) -> Status:
+    """Build schema Status with assessment procedure metadata (WP5)."""
+    from computronium.experiment.evidence.status import (
+        StatusLegacy,
+        build_assessments_from_legacy,
+    )
+    from computronium.experiment.schema.record import (
+        FailureCause,
+        GateVerdict,
+        Maturity,
+        ReproducibilityClass,
+        Severity,
+        Status,
+    )
+
+    legacy_status = StatusLegacy(
+        gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
+        defect=_defect(complete, within_ceiling, param_count, param_budget),
+        cause=FailureCause.UNKNOWN if passed else FailureCause.CONSTRAINT_VIOLATION,
+        severity=Severity.LOW if passed else Severity.MEDIUM,
+        quarantine=not passed,
+        maturity=Maturity.L0,
+        uncertainty={},
+        reproducibility=ReproducibilityClass.REPLAYABLE,
+        assessment_procedure_version=procedure_version,
+        ceec_link=None,
+    )
+
+    assessments = build_assessments_from_legacy(
+        legacy_status,
+        procedure_name=procedure_name,
+        procedure_version=procedure_version,
+        procedure_code_hash=procedure_code_hash,
+    )
+
+    return Status(
+        gate_verdict=assessments.gate_verdict,
+        defect=assessments.defect,
+        cause=assessments.failure_classification,
+        severity=assessments.severity,
+        quarantine=assessments.quarantine,
+        maturity=assessments.maturity,
+        uncertainty=assessments.uncertainty,
+        reproducibility=assessments.reproducibility,
+        assessment_procedure_version=assessments.procedure_version,
+        ceec_link=assessments.ceec_link,
+    )
+
+
 def cell_record(
     coordinate: Coordinate,
     schedule: Schedule,
@@ -927,13 +1007,6 @@ def cell_record(
     Assessment procedures are run to stamp procedure metadata (name, version, code_hash)
     into the record's status, implementing the three-tier evidence model (WP5).
     """
-    from computronium.experiment.evidence.procedures import (
-        ASSESSMENT_PROCEDURES,
-        get_assessment_procedure,
-    )
-    from computronium.experiment.evidence.status import (
-        build_assessments_from_legacy,
-    )
     from computronium.experiment.schema.record import (
         FailureCause,
         GateVerdict,
@@ -991,69 +1064,19 @@ def cell_record(
         payload["convergence_curve"] = evaluation.convergence_curve
     passed = complete and within_ceiling
 
-    # Run assessment procedures to stamp procedure metadata (WP5)
-    # Gate verdict assessment
-    gate_verdict_proc = get_assessment_procedure(
-        "gate_verdict", "1.0"
-    ) or ASSESSMENT_PROCEDURES.get(
-        "gate_verdict@1.0#" + "gate_verdict"[:8]  # Fallback key
-    )
+    # Determine procedure metadata for assessment stamping (WP5)
+    procedure_name, procedure_version, procedure_code_hash = _determine_procedure_metadata()
 
-    # Maturity assessment
-    maturity_proc = get_assessment_procedure("maturity", "1.0")
-
-    # Failure classification assessment
-    failure_proc = get_assessment_procedure("failure_classification", "1.0")
-
-    # Determine which procedure to reference (use gate_verdict as primary)
-    primary_proc = gate_verdict_proc
-    if primary_proc is None:
-        # Fallback: use a default procedure identifier
-        procedure_name = "gate_verdict"
-        procedure_version = "1.0"
-        procedure_code_hash = "default"
-    else:
-        procedure_name = primary_proc.name.split("@")[0]  # Extract original name
-        procedure_version = primary_proc.version
-        procedure_code_hash = primary_proc.code_hash
-
-    # Build legacy status first (from evidence.status for assessment building)
-    from computronium.experiment.evidence.status import StatusLegacy
-    legacy_status = StatusLegacy(
-        gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
-        defect=_defect(
-            complete, within_ceiling, evaluation.param_count, schedule.param_budget
-        ),
-        cause=FailureCause.UNKNOWN if passed else FailureCause.CONSTRAINT_VIOLATION,
-        severity=Severity.LOW if passed else Severity.MEDIUM,
-        quarantine=not passed,
-        maturity=Maturity.L0,
-        uncertainty={},
-        reproducibility=ReproducibilityClass.REPLAYABLE,
-        assessment_procedure_version=procedure_version,
-        ceec_link=None,
-    )
-
-    # Build assessments with procedure metadata
-    assessments = build_assessments_from_legacy(
-        legacy_status,
-        procedure_name=procedure_name,
-        procedure_version=procedure_version,
-        procedure_code_hash=procedure_code_hash,
-    )
-
-    # Convert back to schema Status with procedure metadata
-    status = Status(
-        gate_verdict=assessments.gate_verdict,
-        defect=assessments.defect,
-        cause=assessments.failure_classification,
-        severity=assessments.severity,
-        quarantine=assessments.quarantine,
-        maturity=assessments.maturity,
-        uncertainty=assessments.uncertainty,
-        reproducibility=assessments.reproducibility,
-        assessment_procedure_version=assessments.procedure_version,
-        ceec_link=assessments.ceec_link,
+    # Build legacy status and convert to schema Status with procedure metadata
+    status = _build_status_with_procedures(
+        passed,
+        complete,
+        within_ceiling,
+        evaluation.param_count,
+        schedule.param_budget,
+        procedure_name,
+        procedure_version,
+        procedure_code_hash,
     )
 
     return Record.create(

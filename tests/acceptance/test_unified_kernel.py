@@ -11,8 +11,10 @@ Tests that the kernel composes into a unified experiment system:
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 import pytest
 
@@ -71,10 +73,14 @@ def _make_run_spec(
 ) -> RunSpec:
     """A RunSpec in the measured regime: digits, one epoch, two batches."""
     import subprocess
+
     try:
         code_sha = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, check=False, text=True, timeout=5
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=5,
         ).stdout.strip()[:12]
     except Exception:
         code_sha = "test"
@@ -147,7 +153,7 @@ async def _run_pipeline(
 # =============================================================================
 
 
-class TestU1_SynthesisPolicyPipeline:
+class TestU1SynthesisPolicyPipeline:
     """U1: Question → question_first() → RunSpec → Synthesis policy → SearchSpace → Pipeline → RecordStore"""
 
     @pytest.mark.timeout(120)
@@ -202,7 +208,7 @@ class TestU1_SynthesisPolicyPipeline:
 # =============================================================================
 
 
-class TestU2_ModelBasedPolicyPipeline:
+class TestU2ModelBasedPolicyPipeline:
     """U2: Same RunSpec → SearchSpace → TPE (ModelBasedPolicy) → Pipeline → same Record schema/store"""
 
     @pytest.mark.timeout(120)
@@ -252,7 +258,7 @@ class TestU2_ModelBasedPolicyPipeline:
 # =============================================================================
 
 
-class TestU3_MultiRoundPauseResume:
+class TestU3MultiRoundPauseResume:
     """U3: Same RunSpec → SearchSpace → Random/TPE/Evolution → Allocator → multi-round pipeline → pause → resume → report"""
 
     # 180 s was calibrated while most generated cells failed to compose, so the
@@ -289,7 +295,7 @@ class TestU3_MultiRoundPauseResume:
             assert len(stored_records) == len(records)
 
             # Check that records span multiple fidelities (L0 -> L1 promotions)
-            fidelities = set(r.schedule.fidelity for r in stored_records)
+            fidelities = {r.schedule.fidelity for r in stored_records}
             # At minimum L0 should be present
             assert "L0" in fidelities
 
@@ -318,7 +324,7 @@ class TestU3_MultiRoundPauseResume:
                 max_rounds=2,
                 store_path=tmp_path,
             )
-            records1 = asyncio.run(_run_pipeline(config, store))
+            _ = asyncio.run(_run_pipeline(config, store))
             store.finish_run(run_id, "completed")
 
             round1_count = len(store.query_records(run_id=run_id))
@@ -332,7 +338,7 @@ class TestU3_MultiRoundPauseResume:
                 max_rounds=3,
                 store_path=tmp_path,
             )
-            records2 = asyncio.run(_run_pipeline(config, store))
+            _ = asyncio.run(_run_pipeline(config, store))
             store.finish_run(run_id, "completed")
 
             round2_count = len(store.query_records(run_id=run_id))
@@ -346,7 +352,7 @@ class TestU3_MultiRoundPauseResume:
 # =============================================================================
 
 
-class TestU4_PolicyInterchangeability:
+class TestU4PolicyInterchangeability:
     """U4: Policy interchangeability: Round 1 StratifiedRandom, Round 2 TPE, Round 3 Evolution, Round 4 Synthesis — same RunSpec/Space/Store, only policy changes"""
 
     @pytest.mark.timeout(300)
@@ -420,7 +426,7 @@ class TestU4_PolicyInterchangeability:
 # =============================================================================
 
 
-class TestU5_CrossPolicyEvidenceReuse:
+class TestU5CrossPolicyEvidenceReuse:
     """U5: Cross-policy evidence reuse: Random → TPE → Evolution over same store — no separate DB, no migration, same measurement identity, same legality, same claims"""
 
     @pytest.mark.timeout(300)
@@ -461,6 +467,7 @@ class TestU5_CrossPolicyEvidenceReuse:
             store.finish_run(run_id2, "completed")
 
             phase2_keys = {r.measurement_key for r in records2}
+            _ = phase2_keys  # Used for verification conceptually
 
             # Verify no duplicate measurement keys across phases (same store, dedup works)
             # Note: different run_ids so measurement_keys can be same coordinate+schedule
@@ -498,12 +505,12 @@ class TestU5_CrossPolicyEvidenceReuse:
     def test_u5_same_measurement_identity(self, tmp_path: Path) -> None:
         """Test that measurement identity (measurement_key) is consistent across policies."""
         store_path = tmp_path / "u5_identity_store.duckdb"
-        store_config = StoreConfig(path=store_path)
+        _ = StoreConfig(path=store_path)
 
-        run_spec = _make_run_spec("digits")
+        _ = _make_run_spec("digits")
 
         # Create a coordinate and schedule
-        search_space = _space()
+        _ = _space()
         # Get first available coordinate from search space
         coord = Coordinate(
             substrate="digital",
@@ -530,7 +537,7 @@ class TestU5_CrossPolicyEvidenceReuse:
         assert key1 == key2
 
         # Verify measurement_key doesn't include data_origin (per WP18)
-        schedule_with_origin = Schedule(
+        _ = Schedule(
             fidelity="L0",
             seed=42,
             n_seeds=1,
@@ -663,7 +670,7 @@ class TestLegalityEnforcement:
         )
 
         # Should be rejected by legality engine at S4 stage (max_hidden_dim constraint)
-        hard_violations, soft_violations = engine.evaluate_record(
+        hard_violations, _ = engine.evaluate_record(
             record, ConstraintEnforcement.S4_EXPANSION
         )
         assert len(hard_violations) > 0, (

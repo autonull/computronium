@@ -211,21 +211,47 @@ class LoopDriver:
         printed, spending no cells.
         """
         cfg = self._config
-        cfg.state_dir.mkdir(parents=True, exist_ok=True)
-        cfg.store_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_directories(cfg)
 
         checkpoint = self._load_checkpoint()
-        saved_cycle = checkpoint.get("cycle")
-        cycle = saved_cycle if isinstance(saved_cycle, int) else 0
-        master_seed = self._resolve_master_seed(checkpoint)
+        cycle, master_seed = self._init_state(checkpoint)
+
+        if dry_run:
+            return self._dry_run(cycle, master_seed)
 
         start_cycle = cycle
         deadline_time = time.time() + cfg.hours * 3600
         history: list[CycleResult] = []
 
+        self._setup_signals()
+        self._print_loop_header(cfg, master_seed, cycle)
+
+        while not self._abort:
+            if self._should_stop(cfg, cycle, start_cycle, deadline_time):
+                break
+
+            result = self._execute_cycle(cycle, master_seed)
+            cycle = self._process_cycle_result(cycle, master_seed, result, history, checkpoint)
+
+        self._write_loop_report(history)
+        self._print_loop_footer(cfg, cycle)
+        return 0
+
+    def _init_directories(self, cfg: LoopConfig) -> None:
+        cfg.state_dir.mkdir(parents=True, exist_ok=True)
+        cfg.store_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _init_state(self, checkpoint: dict[str, Any]) -> tuple[int, int]:
+        saved_cycle = checkpoint.get("cycle")
+        cycle = saved_cycle if isinstance(saved_cycle, int) else 0
+        master_seed = self._resolve_master_seed(checkpoint)
+        return cycle, master_seed
+
+    def _setup_signals(self) -> None:
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
 
+    def _print_loop_header(self, cfg: LoopConfig, master_seed: int, cycle: int) -> None:
         print("=" * 70, flush=True)
         print("COMPUTRONIUM EXPERIMENT LOOP (engine-driven)", flush=True)
         print(f"  Store:   {cfg.store_path}", flush=True)
@@ -235,55 +261,62 @@ class LoopDriver:
         print(f"  Resume:  cycle {cycle}", flush=True)
         print("=" * 70, flush=True)
 
-        if dry_run:
-            return self._dry_run(cycle, master_seed)
+    def _should_stop(
+        self, cfg: LoopConfig, cycle: int, start_cycle: int, deadline_time: float
+    ) -> bool:
+        if cfg.cycles and (cycle - start_cycle) >= cfg.cycles:
+            print("Cycle limit reached.", flush=True)
+            return True
+        if time.time() >= deadline_time:
+            print("Budget exhausted.", flush=True)
+            return True
+        return False
 
-        while not self._abort:
-            if cfg.cycles and (cycle - start_cycle) >= cfg.cycles:
-                print("Cycle limit reached.", flush=True)
-                break
-            if time.time() >= deadline_time:
-                print("Budget exhausted.", flush=True)
-                break
+    def _execute_cycle(self, cycle: int, master_seed: int) -> CycleResult:
+        checkpoint = self._load_checkpoint_typed()
+        cycle_status = checkpoint.get("cycle_status", {})
+        if cycle_status.get(str(cycle)) == "in_progress":
+            print(f"  Resuming interrupted cycle {cycle}...", flush=True)
+            return self._resume_cycle(cycle, master_seed, checkpoint)
+        return self._run_cycle(cycle, master_seed, checkpoint)
 
-            # Check if this cycle was interrupted and needs resume
-            checkpoint = self._load_checkpoint_typed()
-            cycle_status = checkpoint.get("cycle_status", {})
-            if cycle_status.get(str(cycle)) == "in_progress":
-                print(f"  Resuming interrupted cycle {cycle}...", flush=True)
-                result = self._resume_cycle(cycle, master_seed, checkpoint)
-            else:
-                result = self._run_cycle(cycle, master_seed, checkpoint)
-
-            history.append(result)
-            # Track run_id for this cycle for loop-level resume
-            cycle_run_ids: dict[str, str] = checkpoint.get("cycle_run_ids", {})
-            cycle_run_ids[str(cycle)] = result.run_id
-            checkpoint["cycle_run_ids"] = cycle_run_ids
-            # Mark cycle as complete
-            cycle_status = checkpoint.get("cycle_status", {})
-            cycle_status[str(cycle)] = "complete"
-            checkpoint["cycle_status"] = cycle_status
-            cycle += 1
-            checkpoint.update({"cycle": cycle, "master_seed": master_seed})
-            self._save_checkpoint(checkpoint)
-            self._write_loop_report(history)
-
-            print(
-                f"  → task={result.task} kind={result.kind} "
-                f"records={result.n_records} pass={result.n_pass} "
-                f"L1={result.n_l1} L2={result.n_l2} "
-                f"baseline={'yes' if result.baseline_present else 'no'} "
-                f"({result.duration_s:.1f}s)",
-                flush=True,
-            )
-
+    def _process_cycle_result(
+        self,
+        cycle: int,
+        master_seed: int,
+        result: CycleResult,
+        history: list[CycleResult],
+        checkpoint: dict[str, Any],
+    ) -> int:
+        history.append(result)
+        cycle_run_ids: dict[str, str] = checkpoint.get("cycle_run_ids", {})
+        cycle_run_ids[str(cycle)] = result.run_id
+        checkpoint["cycle_run_ids"] = cycle_run_ids
+        cycle_status = checkpoint.get("cycle_status", {})
+        cycle_status[str(cycle)] = "complete"
+        checkpoint["cycle_status"] = cycle_status
+        cycle += 1
+        checkpoint.update({"cycle": cycle, "master_seed": master_seed})
+        self._save_checkpoint(checkpoint)
         self._write_loop_report(history)
+        self._print_cycle_summary(result)
+        return cycle
+
+    def _print_cycle_summary(self, result: CycleResult) -> None:
+        print(
+            f"  → task={result.task} kind={result.kind} "
+            f"records={result.n_records} pass={result.n_pass} "
+            f"L1={result.n_l1} L2={result.n_l2} "
+            f"baseline={'yes' if result.baseline_present else 'no'} "
+            f"({result.duration_s:.1f}s)",
+            flush=True,
+        )
+
+    def _print_loop_footer(self, cfg: LoopConfig, cycle: int) -> None:
         print("\n" + "=" * 70, flush=True)
         print(f"LOOP STOPPED at cycle {cycle}", flush=True)
         print(f"Report: {cfg.state_dir / 'report.md'}", flush=True)
         print("=" * 70, flush=True)
-        return 0
 
     def plan(
         self, cycles: int, start: int = 0, seed: int | None = None
@@ -744,76 +777,103 @@ class LoopDriver:
         if not self._config.hypothesis_ids:
             return results
 
-        # Open store to query ALL records (accumulated across cycles)
         store = RecordStore(StoreConfig(path=self._config.store_path, read_only=True))
-        try:
-            with store:
-                all_records = store.query_records()
-                if not all_records:
-                    return results
+        with store:
+            all_records = store.query_records()
+        if not all_records:
+            return results
 
-                for hyp_id in self._config.hypothesis_ids:
-                    hyp = self._hypothesis_registry.get(hyp_id)
-                    if hyp is None:
-                        logger.warning("Hypothesis %s not found in registry", hyp_id)
-                        continue
-
-                    # Filter records for this hypothesis
-                    # Cross-domain (domain=None) uses all tasks; domain-specific filters by task
-                    if hyp.domain is None:
-                        hyp_records = all_records
-                    else:
-                        # Filter to tasks in the hypothesis's domain
-                        task_registry = get_task_registry()
-                        domain_tasks = {
-                            t
-                            for t in self._config.task_schedule
-                            if task_registry.get(t).domain == hyp.domain
-                        }
-                        hyp_records = [
-                            r for r in all_records if r.schedule.task_id in domain_tasks
-                        ]
-
-                    if not hyp_records:
-                        logger.info("No records for hypothesis %s", hyp_id)
-                        continue
-
-                    # Run the hypothesis test
-                    try:
-                        result = self._test_hypothesis(hyp, hyp_records, task)
-                        # Update hypothesis status in registry
-                        self._hypothesis_registry.record_result(hyp_id, result)
-                        status = (
-                            hyp.status.value
-                            if hyp.status
-                            else HypothesisStatus.INCONCLUSIVE.value
-                        )
-                        results[hyp_id] = status
-                        logger.info(
-                            "Hypothesis %s evaluated: %s (p=%.4f, effect=%.3f, power=%.2f)",
-                            hyp_id,
-                            status,
-                            result.p_value or -1,
-                            result.effect_size or -1,
-                            result.power_achieved or -1,
-                        )
-                    except Exception:  # ruff: ignore[blind-except] - continue evaluating other hypotheses
-                        logger.exception("Failed to evaluate hypothesis %s", hyp_id)
-                        results[hyp_id] = HypothesisStatus.INCONCLUSIVE.value
-        except Exception:  # ruff: ignore[blind-except] - store access failure
-            logger.exception("Failed to open store for hypothesis evaluation")
+        for hyp_id in self._config.hypothesis_ids:
+            self._evaluate_single_hypothesis(hyp_id, all_records, results)
 
         return results
 
+    def _evaluate_single_hypothesis(
+        self, hyp_id: str, all_records: list[Record], results: dict[str, str]
+    ) -> None:
+        hyp = self._hypothesis_registry.get(hyp_id)
+        if hyp is None:
+            logger.warning("Hypothesis %s not found in registry", hyp_id)
+            return
+
+        hyp_records = self._filter_records_for_hypothesis(hyp, all_records)
+        if not hyp_records:
+            logger.info("No records for hypothesis %s", hyp_id)
+            return
+
+        try:
+            result = self._test_hypothesis(hyp, hyp_records)
+            self._hypothesis_registry.record_result(hyp_id, result)
+            status = (
+                hyp.status.value if hyp.status else HypothesisStatus.INCONCLUSIVE.value
+            )
+            results[hyp_id] = status
+            logger.info(
+                "Hypothesis %s evaluated: %s (p=%.4f, effect=%.3f, power=%.2f)",
+                hyp_id,
+                status,
+                result.p_value or -1,
+                result.effect_size or -1,
+                result.power_achieved or -1,
+            )
+        except Exception:  # ruff: ignore[blind-except] - continue evaluating other hypotheses
+            logger.exception("Failed to evaluate hypothesis %s", hyp_id)
+
+    def _filter_records_for_hypothesis(
+        self, hyp: HypothesisSpec, all_records: list[Record]
+    ) -> list[Record]:
+        if hyp.domain is None:
+            return all_records
+        task_registry = get_task_registry()
+        domain_tasks = {
+            t
+            for t in self._config.task_schedule
+            if task_registry.get(t).domain == hyp.domain
+        }
+        return [r for r in all_records if r.schedule.task_id in domain_tasks]
+
+    def _calculate_power_achieved(
+        self,
+        p_value: float | None,
+        effect_size: float | None,
+        n_a: int,
+        n_b: int,
+        alpha: float,
+    ) -> float | None:
+        if p_value is None or effect_size is None:
+            return None
+        try:
+            from scipy import stats
+            from scipy.stats import nct
+
+            return self._compute_power(n_a, n_b, alpha, effect_size, stats, nct)
+        except Exception:
+            return None
+
+    def _compute_power(
+        self,
+        n_a: int,
+        n_b: int,
+        alpha: float,
+        effect_size: float,
+        stats: Any,
+        nct: Any,
+    ) -> float | None:
+        df = n_a + n_b - 2
+        if df <= 0:
+            return None
+        ncp = effect_size * np.sqrt(n_a * n_b / (n_a + n_b))
+        t_crit = stats.t.ppf(1 - alpha / 2, df)
+        return float(nct.sf(t_crit, df, ncp) + nct.cdf(-t_crit, df, ncp))
+
     def _test_hypothesis(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-locals, too-many-statements]
-        self, hyp: HypothesisSpec, records: list[Record], task: str
+        self, hyp: HypothesisSpec, records: list[Record]
     ) -> HypothesisResult:
         """Run a statistical test for a hypothesis on the given records.
 
         This is a simplified implementation that tests the primary metric
         grouped by the grouping_factor (e.g., credit assignment).
         The records passed are already filtered for the hypothesis's domain.
-        The `task` parameter is retained for compatibility but not used for filtering.
         """
 
         if not records:
@@ -962,24 +1022,9 @@ class LoopDriver:
             confidence_interval = (mean_diff - ci_half, mean_diff + ci_half)
 
         # Calculate achieved power
-        power_achieved: float | None = None
-        if p_value is not None and effect_size is not None:
-            try:
-                from scipy.stats import nct
-
-                n_a, n_b = len(group_a), len(group_b)
-                df = n_a + n_b - 2
-                if df > 0:
-                    # Non-centrality parameter for two-sample t-test
-                    ncp = effect_size * np.sqrt(n_a * n_b / (n_a + n_b))
-                    # Critical t-value for alpha (two-sided)
-                    t_crit = stats.t.ppf(1 - hyp.alpha / 2, df)
-                    # Achieved power = P(t > t_crit | ncp) + P(t < -t_crit | ncp)
-                    power_achieved = float(
-                        nct.sf(t_crit, df, ncp) + nct.cdf(-t_crit, df, ncp)
-                    )
-            except Exception:
-                power_achieved = None
+        power_achieved = self._calculate_power_achieved(
+            p_value, effect_size, len(group_a), len(group_b), hyp.alpha
+        )
 
         return HypothesisResult(
             hypothesis_id=hyp.id,
@@ -1044,16 +1089,21 @@ class LoopDriver:
             return self._explore_axes()
 
         objective_names = list(_objectives_for(task))
-        
+
         # Get baselines for ruler-relative normalization (F0b)
         baselines = None
         if self._baseline_gate and self._config.store_path:
             from computronium.experiment.evidence.store import RecordStore, StoreConfig
-            store = RecordStore(StoreConfig(path=self._config.store_path, read_only=True))
+
+            store = RecordStore(
+                StoreConfig(path=self._config.store_path, read_only=True)
+            )
             with store:
                 baselines = self._get_baselines_for_pareto(store, task)
 
-        frontier = compute_pareto_frontier(records, objective_names, baselines=baselines)
+        frontier = compute_pareto_frontier(
+            records, objective_names, baselines=baselines
+        )
         front_points = frontier.front()
         if not front_points:
             return self._explore_axes()

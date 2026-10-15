@@ -120,11 +120,13 @@ def _demo_table() -> str:
 
 def _cli_count() -> str:
     from computronium.cli.__main__ import _SUBCOMMANDS
+
     return str(len(_SUBCOMMANDS))
 
 
 def _api_count() -> str:
     import computronium
+
     return str(len(computronium.__all__))
 
 
@@ -134,66 +136,78 @@ def _demo_count() -> str:
 
 def _gallery_count() -> str:
     from computronium.visualization.gallery import DEMOS
+
     return str(len(DEMOS))
 
 
 def _domain_count() -> str:
     from computronium.domains import _DOMAIN_REGISTRY
+
     return str(len(_DOMAIN_REGISTRY))
 
 
 def _task_count() -> str:
     from computronium.domains.registry import SUPPORTED_TASKS
+
     return str(len(SUPPORTED_TASKS))
 
 
 def _stage_count() -> str:
     from computronium.experiment.execution.stage import STAGE_REGISTRY
+
     return str(len(STAGE_REGISTRY))
 
 
 def _policy_count() -> str:
     from computronium.experiment.execution.policy import POLICY_CATALOG
+
     return str(len(POLICY_CATALOG))
 
 
 def _ensure_seed_registries() -> None:
     """Import seed_registries and call seed_all_registries to populate all registries."""
     from computronium.experiment.schema.seed_registries import seed_all_registries
+
     seed_all_registries()
 
 
 def _objective_count() -> str:
     _ensure_seed_registries()
     from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+
     return str(len(list(OBJECTIVES_REGISTRY)))
 
 
 def _measured_objective_count() -> str:
     from computronium.experiment.schema.metrics import measured_objectives
+
     return str(len(measured_objectives()))
 
 
 def _prior_count() -> str:
     _ensure_seed_registries()
     from computronium.experiment.schema.registries import PRIORS_REGISTRY
+
     return str(len(list(PRIORS_REGISTRY)))
 
 
 def _capability_count() -> str:
     _ensure_seed_registries()
     from computronium.experiment.schema.registries import CAPABILITIES_REGISTRY
+
     return str(len(list(CAPABILITIES_REGISTRY)))
 
 
 def _constraint_count() -> str:
     _ensure_seed_registries()
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+
     return str(len(list(CONSTRAINTS_REGISTRY)))
 
 
 def _axis_primitives(axis: str) -> tuple[int, list[str]]:
     from computronium.experiment.schema.axis import AXES_REGISTRIES
+
     reg = AXES_REGISTRIES[axis]
     names = [s.name for s in reg if s.available]
     return len(names), names
@@ -231,7 +245,10 @@ def _update_count() -> str:
 
 def _primitive_total() -> str:
     from computronium.experiment.schema.axis import AXES_REGISTRIES
-    total = sum(len([s for s in reg if s.available]) for reg in AXES_REGISTRIES.values())
+
+    total = sum(
+        len([s for s in reg if s.available]) for reg in AXES_REGISTRIES.values()
+    )
     return str(total)
 
 
@@ -267,48 +284,67 @@ def _update_list() -> str:
 
 def _algorithm_count() -> str:
     from computronium.acceleration.registry import algorithms
+
     return str(len(algorithms()))
 
 
 def _algorithm_list() -> str:
     from computronium.acceleration.registry import algorithms
+
     names = [s.name for s in algorithms()]
     return ", ".join(names)
 
 
 def _trainer_config_fields() -> str:
-    from computronium.core.system_trainer import SystemTrainerConfig
     import dataclasses
+
+    from computronium.core.system_trainer import SystemTrainerConfig
+
     return str(len(dataclasses.fields(SystemTrainerConfig)))
 
 
 def _store_method_count() -> str:
     from computronium.experiment.evidence.store import RecordStore
+
     methods = [
-        m for m in (
-            "create_run", "finish_run", "append", "append_with_artifacts",
-            "get_record", "get_record_by_measurement_key", "query_records",
-            "query_runs", "vector_search", "count_records", "count_achieved_seeds",
+        m
+        for m in (
+            "create_run",
+            "finish_run",
+            "append",
+            "append_with_artifacts",
+            "get_record",
+            "get_record_by_measurement_key",
+            "query_records",
+            "query_runs",
+            "vector_search",
+            "count_records",
+            "count_achieved_seeds",
             "latest_run_id",
-        ) if hasattr(RecordStore, m)
+        )
+        if hasattr(RecordStore, m)
     ]
     return str(len(methods))
 
 
 def _schema_version() -> str:
     from computronium.experiment.schema.versioning import current_schema_version
+
     return str(current_schema_version())
 
 
 def _record_field_count() -> str:
-    from computronium.experiment.schema.record import Record
     import dataclasses
+
+    from computronium.experiment.schema.record import Record
+
     return str(len(dataclasses.fields(Record)))
 
 
 def _package_count() -> str:
     pkgs = [
-        d.name for d in sorted((REPO / "packages").iterdir())
+        d.name
+        for d in sorted((REPO / "packages").iterdir())
         if d.is_dir() and (d / "pyproject.toml").exists()
     ]
     return str(len(pkgs))

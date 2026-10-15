@@ -10,17 +10,17 @@ and do not drift.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.schema.registries import StageId
 from computronium.experiment.schema.run_spec import AxisSelection, Fidelity, RunSpec
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
     from computronium.experiment.registry.loop import LoopConfig, LoopDriver
-    from computronium.experiment.execution.stage import StageId
 
 
 # Canonical StageIds for a question-first run (S1 Frame first)
@@ -141,7 +141,7 @@ class ExperimentConfig:
 
         # Determine policy
         policy = self.policy
-        if self.profile == "loop" and kind in ("explore", "exploit"):
+        if self.profile == "loop" and kind in {"explore", "exploit"}:
             policy = "round_robin_grid"
 
         # Determine stages
@@ -236,7 +236,7 @@ class ExperimentConfig:
         )
 
     @classmethod
-    def from_loop_profile(cls, profile_name: str) -> ExperimentConfig:
+    def from_loop_profile(cls, _profile_name: str) -> ExperimentConfig:
         """Create config from a loop profile name (e.g., from RUN_PROFILES)."""
         # This would load from the CLI's RUN_PROFILES
         # For now, return defaults

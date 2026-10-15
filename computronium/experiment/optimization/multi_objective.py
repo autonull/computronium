@@ -415,6 +415,73 @@ def compute_crowding_distance(front: list[ParetoPoint]) -> None:
             p.crowding_distance = dist + (next_val - prev_val) / (vmax - vmin)
 
 
+def _extract_reference_values(
+    records: list[Record],
+    objective_names: list[str],
+) -> dict[str, list[float]]:
+    """Extract raw objective values from records for normalization reference."""
+    from computronium.experiment.schema.metrics import (
+        measured_objectives,
+        objective_metric,
+    )
+    from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+
+    measured = set(measured_objectives())
+    reference_values: dict[str, list[float]] = {name: [] for name in objective_names}
+
+    for record in records:
+        for name in objective_names:
+            if name in OBJECTIVES_REGISTRY and name in measured:
+                metric_key = objective_metric(name)
+                raw = record.payload.get(metric_key)
+                if isinstance(raw, int | float) and not isinstance(raw, bool):
+                    reference_values[name].append(float(raw))
+    return reference_values
+
+
+def _create_pareto_point(
+    record: Record,
+    objective_names: list[str],
+    reference_values: dict[str, list[float]],
+    baselines: dict[str, dict[str, float]] | None,
+) -> ParetoPoint:
+    """Create a ParetoPoint from a record with normalized objectives."""
+    from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+
+    raw_objectives = compute_objective_values(record, objective_names)
+    normalized_objectives = normalize_objectives(raw_objectives, reference_values)
+
+    # Add ruler-relative metrics if baselines provided (F0b)
+    if baselines and record.schedule.task_id in baselines:
+        task_baselines = baselines[record.schedule.task_id]
+        ruler_metrics = _compute_ruler_metrics_for_record(record, task_baselines)
+        for name, value in ruler_metrics.items():
+            if name not in normalized_objectives and name in OBJECTIVES_REGISTRY:
+                obj_spec = OBJECTIVES_REGISTRY[name]
+                normalized_objectives[name] = NormalizedObjective(
+                    name=name,
+                    raw_value=value,
+                    normalized_value=value,  # Ruler metrics are already relative
+                    direction=obj_spec.direction,
+                    weight=obj_spec.weight,
+                    normalizer=obj_spec.normalizer,
+                    axis_tag=obj_spec.axis_tag,
+                    is_measured=True,
+                )
+
+    obj_tuple = tuple(
+        normalized_objectives[name]
+        for name in objective_names
+        if name in normalized_objectives
+    )
+
+    return ParetoPoint(
+        cell_key=record.cell_key,
+        replication_key=record.measurement_key,
+        objectives=obj_tuple,
+    )
+
+
 def compute_pareto_frontier(
     records: list[Record],
     objective_names: list[str],
@@ -431,66 +498,11 @@ def compute_pareto_frontier(
         baselines: Optional dict mapping task_name -> {objective: baseline_value}
                    for ruler-relative normalization (F0b)
     """
-    from computronium.experiment.schema.metrics import (
-        measured_objectives,
-        objective_metric,
-    )
-    from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
-
-    measured = set(measured_objectives())
-    points = []
-
-    # First pass: extract all raw values for reference
-    reference_values: dict[str, list[float]] = {name: [] for name in objective_names}
-
-    for record in records:
-        for name in objective_names:
-            if name in OBJECTIVES_REGISTRY and name in measured:
-                metric_key = objective_metric(name)
-                raw = record.payload.get(metric_key)
-                if isinstance(raw, int | float) and not isinstance(raw, bool):
-                    reference_values[name].append(float(raw))
-
-    # Second pass: create normalized points
-    for record in records:
-        cell_key = record.cell_key
-        replication_key = record.measurement_key
-
-        raw_objectives = compute_objective_values(record, objective_names)
-        normalized_objectives = normalize_objectives(raw_objectives, reference_values)
-
-        # Add ruler-relative metrics if baselines provided (F0b)
-        if baselines and record.schedule.task_id in baselines:
-            task_baselines = baselines[record.schedule.task_id]
-            # Add ruler metrics as additional objectives
-            ruler_metrics = _compute_ruler_metrics_for_record(record, task_baselines)
-            for name, value in ruler_metrics.items():
-                if name not in normalized_objectives and name in OBJECTIVES_REGISTRY:
-                    obj_spec = OBJECTIVES_REGISTRY[name]
-                    normalized_objectives[name] = NormalizedObjective(
-                        name=name,
-                        raw_value=value,
-                        normalized_value=value,  # Ruler metrics are already relative
-                        direction=obj_spec.direction,
-                        weight=obj_spec.weight,
-                        normalizer=obj_spec.normalizer,
-                        axis_tag=obj_spec.axis_tag,
-                        is_measured=True,
-                    )
-
-        obj_tuple = tuple(
-            normalized_objectives[name]
-            for name in objective_names
-            if name in normalized_objectives
-        )
-
-        points.append(
-            ParetoPoint(
-                cell_key=cell_key,
-                replication_key=replication_key,
-                objectives=obj_tuple,
-            )
-        )
+    reference_values = _extract_reference_values(records, objective_names)
+    points = [
+        _create_pareto_point(record, objective_names, reference_values, baselines)
+        for record in records
+    ]
 
     # Non-dominated sorting
     fronts = non_dominated_sorting(points)
@@ -510,6 +522,60 @@ def compute_pareto_frontier(
     )
 
 
+def _extract_cell_metrics_and_cost(
+    record: Record,
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Extract metrics and cost values from a record's payload."""
+    cell_metrics: dict[str, float] = {}
+    cell_cost: dict[str, float] = {}
+
+    metric_keys = {
+        "val_acc",
+        "val_loss",
+        "val_ppl",
+        "perplexity",
+        "accuracy",
+        "f1_score",
+        "mean_reward",
+        "test_acc",
+    }
+    cost_keys = {
+        "walltime_s",
+        "energy_per_step",
+        "param_count",
+        "flops",
+        "memory_usage",
+        "latency_ms",
+    }
+
+    for key, value in record.payload.items():
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            if key in metric_keys:
+                cell_metrics[key] = float(value)
+            elif key in cost_keys:
+                cell_cost[key] = float(value)
+    return cell_metrics, cell_cost
+
+
+def _map_baseline_values(
+    baseline_values: dict[str, float],
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Map baseline values to metric and cost categories."""
+    baseline_metrics: dict[str, float] = {}
+    baseline_cost: dict[str, float] = {}
+
+    for k, v in baseline_values.items():
+        if k in {"val_acc", "validation_accuracy"}:
+            baseline_metrics["val_acc"] = v
+        elif k in {"walltime_s", "walltime_total"}:
+            baseline_cost["walltime_s"] = v
+        elif k in {"energy_per_step", "energy_per_sample"}:
+            baseline_cost["energy_per_step"] = v
+        elif k in {"param_count"}:
+            baseline_cost["param_count"] = v
+    return baseline_metrics, baseline_cost
+
+
 def _compute_ruler_metrics_for_record(
     record: Record,
     baseline_values: dict[str, float],
@@ -521,35 +587,16 @@ def _compute_ruler_metrics_for_record(
     """
     from computronium.experiment.registry.baseline import compute_ruler_metrics
 
-    # Extract cell metrics and cost metrics
-    cell_metrics = {}
-    cell_cost = {}
-
-    for key, value in record.payload.items():
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            if key in {"val_acc", "val_loss", "val_ppl", "perplexity", "accuracy", "f1_score", "mean_reward", "test_acc"}:
-                cell_metrics[key] = float(value)
-            elif key in {"walltime_s", "energy_per_step", "param_count", "flops", "memory_usage", "latency_ms"}:
-                cell_cost[key] = float(value)
-
-    # Map baseline keys
-    baseline_metrics = {}
-    baseline_cost = {}
-    for k, v in baseline_values.items():
-        if k in {"val_acc", "validation_accuracy"}:
-            baseline_metrics["val_acc"] = v
-        elif k in {"walltime_s", "walltime_total"}:
-            baseline_cost["walltime_s"] = v
-        elif k in {"energy_per_step", "energy_per_sample"}:
-            baseline_cost["energy_per_step"] = v
-        elif k in {"param_count"}:
-            baseline_cost["param_count"] = v
+    cell_metrics, cell_cost = _extract_cell_metrics_and_cost(record)
+    baseline_metrics, baseline_cost = _map_baseline_values(baseline_values)
 
     if not baseline_metrics or not baseline_cost:
         return {}
 
     # Compute ruler metrics
-    ruler = compute_ruler_metrics(cell_metrics, baseline_metrics, cell_cost, baseline_cost)
+    ruler = compute_ruler_metrics(
+        cell_metrics, baseline_metrics, cell_cost, baseline_cost
+    )
     return ruler
 
 

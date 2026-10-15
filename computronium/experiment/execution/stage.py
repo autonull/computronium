@@ -130,7 +130,9 @@ class StageContext:
     system_context: SystemContext
     batch_sizer: Any = None  # BatchSizer for budget-aware n_propose
     cell_stream: CellStream | None = None
-    allocator_promotions: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
+    allocator_promotions: list[tuple[Coordinate, Schedule]] = field(
+        default_factory=list
+    )
 
 
 @runtime_checkable

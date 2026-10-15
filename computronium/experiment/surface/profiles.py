@@ -10,11 +10,15 @@ W1: Unified with ExperimentConfig for single config surface.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from computronium.experiment.execution.stage import StageId
-from computronium.experiment.schema.run_spec import RunSpec
-from computronium.experiment.schema.unified_config import ExperimentConfig, QUESTION_FIRST_STAGES
+from computronium.experiment.schema.unified_config import (
+    QUESTION_FIRST_STAGES,
+    ExperimentConfig,
+)
+
+if TYPE_CHECKING:
+    from computronium.experiment.schema.run_spec import RunSpec
 
 __all__ = [
     "QUESTION_FIRST_STAGES",

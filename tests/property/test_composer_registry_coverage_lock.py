@@ -15,7 +15,6 @@ from __future__ import annotations
 import pytest
 
 from computronium.core.system_trainer.joint import _credit_from_config
-from computronium.core.system_trainer.spec import _plasticity_from_config
 from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
 from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.ontology import (
@@ -43,21 +42,44 @@ def _get_primitives_for_axis(axis: StructuralAxis) -> list[str]:
 # Geometry primitives that require required arguments (task-specific)
 # These are tested in integration tests with actual task dimensions
 _GEOMETRY_REQUIRES_ARGS = {
-    "feedforward", "recurrent", "causal_transformer", "attention",
-    "conv", "graph", "nca", "ntm", "tile", "tile_mesh", "spatial_lattice",
+    "feedforward",
+    "recurrent",
+    "causal_transformer",
+    "attention",
+    "conv",
+    "graph",
+    "nca",
+    "ntm",
+    "tile",
+    "tile_mesh",
+    "spatial_lattice",
 }
 
 # Plasticity primitives that require required arguments
 _PLASTICITY_REQUIRES_ARGS = {
-    "routing", "fast_weights", "substrate_coupled", "rule_state", "temporal_psi",
-    "conflict_adaptive", "closed_form_ridge",
+    "routing",
+    "fast_weights",
+    "substrate_coupled",
+    "rule_state",
+    "temporal_psi",
+    "conflict_adaptive",
+    "closed_form_ridge",
 }
 
 # Update primitives that require required arguments
 _UPDATE_REQUIRES_ARGS = {
-    "role_split", "natural_gradient", "elastic_consolidation", "mean_norm",
-    "spectral_constrained", "riemannian_orthogonal", "ortho_adam",
-    "local_adam", "lion", "muon", "adam", "euclidean",
+    "role_split",
+    "natural_gradient",
+    "elastic_consolidation",
+    "mean_norm",
+    "spectral_constrained",
+    "riemannian_orthogonal",
+    "ortho_adam",
+    "local_adam",
+    "lion",
+    "muon",
+    "adam",
+    "euclidean",
 }
 
 
@@ -99,7 +121,9 @@ def test_every_geometry_registry_key_composes(name: str):
     """Each geometry primitive the registry declares has a valid config classmethod."""
     # Geometries requiring task-specific args are tested in integration tests
     if name in _GEOMETRY_REQUIRES_ARGS:
-        pytest.skip(f"Geometry {name} requires task-specific args (tested in integration)")
+        pytest.skip(
+            f"Geometry {name} requires task-specific args (tested in integration)"
+        )
     config = getattr(GeometryConfig, name)()
     assert config is not None
     assert config.topology_type == name
