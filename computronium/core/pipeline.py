@@ -195,6 +195,34 @@ def _step_psi(
     return new_psi
 
 
+def _global_norm_clip(grads: list[Tensor], max_norm: float = 1.0) -> list[Tensor]:
+    """Clip gradients by global norm (clip_grad_norm_ semantics)."""
+    if max_norm is None or max_norm <= 0 or not grads:
+        return grads
+    stacked_norms = torch.stack([g.norm() for g in grads])
+    total_norm = torch.linalg.vector_norm(stacked_norms)
+    if total_norm > max_norm:
+        scale = max_norm / (total_norm + 1e-8)
+        grads = [g * scale for g in grads]
+    return grads
+
+
+def _update_handles_own_clipping(update: ParameterUpdate) -> bool:
+    """Check if the update type has its own gradient clipping."""
+    # These update types have internal _clip methods:
+    # - EuclideanUpdate (global-norm)
+    # - AdamUpdate (global-norm, inherited by OrthoAdamUpdate, LionUpdate)
+    # Return False for types that lack internal clipping:
+    # - RiemannianOrthogonalUpdate (Muon)
+    # - SpectralConstrainedUpdate
+    # - UnitRMSUpdate
+    # - LocalAdamUpdate
+    # - MeanNormUpdate
+    # - NaturalGradientUpdate
+    update_type = getattr(update.config, "update_type", "")
+    return update_type in {"euclidean", "adam", "ortho_adam", "lion"}
+
+
 def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
     substrate: Substrate,
     geometry: Geometry,
@@ -265,6 +293,8 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
         if energy is None:
             energy = dynamics.compute_energy(output, geometry)
             set_state_field(output, "energy", energy)
+        if not isinstance(energy, Tensor):
+            energy = torch.as_tensor(energy)
 
         pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
         bias_grads = (
@@ -272,6 +302,19 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
             if _is_bias_gradient_source(credit)
             else None
         )
+
+        # Safety net: global-norm clip pseudo-gradients before update.
+        # Only apply for update types that lack internal clipping:
+        # - RiemannianOrthogonalUpdate (Muon)
+        # - SpectralConstrainedUpdate
+        # - UnitRMSUpdate
+        # - LocalAdamUpdate
+        # - MeanNormUpdate
+        # - NaturalGradientUpdate
+        if not _update_handles_own_clipping(update):
+            clip_val = getattr(update.config, "grad_clip", 0.5)
+            pseudo_grads = _global_norm_clip(pseudo_grads, clip_val)
+
         geometry.update_params(
             update.step(geometry.params, pseudo_grads, geometry, bias_grads)
         )
@@ -292,19 +335,19 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
         metrics: dict[str, Tensor] = {
             "loss": loss,
             "energy": energy,
-            "nudged_fit_accuracy": (output.metrics or {}).get(
-                "accuracy", torch.tensor(0.0)
+            "nudged_fit_accuracy": torch.as_tensor(
+                (output.metrics or {}).get("accuracy", 0.0)
             ),
             "free_loss": free_loss,
             "free_energy": free_energy,
-            "free_accuracy": free_accuracy,
+            "free_accuracy": torch.as_tensor(free_accuracy),
         }
         metrics.update({
             k: v
             for k, v in (output.metrics or {}).items()
             if isinstance(v, Tensor)
             and k not in {"accuracy", "free_accuracy", "nudged_fit_accuracy"}
-        })
+        })  # type: ignore[arg-type]
         return metrics
 
 

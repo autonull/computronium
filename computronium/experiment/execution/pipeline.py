@@ -136,17 +136,11 @@ class PipelineConfig:
     def __post_init__(self) -> None:
         # Convert legacy Budget to Deadline if provided
         if self.budget is not None and self.deadline is None:
+            from computronium.experiment.execution.budget import Budget as ExecBudget
             from computronium.experiment.execution.deadline import Deadline
             from computronium.experiment.kernel.resources import Budget as LegacyBudget
-            from computronium.experiment.execution.budget import Budget as ExecBudget
 
-            if isinstance(self.budget, LegacyBudget):
-                object.__setattr__(
-                    self,
-                    "deadline",
-                    Deadline.from_seconds(self.budget.soft_seconds or 3600),
-                )
-            elif isinstance(self.budget, ExecBudget):
+            if isinstance(self.budget, LegacyBudget) or isinstance(self.budget, ExecBudget):
                 object.__setattr__(
                     self,
                     "deadline",
@@ -217,7 +211,9 @@ class PipelineState:
     cell_timing: CellTiming = field(default_factory=CellTiming)
     signal_handler: SignalHandler | None = None
     allocator_state: dict[str, Any] | None = None
-    allocator_promotions: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
+    allocator_promotions: list[tuple[Coordinate, Schedule]] = field(
+        default_factory=list
+    )
     last_decision: Decision | None = None
     # Coverage tracking (R18)
     coverage: dict[str, Any] = field(default_factory=dict)
@@ -1081,7 +1077,9 @@ class PipelineRunner:
             else continue_round(rationale="No stage has decided yet")
         )
 
-    async def _run_allocator(self, records: list[Record]) -> list[tuple[Coordinate, Schedule]]:
+    async def _run_allocator(
+        self, records: list[Record]
+    ) -> list[tuple[Coordinate, Schedule]]:
         """Run EvidenceDrivenAllocator between rounds (R46-R51).
 
         In the deadline system, allocator uses online cell timing for
@@ -1144,7 +1142,11 @@ class PipelineRunner:
 
         candidates = []
         # Use the first task for shape resolution
-        task = self._config.run_spec.task_names[0] if self._config.run_spec.task_names else "xor"
+        task = (
+            self._config.run_spec.task_names[0]
+            if self._config.run_spec.task_names
+            else "xor"
+        )
 
         # Generate candidates at explore fidelity (L0/L1) for promotion to exploit fidelity
         spec = self._config.run_spec

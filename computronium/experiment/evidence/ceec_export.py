@@ -54,6 +54,7 @@ def _ensure_ceec_available() -> bool:
         from ceec.store import CEECStore  # ruff: ignore[unused-import]
 
         import ceec  # ruff: ignore[unused-import]
+
         return True
     except ImportError:
         logger.warning("CEEC package not available; ceec_link will not be populated")
@@ -147,8 +148,7 @@ def export_claims_to_ceec(
             for record in eligible_records:
                 # Filter claims for this record's structural values
                 cell_claims = [
-                    c for c in claims
-                    if getattr(record, c.axis, None) == c.value
+                    c for c in claims if getattr(record, c.axis, None) == c.value
                 ]
 
                 if not cell_claims:
@@ -329,7 +329,14 @@ def export_statistical_result_to_ceec(
                     kind="vector",
                     scope=scope,
                     artifact_refs=[artifact.id],
-                    axes=["substrate", "geometry", "dynamics", "plasticity", "credit", "update"],
+                    axes=[
+                        "substrate",
+                        "geometry",
+                        "dynamics",
+                        "plasticity",
+                        "credit",
+                        "update",
+                    ],
                     values_ref=json.dumps({
                         "substrate": record.substrate,
                         "geometry": record.geometry,

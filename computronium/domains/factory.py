@@ -700,7 +700,15 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
         case _:
             _included_classes, base_name = _parse_split_digits(task_name)
 
-    VISION_KEYWORDS = {"vision", "mnist", "cifar", "fashion", "digits", "usps", "svhn"}
+    VISION_KEYWORDS = {"vision", "mnist", "cifar", "fashion", "usps", "svhn"}
+
+    # "digits" (sklearn) is a tabular dataset, not vision
+    if base_name == "digits":
+        from computronium.domains.tabular import TabularTask
+
+        return TabularTask(
+            name=base_name, dataset_name=base_name, device=str(device), **kwargs
+        )
 
     if any(kw in base_name for kw in VISION_KEYWORDS):
         from computronium.domains.vision import VisionTask

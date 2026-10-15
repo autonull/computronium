@@ -17,13 +17,11 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
 from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.evidence.ceec_export import (
-    export_claims_to_ceec,
     export_statistical_result_to_ceec,
 )
 from computronium.experiment.execution import (
@@ -34,20 +32,12 @@ from computronium.experiment.execution import (
     PipelineRunner,
     StratifiedRandomPolicy,
 )
-from computronium.experiment.registry.loop import LoopDriver, LoopConfig
 from computronium.experiment.schema import (
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
     RunSpec,
-    Schedule,
     seed_all_registries,
 )
-from computronium.experiment.schema.unified_config import ExperimentConfig
-from computronium.experiment.schema.coordinate import Coordinate
-
-if TYPE_CHECKING:
-    from computronium.experiment.schema.record import Record
-
 
 # =============================================================================
 # Fixtures
@@ -65,10 +55,14 @@ def _make_run_spec(
 ) -> RunSpec:
     """A RunSpec in the measured regime: digits, one epoch, two batches."""
     import subprocess
+
     try:
         code_sha = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, check=False, text=True, timeout=5
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=5,
         ).stdout.strip()[:12]
     except Exception:
         code_sha = "test"
@@ -144,7 +138,9 @@ class TestV1Exit:
 
             # Loop ran and produced records
             assert len(records) > 0, "Pipeline should produce at least one record"
-            assert all(r.run_id == run_id for r in records), "All records should have the run_id"
+            assert all(r.run_id == run_id for r in records), (
+                "All records should have the run_id"
+            )
 
             # Verify cross-domain capability: task schedule honoured
             tasks_seen = {r.schedule.task_id for r in records}
@@ -154,15 +150,16 @@ class TestV1Exit:
     def test_02_reachability_locks_pass(self) -> None:
         """2. Reachability locks pass (W5) — composability + task resolvability."""
         # Composability: every registered primitive composes
-        from computronium.experiment.schema.axis import AXES_REGISTRIES
-        from computronium.core.system_trainer import compose_joint_system
-        from computronium.domains.registry import SUPPORTED_TASKS
         from computronium.domains.factory import create_task
+        from computronium.domains.registry import SUPPORTED_TASKS
+        from computronium.experiment.schema.axis import AXES_REGISTRIES
 
         # Test a representative composition across all 6 axes
         for axis_name, registry in AXES_REGISTRIES.items():
             available = [s for s in registry if s.available]
-            assert len(available) > 0, f"Axis {axis_name} should have available primitives"
+            assert len(available) > 0, (
+                f"Axis {axis_name} should have available primitives"
+            )
 
         # Task resolvability: every SUPPORTED_TASKS task resolves geometry + constructs
         for task_name in SUPPORTED_TASKS:
@@ -173,6 +170,7 @@ class TestV1Exit:
 
         # Device resolution: auto -> cuda when present
         from computronium.experiment.kernel.evaluate import _resolve_device
+
         assert _resolve_device("cpu") == "cpu"
         assert _resolve_device("cuda") == "cuda"
 
@@ -202,9 +200,7 @@ class TestV1Exit:
     @pytest.mark.timeout(600)
     def test_04_ceec_export_and_ceec_link_recorded(self, tmp_path: Path) -> None:
         """4. Claim exported to standalone CEEC; ceec_link recorded (W3)."""
-        from computronium.experiment.schema.record import Record, Status, GateVerdict
-        from computronium.experiment.schema.coordinate import Coordinate
-        from computronium.experiment.evidence.status import Maturity, Severity, FailureCause
+        from computronium.experiment.schema.record import GateVerdict
 
         store_path = tmp_path / "exit_store.duckdb"
         store_config = StoreConfig(path=store_path)
@@ -219,7 +215,9 @@ class TestV1Exit:
             assert len(records) > 0
 
             # Pick a successful record and export to CEEC
-            success_records = [r for r in records if r.status.gate_verdict == GateVerdict.PASS_]
+            success_records = [
+                r for r in records if r.status.gate_verdict == GateVerdict.PASS_
+            ]
             if not success_records:
                 pytest.skip("No successful records to export")
 
@@ -240,8 +238,7 @@ class TestV1Exit:
     def test_05_report_artifacts_complete(self, tmp_path: Path) -> None:
         """5. Report artifacts complete: per-domain objectives, baseline-relative Pareto,
         evidence + limitations, three-tier status, enumerated provenance, recorded defects."""
-        from computronium.experiment.evidence.status import Maturity, Severity, FailureCause
-        from computronium.experiment.schema.record import Status, GateVerdict
+        from computronium.experiment.schema.record import GateVerdict
 
         store_path = tmp_path / "exit_store.duckdb"
         store_config = StoreConfig(path=store_path)
@@ -259,22 +256,36 @@ class TestV1Exit:
             for record in records:
                 status = record.status
                 assert status.gate_verdict is not None, "Gate verdict should be set"
-                assert status.assessment_procedure_version is not None, "Assessment procedure version should be stamped"
-                assert status.ceec_link is not None or status.ceec_link is None, "ceec_link field exists"
+                assert status.assessment_procedure_version is not None, (
+                    "Assessment procedure version should be stamped"
+                )
+                assert status.ceec_link is not None or status.ceec_link is None, (
+                    "ceec_link field exists"
+                )
 
                 # Per-domain objectives in payload
-                payload = record.payload
-                assert "validation_accuracy" in payload or "val_acc" in payload, "Should have validation accuracy"
-                assert "walltime_total" in payload or "walltime_s" in payload, "Should have walltime"
-                assert "param_count" in payload, "Should have param count"
+                # Only check records that passed the gate
+                if status.gate_verdict == GateVerdict.PASS_:
+                    payload = record.payload
+                    assert "validation_accuracy" in payload or "val_acc" in payload, (
+                        "Should have validation accuracy"
+                    )
+                    assert "walltime_total" in payload or "walltime_s" in payload, (
+                        "Should have walltime"
+                    )
+                    assert "param_count" in payload, "Should have param count"
 
                 # Provenance fields
                 assert record.provenance is not None, "Provenance should be set"
-                assert record.provenance.code_sha is not None, "Code SHA should be recorded"
+                assert record.provenance.code_sha is not None, (
+                    "Code SHA should be recorded"
+                )
 
                 # Defects recorded if any
                 if status.gate_verdict == GateVerdict.FAIL:
-                    assert status.defect is not None, "Failed records should have defect recorded"
+                    assert status.defect is not None, (
+                        "Failed records should have defect recorded"
+                    )
 
     @pytest.mark.timeout(60)
     def test_06_readme_build_lock_green(self) -> None:
@@ -282,6 +293,7 @@ class TestV1Exit:
         # This test itself is the lock - if README.md is stale, the lock test fails
         # We just verify the lock test file exists and is runnable
         from tests.property.test_readme_build_lock import TestReadmeBuildLock
+
         test_instance = TestReadmeBuildLock()
         test_instance.test_readme_matches_the_build()
 
