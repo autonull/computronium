@@ -1,6 +1,6 @@
 # TODO64: Finish the Autonomous Scientific Loop — Remaining Work from TODO63
 
-**Status:** Phase A complete (F0, F0c done). Phase B: exploit-axis selection ✅, S1 From-Scratch Test ✅ (hard assertion + probe verified), S2 in progress.
+**Status:** Phase A complete (F0, F0c done). Phase B: exploit-axis selection ✅, S1 From-Scratch Test ✅ (hard assertion + probe verified), S2: unit test ✅, probe ✅ (hypothesis evaluation logic works; probe runs but gradient credit not swept in tiny explore budget — acceptance test will use larger budget).
 **Predecessor:** TODO63.md (full rationale). This doc keeps only what is *not yet done*.
 **Goal:** close the gap between "the loop runs" and "the loop produces a first empirical verdict."
 That means scientific validation (From-Scratch Test, First Governed Claim), cross-domain coverage,
@@ -26,6 +26,8 @@ statistical rigor, and the hygiene/instrumentation that makes it trustworthy at 
 Fast verification artifacts created this session:
 - `tests/unit/test_pareto_frontier_selection.py` — 6 tests, <1s
 - `scripts/probes/probe_credit_promotion.py` — 1 cycle probe, ~2 min
+- `tests/unit/test_hypothesis_evaluation.py` — 6 tests, <1s (S2 unit test)
+- `scripts/probes/probe_hypothesis_s2.py` — 1 cycle probe, ~3 min (S2 probe)
 
 All remaining work follows this pattern.
 
@@ -67,11 +69,10 @@ without seeded priors.
 ### S2 — First Governed Claim (DoD §6.13)
 One preregistered cross-domain hypothesis with a definitive verdict, exported at the CEEC boundary.
 Candidate `H1_credit_efficiency`.
-- Scaffolded in `...::TestFirstGovernedClaim`; **not verified green**.
-- **Risk:** per-cycle single-task evaluation starves cross-domain hypotheses — accumulate records
-  across cycles before testing.
-- **Boundary:** the loop exports a `ceec_link`/`StatisticalResult`; it must *not* render the verdict
-  (CEEC owns the decision).
+- Unit test `tests/unit/test_hypothesis_evaluation.py` ✅ verifies `_test_hypothesis` returns `StatisticalResult` with p_value/effect_size for multiple test types.
+- Probe `scripts/probes/probe_hypothesis_s2.py` ✅ runs 1-cycle loop with hypothesis evaluation; logic works but tiny explore budget (sweep_steps=4) doesn't sweep gradient credit — acceptance test uses sweep_steps=10.
+- **Risk:** per-cycle single-task evaluation starves cross-domain hypotheses — accumulate records across cycles before testing.
+- **Boundary:** the loop exports a `ceec_link`/`StatisticalResult`; it must *not* render the verdict (CEEC owns the decision).
 
 ---
 
@@ -274,7 +275,7 @@ Phases ordered by dependency. Each phase ends in a **fast gate** (unit tests + t
 | Phase | Work | Fast gate (dev) | Phase gate (once) |
 |---|---|---|---|
 | **A** | Honest measurement | — | ✅ DONE |
-| **B** | S2 First Governed Claim; B2 discovery/confirmation seeds | Unit test: `test_hypothesis_evaluation.py` + probe: 1-cycle `xor` | `TestFirstGovernedClaim` green; verdict CONFIRMED/REJECTED |
+| **B** | S2 First Governed Claim; B2 discovery/confirmation seeds | Unit test: `test_hypothesis_evaluation.py` ✅ + probe: 1-cycle `xor` ✅ | `TestFirstGovernedClaim` green; verdict CONFIRMED/REJECTED |
 | **C** | B1 power analysis; M1–M3 self-validation | Unit tests for each (synthetic data) | Property tests pass; `capabilities` command works |
 | **D** | K1–K3 instrumentation; allocator; stability dedup | Unit tests per module | Per-stage timings queryable; allocator promotes or deleted |
 | **E** | §10 orphans delete/wire; regression locks | Delete = no test; wire = unit test | Orphans gone; ruff/pyright clean; shard runs green |
@@ -286,7 +287,5 @@ Phases ordered by dependency. Each phase ends in a **fast gate** (unit tests + t
 
 ## 15. Next action (fast-first)
 
-1. **S2 Fast unit test** — `tests/unit/test_hypothesis_evaluation.py`: synthetic records → verify `_test_hypothesis` returns `StatisticalResult` with p_value/effect_size.
-2. **S2 Tiny probe** — `scripts/probes/probe_hypothesis_s2.py`: 1 cycle, n_seeds=1, 3 steps on `xor` → confirm hypothesis registry records verdict.
-3. **Phase B gate** — run `TestFirstGovernedClaim` **once** (acceptance).
-4. **Phase C** — power analysis (B1), gate-calibration (M1), drift detection (M2) — all via unit tests.
+1. **Phase B gate** — run `TestFirstGovernedClaim` **once** (acceptance).
+2. **Phase C** — power analysis (B1), gate-calibration (M1), drift detection (M2) — all via unit tests.

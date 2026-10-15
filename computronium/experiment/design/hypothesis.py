@@ -226,10 +226,10 @@ class HypothesisResult(BaseModel):
 
         return StatisticalResult(
             hypothesis_id=self.hypothesis_id,
-            test_name=self.test_type.value,
+            test_name=self.test_type,
             p_value=self.p_value,
             effect_size=self.effect_size,
-            effect_size_type=self.effect_size_type.value,
+            effect_size_type=self.effect_size_type,
             confidence_interval=self.confidence_interval,
             significant=self.significant,
             power_achieved=self.power_achieved,
@@ -396,7 +396,7 @@ CREDIT_EFFICIENCY_HYPOTHESIS = HypothesisSpec(
     rationale="Equilibrium propagation (thermodynamic_contrast) uses local updates that may be more energy-efficient than backprop",
     test_type=TestType.PAIRED_T_TEST,
     primary_metric="energy_per_step",
-    grouping_factor="substrate",
+    grouping_factor="credit",
     comparison_values=["gradient", "thermodynamic_contrast"],
     min_effect_size=0.5,
     required_power=0.8,
