@@ -30,12 +30,15 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import shutil
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SNIPPET_DIR = Path(__file__).resolve().parent
 README = REPO / "README.md"
+CHEATSHEET_SRC = REPO / "docs" / "cheatsheet" / "cheatsheet.svg"
+CHEATSHEET_DST = REPO / "cheatsheet.svg"
 
 _GENERATED_RE = re.compile(r"<!-- gen:([a-z_]+) -->")
 

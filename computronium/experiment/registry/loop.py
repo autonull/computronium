@@ -602,7 +602,7 @@ class LoopDriver:
             policy = create_policy(
                 policy_name,
                 **policy_context(
-                    spec, policy_name, shape=task_shape, deadline=deadline
+                    spec, policy_name, shape=task_shape, deadline=deadline, legality_engine=self._legality
                 ),
             )
 

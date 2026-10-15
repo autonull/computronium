@@ -1,6 +1,6 @@
 ## 📋 Architecture Cheatsheet
 
-![Computronium Architecture Cheatsheet](../cheatsheet/cheatsheet.svg)
+![Computronium Architecture Cheatsheet](docs/cheatsheet/cheatsheet.svg)
 
 Computronium at a glance — a live reflection of the codebase architecture, regenerated from source on every build.
 
@@ -39,7 +39,7 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 ### Artifacts
 
-- **SVG diagram**: [`docs/cheatsheet/cheatsheet.svg`](../cheatsheet/cheatsheet.svg) — directed architecture graph with nested panel insets
-- **Data file**: [`docs/cheatsheet/cheatsheet.txt`](../cheatsheet/cheatsheet.txt) — structured data behind the diagram
+- **SVG diagram**: [`docs/cheatsheet/cheatsheet.svg`](docs/cheatsheet/cheatsheet.svg) — directed architecture graph with nested panel insets
+- **Data file**: [`docs/cheatsheet/cheatsheet.txt`](docs/cheatsheet/cheatsheet.txt) — structured data behind the diagram
 
 > **Regeneration**: `uv run python docs/cheatsheet/cheatsheet_create.py` — pulls live facts from registries, configs, and catalogs.

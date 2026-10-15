@@ -173,6 +173,8 @@ class ProposalContext:
     # Backward compatibility
     budget: Any = None
     cost_model: Any = None
+    # Defect constraints from LegalityEngine (Phase 3 wiring)
+    legality_engine: Any = None
 
     def __post_init__(self) -> None:
         # Convert legacy Budget to Deadline if provided
@@ -294,9 +296,52 @@ class ProposalContext:
         policies that build their own — a mutated cell is a cell nobody has
         composed yet, and an uncomposable cell is discovered by training.
 
-        Checks deadline affordability only; composability is validated at GateStage/ComposeStage.
+        Checks deadline affordability and LegalityEngine constraints (defect-derived).
         """
-        return bool(_affordable([(coordinate, schedule)], self.deadline, None))
+        if not _affordable([(coordinate, schedule)], self.deadline, None):
+            return False
+        if self.legality_engine is not None:
+            from computronium.experiment.legality.dsl import CoordinateContext
+            from computronium.experiment.legality.engine import ConstraintEnforcement, ConstraintScope
+            ctx = CoordinateContext(
+                Coordinate(
+                    substrate=coordinate.substrate,
+                    geometry=coordinate.geometry,
+                    dynamics=coordinate.dynamics,
+                    plasticity=coordinate.plasticity,
+                    credit=coordinate.credit,
+                    update=coordinate.update,
+                    params=coordinate.params,
+                )
+            )
+            hard_violations, _ = self.legality_engine.evaluate_record(
+                # Create a minimal record-like object for evaluation
+                type("_Record", (), {
+                    "record_id": "",
+                    "cell_key": coordinate.cell_key(),
+                    "measurement_key": coordinate.measurement_key(schedule),
+                    "substrate": coordinate.substrate,
+                    "geometry": coordinate.geometry,
+                    "dynamics": coordinate.dynamics,
+                    "plasticity": coordinate.plasticity,
+                    "credit": coordinate.credit,
+                    "update": coordinate.update,
+                    "params": coordinate.params,
+                    "schedule": schedule,
+                    "status": type("_Status", (), {
+                        "gate_verdict": type("_GV", (), {"value": "PASS"}),
+                        "quarantine": False,
+                    })(),
+                    "provenance": type("_Prov", (), {
+                        "code_sha": "",
+                        "data_origin": "exploration",
+                    })(),
+                })(),
+                ConstraintEnforcement.S4_EXPANSION
+            )
+            if hard_violations:
+                return False
+        return True
 
 
 def _dedupe(
@@ -1230,6 +1275,7 @@ def policy_context(
     *,
     shape: ShapeResolver | None = None,
     deadline: Deadline | None = None,
+    legality_engine: Any | None = None,
 ) -> dict[str, Any]:
     """The run arguments one policy is offered.
 
@@ -1243,10 +1289,11 @@ def policy_context(
         name: The chosen policy's catalog key.
         shape: Shape resolver for cell legality.
         deadline: Hard deadline for time enforcement.
+        legality_engine: LegalityEngine for defect-derived constraints.
 
     Returns:
         The subset of ``seed``, ``objectives``, ``axis_objectives``, ``spec``,
-        and ``deadline`` that this policy accepts.
+        ``deadline``, and ``legality_engine`` that this policy accepts.
 
     Raises:
         ValueError: The policy name is unknown.
@@ -1265,6 +1312,7 @@ def policy_context(
         # screen legality without the shape, so it must reach the policy.
         "shape": shape,
         "deadline": deadline,
+        "legality_engine": legality_engine,
     }
 
     # Add I(C,U) model for icu_guided sampler
