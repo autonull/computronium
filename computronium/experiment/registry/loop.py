@@ -990,14 +990,23 @@ class LoopDriver:
         if not records:
             return self._explore_axes()
 
-        frontier = compute_pareto_frontier(records, list(_objectives_for(task)))
-        front_keys = {point.cell_key for point in frontier.front()}
-        front_records = [r for r in records if r.cell_key in front_keys]
-        if not front_records:
+        objective_names = list(_objectives_for(task))
+        frontier = compute_pareto_frontier(records, objective_names)
+        front_points = frontier.front()
+        if not front_points:
             return self._explore_axes()
 
+        # Select diverse top-k from frontier using crowding distance
+        # This prevents "exploit" from being the full space when all cells are non-dominated
+        k = min(5, len(front_points))
+        selected_points = frontier.select_diverse(k)
+
+        # Map cell_key back to records
+        front_keys = {p.cell_key for p in selected_points}
+        selected_records = [r for r in records if r.cell_key in front_keys]
+
         union: dict[StructuralAxis, set[str]] = {axis: set() for axis in StructuralAxis}
-        for record in front_records:
+        for record in selected_records:
             for axis, value in (
                 (StructuralAxis.SUBSTRATE, record.substrate),
                 (StructuralAxis.GEOMETRY, record.geometry),

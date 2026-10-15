@@ -535,7 +535,7 @@ def promote_with_stats(
     eligible = eligible_cells(records, spec.n_seeds)
 
     # Now run statistical gates for L1->L2 decision
-    from computronium.experiment.execution.promotion import (
+    from computronium.experiment.schema.record import (
         Maturity,
         ReproducibilityClass,
     )

@@ -68,6 +68,19 @@ class ParetoFrontier:
         """Return points on the Pareto front (rank == 0)."""
         return [p for p in self.points if p.rank == 0]
 
+    def select_diverse(self, k: int) -> list[ParetoPoint]:
+        """Select up to k diverse points from the front by crowding distance.
+
+        Points with infinite crowding distance (boundary points) are preferred,
+        then points with larger crowding distance.
+        """
+        front = self.front()
+        if not front:
+            return []
+        if len(front) <= k:
+            return list(front)
+        return sorted(front, key=lambda p: p.crowding_distance, reverse=True)[:k]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "n_points": len(self.points),

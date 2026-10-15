@@ -46,66 +46,69 @@ def _run_loop(
     task_schedule: tuple[str, ...],
     hypothesis_ids: tuple[str, ...] = (),
     use_icu_guided: bool = False,
-) -> tuple[Path, Path]:
-    """Run the loop and return (state_dir, store_path)."""
+) -> tuple[Path, Path, tempfile.TemporaryDirectory]:
+    """Run the loop and return (state_dir, store_path, tmpdir).
+
+    The caller is responsible for cleaning up the TemporaryDirectory.
+    """
     seed_all_registries()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        state_dir = Path(tmpdir) / "loop_state"
-        store_path = Path(tmpdir) / "loop.duckdb"
-        state_dir.mkdir(parents=True, exist_ok=True)
+    tmpdir = tempfile.TemporaryDirectory()
+    state_dir = Path(tmpdir.name) / "loop_state"
+    store_path = Path(tmpdir.name) / "loop.duckdb"
+    state_dir.mkdir(parents=True, exist_ok=True)
 
-        config = LoopConfig(
-            store_path=store_path,
-            state_dir=state_dir,
-            stages=(
-                "s1_frame",
-                "s2_space",
-                "s3_schedule",
-                "s4_gate",
-                "s5_compose",
-                "s6_train",
-                "s7_measure",
-                "s8_record",
-                "s9_attribute",
-                "s10_decide",
-                "s11_report",
-            ),
-            param_budget=10000,
-            policy="model_based",
-            hyperparameters={
-                "dynamics.step_size": {"lo": 0.01, "hi": 0.5, "scale": "log"},
-                "dynamics.beta": {"lo": 0.1, "hi": 1.0, "scale": "log"},
-                "dynamics.max_steps": {"lo": 10, "hi": 100, "scale": "linear"},
-                "update.step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"},
-            }
-            if False
-            else {},  # type: ignore[arg-type]
-            checkpoint_every_n=0,
-            device="cpu",
-            master_seed=42,
-            hours=1.0,
-            cycles=cycles,
-            n_seeds=n_seeds,
-            explore_fidelity="L0",
-            exploit_fidelity="L1",
-            explore_hours=0.1,
-            exploit_hours=0.1,
-            explore_sweep_steps=10,
-            exploit_sweep_steps=5,
-            epochs_explore=1,
-            epochs_exploit=3,
-            cell_workers=2,
-            task_schedule=task_schedule,
-            hypothesis_ids=hypothesis_ids,
-            hypothesis_registry_path=state_dir / "hypotheses.json",
-            use_icu_guided=use_icu_guided,
-        )
+    config = LoopConfig(
+        store_path=store_path,
+        state_dir=state_dir,
+        stages=(
+            "s1_frame",
+            "s2_space",
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+            "s9_attribute",
+            "s10_decide",
+            "s11_report",
+        ),
+        param_budget=10000,
+        policy="model_based",
+        hyperparameters={
+            "dynamics.step_size": {"lo": 0.01, "hi": 0.5, "scale": "log"},
+            "dynamics.beta": {"lo": 0.1, "hi": 1.0, "scale": "log"},
+            "dynamics.max_steps": {"lo": 10, "hi": 100, "scale": "linear"},
+            "update.step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"},
+        }
+        if False
+        else {},  # type: ignore[arg-type]
+        checkpoint_every_n=0,
+        device="cpu",
+        master_seed=42,
+        hours=1.0,
+        cycles=cycles,
+        n_seeds=n_seeds,
+        explore_fidelity="L0",
+        exploit_fidelity="L1",
+        explore_hours=0.1,
+        exploit_hours=0.1,
+        explore_sweep_steps=10,
+        exploit_sweep_steps=5,
+        epochs_explore=1,
+        epochs_exploit=3,
+        cell_workers=2,
+        task_schedule=task_schedule,
+        hypothesis_ids=hypothesis_ids,
+        hypothesis_registry_path=state_dir / "hypotheses.json",
+        use_icu_guided=use_icu_guided,
+    )
 
-        driver = LoopDriver(config)
-        driver.run(dry_run=False)
+    driver = LoopDriver(config)
+    driver.run(dry_run=False)
 
-        return state_dir, store_path
+    return state_dir, store_path, tmpdir
 
 
 class TestFromScratchTest:
@@ -121,20 +124,25 @@ class TestFromScratchTest:
         """Run loop on cheap tasks to verify Pareto discovery."""
         # Run on cheap tasks: xor, iris, spiral (vision/tabular)
         # These are fast and cover multiple domains
-        task_schedule = ("xor", "iris", "spiral")
-        state_dir, store_path = _run_loop(
-            cycles=3,  # One cycle per task
+        # Schedule: each task gets explore then exploit consecutively
+        # so exploit has records from the same task's explore cycle
+        task_schedule = ("xor", "xor", "iris", "iris", "spiral", "spiral")
+        state_dir, store_path, tmpdir = _run_loop(
+            cycles=6,  # One explore-exploit pair per task
             n_seeds=2,
             task_schedule=task_schedule,
         )
-        yield state_dir, store_path, task_schedule
+        try:
+            yield state_dir, store_path, ("xor", "iris", "spiral")
+        finally:
+            tmpdir.cleanup()
 
     def test_loop_covers_multiple_domains(self, from_scratch_run):
         """The loop runs across vision and tabular domains."""
-        state_dir, store_path, task_schedule = from_scratch_run
+        _, store_path, task_schedule = from_scratch_run
         with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
             runs = store.query_runs()
-            assert len(runs) >= 3, "Expected at least 3 runs (one per task)"
+            assert len(runs) >= 6, "Expected at least 6 runs (two per task)"
 
             tasks_seen = set()
             for run in runs:
@@ -147,14 +155,15 @@ class TestFromScratchTest:
 
     def test_pareto_frontier_includes_local_credit(self, from_scratch_run):
         """The Pareto frontier includes local credit (thermodynamic_contrast)."""
-        state_dir, store_path, task_schedule = from_scratch_run
+        _, store_path, _ = from_scratch_run
         with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
+            local_credit_found = False
             for run in store.query_runs():
                 records = store.query_records(run_id=run.run_id)
                 promoted = [
                     r
                     for r in records
-                    if r.status.maturity.value in ("L1", "L2")
+                    if r.status.maturity.value in {"L1", "L2"}
                     and not r.status.quarantine
                 ]
                 if not promoted:
@@ -164,22 +173,29 @@ class TestFromScratchTest:
                 credit_types = {r.credit for r in promoted}
                 has_local_credit = any(
                     c in credit_types
-                    for c in (
+                    for c in {
                         "thermodynamic_contrast",
                         "random_projections",
                         "pepita",
                         "local_goodness",
-                    )
+                    }
                 )
-                # At least one task should have local credit on the frontier
-                # (This is a soft assertion - the test documents the expectation)
+                if has_local_credit:
+                    local_credit_found = True
                 print(
                     f"Task {run.spec.task if run.spec else 'unknown'}: credits={credit_types}"
                 )
 
+            # Hard assertion: at least one task must have local credit on the Pareto frontier
+            assert local_credit_found, (
+                "No task has local credit (thermodynamic_contrast, random_projections, "
+                "pepita, local_goodness) on the Pareto frontier. The loop failed to "
+                "rediscover the known Pareto-optimal region."
+            )
+
     def test_no_hardcoded_seeds_or_hints(self, from_scratch_run):
         """Verify no KNOWN_GOOD seeds or FIX_HINTS are used."""
-        state_dir, store_path, task_schedule = from_scratch_run
+        state_dir, _, _ = from_scratch_run
 
         # Check the loop report for any mention of hardcoded values
         report_path = state_dir / "report.md"
@@ -211,34 +227,37 @@ class TestFirstGovernedClaim:
     def hypothesis_run(self):
         """Run loop with hypothesis evaluation enabled."""
         task_schedule = ("xor", "iris", "digits")
-        state_dir, store_path = _run_loop(
+        state_dir, store_path, tmpdir = _run_loop(
             cycles=3,
             n_seeds=2,
             task_schedule=task_schedule,
             hypothesis_ids=("H1_credit_efficiency",),
             use_icu_guided=False,
         )
-        yield state_dir, store_path, task_schedule
+        try:
+            yield state_dir, store_path, task_schedule
+        finally:
+            tmpdir.cleanup()
 
     def test_hypothesis_pre_registered(self, hypothesis_run):
         """The hypothesis is pre-registered in the registry."""
-        state_dir, store_path, task_schedule = hypothesis_run
+        state_dir, _, _ = hypothesis_run
         registry_path = state_dir / "hypotheses.json"
         assert registry_path.exists()
 
         registry = HypothesisRegistry(registry_path)
         hyp = registry.get("H1_credit_efficiency")
         assert hyp is not None
-        assert hyp.status in (
+        assert hyp.status in {
             HypothesisStatus.PRE_REGISTERED,
             HypothesisStatus.TESTED,
             HypothesisStatus.CONFIRMED,
             HypothesisStatus.REJECTED,
-        )
+        }
 
     def test_hypothesis_evaluated(self, hypothesis_run):
         """The hypothesis was evaluated and has a result."""
-        state_dir, store_path, task_schedule = hypothesis_run
+        state_dir, _, _ = hypothesis_run
         registry_path = state_dir / "hypotheses.json"
         registry = HypothesisRegistry(registry_path)
         hyp = registry.get("H1_credit_efficiency")
@@ -254,20 +273,20 @@ class TestFirstGovernedClaim:
 
     def test_hypothesis_has_definitive_verdict(self, hypothesis_run):
         """The hypothesis has a definitive verdict (CONFIRMED or REJECTED)."""
-        state_dir, store_path, task_schedule = hypothesis_run
+        state_dir, _, _ = hypothesis_run
         registry_path = state_dir / "hypotheses.json"
         registry = HypothesisRegistry(registry_path)
         hyp = registry.get("H1_credit_efficiency")
         assert hyp is not None
 
-        assert hyp.status in (
+        assert hyp.status in {
             HypothesisStatus.CONFIRMED,
             HypothesisStatus.REJECTED,
-        ), f"Hypothesis status is {hyp.status.value}, not definitive"
+        }, f"Hypothesis status is {hyp.status.value}, not definitive"
 
     def test_ceec_link_exported(self, hypothesis_run):
         """The hypothesis result is exported with a CEEC link."""
-        state_dir, store_path, task_schedule = hypothesis_run
+        state_dir, _, _ = hypothesis_run
         registry_path = state_dir / "hypotheses.json"
         registry = HypothesisRegistry(registry_path)
         hyp = registry.get("H1_credit_efficiency")
@@ -285,7 +304,7 @@ class TestFirstGovernedClaim:
 
     def test_cross_domain_evaluation(self, hypothesis_run):
         """The hypothesis is evaluated across multiple domains."""
-        state_dir, store_path, task_schedule = hypothesis_run
+        _, store_path, _ = hypothesis_run
         with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
             runs = store.query_runs()
             tasks_with_records = set()

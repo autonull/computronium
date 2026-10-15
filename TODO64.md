@@ -1,6 +1,6 @@
 # TODO64: Finish the Autonomous Scientific Loop — Remaining Work from TODO63
 
-**Status:** Phase A complete (F0, F0c done). Phase B in progress (exploit-axis selection, S1, S2).
+**Status:** Phase A complete (F0, F0c done). Phase B: exploit-axis selection ✅, S1 From-Scratch Test ✅ (hard assertion + probe verified), S2 in progress.
 **Predecessor:** TODO63.md (full rationale). This doc keeps only what is *not yet done*.
 **Goal:** close the gap between "the loop runs" and "the loop produces a first empirical verdict."
 That means scientific validation (From-Scratch Test, First Governed Claim), cross-domain coverage,
@@ -28,19 +28,20 @@ statistical rigor, and the hygiene/instrumentation that makes it trustworthy at 
 | Cleanup — `execution/budget.py`, `cost_tracking.py`, `promotion.promote_run` deleted | ✅ partial |
 | **F0 — Per-domain objective emission (perplexity, f1_score, bleu_score, mean_reward)** | ✅ **Phase A complete** |
 | **F0c — Baseline metric-name mismatch fix** | ✅ **Phase A complete** |
+| **§6.4 — Exploit-axis selection (crowding distance + top-k)** | ✅ **Phase B complete** |
+| **S1 — From-Scratch Test: hard assertion + probe verified** | ✅ **Phase B complete** |
 
 ---
 
 ## 2. Scientific payoff (highest priority — the reason the loop exists)
 
-### S1 — From-Scratch Test (DoD §6.12)
+### S1 — From-Scratch Test (DoD §6.12) ✅ **COMPLETE**
 Loop rediscovers the known Pareto-optimal region (`tile_mesh` + local credit) on cheap tasks
 without seeded priors.
-- Scaffolded in `tests/acceptance/test_todo63_scientific_validation.py::TestFromScratchTest`; **not
-  verified green**.
-- `test_pareto_frontier_includes_local_credit` only `print`s — **make it a hard assertion** or it is
-  a comment (a lock whose fixture cannot fail is a comment).
-- Blocked by weak exploit-axis selection (§6).
+- Exploit-axis selection fixed (§6.4): crowding-distance top-k selection prevents "exploit" ≈ full space.
+- `test_pareto_frontier_includes_local_credit` now a hard assertion in `tests/acceptance/test_todo63_scientific_validation.py::TestFromScratchTest`.
+- Probe `scripts/probes/probe_credit_promotion.py` confirms local credits (thermodynamic_contrast, local_goodness) reach L1 in explore phase.
+- Acceptance test fixture updated with consecutive task schedule (explore→exploit per task) and tempdir cleanup.
 
 ### S2 — First Governed Claim (DoD §6.13)
 One preregistered cross-domain hypothesis with a definitive verdict, exported at the CEEC boundary.
@@ -237,8 +238,8 @@ time ≫ interval; for `quick-verify` **never** checkpoint.
 | 9 | Self-report (calibration, drift, gaps) | 🔄 M-lite done; §8 |
 | 10 | CLI-only; zero `run_*.sh` | ✅ |
 | 11 | No `KNOWN_GOOD`/`FIX_HINTS` | ✅ |
-| 12 | **From-Scratch Test** | ❌ §2 S1 |
-| 13 | **First Governed Claim** + CEEC export | ❌ §2 S2 |
+| 12 | **From-Scratch Test** | ✅ §2 S1 |
+| 13 | **First Governed Claim** + CEEC export | 🔄 §2 S2 |
 | 14 | Provenance; crash resume; replay | ✅ run-level; §6.1 loop-level |
 | 15 | **Per-domain objectives emitted (perplexity, f1_score, bleu_score, mean_reward)** | ✅ §3 F0 |
 | 16 | **Baseline metric-name mismatch fixed** | ✅ §3 F0c |
@@ -253,7 +254,7 @@ development. Item IDs reference the sections above.
 | Phase | Work | Depends on | Exit criterion |
 |---|---|---|---|
 | **A. Honest measurement** | F0, F0b, F0c, R1, R2 | — | ✅ **COMPLETE** — `coverage` shows language/RL/graph with their own metrics; baseline Δ computes for language task; gate_values regression passes |
-| **B. Scientific acceptance** | §6.4 (exploit selection), B2 (discovery/confirmation seeds), S1, S2 | A | both acceptance tests green; hypothesis gets CONFIRMED/REJECTED; CEEC export consumed |
+| **B. Scientific acceptance** | §6.4 (exploit selection), B2 (discovery/confirmation seeds), S1, S2 | A | S1 ✅; S2 🔄 acceptance test green; hypothesis gets CONFIRMED/REJECTED; CEEC export consumed |
 | **C. Rigor & self-awareness** | B1 (power/multiplicity), M1, M2, M3, R3 | B | noisy cell not promoted; `capabilities` truthful; CLI-reachability CI green |
 | **D. Instrumentation & integrity** | K1, K2, K3, allocator (wire/delete), stability dedup | A | per-stage timings queryable; allocator either promotes or is gone |
 | **E. Hygiene / consolidation** | §10 table + remaining §1-register items; lock hygiene | — (round close) | orphans gone; ruff/pyright clean on changed; shard runs green |
@@ -266,7 +267,7 @@ close.
 
 ## 15. Next action
 
-1. **Phase B** — exploit-axis selection (§6.4), then S1 (From-Scratch Test), then S2 (First Governed Claim).
+1. **Phase B** — S2 (First Governed Claim): verify `TestFirstGovernedClaim` green on cheap tasks.
 2. **Phase C** — power/multiplicity analysis (B1), gate-calibration feedback (M1), drift detection (M2).
 3. Fold §10 deletions into the next round-close hygiene commit.
 4. Scale to `--budget 24h` only after S1/S2 pass on cheap tasks.
