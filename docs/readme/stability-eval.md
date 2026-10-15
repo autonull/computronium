@@ -1,4 +1,3 @@
----
 
 ## 📐 Stability-Plasticity Trade-off Hypothesis
 
@@ -49,7 +48,6 @@ The campaign asks whether adaptive-rule systems occupy a superior Pareto frontie
 The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
 </details>
 
----
 
 ## 🌐 Evaluation Domains
 
@@ -67,39 +65,27 @@ The framework defines **7 evaluation domains**, unified through a common task in
 | **Time Series** | 1 (+1 planned) | Synthetic Forecast; ETT (planned) | 6+ | MSE, MAE |
 | **Scientific** | 2 (+PDE suite planned) | Pendulum/Lorenz ODE simulation; Heat/Wave/Burgers, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
 
-### 🖼️ Vision Domain
-
-**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
-(image classification + synthetic boolean tasks)
-
-**Quick Commands**
+**Quick Commands (all domains)**
 ```bash
-# Quick verification run
+# Quick verification run (dry-run)
 comp run quick-verify --dry-run
 
 # Run with store
 comp run quick-verify --store experiment.duckdb
 ```
 
+### 🖼️ Vision Domain
+
+**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
+(image classification + synthetic boolean tasks)
+
 ### 📝 Language Modeling Domain
 
 **Tasks**: `tiny_shakespeare` (char), `char_ngram`; `wikitext2`, `penn_treebank` (planned)
 
-**Key Experiments**
-```bash
-# Quick verification run
-comp run quick-verify --dry-run
-```
-
 ### 🎮 Reinforcement Learning Domain
 
 **Tasks**: `cartpole`, `pendulum`, `acrobot` (implemented); `mountain_car`, `lunar_lander` (planned) — Gymnasium classic control + Box2D
-
-**Key Experiments**
-```bash
-# Quick verification run
-comp run quick-verify --dry-run
-```
 
 ### 🕸️ Graph Domain
 

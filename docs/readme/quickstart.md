@@ -56,4 +56,3 @@ print(f"train accuracy: {history[-1]['train_acc']:.1%}")
 
 Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 train accuracy (chance 0.1).
 
----

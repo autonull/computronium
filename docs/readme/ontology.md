@@ -58,7 +58,6 @@ and its verification level. Rendered cards live in
 pre-commit (C.1) and fails when a concrete primitive ships without
 one.
 
----
 
 ### Architecture Diagram
 
@@ -83,4 +82,3 @@ state, e.g. memristive conductance), not a strict sequential pipeline.
 The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
 </details>
 
----

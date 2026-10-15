@@ -16,4 +16,3 @@ uv run comp status --store experiment.duckdb
 uv run comp report --run-id <id> --store experiment.duckdb
 ```
 
----

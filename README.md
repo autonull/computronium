@@ -33,43 +33,6 @@ The library is usable independently of the research hypotheses; the research pro
 
 The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
 
----
-
-## Contents
-
-- [What is Computronium](#what-is-computronium)
-- [Install](#install)
-- [60-second quickstart](#60-second-quickstart)
-- [The 6-axis ontology](#the-6-axis-ontology)
-- [ML Library Capabilities](#ml-library-capabilities)
-- [🧬 Coupled Dynamical Systems](#coupled-dynamical-systems)
-- [⚡ Energy, Stability, and Dynamical Invariants](#energy-stability-and-dynamical-invariants)
-- [🏗️ Core Architecture](#core-architecture)
-- [🔬 Validation Framework: Property-Verified Hypercube](#validation-framework-property-verified-hypercube)
-- [📐 Stability-Plasticity Trade-off Hypothesis](#stability-plasticity-trade-off-hypothesis)
-- [🌐 Evaluation Domains](#evaluation-domains)
-- [The Experiment Kernel](#the-experiment-kernel)
-- [CLI reference](#cli-reference)
-- [Demonstrations](#demonstrations)
-- [Evidence & claims](#evidence--claims)
-- [🌐 Distributed Training & P2P](#distributed-training--p2p)
-- [🚀 Deployment & Inference](#deployment--inference)
-- [📊 Analysis & Visualization (`computronium/analysis/`)](#analysis--visualization-computroniumanalysis)
-- [⚡ Hardware Acceleration (`computronium/acceleration/`)](#hardware-acceleration-computroniumacceleration)
-- [🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)](#shared-acceleration-layer-computroniumacceleration--registry--dispatch)
-- [🛠️ Kernel Development Workflow](#kernel-development-workflow)
-- [📚 Documentation & Bench Tools from Specs](#documentation--bench-tools-from-specs)
-- [🧪 Enhanced CLI Tools](#enhanced-cli-tools)
-- [🧪 Registry Integrity Locks (Extended Verification Framework)](#registry-integrity-locks-extended-verification-framework)
-- [🧭 CEEC Epistemic Operating System (`packages/ceec-core`)](#ceec-epistemic-operating-system-packagesceec-core)
-- [📦 Standalone Platform Packages (`packages/`)](#standalone-platform-packages-packages)
-- [For developers](#for-developers)
-- [Research program](#research-program)
-- [FAQ / Troubleshooting + Glossary](#faq--troubleshooting--glossary)
-- [License](#license)
-
----
-
 ## What is Computronium
 
 Computronium ships three layers, each usable independently:
@@ -81,17 +44,6 @@ Computronium ships three layers, each usable independently:
 | **Scientific Program** (hypotheses + governance) | Motivating hypotheses on locality, plasticity, stability, and physical constraints; standalone CEEC governance ledger (not integrated) | Ongoing empirical investigation — claims below are labeled by verification level, never asserted beyond their evidence |
 
 **Claim-strength discipline.** Every claim in this README is labeled by its verification level: (1) analytical, (2) machine-checked, (3) certified numerical, (4) sampled numerical, (5) empirical. Levels are defined in `computronium.verification` and enforced against banned overclaim phrases. The motivating hypothesis — that learning systems native to physical constraints (asynchrony, locality, limited precision, energy budgets) offer measurable benefits — is an *agenda*, not a result.
-
-| Audience | Entry Point |
-|----------|-------------|
-| 🧠 **Natural Scientists & Physicists** | Energy-based local learning demo: Hebbian/contrastive rules with Lyapunov stability analysis, passivity checks, energy tracking |
-| 📊 **Data Scientists & ML Researchers** | Composable learning rules, local credit assignment, depth/compute scaling, systematic comparison across algorithms |
-| 🔬 **Algorithm / Hardware Researchers** | Substrate models, hardware-aware constraints, stability analysis, algorithm–substrate co-design |
-| 💻 **Systems Engineers & Developers** | Correctness by construction: type-safe (PEP 695 generics), property-locked (Hypothesis), Triton-accelerated, experiment kernel automation |
-
-The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
-
----
 
 ## Install
 
@@ -107,8 +59,6 @@ Dev-environment smoke (run this before any gate; a stripped env fails here in se
 ```bash
 uv run python -c "import optuna, scipy, torchvision, pytest"
 ```
-
----
 
 ## 60-second quickstart
 
@@ -168,7 +118,51 @@ print(f"train accuracy: {history[-1]['train_acc']:.1%}")
 
 Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 train accuracy (chance 0.1).
 
----
+## 📋 Architecture Cheatsheet
+
+![Computronium Architecture Cheatsheet](../cheatsheet/cheatsheet.svg)
+
+Computronium at a glance — a live reflection of the codebase architecture, regenerated from source on every build.
+
+### Outer Flow
+
+```
+Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → System Composition → Training Loop → Evidence Store → Surface & Governance
+              ↑_______________________________________________________________________________________________________|
+                                    🔁 evidence → next question
+```
+
+### Panels Summary
+
+| Panel | Key Contents |
+|-------|--------------|
+| **🚪 Entry Points** | `comp` CLI (10 subcommands), 142 Python API symbols, 6 demos + 21 gallery figures |
+| **🎯 Tasks & Data** | 7 domains (vision, lm, rl, graph, tabular, timeseries, scientific), ~25 tasks |
+| **🧪 Experiment Kernel** | 11 pipeline stages (S1–S11), 8 policies, 36 objectives (4 measured), 28 priors, 88 capabilities, 17 constraints |
+| **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
+| **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (15 fields), `compose_joint_system` factory |
+| **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
+| **💾 Evidence Store** | DuckDB, single-writer, 13 RecordStore methods, schema v3 with 21 fields, 3-tier claim status |
+| **📊 Surface & Governance** | 5 verification levels (L1–L5), 5 workspace packages, `comp report/export/conformance/status` |
+
+### Quick Reference
+
+| Category | Count | Details |
+|----------|-------|---------|
+| **Substrate primitives** | 9 | digital, analog, memristive, neuromorphic, optical, quantum, complex, sparse, ternary |
+| **Geometry primitives** | 11 | feedforward, recurrent, causal_transformer, tile, tile_mesh, conv, graph, attention, spatial_lattice, nca, ntm |
+| **StateDynamics primitives** | 8 | energy_minimization, predictive_settling, error_predictive_coding, spike_integration, instantaneous, diffusion, lazy, pc_alm |
+| **Plasticity primitives** | 7 | null, routing, fast_weights, substrate_coupled, rule_state, temporal_psi, conflict_adaptive |
+| **CreditAssignment primitives** | 10 | thermodynamic_contrast, random_projections, local_goodness, local_contrastive, temporal_trace, target_inversion, homeostatic, pepita, gradient, pc_alm |
+| **ParameterUpdate primitives** | 12 | euclidean, adam, local_adam, ortho_adam, riemannian_orthogonal, muon, lion, spectral_constrained, mean_norm, elastic_consolidation, natural_gradient, role_split |
+| **Algorithms (composed)** | 21 | backprop, eqprop, fa, dfp, pepita, tp, predictive_coding, hebbian, snn, tilenet, tilenet_sharded, mep, mep_sharded, ... |
+
+### Artifacts
+
+- **SVG diagram**: [`docs/cheatsheet/cheatsheet.svg`](../cheatsheet/cheatsheet.svg) — directed architecture graph with nested panel insets
+- **Data file**: [`docs/cheatsheet/cheatsheet.txt`](../cheatsheet/cheatsheet.txt) — structured data behind the diagram
+
+> **Regeneration**: `uv run python docs/cheatsheet/cheatsheet_create.py` — pulls live facts from registries, configs, and catalogs.
 
 ## The 6-axis ontology
 
@@ -230,7 +224,6 @@ and its verification level. Rendered cards live in
 pre-commit (C.1) and fails when a concrete primitive ships without
 one.
 
----
 
 ### Architecture Diagram
 
@@ -255,8 +248,6 @@ state, e.g. memristive conductance), not a strict sequential pipeline.
 The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
 </details>
 
----
-
 ## ML Library Capabilities
 
 | Capability | Description |
@@ -277,29 +268,6 @@ The cyclic dependency (U → S) reflects that parameter updates can alter substr
 | **Experiment sweeps / campaigns** | `comp run` / `comp benchmark` — structured hypercube exploration |
 | **Distributed execution / deployment** | P2P (gRPC/Kademlia), multi-GPU (DDP/FSDP/DeepSpeed), ONNX/TorchScript/INT8/ternary export, FastAPI inference server |
 
----
-
-### Architecture Diagram
-
-```mermaid
-flowchart LR
-    S[Substrate] --> G[Geometry]
-    G --> D[StateDynamics]
-    D --> M[Plasticity]
-    M --> C[CreditAssignment]
-    C --> U[ParameterUpdate]
-    U --> S
-```
-
-**Schematic Coupling Diagram** — arrows denote *data flow through the ontology*, not execution order. The cyclic `U → S` edge represents physical state updates (parameter consolidation altering substrate state, e.g. memristive conductance), not a strict sequential pipeline.
-
-<details>
-<summary><strong>Why U → S cyclic dependency?</strong> ⋯</summary>
-
-The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
-</details>
-
----
 
 ### Algebraic Composition (API)
 
@@ -385,7 +353,6 @@ Pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledP
 Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
 </details>
 
----
 
 ### Research Direction Models (Experimental Variants)
 
@@ -421,7 +388,6 @@ from computronium.models.native import (
 These models are not claimed as novel algorithms; they are *framework-native expressions* of research directions that can be systematically compared, ablated, and extended within the 6-axis ontology. The framework contribution is their common compositional representation and systematic comparison infrastructure.
 </details>
 
----
 
 ## 🧬 Coupled Dynamical Systems
 
@@ -504,7 +470,6 @@ claim_record.json`; scatter extraction via
 numerical) / Level 5 (empirical).
 </details>
 
----
 
 ## ⚡ Energy, Stability, and Dynamical Invariants
 
@@ -539,7 +504,6 @@ The CI gate relies primarily on **Level 4** (sampled numerical) and **Level 5** 
 The joint extension of these dynamics — composite state $z_t = (x_t, \psi_t, \sigma_t)$, lifecycle registry, episode-boundary consolidation — is specified once in *Core Architecture* below. Campaign tooling treats the **stability-plasticity trade-off** and resource constraints as explicit search constraints rather than afterthoughts; the **experiment kernel** searches the declared ontology space and records experiment results.
 </details>
 
----
 
 ## 🏗️ Core Architecture
 
@@ -646,7 +610,6 @@ Current substrate implementations are primarily computational models; physical-h
 **Terminology:** *simulated energy*, *estimated energy*, *hardware-measured energy*. Avoid generic "energy efficiency" unless measurement methodology is stated.
 </details>
 
----
 
 ## 🔬 Validation Framework: Property-Verified Hypercube
 
@@ -782,7 +745,6 @@ uv run pyright .
 uv run ruff format --check . && uv run ruff check .
 ```
 
----
 
 ## 📐 Stability-Plasticity Trade-off Hypothesis
 
@@ -833,7 +795,6 @@ The campaign asks whether adaptive-rule systems occupy a superior Pareto frontie
 The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
 </details>
 
----
 
 ## 🌐 Evaluation Domains
 
@@ -851,39 +812,27 @@ The framework defines **7 evaluation domains**, unified through a common task in
 | **Time Series** | 1 (+1 planned) | Synthetic Forecast; ETT (planned) | 6+ | MSE, MAE |
 | **Scientific** | 2 (+PDE suite planned) | Pendulum/Lorenz ODE simulation; Heat/Wave/Burgers, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
 
-### 🖼️ Vision Domain
-
-**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
-(image classification + synthetic boolean tasks)
-
-**Quick Commands**
+**Quick Commands (all domains)**
 ```bash
-# Quick verification run
+# Quick verification run (dry-run)
 comp run quick-verify --dry-run
 
 # Run with store
 comp run quick-verify --store experiment.duckdb
 ```
 
+### 🖼️ Vision Domain
+
+**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
+(image classification + synthetic boolean tasks)
+
 ### 📝 Language Modeling Domain
 
 **Tasks**: `tiny_shakespeare` (char), `char_ngram`; `wikitext2`, `penn_treebank` (planned)
 
-**Key Experiments**
-```bash
-# Quick verification run
-comp run quick-verify --dry-run
-```
-
 ### 🎮 Reinforcement Learning Domain
 
 **Tasks**: `cartpole`, `pendulum`, `acrobot` (implemented); `mountain_car`, `lunar_lander` (planned) — Gymnasium classic control + Box2D
-
-**Key Experiments**
-```bash
-# Quick verification run
-comp run quick-verify --dry-run
-```
 
 ### 🕸️ Graph Domain
 
@@ -986,8 +935,6 @@ six-axis systems and assert real accuracies.
 
 **ContrastDesign.** WP18 adds design-of-experiments (OFAT/factorial) with explicit `DataOrigin` labels, so contrasted arms carry known structure rather than incidental variation.
 
----
-
 ## CLI reference
 
 `comp <command>` — every subcommand either works end-to-end or does not exist in the dispatcher:
@@ -1013,9 +960,22 @@ six-axis systems and assert real accuracies.
 | `pareto` | Export Pareto frontier for plotting (machine-readable) |
 | `diff` | Statistical run comparison with effect sizes |
 | `campaign` | Run declarative multi-run YAML campaigns |
+| `loop` | Continuous engine-driven experiment loop (explore/exploit cycles) |
+| `baseline` | Online baseline discovery and registry |
+| `coverage` | Task/domain coverage: what has and has not been measured |
+| `defect` | Defect constraint registry: list, cluster, and revoke constraints |
 | `schema` | Dump JSON schemas for RunSpec/Coordinate/Objectives |
 | `power-analysis` | Compute statistical power for experiment design (machine-readable) |
 | `stability-analysis` | Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories) |
+| `dashboard` | Launch live monitoring web dashboard for campaigns (Phase E5) |
+| `dataset` | Dataset registry: versioned datasets with hash-verified splits (Phase E6) |
+| `environment` | Environment snapshots: capture uv lockfiles, container images (Phase E7) |
+| `quality` | Automated quality gates for reports and data (Phase F1) |
+| `catalog` | Experiment catalog: query runs/records with axis filters (Phase F2) |
+| `method-card` | Method cards: auto-generated docs for ontology primitives (Phase F2) |
+| `faq` | FAQ/Troubleshooting: curated from CI/CD failures (Phase F2) |
+| `plugin` | Plugin management: custom objectives, substrates, dynamics (Phase F3) |
+| `benchmark-contrib` | Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3) |
 
 This table is locked against the dispatcher by `tests/property/test_cli_readme_lock.py` — set and purpose lines must match exactly, and every fenced `bash` block in this README is executed by that lock, so a documented invocation that errors fails CI.
 
@@ -1028,8 +988,6 @@ uv run comp run quick-verify --store experiment.duckdb
 uv run comp status --store experiment.duckdb
 uv run comp report --run-id <id> --store experiment.duckdb
 ```
-
----
 
 ## Demonstrations
 
@@ -1059,9 +1017,6 @@ Claims are labeled by verification level (see *What is Computronium*). CEEC ([`p
 
 The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.
 
----
-
----
 
 ## 🌐 Distributed Training & P2P
 
@@ -1085,7 +1040,6 @@ P2P workers run as modules (`computronium/p2p/grpc_worker.py`, `p2p_worker.py` �
 uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --device cpu
 ```
 
----
 
 ## 🚀 Deployment & Inference
 
@@ -1105,7 +1059,6 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 - 🌐 FastAPI endpoints: `/predict` (async batched), `/predict/sync`, `/health`, `/metrics`
 - 🔄 Graceful startup/shutdown via lifespan events
 
----
 
 ## 📊 Analysis & Visualization (`computronium/analysis/`)
 
@@ -1122,7 +1075,6 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 | `tile_dynamics.py` | Tile settling trajectories, utilization, routing patterns |
 | `tile_profiler.py` | Per-tile compute/memory profiling |
 
----
 
 ## ⚡ Hardware Acceleration (`computronium/acceleration/`)
 
@@ -1150,7 +1102,6 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 - 🌐 Multi-GPU tile sharding support for large TileNet models
 - ✅ Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
 
----
 
 ## 🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)
 
@@ -1212,7 +1163,6 @@ get("primitive.credit_assignment.random_projections")
 list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 ```
 
----
 
 ## 🛠️ Kernel Development Workflow
 
@@ -1263,7 +1213,6 @@ uv run python scripts/validate_composition.py --algorithm algorithm.backprop
 
 Static check: each algorithm's `uses_primitives ⊆ actually-imported primitives`. Wired into CI (`.github/workflows/ci.yml`).
 
----
 
 ## 📚 Documentation & Bench Tools from Specs
 
@@ -1307,7 +1256,6 @@ uv run python scripts/bench_dashboard.py --input artifacts/benchmarks/ --spec pr
 
 Plots median/p95 latency and peak memory across git commits from microbench JSONL (which embeds git SHA via `--tag`).
 
----
 
 ## 🧪 Enhanced CLI Tools
 
@@ -1351,7 +1299,6 @@ uv run python -m computronium.acceleration.matrix \
     --format json
 ```
 
----
 
 ## 🧪 Registry Integrity Locks (Extended Verification Framework)
 
@@ -1364,7 +1311,6 @@ These locks protect the 64-spec registry from silent drift — extending TODO32'
 | **Structural equivalence** | Geometry/Substrate primitives | Factory determinism: same config → bitwise-equal state tensors; spec round-trip |
 | **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (25 tests) |
 
----
 
 ## 🧭 CEEC Epistemic Operating System (`packages/ceec-core`)
 
@@ -1391,7 +1337,6 @@ CLI: `ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status
 shim of this package). Main ledger at `ceec/ceec.sqlite3`; campaign
 ledgers under `scratch/`.
 
----
 
 ## 📦 Standalone Platform Packages (`packages/`)
 
@@ -1444,15 +1389,11 @@ uv run python -m pytest tests/property/test_kernel_isolation_lock.py \
 
 **Adding an ontology primitive** — follow the checklist in [`AGENTS.md`](AGENTS.md) (registry row, config classmethod, wiring lockstep lock, export surfaces, contract invariants). **Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
 
----
-
 ## Research program
 
 The motivating hypothesis: learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, energy/resource efficiency — offer measurable benefits over global-clock, backprop-centric training under those constraints.
 
 Open questions: when does the plasticity axis (writable ψ on frozen θ) beat standard recurrent memory; how far do local credit rules scale on digital substrates; which substrate constraints actually bind. Historical campaign records and research notes live in `docs/archive/`; methodology and Z3 material in `docs/reference/`.
-
----
 
 ## FAQ / Troubleshooting + Glossary
 
@@ -1472,8 +1413,6 @@ Open questions: when does the plasticity axis (writable ψ on frozen θ) beat st
 - **Stage** — one step S1–S11 of the pipeline.
 - **Record** — one measured row in the evidence store (identity, provenance, status, payload).
 - **Claim** — a governed statement derived from records, with a verification level.
-
----
 
 ## License
 

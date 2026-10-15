@@ -1,4 +1,3 @@
----
 
 ## 🔬 Validation Framework: Property-Verified Hypercube
 

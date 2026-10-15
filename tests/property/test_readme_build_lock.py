@@ -88,12 +88,3 @@ class TestReadmeBuildLock:
             assert f"| `{name}` |" in table, name
         rows = _data_rows(table)
         assert len(rows) == len(demos), "stale demo row"
-
-    def test_contents_links_resolve_to_a_heading(self) -> None:
-        rendered = build_readme.build_readme()
-        headings = {
-            build_readme._anchor(h)
-            for h in re.findall(r"^## (.+)$", rendered, flags=re.M)
-        }
-        for anchor in re.findall(r"^-\s+\[.+\]\(#(.+)\)$", rendered, flags=re.M):
-            assert anchor in headings, f"contents links to a missing #{anchor}"

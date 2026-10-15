@@ -31,4 +31,3 @@ The library is usable independently of the research hypotheses; the research pro
 
 The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
 
----

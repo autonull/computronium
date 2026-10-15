@@ -17,4 +17,3 @@
 - **Record** — one measured row in the evidence store (identity, provenance, status, payload).
 - **Claim** — a governed statement derived from records, with a verification level.
 
----

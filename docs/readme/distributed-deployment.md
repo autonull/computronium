@@ -1,4 +1,3 @@
----
 
 ## 🌐 Distributed Training & P2P
 
@@ -22,7 +21,6 @@ P2P workers run as modules (`computronium/p2p/grpc_worker.py`, `p2p_worker.py` �
 uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --device cpu
 ```
 
----
 
 ## 🚀 Deployment & Inference
 
@@ -42,7 +40,6 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 - 🌐 FastAPI endpoints: `/predict` (async batched), `/predict/sync`, `/health`, `/metrics`
 - 🔄 Graceful startup/shutdown via lifespan events
 
----
 
 ## 📊 Analysis & Visualization (`computronium/analysis/`)
 

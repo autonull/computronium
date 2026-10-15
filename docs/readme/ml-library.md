@@ -18,29 +18,6 @@
 | **Experiment sweeps / campaigns** | `comp run` / `comp benchmark` — structured hypercube exploration |
 | **Distributed execution / deployment** | P2P (gRPC/Kademlia), multi-GPU (DDP/FSDP/DeepSpeed), ONNX/TorchScript/INT8/ternary export, FastAPI inference server |
 
----
-
-### Architecture Diagram
-
-```mermaid
-flowchart LR
-    S[Substrate] --> G[Geometry]
-    G --> D[StateDynamics]
-    D --> M[Plasticity]
-    M --> C[CreditAssignment]
-    C --> U[ParameterUpdate]
-    U --> S
-```
-
-**Schematic Coupling Diagram** — arrows denote *data flow through the ontology*, not execution order. The cyclic `U → S` edge represents physical state updates (parameter consolidation altering substrate state, e.g. memristive conductance), not a strict sequential pipeline.
-
-<details>
-<summary><strong>Why U → S cyclic dependency?</strong> ⋯</summary>
-
-The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
-</details>
-
----
 
 ### Algebraic Composition (API)
 
@@ -126,7 +103,6 @@ Pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledP
 Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
 </details>
 
----
 
 ### Research Direction Models (Experimental Variants)
 
@@ -162,7 +138,6 @@ from computronium.models.native import (
 These models are not claimed as novel algorithms; they are *framework-native expressions* of research directions that can be systematically compared, ablated, and extended within the 6-axis ontology. The framework contribution is their common compositional representation and systematic comparison infrastructure.
 </details>
 
----
 
 ## 🧬 Coupled Dynamical Systems
 
@@ -245,7 +220,6 @@ claim_record.json`; scatter extraction via
 numerical) / Level 5 (empirical).
 </details>
 
----
 
 ## ⚡ Energy, Stability, and Dynamical Invariants
 

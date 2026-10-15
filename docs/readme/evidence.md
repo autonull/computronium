@@ -13,4 +13,3 @@ Claims are labeled by verification level (see *What is Computronium*). CEEC ([`p
 
 The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.
 
----

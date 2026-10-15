@@ -68,4 +68,3 @@ six-axis systems and assert real accuracies.
 
 **ContrastDesign.** WP18 adds design-of-experiments (OFAT/factorial) with explicit `DataOrigin` labels, so contrasted arms carry known structure rather than incidental variation.
 
----

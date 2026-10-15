@@ -98,6 +98,7 @@ _SECTIONS: tuple[str, ...] = (
     "what-is.md",
     "install.md",
     "quickstart.md",
+    "cheatsheet.md",
     "ontology.md",
     "ml-library.md",
     "core-architecture.md",
@@ -120,23 +121,6 @@ _SECTIONS: tuple[str, ...] = (
 def _section_files() -> list[Path]:
     """The snippet files, in the order the manifest declares."""
     return [SNIPPET_DIR / name for name in _SECTIONS]
-
-
-def _anchor(heading: str) -> str:
-    """GitHub's heading slug: lowercase, punctuation dropped, spaces hyphenated.
-
-    Each space becomes its own hyphen, so "Evidence & claims" anchors as
-    ``evidence--claims`` — the ampersand leaves the two words separated.
-    """
-    return re.sub(r"[\s]", "-", re.sub(r"[^\w\s-]", "", heading.lower()).strip())
-
-
-def _contents(sections: str) -> str:
-    """The section list, derived from the headings that actually exist."""
-    lines = ["## Contents", ""]
-    for heading in re.findall(r"^## (.+)$", sections, flags=re.M):
-        lines.append(f"- [{heading}](#{_anchor(heading)})")
-    return "\n".join(lines) + "\n\n---"
 
 
 def _substitute(text: str) -> str:
@@ -162,7 +146,7 @@ def build_readme() -> str:
         path.read_text(encoding="utf-8").rstrip() for path in files[1:]
     )
     return (
-        "\n\n".join((BANNER, preamble, _contents(sections), _substitute(sections)))
+        "\n\n".join((BANNER, preamble, _substitute(sections)))
         + "\n"
     )
 

@@ -1,4 +1,3 @@
----
 
 ## 🧭 CEEC Epistemic Operating System (`packages/ceec-core`)
 
@@ -25,7 +24,6 @@ CLI: `ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status
 shim of this package). Main ledger at `ceec/ceec.sqlite3`; campaign
 ledgers under `scratch/`.
 
----
 
 ## 📦 Standalone Platform Packages (`packages/`)
 

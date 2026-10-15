@@ -13,4 +13,3 @@ Dev-environment smoke (run this before any gate; a stripped env fails here in se
 uv run python -c "import optuna, scipy, torchvision, pytest"
 ```
 
----

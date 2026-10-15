@@ -1,6 +1,6 @@
 ==============================================================================
 COMPUTRONIUM ARCHITECTURE — CHEATSHEET DATAFILE
-generated 2026-10-02 @ commit b45251f1 by docs/cheatsheet/cheatsheet_create.py
+generated 2026-10-15 @ commit 24fb9c57 by docs/cheatsheet/cheatsheet_create.py
 artifacts: docs/cheatsheet/cheatsheet.svg (directed graph) · this file (data)
 ==============================================================================
 
@@ -21,17 +21,42 @@ OUTER GRAPH (directed edges between panels)
 ==============================================================================
 PANEL ENTRY — 🚪 Entry Points
 ==============================================================================
-  comp CLI (10 commands):
+  comp CLI (35 commands):
     comp run            Execute a run profile (dry-run with --dry-run)
     comp report         Generate report from store
     comp export         Export store data for round-trip
+    comp import         Import store data from export (round-trip)
     comp conformance    Check capability conformance
     comp status         Show run/store status
+    comp gallery        Render gallery figures from demo records
+    comp hypothesis-campaign Run hypothesis templates over campaign records
+    comp stability-plasticity Generate and run stability-plasticity frontier campaign
+    comp frozen-theta-psi Run frozen-θ ψ benchmarks at scale (multi-substrate, multi-plasticity)
     comp parity         Check library-vs-kernel parity for an axis
     comp repro          Replay a recorded run and diff it
     comp validate       Validate a config or record against the schema
     comp joint-validate Validate a composed multi-axis system
     comp benchmark      Run kernel benchmarks and emit a verdict
+    comp stats          Compute summary statistics for run metrics (machine-readable)
+    comp pareto         Export Pareto frontier for plotting (machine-readable)
+    comp diff           Statistical run comparison with effect sizes
+    comp campaign       Run declarative multi-run YAML campaigns
+    comp loop           Continuous engine-driven experiment loop (explore/exploit cycles)
+    comp baseline       Online baseline discovery and registry
+    comp coverage       Task/domain coverage: what has and has not been measured
+    comp defect         Defect constraint registry: list, cluster, and revoke constraints
+    comp schema         Dump JSON schemas for RunSpec/Coordinate/Objectives
+    comp power-analysis Compute statistical power for experiment design (machine-readable)
+    comp stability-analysis Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories)
+    comp dashboard      Launch live monitoring web dashboard for campaigns (Phase E5)
+    comp dataset        Dataset registry: versioned datasets with hash-verified splits (Phase E6)
+    comp environment    Environment snapshots: capture uv lockfiles, container images (Phase E7)
+    comp quality        Automated quality gates for reports and data (Phase F1)
+    comp catalog        Experiment catalog: query runs/records with axis filters (Phase F2)
+    comp method-card    Method cards: auto-generated docs for ontology primitives (Phase F2)
+    comp faq            FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)
+    comp plugin         Plugin management: custom objectives, substrates, dynamics (Phase F3)
+    comp benchmark-contrib Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3)
   Python API: 142 public symbols (computronium.__all__)
     examples: AdamUpdate, AlgorithmIdentityCard, AnalogSubstrate, AttentionGeometry, BackpropCredit, ClosedFormRidgePlasticity, CompositeState, ComputroniumLinear, ConflictAdaptivePsiPlasticity, ConvGeometry, CorrectionRecord, CoupledTransition, ...
   Demos: 6 scripts under scripts/demos/; gallery: 21 demos
@@ -46,18 +71,18 @@ PANEL ENTRY — 🚪 Entry Points
 PANEL TASKS — 🎯 Tasks & Data
 ==============================================================================
   domains (7): vision, lm, rl, graph, tabular, timeseries, scientific
-    vision       (11): xor, spiral, circles, digits, mnist, fashion_mnist, kmnist, usps, cifar10, cifar100, svhn
-    lm           ( 4): tiny_shakespeare, char_ngram, wikitext2, penn_treebank
-    rl           ( 5): pendulum, acrobot, cartpole, mountain_car, lunar_lander
-    graph        ( 3): cora, citeseer, pubmed
-    tabular      ( 5): breast_cancer, iris, wine, diabetes, california_housing
+    vision       ( 9): xor, spiral, circles, digits, mnist, fashion_mnist, kmnist, usps, cifar10
+    lm           ( 2): tiny_shakespeare, char_ngram
+    rl           ( 3): pendulum, acrobot, cartpole
+    graph        ( 4): cora, citeseer, pubmed, graph_classification
+    tabular      ( 3): breast_cancer, iris, wine
     timeseries   ( 0): via create_task() only
     scientific   ( 0): via create_task() only
 
 ==============================================================================
 PANEL KERNEL — 🧪 Experiment Kernel — question → governed evidence
 ==============================================================================
-  RunSpec fields: version, profile, task, tasks, objectives, stages, fidelity, n_seeds, epochs, batch_limit, seed, budget_seconds, param_budget, policy, axes, hyperparameters, operating_points, dataset, dataset_version, code_sha
+  RunSpec fields: version, profile, task, tasks, objectives, stages, fidelity, n_seeds, epochs, batch_limit, seed, budget_seconds, param_budget, policy, axes, hyperparameters, operating_points, dataset, dataset_version, code_sha, device, deterministic, num_workers, precision, checkpoint_every_n, axis_objectives, sweep_steps
   pipeline stages (11):
     S1 frame    Objective/operating-point resolution; questi
     S2 space    Axis snapshot + legality preview (dry-run = 
@@ -71,10 +96,10 @@ PANEL KERNEL — 🧪 Experiment Kernel — question → governed evidence
     S10 decide  Promotion predicates + allocation handoff (R
     S11 report  Delegates to surface.report fragments (R85-R
   policies (8): stratified_random, round_robin_grid, uniform_random, model_based, evolution, synthesis, strategy_progression, trainer_driven
-  objectives (36): measured 4 -> validation_accuracy, validation_loss, walltime_total, param_count
-                   research targets 32 -> test_accuracy, test_loss, f1_score, perplexity, bleu_score, training_time, memory_usage, flops, energy_per_step, latency_ms, spike_rate, ir_drop_variance, phase_noise, gate_fidelity, coherence_time, bp_deficit, ruler_walltime_ratio, ruler_energy_ratio, ruler_param_ratio, spectral_radius, max_singular_value, lyapunov_exponent, free_energy, settle_steps, psi_capacity, consolidation_cost, rewrite_rate, stability_plasticity_ratio, credit_efficiency, convergence_steps, energy_efficiency, generalization_gap
-  priors (28): lr_ruler_mnist, lr_ruler_cifar10, lr_ruler_cifar100, lr_ruler_imagenet, lr_ruler_sst2, lr_ruler_squad, lr_ruler_wikitext2, lr_ruler_ptb, ...
-  registries: capabilities=88 constraints=17 policies_registry=9
+  objectives (48): measured 34 -> validation_accuracy, validation_loss, walltime_total, memory_usage, param_count, flops, energy_per_step, energy_per_mac, macs_per_step, latency_ms, spike_rate, ir_drop_variance, phase_noise, gate_fidelity, coherence_time, spectral_radius, stability_margin, nonnormality, drift_spectral_radius, drift_max_singular_value, contraction_rate, max_singular_value, lyapunov_exponent, hopfield_energy, pc_free_energy, augmented_lagrangian, spike_proxy_energy, instantaneous_proxy_energy, free_energy, settle_steps, psi_capacity, consolidation_cost, rewrite_rate, energy_efficiency
+                   research targets 14 -> test_accuracy, test_loss, f1_score, perplexity, bleu_score, training_time, bp_deficit, ruler_walltime_ratio, ruler_energy_ratio, ruler_param_ratio, stability_plasticity_ratio, credit_efficiency, convergence_steps, generalization_gap
+  priors (72): ruler_lr_cifar10, ruler_lr_cifar100, ruler_lr_imagenet, ruler_lr_sst2, ruler_lr_squad, ruler_lr_wikitext2, ruler_lr_ptb, ruler_lr_copyshake, ...
+  registries: capabilities=88 constraints=41 policies_registry=9
 
 ==============================================================================
 PANEL ONTOLOGY — 🧬 6-Axis Ontology — System = Substrate × Geometry × StateDynamics × Plasticity × Credit × Update
@@ -89,7 +114,7 @@ PANEL ONTOLOGY — 🧬 6-Axis Ontology — System = Substrate × Geometry × St
     complex                    Complex-valued substrate
     sparse                     Sparse substrate: sparsity-masked state
     ternary                    Ternary substrate: weights in {-alpha, 0, +alpha}
-  geometry (11 primitives) · config input_dim, output_dim, hidden_dims, num_layers, topology_type, connectivity, recurrent_weight, init_scale, init_scheme, residual, conv_channels, kernel_size, in_channels, input_hw, pool_hw, num_heads, head_dim, attention_dropout, seq_len, lattice_dims, connectivity_radius, grid_hw, delta_scale, mask_prob, label_channels, mem_slots, mem_width, beta_init, neurons_per_tile, tiles_per_layer
+  geometry (11 primitives) · config input_dim, output_dim, hidden_dims, num_layers, topology_type, connectivity, recurrent_weight, init_scale, init_scheme, residual, conv_channels, kernel_size, in_channels, input_hw, pool_hw, num_heads, head_dim, attention_dropout, seq_len, lattice_dims, connectivity_radius, grid_hw, delta_scale, mask_prob, label_channels, mem_slots, mem_width, beta_init, neurons_per_tile, tiles_per_layer, required_input
     feedforward                Feedforward DAG (MLP/CNN)
     recurrent                  Recurrent attractor (Hopfield/EqProp)
     causal_transformer         Causal transformer with KV cache
@@ -99,7 +124,7 @@ PANEL ONTOLOGY — 🧬 6-Axis Ontology — System = Substrate × Geometry × St
     graph                      Arbitrary node-edge fabric (FabricPC)
     attention                  Attention geometry
     spatial_lattice            3-D spatial lattice (neural_cube)
-    nca                        Neural cellular automaton fabric  UNAVAILABLE: NcaGeometry.step requires a (B, C, H, W) state grid; the kernel's trainer supplies a flattened batch, so every nca cell fails at runtime. Retired 2026-10-02 pending a route-level reshape.
+    nca                        Neural cellular automaton fabric
     ntm                        Neural Turing Machine tape
   dynamics (8 primitives) · config dynamics_type, max_steps, convergence_threshold, convergence_start, step_size, beta, momentum, track_free_energy_per_iter, threshold, gradient_checkpointing, compiled, gain_control, rho, prospective_leak, warm_start_duals, rho_schedule, rho_final, max_energy
     energy_minimization        Equilibrium propagation energy minimization
@@ -147,19 +172,19 @@ PANEL ONTOLOGY — 🧬 6-Axis Ontology — System = Substrate × Geometry × St
 PANEL SYSTEM — 🏗️ System & Composition
 ==============================================================================
   SystemConfig = SubstrateConfig × GeometryConfig × StateDynamicsConfig × PlasticityConfig × CreditAssignmentConfig × ParameterUpdateConfig
-  SystemTrainerConfig: max_epochs, batch_size, val_batch_size, device, grad_clip, track_energy, track_flops, track_memory, log_every_n_steps, seed, deterministic, resumable, limit_train_batches, limit_val_batches, harvest_mode, harvest_decay, harvest_every_n, max_epoch_time
+  SystemTrainerConfig: max_epochs, batch_size, val_batch_size, device, grad_clip, track_energy, track_flops, track_memory, log_every_n_steps, seed, deterministic, resumable, limit_train_batches, limit_val_batches, harvest_mode, harvest_decay, harvest_every_n, max_epoch_time, async_dataloading, precision, checkpoint_every_n, distributed_backend, ddp_backend, fsdp_sharding_strategy, fsdp_min_params, fsdp_cpu_offload, fsdp_mixed_precision
 
 ==============================================================================
 PANEL TRAIN — ⚡ Training Loop — SystemTrainer.fit()
 ==============================================================================
   history per epoch: train_acc, train_energy, train_loss, val_acc, val_loss
-  evaluator adds: param_count, walltime_s
+  evaluator adds: augmented_lagrangian, coherence_time_us, consolidation_cost, contraction_rate, drift_max_singular_value, drift_nonnormality, drift_rate, drift_spectral_radius, endurance_cycles, energy_efficiency, energy_per_batch, energy_per_mac, energy_per_op, energy_per_sample, energy_per_step, epochs_run, event_density, flops, forward_energy_per_batch, free_energy, free_energy_final, gate_fidelity, hopfield_energy, insertion_loss_db, instantaneous_proxy_energy, ir_drop_variance, latency_ms, lyapunov_exponent, macs_per_step, max_singular_value, memory_usage, min_singular_value, nonlinearity_error, nonnormality, optical_power_mw, param_count, pc_free_energy, phase_noise, phase_shifter_energy_pj, precision_bits, psi_capacity, qubit_count, rewrite_rate, settle_converged, settle_horizon, settle_step_size, settle_steps, settle_steps_used, shot_noise, spectral_radius, spike_energy_pj, spike_proxy_energy, spike_rate, stability_margin, synaptic_ops_per_sample, thermal_noise_variance, update_energy_per_batch, walltime_s, write_energy_pj
 
 ==============================================================================
 PANEL EVIDENCE — 💾 Evidence Store — one DuckDB, single writer
 ==============================================================================
   RecordStore methods: create_run, finish_run, append, append_with_artifacts, get_record, get_record_by_measurement_key, query_records, query_runs, vector_search, count_records, count_achieved_seeds, latest_run_id
-  Record fields (schema v3): record_id, seq, run_id, schema_version, cell_key, measurement_key, substrate, geometry, dynamics, plasticity, credit, update, params, schedule, provenance, status, payload, unknown
+  Record fields (schema v3): record_id, seq, run_id, schema_version, cell_key, measurement_key, substrate, geometry, dynamics, plasticity, credit, update, params, effective_params, schedule, provenance, status, payload, unknown
   claim tiers: gate verdict · defect cause · maturity
 
 ==============================================================================

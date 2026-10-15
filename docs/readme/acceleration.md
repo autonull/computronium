@@ -1,4 +1,3 @@
----
 
 ## ⚡ Hardware Acceleration (`computronium/acceleration/`)
 
@@ -26,7 +25,6 @@
 - 🌐 Multi-GPU tile sharding support for large TileNet models
 - ✅ Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
 
----
 
 ## 🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)
 
@@ -88,7 +86,6 @@ get("primitive.credit_assignment.random_projections")
 list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 ```
 
----
 
 ## 🛠️ Kernel Development Workflow
 
@@ -139,7 +136,6 @@ uv run python scripts/validate_composition.py --algorithm algorithm.backprop
 
 Static check: each algorithm's `uses_primitives ⊆ actually-imported primitives`. Wired into CI (`.github/workflows/ci.yml`).
 
----
 
 ## 📚 Documentation & Bench Tools from Specs
 
@@ -183,7 +179,6 @@ uv run python scripts/bench_dashboard.py --input artifacts/benchmarks/ --spec pr
 
 Plots median/p95 latency and peak memory across git commits from microbench JSONL (which embeds git SHA via `--tag`).
 
----
 
 ## 🧪 Enhanced CLI Tools
 
@@ -227,7 +222,6 @@ uv run python -m computronium.acceleration.matrix \
     --format json
 ```
 
----
 
 ## 🧪 Registry Integrity Locks (Extended Verification Framework)
 
