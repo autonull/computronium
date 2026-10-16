@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class FactorType(str, Enum):
+class FactorType(StrEnum):
     """Types of experimental factors."""
 
     BETWEEN_SUBJECTS = "between_subjects"
@@ -24,7 +24,7 @@ class FactorType(str, Enum):
     BLOCKING = "blocking"
 
 
-class DesignType(str, Enum):
+class DesignType(StrEnum):
     """Experimental design types."""
 
     FULL_FACTORIAL = "full_factorial"
@@ -37,7 +37,7 @@ class DesignType(str, Enum):
     ADAPTIVE = "adaptive"
 
 
-class SamplerType(str, Enum):
+class SamplerType(StrEnum):
     """HPO sampler types."""
 
     NSGA2 = "nsga2"
@@ -48,7 +48,7 @@ class SamplerType(str, Enum):
     CMAES = "cmaes"
 
 
-class ObjectiveDirection(str, Enum):
+class ObjectiveDirection(StrEnum):
     """Objective optimization direction."""
 
     MAXIMIZE = "maximize"
@@ -289,103 +289,112 @@ class CampaignDSL(BaseModel):
 
     meta: CampaignMeta
     design: DesignSpec
-    analysis: AnalysisSpec = Field(default_factory=lambda: AnalysisSpec())
-    resources: ResourceSpec = Field(default_factory=lambda: ResourceSpec())
-    search_space: SearchSpaceSpec = Field(default_factory=lambda: SearchSpaceSpec())
-    arms: ArmsSpec = Field(default_factory=lambda: ArmsSpec())
+    analysis: AnalysisSpec = Field(default_factory=AnalysisSpec)
+    resources: ResourceSpec = Field(default_factory=ResourceSpec)
+    search_space: SearchSpaceSpec = Field(default_factory=SearchSpaceSpec)
+    arms: ArmsSpec = Field(default_factory=ArmsSpec)
     hpo: HPOSpec = Field(
         default_factory=lambda: HPOSpec(n_trials=20, n_startup_trials=5, n_seeds=3)
     )
-    output: OutputSpec = Field(default_factory=lambda: OutputSpec())
-    reproducibility: ReproducibilitySpec = Field(
-        default_factory=lambda: ReproducibilitySpec()
+    output: OutputSpec = Field(default_factory=OutputSpec)
+    reproducibility: ReproducibilitySpec = Field(default_factory=ReproducibilitySpec)
+
+    _AXIS_ORDER = (
+        "substrate",
+        "geometry",
+        "dynamics",
+        "plasticity",
+        "credit",
+        "update",
     )
+
+    def _factor_values(self, axis_name: str) -> list[str]:
+        factor = self.design.factors.get(axis_name)
+        if factor:
+            return list(factor.values)
+        fixed = self.design.fixed.get(axis_name)
+        if fixed:
+            return [fixed.value]
+        return []
+
+    @staticmethod
+    def _geometry_compatible(geom: str, dyn: str, cred: str) -> bool:
+        """Instantaneous dynamics cannot train a recurrent geometry by gradient."""
+        return not (
+            dyn == "instantaneous"
+            and geom in {"recurrent", "recurrent_attractor"}
+            and cred in {"gradient", "backprop"}
+        )
+
+    def _valid_geometries(
+        self, geometries: list[str], dynamics: list[str], credits: list[str]
+    ) -> list[str]:
+        return [
+            geom
+            for geom in geometries
+            if all(
+                self._geometry_compatible(geom, dyn, cred)
+                for dyn in dynamics
+                for cred in credits
+            )
+        ]
+
+    def _budget_seconds(self, block: BlockSpec) -> float | None:
+        if block.budget_seconds:
+            return block.budget_seconds
+        if self.resources.max_wall_hours:
+            return (
+                self.resources.max_wall_hours * 3600 / max(1, len(self.design.blocks))
+            )
+        return None
+
+    def _block_overrides(
+        self, block: BlockSpec, valid_geometries: list[str]
+    ) -> dict[str, Any]:
+        axis_selections = [
+            {
+                "axis": name,
+                "primitives": valid_geometries
+                if name == "geometry"
+                else self._factor_values(name),
+            }
+            for name in self._AXIS_ORDER
+        ]
+        overrides: dict[str, Any] = {
+            "axes": axis_selections,
+            "tasks": [block.task],
+            "hpo": {"n_trials": self.hpo.n_trials, "n_seeds": self.hpo.n_seeds},
+            "epochs": block.epochs,
+            "budget_seconds": self._budget_seconds(block),
+        }
+        for name, fixed in self.design.fixed.items():
+            overrides[name] = fixed.value
+        return overrides
+
+    def _build_runs(self) -> list[dict[str, Any]]:
+        runs: list[dict[str, Any]] = []
+        for i, block in enumerate(self.design.blocks):
+            valid = self._valid_geometries(
+                self._factor_values("geometry"),
+                self._factor_values("dynamics"),
+                self._factor_values("credit"),
+            )
+            runs.append({
+                "name": f"task_{block.task}" if i > 0 else "main",
+                "profile": "production-map",
+                "overrides": self._block_overrides(block, valid),
+                "depends_on": [0] if i > 0 else [],
+                "device": self.resources.device,
+                "store": self.output.db,
+            })
+        return runs
 
     def to_campaign_yaml(self, output_path: Path | str) -> Path:
         """Export to campaign YAML format for execution."""
         import yaml
 
         data = self.model_dump(mode="json", exclude_none=True)
-
-        # Helper to get factor values
-        def get_factor_values(axis_name: str) -> list[str]:
-            factor = self.design.factors.get(axis_name)
-            if factor:
-                return factor.values
-            fixed = self.design.fixed.get(axis_name)
-            if fixed:
-                return [fixed.value]
-            return []
-
-        # Filter invalid combinations: instantaneous dynamics + recurrent geometry + gradient credit
-        def is_valid_geometry(geom: str, dyn: str, cred: str) -> bool:
-            if dyn == "instantaneous" and geom in {"recurrent", "recurrent_attractor"}:
-                if cred in {"gradient", "backprop"}:
-                    return False
-            return True
-
-        # Generate runs from design blocks
-        runs = []
-        for i, block in enumerate(self.design.blocks):
-            # Get factor values for each axis
-            geometries = get_factor_values("geometry")
-            dynamics = get_factor_values("dynamics")
-            credits = get_factor_values("credit")
-
-            # Filter geometries based on dynamics/credit compatibility
-            # Check if any dynamic/credit combination would invalidate a geometry
-            valid_geometries = []
-            for geom in geometries:
-                valid = True
-                for dyn in dynamics:
-                    for cred in credits:
-                        if not is_valid_geometry(geom, dyn, cred):
-                            valid = False
-                            break
-                    if not valid:
-                        break
-                if valid:
-                    valid_geometries.append(geom)
-
-            # Build axis selections for overrides (expected by _apply_overrides)
-            axis_selections = [
-                {"axis": "substrate", "primitives": get_factor_values("substrate")},
-                {"axis": "geometry", "primitives": valid_geometries},
-                {"axis": "dynamics", "primitives": get_factor_values("dynamics")},
-                {"axis": "plasticity", "primitives": get_factor_values("plasticity")},
-                {"axis": "credit", "primitives": get_factor_values("credit")},
-                {"axis": "update", "primitives": get_factor_values("update")},
-            ]
-
-            # Build overrides for this block
-            overrides = {
-                "axes": axis_selections,
-                "tasks": [block.task],
-                "hpo": {"n_trials": self.hpo.n_trials, "n_seeds": self.hpo.n_seeds},
-                "epochs": block.epochs,
-                "budget_seconds": block.budget_seconds
-                or (
-                    self.resources.max_wall_hours
-                    * 3600
-                    / max(1, len(self.design.blocks))
-                )
-                if self.resources.max_wall_hours
-                else None,
-            }
-            # Add fixed factors to overrides (they override the factor values)
-            for name, fixed in self.design.fixed.items():
-                overrides[name] = fixed.value
-
-            runs.append({
-                "name": f"task_{block.task}" if i > 0 else "main",
-                "profile": "production-map",
-                "overrides": overrides,
-                "depends_on": [0] if i > 0 else [],
-                "device": self.resources.device,
-                "store": self.output.db,
-            })
-
-        data["runs"] = runs
+        data["runs"] = self._build_runs()
         data["store"] = self.output.db
         data["parallel"] = self.resources.max_parallel
         data["compute"] = {
@@ -397,7 +406,7 @@ class CampaignDSL(BaseModel):
 
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        with output_file.open("w") as f:
+        with output_file.open("w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
         return output_file
 
@@ -405,7 +414,6 @@ class CampaignDSL(BaseModel):
         """Convert to adaptive budget planner format."""
         from computronium.experiment.execution.adaptive_budget import (
             BudgetStrategy,
-            DeviceClass,
             plan_from_args,
         )
 
@@ -417,11 +425,6 @@ class CampaignDSL(BaseModel):
         }
 
         budget_hours = self.resources.max_wall_hours or 1.0
-        device = (
-            DeviceClass.GPU
-            if self.resources.device in ("auto", "cuda")
-            else DeviceClass.CPU
-        )
 
         plan = plan_from_args(
             time_hours=budget_hours,
@@ -450,7 +453,7 @@ class CampaignDSL(BaseModel):
         """Load campaign from YAML file."""
         import yaml
 
-        with Path(path).open() as f:
+        with Path(path).open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return cls(**data)
 

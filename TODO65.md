@@ -423,13 +423,71 @@ regression, and landed it.
   not introduced here; `pyright` clean on all changed library files.
 
 ### Remaining work (deferred — defensive, not v1.0 blockers)
-- Minimum `hidden_dim` floor for recurrent geometries.
-- Document the gradient-clipping `handles_own_clipping` flag in
-  `docs/readme/kernel.md`.
-- Register C: repo-wide legacy lint (`campaign_dsl.py`, `hypothesis.py`).
+- Minimum `hidden_dim` floor for recurrent geometries. **(Verified not a
+  defect — see §13.1: the recurrent weight *is* applied per hidden layer;
+  `_layers` interleaves ReLUs, so `i < len-1` is the hidden-producing edge,
+  not off-by-one. No floor needed.)**
+- ~~Document the gradient-clipping `handles_own_clipping` flag in
+  `docs/readme/kernel.md`.~~ **DONE — §13.2.**
+- ~~Register C: repo-wide legacy lint (`campaign_dsl.py`, `hypothesis.py`).~~
+  **DONE — §13.3.**
 - The L2 confirmation path is wired but **not exercised by the exit test** (its
   tiny seed budget rarely clears the L1 gates that precede confirmation); the
   new unit lock covers the mechanism, but an end-to-end L2 run remains a
   scheduled-campaign concern, not a merge gate.
+
+---
+
+## 13. Session — Register C lint close-out & clipping docs (this session)
+
+Closing the last purely-deferred §12 items. No engine behaviour changed.
+
+### 13.1 Recurrent geometry "floor" — investigated, not needed
+The §12/§8.3 worry was a disconnected loss graph for recurrent geometry. Traced
+to the source: `RecurrentGeometry.forward` applies the recurrent weight on the
+branch `i < len(self._layers) - 2`, and because `_linear_stack` **interleaves
+ReLU modules** between linears, the hidden-producing linear sits at that edge.
+A single-hidden-layer recurrent net still applies the weight exactly once; the
+recurrent parameter receives gradient. The real incompatibility (instantaneous
+dynamics × gradient credit on recurrent geometry) was already voided at the
+search-space level (§8.2). **No hidden_dim floor added — it would have chased a
+non-defect.** Reported geometry on `quick-verify --dry-run`: `recurrent` appears
+only with temporal dynamics, correctly.
+
+### 13.2 Gradient clipping documented
+`docs/readme/kernel.md` gains a bullet stating the declarative contract:
+`ParameterUpdateConfig.handles_own_clipping` marks rules that clip internally
+(`euclidean`, `adam`, `ortho_adam`, `lion`, `natural_gradient`); the pipeline
+applies the global-norm safety net to the rest (Muon, `spectral_constrained`,
+`mean_norm`, `unit_rms`, `local_adam`, `elastic_consolidation`, `role_split`).
+README regenerated (`build_readme.py`); `test_readme_build_lock` green.
+
+### 13.3 Register C lint cleared
+`computronium/experiment/design/campaign_dsl.py` (16 findings) and
+`computronium/experiment/design/hypothesis.py` (3) now lint clean:
+- `str, Enum` → `StrEnum` (matches `hypothesis.py`'s existing `TestType`);
+- `Field(default_factory=lambda: X())` → `Field(default_factory=X)`;
+- `to_campaign_yaml` decomposed into `_factor_values` / `_geometry_compatible`
+  / `_valid_geometries` / `_budget_seconds` / `_block_overrides` / `_build_runs`
+  (was cyclomatic 16); axis order pinned by `_AXIS_ORDER`;
+- explicit `encoding="utf-8"` on every `open()`;
+- removed a dead `DeviceClass` computation (`plan_from_args` derives the device
+  class from the string itself);
+- `except Exception: pass` in `HypothesisRegistry._load` now logs with
+  `exc_info`, so an unreadable store is diagnosed, not silently discarded.
+- New `tests/unit/test_campaign_dsl.py` (6 tests) locks the refactor: recurrent
+  filter both ways, axis order, enum serialization, YAML write, budget plan.
+
+### Verified (this session)
+- `tests/unit/test_campaign_dsl.py`: **6 passed**
+- `test_hypothesis_evaluation.py` + `test_readme_build_lock.py`: **14 passed**
+- `ruff check` clean on both modules + the new test; `pyright` clean on
+  `campaign_dsl.py`, `hypothesis.py`, `loop.py`, `test_campaign_dsl.py`.
+
+### Still open (unchanged, scheduled-campaign concerns)
+- End-to-end L2 confirmation run (mechanism locked by
+  `test_seed_separation.py::TestL2ConfirmationWiring`).
+- `comp` CLI `campaign` execution path is exercised by the campaign locks;
+  `campaign_dsl` authoring is now unit-locked.
 
 (End of file)

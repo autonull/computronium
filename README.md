@@ -924,6 +924,14 @@ told back. Four claims are worth stating rather than leaving to be discovered:
   enumerated from the spec's permitted primitives; the sampler optimizes the
   continuous/integer/categorical knobs a cell's selection activates. Deleting
   the candidate-list `propose()` signature entirely is TODO46 §3.4's remainder.
+- **Gradient clipping is declarative, not a magic list.** A
+  `ParameterUpdateConfig` carries `handles_own_clipping`: rules that clip
+  internally (`euclidean`, `adam`, `ortho_adam`, `lion`, `natural_gradient`)
+  set it, and the pipeline clips only the rest (Muon/`riemannian_orthogonal`,
+  `spectral_constrained`, `mean_norm`, `unit_rms`, `local_adam`,
+  `elastic_consolidation`, `role_split`) to a global norm before the step
+  (`core/pipeline.py`). A new update rule declares its own behaviour once,
+  in its factory classmethod.
 - **46 of the 48 registered objectives are measured.** `schema/metrics.py`
   declares the measured namespace (`MEASURED_OBJECTIVES`), and every objective
   row in `OBJECTIVES_REGISTRY` is stamped with the payload key that satisfies it

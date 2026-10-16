@@ -7,6 +7,7 @@ and power analysis integration.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -18,6 +19,8 @@ from computronium.experiment.templates.report.models import (
     Hypothesis as ReportHypothesis,
 )
 from computronium.experiment.templates.report.models import StatisticalResult
+
+logger = logging.getLogger(__name__)
 
 
 class TestType(StrEnum):
@@ -245,13 +248,17 @@ class HypothesisRegistry:
         """Load hypotheses from storage."""
         if self._storage_path.exists():
             try:
-                with self._storage_path.open() as f:
+                with self._storage_path.open(encoding="utf-8") as f:
                     data = json.load(f)
                 for item in data.get("hypotheses", []):
                     spec = HypothesisSpec(**item)
                     self._hypotheses[spec.id] = spec
             except Exception:
-                pass  # Start fresh on corruption
+                logger.warning(
+                    "hypothesis store unreadable; starting fresh",
+                    exc_info=True,
+                    extra={"path": str(self._storage_path)},
+                )
 
     def _save(self) -> None:
         """Save hypotheses to storage."""
@@ -262,7 +269,7 @@ class HypothesisRegistry:
                 h.model_dump(mode="json") for h in self._hypotheses.values()
             ],
         }
-        with self._storage_path.open("w") as f:
+        with self._storage_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
 
     def register(self, hypothesis: HypothesisSpec) -> HypothesisSpec:
@@ -344,7 +351,7 @@ class HypothesisRegistry:
                 for h in self._hypotheses.values()
             ]
         }
-        with output_path.open("w") as f:
+        with output_path.open("w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
     @classmethod
@@ -353,7 +360,7 @@ class HypothesisRegistry:
         import yaml
 
         registry = cls(storage_path=None)  # Don't load default
-        with path.open() as f:
+        with path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         for item in data.get("hypotheses", []):
             spec = HypothesisSpec(
