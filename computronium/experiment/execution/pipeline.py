@@ -43,6 +43,7 @@ from computronium.experiment.execution.stream import CellStream, CellStreamState
 from computronium.experiment.execution.sysctx import (
     SystemContext,
     capture_environment_snapshot,
+    resolve_code_sha,
 )
 from computronium.experiment.schema.coordinate import (
     Coordinate,
@@ -267,6 +268,16 @@ class PipelineRunner:
         self._config = config
         self._store = store
 
+        # Resolved once: the code SHA and dataset the records will carry. A spec
+        # that leaves them unset would persist values the store refuses, so the
+        # engine infers them here instead of per stage (TODO65 turn-key path).
+        self._dataset = (
+            config.run_spec.dataset
+            if config.run_spec.dataset not in {"", "unknown"}
+            else _resolve_tasks(config)[0]
+        )
+        self._code_sha = resolve_code_sha(config.run_spec.code_sha)
+
         # Capture environment snapshot once per run (WP19)
         env_snapshot = capture_environment_snapshot(
             dtype=config.dtype,
@@ -351,6 +362,16 @@ class PipelineRunner:
             key in self._state.completed_measurement_keys
             or key in self._state.rejected_keys
         )
+
+    @property
+    def allocator_promotions(self) -> list[tuple[Coordinate, Schedule]]:
+        """The allocator's promotions from the last completed round (S10).
+
+        Empty when no allocator is configured, the deadline is unset, or the
+        allocations after measuring proposed nothing. This is the observable
+        evidence that successive-halving allocation ran (TODO65 §3.W2).
+        """
+        return self._state.allocator_promotions
 
     @classmethod
     def from_checkpoint(
@@ -996,13 +1017,18 @@ class PipelineRunner:
         )
 
     def _provenance(self, env_dict: dict[str, Any]) -> Provenance:
-        """The run's provenance: environment plus the spec's own declarations."""
+        """The run's provenance: environment plus the spec's own declarations.
+
+        The dataset and code SHA were resolved once in ``__init__`` from the
+        spec (or the task/repo), so every stage's records carry the same
+        contract-satisfying values.
+        """
         spec = self._config.run_spec
         return Provenance(
             env=env_dict,
-            dataset=spec.dataset,
+            dataset=self._dataset,
             dataset_version=spec.dataset_version,
-            code_sha=spec.code_sha,
+            code_sha=self._code_sha,
             policy=self._config.policy.get_name() if self._config.policy else "unknown",
             links={"run_id": self._config.run_id},
         )

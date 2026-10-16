@@ -145,6 +145,7 @@ def export_claims_to_ceec(
 
             # Export each claim group as CEEC evidence
             evidence_ids = []
+            linked_cells: list[str] = []
             for record in eligible_records:
                 # Filter claims for this record's structural values
                 cell_claims = [
@@ -202,6 +203,7 @@ def export_claims_to_ceec(
                 )
 
                 evidence_ids.append(evidence.id)
+                linked_cells.append(record.cell_key)
 
             # Create a belief summarizing the run's findings
             if evidence_ids:
@@ -217,6 +219,10 @@ def export_claims_to_ceec(
                     scope=belief_scope,
                     evidence_refs=evidence_ids,
                 )
+                # Record the link on the exported cells so the store and the
+                # ledger agree on the claim's identity (TODO65 §3.W3).
+                for cell_key in linked_cells:
+                    store.set_cell_ceec_link(run_id, cell_key, belief.id)
                 # Return the belief ID as the ceec_link
                 return belief.id
 
@@ -369,6 +375,10 @@ def export_statistical_result_to_ceec(
 
                 # Update experiment status
                 ceec_store.set_experiment_status(registered.id, "completed")
+
+                # Record the link on the promoted cells (TODO65 §3.W3)
+                for record in promoted_records:
+                    store.set_cell_ceec_link(run_id, record.cell_key, registered.id)
 
                 # Return experiment ID as ceec_link
                 return registered.id

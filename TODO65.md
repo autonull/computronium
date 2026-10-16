@@ -326,6 +326,7 @@ All quality gates pass. The v1.0 turn-key discovery engine is wired and verified
 - [x] Every registered primitive composes; every task resolves; `auto` → GPU when present, CPU complete.
 - [x] `EvidenceDrivenAllocator` wired — S10 promotions real and evidence-driven.
 - [x] Governed claim exported to the standalone CEEC; `ceec_link` recorded; boundary intact.
+      *(Was claimed but not wired — export was never called. Repaired in §14.1; verified by `test_v1_exit.py::test_04` recording the link on measured L2 cells.)*
 - [x] Evidence three-tier status stamped into records/report.
 - [x] `question_first` and the loop share one config surface; the relationship is documented.
 - [x] README self-consistent **by construction** (generated counts; one "measured" definition; one domain source).
@@ -490,4 +491,89 @@ README regenerated (`build_readme.py`); `test_readme_build_lock` green.
 - `comp` CLI `campaign` execution path is exercised by the campaign locks;
   `campaign_dsl` authoring is now unit-locked.
 
+## 14. Session — W3 was not actually wired; ceec_link recorded (this session)
+
+The plan marked §3.W3 **DONE** — "records get `ceec_link` populated during
+`cell_record()`" — but a probe proved the opposite: **nothing in production ever
+called the CEEC export**, so `ceec_link` was *always* `None`. A 5-cell L2 run
+showed `export_claims_to_ceec` returning a real belief id (`B-000001`) while
+`ceec_link` was recorded on **0 of 5** records. §9's "Governed claim exported …
+`ceec_link` recorded" was aspirational, not measured.
+
+### 14.1 CEEC write-back actually wired
+- **`RecordStore.set_cell_ceec_link(run_id, cell_key, link)`** (new): writes
+  `status.ceec_link` for a cell, mirroring `set_cell_maturity`/`set_cell_uncertainty`
+  (struct rebuild; DuckDB refuses a qualified `SET`).
+- **`evidence/ceec_export.py`**: `export_claims_to_ceec` now records the returned
+  belief id on the cells it exported; `export_statistical_result_to_ceec` records
+  the experiment id on the promoted cells. Export = record, not just return.
+- **`LoopDriver._export_claims_to_ceec`** (new) is called after `_settle()` in
+  **both** `_execute` and `_execute_resume`, so every cycle attempts the boundary.
+  New `LoopConfig.export_to_ceec: bool = True` gates it; CEEC absence degrades
+  gracefully (logged, no link), never an error.
+
+### 14.2 Exit test made honest (§7 items 3–4 were toothless)
+- **3 (S10 promotions).** `test_03` only checked `len(records) > 0` and
+  `allocator is not None` — a lock that could not fail if the allocator were
+  removed. New read-only `PipelineRunner.allocator_promotions` exposes the
+  allocator's output; the test now asserts it is **non-empty** (verified: 50
+  promotions in the exit scenario).
+- **4 (CEEC link).** `test_04` skipped whenever there were no L2 records —
+  which is always, at the exit scenario's budget. Rewritten to **measure 5 real
+  L2 `digits` cells** through `cell_record` (the "measured, not fabricated"
+  pattern), export to a `tmp_path` CEEC ledger, and assert the belief is written
+  back onto the records. Falsifiable: dropping the write-back nulls the link.
+- Removed a tautology in `test_05` (`ceec_link is not None or is None`).
+
+### 14.3 Turn-key provenance repair (found while fixing the above)
+Building the exit test surfaced that a `RunSpec` which leaves `dataset`/`code_sha`
+unset (`"unknown"`) **persists nothing**: the store's provenance contract refuses
+the record and it is silently dropped. This hit the documented `question_first` /
+`ExperimentConfig` path (`code_sha="unknown"` by default) and the test helper
+`mechanism_spec`. Fixed in the engine, once per runner:
+- new `execution/sysctx.py::resolve_code_sha(declared)` → declared value, else the
+  repo's `HEAD`;
+- `PipelineRunner.__init__` resolves `self._dataset` (spec's, else the task) and
+  `self._code_sha`, and `_provenance` uses them.
+This repaired the **pre-existing** red `test_round_loop_mechanism_lock.py`
+(6 failures — its fixture measured nothing) and is net-positive across the
+property shard.
+
+### 14.4 Stale lock repaired
+`test_claim_report_lock.py` was red on `HEAD` (13 fixture errors + 1 failure):
+its hand-built `Provenance(env={})` fails the store's env-fingerprint contract,
+and it used `test_accuracy` as an "unmeasured objective" after that objective
+gained a `metric_key`. Added `_ENV` and switched to `training_time` (genuinely
+unmeasured). **28 passed.**
+
+### Verified (this session)
+- `tests/acceptance/test_v1_exit.py`: **5 passed, 1 skipped** (~120 s) — the
+  1 skip is `test_02`'s device assertion on a CPU-only host.
+- `test_claim_report_lock.py` **28 passed**; `test_round_loop_mechanism_lock.py`
+  **6 passed**; `test_loop_uses_engine_lock.py` + exit test together **16 passed**.
+- `ruff format` clean; `ruff check` adds no **new** findings (pre-existing
+  Register C counts in `ceec_export.py`/`pipeline.py` unchanged or lower);
+  `pyright` **0 errors** on all changed library files.
+- Probes: `scripts/probes/ceec_export_probe.py` (0/5 → 5/5 links recorded),
+  `scripts/probes/exit_state_probe.py` (allocator promotions, maturity).
+
+### Remaining work (pre-existing; NOT caused by this session)
+The repo-wide property shard is **substantially red on `HEAD`** (~80 failures),
+unrelated to the CEEC work. Measured categories for a future hygiene pass:
+- **Lazy-export map gaps** (`test_lazy_export_lock`): `experiment.execution.
+  __all__` omits submodules `compose`/`search_space`; the map holds dead rows
+  (`BatchSizer`, `CellStream`, `CellStreamState`, `validate_record_input/output`).
+- **Undefined-name lock** (`test_undefined_name_lock`): `reporters/html.py` uses
+  `pd.DataFrame` in module-level annotations while importing pandas lazily.
+- **API drift in locks**: e.g. `Budget.from_duration(target_cells=…)`
+  (`test_hyperparameter_effect_lock`); `test_wp11_surface_lock` intent/export drift.
+- The `pytest-fast` pre-commit hook (`pytest tests/property/ -q`) would fail on
+  these; it is **not installed** here, but the shard must be greened before it is.
+- (Unchanged) End-to-end L2 confirmation run — mechanism locked by
+  `test_seed_separation.py::TestL2ConfirmationWiring`; the new `test_04` exercises
+  the CEEC write-back on measured L2 cells, but a full gated L2 loop run remains a
+  scheduled-campaign concern, not a merge gate.
+
 (End of file)
+
+

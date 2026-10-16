@@ -484,6 +484,36 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             )
         return len(result.fetchall())
 
+    def set_cell_ceec_link(
+        self,
+        run_id: str,
+        cell_key: str,
+        ceec_link: str | None,
+    ) -> int:
+        """Write ``status.ceec_link`` for every record of a cell.
+
+        The CEEC export is the only writer: a link a record cannot resolve in
+        the governed ledger is worse than no link. Called after a belief is
+        created so the record and the ledger agree on the claim's identity.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        with self._write_lock:
+            result = self._conn.execute(
+                "UPDATE records SET status = {"
+                "'gate_verdict': status.gate_verdict, 'defect': status.defect, "
+                "'cause': status.cause, 'severity': status.severity, "
+                "'quarantine': status.quarantine, 'maturity': status.maturity, "
+                "'uncertainty': status.uncertainty, "
+                "'reproducibility': status.reproducibility, "
+                "'assessment_procedure_version': "
+                "status.assessment_procedure_version, "
+                "'ceec_link': ?} "
+                "WHERE run_id = ? AND cell_key = ?",
+                [ceec_link, run_id, cell_key],
+            )
+        return len(result.fetchall())
+
     def finish_run(
         self,
         run_id: str,

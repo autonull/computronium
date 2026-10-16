@@ -8,7 +8,9 @@ SystemContext carries run-scoped kernel cache and injected learning state (R75/K
 
 from __future__ import annotations
 
+import logging
 import platform
+import subprocess  # ruff: ignore[suspicious-subprocess-import] -- controlled git call for the code SHA
 import sys
 import threading
 from dataclasses import dataclass, field
@@ -18,6 +20,32 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from computronium.experiment.learning.icu import ICUModel
     from computronium.experiment.learning.reasoning import ReasoningStore
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_code_sha(declared: str | None = None) -> str:
+    """The code SHA to stamp on a run: the declared value, else the repo's HEAD.
+
+    A spec that declares no SHA would otherwise persist ``"unknown"``, which the
+    store's provenance contract refuses — so the engine captures its own rather
+    than silently failing to record a measurement (TODO65 turn-key path).
+    """
+    if declared and declared not in {"", "unknown"}:
+        return declared
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception as e:  # ruff: ignore[blind-except] - git is optional
+        logger.debug("Failed to resolve git SHA: %s", e)
+    return declared or "unknown"
 
 
 @dataclass(frozen=True, slots=True)

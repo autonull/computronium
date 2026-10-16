@@ -69,6 +69,8 @@ _SEEDS = 5
 _SHORT_SEEDS = 2
 _BATCHES = 2
 _METRIC = "val_acc"
+# Every record the store accepts must carry an env fingerprint (store contract).
+_ENV = {"python": "3.14", "platform": "test"}
 
 
 def _coordinate(credit: str) -> Coordinate:
@@ -128,7 +130,7 @@ def measured_run(
                     _coordinate(credit),
                     _schedule(seed),
                     Provenance(
-                        env={},
+                        env=_ENV,
                         dataset=_TASK,
                         dataset_version="1.0",
                         code_sha="test",
@@ -366,7 +368,7 @@ class TestPerMetricClaims:
                             _coordinate(credit),
                             _schedule(seed),
                             Provenance(
-                                env={},
+                                env=_ENV,
                                 dataset=_TASK,
                                 dataset_version="1.0",
                                 code_sha="test",
@@ -422,7 +424,7 @@ class TestPerMetricClaims:
                 coordinate=_coordinate(_CREDITS[0]),
                 schedule=_schedule(0),
                 provenance=Provenance(
-                    env={},
+                    env=_ENV,
                     dataset=_TASK,
                     dataset_version="1.0",
                     code_sha="test",
@@ -600,7 +602,7 @@ class TestReport:
             pydantic_core.ValidationError,
             match=r"have no measurement.*metric_key is None",
         ):
-            _spec(objectives=("test_accuracy",))
+            _spec(objectives=("training_time",))
 
     def test_unmeasured_objectives_in_axis_objectives_do_not_trigger_limitation(
         self, tmp_path: Path

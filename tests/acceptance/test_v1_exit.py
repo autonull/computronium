@@ -16,14 +16,14 @@ Run once (<10 min; faster on GPU) before tagging v1.0.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 from computronium.experiment.evidence import RecordStore, StoreConfig
-from computronium.experiment.evidence.ceec_export import (
-    export_statistical_result_to_ceec,
-)
 from computronium.experiment.execution import (
     Budget,
     EvidenceDrivenAllocator,
@@ -108,10 +108,10 @@ def _make_pipeline_config(
 async def _run_pipeline(
     config: PipelineConfig,
     store: RecordStore,
-) -> list:
-    """Run a pipeline and return records."""
+) -> tuple[list, PipelineRunner]:
+    """Run a pipeline and return (records, runner) for state assertions."""
     runner = PipelineRunner(config, store)
-    return await runner.run()
+    return await runner.run(), runner
 
 
 # =============================================================================
@@ -134,7 +134,7 @@ class TestV1Exit:
             run_id = store.create_run(spec=run_spec)
 
             config = _make_pipeline_config(run_id, run_spec, max_rounds=2)
-            records = asyncio.run(_run_pipeline(config, store))
+            records, _runner = asyncio.run(_run_pipeline(config, store))
 
             # Loop ran and produced records
             assert len(records) > 0, "Pipeline should produce at least one record"
@@ -176,7 +176,12 @@ class TestV1Exit:
 
     @pytest.mark.timeout(600)
     def test_03_s10_promotions_non_empty(self, tmp_path: Path) -> None:
-        """3. S10 promotions non-empty (W2) — EvidenceDrivenAllocator wired."""
+        """3. S10 promotions non-empty (W2) — EvidenceDrivenAllocator wired.
+
+        Falsifiable: removing the allocator from ``PipelineConfig`` (or the
+        deadline it needs to allocate against) empties ``allocator_promotions``
+        and turns this red.
+        """
         store_path = tmp_path / "exit_store.duckdb"
         store_config = StoreConfig(path=store_path)
 
@@ -185,54 +190,91 @@ class TestV1Exit:
             run_id = store.create_run(spec=run_spec)
 
             config = _make_pipeline_config(run_id, run_spec, max_rounds=2)
-            records = asyncio.run(_run_pipeline(config, store))
+            records, runner = asyncio.run(_run_pipeline(config, store))
 
-            # The allocator should have run and produced promotions
-            # Check that at least one record has allocator-related payload
-            # (In practice, promotions are recorded in PipelineState, not individual records)
             assert len(records) > 0, "Should have records from multi-round run"
 
-            # Verify allocator was used by checking pipeline state
-            # The EvidenceDrivenAllocator is wired into PipelineConfig.allocator
+            # The allocator ran between rounds and proposed successors.
             assert config.allocator is not None, "Allocator should be configured"
             assert isinstance(config.allocator, EvidenceDrivenAllocator)
+            assert len(runner.allocator_promotions) > 0, (
+                "S10 successive-halving allocation proposed no promotions"
+            )
 
     @pytest.mark.timeout(600)
     def test_04_ceec_export_and_ceec_link_recorded(self, tmp_path: Path) -> None:
-        """4. Claim exported to standalone CEEC; ceec_link recorded (W3)."""
-        from computronium.experiment.schema.record import GateVerdict
+        """4. Claim exported to standalone CEEC; ceec_link recorded (W3).
 
-        store_path = tmp_path / "exit_store.duckdb"
-        store_config = StoreConfig(path=store_path)
+        A claim is claim-eligible only at L2 with the required seed count, so
+        this measures real L2 cells through the kernel evaluator — the same
+        "measured, not fabricated" pattern as ``test_claim_report_lock`` — then
+        exports them and asserts the returned belief is written back onto the
+        records. Falsifiable: dropping the write-back in ``export_claims_to_ceec``
+        leaves ``ceec_link`` null and turns this red.
+        """
+        from computronium.experiment.evidence.ceec_export import export_claims_to_ceec
+        from computronium.experiment.kernel import cell_record
+        from computronium.experiment.schema import (
+            Coordinate,
+            Provenance,
+            Schedule,
+        )
 
-        with RecordStore(store_config) as store:
-            run_spec = _make_run_spec("digits")
+        task = "digits"
+        n_seeds = 5
+        coordinate = Coordinate(
+            substrate="digital",
+            geometry="feedforward",
+            dynamics="energy_minimization",
+            plasticity="fast_weights",
+            credit="local_contrastive",
+            update="euclidean",
+            params={},
+        )
+
+        def measure(store: RecordStore, run_id: str, seed: int) -> None:
+            store.append(
+                cell_record(
+                    coordinate,
+                    Schedule(
+                        fidelity="L2",
+                        seed=seed,
+                        n_seeds=n_seeds,
+                        epochs=1,
+                        batch_limit=MEASURED_BATCH_LIMIT,
+                        budget_id="exit-ceec",
+                        task_id=task,
+                        param_budget=MEASURED_PARAM_BUDGET,
+                    ),
+                    Provenance(
+                        env={"python": "3.14", "platform": "exit-test"},
+                        dataset=task,
+                        dataset_version="1.0",
+                        code_sha="exit-test",
+                        policy="exit-test",
+                        links={"run_id": run_id},
+                    ),
+                )
+            )
+
+        with RecordStore(StoreConfig(path=tmp_path / "ceec_store.duckdb")) as store:
+            run_spec = _make_run_spec(task)
             run_id = store.create_run(spec=run_spec)
+            for seed in range(n_seeds):
+                measure(store, run_id, seed)
 
-            config = _make_pipeline_config(run_id, run_spec, max_rounds=1)
-            records = asyncio.run(_run_pipeline(config, store))
+            link = export_claims_to_ceec(
+                store,
+                run_id,
+                ceec_ledger_path=tmp_path / "ceec.sqlite3",
+                ceec_artifacts_dir=tmp_path / "ceec_artifacts",
+            )
 
-            assert len(records) > 0
+            assert link is not None, "CEEC export should return a belief link"
 
-            # Pick a successful record and export to CEEC
-            success_records = [
-                r for r in records if r.status.gate_verdict == GateVerdict.PASS_
-            ]
-            if not success_records:
-                pytest.skip("No successful records to export")
-
-            record = success_records[0]
-
-            # Export the record's statistical result to CEEC
-            # This tests the ceec_export wiring
-            try:
-                link = export_statistical_result_to_ceec(store, run_id)
-                assert link is not None, "CEEC export should return a link"
-                # The record's ceec_link should be updated (in practice this happens in cell_record)
-                # For this test, we verify the export function works
-            except Exception as e:
-                # CEEC might not be fully configured in test env; that's OK for this check
-                pytest.skip(f"CEEC export not available in test env: {e}")
+            after = store.query_records(run_id=run_id)
+            recorded = [r for r in after if r.status.ceec_link == link]
+            assert recorded, "The exported claim's ceec_link was not recorded"
 
     @pytest.mark.timeout(600)
     def test_05_report_artifacts_complete(self, tmp_path: Path) -> None:
@@ -248,7 +290,7 @@ class TestV1Exit:
             run_id = store.create_run(spec=run_spec)
 
             config = _make_pipeline_config(run_id, run_spec, max_rounds=2)
-            records = asyncio.run(_run_pipeline(config, store))
+            records, _runner = asyncio.run(_run_pipeline(config, store))
 
             assert len(records) > 0
 
@@ -258,9 +300,6 @@ class TestV1Exit:
                 assert status.gate_verdict is not None, "Gate verdict should be set"
                 assert status.assessment_procedure_version is not None, (
                     "Assessment procedure version should be stamped"
-                )
-                assert status.ceec_link is not None or status.ceec_link is None, (
-                    "ceec_link field exists"
                 )
 
                 # Per-domain objectives in payload

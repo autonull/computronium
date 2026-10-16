@@ -127,6 +127,8 @@ class LoopConfig:
     hypothesis_registry_path: Path | None = None
     # Phase 5: Guided search
     use_icu_guided: bool = False
+    # TODO65 §3.W3: export each cycle's governed claims to the CEEC ledger
+    export_to_ceec: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,6 +568,7 @@ class LoopDriver:
 
             baselines = await self._baselines(store, run_id, spec, task)
             self._settle(store, run_id, spec, baselines, cycle=cycle)
+            self._export_claims_to_ceec(store, run_id)
 
             from computronium.experiment.surface.report import generate_run_report
 
@@ -678,6 +681,7 @@ class LoopDriver:
 
             baselines = await self._baselines(store, run_id, spec, task)
             self._settle(store, run_id, spec, baselines, cycle=cycle)
+            self._export_claims_to_ceec(store, run_id)
 
             from computronium.experiment.surface.report import generate_run_report
 
@@ -1240,6 +1244,31 @@ class LoopDriver:
             sum(1 for entry in history if entry["maturity"] == Maturity.L2.value),
         )
         return history
+
+    def _export_claims_to_ceec(self, store: RecordStore, run_id: str) -> str | None:
+        """Export this cycle's governed claims to the CEEC ledger (TODO65 §3.W3).
+
+        The export records the returned belief link on the exported cells, so
+        ``status.ceec_link`` names the ledger entry the claim rests on. A run
+        with no claim-eligible cells exports nothing and records no link; CEEC
+        absence is not an error (the boundary degrades gracefully).
+        """
+        if not self._config.export_to_ceec:
+            return None
+        from computronium.experiment.evidence.ceec_export import export_claims_to_ceec
+
+        try:
+            link = export_claims_to_ceec(store, run_id)
+        except Exception:  # ruff: ignore[blind-except] - CEEC is an optional boundary
+            logger.warning(
+                "CEEC export failed for run %s; no ceec_link recorded",
+                run_id,
+                exc_info=True,
+            )
+            return None
+        if link:
+            logger.info("Run %s: claims exported to CEEC as %s", run_id, link)
+        return link
 
     async def _baselines(
         self,
