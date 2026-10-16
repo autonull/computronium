@@ -2,6 +2,10 @@
 
 Computes Pareto frontiers, scalarization sweeps, and hypervolume tracking
 for multi-objective optimization analysis.
+
+This module wraps the canonical Pareto implementation from
+`computronium.experiment.optimization.multi_objective` and provides
+additional analysis utilities (scalarization sweeps, hypervolume).
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.schema.record import Record
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,74 +42,44 @@ class ParetoConfig:
 
 
 def compute_pareto_frontier(
-    records: list[Any],
+    records: list[Record],
     objectives: list[str],
     maximize: list[bool] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Compute Pareto frontier from records.
+    """Compute Pareto frontier from records using canonical implementation.
 
     Returns:
         (pareto_points, dominated_points)
     """
+    from computronium.experiment.optimization.multi_objective import (
+        ParetoFrontier,
+    )
+    from computronium.experiment.optimization.multi_objective import (
+        compute_pareto_frontier as canonical_compute_pareto_frontier,
+    )
+
     if maximize is None:
         maximize = [True] * len(objectives)
 
-    # Extract objective values
-    points = []
-    for r in records:
-        obj_vals = {}
-        valid = True
-        for obj in objectives:
-            val = r.payload.get(obj)
-            if val is None:
-                valid = False
-                break
-            obj_vals[obj] = float(val)
-        if valid:
-            points.append({
-                "record_id": r.record_id,
-                "cell_key": r.cell_key(),
-                "objectives": obj_vals,
-                "coordinate": {
-                    "substrate": r.substrate,
-                    "geometry": r.geometry,
-                    "dynamics": r.dynamics,
-                    "plasticity": r.plasticity,
-                    "credit": r.credit,
-                    "update": r.update,
-                },
-            })
+    # Use canonical Pareto computation (directions come from OBJECTIVE_REGISTRY)
+    frontier: ParetoFrontier = canonical_compute_pareto_frontier(records, objectives)
 
-    if not points:
-        return [], []
+    # Convert to analysis format
+    pareto_points = []
+    dominated_points = []
 
-    # Convert to array for efficient comparison
-    obj_matrix = np.array([[p["objectives"][o] for o in objectives] for p in points])
-
-    # Apply maximization/minimization
-    for i, max_flag in enumerate(maximize):
-        if not max_flag:
-            obj_matrix[:, i] = -obj_matrix[:, i]
-
-    # Non-dominated sorting
-    n = len(points)
-    is_dominated = np.zeros(n, dtype=bool)
-
-    for i in range(n):
-        if is_dominated[i]:
-            continue
-        for j in range(n):
-            if i == j or is_dominated[j]:
-                continue
-            # Check if j dominates i
-            if np.all(obj_matrix[j] >= obj_matrix[i]) and np.any(
-                obj_matrix[j] > obj_matrix[i]
-            ):
-                is_dominated[i] = True
-                break
-
-    pareto_points = [points[i] for i in range(n) if not is_dominated[i]]
-    dominated_points = [points[i] for i in range(n) if is_dominated[i]]
+    for point in frontier.points:
+        obj_dict = {o.name: o.raw_value for o in point.objectives}
+        point_dict = {
+            "record_id": point.replication_key,
+            "cell_key": point.cell_key,
+            "objectives": obj_dict,
+            "coordinate": {},  # Coordinate info not in canonical ParetoPoint
+        }
+        if point.rank == 0:
+            pareto_points.append(point_dict)
+        else:
+            dominated_points.append(point_dict)
 
     return pareto_points, dominated_points
 
@@ -115,72 +90,79 @@ def compute_hypervolume(
     maximize: list[bool],
     reference_point: list[float] | None = None,
 ) -> float:
-    """Compute hypervolume indicator for Pareto front.
+    """Compute hypervolume indicator for Pareto front using canonical implementation."""
+    from computronium.experiment.optimization.multi_objective import (
+        NormalizedObjective,
+        ParetoFrontier,
+        ParetoPoint,
+    )
+    from computronium.experiment.optimization.multi_objective import (
+        compute_hypervolume as canonical_compute_hypervolume,
+    )
 
-    For 2D case, computes area dominated by Pareto front.
-    For higher dimensions, uses Monte Carlo approximation.
-    """
     if not pareto_points:
         return 0.0
 
-    obj_matrix = np.array([
-        [p["objectives"][o] for o in objectives] for p in pareto_points
-    ])
+    # Reconstruct ParetoPoint objects from analysis format
+    points = []
+    for p in pareto_points:
+        obj_tuple = tuple(
+            NormalizedObjective(
+                name=name,
+                raw_value=p["objectives"][name],
+                normalized_value=p["objectives"][name],
+                direction="maximize" if maximize[i] else "minimize",
+                weight=1.0,
+                normalizer=None,
+                axis_tag=None,
+                is_measured=True,
+            )
+            for i, name in enumerate(objectives)
+            if name in p["objectives"]
+        )
+        points.append(
+            ParetoPoint(
+                cell_key=p["cell_key"],
+                replication_key=p["record_id"],
+                objectives=obj_tuple,
+            )
+        )
 
-    # Apply maximization/minimization
-    for i, max_flag in enumerate(maximize):
-        if not max_flag:
-            obj_matrix[:, i] = -obj_matrix[:, i]
-
-    if reference_point is None:
-        # Use nadir point + small buffer
-        reference_point_arr = np.max(obj_matrix, axis=0) + 1.0
-    else:
-        reference_point_arr = np.array(reference_point)
-
-    # Simple 2D case
-    if len(objectives) == 2:
-        # Sort by first objective
-        idx = np.argsort(obj_matrix[:, 0])
-        sorted_obj = obj_matrix[idx]
-
-        hv = 0.0
-        prev_x = reference_point_arr[0]
-        for pt in sorted_obj:
-            width = prev_x - pt[0]
-            height = max(0, reference_point_arr[1] - pt[1])
-            if width > 0 and height > 0:
-                hv += width * height
-            prev_x = pt[0]
-        return float(hv)
-
-    # Higher dimensions: Monte Carlo
-    n_samples = 10000
-    samples = np.random.uniform(
-        low=np.min(obj_matrix, axis=0),
-        high=reference_point_arr,
-        size=(n_samples, len(objectives)),
+    # Create a minimal ParetoFrontier for canonical hypervolume
+    frontier = ParetoFrontier(
+        points=tuple(points),
+        objective_names=tuple(objectives),
+        reference_point=tuple(reference_point) if reference_point else None,
     )
 
-    dominated = 0
-    for sample in samples:
-        for pt in obj_matrix:
-            if np.all(sample <= pt):
-                dominated += 1
-                break
+    # Use canonical hypervolume (need reference point)
+    if reference_point is None:
+        # Compute reference point from pareto points
+        obj_matrix = np.array([
+            [p["objectives"][o] for o in objectives] for p in pareto_points
+        ])
+        # Apply maximization/minimization
+        for i, max_flag in enumerate(maximize):
+            if not max_flag:
+                obj_matrix[:, i] = -obj_matrix[:, i]
+        ref = np.max(obj_matrix, axis=0) + 1.0
+        ref_tuple = tuple(ref)
+    else:
+        ref_tuple = tuple(reference_point)
 
-    # Volume of bounding box
-    box_volume = np.prod(reference_point - np.min(obj_matrix, axis=0))
-    return float(box_volume * dominated / n_samples)
+    return canonical_compute_hypervolume(list(frontier.front()), objectives, ref_tuple)
 
 
 def compute_scalarization_sweep(
-    records: list[Any],
+    records: list[Record],
     objectives: list[str],
     maximize: list[bool],
     n_weight_samples: int = 20,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Compute weighted scalarization for multiple weight vectors."""
+    """Compute weighted scalarization for multiple weight vectors.
+
+    This is an analysis-specific utility not in the canonical implementation.
+    """
     if maximize is None:
         maximize = [True] * len(objectives)
 
@@ -198,7 +180,7 @@ def compute_scalarization_sweep(
         if valid:
             points.append({
                 "record_id": r.record_id,
-                "cell_key": r.cell_key(),
+                "cell_key": r.cell_key,
                 "objectives": obj_vals,
                 "coordinate": {
                     "substrate": r.substrate,
@@ -254,7 +236,7 @@ class ParetoAnalyzer:
         objectives: list[str] = ["val_acc", "energy_per_step"],
         maximize: list[bool] | None = None,
     ) -> ParetoResult:
-        """Run Pareto analysis."""
+        """Run Pareto analysis using canonical Pareto implementation."""
         from computronium.experiment.surface.report import ReportGenerator
 
         generator = ReportGenerator(self.store)

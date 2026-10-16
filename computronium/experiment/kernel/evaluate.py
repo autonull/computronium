@@ -18,6 +18,9 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Final
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 import torch
 
 from computronium.core.logging import get_logger
@@ -66,10 +69,6 @@ __all__ = [
 # above the declared space rather than truncating it. A cap, not a silent
 # wrong number: past it the settle telemetry is reported without a Jacobian.
 _MAX_JACOBIAN_WIDTH: Final[int] = 1536
-
-# ρ(J) is exactly 0 for a nilpotent step and ln(0) is -inf, which would fail
-# the finite-metrics gate on a measurement that succeeded.
-_RADIUS_FLOOR: Final[float] = 1e-10
 
 logger = get_logger(__name__)
 
@@ -237,6 +236,8 @@ def compute_stability_metrics(
     - ``lyapunov_exponent`` — ln ρ(J), negative exactly when contracting
     - ``settle_steps`` / ``settle_converged`` — the free phase's own telemetry
     - ``free_energy`` — the dynamics' energy at the settled state
+    - ``drift_spectral_radius``, ``drift_max_singular_value``, ``drift_nonnormality``,
+      ``settle_step_size``, ``contraction_rate`` — drift operator metrics
 
     The step, not the settle: a loop that runs ``N`` steps composes the step
     Jacobian N times, so measuring the whole settle reports ρ^N. At ρ=0.997 and
@@ -246,6 +247,9 @@ def compute_stability_metrics(
     The Jacobian is exact (``torch.autograd.functional.jacobian``) at the
     settled hidden activations (the fixed point), so the hidden stack is capped:
     an O(d²) SVD on an uncapped stack is how a measurement turns into a timeout.
+
+    Uses the canonical stability package (packages/stability) for Jacobian
+    spectral analysis via the low-level tensor API.
     """
     from computronium.experiment.execution.settle_operator import (
         settle_step_operator_at_state,
@@ -276,30 +280,38 @@ def compute_stability_metrics(
     # Compute Jacobian at the settled hidden activations (the fixed point)
     settled_hidden = torch.cat([h[0] for h in settled_acts[1:-1]])
 
-    try:  # ruff: ignore[too-many-statements-in-try-clause]
-        jac = torch.autograd.functional.jacobian(step, settled_hidden)
-        # Use svd_lowrank for large matrices (>512) for speed (C4)
-        if jac.shape[0] > 512 or jac.shape[1] > 512:
-            # Randomized SVD: compute only top k singular values
-            # We need max and min, so compute a few more than needed
-            k = min(16, *jac.shape)
-            _, S, _ = torch.svd_lowrank(jac, q=k, niter=2)
-            singular = S
-        else:
-            singular = torch.linalg.svdvals(jac)
-        sigma_max = float(singular.max().item())
-        sigma_min = float(singular.min().item())
-        radius = _radius(jac, sigma_max)
-        metrics["spectral_radius"] = radius
-        metrics["max_singular_value"] = sigma_max
-        metrics["min_singular_value"] = sigma_min
-        metrics["lyapunov_exponent"] = math.log(max(radius, _RADIUS_FLOOR))
-        metrics["stability_margin"] = 1.0 - radius
-        metrics["nonnormality"] = sigma_max / max(radius, _RADIUS_FLOOR)
-        metrics.update(_drift_metrics(jac, system))
-    except Exception as exc:  # ruff: ignore[blind-except] - a metric must not fail the cell
-        logger.warning("settle-step Jacobian failed: %s", exc)
+    _compute_jacobian_metrics(step, settled_hidden, system, metrics)
+
     return metrics
+
+
+def _compute_jacobian_metrics(
+    step: Callable[[torch.Tensor], torch.Tensor],
+    settled_hidden: torch.Tensor,
+    system: Any,
+    metrics: dict[str, float],
+) -> None:
+    """Compute Jacobian-based stability metrics using the stability package."""
+    from computronium.stability import drift_metrics, jacobian_spectral_metrics
+
+    # Define step function for stability package
+    def step_fn(h: torch.Tensor) -> torch.Tensor:
+        return step(h)
+
+    # Use canonical stability package for spectral metrics
+    spectral = jacobian_spectral_metrics(
+        step_fn,
+        settled_hidden,
+        compute_min_singular=True,
+        use_lowrank_for_large=True,
+    )
+    metrics.update(spectral)
+
+    # Drift metrics
+    step_size = float(getattr(system.dynamics.config, "step_size", 0.0))
+    if step_size > 0:
+        drift = drift_metrics(step_fn, settled_hidden, step_size)
+        metrics.update(drift)
 
 
 def _energy_family(dynamics_type: str) -> str:
@@ -424,46 +436,6 @@ def _free_settle_metrics_and_state(
     except Exception as exc:  # ruff: ignore[blind-except] - a metric must not fail the cell
         logger.warning("free settle telemetry failed: %s", exc)
     return metrics, settled_acts
-
-
-def _radius(jac: torch.Tensor, sigma_max: float) -> float:
-    """Spectral radius for a square operator; its own norm when not square."""
-    if jac.shape[0] != jac.shape[1]:
-        return sigma_max
-    return float(torch.linalg.eigvals(jac).abs().max().item())
-
-
-def _drift_metrics(jac: torch.Tensor, system: Any) -> dict[str, float]:
-    """The drift operator ``f(h) - h``: the network's own gain, step size removed.
-
-    A relaxation step is ``h <- h + eta * (f(h) - h)``, so its Jacobian is
-    ``J = I + eta * D``. The identity pins ``rho(J)`` at 1 for any small ``eta``:
-    over a 500x range of ``eta`` the campaign's ``rho_step`` stayed within
-    1.0000 +/- 0.0003 and resolved nothing, while the same cell's drift radius
-    read 2.00 +/- 0.09 across that whole range. ``D = (J - I) / eta`` is exact
-    algebra on the Jacobian already built, costs one subtraction, and is the
-    quantity a stability-plasticity frontier is actually about.
-
-    ``contraction_rate`` is the *prediction* linear theory makes, and it is not
-    the measurement: ``rho(J) = 1 - eta*rho(D)`` holds only for a real dominant
-    eigenvalue, and with complex eigenpairs the measured ``rho_step`` disagrees
-    (at eta=0.03 it reads 1.003 where this predicts 0.94). Reported because that
-    prediction is what a stability budget is reasoned about; not reported as an
-    observed rate, because it is not one.
-    """
-    eta = float(getattr(system.dynamics.config, "step_size", 0.0))
-    if eta <= 0:
-        return {}
-    drift = (jac - torch.eye(jac.shape[0], device=jac.device)) / eta
-    sigma_max = float(torch.linalg.svdvals(drift).max().item())
-    radius = _radius(drift, sigma_max)
-    return {
-        "drift_spectral_radius": radius,
-        "drift_max_singular_value": sigma_max,
-        "drift_nonnormality": sigma_max / max(radius, _RADIUS_FLOOR),
-        "settle_step_size": eta,
-        "contraction_rate": 1.0 - eta * radius,
-    }
 
 
 def _param_device(system: Any) -> torch.device:

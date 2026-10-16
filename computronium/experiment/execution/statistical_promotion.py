@@ -7,6 +7,7 @@ Supports discovery/confirmation seed separation for multiplicity control.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -15,9 +16,14 @@ import numpy as np
 from scipy import stats
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.registry.baseline import BaselineRecord
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +51,20 @@ class GateThresholds:
     alpha: float = 0.05
     effect_size_target: float = 0.5  # Cohen's d
 
+    # Discovery/confirmation seed separation
+    use_confirmation_seeds_for_l2: bool = True
+
+    @property
+    def required_seeds_per_group(self) -> int:
+        """Required seeds per group from power analysis (C0)."""
+        from computronium.core.statistics import required_sample_size
+
+        return required_sample_size(
+            effect_size=self.effect_size_target,
+            power=self.power_target,
+            alpha=self.alpha,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "superiority_margin": self.superiority_margin,
@@ -56,6 +76,8 @@ class GateThresholds:
             "power_target": self.power_target,
             "alpha": self.alpha,
             "effect_size_target": self.effect_size_target,
+            "required_seeds_per_group": self.required_seeds_per_group,
+            "use_confirmation_seeds_for_l2": self.use_confirmation_seeds_for_l2,
         }
 
     @classmethod
@@ -70,6 +92,9 @@ class GateThresholds:
             power_target=data.get("power_target", 0.8),
             alpha=data.get("alpha", 0.05),
             effect_size_target=data.get("effect_size_target", 0.5),
+            use_confirmation_seeds_for_l2=data.get(
+                "use_confirmation_seeds_for_l2", True
+            ),
         )
 
 
@@ -145,17 +170,27 @@ def check_superiority_gate(
     Gates:
     - mean_cell > mean_baseline + superiority_margin (absolute)
     - mean_cell > mean_baseline + superiority_margin_sigma * SE_cell
+    - Minimum seeds from power analysis (C0/C1)
 
     If no baseline is available, this gate is skipped (passed=True with a note).
     """
-    if len(cell_values) < thresholds.min_seeds_for_stats:
+    # Use power analysis to determine required seeds (C0/C1)
+    required_seeds = thresholds.required_seeds_per_group
+    if len(cell_values) < required_seeds:
         return GateResult(
             gate_name="superiority",
             passed=False,
             statistic=len(cell_values),
-            threshold=thresholds.min_seeds_for_stats,
-            reason=f"Insufficient seeds for statistical test: {len(cell_values)} < {thresholds.min_seeds_for_stats}",
-            details={"n_cell": len(cell_values), "n_baseline": len(baseline_values)},
+            threshold=required_seeds,
+            reason=f"Insufficient seeds for statistical test (power analysis): {len(cell_values)} < {required_seeds}",
+            details={
+                "n_cell": len(cell_values),
+                "n_baseline": len(baseline_values),
+                "required_seeds": required_seeds,
+                "power_target": thresholds.power_target,
+                "effect_size_target": thresholds.effect_size_target,
+                "alpha": thresholds.alpha,
+            },
         )
 
     if not baseline_values:
@@ -179,6 +214,7 @@ def check_superiority_gate(
     absolute_superior = bool(cell_mean > baseline_mean + thresholds.superiority_margin)
 
     # Sigma margin check (mean > baseline + k * SE)
+    # Use power-derived threshold instead of fixed 2*SE (C1)
     sigma_superior = bool(
         cell_mean > baseline_mean + thresholds.superiority_margin_sigma * cell_se
     )
@@ -200,6 +236,13 @@ def check_superiority_gate(
 
     effect_size = (cell_mean - baseline_mean) / max(pooled_std, 1e-12)
 
+    # Calculate achieved power (C1: verdict reports power_achieved)
+    from computronium.core.statistics import power_for_two_sample
+
+    power_achieved = power_for_two_sample(
+        effect_size, len(cell_values), thresholds.alpha
+    )
+
     return GateResult(
         gate_name="superiority",
         passed=passed,
@@ -207,7 +250,8 @@ def check_superiority_gate(
         threshold=thresholds.superiority_margin,
         reason=(
             f"Cell mean {cell_mean:.4f} vs baseline {baseline_mean:.4f}: "
-            f"Δ={cell_mean - baseline_mean:.4f}, effect_size={effect_size:.3f}"
+            f"Δ={cell_mean - baseline_mean:.4f}, effect_size={effect_size:.3f}, "
+            f"power_achieved={power_achieved:.2f}"
         ),
         details={
             "cell_mean": float(cell_mean),
@@ -217,6 +261,8 @@ def check_superiority_gate(
             "effect_size": float(effect_size),
             "absolute_superior": absolute_superior,
             "sigma_superior": sigma_superior,
+            "power_achieved": float(power_achieved),
+            "required_seeds": required_seeds,
         },
     )
 
@@ -353,14 +399,15 @@ def compute_required_seeds_power(
 ) -> int:
     """Compute required seeds for a given effect size and power.
 
-    Uses Cohen's d for t-test power analysis.
+    Delegates to canonical implementation in core.statistics.
     """
-    # Simplified power calculation for one-sample t-test
-    # Using normal approximation: n = ((z_{1-alpha} + z_{power}) / d)^2
-    z_alpha = stats.norm.ppf(1 - alpha)
-    z_power = stats.norm.ppf(power)
-    n = ((z_alpha + z_power) / max(effect_size, 0.01)) ** 2
-    return max(math.ceil(n), 3)  # Minimum 3 seeds
+    from computronium.core.statistics import required_sample_size
+
+    return required_sample_size(
+        effect_size=effect_size,
+        power=power,
+        alpha=alpha,
+    )
 
 
 def run_l1_statistical_gates(  # ruff: ignore[too-many-locals] - one accumulator per gate metric
@@ -505,18 +552,70 @@ class StatisticalGateRunner:
         return results
 
 
+def _evaluate_l2_confirmation(
+    gate_runner: StatisticalGateRunner,
+    group: list[Record],
+    baseline: BaselineRecord | None,
+    spec: RunSpec,
+    cycle: int,
+    confirmation_evaluator: Callable[[list[Record], list[int]], list[Record]] | None,
+    thresholds: GateThresholds,
+    tolerance: float,
+) -> tuple[bool, str, PromotionGateResult | None]:
+    """Evaluate L2 confirmation for a cell group.
+
+    When a ``confirmation_evaluator`` is supplied, the cell is re-measured on
+    fresh confirmation seeds and re-gated; otherwise the legacy replay gate runs.
+
+    Returns:
+        (l2_passed, replay_status, confirmation_gate_result)
+    """
+    from computronium.experiment.execution.promotion import replay_survives
+    from computronium.experiment.registry.seed import SeedContext
+
+    if not (
+        thresholds.use_confirmation_seeds_for_l2 and confirmation_evaluator is not None
+    ):
+        # Fallback to replay gate (no fresh-seed confirmation available)
+        representative = min(group, key=lambda r: r.schedule.seed)
+        survived = replay_survives(representative, tolerance)
+        return survived, "pass" if survived else "fail", None
+
+    # C1: re-measure with fresh confirmation seeds, never the discovery seeds.
+    seed_ctx = SeedContext(spec.seed)
+    confirmation_seeds = seed_ctx.confirmation_seeds(cycle, 1, spec.n_seeds)[0]
+
+    try:
+        confirmation_records = confirmation_evaluator(group, confirmation_seeds)
+        confirmation_gate_result = gate_runner.evaluate_cell(
+            confirmation_records, baseline, use_discovery_seeds=False
+        )
+    except Exception as exc:  # ruff: ignore[blind-except] - a failed confirmation is a non-promotion, not a crash
+        logger.warning("Confirmation evaluation failed: %s", exc)
+        return False, "fail", None
+
+    l2_passed = confirmation_gate_result.all_passed
+    return l2_passed, "pass" if l2_passed else "fail", confirmation_gate_result
+
+
 def promote_with_stats(
     store: RecordStore,
     run_id: str,
-    spec,
+    spec: RunSpec,
     *,
     tolerance: float,
     thresholds: GateThresholds | None = None,
     baselines: dict[str, BaselineRecord] | None = None,
+    confirmation_evaluator: Callable[[list[Record], list[int]], list[Record]]
+    | None = None,
+    cycle: int = 0,
 ) -> list[dict[str, Any]]:
-    """Earn maturity with statistical gates at L1; L2 unchanged (replay).
+    """Earn maturity with statistical gates at L1; L2 requires confirmation seeds (C1).
 
     This is the enhanced version of promote_run that adds L1 statistical gates.
+    For L2 promotion, if `confirmation_evaluator` is provided and
+    `thresholds.use_confirmation_seeds_for_l2` is True, cells that pass L1
+    are re-evaluated with fresh confirmation seeds.
 
     Args:
         store: RecordStore
@@ -525,6 +624,10 @@ def promote_with_stats(
         tolerance: Replay tolerance for L2
         thresholds: GateThresholds for L1 stats gates
         baselines: Mapping replication_key -> BaselineRecord for comparison
+        confirmation_evaluator: Optional callable(cell_records, confirmation_seeds)
+            that re-measures a cell with fresh confirmation seeds and returns the
+            new records. If provided, used for L2 promotion (C1).
+        cycle: Current loop cycle number (for confirmation seed generation).
     """
     from computronium.experiment.execution.promotion import (
         eligible_cells,
@@ -548,6 +651,7 @@ def promote_with_stats(
 
     history: list[dict[str, Any]] = []
     gate_runner = StatisticalGateRunner(store, thresholds)
+    thresholds = thresholds or GateThresholds()
 
     for key, group in eligible.items():
         cell_key = group[0].cell_key
@@ -558,14 +662,24 @@ def promote_with_stats(
             group, baseline, use_discovery_seeds=True
         )
 
-        # L2: Replay gate (unchanged)
-        representative = min(group, key=lambda r: r.schedule.seed)
-        from computronium.experiment.execution.promotion import replay_survives
+        l2_passed = False
+        replay_status = "fail"
+        confirmation_gate_result = None
 
-        survived = replay_survives(representative, tolerance)
-
-        # L2 requires BOTH statistical gates pass AND replay survives
-        l2_passed = gate_result.all_passed and survived
+        if gate_result.all_passed:
+            # Cell passed L1 statistical gates
+            l2_passed, replay_status, confirmation_gate_result = (
+                _evaluate_l2_confirmation(
+                    gate_runner,
+                    group,
+                    baseline,
+                    spec,
+                    cycle,
+                    confirmation_evaluator,
+                    thresholds,
+                    tolerance,
+                )
+            )
 
         if l2_passed:
             store.set_cell_maturity(
@@ -575,10 +689,8 @@ def promote_with_stats(
                 ReproducibilityClass.COMPUTATIONALLY_REPRODUCIBLE,
             )
             maturity = Maturity.L2.value
-            replay_status = "pass"
         else:
             maturity = Maturity.L1.value
-            replay_status = "pass" if survived else "fail"
 
         history.append({
             "cell_key": cell_key,
@@ -586,6 +698,9 @@ def promote_with_stats(
             "maturity": maturity,
             "replay": replay_status,
             "statistical_gates": gate_result.to_dict(),
+            "confirmation_gates": confirmation_gate_result.to_dict()
+            if confirmation_gate_result
+            else None,
         })
 
     return history

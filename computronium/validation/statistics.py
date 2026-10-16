@@ -32,6 +32,11 @@ __all__ = [
     "spearman_rho",
 ]
 
+# Re-export canonical power_for_two_sample from core.statistics
+from computronium.core.statistics import power_for_two_sample as _power_for_two_sample
+
+power_for_two_sample = _power_for_two_sample
+
 Statistic = Callable[[np.ndarray], float]
 
 
@@ -303,41 +308,8 @@ def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
     return q.tolist()
 
 
-def power_for_two_sample(
-    d: float,
-    n_per_group: int,
-    alpha: float = 0.05,
-) -> float:
-    """Statistical power of a two-sample t-test for effect size ``d``.
-
-    Closed-form approximation for the (equal-n, equal-variance) two-sample
-    t-test: the test statistic is non-central t with ``2n - 2`` degrees of
-    freedom and non-centrality ``d * sqrt(n / 2)``.
-
-    Args:
-        d: Population effect size (Cohen's d).
-        n_per_group: Observations in each group.
-        alpha: Two-sided significance level.
-
-    Returns:
-        Power (probability of rejecting the null) in ``[0, 1]``.
-    """
-    from scipy.stats import nct, t
-
-    if n_per_group < 2:
-        raise ValueError(  # descriptive message is the public API
-            "power requires at least 2 observations per group"
-        )
-    df = 2 * n_per_group - 2
-    ncp = d * np.sqrt(n_per_group / 2)
-    crit = float(t.ppf(1 - alpha / 2, df))
-    # scipy's nct.cdf is numerically unstable for large |ncp| (returns NaN).
-    # Use the survival function of the reflected statistic for the lower tail:
-    #   P(T_ncp < -crit) = P(-T_ncp > crit) = sf(crit; df, -ncp)
-    lower = float(nct.sf(crit, df, -ncp))
-    upper = float(nct.sf(crit, df, ncp))
-    power = float(np.clip(lower + upper, 0.0, 1.0))
-    return power
+# Canonical power_for_two_sample is re-exported from computronium.core.statistics
+# (defined at module bottom to avoid circular imports)
 
 
 def permutation_test_p(

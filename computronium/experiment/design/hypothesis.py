@@ -182,21 +182,15 @@ class HypothesisSpec(BaseModel):
     def required_sample_size(self) -> int:
         """Calculate required sample size per group for target power.
 
-        Uses approximate formula for two-sample t-test.
-        For exact calculation, use specialized power analysis libraries.
+        Delegates to canonical implementation in core.statistics.
         """
-        import math
+        from computronium.core.statistics import required_sample_size
 
-        from scipy import stats
-
-        # Cohen's d to non-centrality parameter approximation
-        # For two-sample t-test: n = 2 * (z_{1-alpha/2} + z_{power})^2 / d^2
-        z_alpha = stats.norm.ppf(1 - self.alpha / 2)
-        z_power = stats.norm.ppf(self.required_power)
-        d = self.min_effect_size
-
-        n_per_group = 2 * (z_alpha + z_power) ** 2 / (d**2)
-        return math.ceil(n_per_group)
+        return required_sample_size(
+            effect_size=self.min_effect_size,
+            power=self.required_power,
+            alpha=self.alpha,
+        )
 
 
 class HypothesisResult(BaseModel):

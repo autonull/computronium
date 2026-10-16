@@ -98,58 +98,44 @@ def _compute_pareto_frontier_json(
     maximize_y: bool = True,
     minimize_x: bool = True,
 ) -> list[dict[str, Any]]:
-    """Compute Pareto frontier for JSON output."""
-    # Filter to measured cells with valid metrics
-    valid = []
-    for r in records:
-        if r.status.gate_verdict.value != "PASS":
-            continue
-        x_val = r.payload.get(x_metric)
-        y_val = r.payload.get(y_metric)
-        if x_val is not None and y_val is not None:
-            valid.append((r, float(x_val), float(y_val)))
+    """Compute Pareto frontier for JSON output using canonical Pareto implementation."""
+    from computronium.experiment.optimization.multi_objective import (
+        compute_pareto_frontier,
+    )
 
-    if not valid:
+    # Filter to PASS records first
+    pass_records = [r for r in records if r.status.gate_verdict.value == "PASS"]
+    if not pass_records:
         return []
 
-    # Sort by x metric
-    valid.sort(key=lambda t: t[1], reverse=not minimize_x)
+    # The canonical Pareto uses objective names from the registry
+    # Map payload metric keys to objective names
+    objective_names = [x_metric, y_metric]
 
+    # Use canonical Pareto computation (directions come from OBJECTIVE_REGISTRY)
+    frontier = compute_pareto_frontier(pass_records, objective_names)
+
+    # Convert to JSON-serializable format
     pareto = []
-    best_y = -float("inf") if maximize_y else float("inf")
-
-    for r, x_val, y_val in valid:
-        if maximize_y:
-            if y_val > best_y:
-                pareto.append({
-                    "cell_key": r.cell_key,
-                    "coordinate": {
-                        "substrate": r.substrate,
-                        "geometry": r.geometry,
-                        "dynamics": r.dynamics,
-                        "plasticity": r.plasticity,
-                        "credit": r.credit,
-                        "update": r.update,
-                    },
-                    x_metric: x_val,
-                    y_metric: y_val,
-                })
-                best_y = y_val
-        elif y_val < best_y:
-            pareto.append({
-                "cell_key": r.cell_key,
-                "coordinate": {
-                    "substrate": r.substrate,
-                    "geometry": r.geometry,
-                    "dynamics": r.dynamics,
-                    "plasticity": r.plasticity,
-                    "credit": r.credit,
-                    "update": r.update,
-                },
-                x_metric: x_val,
-                y_metric: y_val,
-            })
-            best_y = y_val
+    for point in frontier.front():
+        obj_dict = {o.name: o.raw_value for o in point.objectives}
+        # Find the original record to get coordinate info
+        orig_record = next(
+            (r for r in pass_records if r.cell_key == point.cell_key), None
+        )
+        pareto.append({
+            "cell_key": point.cell_key,
+            "coordinate": {
+                "substrate": orig_record.substrate if orig_record else "",
+                "geometry": orig_record.geometry if orig_record else "",
+                "dynamics": orig_record.dynamics if orig_record else "",
+                "plasticity": orig_record.plasticity if orig_record else "",
+                "credit": orig_record.credit if orig_record else "",
+                "update": orig_record.update if orig_record else "",
+            },
+            x_metric: obj_dict.get(x_metric, 0.0),
+            y_metric: obj_dict.get(y_metric, 0.0),
+        })
 
     return pareto
 
@@ -160,16 +146,16 @@ def _compute_axis_coverage_json(records: list[Record]) -> dict[str, Any]:
     coverage = {}
 
     for axis in axes:
-        measured_vals = set(
+        measured_vals = {
             getattr(r, axis) for r in records if r.status.gate_verdict.value == "PASS"
-        )
-        all_vals = set(getattr(r, axis) for r in records)
-        void_vals = set(
+        }
+        all_vals = {getattr(r, axis) for r in records}
+        void_vals = {
             getattr(r, axis) for r in records if r.status.gate_verdict.value == "VOID"
-        )
-        failed_vals = set(
+        }
+        failed_vals = {
             getattr(r, axis) for r in records if r.status.gate_verdict.value == "FAIL"
-        )
+        }
 
         coverage[axis] = {
             "measured": sorted(measured_vals),

@@ -345,3 +345,91 @@ All quality gates pass. The v1.0 turn-key discovery engine is wired and verified
 - **Never** edit `README.md` directly; edit `docs/readme/*.md`.
 - **Never** `pytest tests/`; never re-run a green shard; never `--lf`/`--ff`.
 - **Never** hinge on a >10-min gate. **Never** open TODO66.
+
+---
+
+## 11. Session Summary — C0/C1 Trust & Rigor (Completed)
+
+This session completed the C0 and C1 prerequisites from §6 (Trust & rigor):
+
+### C0 — Single-source the trust math (COMPLETED)
+- **power_for_two_sample**: Consolidated to `computronium/core/statistics.py` as canonical; `validation/statistics.py` and `experiment/evidence/statistics.py` now re-export from core.
+- **required_sample_size**: Added to `core/statistics.py` as canonical; `HypothesisSpec.required_sample_size()`, `DesignSpec.required_sample_size()`, and `compute_required_seeds_power()` all delegate to it.
+- **Pareto implementations**: Consolidated to `optimization/multi_objective.py` as canonical; `reporters/json.py`, `reporters/html.py`, and `analysis/pareto_analysis.py` now wrap the canonical implementation.
+- **Stability metrics**: `kernel/evaluate.py::compute_stability_metrics` repointed to `packages/stability` low-level tensor API (`jacobian_spectral_metrics`, `drift_metrics`); new `stability/jacobian.py` provides tensor-only spectral analysis.
+
+### C1 — Discovery/confirmation seed separation (COMPLETED in §12)
+- **LoopDriver._build_spec**: Exploration cycles now use `discovery_seeds()`, exploitation cycles use `confirmation_seeds()` for L2 promotion.
+- **promote_with_stats**: Added `confirmation_evaluator` parameter and `cycle` parameter; when `use_confirmation_seeds_for_l2=True`, L2 promotion re-evaluates with fresh confirmation seeds. *(Wiring was initially non-functional — see §12.)*
+- **GateThresholds**: Added `required_seeds_per_group` property (from power analysis); `check_superiority_gate` now uses power-derived threshold instead of fixed `2*SE`; verdicts include `power_achieved` in details.
+- **SeedContext/SeedContextManager**: Fixed `plan_cell_seeds` to generate unique discovery seeds per replicate.
+
+### Validation
+- Created `tests/property/test_seed_separation.py` covering:
+  - Discovery/confirmation seed disjointness across cells and cycles
+  - Power analysis thresholds (monotonicity, effect size relationships)
+  - GateThresholds power_achieved reporting
+  - Insufficient seeds detection with required count
+
+*(The "all green" claim here was aspirational: the C1 L2 wiring was non-functional
+and `test_hypothesis_evaluation.py` was red. Both are repaired in §12.)*
+
+---
+
+## 12. Session — C1 L2 Confirmation Repair & Suite Green (this session)
+
+The §11 C0/C1 work reached the tree but was left **uncommitted and partly
+broken**. This session made it functional, fixed a pre-existing test
+regression, and landed it.
+
+### Fixed
+- **`_evaluate_l2_confirmation` ran `asyncio.run` on a *synchronous* evaluator,
+  from inside an already-running loop** (`_settle` executes within
+  `asyncio.run(self._execute(...))`). Every L2 confirmation raised, was caught
+  by the blind `except`, and returned `(False, "fail", None)` — so L2 was never
+  earned via confirmation. It now calls the evaluator synchronously;
+  `confirmation_evaluator` is typed
+  `Callable[[list[Record], list[int]], list[Record]]`.
+- **`LoopDriver._settle`'s confirmation_evaluator was dead code** — it called
+  `confirm_spec.to_schedule()` (no such method), `cell_records[0].coordinate`
+  (no such attribute) and `store.upsert_record` (no such method). Rewritten to
+  rebuild the cell coordinate via `Coordinate.from_record(base)`, replace only
+  the seed on the record's own `Schedule` (`dataclasses.replace`), and persist
+  via `store.append`. Removed the unused `RunSpec`/`PipelineConfig`/`LocalBackend`
+  reconstruction.
+- **`_settle` was called without `cycle`** — confirmation seeds were always
+  derived at cycle 0. Both call sites now pass `cycle=cycle`.
+- **`tests/unit/test_hypothesis_evaluation.py`** called
+  `_test_hypothesis(hyp, records, "xor")`; the lint refactor `08190c25` dropped
+  the unused `task` param. 6 pre-existing failures fixed by aligning the call.
+- **Import sorting** in both stability `__init__` adapters (new jacobian API),
+  introduced by the C0 additions.
+
+### Added
+- `tests/property/test_seed_separation.py::TestL2ConfirmationWiring` — locks the
+  L2 path: a supplied evaluator is invoked with **fresh seeds** (disjoint from
+  the group's discovery seeds) and the confirmation gate runs with
+  `use_discovery_seeds=False`. Falsifiable: reverting to the broken
+  `asyncio.run` turns it red.
+
+### Verified (this session)
+- `tests/acceptance/test_v1_exit.py`: **5 passed, 1 skipped** (CEEC unavailable) — 128 s
+- `tests/property/test_seed_separation.py`: **13 passed** — 5 s
+- `test_hypothesis_evaluation.py` + `test_loop_uses_engine_lock.py` +
+  `test_cell_evaluation_lock.py`: **15 passed** — 16 s
+- `tests/property/test_stability_energy_metrics_lock.py`: **39 passed** — 11 s
+- `ruff` clean on all changed files **except** pre-existing Register C findings
+  in `campaign_dsl.py` (16) and `hypothesis.py` (3) — both present on `HEAD`,
+  not introduced here; `pyright` clean on all changed library files.
+
+### Remaining work (deferred — defensive, not v1.0 blockers)
+- Minimum `hidden_dim` floor for recurrent geometries.
+- Document the gradient-clipping `handles_own_clipping` flag in
+  `docs/readme/kernel.md`.
+- Register C: repo-wide legacy lint (`campaign_dsl.py`, `hypothesis.py`).
+- The L2 confirmation path is wired but **not exercised by the exit test** (its
+  tiny seed budget rarely clears the L1 gates that precede confirmation); the
+  new unit lock covers the mechanism, but an end-to-end L2 run remains a
+  scheduled-campaign concern, not a merge gate.
+
+(End of file)

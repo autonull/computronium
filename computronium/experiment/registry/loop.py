@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import signal
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -49,7 +49,7 @@ from computronium.experiment.execution.statistical_promotion import (
     GateThresholds,
     promote_with_stats,
 )
-from computronium.experiment.kernel.evaluate import task_shape
+from computronium.experiment.kernel.evaluate import cell_record, task_shape
 from computronium.experiment.learning.icu import ICUModel
 from computronium.experiment.legality.engine import LegalityEngine
 from computronium.experiment.optimization.multi_objective import (
@@ -67,6 +67,7 @@ from computronium.experiment.registry.defect_registry import (
 from computronium.experiment.registry.seed import SeedContext
 from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.schema.axis import AXES_REGISTRIES, Domain, StructuralAxis
+from computronium.experiment.schema.coordinate import Coordinate
 from computronium.experiment.schema.metrics import measured_objectives, objective_metric
 from computronium.experiment.schema.record import GateVerdict, Maturity, Record
 from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
@@ -564,7 +565,7 @@ class LoopDriver:
                 registry.complete_cell(outcome.measurement_key)
 
             baselines = await self._baselines(store, run_id, spec, task)
-            self._settle(store, run_id, spec, baselines)
+            self._settle(store, run_id, spec, baselines, cycle=cycle)
 
             from computronium.experiment.surface.report import generate_run_report
 
@@ -676,7 +677,7 @@ class LoopDriver:
                 registry.complete_cell(outcome.measurement_key)
 
             baselines = await self._baselines(store, run_id, spec, task)
-            self._settle(store, run_id, spec, baselines)
+            self._settle(store, run_id, spec, baselines, cycle=cycle)
 
             from computronium.experiment.surface.report import generate_run_report
 
@@ -1150,7 +1151,19 @@ class LoopDriver:
     ) -> RunSpec:
         cfg = self._config
         explore = kind == "explore"
-        cycle_seed = SeedContext(master_seed).cycle_seed(cycle)
+        seed_ctx = SeedContext(master_seed)
+
+        if explore:
+            # Exploration uses discovery seeds
+            seeds = seed_ctx.discovery_seeds(cycle, len(axes))
+            # Use first discovery seed as base, n_seeds from config
+            base_seed = seeds[0] if seeds else seed_ctx.cycle_seed(cycle)
+        else:
+            # Exploitation uses confirmation seeds for L2 promotion
+            seeds = seed_ctx.confirmation_seeds(cycle, len(axes), cfg.n_seeds)
+            # Use first confirmation seed as base
+            base_seed = seeds[0][0] if seeds else seed_ctx.cycle_seed(cycle)
+
         return RunSpec(
             profile=f"loop-{kind}",
             task=task,
@@ -1167,7 +1180,7 @@ class LoopDriver:
             axes=axes,
             hyperparameters=dict(cfg.hyperparameters),
             checkpoint_every_n=cfg.checkpoint_every_n,
-            seed=cycle_seed,
+            seed=base_seed,
             device=self._device(),
             sweep_steps=cfg.explore_sweep_steps if explore else cfg.exploit_sweep_steps,
             code_sha=self._git_sha,
@@ -1183,6 +1196,7 @@ class LoopDriver:
         run_id: str,
         spec: RunSpec,
         baselines: dict[str, BaselineRecord] | None,
+        cycle: int = 0,
     ) -> list[dict[str, object]]:
         min_seeds = max(spec.n_seeds, 5) if spec.n_seeds >= 3 else spec.n_seeds
         thresholds = GateThresholds(
@@ -1190,6 +1204,26 @@ class LoopDriver:
             superiority_margin_sigma=1.0 if spec.n_seeds < 5 else 2.0,
             ci_width_threshold=0.1 if spec.n_seeds < 5 else 0.05,
         )
+
+        # C1: L1-passing cells are re-measured on fresh confirmation seeds
+        # before L2. The coordinate is the cell's own; only the seed changes.
+        def confirmation_evaluator(
+            cell_records: list[Record], confirmation_seeds: list[int]
+        ) -> list[Record]:
+            base = cell_records[0]
+            coordinate = Coordinate.from_record(base)
+            confirmed: list[Record] = []
+            for seed in confirmation_seeds:
+                schedule = replace(base.schedule, seed=seed)
+                record = cell_record(
+                    coordinate=coordinate,
+                    schedule=schedule,
+                    provenance=base.provenance,
+                )
+                store.append(record)
+                confirmed.append(record)
+            return confirmed
+
         history = promote_with_stats(
             store,
             run_id,
@@ -1197,6 +1231,8 @@ class LoopDriver:
             tolerance=REPLAY_METRIC_TOLERANCE,
             thresholds=thresholds,
             baselines=baselines,
+            confirmation_evaluator=confirmation_evaluator,
+            cycle=cycle,
         )
         logger.info(
             "Promotion: %d cell(s) assessed, %d earned L2",

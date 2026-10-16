@@ -247,15 +247,13 @@ class DesignSpec(BaseModel):
     def required_sample_size(self) -> int:
         """Get required sample size from power analysis."""
         if self.power_analysis.enabled:
-            import math
+            from computronium.core.statistics import required_sample_size
 
-            from scipy import stats
-
-            z_alpha = stats.norm.ppf(1 - self.power_analysis.alpha / 2)
-            z_power = stats.norm.ppf(self.power_analysis.required_power)
-            d = self.power_analysis.min_effect_size
-            n = 2 * (z_alpha + z_power) ** 2 / (d**2)
-            return math.ceil(n)
+            return required_sample_size(
+                effect_size=self.power_analysis.min_effect_size,
+                power=self.power_analysis.required_power,
+                alpha=self.power_analysis.alpha,
+            )
         return 10
 
     def generate_design_matrix(self) -> list[dict[str, Any]]:

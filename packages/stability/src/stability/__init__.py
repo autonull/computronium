@@ -78,6 +78,12 @@ from stability.guard import (
     measure_guard_overhead,
     quantify_proxy_disagreement,
 )
+from stability.jacobian import (
+    dominant_singular_value_tensor,
+    drift_metrics,
+    jacobian_spectral_metrics,
+    spectral_radius_from_jacobian_tensor,
+)
 from stability.lyapunov import (
     LyapunovEstimator,
     estimate_lyapunov_exponent,
@@ -121,13 +127,18 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "calibrate_threshold",
     "quantify_proxy_disagreement",
     "measure_guard_overhead",
-    # Spectral radius
+    # Spectral radius (joint architecture)
     "JacobianAmplificationEstimator",
     "estimate_directional_amplification",
     "dominant_singular_value",
     "spectral_radius_from_jacobian",
     "spectral_norm_power_iteration",
     "spectral_normalized_weight",
+    # Spectral radius (low-level tensor API)
+    "dominant_singular_value_tensor",
+    "jacobian_spectral_metrics",
+    "spectral_radius_from_jacobian_tensor",
+    "drift_metrics",
     # Lyapunov
     "LyapunovEstimator",
     "estimate_lyapunov_exponent",

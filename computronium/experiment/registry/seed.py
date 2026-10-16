@@ -189,8 +189,8 @@ class SeedContextManager:
         """Plan all seeds for a cell in the current cycle."""
         cycle_idx = self._current_cycle
         discovery = [
-            self._context._derive_seed(f"discovery:{cycle_idx}:{cell_index}")
-            for _ in range(n_discovery)
+            self._context._derive_seed(f"discovery:{cycle_idx}:{cell_index}:rep:{rep}")
+            for rep in range(n_discovery)
         ]
         confirmation = []
         for rep in range(n_confirmation):

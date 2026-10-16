@@ -16,12 +16,17 @@ from stability import (  # ruff: ignore[unused-import]  # adapter re-exports
     PR5Calibration,
     calibrate_ginibre_harvest,
     calibrate_threshold,
+    dominant_singular_value_tensor,
+    # Low-level Jacobian API
+    drift_metrics,
     ginibre_run,
     harvest_bad_statistics,
     harvest_good_statistics,
+    jacobian_spectral_metrics,
     measure_guard_overhead,
     probe_interval_for_overhead,
     quantify_proxy_disagreement,
+    spectral_radius_from_jacobian_tensor,
     unrolled_divergence,
 )
 from stability import (  # submodule binding for legacy paths

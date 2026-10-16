@@ -101,4 +101,44 @@ def power_for_two_sample(
     return power
 
 
-__all__ = ["cliffs_delta", "cohens_d", "power_for_two_sample"]
+def required_sample_size(
+    effect_size: float,
+    power: float = 0.8,
+    alpha: float = 0.05,
+    *,
+    min_samples: int = 2,
+) -> int:
+    """Required sample size per group for a two-sample t-test.
+
+    Inverts the power calculation to find the minimum n per group needed
+    to achieve the target power for a given effect size (Cohen's d).
+
+    Uses the normal approximation: n = 2 * (z_{1-alpha/2} + z_{power})^2 / d^2
+
+    Args:
+        effect_size: Minimum practically significant effect size (Cohen's d).
+        power: Required statistical power (default 0.8).
+        alpha: Two-sided significance level (default 0.05).
+        min_samples: Minimum sample size floor (default 2).
+
+    Returns:
+        Required sample size per group (ceiling of calculated value).
+    """
+    import math
+
+    from scipy.stats import norm
+
+    if effect_size <= 0:
+        raise ValueError("effect_size must be positive")
+    if not (0 < power < 1):
+        raise ValueError("power must be in (0, 1)")
+    if not (0 < alpha < 1):
+        raise ValueError("alpha must be in (0, 1)")
+
+    z_alpha = norm.ppf(1 - alpha / 2)
+    z_power = norm.ppf(power)
+    n = 2 * (z_alpha + z_power) ** 2 / (effect_size**2)
+    return max(math.ceil(n), min_samples)
+
+
+__all__ = ["cliffs_delta", "cohens_d", "power_for_two_sample", "required_sample_size"]

@@ -188,7 +188,7 @@ class TestHypothesisEvaluation:
         hyp.test_type = TestType.INDEPENDENT_T_TEST
         hyp.paired = False
 
-        result = driver._test_hypothesis(hyp, records, "xor")
+        result = driver._test_hypothesis(hyp, records)
 
         # Verify result structure
         assert isinstance(result, HypothesisResult)
@@ -219,7 +219,7 @@ class TestHypothesisEvaluation:
         hyp.comparison_values = ["gradient", "thermodynamic_contrast"]
         hyp.primary_metric = "energy_per_step"
 
-        result = driver._test_hypothesis(hyp, records, "xor")
+        result = driver._test_hypothesis(hyp, records)
 
         assert result.n_groups == 1
         assert result.notes == "Insufficient groups for comparison"
@@ -239,7 +239,7 @@ class TestHypothesisEvaluation:
         hyp.comparison_values = ["gradient", "thermodynamic_contrast"]
         hyp.primary_metric = "energy_per_step"
 
-        result = driver._test_hypothesis(hyp, records, "xor")
+        result = driver._test_hypothesis(hyp, records)
 
         assert result.n_samples == 0
         assert result.n_groups == 0
@@ -271,7 +271,7 @@ class TestHypothesisEvaluation:
         hyp.effect_size_type = EffectSizeType.CLIFFS_DELTA
         hyp.paired = False
 
-        result = driver._test_hypothesis(hyp, records, "xor")
+        result = driver._test_hypothesis(hyp, records)
 
         assert result.p_value is not None
         assert result.effect_size is not None
@@ -313,7 +313,7 @@ class TestHypothesisEvaluation:
         hyp.effect_size_type = EffectSizeType.ETA_SQUARED
         hyp.paired = False
 
-        result = driver._test_hypothesis(hyp, records, "xor")
+        result = driver._test_hypothesis(hyp, records)
 
         assert result.p_value is not None
         assert result.effect_size is not None
@@ -351,7 +351,7 @@ class TestHypothesisEvaluation:
         hyp.test_type = TestType.INDEPENDENT_T_TEST
         hyp.effect_size_type = EffectSizeType.COHENS_D
 
-        result = driver._test_hypothesis(hyp, records, "xor")
+        result = driver._test_hypothesis(hyp, records)
         stat_result = result.to_statistical_result()
 
         assert stat_result.hypothesis_id == "H1_credit_efficiency"
