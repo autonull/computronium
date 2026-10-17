@@ -103,7 +103,7 @@ class BaselineRegistry:
             update="euclidean",
             plasticity="null",
             substrate="digital",
-            hyperparameters={"dynamics.step_size": Domain(members=(0.01,))},
+            hyperparameters={"update.step_size": Domain(members=(0.01,))},
             applicable_tasks=("digits", "mnist", "fashion_mnist", "cifar10"),
         ),
         BaselineConfig(
@@ -119,7 +119,7 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.step_size": Domain(members=(1e-3,)),
                 "update.beta2": Domain(members=(0.999,)),
                 "update.eps": Domain(members=(1e-8,)),
             },
@@ -138,7 +138,7 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "dynamics.step_size": Domain(members=(3e-4,)),
+                "update.step_size": Domain(members=(3e-4,)),
                 "update.beta2": Domain(members=(0.999,)),
                 "update.eps": Domain(members=(1e-8,)),
             },
@@ -158,7 +158,7 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "dynamics.step_size": Domain(members=(3e-4,)),
+                "update.step_size": Domain(members=(3e-4,)),
                 "update.beta2": Domain(members=(0.999,)),
                 "update.eps": Domain(members=(1e-8,)),
             },
@@ -178,7 +178,7 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.step_size": Domain(members=(1e-3,)),
                 "update.beta2": Domain(members=(0.999,)),
                 "update.eps": Domain(members=(1e-8,)),
             },
@@ -198,7 +198,7 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "dynamics.step_size": Domain(members=(3e-4,)),
+                "update.step_size": Domain(members=(3e-4,)),
                 "update.beta2": Domain(members=(0.999,)),
                 "update.eps": Domain(members=(1e-8,)),
             },
@@ -218,7 +218,7 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.step_size": Domain(members=(1e-3,)),
                 "update.beta2": Domain(members=(0.999,)),
                 "update.eps": Domain(members=(1e-8,)),
             },
@@ -238,7 +238,7 @@ class BaselineRegistry:
             plasticity="null",
             substrate="digital",
             hyperparameters={
-                "dynamics.step_size": Domain(members=(1e-3,)),
+                "update.step_size": Domain(members=(1e-3,)),
                 "update.beta2": Domain(members=(0.999,)),
                 "update.eps": Domain(members=(1e-8,)),
                 "geometry.mem_slots": Domain(members=(20,)),

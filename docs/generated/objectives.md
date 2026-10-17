@@ -1,6 +1,6 @@
 # Objectives Registry
 
-Generated: 2026-10-08T18:43:30.291034
+Generated: 2026-10-17T17:57:03.111640
 Total: 48 objectives
 
 | Name | Direction | Weight | Normalizer | Axis Tag | Metric |
@@ -34,7 +34,7 @@ Total: 48 objectives
 | nonnormality | minimize | 1.0 | minmax | stability | nonnormality |
 | param_count | minimize | 1.0 | log | cost | param_count |
 | pc_free_energy | minimize | 1.0 | minmax | stability | pc_free_energy |
-| perplexity | minimize | 1.0 | log | task | unmeasured |
+| perplexity | minimize | 1.0 | log | task | val_ppl |
 | phase_noise | minimize | 1.0 | minmax | substrate | phase_noise |
 | psi_capacity | maximize | 1.0 | minmax | plasticity | psi_capacity |
 | rewrite_rate | maximize | 1.0 | minmax | plasticity | rewrite_rate |

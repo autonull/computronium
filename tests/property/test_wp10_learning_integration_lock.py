@@ -36,7 +36,6 @@ from computronium.experiment.learning.benchmark import (
     embedding_dims,
     run_acquisition_benchmark,
 )
-from computronium.experiment.learning.prior import get_ruler_lr
 from computronium.experiment.schema.coordinate import (
     Coordinate,
     DataOrigin,
@@ -182,34 +181,6 @@ class TestAchievedSeedClaims:
 
 
 class TestPriorSingleSource:
-    def test_ruler_tasks_resolve_via_registry(self) -> None:
-        """L11: every ruler-LR task resolves through prior_value()."""
-        # Task-specific ruler LRs from the registration function
-        ruler_tasks = [
-            "digits",
-            "mnist",
-            "fashion_mnist",
-            "kmnist",
-            "usps",
-            "xor",
-            "spiral",
-            "circles",
-            "iris",
-            "wine",
-            "breast_cancer",
-        ]
-        missing: list[str] = []
-        for task in ruler_tasks:
-            if prior_value(f"ruler_lr_{task}") is None:
-                missing.append(task)
-        assert not missing, f"ruler tasks missing from PRIORS: {missing}"
-
-    def test_ruler_accessors_match_registry(self) -> None:
-        """L11: get_ruler_lr agrees with the registry center value."""
-        center, _, _ = prior_value("ruler_lr_mnist") or (None, None, None)
-        assert center is not None
-        assert get_ruler_lr("mnist") == pytest.approx(center)
-
     def test_override_tables_resolve_via_registry(self) -> None:
         """L11: every dynamics step-size override resolves through prior_value()."""
         dynamics_step_sizes = ["diffusion", "predictive_settling"]

@@ -1,6 +1,6 @@
 ==============================================================================
 COMPUTRONIUM ARCHITECTURE — CHEATSHEET DATAFILE
-generated 2026-10-17 @ commit 83a0f7d8 by docs/cheatsheet/cheatsheet_create.py
+generated 2026-10-17 @ commit bc080a15 by docs/cheatsheet/cheatsheet_create.py
 artifacts: docs/cheatsheet/cheatsheet.svg (directed graph) · this file (data)
 ==============================================================================
 
@@ -99,7 +99,7 @@ PANEL KERNEL — 🧪 Experiment Kernel — question → governed evidence
   policies (8): stratified_random, round_robin_grid, uniform_random, model_based, evolution, synthesis, strategy_progression, trainer_driven
   objectives (48): measured 35 -> validation_accuracy, validation_loss, perplexity, walltime_total, memory_usage, param_count, flops, energy_per_step, energy_per_mac, macs_per_step, latency_ms, spike_rate, ir_drop_variance, phase_noise, gate_fidelity, coherence_time, spectral_radius, stability_margin, nonnormality, drift_spectral_radius, drift_max_singular_value, contraction_rate, max_singular_value, lyapunov_exponent, hopfield_energy, pc_free_energy, augmented_lagrangian, spike_proxy_energy, instantaneous_proxy_energy, free_energy, settle_steps, psi_capacity, consolidation_cost, rewrite_rate, energy_efficiency
                    research targets 13 -> test_accuracy, test_loss, f1_score, bleu_score, training_time, bp_deficit, ruler_walltime_ratio, ruler_energy_ratio, ruler_param_ratio, stability_plasticity_ratio, credit_efficiency, convergence_steps, generalization_gap
-  priors (28): ruler_lr_cifar10, ruler_lr_cifar100, ruler_lr_imagenet, ruler_lr_sst2, ruler_lr_squad, ruler_lr_wikitext2, ruler_lr_ptb, ruler_lr_copyshake, ...
+  priors (5): dynamics_step_size_default, dynamics_step_size_diffusion, dynamics_step_size_predictive_settling, hidden_width, hidden_depth, ...
   registries: capabilities=88 constraints=41 policies_registry=9
 
 ==============================================================================

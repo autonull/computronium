@@ -103,12 +103,6 @@
       "kind": "core"
     },
     {
-      "flag": "ruler_lr",
-      "capability_id": "C17",
-      "display_name": "Prior registry",
-      "kind": "core"
-    },
-    {
       "flag": "surrogate",
       "capability_id": "C18",
       "display_name": "Surrogate policy wrapper",
@@ -1518,6 +1512,30 @@
     },
     {
       "kind": "void",
+      "constraint_name": "nca_instantaneous_homeostatic",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "nca_instantaneous_pc_alm",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "nca_instantaneous_target_inversion",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "nca_ntm_fast_weight_plasticity",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
       "constraint_name": "nca_ntm_geometry",
       "origin": "DECLARED",
       "proof_kind": "type_mismatch"
@@ -1578,6 +1596,12 @@
     },
     {
       "kind": "void",
+      "constraint_name": "recurrent_instantaneous_gradient_credit",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
       "constraint_name": "residual_connections",
       "origin": "DECLARED",
       "proof_kind": "type_mismatch"
@@ -1596,13 +1620,31 @@
     },
     {
       "kind": "void",
+      "constraint_name": "ternary_substrate_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
       "constraint_name": "thermodynamic_contrast_dynamics",
       "origin": "DECLARED",
       "proof_kind": "type_mismatch"
     },
     {
       "kind": "void",
+      "constraint_name": "tile_fast_weight_plasticity",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
       "constraint_name": "tile_mesh_dynamics",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "tile_mesh_pc_alm_dynamics",
       "origin": "DECLARED",
       "proof_kind": "type_mismatch"
     },

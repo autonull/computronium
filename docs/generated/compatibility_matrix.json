@@ -9,7 +9,7 @@
     {
       "name": "dynamics_plasticity_compatibility",
       "description": "Instantaneous dynamics cannot use fast-weight plasticity",
-      "predicate": "Not(expr=And(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weight'))))",
+      "predicate": "Not(expr=And(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weights'))))",
       "proof_kind": "type_mismatch"
     },
     {
@@ -40,6 +40,18 @@
       "name": "nca_ntm_geometry",
       "description": "NCA/NTM geometries require instantaneous dynamics",
       "predicate": "Or(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Not(expr=In(left=Var(name='geometry'), right=Const(value=['nca', 'ntm']))))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "nca_ntm_fast_weight_plasticity",
+      "description": "NCA/NTM geometries have per-cell activations incompatible with fast-weight plasticity",
+      "predicate": "Not(expr=And(left=In(left=Var(name='geometry'), right=Const(value=['nca', 'ntm'])), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weights'))))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "tile_fast_weight_plasticity",
+      "description": "Tile geometries with fast_weights require layout-aware modulation",
+      "predicate": "Not(expr=And(left=In(left=Var(name='geometry'), right=Const(value=['tile', 'tile_mesh'])), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weights'))))",
       "proof_kind": "type_mismatch"
     },
     {
@@ -79,6 +91,36 @@
       "proof_kind": "type_mismatch"
     },
     {
+      "name": "nca_instantaneous_target_inversion",
+      "description": "NCA geometry with instantaneous dynamics incompatible with target_inversion credit (cell-mode activations)",
+      "predicate": "Not(expr=And(left=And(left=Eq(left=Var(name='geometry'), right=Const(value='nca')), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=Eq(left=Var(name='credit'), right=Const(value='target_inversion'))))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "nca_instantaneous_homeostatic",
+      "description": "NCA geometry with instantaneous dynamics incompatible with homeostatic credit (cell-mode activations)",
+      "predicate": "Not(expr=And(left=And(left=Eq(left=Var(name='geometry'), right=Const(value='nca')), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=Eq(left=Var(name='credit'), right=Const(value='homeostatic'))))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "nca_instantaneous_pc_alm",
+      "description": "NCA geometry with instantaneous dynamics incompatible with pc_alm credit (cell-mode activations)",
+      "predicate": "Not(expr=And(left=And(left=Eq(left=Var(name='geometry'), right=Const(value='nca')), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=Eq(left=Var(name='credit'), right=Const(value='pc_alm'))))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "tile_mesh_pc_alm_dynamics",
+      "description": "tile_mesh geometry with pc_alm dynamics has layer width mismatch",
+      "predicate": "Not(expr=And(left=Eq(left=Var(name='geometry'), right=Const(value='tile_mesh')), right=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "recurrent_instantaneous_gradient_credit",
+      "description": "Recurrent geometry with instantaneous dynamics incompatible with gradient/backprop credit (weights disconnected from loss)",
+      "predicate": "Not(expr=And(left=And(left=In(left=Var(name='geometry'), right=Const(value=['recurrent', 'recurrent_attractor'])), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=In(left=Var(name='credit'), right=Const(value=['gradient', 'backprop']))))",
+      "proof_kind": "type_mismatch"
+    },
+    {
       "name": "thermodynamic_contrast_dynamics",
       "description": "Thermodynamic contrast/equilibrium credit requires energy-based or PC-family dynamics",
       "predicate": "Or(left=Not(expr=In(left=Var(name='credit'), right=Const(value=['thermodynamic_contrast', 'equilibrium']))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'predictive_settling', 'error_predictive_coding', 'lazy', 'pc_alm'])))",
@@ -94,6 +136,12 @@
       "name": "quantum_substrate_dynamics",
       "description": "Quantum substrate requires energy_minimization, instantaneous, or diffusion dynamics",
       "predicate": "Or(left=Not(expr=Eq(left=Var(name='substrate'), right=Const(value='quantum'))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'instantaneous', 'diffusion'])))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "ternary_substrate_dynamics",
+      "description": "Ternary substrate weight quantization causes numerical instability with pc_alm dynamics",
+      "predicate": "Or(left=Not(expr=Eq(left=Var(name='substrate'), right=Const(value='ternary'))), right=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))))",
       "proof_kind": "type_mismatch"
     },
     {

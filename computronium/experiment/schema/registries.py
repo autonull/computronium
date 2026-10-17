@@ -439,7 +439,7 @@ def prior_value(
     """Get a prior value with confidence and uncertainty (single-source accessor, L11).
 
     Args:
-        name: The prior name (e.g., "ruler_lr_digits", "dynamics_step_size_default").
+        name: The prior name (e.g., "dynamics_step_size_default", "hidden_width").
         context: Optional context for per-run/per-coordinate overrides.
             Keys: "run_id", "coordinate", "override" (dict of param overrides).
 

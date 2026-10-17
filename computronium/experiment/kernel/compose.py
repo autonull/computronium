@@ -951,14 +951,14 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     )
 
     d_factory = _axis_factory(StateDynamicsConfig, dynamics_name)
+    dynamics_step_size = active.values.get(
+        "dynamics.step_size", _config_default_step_size(d_factory)
+    )
+    if "dynamics.step_size" not in coordinate.params:
+        dynamics_step_size = apply_dynamics_step_size(dynamics_step_size, dynamics_name)
     dcfg = d_factory(**{
         **active.for_axis(StructuralAxis.DYNAMICS, dynamics_name),
-        "step_size": apply_dynamics_step_size(
-            active.values.get(
-                "dynamics.step_size", _config_default_step_size(d_factory)
-            ),
-            dynamics_name,
-        ),
+        "step_size": dynamics_step_size,
     })
 
     c_factory = _axis_factory(CreditAssignmentConfig, coordinate.credit)

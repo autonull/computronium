@@ -1387,165 +1387,10 @@ CONSTRAINTS = [
 
 
 # =============================================================================
-# PRIORS — Gate 1/2: ruler-LR table + step-size overrides (Appendix IV + §13.2)
+# PRIORS — Gate 1/2: dynamics settling steps + geometry sizes (Appendix IV)
 # =============================================================================
 
 PRIORS = [
-    # Ruler learning rate priors (from 11 tasks). The MNIST row lives below
-    # with the migrated learning.prior table (explicit measured center).
-    PriorSpec(
-        name="ruler_lr_cifar10",
-        distribution="log_uniform",
-        params={"low": 1e-4, "high": 1e-1},
-        description="Ruler LR prior for CIFAR-10",
-    ),
-    PriorSpec(
-        name="ruler_lr_cifar100",
-        distribution="log_uniform",
-        params={"low": 1e-4, "high": 1e-1},
-        description="Ruler LR prior for CIFAR-100",
-    ),
-    PriorSpec(
-        name="ruler_lr_imagenet",
-        distribution="log_uniform",
-        params={"low": 1e-5, "high": 1e-2},
-        description="Ruler LR prior for ImageNet",
-    ),
-    PriorSpec(
-        name="ruler_lr_sst2",
-        distribution="log_uniform",
-        params={"low": 1e-5, "high": 1e-2},
-        description="Ruler LR prior for SST-2",
-    ),
-    PriorSpec(
-        name="ruler_lr_squad",
-        distribution="log_uniform",
-        params={"low": 1e-5, "high": 1e-2},
-        description="Ruler LR prior for SQuAD",
-    ),
-    PriorSpec(
-        name="ruler_lr_wikitext2",
-        distribution="log_uniform",
-        params={"low": 1e-5, "high": 1e-2},
-        description="Ruler LR prior for WikiText-2",
-    ),
-    PriorSpec(
-        name="ruler_lr_ptb",
-        distribution="log_uniform",
-        params={"low": 1e-5, "high": 1e-2},
-        description="Ruler LR prior for PTB",
-    ),
-    PriorSpec(
-        name="ruler_lr_copyshake",
-        distribution="log_uniform",
-        params={"low": 1e-4, "high": 1e-1},
-        description="Ruler LR prior for CopyShake",
-    ),
-    PriorSpec(
-        name="ruler_lr_arithmetic",
-        distribution="log_uniform",
-        params={"low": 1e-4, "high": 1e-1},
-        description="Ruler LR prior for Arithmetic",
-    ),
-    PriorSpec(
-        name="ruler_lr_listops",
-        distribution="log_uniform",
-        params={"low": 1e-4, "high": 1e-1},
-        description="Ruler LR prior for ListOps",
-    ),
-    # Migrated from learning.prior (Q4, TODO48): one PRIORS table, one
-    # registration path. Ruler LRs carry explicit measured centers.
-    PriorSpec(
-        name="ruler_lr_digits",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'digits' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_mnist",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'mnist' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_fashion_mnist",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'fashion_mnist' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_kmnist",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'kmnist' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_usps",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'usps' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_xor",
-        distribution="log_uniform",
-        params={"low": 0.0001, "high": 0.01, "center": 0.001},
-        description="Ruler-calibrated learning rate for task 'xor' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_spiral",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'spiral' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_circles",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'circles' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_iris",
-        distribution="log_uniform",
-        params={"low": 0.0001, "high": 0.01, "center": 0.001},
-        description="Ruler-calibrated learning rate for task 'iris' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_wine",
-        distribution="log_uniform",
-        params={"low": 0.0001, "high": 0.01, "center": 0.001},
-        description="Ruler-calibrated learning rate for task 'wine' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_breast_cancer",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Ruler-calibrated learning rate for task 'breast_cancer' (feedforward topology)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_catchall",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Catch-all ruler-calibrated learning rate for unknown tasks (feedforward)",
-        confidence=0.9,
-    ),
-    PriorSpec(
-        name="ruler_lr_non_feedforward",
-        distribution="log_uniform",
-        params={"low": 0.001, "high": 0.1, "center": 0.01},
-        description="Default learning rate for non-feedforward topologies (from topology LR probe)",
-        confidence=0.8,
-    ),
     # Dynamics settling step priors: the base declaration in
     # ontology/dynamics/_dynamics.py reads `dynamics_step_size_default`; the two
     # rows below override it where the settle step has been calibrated.
@@ -1874,12 +1719,12 @@ CAPABILITIES = [
         name="C17",
         kind=CapabilityKind.CORE,
         display_name="Prior registry",
-        description="Ruler LR + step-size overrides as PriorSpec data",
+        description="Dynamics settling steps + geometry sizes as PriorSpec data",
         required=True,
         stage="S1_FRAME",
         owner="priors",
         verifying_test="tests/property/test_active_space_lock.py::test_every_declared_prior_resolves",
-        flags=("priors", "ruler_lr"),
+        flags=("priors",),
     ),
     CapabilitySpec(
         capability_id="C18",
@@ -2312,7 +2157,7 @@ CAPABILITIES = [
         required=True,
         stage="S1_FRAME",
         owner="priors",
-        verifying_test="tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_ruler_tasks_resolve_via_registry",
+        verifying_test="tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_override_tables_resolve_via_registry",
         flags=("priors", "single_source"),
     ),
     CapabilitySpec(

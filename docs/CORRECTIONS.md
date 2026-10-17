@@ -32,3 +32,23 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The swept `update.step_size` is the only step scale; unswept defaults come from the schema's declared prior (`dynamics_step_size_default` and the two calibrated overrides). |
 | Status | corrected — column deleted; the absence is locked by `test_no_step_size_multiplier_priors` |
 | Commit | this commit |
+
+| Field | Correction 4 — ruler learning rates never reached an optimizer |
+|---|---|
+| Original claim | The 23 `ruler_lr_*` priors gave the ruler (backprop) baseline a task-calibrated learning rate, and the standard baselines carried those rates. |
+| Original metric | `learning.prior.get_ruler_lr(task)` looked up `ruler_lr_{task}`; `BaselineRegistry.STANDARD_BASELINES` wrote the chosen rate to `dynamics.step_size`. |
+| Audited procedure | Repository grep: `get_ruler_lr` has no production caller (tests only). Every standard baseline selects `dynamics="instantaneous"`, whose `settle` never reads `config.step_size`; the optimizer reads `update.step_size`, which the baselines left at the factory default (`euclidean` 0.01, `adam` 1e-3). A baseline asking for 3e-4 therefore trained at 1e-3. |
+| Affected conclusions | Any `bp_deficit` or `ruler_*_ratio` computed against a discovered baseline whose intended rate was not the factory default (CNN, language, RL, graph and memory arms); the ruler-LR table itself. |
+| Replacement metric | Standard baselines declare `update.step_size`, the field the optimizer reads. The `ruler_lr_*` rows and `get_ruler_lr` are deleted; a baseline rate is now visible where it acts. |
+| Status | corrected — locked by `test_ruler_lr_priors_stay_retired` and `test_standard_baselines_set_the_optimizer_step` |
+| Commit | this commit |
+
+| Field | Correction 5 — sampled settle step overridden at construction |
+|---|---|
+| Original claim | A sweep could choose `dynamics.step_size` for every dynamics primitive. |
+| Original metric | `compose_configs` called `apply_dynamics_step_size` unconditionally, replacing the harvested (possibly sampled) value with the calibrated `dynamics_step_size_{diffusion,predictive_settling}` center. |
+| Audited procedure | Read of `kernel/compose.py`: the override received `active.values["dynamics.step_size"]` and ignored `coordinate.params`; a sampled value was therefore a phantom knob for those two primitives. |
+| Affected conclusions | Any diffusion or predictive-settling cell whose sweep varied the settle step: all trained at the calibrated center. |
+| Replacement metric | The calibrated center fills only an unsampled value; an explicit `dynamics.step_size` wins. Locked by `test_a_sampled_dynamics_step_size_survives_composition`. |
+| Status | corrected |
+| Commit | this commit |

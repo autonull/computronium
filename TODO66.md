@@ -553,7 +553,9 @@ composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIO
 `experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) ·
 the `step_size_override_<dynamics>_<credit>` multiplier column and its post-construction
 mechanism (29 rows, every one an identity after TODO48b R4; the measurement is
-`docs/CORRECTIONS.md` Correction 3) · 12 unread `step_size_*` rows and 3 unread optimizer
+`docs/CORRECTIONS.md` Correction 3) · the `ruler_lr_*` table and `get_ruler_lr`
+(23 rows, no production reader; the standard baselines' rates never reached the
+optimizer — Correction 4) · 12 unread `step_size_*` rows and 3 unread optimizer
 priors, leaving 28 rows with one reader each (§15) · Register C: legacy lint findings,
 counted per rule below, ratcheted not cleaned (§3.19).
 
@@ -1193,3 +1195,42 @@ validates output geometry after writing; it is not a drift check.
 
 The recording, the demo-price probe and the Register C hygiene pass remain as
 stated in §16; this pass changed presentation only.
+
+---
+
+## 18. Seventh implementation pass (2026-10-17, prior-registry audit)
+
+The question was whether the `ruler_lr_*` rows were the same class of dead
+configuration as the retired step-size multipliers. They were worse: 23 rows,
+one accessor, and no production caller. The same audit found two more defects
+of the family — a prior applied at construction that replaced sampled values,
+and baseline learning rates attached to a field their dynamics never read.
+
+### Findings and repairs
+
+| # | Finding | Repair | Lock |
+|---|---|---|---|
+| 1 | **`ruler_lr_*` never reached an optimizer.** `get_ruler_lr()` is called only by tests; no hyperparameter declaration names a `ruler_lr_*` prior, and the `ruler_*` objectives are computed from a baseline record, not from a lookup. | Deleted the 23 rows and `get_ruler_lr`; the prior registry is **5 rows**: `dynamics_step_size_default` (read by the schema declaration), the two calibrated dynamics overrides (read by `apply_dynamics_step_size`), and `hidden_width` / `hidden_depth` (read by the geometry declarations). | `test_ruler_lr_priors_stay_retired`; `test_priors_are_registered_through_the_single_path` |
+| 2 | **Baseline learning rates were no-ops.** Every standard baseline uses `dynamics="instantaneous"`, whose `settle` never reads `config.step_size`; the chosen rates were stored there, so the optimizer ran at its factory default. A baseline asking 3e-4 trained at 1e-3. | `STANDARD_BASELINES` now declares `update.step_size`, which is the field `ParameterUpdateConfig` reads. | `test_standard_baselines_set_the_optimizer_step` |
+| 3 | **A sampled settle step was silently dropped.** `compose_configs` called `apply_dynamics_step_size` unconditionally, so `dynamics.step_size` sampled for `diffusion` or `predictive_settling` was replaced by the calibrated center — a phantom knob for exactly those two primitives. | The calibrated default fills only an unsampled value; an explicit `dynamics.step_size` wins. | `test_a_sampled_dynamics_step_size_survives_composition` |
+| 4 | **Generated docs were stale.** `docs/generated/` carried 2026-10-08 timestamps and predated several renames (`fast_weight` → `fast_weights`, `perplexity` measured, the newer constraints); nothing regenerates them in CI. | `generate_all()` rewrites every listing; `priors.json` now has 5 rows and the C17 capability no longer advertises a ruler-LR flag. | `test_codegen_drift_lock` exercises generation; the committed tree is regenerated |
+
+Both measurement-affecting findings are recorded as
+`docs/CORRECTIONS.md` Corrections 4–5, with the affected conclusions named.
+`PRIORS_REGISTRY` is now one declaration path with one reader per row; the
+cheatsheet and README prior counts follow (5).
+
+### Evidence (this pass)
+
+| Check | Result |
+|---|---|
+| `test_schema_seam_lock` + `test_wp10_learning_integration_lock` + `test_active_space_lock` + `test_search_space_lock` | **80 passed** (11.9 s) |
+| `test_readme_build_lock` after regeneration | **8 passed** (8.0 s) |
+| `generate_all()` | capabilities 88 · objectives 48 · axes 57 · constraints 41 · **priors 5** · policies 9 · stages 11 |
+| `cheatsheet_create.py` | 57 primitives · 36 CLI · 11 stages · 8 policies · 5 priors |
+
+### What this leaves
+
+The registry now contains only values a code path reads. The remaining
+research-program work is unchanged: the recording, the demo-price probe and the
+Register C hygiene pass (§16). No new capability was added.

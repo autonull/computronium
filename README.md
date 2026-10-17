@@ -171,7 +171,7 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 |-------|--------------|
 | **🚪 Entry Points** | 36 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
 | **🎯 Tasks & Data** | 7 domains, 24 tasks |
-| **🧪 Experiment Kernel** | 11 pipeline stages, 8 policies, 48 objectives (41 measured), 28 priors, 88 capabilities, 41 constraints |
+| **🧪 Experiment Kernel** | 11 pipeline stages, 8 policies, 48 objectives (41 measured), 5 priors, 88 capabilities, 41 constraints |
 | **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
 | **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (27 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
@@ -832,7 +832,7 @@ not a claim about anyone else's motives.
   fixed; every row carries `n` and `std`; an arm at chance is labelled
   `[at chance]`; and the run checks a known-good control arm before publishing
   the comparison.
-- **A corrections log.** 3 superseded measurements
+- **A corrections log.** 5 superseded measurements
   are recorded with the audit that invalidated them (`docs/CORRECTIONS.md`), and
   claims are held in a ledger outside the engine that produced them
   (`packages/ceec-core`).

@@ -10,7 +10,7 @@ from computronium.experiment.surface.conformance import run_verifying_test
 def test_conformance_c51() -> None:
     """Verify C51 capability via its verifying test."""
     passed, output, duration = run_verifying_test(
-        "tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_ruler_tasks_resolve_via_registry",
+        "tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_override_tables_resolve_via_registry",
         timeout_seconds=120,
     )
     assert passed, f"Verifying test failed: {output}"

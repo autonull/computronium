@@ -1,6 +1,6 @@
 # Capabilities Registry
 
-Generated: 2026-10-08T18:43:30.289989
+Generated: 2026-10-17T17:57:03.110674
 Total: 88 capabilities
 
 | ID | Name | Kind | Required | Stage | Owner | Verifying Test | Evidence | Flags | Status |
@@ -13,7 +13,7 @@ Total: 88 capabilities
 | C14 | Failure intelligence | core | ✓ | S7_MEASURE | evidence | tests/property/test_statistical_protocol_lock.py::TestAlertPredicates::test_alert_on_divergence | mechanism | failure, clustering | active |
 | C15 | Unified artifact storage | core | ✓ | S8_RECORD | artifacts | tests/property/test_atomic_append_kill_proof.py::TestAtomicAppendKillProof::test_kill_during_atomic_append_no_partial_state | mechanism | artifacts, atomic | active |
 | C16 | Vector retrieval | core | ✓ | S8_RECORD | store | tests/property/test_statistical_protocol_lock.py::TestStoreIntegration::test_store_supports_vector_index | mechanism | vector, vss_optional | active |
-| C17 | Prior registry | core | ✓ | S1_FRAME | priors | tests/property/test_active_space_lock.py::test_every_declared_prior_resolves | mechanism | priors, ruler_lr | active |
+| C17 | Prior registry | core | ✓ | S1_FRAME | priors | tests/property/test_active_space_lock.py::test_every_declared_prior_resolves | mechanism | priors | active |
 | C18 | Surrogate policy wrapper | core | ✓ | S5_COMPOSE | learning | tests/property/test_wp10_learning_integration_lock.py::TestSurrogateStoreWiring::test_training_split_excludes_calibration_test | mechanism | surrogate, acquisition | active |
 | C19 | I(C,U) metamodel | core | ✓ | S5_COMPOSE | learning | tests/property/test_statistical_protocol_lock.py::TestDataSplitProtocol::test_leakage_detection_calibration_in_training | mechanism | icu, leakage_guard | active |
 | C2 | Unified record schema | core | ✓ | S2_SPACE | schema | tests/property/test_dynamics_wiring_lock.py::test_registry_classes_round_trip_to_spec_from_spec | mechanism | schema, record | active |
@@ -51,7 +51,7 @@ Total: 88 capabilities
 | C49 | Surrogate-driven acquisition | learning | ✗ | S5_COMPOSE | learning | tests/property/test_statistical_protocol_lock.py::test_surrogate_acquisition_ei | shape | surrogate, ei | unverified |
 | C5 | Cell key grouping | core | ✓ | S2_SPACE | schema | tests/property/test_atomic_append_kill_proof.py::TestAtomicAppendKillProof::test_concurrent_append_dedup_by_measurement_key | mechanism | cell_key, replication | active |
 | C50 | Cross-task transfer | learning | ✗ | S1_FRAME | learning | tests/property/test_statistical_protocol_lock.py::test_cross_task_transfer | shape | transfer, cross_task | unverified |
-| C51 | Prior single source | learning | ✓ | S1_FRAME | priors | tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_ruler_tasks_resolve_via_registry | mechanism | priors, single_source | active |
+| C51 | Prior single source | learning | ✓ | S1_FRAME | priors | tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_override_tables_resolve_via_registry | mechanism | priors, single_source | active |
 | C52 | No global singletons | learning | ✓ | S1_FRAME | kernel | tests/property/test_kernel_isolation_lock.py::TestRunScopedState::test_engine_singleton_removed | shape | k10, singletons | active |
 | C53 | Reasoning persistence | learning | ✓ | S1_FRAME | learning | tests/property/test_scientific_validity_protocol_lock.py::TestDataOriginAndTransferProvenance::test_provenance_with_data_origin | mechanism | reasoning, persistence | active |
 | C54 | Warm-start from prior runs | learning | ✗ | S5_COMPOSE | learning | tests/property/test_statistical_protocol_lock.py::test_warm_start_prior_runs | shape | warm_start, transfer | unverified |

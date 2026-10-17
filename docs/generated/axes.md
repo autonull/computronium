@@ -1,6 +1,6 @@
 # Axes Registry
 
-Generated: 2026-10-08T18:43:30.291383
+Generated: 2026-10-17T17:57:03.112055
 Total: 57 axes
 
 | Structural Axis | Name | Axis Kind | Available | Prior | Override Scope | Topology Params |

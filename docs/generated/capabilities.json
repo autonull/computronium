@@ -157,15 +157,14 @@
     "name": "C17",
     "kind": "core",
     "display_name": "Prior registry",
-    "description": "Ruler LR + step-size overrides as PriorSpec data",
+    "description": "Dynamics settling steps + geometry sizes as PriorSpec data",
     "required": true,
     "gated_by": null,
     "stage": "S1_FRAME",
     "owner": "priors",
     "verifying_test": "tests/property/test_active_space_lock.py::test_every_declared_prior_resolves",
     "flags": [
-      "priors",
-      "ruler_lr"
+      "priors"
     ],
     "status": "active",
     "retirement_record": null
@@ -885,7 +884,7 @@
     "gated_by": null,
     "stage": "S1_FRAME",
     "owner": "priors",
-    "verifying_test": "tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_ruler_tasks_resolve_via_registry",
+    "verifying_test": "tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_override_tables_resolve_via_registry",
     "flags": [
       "priors",
       "single_source"

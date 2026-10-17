@@ -139,15 +139,72 @@ def test_retired_rows_stay_retired() -> None:
 def test_priors_are_registered_through_the_single_path() -> None:
     """The migrated accessors' names all exist in the one PRIORS table."""
     for name in (
-        "ruler_lr_mnist",
-        "ruler_lr_catchall",
-        "ruler_lr_non_feedforward",
         "dynamics_step_size_default",
         "dynamics_step_size_diffusion",
+        "dynamics_step_size_predictive_settling",
         "hidden_width",
         "hidden_depth",
     ):
         assert name in PRIORS_REGISTRY, f"prior '{name}' missing from PRIORS_REGISTRY"
+
+
+def test_ruler_lr_priors_stay_retired() -> None:
+    """The ruler-LR table had no production reader (TODO66 §18).
+
+    ``get_ruler_lr`` was called only by tests; the standard baselines wrote
+    their chosen learning rates to ``dynamics.step_size``, which
+    ``instantaneous`` dynamics ignore. Re-introducing a ``ruler_lr_*`` prior
+    without a reader fails here.
+    """
+    names = {prior.name for prior in PRIORS_REGISTRY}
+    assert not {name for name in names if name.startswith("ruler_lr_")}
+
+
+def test_standard_baselines_set_the_optimizer_step() -> None:
+    """A baseline's learning rate belongs on ``update.step_size``.
+
+    All standard baselines use ``instantaneous`` dynamics, whose config
+    ``step_size`` is never read; the old keys were no-ops.
+    """
+    from computronium.experiment.registry.baseline import BaselineRegistry
+
+    for baseline in BaselineRegistry.STANDARD_BASELINES:
+        assert "update.step_size" in baseline.hyperparameters, baseline.name
+        assert "dynamics.step_size" not in baseline.hyperparameters, baseline.name
+
+
+def test_a_sampled_dynamics_step_size_survives_composition() -> None:
+    """The calibrated default fills an unsampled settle step; a sampled one wins."""
+    from computronium.experiment.kernel.compose import compose_configs
+    from computronium.experiment.kernel.evaluate import task_shape
+
+    shape = task_shape("digits")
+
+    def settle_step(
+        dynamics: str, geometry: str, credit: str, params: dict[str, float]
+    ) -> float:
+        config = compose_configs(
+            coordinate=Coordinate(
+                substrate="digital",
+                geometry=geometry,
+                dynamics=dynamics,
+                plasticity="null",
+                credit=credit,
+                update="adam",
+                params=params,
+            ),
+            geometry={},
+            input_shape=shape.input_shape,
+            output_dim=shape.output_dim,
+        )
+        return config.dynamics.step_size
+
+    diffusion = ("diffusion", "recurrent", "random_projections")
+    settling = ("predictive_settling", "feedforward", "thermodynamic_contrast")
+    assert settle_step(*diffusion, {}) == 0.001
+    assert settle_step(*diffusion, {"dynamics.step_size": 0.05}) == 0.05
+    assert settle_step(*settling, {}) == 0.01
+    assert settle_step(*settling, {"dynamics.step_size": 0.05}) == 0.05
 
 
 def test_no_step_size_multiplier_priors() -> None:
