@@ -90,26 +90,29 @@ def _help(argv: list[str]) -> tuple[int, str]:
 
 
 class TestTheCommandSurface:
-    def test_every_command_is_listed_in_help(self) -> None:
+    def test_the_core_commands_are_listed_in_help(self) -> None:
         assert COMMANDS, "the dispatcher declares no command"
 
         code, text = _help(["--help"])
         assert code == 0
-        missing = [name for name in COMMANDS if name not in text]
-        assert not missing, f"declared but absent from --help: {missing}"
+        core = dispatcher._CORE_COMMANDS
+        missing = [name for name in core if name not in text]
+        assert not missing, f"core command absent from --help: {missing}"
+        assert len(core) <= 6, "the help screen must stay a story, not a directory"
+        hidden = [
+            name for name in COMMANDS if name not in core and f"\n    {name}" in text
+        ]
+        assert not hidden, f"non-core commands leaked into --help: {hidden}"
 
-    def test_every_command_in_help_is_declared(self) -> None:
-        """The other direction: an advertised command the dispatcher refuses.
-
-        Falsifiable by adding a row to ``_SUMMARIES`` alone — the help text is
-        written from a second dict, so it can drift from the tree.
-        """
+    def test_every_command_is_listed_under_help_all(self) -> None:
+        """The grouping hides, it does not delete: --help-all shows every row."""
         assert set(dispatcher._SUMMARIES) == set(dispatcher._SUBCOMMANDS), (
             "the summaries and the subcommands are two lists"
         )
-        _code, text = _help(["--help"])
-        for name in dispatcher._SUMMARIES:
-            assert text.count(name) >= 1
+        code, text = _help(["--help-all"])
+        assert code == 0
+        missing = [name for name in COMMANDS if name not in text]
+        assert not missing, f"declared but absent from --help-all: {missing}"
 
     @pytest.mark.parametrize("command", COMMANDS)
     def test_every_command_is_reachable_through_the_surface(self, command: str) -> None:

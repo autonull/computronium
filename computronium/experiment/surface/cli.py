@@ -250,15 +250,97 @@ RUN_PROFILES: dict[str, RunProfile] = {
         deep_tier=True,
         hyperparameters=dict(_SEARCH_SWEEP),
     ),
+    "demo": RunProfile(
+        name="demo",
+        description="One controlled contrast: four credit rules, five axes fixed",
+        stages=[
+            "s1_frame",
+            "s2_space",
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+            "s9_attribute",
+            "s10_decide",
+            "s11_report",
+        ],
+        fidelity="L1",
+        n_seeds=5,
+        epochs=3,
+        batch_limit=0,
+        budget_seconds=120.0,
+        task="digits",
+        policy="round_robin_grid",
+        param_budget=MEASURED_PARAM_BUDGET,
+        objectives=("validation_accuracy", "walltime_total"),
+        promotion_threshold=0.8,
+        maturation=False,
+        deep_tier=False,
+        axes=(
+            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
+            AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("feedforward",)),
+            AxisSelection(axis=StructuralAxis.DYNAMICS, primitives=("instantaneous",)),
+            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null",)),
+            AxisSelection(
+                axis=StructuralAxis.CREDIT,
+                primitives=(
+                    "gradient",
+                    "random_projections",
+                    "pepita",
+                    "local_goodness",
+                ),
+            ),
+            AxisSelection(axis=StructuralAxis.UPDATE, primitives=("adam",)),
+        ),
+        hyperparameters={"geometry.hidden_dim": Domain(members=(32,))},
+        checkpoint_every_n=0,
+    ),
 }
 
 
-def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-statements, too-many-locals]
+# The six commands that tell the story. The rest stay reachable under
+# ``comp --help-all``; the surface is grouped for presentation, not deleted.
+CORE_COMMANDS: frozenset[str] = frozenset({
+    "run",
+    "report",
+    "status",
+    "demo",
+    "coverage",
+    "gallery",
+})
+
+
+def _limit_help(sub: Any) -> None:
+    """Keep non-core commands out of ``comp --help`` but fully usable."""
+    for action in sub._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for choice in action._choices_actions:
+                if choice.dest not in CORE_COMMANDS:
+                    choice.help = argparse.SUPPRESS
+
+
+def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
+    *, full: bool = False
+) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="comp-surface",
         description="Computronium Surface CLI — experiment orchestration and reporting",
     )
+    parser.add_argument(
+        "--help-all",
+        action="store_true",
+        help="Show every command, including the non-core ones",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    # Demo command
+    p_demo = sub.add_parser("demo", help="Run the seven-beat demonstration")
+    p_demo.add_argument("--store", default="demo.duckdb", help="DuckDB store path")
+    p_demo.add_argument(
+        "--run-id", default=None, help="Report on this run (latest if omitted)"
+    )
 
     # Run command
     p_run = sub.add_parser("run", help="Execute a run profile or a spec file")
@@ -267,6 +349,12 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         nargs="?",
         choices=list(RUN_PROFILES.keys()),
         help="Run profile to execute (omit when --spec names the run)",
+    )
+    p_run.add_argument(
+        "--profile",
+        dest="profile_flag",
+        choices=list(RUN_PROFILES.keys()),
+        help="Alias for the positional profile",
     )
     p_run.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
     p_run.add_argument(
@@ -2044,6 +2132,121 @@ def _resolve_baselines(
         return None
     keys = eligible_cells(store.query_records(run_id=run_id), spec.n_seeds).keys()
     return dict.fromkeys(keys, baseline)
+
+
+_DEMO_BEATS: tuple[tuple[str, str, str], ...] = (
+    ("0", "the machine is ready", "import optuna, scipy, torchvision, duckdb"),
+    ("1", "the declared space, priced", "comp run demo --dry-run"),
+    ("2", "execution: cells, rounds, verdicts", "comp run demo"),
+    ("3", "the ledger: what landed", "comp status"),
+    ("4", "the governed result", "comp report"),
+    ("5", "what is unreached", "comp coverage report"),
+    ("6", "what we learned", "the three results we already own"),
+)
+
+_DEMO_RESULTS: tuple[str, ...] = (
+    "deep EqProp boundary (docs/eqprop_deep_limitation.md): multi-layer vanilla "
+    "EqProp does not learn — slope -1.19, R^2=0.80; DirectedEP restores the "
+    "signal but not accuracy (9.2%, chance for 10 classes). Gate G2 FAILED.",
+    "phantom-knob audit (docs/phantom_knob_audit.md): a search key sampled but "
+    "dropped at construction poisons parity and liveness identically; detected "
+    "by construction.phantom_knobs and enforced by validate_all_rule_spaces().",
+    "rho(J) vs sigma_max (docs/CORRECTIONS.md): power iteration reported as a "
+    "spectral radius on nonnormal J converged to 0.5 while ||J||_2 = 10.025; "
+    "caught by test_jacobian_amplification and replaced by three estimators.",
+)
+
+
+def _demo_call(argv: list[str]) -> int:
+    """Run one beat through the same parser and handler the user would."""
+    return main(argv)
+
+
+def _demo_control(store_path: str) -> tuple[bool, str]:
+    """G13: the gradient arm must clear chance before a comparison is published."""
+    from computronium.experiment.evidence import RecordStore, StoreConfig
+    from computronium.experiment.surface.report import chance_level
+
+    store = RecordStore(StoreConfig(path=store_path, read_only=True))
+    with store:
+        runs = store.query_runs()
+        if not runs:
+            return False, "no run in the store"
+        records = [
+            record
+            for record in store.query_records(run_id=runs[0].run_id)
+            if record.credit == "gradient"
+        ]
+    values = [
+        float(record.payload["val_acc"])
+        for record in records
+        if isinstance(record.payload.get("val_acc"), (int, float))
+    ]
+    if not values:
+        return False, "the gradient arm measured no validation accuracy"
+    mean = sum(values) / len(values)
+    chance = chance_level(records[0].schedule.task_id, "val_acc") or 0.0
+    floor = max(3.0 * chance, chance + 0.2)
+    return (
+        mean > floor,
+        f"gradient val_acc={mean:.4f} vs chance={chance:.2f} (floor {floor:.2f})",
+    )
+
+
+def _cmd_demo(args: argparse.Namespace) -> int:
+    """The single entry point: seven beats over the same commands.
+
+    No engine logic lives here. Each beat dispatches the command it names, so
+    the demonstration cannot drift from the software it demonstrates.
+    """
+    import importlib
+
+    store = args.store
+    print("=" * 80)
+    print("COMPUTRONIUM DEMO — seven beats")
+    print("=" * 80)
+
+    print(f"\n[0] {_DEMO_BEATS[0][1]}")
+    try:
+        for module in ("optuna", "scipy", "torchvision", "duckdb"):
+            importlib.import_module(module)
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"  imports: OK; device: {device}")
+    except Exception as exc:  # ruff: ignore[blind-except] - beat 0 is a smoke
+        print(f"  imports failed: {exc}")
+        return 1
+
+    beats = [
+        (1, ["run", "demo", "--store", store, "--dry-run"]),
+        (2, ["run", "demo", "--store", store]),
+        (3, ["status", "--store", store]),
+        (
+            4,
+            ["report", "--store", store, "--format", "text"]
+            + (["--run-id", args.run_id] if args.run_id else []),
+        ),
+        (5, ["coverage", "report", "--store", store]),
+    ]
+    for index, argv in beats:
+        print(f"\n[{index}] {_DEMO_BEATS[index][1]}")
+        print(f"  equivalent: {_DEMO_BEATS[index][2]}")
+        code = _demo_call(argv)
+        if code != 0:
+            print(f"  beat {index} exited {code}")
+            return code
+        if index == 2:
+            ok, message = _demo_control(store)
+            print(f"  positive control: {message}")
+            if not ok:
+                print("  the control arm is at chance: this comparison is invalid")
+                return 1
+
+    print(f"\n[6] {_DEMO_BEATS[6][1]}")
+    for line in _DEMO_RESULTS:
+        print(f"  - {line}")
+    return 0
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -5951,9 +6154,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _ensure_registries_seeded()
 
-    args = _build_parser().parse_args(argv)
+    raw = list(sys.argv[1:] if argv is None else argv)
+    if "--help-all" in raw:
+        _build_parser(full=True).print_help()
+        return 0
+
+    args = _build_parser().parse_args(raw)
+    if args.command == "run" and args.profile is None and args.profile_flag:
+        args.profile = args.profile_flag
     command_handlers = {
         "run": _cmd_run,
+        "demo": _cmd_demo,
         "report": _cmd_report,
         "export": _cmd_export,
         "import": _cmd_import,

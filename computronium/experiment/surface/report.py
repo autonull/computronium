@@ -276,7 +276,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         """
         return set(
             self._store.claim_eligible_replication_keys(
-                run_id, min_n_seeds=DEFAULT_MIN_SEEDS, fidelity="L2"
+                run_id, min_n_seeds=DEFAULT_MIN_SEEDS, fidelity=None
             )
         )
 

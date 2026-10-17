@@ -945,7 +945,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         self,
         run_id: str | None = None,
         min_n_seeds: int = 5,
-        fidelity: str = "L2",
+        fidelity: str | None = "L2",
     ) -> tuple[str, ...]:
         """Replication keys that *achieved* ``min_n_seeds`` distinct passing seeds.
 
@@ -956,8 +956,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         """
         if self._conn is None:
             raise StoreError("Connection not initialized")
-        conditions = ["status.gate_verdict = ?", "schedule.fidelity = ?"]
-        params: list[Any] = [GateVerdict.PASS_.value, fidelity]
+        conditions = ["status.gate_verdict = ?"]
+        params: list[Any] = [GateVerdict.PASS_.value]
+        if fidelity is not None:
+            conditions.append("schedule.fidelity = ?")
+            params.append(fidelity)
         if run_id is not None:
             conditions.append("run_id = ?")
             params.append(run_id)

@@ -36,6 +36,7 @@ _SURFACE = "computronium.experiment.surface.cli"
 # prefix, so ``comp run`` and ``comp run run`` reach the same parser and there
 # is no second command tree to keep in step.
 _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "demo": (_SURFACE, "main", ("demo",)),
     "run": (_SURFACE, "main", ("run",)),
     "report": (_SURFACE, "main", ("report",)),
     "export": (_SURFACE, "main", ("export",)),
@@ -73,7 +74,19 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "benchmark-contrib": ("computronium.benchmarks.contributions.cli", "main", ()),
 }
 
+# Commands that tell the story. Everything else is reachable, but only under
+# ``comp --help-all``; this is a presentation grouping, not a deletion.
+_CORE_COMMANDS: frozenset[str] = frozenset({
+    "run",
+    "report",
+    "status",
+    "demo",
+    "coverage",
+    "gallery",
+})
+
 _SUMMARIES: dict[str, str] = {
+    "demo": "Run the seven-beat demonstration: space, run, ledger, report, coverage",
     "run": "Execute a run profile (dry-run with --dry-run)",
     "report": "Generate report from store",
     "export": "Export store data for round-trip",
@@ -113,8 +126,11 @@ _SUMMARIES: dict[str, str] = {
 }
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(*, full: bool = False) -> argparse.ArgumentParser:
     """Build the top-level help tree.
+
+    Args:
+        full: Show every command, not just the six core ones.
 
     Returns:
         Parser whose subparsers mirror :data:`_SUBCOMMANDS`; each subcommand
@@ -123,11 +139,18 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="comp",
         description="Computronium — experiment surface over the Kernel and Library.",
-        epilog="Run 'comp <command> --help' for that command's own options.",
+        epilog=(
+            "Run 'comp <command> --help' for that command's own options; "
+            "'comp --help-all' lists every command."
+        ),
     )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     for name in _SUBCOMMANDS:
         sub.add_parser(name, help=_SUMMARIES[name], add_help=False)
+    if not full:
+        for choice in list(sub._choices_actions):
+            if choice.dest not in _CORE_COMMANDS:
+                sub._choices_actions.remove(choice)
     return parser
 
 
@@ -155,6 +178,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     joblib.parallel.DEFAULT_BACKEND = "threading"
 
     args = list(sys.argv[1:] if argv is None else argv)
+    if args[:1] == ["--help-all"]:
+        _build_parser(full=True).print_help()
+        return 0
     parser = _build_parser()
     if not args:
         parser.print_help(sys.stderr)
