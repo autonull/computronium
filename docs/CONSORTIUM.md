@@ -125,3 +125,11 @@ This is not a plan to reach a final, perfect protocol once and for all. Scientif
 Bring an algorithm, a research question, a benchmark concern, a critique, expertise in methodology or statistics, implementation work, data, compute, funding, or simply time to help shape the first steps. A strong objection to this proposal—especially one paired with a better alternative—is a useful contribution.
 
 The first task is not to agree with every sentence here. It is to identify the people, questions, and modest first experiment that could make a consortium worth having. **Help decide what should be built, what should remain optional, and what evidence would justify taking the next step.**
+
+## Existing models to consider
+
+- MLCommons — [mlcommons.org](https://mlcommons.org). The closest organizational precedent: an established industry–academic consortium for shared benchmarks, reproducibility, and measurement. It even has an AlgoPerf benchmark for training algorithms. This is the first organization I would investigate for overlap or possible collaboration.
+
+- METR — [metr.org](https://metr.org). A model for independent evaluation research with an explicit public-interest mission, though focused on advanced AI capabilities and risks rather than general learning-algorithm comparisons.
+
+- Cochrane — [cochrane.org](https://www.cochrane.org). A useful precedent from medicine: a distributed international community that synthesizes evidence using shared methods, independent review, and continual updating. The analogous lesson is that the institution's value lies in trusted procedures and accumulated evidence, not simply running experiments.
