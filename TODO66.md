@@ -531,12 +531,11 @@ generated into README §5.3, so it cannot drift.
 
 **Live (user path):** loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
 statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
-claims, limitations · CEEC export · provenance/seed/checkpoint · reports (text/JSON/HTML) · `comp`
-core commands.
+claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
+(text/JSON/HTML) · `comp` core commands.
 
 **Designed, not built (intent preserved):** M1 gate calibration · M2 drift detection · M3 metric
-coverage warnings · `capabilities` command · per-stage timing defects · repo-wide effect lock ·
-silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
+coverage warnings · `capabilities` command · repo-wide effect lock · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
 compatibility sampling · `SystemConfig.validate` codegen.
 
 **Planned (intent, no code):** **fair-HPO recovery study — for each zoo algorithm, re-tune under
@@ -559,11 +558,11 @@ threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) ·
 cards, `--strict` green, drift-locked · phantom-knob detector · metric-provenance rule · corrections
 log · CEEC ledger · discovery/confirmation seed split.
 
-**Neutrality defects found by measurement (§1.4):** the per-axis ablation table aggregates cells that
-differ on all other five axes, so its "credit ablation" reports `hidden_dim` and optimizer choice
-(`gradient` 0.094 vs `pepita` 0.528) — §2.9 · the fairness contract's chance-line floor (E-10) is
-written but not applied by the report · no positive control is required before a comparison is
-presented.
+**Neutrality defects found by measurement and repaired (§2.9):** the per-axis ablation table used
+to aggregate cells that differ on all other five axes (`gradient` 0.094 vs `pepita` 0.528) — now
+printed only for a shared-five-axes group, with `n`/`std` and an `[at chance]` flag · the fairness
+contract's chance-line floor (E-10) is applied by the report · a positive control must clear chance
+before a comparison is published.
 
 **Neutrality gaps (named, so the README cannot imply otherwise):**
 1. **All credit rules are this project's re-implementations**, with deviations declared and cited — not
@@ -878,9 +877,9 @@ assertion weakened.
 
 ### Still open (honest ledger)
 
-1. **§5.2 / §5.3** — the three capability tables are not yet demoted to one,
-   and the readiness ledger is not generated into the README. The factual
-   generators landed (G12), but the §8 ledger itself remains a TODO66 table.
+1. **§5.2** — the capability tables are not yet demoted to one. §5.3 is now
+   generated: `docs/readme/readiness.md` renders §8 through
+   `<!-- gen:readiness_ledger -->`, so the README follows the ledger.
 2. **§3.19 per-rule counts** — the ratchet is green at 659 but the Register C
    per-rule breakdown is still hygiene-pass work.
 3. **§4.3 grammar** — non-TTY output is fixed; the unified
@@ -901,5 +900,5 @@ assertion weakened.
 | G8 findings | green |
 | G10 same cells | green |
 | G11 identity cards | green |
-| G12 generated neutrality | **green for counts**: identity cards 31, corrections 2, contract F-1…F-6 rendered from source |
+| G12 generated neutrality | **green**: identity cards 31, corrections 2, contract F-1…F-6, and the §8 readiness ledger all rendered from source |
 | G13 control | green under `max(3×chance, chance+0.2)`; the plan's ≈0.87 is stale (measured 0.4389) |

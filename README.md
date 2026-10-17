@@ -116,6 +116,57 @@ shows only a favourable run. These three are the discovery output to date; the
 readiness ledger below names everything that is designed or planned but not
 built.
 
+## What is proven, what is designed, and what is not
+
+Generated from the durable readiness ledger in `TODO66.md` §8, so the README
+cannot promise a capability the tree does not have.
+
+- **Live (user path).** loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
+statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
+claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
+(text/JSON/HTML) · `comp` core commands.
+- **Designed, not built (intent preserved).** M1 gate calibration · M2 drift detection · M3 metric
+coverage warnings · `capabilities` command · repo-wide effect lock · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
+compatibility sampling · `SystemConfig.validate` codegen.
+- **Planned (intent, no code).** **fair-HPO recovery study — for each zoo algorithm, re-tune under
+equal effort and publish the delta from its published number** (the "these algorithms may be better than
+commonly believed" programme; needs §3.22's gap closed and real compute) · 7-domain task expansion
+(cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes, california_housing,
+ett_h1, PDE suites) · physical-hardware validation (memristive/neuromorphic/optical/quantum) ·
+Ray/SLURM · DDP at scale · `campaign_queue` as loop driver · full CEEC integration ·
+`question_first` literature store · a real TUI · **an evaluation consortium** (§11.2): the fairness
+contract as a shared constitution, identity cards as the admission ticket, the corrections log as the
+shared memory.
+- **Retired (finding kept).** E1 deep chaotic unfolding — **falsified**, mechanism boundary is
+composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIONS.md`) · legacy
+`experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: 659
+legacy lint findings, counted per rule, ratcheted not cleaned (§3.19).
+- **Neutrality apparatus (live, §1.3).** fairness contract F-1…F-6 (append-only) · 11 pre-registered
+threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) · 31 generated identity
+cards, `--strict` green, drift-locked · phantom-knob detector · metric-provenance rule · corrections
+log · CEEC ledger · discovery/confirmation seed split.
+- **Neutrality defects found by measurement and repaired (§2.9).** the per-axis ablation table used
+to aggregate cells that differ on all other five axes (`gradient` 0.094 vs `pepita` 0.528) — now
+printed only for a shared-five-axes group, with `n`/`std` and an `[at chance]` flag · the fairness
+contract's chance-line floor (E-10) is applied by the report · a positive control must clear chance
+before a comparison is published.
+- **Neutrality gaps (named, so the README cannot imply otherwise).** 1. **All credit rules are this project's re-implementations**, with deviations declared and cited — not
+   the inventors' reference code, and not verified against it. The defensible claim is "independent
+   re-implementation with disclosed deviations", never "verified upstream".
+2. **Equal-effort HPO is a protocol, not a kernel invariant** (§3.22): `docs/hpo_protocol.md` +
+   `biopl-hpo`, not `comp run`.
+3. **No blinding.** The analyst sees arm identity. A blinded arm-label path is unbuilt.
+4. **Pre-registration was not enforced in the claim path** (§3.20); after this plan an unregistered
+   claim is *labelled*, not refused.
+5. **One language, one task family so far.** Vision/classification on `digits`-class data. Cross-domain
+   neutrality needs the 7-domain expansion (Planned, above).
+- **Results we actually own (the discovery output, to date).** deep EqProp boundary — multi-layer vanilla
+EqProp does not learn (vanishing contrastive signal, slope −1.19, R²=0.80); DirectedEP restores the
+signal without restoring accuracy (9.2% at depth ≥3, gate G2 FAILED); 1-layer EqProp viable
+(`docs/eqprop_deep_limitation.md`) · phantom-knob class + detector (`docs/phantom_knob_audit.md`) ·
+ρ(J)/σ_max conflation caught and corrected, three separated estimators, pre-correction frontier numbers
+flagged `requires_rerun` (`docs/CORRECTIONS.md`, `test_jacobian_amplification`).
+
 ## What is Computronium
 
 Computronium ships three layers, each usable independently:

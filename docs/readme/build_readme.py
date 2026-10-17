@@ -48,6 +48,7 @@ order lives in :data:`_SECTIONS`, the one place it is decided.
 * ``<!-- gen:identity_card_count -->`` — primitive identity cards in the tree.
 * ``<!-- gen:corrections_count -->`` — entries in the corrections log.
 * ``<!-- gen:fairness_clause_count -->`` — highest F-n fairness-contract clause.
+* ``<!-- gen:readiness_ledger -->`` — TODO66 §8, the durable readiness ledger.
 
 The contents list is generated too, from the headings the section files
 actually contain, so it cannot list a section that was renamed or deleted.
@@ -370,6 +371,20 @@ def _corrections_count() -> str:
     )
 
 
+def _readiness_ledger() -> str:
+    """The §8 readiness ledger, rendered from TODO66 (the durable ledger)."""
+    text = (REPO / "TODO66.md").read_text(encoding="utf-8")
+    section = text.split("## 8. Readiness ledger", 1)[1].split("## 9.", 1)[0]
+    blocks = re.split(r"\n\n(?=\*\*)", section.strip())
+    rendered: list[str] = []
+    for block in blocks:
+        match = re.match(r"\*\*(.+?):\*\*\s*(.*)", block, re.S)
+        if match is None:
+            continue
+        rendered.append(f"- **{match.group(1)}.** {match.group(2).strip()}")
+    return "\n".join(rendered)
+
+
 def _fairness_clause_count() -> str:
     """Highest fairness-contract clause number (F-1…F-n)."""
     numbers = [
@@ -421,6 +436,7 @@ _GENERATORS = {
     "identity_card_count": _identity_card_count,
     "corrections_count": _corrections_count,
     "fairness_clause_count": _fairness_clause_count,
+    "readiness_ledger": _readiness_ledger,
 }
 
 
@@ -432,6 +448,7 @@ _SECTIONS: tuple[str, ...] = (
     "start-here.md",
     "neutral-evaluation.md",
     "findings.md",
+    "readiness.md",
     "what-is.md",
     "install.md",
     "quickstart.md",
