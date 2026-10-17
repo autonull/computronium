@@ -258,8 +258,6 @@ _symbol_to_module: dict[str, str] = {
     "TableSlice": "store",
     "UnsupportedSchemaVersionError": "store",
     "format_replication_key": "store",
-    "validate_record_input": "store",
-    "validate_record_output": "store",
     # ceec_export
     "export_claims_to_ceec": "ceec_export",
     "export_statistical_result_to_ceec": "ceec_export",

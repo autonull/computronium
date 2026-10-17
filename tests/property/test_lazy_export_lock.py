@@ -66,15 +66,12 @@ LAZY_PACKAGES: dict[str, tuple[str, ...]] = {
     "computronium.experiment.execution": (
         "allocator",
         "backends",
-        "budget",
-        "compose",
         "decision",
         "optuna_adapter",
         "pipeline",
         "policy",
         "pricing",
         "replay",
-        "search_space",
         "settle_operator",
         "stage",
         "stages_impl",
@@ -98,7 +95,13 @@ def _package(name: str) -> ModuleType:
 
 
 def _resolve(package: str, target: str) -> ModuleType:
-    """The submodule a map entry or submodule name points at."""
+    """The submodule a map entry or submodule name points at.
+
+    Kernel targets are absolute under ``computronium.experiment``; the runtime
+    ``__getattr__`` rewrites them the same way.
+    """
+    if target.startswith("kernel."):
+        return importlib.import_module(f"computronium.experiment.{target}")
     return importlib.import_module(f"{package}.{target}")
 
 

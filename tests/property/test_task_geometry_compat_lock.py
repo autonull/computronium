@@ -171,7 +171,7 @@ def test_filter_removal_regression() -> None:
     It temporarily patches the required_input check to always pass
     and asserts the search space then includes causal_transformer for digits.
     """
-    from computronium.experiment.execution import compose as compose_module
+    from computronium.experiment.kernel import compose as compose_module
 
     # Save original
     original_check = compose_module._check_geometry_input_compat

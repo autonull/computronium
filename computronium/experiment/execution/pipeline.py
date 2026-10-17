@@ -137,13 +137,10 @@ class PipelineConfig:
     def __post_init__(self) -> None:
         # Convert legacy Budget to Deadline if provided
         if self.budget is not None and self.deadline is None:
-            from computronium.experiment.execution.budget import Budget as ExecBudget
             from computronium.experiment.execution.deadline import Deadline
             from computronium.experiment.kernel.resources import Budget as LegacyBudget
 
-            if isinstance(self.budget, LegacyBudget) or isinstance(
-                self.budget, ExecBudget
-            ):
+            if isinstance(self.budget, LegacyBudget):
                 object.__setattr__(
                     self,
                     "deadline",

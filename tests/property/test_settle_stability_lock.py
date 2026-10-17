@@ -283,7 +283,7 @@ def test_guard_removal_regression_pc_alm() -> None:
     PCALMDynamics._run_relaxation_loop = no_nan_check_relaxation
 
     try:
-        from computronium.experiment.execution import (
+        from computronium.experiment.kernel import (
             search_space as search_space_module,
         )
 
@@ -422,7 +422,7 @@ def test_guard_removal_regression_error_predictive_coding() -> None:
     ErrorPredictiveCodingDynamics.settle = no_nan_check_settle
 
     try:
-        from computronium.experiment.execution import (
+        from computronium.experiment.kernel import (
             search_space as search_space_module,
         )
 

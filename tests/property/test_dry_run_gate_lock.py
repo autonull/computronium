@@ -97,8 +97,8 @@ def test_gate_removal_regression() -> None:
 
     This test verifies the lock is not a comment (TODO46 D25).
     """
-    from computronium.experiment.execution import compose as compose_module
-    from computronium.experiment.execution import search_space as search_space_module
+    from computronium.experiment.kernel import compose as compose_module
+    from computronium.experiment.kernel import search_space as search_space_module
 
     # Save original
     original_dry_run = compose_module._dry_run_trainable

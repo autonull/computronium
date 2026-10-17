@@ -106,7 +106,6 @@ __all__ = [
     "allocator",
     "backends",
     "batch_sizer",
-    "budget",
     "build_geometry_config",
     "capture_environment_snapshot",
     "cell_record",
@@ -179,10 +178,10 @@ _symbol_to_module: dict[str, str] = {
     "LocalBackend": "backends",
     "MultiprocessBackend": "backends",
     "Success": "backends",
-    # budget
-    "Budget": "budget",
-    "CostModel": "budget",
-    "SimpleCostModel": "budget",
+    # budget (canonical definitions live in the kernel)
+    "Budget": "kernel.resources",
+    "CostModel": "kernel.resources",
+    "SimpleCostModel": "kernel.resources",
     # compose (moved to kernel)
     "GRID_CREDITS": "kernel.compose",
     "GRID_DYNAMICS": "kernel.compose",
@@ -257,11 +256,6 @@ _symbol_to_module: dict[str, str] = {
     "iter_candidates": "kernel.search_space",
     "narrow_domain": "kernel.search_space",
     "search_space_from_spec": "kernel.search_space",
-    # stream
-    "CellStream": "stream",
-    "CellStreamState": "stream",
-    # batch_sizer
-    "BatchSizer": "batch_sizer",
     # settle_operator
     "hidden_stack_operator": "settle_operator",
     "layer_weight_shapes": "settle_operator",
@@ -331,7 +325,6 @@ def __getattr__(name: str) -> Any:
     if name in {
         "allocator",
         "backends",
-        "budget",
         "batch_sizer",
         "contrast_design",
         "decision",

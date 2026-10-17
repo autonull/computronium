@@ -353,7 +353,7 @@ def test_void_constraint_removal_regression_nca_ntm() -> None:
         # Patch validation
         SystemConfig._validate_nca_ntm_fast_weight_plasticity = no_op_validate
 
-        from computronium.experiment.execution import (
+        from computronium.experiment.kernel import (
             search_space as search_space_module,
         )
 
@@ -381,7 +381,7 @@ def test_void_constraint_removal_regression_nca_ntm() -> None:
         SystemConfig._validate_nca_ntm_fast_weight_plasticity = original_validate
         if original_constraint is not None:
             CONSTRAINTS_REGISTRY.register(original_constraint)
-        from computronium.experiment.execution import (
+        from computronium.experiment.kernel import (
             search_space as search_space_module,
         )
 
@@ -419,7 +419,7 @@ def test_void_constraint_removal_regression_tile() -> None:
         # Patch validation
         SystemConfig._validate_tile_fast_weight_plasticity = no_op_validate
 
-        from computronium.experiment.execution import (
+        from computronium.experiment.kernel import (
             search_space as search_space_module,
         )
 
@@ -446,7 +446,7 @@ def test_void_constraint_removal_regression_tile() -> None:
         SystemConfig._validate_tile_fast_weight_plasticity = original_validate
         if original_constraint is not None:
             CONSTRAINTS_REGISTRY.register(original_constraint)
-        from computronium.experiment.execution import (
+        from computronium.experiment.kernel import (
             search_space as search_space_module,
         )
 
