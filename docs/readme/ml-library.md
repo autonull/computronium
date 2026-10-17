@@ -1,23 +1,19 @@
-## ML Library Capabilities
+## Machine learning library
 
-| Capability | Description |
-|------------|-------------|
-| **Composable systems** | Construct any 6-axis system coordinate via the `System` generic or factory functions (5-D systems are the `P = NullPlasticity` slice) |
-| **Common training API** | `SystemTrainer` — single interface for all learning rules, including joint systems via duck-typed `train_step`/`forward` |
-| **Multiple learning rules** | Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint (Routing, FastWeight) — credit swap demonstrated live |
-| **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
-| **Benchmarks & ablations** | 5-level hierarchy: adaptation, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights |
-| **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee |
-| **Multi-objective discovery** | `comp run` profiles with multi-objective config — configurable Pareto fronts across objectives (accuracy, walltime, params, FLOPs, memory, energy, latency, spectral radius, Lyapunov, ψ capacity, credit alignment, ruler-relative); objective-aware driver, multi-objective promotion (L1/L2) |
-| **EMA harvest** (`SystemTrainerConfig.harvest_mode`) | Probe-free streaming-weight harvest instrument; resurrected depth-50 (0.784→0.917) |
-| **Recipe cards** (`recipe_cards.py`) | Credit×Update→optimizer/geometry/config canonical-constructor registry |
-| **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy |
-| **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) | Frozen-θ ψ-only adaptation, recovery, and migration with θ bitwise-invariance audits |
-| **P-axis expressiveness probes** | Fixed-θ ψ mechanisms verified at probe scale: Kolmogorov compression (short ψ unfolds 32×32 patterns, 2.66× ratio), NCA rule reconfiguration (K distinct patterns from one seed, θ SHA-invariant, 3 seeds), sequential composition over NTM tape (max/sum/median at O(1) depth); σ_max(J_F) stability-expressiveness frontier measured. Deep chaotic unfolding (E1) falsified with a mechanism boundary — composition-error compounding |
-| **I(C,U) ψ-orthogonality** | 3-seed measurement of ψ modulation on the credit×update surface: across tested configurations, observed ψ modulation averaged 2.0 percentage points (max 9.1 points, fa×muon routing). These measurements do not establish equivalence or negligibility; campaign-7.1 rows in `data/icu_measurements.csv`, `logs/w17_icu_fit.log` |
-| **Experiment sweeps / campaigns** | `comp run` / `comp benchmark` — structured hypercube exploration |
-| **Distributed execution / deployment** | P2P (gRPC/Kademlia), multi-GPU (DDP/FSDP/DeepSpeed), ONNX/TorchScript/INT8/ternary export, FastAPI inference server |
+Compose any 6-axis coordinate through the `System` generic or the `compose_*`
+factories, train it through one `SystemTrainer`, and change one axis at a time.
+The axes and their primitives are listed once, under
+[the 6-axis ontology](#the-6-axis-ontology); what exists versus what is
+designed is the [readiness ledger](#what-is-proven-what-is-designed-and-what-is-not).
+Beyond the axes, the library carries these instruments:
 
+- **EMA harvest** (`SystemTrainerConfig.harvest_mode`) — probe-free streaming-weight harvest; resurrected depth-50 (0.784 → 0.917).
+- **Recipe cards** (`recipe_cards.py`) — credit × update → optimizer/geometry/config canonical constructors.
+- **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) — learnability-interaction law, 0.944 held-out lattice accuracy.
+- **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) — ψ-only adaptation, recovery and migration with θ bitwise-invariance audits.
+- **P-axis expressiveness probes** — fixed-θ ψ at probe scale: Kolmogorov compression (2.66× ratio), NCA rule reconfiguration (θ SHA-invariant, 3 seeds), sequential composition over NTM tape; σ_max(J_F) frontier measured. Deep chaotic unfolding (E1) is falsified — see [Findings we own](#findings-we-own).
+- **I(C,U) ψ-orthogonality** — 3-seed measurement: ψ modulation averaged 2.0 percentage points (max 9.1, fa × muon routing); these measurements do not establish equivalence or negligibility (`data/icu_measurements.csv`).
+- **Distributed execution** — in-process P2P, multi-GPU DDP/FSDP/DeepSpeed, ONNX/TorchScript/INT8/ternary export, FastAPI inference server.
 
 ### Algebraic Composition (API)
 

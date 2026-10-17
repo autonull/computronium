@@ -577,3 +577,38 @@ unrelated to the CEEC work. Measured categories for a future hygiene pass:
 (End of file)
 
 
+
+---
+
+## 15. Final close-out — TODO66 handover (this session)
+
+TODO66 is the terminal plan; this section records what it closed against the
+state this document left behind.
+
+- **The red shard is green.** The ~80 property failures and 21 setup errors
+  listed under §14's "Remaining work" are closed in the TODO66 passes: shard
+  `2085 passed, 60 skipped, 25 xfailed, 1 xpassed, 0 failed, 0 errors`;
+  unit + `test_v1_exit` `551 passed, 1 xfailed`. The lazy-export gaps, the
+  `pd.DataFrame` annotation, the `Budget` API drift and the `wp11` intent drift
+  were repaired at source, not exempted.
+- **The product path is honest.** `comp run` now emits a verdict of
+  `PASSED` / `REJECTED` / `INSUFFICIENT` with `power_achieved` (TODO65 §6.C1's
+  contract, previously unreachable); `comp report`'s eligibility count and its
+  claims come from one rule; the ablation table is printed only for a
+  shared-five-axes group, with `n`, `std` and an `[at chance]` line.
+- **One entry point exists.** `comp demo` runs the same handlers as
+  `run/status/report/coverage`, prints seven beats, checks the positive control
+  (`0.4389` vs `0.10`) before publishing, and completes in ~31 s on CPU.
+- **Two figures this document estimated are superseded by measurement:** the
+  control is `0.4389` (not ≈0.87) and the demo sweeps four legal credit arms
+  (`thermodynamic_contrast` is unreachable under `instantaneous` dynamics).
+  TODO66 §14 carries both, with the reason.
+- **The handover is documented:** README regenerated from `docs/readme/*.md`
+  (start-here product path, neutral evaluation generated, findings generated,
+  readiness ledger generated), `docs/DEMO.md` + its executable acceptance test,
+  `docs/CONSORTIUM.md`.
+- **Tagged `v1.0.0`.** No TODO67. The only unbuilt deliverable is the demo
+  recording, which `docs/DEMO.md` and `tests/acceptance/test_demo_script.py`
+  make reproducible.
+
+(End of file)

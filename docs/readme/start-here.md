@@ -29,3 +29,7 @@ instead of declaring "no effect".
 The Python library is separate and usable on its own — see
 [Machine learning library](#machine-learning-library) below, or run the
 60-second snippet it contains.
+
+A six-minute shot list — every command and the sentence to say over it — is in
+[`docs/DEMO.md`](docs/DEMO.md); `tests/acceptance/test_demo_script.py` runs the
+same commands, so the recording cannot drift from the software.

@@ -25,18 +25,6 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 | **💾 Evidence Store** | DuckDB, single-writer, <!-- gen:store_method_count --> RecordStore methods, schema v<!-- gen:schema_version --> with <!-- gen:record_field_count --> fields, 3-tier claim status |
 | **📊 Surface & Governance** | 5 verification levels (L1–L5), <!-- gen:package_count --> workspace packages, `comp report/export/conformance/status` |
 
-### Quick Reference
-
-| Category | Count | Details |
-|----------|-------|---------|
-| **Substrate primitives** | <!-- gen:substrate_count --> | <!-- gen:substrate_list --> |
-| **Geometry primitives** | <!-- gen:geometry_count --> | <!-- gen:geometry_list --> |
-| **StateDynamics primitives** | <!-- gen:dynamics_count --> | <!-- gen:dynamics_list --> |
-| **Plasticity primitives** | <!-- gen:plasticity_count --> | <!-- gen:plasticity_list --> |
-| **CreditAssignment primitives** | <!-- gen:credit_count --> | <!-- gen:credit_list --> |
-| **ParameterUpdate primitives** | <!-- gen:update_count --> | <!-- gen:update_list --> |
-| **Algorithms (composed)** | <!-- gen:algorithm_count --> | <!-- gen:algorithm_list --> |
-
 ### Artifacts
 
 - **SVG diagram**: [`docs/cheatsheet/cheatsheet.svg`](docs/cheatsheet/cheatsheet.svg) — directed architecture graph with nested panel insets

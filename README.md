@@ -18,12 +18,6 @@ The **search for computronium** is the motivating hypothesis: investigate learni
 
 The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.
 
-| Aspect | What It Is | What You Get |
-|------|------------|--------------|
-| **📦 ML Library** | Composable learning systems behind one training API | Train and compare every implemented rule — Backprop, EqProp, FA, FF, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint — under a single interface |
-| **🔬 Research Framework** | 6-D parameterized algorithm space (Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate), experiment kernel, property-verified hypercube, stability-plasticity monitoring, **multi-objective Pareto frontier analysis** (configurable objectives per axis) | Systematic ablations across axes; controlled benchmark campaigns for adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weight adaptation; **axis-aligned objective optimization** (accuracy, walltime, params, FLOPs, energy, latency, stability, plasticity, credit alignment, ruler-relative) |
-| **🧪 Scientific Program** | Hypotheses on locality, plasticity, stability, and physical constraints as first-class dimensions; stability-plasticity trade-off as controlled departure from contraction; resource-vector Pareto analysis (compute, memory, energy, latency, plastic-state capacity) | Ongoing empirical investigation—not validated claims. Large-scale campaigns and physical-hardware validation remain future work. |
-
 | Audience | Entry Point |
 |----------|-------------|
 | 🧠 **Natural Scientists & Physicists** | Energy-based local learning demo: Hebbian/contrastive rules with Lyapunov stability analysis, passivity checks, energy tracking |
@@ -31,7 +25,7 @@ The library is usable independently of the research hypotheses; the research pro
 | 🔬 **Algorithm / Hardware Researchers** | Substrate models, hardware-aware constraints, stability analysis, algorithm–substrate co-design |
 | 💻 **Systems Engineers & Developers** | Correctness by construction: type-safe (PEP 695 generics), property-locked (Hypothesis), Triton-accelerated, experiment kernel automation |
 
-The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
+The library provides the composable primitives; the experiment kernel provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities. [What is Computronium](#what-is-computronium) states what each layer gives you.
 
 ## Start here
 
@@ -64,6 +58,10 @@ instead of declaring "no effect".
 The Python library is separate and usable on its own — see
 [Machine learning library](#machine-learning-library) below, or run the
 60-second snippet it contains.
+
+A six-minute shot list — every command and the sentence to say over it — is in
+[`docs/DEMO.md`](docs/DEMO.md); `tests/acceptance/test_demo_script.py` runs the
+same commands, so the recording cannot drift from the software.
 
 ## Neutral evaluation — what this repository does, in its own voice
 
@@ -139,8 +137,15 @@ contract as a shared constitution, identity cards as the admission ticket, the c
 shared memory.
 - **Retired (finding kept).** E1 deep chaotic unfolding — **falsified**, mechanism boundary is
 composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIONS.md`) · legacy
-`experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: 659
-legacy lint findings, counted per rule, ratcheted not cleaned (§3.19).
+`experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: legacy
+lint findings, counted per rule below, ratcheted not cleaned (§3.19).
+- **Register C — legacy lint, ratcheted and censused (not cleaned).** 650 findings measured 2026-10-17
+under ruff 0.16.10; `test_lint_count_ratchet.py` holds `BASELINE = 659`, so the direction is still
+never-up. Per rule: RUF105 81 · PLW0717 62 · C901 46 · E402 36 · C408 33 · PLR0914 30 · F841 30 ·
+PLR0912 26 · PLR0915 23 · PLR1702 21 · S110 18 · PLW1514 16 · PLW1510 14 · SIM102 13 · S607 13 ·
+RUF059 13 · PLR0911 12 · TRY300 12 · PLR6201 10 · E741 9 · PLR6104 9 · RUF029 9 · TC001 7 ·
+TRY400 6 · S603 6 · S404 6 · PLR0917 6 · PLW2901 5 · PLR0913 5 · C401 5 · TRY401 5 · 37 rules
+with ≤4 findings (57 total).
 - **Neutrality apparatus (live, §1.3).** fairness contract F-1…F-6 (append-only) · 11 pre-registered
 threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) · 31 generated identity
 cards, `--strict` green, drift-locked · phantom-knob detector · metric-provenance rule · corrections
@@ -169,15 +174,18 @@ flagged `requires_rerun` (`docs/CORRECTIONS.md`, `test_jacobian_amplification`).
 
 ## What is Computronium
 
-Computronium ships three layers, each usable independently:
+Computronium ships three layers, each usable independently. This is the single
+capability inventory; the primitive lists live once under
+[the 6-axis ontology](#the-6-axis-ontology), and what is designed rather than
+built lives in the [readiness ledger](#what-is-proven-what-is-designed-and-what-is-not).
 
 | Layer | What it is | What you get |
 |---|---|---|
-| **ML Library** (`computronium` core) | Composable 6-axis learning systems behind one training API | Train and compare Backprop, EqProp, FA, FF, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, and 6-D joint variants under a single `SystemTrainer` interface |
-| **Experiment Kernel** (`computronium.experiment`) | Question → RunSpec → policy → pipeline → evidence store → claims | Reproducible, resumable, policy-interchangeable experiments with a single DuckDB evidence store and fail-closed schema versioning |
-| **Scientific Program** (hypotheses + governance) | Motivating hypotheses on locality, plasticity, stability, and physical constraints; standalone CEEC governance ledger (not integrated) | Ongoing empirical investigation — claims below are labeled by verification level, never asserted beyond their evidence |
+| **ML library** (`computronium` core) | Composable 6-axis learning systems behind one training API | Any coordinate of Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate (5-D systems are `P = NullPlasticity`); Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet and 6-D joint rules under one `SystemTrainer`; digital, memristive, neuromorphic, photonic and quantum substrates; spectral-radius, Lyapunov, settling-time, basin-stability and free-energy analysis; frozen-θ ψ lifecycles and a credit-swap demo |
+| **Experiment kernel** (`computronium.experiment`) | Question → `RunSpec` → policy → pipeline → evidence store → claims | Reproducible, resumable, policy-interchangeable runs over 11 stages and 8 proposal policies; 48 objectives (41 measured) with multi-objective Pareto promotion; a single DuckDB evidence store with fail-closed schema versioning; statistical promotion, claims, limitations and per-stage timings |
+| **Scientific program** (hypotheses + governance) | Motivating hypotheses on locality, plasticity, stability and physical constraints; standalone CEEC governance ledger | Labeled empirical investigation — every claim carries a verification level; a fairness contract, pre-registered thresholds, generated identity cards, a corrections log, and three findings that survived audit ([Findings we own](#findings-we-own)). The motivating hypothesis is an *agenda*, not a result |
 
-**Claim-strength discipline.** Every claim in this README is labeled by its verification level: (1) analytical, (2) machine-checked, (3) certified numerical, (4) sampled numerical, (5) empirical. Levels are defined in `computronium.verification` and enforced against banned overclaim phrases. The motivating hypothesis — that learning systems native to physical constraints (asynchrony, locality, limited precision, energy budgets) offer measurable benefits — is an *agenda*, not a result.
+**Claim-strength discipline.** Every claim in this README is labeled by its verification level: (1) analytical, (2) machine-checked, (3) certified numerical, (4) sampled numerical, (5) empirical. Levels are defined in `computronium.verification` and enforced against banned overclaim phrases.
 
 ## Install
 
@@ -279,18 +287,6 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 | **💾 Evidence Store** | DuckDB, single-writer, 12 RecordStore methods, schema v3 with 19 fields, 3-tier claim status |
 | **📊 Surface & Governance** | 5 verification levels (L1–L5), 5 workspace packages, `comp report/export/conformance/status` |
 
-### Quick Reference
-
-| Category | Count | Details |
-|----------|-------|---------|
-| **Substrate primitives** | 9 | digital, analog, memristive, neuromorphic, optical, quantum, complex, sparse, ternary |
-| **Geometry primitives** | 11 | feedforward, recurrent, causal_transformer, tile, tile_mesh, conv, graph, attention, spatial_lattice, nca, ntm |
-| **StateDynamics primitives** | 8 | energy_minimization, predictive_settling, error_predictive_coding, spike_integration, instantaneous, diffusion, lazy, pc_alm |
-| **Plasticity primitives** | 7 | null, routing, fast_weights, substrate_coupled, rule_state, temporal_psi, conflict_adaptive |
-| **CreditAssignment primitives** | 10 | thermodynamic_contrast, random_projections, local_goodness, local_contrastive, temporal_trace, target_inversion, homeostatic, pepita, gradient, pc_alm |
-| **ParameterUpdate primitives** | 12 | euclidean, adam, local_adam, ortho_adam, riemannian_orthogonal, muon, lion, spectral_constrained, mean_norm, elastic_consolidation, natural_gradient, role_split |
-| **Algorithms (composed)** | 21 | Backpropagation, Direct Feedback Alignment, Diffusion Eqprop, Directed Ep, Equilibrium Propagation, Feedback Alignment, Fast-Weight (6-D Joint), Forward-Forward, Finite Nudge Ep, Hebbian/STDP, Holomorphic Ep, Momentum Eqprop, Predictive Coding, PC-ALM, PEPITA, Routing (6-D Joint), Sparse Eqprop, Spiking SNN (STDP), Ternary Eqprop, TileNet, Target Propagation |
-
 ### Artifacts
 
 - **SVG diagram**: [`docs/cheatsheet/cheatsheet.svg`](docs/cheatsheet/cheatsheet.svg) — directed architecture graph with nested panel insets
@@ -382,26 +378,22 @@ state, e.g. memristive conductance), not a strict sequential pipeline.
 The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
 </details>
 
-## ML Library Capabilities
+## Machine learning library
 
-| Capability | Description |
-|------------|-------------|
-| **Composable systems** | Construct any 6-axis system coordinate via the `System` generic or factory functions (5-D systems are the `P = NullPlasticity` slice) |
-| **Common training API** | `SystemTrainer` — single interface for all learning rules, including joint systems via duck-typed `train_step`/`forward` |
-| **Multiple learning rules** | Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint (Routing, FastWeight) — credit swap demonstrated live |
-| **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
-| **Benchmarks & ablations** | 5-level hierarchy: adaptation, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights |
-| **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee |
-| **Multi-objective discovery** | `comp run` profiles with multi-objective config — configurable Pareto fronts across objectives (accuracy, walltime, params, FLOPs, memory, energy, latency, spectral radius, Lyapunov, ψ capacity, credit alignment, ruler-relative); objective-aware driver, multi-objective promotion (L1/L2) |
-| **EMA harvest** (`SystemTrainerConfig.harvest_mode`) | Probe-free streaming-weight harvest instrument; resurrected depth-50 (0.784→0.917) |
-| **Recipe cards** (`recipe_cards.py`) | Credit×Update→optimizer/geometry/config canonical-constructor registry |
-| **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy |
-| **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) | Frozen-θ ψ-only adaptation, recovery, and migration with θ bitwise-invariance audits |
-| **P-axis expressiveness probes** | Fixed-θ ψ mechanisms verified at probe scale: Kolmogorov compression (short ψ unfolds 32×32 patterns, 2.66× ratio), NCA rule reconfiguration (K distinct patterns from one seed, θ SHA-invariant, 3 seeds), sequential composition over NTM tape (max/sum/median at O(1) depth); σ_max(J_F) stability-expressiveness frontier measured. Deep chaotic unfolding (E1) falsified with a mechanism boundary — composition-error compounding |
-| **I(C,U) ψ-orthogonality** | 3-seed measurement of ψ modulation on the credit×update surface: across tested configurations, observed ψ modulation averaged 2.0 percentage points (max 9.1 points, fa×muon routing). These measurements do not establish equivalence or negligibility; campaign-7.1 rows in `data/icu_measurements.csv`, `logs/w17_icu_fit.log` |
-| **Experiment sweeps / campaigns** | `comp run` / `comp benchmark` — structured hypercube exploration |
-| **Distributed execution / deployment** | P2P (gRPC/Kademlia), multi-GPU (DDP/FSDP/DeepSpeed), ONNX/TorchScript/INT8/ternary export, FastAPI inference server |
+Compose any 6-axis coordinate through the `System` generic or the `compose_*`
+factories, train it through one `SystemTrainer`, and change one axis at a time.
+The axes and their primitives are listed once, under
+[the 6-axis ontology](#the-6-axis-ontology); what exists versus what is
+designed is the [readiness ledger](#what-is-proven-what-is-designed-and-what-is-not).
+Beyond the axes, the library carries these instruments:
 
+- **EMA harvest** (`SystemTrainerConfig.harvest_mode`) — probe-free streaming-weight harvest; resurrected depth-50 (0.784 → 0.917).
+- **Recipe cards** (`recipe_cards.py`) — credit × update → optimizer/geometry/config canonical constructors.
+- **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) — learnability-interaction law, 0.944 held-out lattice accuracy.
+- **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) — ψ-only adaptation, recovery and migration with θ bitwise-invariance audits.
+- **P-axis expressiveness probes** — fixed-θ ψ at probe scale: Kolmogorov compression (2.66× ratio), NCA rule reconfiguration (θ SHA-invariant, 3 seeds), sequential composition over NTM tape; σ_max(J_F) frontier measured. Deep chaotic unfolding (E1) is falsified — see [Findings we own](#findings-we-own).
+- **I(C,U) ψ-orthogonality** — 3-seed measurement: ψ modulation averaged 2.0 percentage points (max 9.1, fa × muon routing); these measurements do not establish equivalence or negligibility (`data/icu_measurements.csv`).
+- **Distributed execution** — in-process P2P, multi-GPU DDP/FSDP/DeepSpeed, ONNX/TorchScript/INT8/ternary export, FastAPI inference server.
 
 ### Algebraic Composition (API)
 

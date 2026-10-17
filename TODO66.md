@@ -550,8 +550,16 @@ shared memory.
 
 **Retired (finding kept):** E1 deep chaotic unfolding — **falsified**, mechanism boundary is
 composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIONS.md`) · legacy
-`experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: 659
-legacy lint findings, counted per rule, ratcheted not cleaned (§3.19).
+`experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: legacy
+lint findings, counted per rule below, ratcheted not cleaned (§3.19).
+
+**Register C — legacy lint, ratcheted and censused (not cleaned):** 650 findings measured 2026-10-17
+under ruff 0.16.10; `test_lint_count_ratchet.py` holds `BASELINE = 659`, so the direction is still
+never-up. Per rule: RUF105 81 · PLW0717 62 · C901 46 · E402 36 · C408 33 · PLR0914 30 · F841 30 ·
+PLR0912 26 · PLR0915 23 · PLR1702 21 · S110 18 · PLW1514 16 · PLW1510 14 · SIM102 13 · S607 13 ·
+RUF059 13 · PLR0911 12 · TRY300 12 · PLR6201 10 · E741 9 · PLR6104 9 · RUF029 9 · TC001 7 ·
+TRY400 6 · S603 6 · S404 6 · PLR0917 6 · PLW2901 5 · PLR0913 5 · C401 5 · TRY401 5 · 37 rules
+with ≤4 findings (57 total).
 
 **Neutrality apparatus (live, §1.3):** fairness contract F-1…F-6 (append-only) · 11 pre-registered
 threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) · 31 generated identity
@@ -593,29 +601,33 @@ and it is worth showing.
 
 ## 9. Definition of done
 
-- [ ] §2.1–§2.9 repaired; each with the lock that prevents its return.
-- [ ] The ablation table appears **only** for a shared-five-axes contrast group, carries `n`/`std` per
+Checked against the tree at close (see §12–§14 for the evidence).
+
+- [x] §2.1–§2.9 repaired; each with the lock that prevents its return.
+- [x] The ablation table appears **only** for a shared-five-axes contrast group, carries `n`/`std` per
       row, and flags any arm at chance (§2.9).
-- [ ] G13 green: the `gradient` control arm beats chance by a wide margin (≈0.87 measured) before any
-      comparison is published or recorded.
-- [ ] `comp run demo` produces an honest verdict on CPU in ≤180 s, from a clean tree (measured ≈20–30 s
-      at `instantaneous` dynamics, §1.4).
-- [ ] `comp coverage report` exits 0.
-- [ ] Every demo-script command exits 0; `test_demo_script.py` green.
-- [ ] Property shard: **0 failed, 0 errors**. Unit + acceptance green.
-- [ ] `test_readme_build_lock` green; README's first screen is the six-command product path.
-- [ ] `README.md` contains no claim the report cannot emit.
-- [ ] `comp --help` ≤6 core commands; all reachable under `--help-all`.
-- [ ] `docs/DEMO.md` exists; video recorded; length ≤6 min; every command on screen is in the script.
-- [ ] The video's closing beats quote the three results in §1.2, numbers unchanged from their documents.
-- [ ] README alone lets a contributor add one primitive (§5.8) and find a named next step (§5.10).
-- [ ] README's first value proposition is neutral comparison (§5.11), generated and gated (G12); it
+- [x] G13 green: the `gradient` control arm beats chance before any comparison is published
+      (measured `0.4389` vs chance `0.10`; the plan's ≈0.87 estimate was stale — §14).
+- [x] `comp run demo` produces an honest verdict on CPU in ≤180 s, from a clean tree (~31 s measured).
+- [x] `comp coverage report` exits 0.
+- [x] Every demo-script command exits 0; `test_demo_script.py` green.
+- [x] Property shard: **0 failed, 0 errors**. Unit + acceptance green (§13, §14).
+- [x] `test_readme_build_lock` green; README's first screen is the six-command product path.
+- [x] `README.md` contains no claim the report cannot emit.
+- [x] `comp --help` ≤6 core commands; all reachable under `--help-all`.
+- [ ] `docs/DEMO.md` exists; **video recorded**; length ≤6 min; every command on screen is in the
+      script. — Shot list and its executable lock are done; the recording is an offline artefact and
+      the only open item in this plan (§14).
+- [x] The video's closing beats quote the three results in §1.2, numbers unchanged from their documents
+      (`docs/DEMO.md` beat 6).
+- [x] README alone lets a contributor add one primitive (§5.8) and find a named next step (§5.10).
+- [x] README's first value proposition is neutral comparison (§5.11), generated and gated (G12); it
       names only our procedure, never another author's motives (§5.13).
-- [ ] `docs/CONSORTIUM.md` exists, is one page, and promises nothing in §8's neutrality gaps.
-- [ ] G11 green: every concrete primitive declares its deviations from its source paper, `--strict`.
-- [ ] §8 ledger complete; every unimplemented capability named.
-- [ ] `TODO65.md` and this file carry a final progress section; no TODO67 is opened.
-- [ ] Tagged.
+- [x] `docs/CONSORTIUM.md` exists, is one page, and promises nothing in §8's neutrality gaps.
+- [x] G11 green: every concrete primitive declares its deviations from its source paper, `--strict`.
+- [x] §8 ledger complete; every unimplemented capability named.
+- [x] `TODO65.md` and this file carry a final progress section; no TODO67 is opened.
+- [x] Tagged: `v1.0.0`.
 
 ---
 
@@ -902,3 +914,65 @@ assertion weakened.
 | G11 identity cards | green |
 | G12 generated neutrality | **green**: identity cards 31, corrections 2, contract F-1…F-6, and the §8 readiness ledger all rendered from source |
 | G13 control | green under `max(3×chance, chance+0.2)`; the plan's ≈0.87 is stale (measured 0.4389) |
+
+---
+
+## 14. Third implementation pass (2026-10-17, close-out)
+
+The second pass left four rows open. Three are closed here; the fourth (the
+recording) is an offline artefact and is the only item this tree cannot
+produce.
+
+### Closed, by item
+
+| Plan item | What was still wrong | Fix |
+|---|---|---|
+| §4.3 grammar | `--dry-run` printed metadata, then cells, then a price block whose budget line was buried inside it. | `PricePlan.render_price()` / `render_budget()` split the two facts; `_dry_run_report` now emits exactly `space / price / budget / first cells`, each as a headed section. Minutes are shown only when the total reaches a minute; a declared budget prints as `120s`. `test_dry_run_prints_a_plan_and_writes_nothing` now asserts the four sections, so the grammar is locked, not documented. |
+| §5.2 overlapping tables | Three tables restated the six axes or the layer pitch: `title.md`'s Aspect table (verbatim duplicate of `what-is.md`), the cheatsheet's Quick Reference (same axes and counts as `ontology.md`), and the ML-library capability table (axis content again). | One table per job: `what-is.md` is the single capability inventory (library / kernel / program, now carrying rules, substrates, objectives and governance), `ontology.md` is the single axis table, and the cheatsheet keeps only the panel counts. The ML-library section became prose plus the instruments that are *not* axes (EMA harvest, recipe cards, I(C,U), frozen-θ, P-axis probes, distributed execution), so no unique row was lost. |
+| §5.6 demo link | `docs/DEMO.md` was reachable from no README snippet, and the `#machine-learning-library` anchor pointed at a heading that did not exist. | The ml-library heading is now `## Machine learning library` (anchor resolves); `start-here.md` links the shot list and the acceptance test that executes it. |
+| §3.19 Register C census | The ratchet was re-baselined but the per-rule counts were not recorded. | §8 now carries a `Register C` ledger block with all 69 rule counts (650 findings measured under ruff 0.16.10; 31 rules ≥5 are listed, the 37-rule tail totals 57). `BASELINE` stays 659 — the census is lower than the baseline, so the ratchet direction is unchanged. |
+
+### Evidence (this pass)
+
+| Check | Result |
+|---|---|
+| `test_readme_build_lock` + `test_cli_readme_lock` + `test_findings_lock` | **29 passed** (10.2 s) after regeneration |
+| `test_price_oracle_lock` + `test_ablation_lock` + `test_cli_surface_lock` | **51 passed** (28.2 s) |
+| `pytest -m demo tests/acceptance/test_demo_script.py` | **2 passed** (70.8 s) |
+| `ruff format` / `ruff check` on changed files | formatted; no new findings in the changed regions (pricing and the lock are clean; `surface/cli.py`'s existing Register C findings are untouched) |
+
+### Remaining work, stated plainly
+
+1. **The recording.** `docs/DEMO.md` is the shot list and
+   `test_demo_script.py` executes every command, so the video is the only
+   deliverable that can still be missing from a tree that passes its gates.
+2. **The plan's demo prose vs the measured numbers.** Two figures in §4.2 and
+   §6 are estimates the tree disproved and this progress record keeps visible:
+   the control reaches `0.4389` (not ≈0.87) and the sweep has **four** legal
+   arms (no `thermodynamic_contrast` under `instantaneous`). Neither is a
+   defect; the demo prints the measured values.
+3. **The demo's projected total is small against its measured walltime**
+   (`projected total: 1.3s` vs ~31 s measured). The price is computed from the
+   `dynamics_cost.py` regime (`hd=64`, L0, 1 epoch, `batch_limit=2`) while the
+   demo runs L1 × 3 epochs full-batch; the fixed 30 s run cost is printed but
+   excluded from the total. Beat 1's sentence should not claim the total is the
+   demo's walltime. Re-pricing the demo regime is a probe task, not a code fix.
+4. **§3.19's 650 findings remain**; the census makes the hygiene pass sized,
+   not done.
+
+### Gate state at close
+
+| Gate | State |
+|---|---|
+| G1 property shard | green at the end of the second pass (2085 passed, 0 failed, 0 errors); the only code touched since is the dry-run renderer, whose locks are green above |
+| G2 unit + `test_v1_exit` | green at the end of the second pass (551 passed, 1 xfailed) |
+| G4 demo screenplay | **2 passed** (70.8 s) |
+| G5 README build | green after regeneration |
+| G7 core help | green (6 core, all under `--help-all`) |
+| G8 findings | green |
+| G10 same cells | green |
+| G11 identity cards | green |
+| G12 generated neutrality | green |
+| G13 control | green (`0.4389 > 0.30`) |
+
+No TODO67 is opened. The only unbuilt item named by §9 is the recording.
