@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/consortium-mark-dark.svg">
+  <img src="assets/consortium-mark-light.svg" alt="Computronium Consortium mark" width="72">
+</picture>
+
 # The Computronium Consortium
 
 **An independent referee for the algorithm zoo.**

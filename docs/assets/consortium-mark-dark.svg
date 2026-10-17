@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Computronium Consortium">
+  <title>Computronium Consortium</title>
+  <polygon points="96.0,22.0 160.1,59.0 160.1,133.0 96.0,170.0 31.9,133.0 31.9,59.0" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="96.0" cy="22.0" r="8" fill="#e2e8f0"/>
+  <circle cx="160.1" cy="59.0" r="8" fill="#e2e8f0"/>
+  <circle cx="160.1" cy="133.0" r="8" fill="#e2e8f0"/>
+  <circle cx="96.0" cy="170.0" r="8" fill="#e2e8f0"/>
+  <circle cx="31.9" cy="133.0" r="8" fill="#e2e8f0"/>
+  <circle cx="31.9" cy="59.0" r="8" fill="#e2e8f0"/>
+  <circle cx="96.0" cy="96.0" r="21" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+  <circle cx="96.0" cy="96.0" r="8" fill="#e2e8f0"/>
+</svg>

@@ -1067,3 +1067,46 @@ primitive, where the phantom-knob detector can see it.
    neutral-referee motif — no algorithm family; SVG with light/dark variants
    under `docs/assets/`, linked from the page header). This is a design task,
    not a code task, and no broken image link should precede the asset.
+
+---
+
+## 16. Fifth implementation pass (2026-10-17, consortium mark)
+
+§15 left one actionable item that was neither an offline artefact nor a hygiene
+programme: the consortium mark. It is now in the tree.
+
+### Landed
+
+| Plan item | Change | Evidence |
+|---|---|---|
+| §15.4 mark | `scripts/generate_consortium_mark.py` emits one geometry in two inks — six nodes on the six-axis hexagon around a referee at the centre, no rule family in the mark — to `docs/assets/consortium-mark-{light,dark}.svg`. `docs/CONSORTIUM.md` opens with a `<picture>` that swaps variants by `prefers-color-scheme`, so the dark page does not get dark ink on dark background. | The assets exist before the link; `rsvg-convert` renders both at 72 px and 384 px; `ruff format`/`ruff check`/`pyright` clean on the generator |
+
+The two variants are rendered from the same path data, so a geometry change is a
+regeneration, not a second hand-drawn file. The mark is deliberately monochrome
+and text-free: it survives at 72 px, in print, and beside either README theme.
+
+### Remaining work, unchanged and stated plainly
+
+1. **The recording** — the only §9 item still unchecked, and an offline
+   artefact. `docs/DEMO.md` is the shot list and `test_demo_script.py` executes
+   every command in it; nothing else is needed from the tree.
+2. **The demo price.** `comp run demo --dry-run` prices the `dynamics_cost.py`
+   regime (`hd=64`, L0, 1 epoch, `batch_limit=2`) while the demo runs the
+   measured `hd=32`, L1, 3 epochs, full batch, and the fixed 30 s run cost is
+   printed but excluded from the total. Re-pricing that regime is a probe task,
+   not a code fix; until then beat 1 must not describe the printed total as the
+   demo's walltime.
+3. **§3.19's 650 lint findings** — measured, censused per rule in §8, and
+   ratcheted at 659. The hygiene pass is named work with no user-visible payoff,
+   not an open gate, and no `noqa` was added to buy a green run.
+4. **The plan's stale demo estimates** — the control measures `0.4389` (not
+   ≈0.87) and the sweep has four legal credit arms (`thermodynamic_contrast` is
+   unreachable under `instantaneous` dynamics). Neither is a defect; the demo
+   prints the measured values, and §12/§14 keep the estimate and the
+   measurement side by side.
+
+### Gate state
+
+No gate moved: the change is one static asset pair plus its generator; no
+library, kernel or CLI code changed. Gates stand as recorded at the §14/§15
+close (G1 0 failed/0 errors, G2 green, G4–G13 green).
