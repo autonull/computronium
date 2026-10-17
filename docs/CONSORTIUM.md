@@ -5,102 +5,123 @@
 
 # The Computronium Consortium
 
-**An independent referee for the algorithm zoo.**
+**A proposal for a community-led effort to make evidence about learning mechanisms easier to inspect, compare, reproduce, and improve.**
+
+> **This is a starting proposal, not a settled charter.** It is an invitation to researchers, practitioners, and other interested participants to help decide what the consortium should become. Its scope, governance, services, and standards should be shaped through participation and revised in light of experience.
 
 ## The problem worth solving
 
-Learning-rule research is fast, large, and almost impossible to compare across.
-Every result arrives with its own dataset, budget, stopping rule, seed count and
-hyperparameter effort. Those choices are not neutral: they decide the ranking.
-And the people with the deepest knowledge of a rule are its inventors, who also
-carry publication, tenure and funding incentives that no individual should have
-to overcome alone.
+Research on learning mechanisms is difficult to compare across papers, implementations, tasks, and labs. A reported result reflects more than the learning rule itself: dataset choices, preprocessing, implementation details, compute, hyperparameter search, stopping criteria, random seeds, metrics, and reporting decisions can all matter.
 
-The result is a gap that hurts everyone. Inventors cannot prove their rule was
-given a fair shot. Practitioners cannot tell whether a reported win is the rule
-or the tuning budget. Reviewers cannot check a protocol they cannot see. And the
-field keeps re-litigating comparisons instead of building on them.
+These differences are not necessarily mistakes or misconduct. Different studies may be answering different questions. The problem arises when the conditions behind a result are difficult to inspect, when unlike results are treated as direct comparisons, or when the cost of careful replication is too high for any one group to bear.
 
-Computronium exists to close that gap. It is a six-axis laboratory with **no
-credit rule of its own** — no horse in the race — and an evaluation kernel that
-was built for exactly one purpose: to compare mechanisms under a protocol that
-is declared before the result is known.
+That gap affects the whole field. Authors want their methods to be represented faithfully. Practitioners want to know what a result does and does not establish. Reviewers need enough information to assess the evidence. Researchers building on earlier work need a way to find out which conclusions survived scrutiny and which have changed.
 
-## What the referee already enforces
+The opportunity is to make research more cumulative: preserve the context of each claim, make comparisons interpretable, share the work of verification, and treat corrections as progress rather than embarrassment.
 
-- **An append-only fairness contract** (F-1…F-6,
-  [`FAIRNESS_CONTRACT.md`](FAIRNESS_CONTRACT.md)): identical data, budget,
-  stopping rule, seeds and reporting for every arm; all comparisons published
-  unfiltered, or a named correction.
-- **Pre-registered thresholds** ([`preregistration.py`](../computronium/validation/preregistration.py)):
-  metric, superiority margin, error rate and seed budget declared before the
-  run; `paired_comparison` returns a bootstrap CI, a sign-flip permutation p,
-  and Cohen's dz.
-- **Algorithm Identity Cards** ([`IDENTITY_CARDS.md`](IDENTITY_CARDS.md)):
-  every primitive ships its paper citation and a *Deviations* column stating
-  where this implementation departs from the published algorithm — generated,
-  `--strict`, drift-locked.
-- **A phantom-knob detector** (`construction.phantom_knobs`): a search key that
-  is sampled by a sweep and silently dropped at construction is a class of
-  defect, not an accident.
-- **A compute-matched HPO protocol** ([`hpo_protocol.md`](hpo_protocol.md)):
-  the same patience tier for every family, so a tuning budget cannot be the
-  explanation of a ranking.
-- **A corrections log** ([`CORRECTIONS.md`](CORRECTIONS.md)): superseded
-  measurements are recorded with the audit that invalidated them, including
-  this project's own.
-- **An epistemic ledger outside the engine** (`packages/ceec-core`): claim
-  decisions are not held by the code that produced them.
+## Why a consortium?
 
-None of this is marketing. Each line is a lock that fails when violated.
+No single lab can reasonably carry every implementation, benchmark, replication, and audit. Nor should one team decide unilaterally what counts as a meaningful comparison for every research question.
 
-## What a member gets
+A consortium could bring together people with different methods, expertise, resources, and incentives to build common practices where they are useful. It could coordinate work that is hard to sustain alone, make assumptions and disagreements visible, and create a public record that improves as more people examine it.
 
-- **A comparison you can cite**, with the contract version and the corrections
-  log attached.
-- **Your rule represented faithfully**, with deviations from your paper written
-  down and checkable by you before publication.
-- **A fair shot at a favourable result** — the documented compute-matched HPO
-  protocol ([`hpo_protocol.md`](hpo_protocol.md)) gives every family the same
-  patience tier, so a tuning-budget difference cannot explain a ranking.
-- **A public null, if that is what the data say.** A null published under a
-  pre-registered protocol is a credential, not a loss: it is the evidence that
-  your result is real.
+The aim is **not** to declare one universally best algorithm, force every experiment into one protocol, or centralize independent research. It is to make claims easier to assess and comparisons more useful when comparison is the goal. A good consortium should make it easier to disagree productively, not require everyone to agree on a ranking.
 
-## What a member accepts
+## The relationship to Computronium
 
-- Pre-register the comparison before running it.
-- Report unfiltered, including the nulls.
-- Publish the deviations your implementation declares from its paper.
-- Let the corrections log record a refutation of any estimate, including yours
-  and ours.
+**Computronium is a codebase and experimental framework. The Computronium Consortium is a proposed collaboration. They are related, but they are not the same thing.**
 
-## What we do not yet do
+Anyone is free to use, modify, fork, or evaluate methods with Computronium independently of a consortium. Researchers do not need to join, seek permission, or accept a consortium protocol to pursue their own work or report their best results. The consortium may choose to use Computronium, other tools, or a combination of approaches for particular studies.
 
-Stated here so no member discovers it in the first meeting:
+Using Computronium does not by itself make a result independent, verified, fair, preregistered, or endorsed by the consortium. Those descriptions should depend on what was actually done and reviewed. Likewise, a study conducted outside the consortium may still be valuable and reproducible; it simply should not be presented as having undergone a consortium process that it did not undergo.
 
-1. All credit rules in this tree are the project's re-implementations with
-   disclosed deviations — not the inventors' reference code, and not verified
-   against it.
-2. Equal-effort HPO is a protocol and a separate CLI (`biopl-hpo`), not an
-   enforced invariant of `comp run`.
-3. There is no blinding; the analyst sees arm identity.
-4. An unregistered claim is **labelled**, not refused.
-5. Coverage is one language and one task family so far (`digits`-class vision).
+The current codebase and documentation provide possible starting materials, not a finished institutional design. The consortium should decide collectively which tools and practices to adopt, change, supplement, or leave aside.
+
+## A provisional mission
+
+**Help the research community produce evidence about learning mechanisms that is easier to inspect, compare where appropriate, reproduce, correct, and build on.**
+
+The following are proposed working principles for discussion, not immutable rules:
+
+- **Transparency.** Describe the method, implementation, task, metric, resources, tuning choices, and limitations well enough for readers to understand what a result means.
+- **Pluralism.** Recognize that different scientific questions call for different tasks, metrics, budgets, and evaluation designs. No single benchmark or protocol should be treated as universally decisive.
+- **Proportionate rigor.** Make the strength of a claim match the strength of the evidence. Exploratory results, preregistered comparisons, independent replications, and formal certifications—if such certifications are ever offered—should not be conflated.
+- **Faithful representation.** Document implementation choices and departures from published methods. Give method authors a reasonable opportunity to identify factual errors without giving them control over the conclusions.
+- **Correction as normal practice.** Keep a visible history of material corrections, including corrections to work produced or sponsored by the consortium.
+- **Open criticism and shared governance.** Make important process decisions reviewable, provide ways to challenge them, and leave room for reasoned disagreement.
+- **Useful negative findings.** Publish informative null or inconclusive findings alongside positive results, with their limitations and uncertainty made clear.
+
+## What the consortium could do first
+
+The first objective should be to establish a credible way of working—not to solve every problem in experimental methodology before beginning. A practical first phase could:
+
+1. **Convene participants and draft a charter.** Agree on the initial purpose, scope, decision-making process, membership expectations, and how conflicts of interest and disagreements should be handled.
+2. **Choose one bounded pilot together.** Select a concrete research question that is important enough to matter and narrow enough to complete, given the people and resources available.
+3. **Agree on what must be reported for that pilot.** At minimum, consider the claim being tested, implementation provenance and deviations, data and metrics, compute and tuning conditions, randomization, uncertainty, exclusions, and known limitations. The requirements should fit the question rather than pretend to fit every future study.
+4. **Invite independent scrutiny.** Ask people who did not lead the work to review the protocol or reproduce a defined part of the result, within the pilot's available resources.
+5. **Publish the result and the lessons.** Record what was learned, including inconclusive findings, disagreements, and shortcomings in the process. Revise the protocol before expanding its use.
+
+The pilot should test the consortium's working process as well as the scientific question. A useful first outcome may be a better understanding of what the group can reliably do, what it cannot yet do, and what should be attempted next.
+
+## Potential activities and optional services
+
+Participants may decide to coordinate several kinds of work over time, for example:
+
+- shared study descriptions, reporting templates, and preregistration practices;
+- implementation review and independent replication;
+- benchmark design and multi-lab evaluation campaigns;
+- a public record of results, limitations, disputes, and corrections;
+- shared access to datasets, compute, or other infrastructure;
+- specialist services that help researchers design or execute particular kinds of evaluations.
+
+These activities need not all be created at once, funded in the same way, or made compulsory for every participant. The consortium should distinguish its common purpose and governance from the optional services it may eventually offer. Each service should state what it does, what it costs, what evidence it provides, and what it does not establish.
+
+### Hyperparameter optimization is a separate service to consider
+
+Hyperparameter optimization (HPO) can substantially affect reported performance, but there is no universally fair tuning procedure that can simply be assumed to work for every method and research question. Different algorithms may have different search spaces, costs, convergence behavior, and meaningful notions of training effort.
+
+For that reason, **a standardized HPO service should not be a core promise of the consortium at its outset**. Participants can decide whether it is needed, who has the expertise to design it, and how its claims should be reviewed. If developed, it should be described as a distinct service with its own protocol and limitations—not as a guarantee that every consortium comparison is fair.
+
+An HPO service should disclose, as appropriate, the search space, search strategy, stopping rules, treatment of failed trials, hardware and resource accounting, and the definition of the budget being matched. Depending on the question, useful comparisons might involve equal elapsed time, accelerator-hours, training steps, trial counts, or a different declared budget. These choices answer different questions; none should be called neutral merely because it is standardized.
+
+Researchers should remain free to tune methods for their own best achievable results. A study seeking best performance under a stated workflow and a study seeking comparison under a shared budget are both legitimate, but they should describe their aims and conditions clearly. Over time, the consortium may support more than one evaluation profile rather than force every question into a single definition of fairness.
+
+## What exists today—and what it does not establish
+
+The existing Computronium project contains work that may be useful to this effort, including algorithm identity cards, preregistration tooling, a corrections log, and documentation exploring HPO. These are starting points for discussion and experimentation.
+
+Their existence does **not** mean that a consortium has adopted them as policy, that every procedure is automatically enforced by the software, or that results produced with the current codebase have been independently verified. Current limitations described in the project documentation should remain visible, and any future public claim should be limited to what a particular study and review process actually support.
+
+Relevant background in the current repository includes the [project README](../README.md), [Algorithm Identity Cards](IDENTITY_CARDS.md), [Corrections log](CORRECTIONS.md), [preregistration tooling](../computronium/validation/preregistration.py), and [HPO protocol](hpo_protocol.md). These documents describe aspects of the codebase; they do not predetermine what the consortium must become.
+
+## Decisions participants should shape
+
+The founding group should decide, rather than assume in advance:
+
+- **Scope:** Which kinds of learning mechanisms, claims, tasks, and research communities should be in scope first?
+- **Governance:** Who can propose or change standards? How are decisions made, and how can decisions be appealed or revisited?
+- **Participation:** What contributions are useful, what commitments are reasonable, and how can people participate without endorsing every view or result?
+- **Evidence and review:** What information is required for different kinds of claims, and how should implementation disputes, failed replications, and corrections be handled?
+- **Services:** Which activities belong in a shared core process, and which should remain optional specialist services, such as HPO or implementation audits?
+- **Resources:** How should costs, infrastructure, funding, credit, and maintenance responsibilities be handled without excluding participants who have limited resources?
+- **Expansion:** What should a successful pilot demonstrate before the consortium widens its scope or makes stronger claims?
+
+The answers can evolve. The important thing is to make the decision process explicit and to avoid turning today's assumptions into permanent rules by accident.
+
+## A path for iterative growth
+
+A sensible path is staged and revisable:
+
+1. **Form the working group.** Gather interested participants and turn this proposal into a first charter.
+2. **Run a bounded pilot.** Agree on one question, the reporting requirements, the available resources, and an appropriate review process.
+3. **Audit the process, not just the result.** Ask what was useful, what was ambiguous, what proved too expensive, who was missing, and which conclusions were warranted.
+4. **Revise in public.** Publish the protocol changes and reasons for them, preserve a record of superseded claims, and invite further criticism.
+5. **Expand selectively.** Add methods, tasks, working groups, or optional services only when participants and resources are ready to support them.
+
+This is not a plan to reach a final, perfect protocol once and for all. Scientific methods, available resources, and participant needs will change. The goal is a durable practice of making careful commitments, learning from their limits, and improving them without hiding the history.
 
 ## The invitation
 
-*Bring your algorithm and the paper whose deviations we must declare. We will
-pre-register the comparison, publish the result unfiltered including the nulls,
-and log our own corrections — and neither of us gets to choose the outcome.*
+Bring an algorithm, a research question, a benchmark concern, a critique, expertise in methodology or statistics, implementation work, data, compute, funding, or simply time to help shape the first steps. A strong objection to this proposal—especially one paired with a better alternative—is a useful contribution.
 
-The argument is structural, not moral. An honest comparison has a price: 63
-seeds per group for a d=0.5 effect, times every arm, every axis, and each
-family's fair share of hyperparameter trials. No single participant can pay it.
-A consortium is the institution shaped like that gap — and every member who
-joins is demonstrating, in public and in writing, that they want the truth about
-learning mechanisms more than a favourable number.
-
-The procedure is described in the README's [neutral
-evaluation](../README.md#neutral-evaluation--why-a-referee-and-how-this-one-works)
-section. The first step is a registered comparison, not a memorandum.
+The first task is not to agree with every sentence here. It is to identify the people, questions, and modest first experiment that could make a consortium worth having. **Help decide what should be built, what should remain optional, and what evidence would justify taking the next step.**
