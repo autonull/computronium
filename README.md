@@ -145,7 +145,7 @@ never-up. Per rule: RUF105 81 · PLW0717 62 · C901 46 · E402 36 · C408 33 · 
 PLR0912 26 · PLR0915 23 · PLR1702 21 · S110 18 · PLW1514 16 · PLW1510 14 · SIM102 13 · S607 13 ·
 RUF059 13 · PLR0911 12 · TRY300 12 · PLR6201 10 · E741 9 · PLR6104 9 · RUF029 9 · TC001 7 ·
 TRY400 6 · S603 6 · S404 6 · PLR0917 6 · PLW2901 5 · PLR0913 5 · C401 5 · TRY401 5 · 37 rules
-with ≤4 findings (57 total).
+with ≤4 findings (63 total).
 - **Neutrality apparatus (live, §1.3).** fairness contract F-1…F-6 (append-only) · 11 pre-registered
 threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) · 31 generated identity
 cards, `--strict` green, drift-locked · phantom-knob detector · metric-provenance rule · corrections

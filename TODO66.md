@@ -559,7 +559,7 @@ never-up. Per rule: RUF105 81 · PLW0717 62 · C901 46 · E402 36 · C408 33 · 
 PLR0912 26 · PLR0915 23 · PLR1702 21 · S110 18 · PLW1514 16 · PLW1510 14 · SIM102 13 · S607 13 ·
 RUF059 13 · PLR0911 12 · TRY300 12 · PLR6201 10 · E741 9 · PLR6104 9 · RUF029 9 · TC001 7 ·
 TRY400 6 · S603 6 · S404 6 · PLR0917 6 · PLW2901 5 · PLR0913 5 · C401 5 · TRY401 5 · 37 rules
-with ≤4 findings (57 total).
+with ≤4 findings (63 total).
 
 **Neutrality apparatus (live, §1.3):** fairness contract F-1…F-6 (append-only) · 11 pre-registered
 threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) · 31 generated identity
@@ -930,7 +930,7 @@ produce.
 | §4.3 grammar | `--dry-run` printed metadata, then cells, then a price block whose budget line was buried inside it. | `PricePlan.render_price()` / `render_budget()` split the two facts; `_dry_run_report` now emits exactly `space / price / budget / first cells`, each as a headed section. Minutes are shown only when the total reaches a minute; a declared budget prints as `120s`. `test_dry_run_prints_a_plan_and_writes_nothing` now asserts the four sections, so the grammar is locked, not documented. |
 | §5.2 overlapping tables | Three tables restated the six axes or the layer pitch: `title.md`'s Aspect table (verbatim duplicate of `what-is.md`), the cheatsheet's Quick Reference (same axes and counts as `ontology.md`), and the ML-library capability table (axis content again). | One table per job: `what-is.md` is the single capability inventory (library / kernel / program, now carrying rules, substrates, objectives and governance), `ontology.md` is the single axis table, and the cheatsheet keeps only the panel counts. The ML-library section became prose plus the instruments that are *not* axes (EMA harvest, recipe cards, I(C,U), frozen-θ, P-axis probes, distributed execution), so no unique row was lost. |
 | §5.6 demo link | `docs/DEMO.md` was reachable from no README snippet, and the `#machine-learning-library` anchor pointed at a heading that did not exist. | The ml-library heading is now `## Machine learning library` (anchor resolves); `start-here.md` links the shot list and the acceptance test that executes it. |
-| §3.19 Register C census | The ratchet was re-baselined but the per-rule counts were not recorded. | §8 now carries a `Register C` ledger block with all 69 rule counts (650 findings measured under ruff 0.16.10; 31 rules ≥5 are listed, the 37-rule tail totals 57). `BASELINE` stays 659 — the census is lower than the baseline, so the ratchet direction is unchanged. |
+| §3.19 Register C census | The ratchet was re-baselined but the per-rule counts were not recorded. | §8 now carries a `Register C` ledger block with all 67 rule counts (650 findings measured under ruff 0.16.10; the 31 rules ≥5 are listed, the 36-rule tail totals 63). `BASELINE` stays 659 — the census is lower than the baseline, so the ratchet direction is unchanged. |
 
 ### Evidence (this pass)
 
