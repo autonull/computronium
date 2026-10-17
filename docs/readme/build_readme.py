@@ -48,10 +48,8 @@ order lives in :data:`_SECTIONS`, the one place it is decided.
 * ``<!-- gen:identity_card_count -->`` — primitive identity cards in the tree.
 * ``<!-- gen:corrections_count -->`` — entries in the corrections log.
 * ``<!-- gen:fairness_clause_count -->`` — highest F-n fairness-contract clause.
-* ``<!-- gen:readiness_ledger -->`` — TODO66 §8, the durable readiness ledger.
-
-The contents list is generated too, from the headings the section files
-actually contain, so it cannot list a section that was renamed or deleted.
+* ``<!-- gen:readiness_summary -->`` — the live / designed / planned rows of the
+  TODO66 §8 readiness ledger.
 
 ``tests/property/test_readme_build_lock.py`` fails when the committed README
 differs from this build, so a snippet edit and a regenerated README are the same
@@ -371,22 +369,26 @@ def _corrections_count() -> str:
     )
 
 
-def _readiness_ledger() -> str:
-    """The §8 readiness ledger, rendered from TODO66 (the durable ledger)."""
+_README_SCOPE_ROWS = ("Live", "Designed", "Planned")
+
+
+def _readiness_summary() -> str:
+    """The user-facing rows of TODO66 §8: live, designed, planned."""
     text = (REPO / "TODO66.md").read_text(encoding="utf-8")
     section = text.split("## 8. Readiness ledger", 1)[1].split("## 9.", 1)[0]
     blocks = re.split(r"\n\n(?=\*\*)", section.strip())
     rendered: list[str] = []
     for block in blocks:
         match = re.match(r"\*\*(.+?):\*\*\s*(.*)", block, re.S)
-        if match is None:
+        if match is None or not match.group(1).startswith(_README_SCOPE_ROWS):
             continue
+        label = match.group(1).split(" (", 1)[0]
         body = match.group(2).strip().splitlines()
         if re.match(r"^\d+\.", body[0]):
-            rendered.append(f"- **{match.group(1)}.**")
+            rendered.append(f"- **{label}.**")
             rendered.extend(f"  {line}" for line in body)
         else:
-            rendered.append(f"- **{match.group(1)}.** " + "\n  ".join(body))
+            rendered.append(f"- **{label}.** " + "\n  ".join(body))
     return "\n".join(rendered)
 
 
@@ -441,7 +443,7 @@ _GENERATORS = {
     "identity_card_count": _identity_card_count,
     "corrections_count": _corrections_count,
     "fairness_clause_count": _fairness_clause_count,
-    "readiness_ledger": _readiness_ledger,
+    "readiness_summary": _readiness_summary,
 }
 
 
@@ -451,7 +453,6 @@ _GENERATORS = {
 _SECTIONS: tuple[str, ...] = (
     "title.md",
     "start-here.md",
-    "readiness.md",
     "what-is.md",
     "install.md",
     "quickstart.md",
@@ -459,18 +460,19 @@ _SECTIONS: tuple[str, ...] = (
     "ontology.md",
     "ml-library.md",
     "core-architecture.md",
-    "neutral-evaluation.md",
-    "validation.md",
-    "stability-eval.md",
     "kernel.md",
     "cli.md",
     "demos.md",
     "evidence.md",
+    "neutral-evaluation.md",
+    "validation.md",
+    "stability-eval.md",
+    "research-program.md",
     "distributed-deployment.md",
     "acceleration.md",
     "ceec.md",
     "developers.md",
-    "research-program.md",
+    "readiness.md",
     "faq.md",
     "license.md",
 )

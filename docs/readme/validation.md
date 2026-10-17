@@ -99,53 +99,9 @@ Scope: current CI / repository verification status — not evidence of scientifi
 | Static typing | 0 errors on `computronium/ontology` (pyright elevated-standard, pre-commit gated); repo-wide basic |
 | Formatting | Clean |
 
-### 🧪 Test Commands
+### Running the verification
 
-```bash
-# Property locks (fast CI gate) — 5-D
-uv run pytest tests/property/test_ontology_locks.py -q
-
-# Property locks (fast CI gate) — 6-D Joint Architecture
-uv run pytest tests/property/joint/ -q
-
-# Registry integrity locks
-uv run pytest tests/property/test_registry_completeness_lock.py -q
-uv run pytest tests/property/test_kernel_verified_promotion_rule.py -q
-uv run pytest tests/property/test_import_time_lock.py -q
-
-# Core ontology unit tests
-uv run pytest tests/unit/core/test_ontology.py -q
-
-# Primitive & Algorithm test suites (now in default testpaths)
-uv run pytest tests/primitives/ -q
-uv run pytest tests/algorithms/ -q
-uv run pytest tests/acceleration/ -q
-
-# Integration: gradient equivalence + energy proofs
-uv run pytest tests/integration/test_gradient_equivalence.py tests/integration/test_energy_invariants.py -q
-
-# Kernel equivalence (Triton vs PyTorch)
-uv run pytest tests/integration/test_kernel_equivalence.py -q
-
-# Kernel accuracy parity (end-to-end learning)
-uv run pytest tests/integration/test_kernel_accuracy_parity.py -q
-
-# gRPC seam test
-uv run pytest tests/integration/test_grpc_seam.py -q
-
-# Demonstration suite (compose, swap credit, swap plasticity, memory wall, frozen θ) + figure lock
-uv run pytest tests/integration/ -k demo
-uv run pytest tests/integration/test_gallery_lock.py -q
-
-# Joint integration tests
-uv run pytest tests/integration/joint/ -q
-
-# Full suite (now collects primitives + algorithms + acceleration + unit + property)
-uv run pytest tests/ -q
-
-# Type checking (strict)
-uv run pyright .
-
-# Formatting & linting
-uv run ruff format --check . && uv run ruff check .
-```
+The fast CI gate is `uv run python -m pytest tests/property/ -q`. The testing
+tiers, the never-bypassed lock list and the per-commit checklist are in [For
+developers](#for-developers); `uv run comp conformance` runs the conformance
+audit.

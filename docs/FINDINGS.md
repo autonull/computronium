@@ -13,10 +13,10 @@ same commit.
 | **ρ(J) vs σ_max conflation** | Power iteration reported as "spectral radius" on a nonnormal J converged to ≈0.5 while ‖J‖₂ ≈ 10.025. | Caught by `test_jacobian_amplification`; replaced by three separated estimators; old frontier numbers flagged `requires_rerun` | [`docs/CORRECTIONS.md`](CORRECTIONS.md) |
 
 A project that shows its own refuted hypothesis is more credible than one that
-shows only a favourable run. The readiness ledger in the
-[README](../README.md#what-is-proven-what-is-designed-and-what-is-not) names
-everything that is designed or planned but not yet built; this page names what
-survived audit, which is a shorter and more interesting list.
+shows only a favourable run. [Status and
+scope](../README.md#status-and-scope) in the README names everything that is
+designed or planned but not yet built; this page names what survived audit,
+which is a shorter and more interesting list.
 
 The fourth entry is the one this project did not get to report as a win: the
 deep-equilibrium-propagation boundary was the motivating experiment, and the

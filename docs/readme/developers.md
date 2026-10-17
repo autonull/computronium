@@ -37,7 +37,7 @@ uv run python -m pytest tests/property/test_kernel_isolation_lock.py \
 
 **Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
 
-**Good first additions** (designed, not built): `capabilities` command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware compatibility sampling. Each is a named row in the readiness ledger, not a silent absence.
+**Good first additions** (designed, not built): `capabilities` command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware compatibility sampling. Each is a named row in [Status and scope](#status-and-scope), not a silent absence.
 
 ### Two Entry Points, One Config Surface
 
@@ -52,8 +52,6 @@ The kernel exposes two entry points that share the **same `ExperimentConfig`** (
 - **`LoopDriver`** (in `registry/loop.py`) is the continuous engine: it reads an `ExperimentConfig`, runs explore/exploit rounds, uses `EvidenceDrivenAllocator` for successive-halving allocation (S10), and can export claims to the standalone CEEC (`packages/ceec-core`).
 
 Both paths delegate to the same `PipelineRunner` (stages S1–S11), `RecordStore`, and `SearchSpace`. They do not drift because `ExperimentConfig` is the single source of truth for: search `policy`, `use_icu_guided`, `task_schedule`/domains, objectives, fidelity ladder, budget, and device.
-
-### Kernel development, tooling, and registry locks
 
 ### 🛠️ Kernel Development Workflow
 

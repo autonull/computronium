@@ -12,7 +12,7 @@ Modern deep learning has achieved remarkable results in mathematical abstraction
 The **search for computronium** is the motivating hypothesis: investigate learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency — and determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This is the *research agenda*; the library is usable independently of it, and no claim below is a conclusion of the search.
 </details>
 
-> **Status:** Active development. The core library, ontology, verification infrastructure, and experiment tooling are implemented; large-scale empirical studies and physical-hardware validation are ongoing.
+> **Status:** `v1.0.0`. The library, ontology, experiment kernel, demo and verification locks are complete. What is proven, designed, planned and unbuilt is stated in [Status and scope](#status-and-scope), so nothing below has to be taken on trust.
 
 The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.
 

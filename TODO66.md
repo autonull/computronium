@@ -540,13 +540,13 @@ compatibility sampling · `SystemConfig.validate` codegen.
 
 **Planned (intent, no code):** **fair-HPO recovery study — for each zoo algorithm, re-tune under
 equal effort and publish the delta from its published number** (the "these algorithms may be better than
-commonly believed" programme; needs §3.22's gap closed and real compute) · 7-domain task expansion
-(cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes, california_housing,
-ett_h1, PDE suites) · physical-hardware validation (memristive/neuromorphic/optical/quantum) ·
-Ray/SLURM · DDP at scale · `campaign_queue` as loop driver · full CEEC integration ·
-`question_first` literature store · a real TUI · **an evaluation consortium** (§11.2): the fairness
-contract as a shared constitution, identity cards as the admission ticket, the corrections log as the
-shared memory.
+commonly believed" programme; needs the equal-effort HPO gap closed and real compute) · 7-domain task
+expansion (cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes,
+california_housing, ett_h1, PDE suites) · physical-hardware validation
+(memristive/neuromorphic/optical/quantum) · Ray/SLURM · DDP at scale · `campaign_queue` as loop driver ·
+full CEEC integration · `question_first` literature store · a real TUI · **an evaluation consortium**:
+the fairness contract as a shared constitution, identity cards as the admission ticket, the corrections
+log as the shared memory.
 
 **Retired (finding kept):** E1 deep chaotic unfolding — **falsified**, mechanism boundary is
 composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIONS.md`) · legacy
@@ -1110,3 +1110,86 @@ and text-free: it survives at 72 px, in print, and beside either README theme.
 No gate moved: the change is one static asset pair plus its generator; no
 library, kernel or CLI code changed. Gates stand as recorded at the §14/§15
 close (G1 0 failed/0 errors, G2 green, G4–G13 green).
+
+---
+
+## 17. Sixth implementation pass (2026-10-17, README flow and cheatsheet refresh)
+
+### The readiness dump was a bad front-door decision
+
+§5.3 generated the §8 ledger into the README and §13/§14 placed it third, right
+after `Start here`. Measured against the document's job — take a stranger from
+"what is this" to "I ran it" — that was wrong: the third thing a visitor read
+was a plan ledger containing the Register C lint census, the retirement history
+of an internal prior column, and plan section references, while the product path
+it interrupted was below it.
+
+What changed:
+
+- `docs/readme/readiness.md` is now **Status and scope**, the last content
+  section before the FAQ. It states what v1.0.0 is, links the corrections log,
+  and renders only the three outward-facing rows of §8 (`Live`, `Designed, not
+  built`, `Planned`) through `<!-- gen:readiness_summary -->`.
+- The full ledger stays in §8, where the retention history, Register C census
+  and neutrality-defect record belong. The README does not repeat them.
+- The `Planned` row lost its plan-section references (§3.22, §11.2) so the
+  rendered text is outward-facing; the facts are unchanged.
+- The title's status line is now `v1.0.0` and routes to Status and scope instead
+  of the stale "Active development" line. It was the only honesty statement in
+  1600 lines; now it is one of two, and the second is generated.
+
+### Order: layers, then verification, then internals
+
+`_SECTIONS` was reordered so the document follows its own three-layer story
+before it descends into machinery:
+
+`title → start → what-is → install → quickstart → cheatsheet → ontology →
+ml-library → core-architecture → kernel → cli → demos → evidence →
+neutral-evaluation → validation → stability-eval → research-program →
+distributed-deployment → acceleration → ceec → developers → readiness → faq →
+license`
+
+`core-architecture` and `kernel` now sit immediately after the layer they
+describe; the kernel, CLI, demos and claims arrive before the research
+hypotheses instead of after them; validation follows the neutral-evaluation
+argument it underwrites; the contributor section precedes scope, FAQ and license.
+
+### Deduplication and one forbidden command removed
+
+- `validation.md`'s `### 🧪 Test Commands` block ran `pytest tests/` and bare
+  `pytest`, both explicitly forbidden by `AGENTS.md` (the first is hard-killed
+  at ~873 tests), and duplicated the testing tiers in `developers.md`. Deleted;
+  a two-line pointer names the fast gate (`tests/property/`) and the developer
+  section.
+- `developers.md`'s `### Kernel development, tooling, and registry locks` was a
+  heading with no body whose claimed children were its siblings. Removed; the
+  four tooling sections are ordinary subsections of `For developers`.
+- `docs/FINDINGS.md` linked the old `#what-is-proven…` anchor; it now points at
+  `#status-and-scope`.
+
+### Cheatsheet refresh
+
+`docs/cheatsheet/cheatsheet.svg` and `.txt` were generated 2026-10-15, before
+§15 retired the step-size multiplier column and §3.8 made unmeasured objectives
+fail closed. Regenerated:
+
+| Fact | Stale | Current |
+|---|---|---|
+| priors | 72 (including the 29 `step_size_override_*` rows) | **28**, one reader each |
+| CLI commands | 35 | **36** (`comp demo`) |
+| measured objectives | 39 | **35** |
+
+No `step_size_override` string survives either artifact. The `--check` flag
+validates output geometry after writing; it is not a drift check.
+
+### Evidence (this pass)
+
+| Check | Result |
+|---|---|
+| `test_readme_build_lock` + `test_cli_readme_lock` + `test_findings_lock` | **30 passed** (10.3 s) |
+| `cheatsheet_create.py` | 57 primitives · 36 CLI · 11 stages · 8 policies · ~121 inner chips; SVG parses, every panel inside the canvas |
+
+### Remaining work, unchanged
+
+The recording, the demo-price probe and the Register C hygiene pass remain as
+stated in §16; this pass changed presentation only.

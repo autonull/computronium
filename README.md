@@ -14,7 +14,7 @@ Modern deep learning has achieved remarkable results in mathematical abstraction
 The **search for computronium** is the motivating hypothesis: investigate learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency — and determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This is the *research agenda*; the library is usable independently of it, and no claim below is a conclusion of the search.
 </details>
 
-> **Status:** Active development. The core library, ontology, verification infrastructure, and experiment tooling are implemented; large-scale empirical studies and physical-hardware validation are ongoing.
+> **Status:** `v1.0.0`. The library, ontology, experiment kernel, demo and verification locks are complete. What is proven, designed, planned and unbuilt is stated in [Status and scope](#status-and-scope), so nothing below has to be taken on trust.
 
 The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.
 
@@ -63,74 +63,12 @@ A six-minute shot list — every command and the sentence to say over it — is 
 [`docs/DEMO.md`](docs/DEMO.md); `tests/acceptance/test_demo_script.py` runs the
 same commands, so the recording cannot drift from the software.
 
-## What is proven, what is designed, and what is not
-
-Generated from the durable readiness ledger in `TODO66.md` §8, so the README
-cannot promise a capability the tree does not have. The results that survived
-audit are collected in [`docs/FINDINGS.md`](docs/FINDINGS.md).
-
-- **Live (user path).** loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
-  statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
-  claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
-  (text/JSON/HTML) · `comp` core commands.
-- **Designed, not built (intent preserved).** M1 gate calibration · M2 drift detection · M3 metric
-  coverage warnings · `capabilities` command · repo-wide effect lock · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
-  compatibility sampling · `SystemConfig.validate` codegen.
-- **Planned (intent, no code).** **fair-HPO recovery study — for each zoo algorithm, re-tune under
-  equal effort and publish the delta from its published number** (the "these algorithms may be better than
-  commonly believed" programme; needs §3.22's gap closed and real compute) · 7-domain task expansion
-  (cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes, california_housing,
-  ett_h1, PDE suites) · physical-hardware validation (memristive/neuromorphic/optical/quantum) ·
-  Ray/SLURM · DDP at scale · `campaign_queue` as loop driver · full CEEC integration ·
-  `question_first` literature store · a real TUI · **an evaluation consortium** (§11.2): the fairness
-  contract as a shared constitution, identity cards as the admission ticket, the corrections log as the
-  shared memory.
-- **Retired (finding kept).** E1 deep chaotic unfolding — **falsified**, mechanism boundary is
-  composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIONS.md`) · legacy
-  `experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) ·
-  the `step_size_override_<dynamics>_<credit>` multiplier column and its post-construction
-  mechanism (29 rows, every one an identity after TODO48b R4; the measurement is
-  `docs/CORRECTIONS.md` Correction 3) · 12 unread `step_size_*` rows and 3 unread optimizer
-  priors, leaving 28 rows with one reader each (§15) · Register C: legacy lint findings,
-  counted per rule below, ratcheted not cleaned (§3.19).
-- **Register C — legacy lint, ratcheted and censused (not cleaned).** 650 findings measured 2026-10-17
-  under ruff 0.16.10; `test_lint_count_ratchet.py` holds `BASELINE = 659`, so the direction is still
-  never-up. Per rule: RUF105 81 · PLW0717 62 · C901 46 · E402 36 · C408 33 · PLR0914 30 · F841 30 ·
-  PLR0912 26 · PLR0915 23 · PLR1702 21 · S110 18 · PLW1514 16 · PLW1510 14 · SIM102 13 · S607 13 ·
-  RUF059 13 · PLR0911 12 · TRY300 12 · PLR6201 10 · E741 9 · PLR6104 9 · RUF029 9 · TC001 7 ·
-  TRY400 6 · S603 6 · S404 6 · PLR0917 6 · PLW2901 5 · PLR0913 5 · C401 5 · TRY401 5 · 37 rules
-  with ≤4 findings (63 total).
-- **Neutrality apparatus (live, §1.3).** fairness contract F-1…F-6 (append-only) · 11 pre-registered
-  threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) · 31 generated identity
-  cards, `--strict` green, drift-locked · phantom-knob detector · metric-provenance rule · corrections
-  log · CEEC ledger · discovery/confirmation seed split.
-- **Neutrality defects found by measurement and repaired (§2.9).** the per-axis ablation table used
-  to aggregate cells that differ on all other five axes (`gradient` 0.094 vs `pepita` 0.528) — now
-  printed only for a shared-five-axes group, with `n`/`std` and an `[at chance]` flag · the fairness
-  contract's chance-line floor (E-10) is applied by the report · a positive control must clear chance
-  before a comparison is published.
-- **Neutrality gaps (named, so the README cannot imply otherwise).**
-  1. **All credit rules are this project's re-implementations**, with deviations declared and cited — not
-     the inventors' reference code, and not verified against it. The defensible claim is "independent
-     re-implementation with disclosed deviations", never "verified upstream".
-  2. **Equal-effort HPO is a protocol, not a kernel invariant** (§3.22): `docs/hpo_protocol.md` +
-     `biopl-hpo`, not `comp run`.
-  3. **No blinding.** The analyst sees arm identity. A blinded arm-label path is unbuilt.
-  4. **Pre-registration was not enforced in the claim path** (§3.20); after this plan an unregistered
-     claim is *labelled*, not refused.
-  5. **One language, one task family so far.** Vision/classification on `digits`-class data. Cross-domain
-     neutrality needs the 7-domain expansion (Planned, above).
-- **Results we actually own (the discovery output, to date).** three findings survived the project's own
-  audits — deep EqProp boundary (gate G2 FAILED), the phantom-knob defect class, and the ρ(J)/σ_max
-  conflation corrected by three separated estimators. [`docs/FINDINGS.md`](docs/FINDINGS.md) carries the
-  numbers, source documents, and the lock behind each.
-
 ## What is Computronium
 
 Computronium ships three layers, each usable independently. This is the single
 capability inventory; the primitive lists live once under
 [the 6-axis ontology](#the-6-axis-ontology), and what is designed rather than
-built lives in the [readiness ledger](#what-is-proven-what-is-designed-and-what-is-not).
+built lives in [Status and scope](#status-and-scope).
 
 | Layer | What it is | What you get |
 |---|---|---|
@@ -337,7 +275,7 @@ Compose any 6-axis coordinate through the `System` generic or the `compose_*`
 factories, train it through one `SystemTrainer`, and change one axis at a time.
 The axes and their primitives are listed once, under
 [the 6-axis ontology](#the-6-axis-ontology); what exists versus what is
-designed is the [readiness ledger](#what-is-proven-what-is-designed-and-what-is-not).
+designed is stated in [Status and scope](#status-and-scope).
 Beyond the axes, the library carries these instruments:
 
 - **EMA harvest** (`SystemTrainerConfig.harvest_mode`) — probe-free streaming-weight harvest; resurrected depth-50 (0.784 → 0.917).
@@ -689,323 +627,6 @@ Current substrate implementations are primarily computational models; physical-h
 **Terminology:** *simulated energy*, *estimated energy*, *hardware-measured energy*. Avoid generic "energy efficiency" unless measurement methodology is stated.
 </details>
 
-## Neutral evaluation — why a referee, and how this one works
-
-A comparison of learning algorithms has a structural problem: the people best
-placed to run it are usually the people who invented the algorithms. Inventors
-carry publication, tenure and funding incentives; their hyperparameter search is
-sized to their budget rather than to the question; and research code is not
-always the code the paper describes. None of that requires bad faith. It is
-enough that a protocol run by a participant can be disputed by whoever the
-protocol ranks lower.
-
-This project holds no credit rule of its own. That is a narrow, checkable
-position, and it is the reason to trust a comparison produced here: the referee
-has no arm in the race. What follows is the procedure the referee publishes,
-not a claim about anyone else's motives.
-
-- **Pre-registered thresholds.** A claim's metric, superiority margin, error
-  rate and seed budget can be declared before the run
-  (`configs/preregistrations/*.json`, `computronium.validation.preregistration`).
-  A claim with no matching registration is labelled `[unpreregistered_claim]`
-  beside the claim; the report does not imply otherwise.
-- **Equal treatment of arms.** `docs/FAIRNESS_CONTRACT.md` (F-1…F-6,
-  append-only) fixes data, budget, stopping rule, seeds and reporting. All
-  comparisons are reported unfiltered, or a correction is named.
-- **Declared deviations.** 31 concrete credit,
-  update and plasticity primitives ship an `AlgorithmIdentityCard` with its paper
-  citation and a *Deviations* column (`docs/IDENTITY_CARDS.md`, generated;
-  `--strict` is a gate). The defensible statement is "independent
-  re-implementation with disclosed deviations", never "verified upstream".
-- **A chance line and a positive control.** An ablation table is printed only
-  when the other five structural axes and the swept hyperparameters are held
-  fixed; every row carries `n` and `std`; an arm at chance is labelled
-  `[at chance]`; and the run checks a known-good control arm before publishing
-  the comparison.
-- **A corrections log.** 3 superseded measurements
-  are recorded with the audit that invalidated them (`docs/CORRECTIONS.md`), and
-  claims are held in a ledger outside the engine that produced them
-  (`packages/ceec-core`).
-
-**What this does not claim.** All credit rules here are this project's
-re-implementations, with deviations declared and cited — not the inventors'
-reference code. Equal-effort HPO is a protocol (`docs/hpo_protocol.md`,
-`biopl-hpo`), not enforced by `comp run`. There is no blinding. And no rule in
-this repository is the author's invention; the comparison stack is the
-contribution.
-
-**Why a consortium.** An honest comparison has a price: 63 seeds per group for a
-d=0.5 effect, times every arm, every axis, and each family's fair share of
-hyperparameter trials. No single participant can pay it, and an inventor has no
-reason to fund a comparison they might lose. The [Computronium
-Consortium](docs/CONSORTIUM.md) is the institution shaped like that gap:
-members contribute algorithms and implementations, and receive a comparison
-stack they can cite — pre-registered, unfiltered, and open to correction,
-including of the referee.
-
-
-## 🔬 Validation Framework: Property-Verified Hypercube
-
-The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate validates the entire hypercube in seconds on CPU.
-
-### ⚠️ Notation Disambiguation
-
-This document uses three distinct "L" numbering schemes — **do not confuse them**:
-
-| Scheme | Range | Meaning | Prefix Used Here |
-|--------|-------|---------|------------------|
-| **Verification Levels** | VL1–VL5 | Evidential strength of a claim (analytical → empirical) | **VL** |
-| **Property Locks** | PL1–PL7 | Core CI-locked invariants (composition, purity, determinism, etc.) | **PL** |
-| **Fidelity Levels** | FL0–FL2 | Schedule fidelity tier for a run (quick → full) | **FL** |
-
-- **VL1–VL5** are defined in `computronium.verification` and label *claims*.
-- **PL1–PL7** are the property-lock test suites in `tests/property/` and label *invariants*.
-- **FL0–FL2** appear in `Schedule.fidelity` and label *evaluation depth*.
-
-### Verification Status Markers
-
-| Status | Meaning |
-|--------|---------|
-| **Implemented** | Code exists and runs |
-| **Verified** | Property-lock tests pass (Hypothesis, numerical equivalence — Level 4 sampled numerical) |
-| **Benchmarked** | Measured on tasks with reported metrics |
-| **Hypothesized** | Research question; not yet empirically established |
-| **Planned** | Future work; not yet implemented |
-
-<details>
-<summary><strong>Verification ≠ scientific superiority</strong> ⋯</summary>
-
-A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
-</details>
-
-### ✅ Property Locks (PL1–PL7 + S/G/D/C/U/M Axes + J1–J7)
-
-> **Notation:** "PL" = Property Lock (not to be confused with Verification Levels VL1–VL5
-> or Fidelity Levels FL0–FL2). This table uses PL1–PL7 for the core property locks.
-
-| Lock | Property | Key Assertions |
-|------|----------|----------------|
-| **PL1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
-| **PL2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
-| **PL3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
-| **PL4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
-| **PL5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
-| **PL6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
-| **PL7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
-| **S-axis** | Neuromorphic passivity; Quantum parameter-shift equivalence | Deterministic noise cancellation; cosine ≥ 0.999 vs FD |
-| **D-axis** | SpikeIntegration Lyapunov (membrane bounded, non-diverging spike process); LazyStateDynamics | Spike counts tracked per (layer, settle step); bounded activations |
-| **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
-| **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
-| **P-axis** | NullPlasticity Zero-Extension (`F_θ^Null = D_θ`); RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
-| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension Invariant) | $F_\theta^\text{Null} = D_\theta$ within numerical tolerance |
-| **J2** | Persistent θ not mutated during intra-episode steps | θ data_ptr() unchanged during CoupledTransition.step |
-| **J3** | fast_plastic variables mutate only through plasticity projection | ψ updates only via PlasticityPrimitive.step |
-| **J4** | substrate_owned variables respect substrate physics constraints | σ updates only via Substrate.forward_operator |
-| **J5** | consolidatable variables promoted only at episode boundaries | consolidate() only called at episode end |
-| **J6** | Cross-adapters preserve joint transition shape & registry semantics | Adapter output is valid CompositeState projection |
-| **J7** | Trajectory records contain full z = (x, ψ, σ) | JointTrajectory has activity, plastic, substrate at each step |
-
-### 🧬 Biologically Motivated Property Tests (Hypothesis-based)
-
-<details>
-<summary><strong>Not established biological axioms</strong> ⋯</summary>
-
-These are biologically motivated constraints/hypotheses encoded as property tests—not established biological axioms.
-</details>
-
-| Motivated Constraint | Test | Method | Threshold |
-|------|------|--------|-----------|
-| **EP Gradient Equivalence** | EqProp gradient aligns with BPTT | Cosine similarity | ≥ 0.5 |
-| **Lyapunov Energy Descent** | Free energy monotonically non-increasing along relaxation | Hypothesis | Slack 1e-3; final < initial |
-| **Contraction Mapping** | Relaxation operator Lipschitz < 1 | Pairwise distance ratio L < 1; directional amplification growth < 1 (`estimate_directional_amplification`) | Step sizes 0.1–0.5 |
-| **Fixed-Point Reliability** | Unique attractor from random initializations | Relative diff < 1e-3; Idempotence ‖T(h*)-h*‖ < 1e-4 | |
-| **Weight-Transport Freeness** | FA backward weights ≠ forward transpose; separate memory | ‖B - W^T‖ > 1e-3; data_ptr() distinct | standard_fa, adaptive_fa, DFA |
-| **Adaptive-FA Alignment** | Feedback matrices align with forward weights over training | cos(B, W^T) improvement > 0.05 | biologically slow B regime |
-
-### ✅ Integration Verification Gates (All Passing)
-
-<details>
-<summary><strong>Scope disclaimer</strong> ⋯</summary>
-
-Scope: current CI / repository verification status — not evidence of scientific or benchmark superiority.
-</details>
-
-| Gate | Result |
-|------|--------|
-| Gradient equivalence (finite-difference) | CE families cos≥0.9: backprop, FA, DirectFA, StochasticFA, MEP-backprop; MSE families cos≥0.6: EqProp, MEP-EP, CHL |
-| Ontology layer equivalence | ThermodynamicContrast=Backprop under InstantaneousDynamics; RiemannianOrthogonal preserves orthogonality; EnergyMinimization converges |
-| Energy invariants (property-locked, Level 4) | Lyapunov descent, Control-Lyapunov, Substrate passivity, EqProp energy, Composition |
-| Kernel equivalence (Triton vs PyTorch) | max_diff < 1e-5, rel_diff < 1e-4 |
-| Kernel accuracy parity | FA, Backprop, PEPITA, DTP: kernel accuracy within 1% of reference on digits/synthetic |
-| Kernel verified specs | 25 specs `kernel_verified` (11 primitives + 14 algorithms), promoted via ladder: parity + microbench evidence + dispatch auto-routing |
-| Registry audit | 0 missing critical fields |
-| Reproducibility | Models bitwise reproducible |
-| Backprop parity | Runs successfully |
-| Static typing | 0 errors on `computronium/ontology` (pyright elevated-standard, pre-commit gated); repo-wide basic |
-| Formatting | Clean |
-
-### 🧪 Test Commands
-
-```bash
-# Property locks (fast CI gate) — 5-D
-uv run pytest tests/property/test_ontology_locks.py -q
-
-# Property locks (fast CI gate) — 6-D Joint Architecture
-uv run pytest tests/property/joint/ -q
-
-# Registry integrity locks
-uv run pytest tests/property/test_registry_completeness_lock.py -q
-uv run pytest tests/property/test_kernel_verified_promotion_rule.py -q
-uv run pytest tests/property/test_import_time_lock.py -q
-
-# Core ontology unit tests
-uv run pytest tests/unit/core/test_ontology.py -q
-
-# Primitive & Algorithm test suites (now in default testpaths)
-uv run pytest tests/primitives/ -q
-uv run pytest tests/algorithms/ -q
-uv run pytest tests/acceleration/ -q
-
-# Integration: gradient equivalence + energy proofs
-uv run pytest tests/integration/test_gradient_equivalence.py tests/integration/test_energy_invariants.py -q
-
-# Kernel equivalence (Triton vs PyTorch)
-uv run pytest tests/integration/test_kernel_equivalence.py -q
-
-# Kernel accuracy parity (end-to-end learning)
-uv run pytest tests/integration/test_kernel_accuracy_parity.py -q
-
-# gRPC seam test
-uv run pytest tests/integration/test_grpc_seam.py -q
-
-# Demonstration suite (compose, swap credit, swap plasticity, memory wall, frozen θ) + figure lock
-uv run pytest tests/integration/ -k demo
-uv run pytest tests/integration/test_gallery_lock.py -q
-
-# Joint integration tests
-uv run pytest tests/integration/joint/ -q
-
-# Full suite (now collects primitives + algorithms + acceleration + unit + property)
-uv run pytest tests/ -q
-
-# Type checking (strict)
-uv run pyright .
-
-# Formatting & linting
-uv run ruff format --check . && uv run ruff check .
-```
-
-
-## 📐 Stability-Plasticity Trade-off Hypothesis
-
-v1 relied on strict Lyapunov descent and global contraction. In the joint architecture, we recognize that global contraction is a *sufficient* condition for a unique fixed point, but not a *necessary* condition for useful computation. Systems can exhibit local contraction, multiple attractors, limit cycles, or metastable states.
-
-### The Hypothesis
-
-We formulate the research object as:
-
-```
-adaptive computation ↔ controlled departure from contraction
-```
-
-*Useful rule reconfiguration may require temporarily sacrificing some of the contraction/stability margin that a fixed computational attractor would maximize.*
-
-### Monitoring the Frontier
-
-The framework measures:
-
-| Metric | Purpose |
-|--------|---------|
-| $\rho(J_F)$ | Spectral radius of joint Jacobian — stability margin |
-| Local Lyapunov exponent | Sensitivity/divergence |
-| Settling time | Dynamical latency |
-| Basin stability | Robustness to perturbation |
-
-**Cheap fast-mode proxies (for CI)**: step-norm ratio, finite-difference perturbation growth, settle iterations, activation variance, gate entropy.
-
-**Deeper estimates (nightly/campaign)**: spectral radius via eigvals of the autograd Jacobian (`spectral_radius_from_jacobian`), transient amplification via SVD (`dominant_singular_value`), Lyapunov via QR, basin via sampling.
-
-### Resource Vector
-
-<details>
-<summary><strong>Resource vector definition</strong> ⋯</summary>
-
-The scientific claim is strictly about **resource scaling, locality, energy efficiency, and learnability** under constrained physical resources:
-
-$$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$$
-
-The campaign asks whether adaptive-rule systems occupy a superior Pareto frontier in $\mathcal{C}$.
-</details>
-
-### 5-Level Benchmark Hierarchy
-
-<details>
-<summary><strong>Experimental questions, not established results</strong> ⋯</summary>
-
-The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
-</details>
-
-
-## 🌐 Evaluation Domains
-
-The framework defines **7 evaluation domains**, unified through a common task interface (`DomainTask` protocol), each with dedicated data loaders and metrics. **~25 tasks/datasets are currently implemented**; additional tasks are planned extensions (marked below). Planned entries do not count toward implemented totals.
-
-### 📊 Domain Overview
-
-| Domain | Tasks | Example Datasets | Models | Key Metrics |
-|--------|-------|------------------|--------|-------------|
-| **Vision** | 11 | MNIST, CIFAR-10/100, SVHN, Digits, synthetic (XOR, spirals) | 25+ | Accuracy, Loss, Energy, FLOPs |
-| **Language (LM)** | 4 | Tiny Shakespeare, char n-gram, WikiText-2, Penn Treebank | 12+ | Perplexity, BPC, Accuracy |
-| **Reinforcement Learning (RL)** | 3 (+2 planned) | CartPole, Pendulum, Acrobot; MountainCar, LunarLander (planned) | 8+ | Episode Return, Success Rate |
-| **Graph** | 3 | Cora, CiteSeer, PubMed | 6+ | Node Classification Acc, F1 |
-| **Tabular** | 3 (+2 planned) | Breast Cancer, Iris, Wine; Diabetes, California Housing (planned) | 10+ | Accuracy, R², AUC |
-| **Time Series** | 1 (+1 planned) | Synthetic Forecast; ETT (planned) | 6+ | MSE, MAE |
-| **Scientific** | 2 (+PDE suite planned) | Pendulum/Lorenz ODE simulation; Heat/Wave/Burgers, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
-
-**Quick Commands (all domains)**
-```bash
-# Quick verification run (dry-run)
-comp run quick-verify --dry-run
-
-# Run with store
-comp run quick-verify --store experiment.duckdb
-```
-
-### 🖼️ Vision Domain
-
-**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
-(image classification + synthetic boolean tasks)
-
-### 📝 Language Modeling Domain
-
-**Tasks**: `tiny_shakespeare` (char), `char_ngram`; `wikitext2`, `penn_treebank` (planned)
-
-### 🎮 Reinforcement Learning Domain
-
-**Tasks**: `cartpole`, `pendulum`, `acrobot` (implemented); `mountain_car`, `lunar_lander` (planned) — Gymnasium classic control + Box2D
-
-### 🕸️ Graph Domain
-
-**Tasks**: `cora`, `citeseer`, `pubmed` (Planetoid citation networks, node classification)
-
-### 📋 Tabular Domain
-
-**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes`, `california_housing` (regression, planned)
-
-**Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
-
-### 📈 Time Series Domain
-
-**Tasks**: `synthetic_forecast` (sine-wave forecasting); `ett_h1` (planned)
-
-**Models**: RNN/LSTM/Transformer families across all credit assignments.
-
-### 🔬 Scientific Domain
-
-**Tasks**: `pendulum`, `lorenz` (ODE simulation); PDE suites (Heat/Wave/Burgers, Navier-Stokes) planned
-
-**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.
-
 ## The Experiment Kernel
 
 `computronium.experiment` turns a question into governed evidence:
@@ -1177,6 +798,285 @@ Claims are labeled by verification level (see *What is Computronium*). CEEC ([`p
 | Conformance audit C1–C88 | 2–3 | `comp conformance` |
 
 The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.
+
+## Neutral evaluation — why a referee, and how this one works
+
+A comparison of learning algorithms has a structural problem: the people best
+placed to run it are usually the people who invented the algorithms. Inventors
+carry publication, tenure and funding incentives; their hyperparameter search is
+sized to their budget rather than to the question; and research code is not
+always the code the paper describes. None of that requires bad faith. It is
+enough that a protocol run by a participant can be disputed by whoever the
+protocol ranks lower.
+
+This project holds no credit rule of its own. That is a narrow, checkable
+position, and it is the reason to trust a comparison produced here: the referee
+has no arm in the race. What follows is the procedure the referee publishes,
+not a claim about anyone else's motives.
+
+- **Pre-registered thresholds.** A claim's metric, superiority margin, error
+  rate and seed budget can be declared before the run
+  (`configs/preregistrations/*.json`, `computronium.validation.preregistration`).
+  A claim with no matching registration is labelled `[unpreregistered_claim]`
+  beside the claim; the report does not imply otherwise.
+- **Equal treatment of arms.** `docs/FAIRNESS_CONTRACT.md` (F-1…F-6,
+  append-only) fixes data, budget, stopping rule, seeds and reporting. All
+  comparisons are reported unfiltered, or a correction is named.
+- **Declared deviations.** 31 concrete credit,
+  update and plasticity primitives ship an `AlgorithmIdentityCard` with its paper
+  citation and a *Deviations* column (`docs/IDENTITY_CARDS.md`, generated;
+  `--strict` is a gate). The defensible statement is "independent
+  re-implementation with disclosed deviations", never "verified upstream".
+- **A chance line and a positive control.** An ablation table is printed only
+  when the other five structural axes and the swept hyperparameters are held
+  fixed; every row carries `n` and `std`; an arm at chance is labelled
+  `[at chance]`; and the run checks a known-good control arm before publishing
+  the comparison.
+- **A corrections log.** 3 superseded measurements
+  are recorded with the audit that invalidated them (`docs/CORRECTIONS.md`), and
+  claims are held in a ledger outside the engine that produced them
+  (`packages/ceec-core`).
+
+**What this does not claim.** All credit rules here are this project's
+re-implementations, with deviations declared and cited — not the inventors'
+reference code. Equal-effort HPO is a protocol (`docs/hpo_protocol.md`,
+`biopl-hpo`), not enforced by `comp run`. There is no blinding. And no rule in
+this repository is the author's invention; the comparison stack is the
+contribution.
+
+**Why a consortium.** An honest comparison has a price: 63 seeds per group for a
+d=0.5 effect, times every arm, every axis, and each family's fair share of
+hyperparameter trials. No single participant can pay it, and an inventor has no
+reason to fund a comparison they might lose. The [Computronium
+Consortium](docs/CONSORTIUM.md) is the institution shaped like that gap:
+members contribute algorithms and implementations, and receive a comparison
+stack they can cite — pre-registered, unfiltered, and open to correction,
+including of the referee.
+
+
+## 🔬 Validation Framework: Property-Verified Hypercube
+
+The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate validates the entire hypercube in seconds on CPU.
+
+### ⚠️ Notation Disambiguation
+
+This document uses three distinct "L" numbering schemes — **do not confuse them**:
+
+| Scheme | Range | Meaning | Prefix Used Here |
+|--------|-------|---------|------------------|
+| **Verification Levels** | VL1–VL5 | Evidential strength of a claim (analytical → empirical) | **VL** |
+| **Property Locks** | PL1–PL7 | Core CI-locked invariants (composition, purity, determinism, etc.) | **PL** |
+| **Fidelity Levels** | FL0–FL2 | Schedule fidelity tier for a run (quick → full) | **FL** |
+
+- **VL1–VL5** are defined in `computronium.verification` and label *claims*.
+- **PL1–PL7** are the property-lock test suites in `tests/property/` and label *invariants*.
+- **FL0–FL2** appear in `Schedule.fidelity` and label *evaluation depth*.
+
+### Verification Status Markers
+
+| Status | Meaning |
+|--------|---------|
+| **Implemented** | Code exists and runs |
+| **Verified** | Property-lock tests pass (Hypothesis, numerical equivalence — Level 4 sampled numerical) |
+| **Benchmarked** | Measured on tasks with reported metrics |
+| **Hypothesized** | Research question; not yet empirically established |
+| **Planned** | Future work; not yet implemented |
+
+<details>
+<summary><strong>Verification ≠ scientific superiority</strong> ⋯</summary>
+
+A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
+</details>
+
+### ✅ Property Locks (PL1–PL7 + S/G/D/C/U/M Axes + J1–J7)
+
+> **Notation:** "PL" = Property Lock (not to be confused with Verification Levels VL1–VL5
+> or Fidelity Levels FL0–FL2). This table uses PL1–PL7 for the core property locks.
+
+| Lock | Property | Key Assertions |
+|------|----------|----------------|
+| **PL1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
+| **PL2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
+| **PL3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
+| **PL4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
+| **PL5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
+| **PL6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
+| **PL7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
+| **S-axis** | Neuromorphic passivity; Quantum parameter-shift equivalence | Deterministic noise cancellation; cosine ≥ 0.999 vs FD |
+| **D-axis** | SpikeIntegration Lyapunov (membrane bounded, non-diverging spike process); LazyStateDynamics | Spike counts tracked per (layer, settle step); bounded activations |
+| **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
+| **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
+| **P-axis** | NullPlasticity Zero-Extension (`F_θ^Null = D_θ`); RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
+| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension Invariant) | $F_\theta^\text{Null} = D_\theta$ within numerical tolerance |
+| **J2** | Persistent θ not mutated during intra-episode steps | θ data_ptr() unchanged during CoupledTransition.step |
+| **J3** | fast_plastic variables mutate only through plasticity projection | ψ updates only via PlasticityPrimitive.step |
+| **J4** | substrate_owned variables respect substrate physics constraints | σ updates only via Substrate.forward_operator |
+| **J5** | consolidatable variables promoted only at episode boundaries | consolidate() only called at episode end |
+| **J6** | Cross-adapters preserve joint transition shape & registry semantics | Adapter output is valid CompositeState projection |
+| **J7** | Trajectory records contain full z = (x, ψ, σ) | JointTrajectory has activity, plastic, substrate at each step |
+
+### 🧬 Biologically Motivated Property Tests (Hypothesis-based)
+
+<details>
+<summary><strong>Not established biological axioms</strong> ⋯</summary>
+
+These are biologically motivated constraints/hypotheses encoded as property tests—not established biological axioms.
+</details>
+
+| Motivated Constraint | Test | Method | Threshold |
+|------|------|--------|-----------|
+| **EP Gradient Equivalence** | EqProp gradient aligns with BPTT | Cosine similarity | ≥ 0.5 |
+| **Lyapunov Energy Descent** | Free energy monotonically non-increasing along relaxation | Hypothesis | Slack 1e-3; final < initial |
+| **Contraction Mapping** | Relaxation operator Lipschitz < 1 | Pairwise distance ratio L < 1; directional amplification growth < 1 (`estimate_directional_amplification`) | Step sizes 0.1–0.5 |
+| **Fixed-Point Reliability** | Unique attractor from random initializations | Relative diff < 1e-3; Idempotence ‖T(h*)-h*‖ < 1e-4 | |
+| **Weight-Transport Freeness** | FA backward weights ≠ forward transpose; separate memory | ‖B - W^T‖ > 1e-3; data_ptr() distinct | standard_fa, adaptive_fa, DFA |
+| **Adaptive-FA Alignment** | Feedback matrices align with forward weights over training | cos(B, W^T) improvement > 0.05 | biologically slow B regime |
+
+### ✅ Integration Verification Gates (All Passing)
+
+<details>
+<summary><strong>Scope disclaimer</strong> ⋯</summary>
+
+Scope: current CI / repository verification status — not evidence of scientific or benchmark superiority.
+</details>
+
+| Gate | Result |
+|------|--------|
+| Gradient equivalence (finite-difference) | CE families cos≥0.9: backprop, FA, DirectFA, StochasticFA, MEP-backprop; MSE families cos≥0.6: EqProp, MEP-EP, CHL |
+| Ontology layer equivalence | ThermodynamicContrast=Backprop under InstantaneousDynamics; RiemannianOrthogonal preserves orthogonality; EnergyMinimization converges |
+| Energy invariants (property-locked, Level 4) | Lyapunov descent, Control-Lyapunov, Substrate passivity, EqProp energy, Composition |
+| Kernel equivalence (Triton vs PyTorch) | max_diff < 1e-5, rel_diff < 1e-4 |
+| Kernel accuracy parity | FA, Backprop, PEPITA, DTP: kernel accuracy within 1% of reference on digits/synthetic |
+| Kernel verified specs | 25 specs `kernel_verified` (11 primitives + 14 algorithms), promoted via ladder: parity + microbench evidence + dispatch auto-routing |
+| Registry audit | 0 missing critical fields |
+| Reproducibility | Models bitwise reproducible |
+| Backprop parity | Runs successfully |
+| Static typing | 0 errors on `computronium/ontology` (pyright elevated-standard, pre-commit gated); repo-wide basic |
+| Formatting | Clean |
+
+### Running the verification
+
+The fast CI gate is `uv run python -m pytest tests/property/ -q`. The testing
+tiers, the never-bypassed lock list and the per-commit checklist are in [For
+developers](#for-developers); `uv run comp conformance` runs the conformance
+audit.
+
+
+## 📐 Stability-Plasticity Trade-off Hypothesis
+
+v1 relied on strict Lyapunov descent and global contraction. In the joint architecture, we recognize that global contraction is a *sufficient* condition for a unique fixed point, but not a *necessary* condition for useful computation. Systems can exhibit local contraction, multiple attractors, limit cycles, or metastable states.
+
+### The Hypothesis
+
+We formulate the research object as:
+
+```
+adaptive computation ↔ controlled departure from contraction
+```
+
+*Useful rule reconfiguration may require temporarily sacrificing some of the contraction/stability margin that a fixed computational attractor would maximize.*
+
+### Monitoring the Frontier
+
+The framework measures:
+
+| Metric | Purpose |
+|--------|---------|
+| $\rho(J_F)$ | Spectral radius of joint Jacobian — stability margin |
+| Local Lyapunov exponent | Sensitivity/divergence |
+| Settling time | Dynamical latency |
+| Basin stability | Robustness to perturbation |
+
+**Cheap fast-mode proxies (for CI)**: step-norm ratio, finite-difference perturbation growth, settle iterations, activation variance, gate entropy.
+
+**Deeper estimates (nightly/campaign)**: spectral radius via eigvals of the autograd Jacobian (`spectral_radius_from_jacobian`), transient amplification via SVD (`dominant_singular_value`), Lyapunov via QR, basin via sampling.
+
+### Resource Vector
+
+<details>
+<summary><strong>Resource vector definition</strong> ⋯</summary>
+
+The scientific claim is strictly about **resource scaling, locality, energy efficiency, and learnability** under constrained physical resources:
+
+$$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$$
+
+The campaign asks whether adaptive-rule systems occupy a superior Pareto frontier in $\mathcal{C}$.
+</details>
+
+### 5-Level Benchmark Hierarchy
+
+<details>
+<summary><strong>Experimental questions, not established results</strong> ⋯</summary>
+
+The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
+</details>
+
+
+## 🌐 Evaluation Domains
+
+The framework defines **7 evaluation domains**, unified through a common task interface (`DomainTask` protocol), each with dedicated data loaders and metrics. **~25 tasks/datasets are currently implemented**; additional tasks are planned extensions (marked below). Planned entries do not count toward implemented totals.
+
+### 📊 Domain Overview
+
+| Domain | Tasks | Example Datasets | Models | Key Metrics |
+|--------|-------|------------------|--------|-------------|
+| **Vision** | 11 | MNIST, CIFAR-10/100, SVHN, Digits, synthetic (XOR, spirals) | 25+ | Accuracy, Loss, Energy, FLOPs |
+| **Language (LM)** | 4 | Tiny Shakespeare, char n-gram, WikiText-2, Penn Treebank | 12+ | Perplexity, BPC, Accuracy |
+| **Reinforcement Learning (RL)** | 3 (+2 planned) | CartPole, Pendulum, Acrobot; MountainCar, LunarLander (planned) | 8+ | Episode Return, Success Rate |
+| **Graph** | 3 | Cora, CiteSeer, PubMed | 6+ | Node Classification Acc, F1 |
+| **Tabular** | 3 (+2 planned) | Breast Cancer, Iris, Wine; Diabetes, California Housing (planned) | 10+ | Accuracy, R², AUC |
+| **Time Series** | 1 (+1 planned) | Synthetic Forecast; ETT (planned) | 6+ | MSE, MAE |
+| **Scientific** | 2 (+PDE suite planned) | Pendulum/Lorenz ODE simulation; Heat/Wave/Burgers, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
+
+**Quick Commands (all domains)**
+```bash
+# Quick verification run (dry-run)
+comp run quick-verify --dry-run
+
+# Run with store
+comp run quick-verify --store experiment.duckdb
+```
+
+### 🖼️ Vision Domain
+
+**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
+(image classification + synthetic boolean tasks)
+
+### 📝 Language Modeling Domain
+
+**Tasks**: `tiny_shakespeare` (char), `char_ngram`; `wikitext2`, `penn_treebank` (planned)
+
+### 🎮 Reinforcement Learning Domain
+
+**Tasks**: `cartpole`, `pendulum`, `acrobot` (implemented); `mountain_car`, `lunar_lander` (planned) — Gymnasium classic control + Box2D
+
+### 🕸️ Graph Domain
+
+**Tasks**: `cora`, `citeseer`, `pubmed` (Planetoid citation networks, node classification)
+
+### 📋 Tabular Domain
+
+**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes`, `california_housing` (regression, planned)
+
+**Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
+
+### 📈 Time Series Domain
+
+**Tasks**: `synthetic_forecast` (sine-wave forecasting); `ett_h1` (planned)
+
+**Models**: RNN/LSTM/Transformer families across all credit assignments.
+
+### 🔬 Scientific Domain
+
+**Tasks**: `pendulum`, `lorenz` (ODE simulation); PDE suites (Heat/Wave/Burgers, Navier-Stokes) planned
+
+**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.
+
+## Research program
+
+The motivating hypothesis: learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, energy/resource efficiency — offer measurable benefits over global-clock, backprop-centric training under those constraints.
+
+Open questions: when does the plasticity axis (writable ψ on frozen θ) beat standard recurrent memory; how far do local credit rules scale on digital substrates; which substrate constraints actually bind. Historical campaign records and research notes live in `docs/archive/`; methodology and Z3 material in `docs/reference/`.
 
 
 ## 🌐 Distributed Training & P2P
@@ -1412,7 +1312,7 @@ uv run python -m pytest tests/property/test_kernel_isolation_lock.py \
 
 **Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
 
-**Good first additions** (designed, not built): `capabilities` command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware compatibility sampling. Each is a named row in the readiness ledger, not a silent absence.
+**Good first additions** (designed, not built): `capabilities` command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware compatibility sampling. Each is a named row in [Status and scope](#status-and-scope), not a silent absence.
 
 ### Two Entry Points, One Config Surface
 
@@ -1427,8 +1327,6 @@ The kernel exposes two entry points that share the **same `ExperimentConfig`** (
 - **`LoopDriver`** (in `registry/loop.py`) is the continuous engine: it reads an `ExperimentConfig`, runs explore/exploit rounds, uses `EvidenceDrivenAllocator` for successive-halving allocation (S10), and can export claims to the standalone CEEC (`packages/ceec-core`).
 
 Both paths delegate to the same `PipelineRunner` (stages S1–S11), `RecordStore`, and `SearchSpace`. They do not drift because `ExperimentConfig` is the single source of truth for: search `policy`, `use_icu_guided`, `task_schedule`/domains, objectives, fidelity ladder, budget, and device.
-
-### Kernel development, tooling, and registry locks
 
 ### 🛠️ Kernel Development Workflow
 
@@ -1577,11 +1475,37 @@ These locks protect the 64-spec registry from silent drift — extending TODO32'
 | **Structural equivalence** | Geometry/Substrate primitives | Factory determinism: same config → bitwise-equal state tensors; spec round-trip |
 | **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (25 tests) |
 
-## Research program
+## Status and scope
 
-The motivating hypothesis: learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, energy/resource efficiency — offer measurable benefits over global-clock, backprop-centric training under those constraints.
+`v1.0.0` is a laboratory, not a completed research programme. Three lists say
+exactly what that means; the durable ledger is `TODO66.md` §8, and retired
+experiments are recorded with the findings that ended them in
+[`docs/CORRECTIONS.md`](docs/CORRECTIONS.md).
 
-Open questions: when does the plasticity axis (writable ψ on frozen θ) beat standard recurrent memory; how far do local credit rules scale on digital substrates; which substrate constraints actually bind. Historical campaign records and research notes live in `docs/archive/`; methodology and Z3 material in `docs/reference/`.
+- **Live.** loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
+  statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
+  claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
+  (text/JSON/HTML) · `comp` core commands.
+- **Designed, not built.** M1 gate calibration · M2 drift detection · M3 metric
+  coverage warnings · `capabilities` command · repo-wide effect lock · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
+  compatibility sampling · `SystemConfig.validate` codegen.
+- **Planned.** **fair-HPO recovery study — for each zoo algorithm, re-tune under
+  equal effort and publish the delta from its published number** (the "these algorithms may be better than
+  commonly believed" programme; needs the equal-effort HPO gap closed and real compute) · 7-domain task
+  expansion (cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes,
+  california_housing, ett_h1, PDE suites) · physical-hardware validation
+  (memristive/neuromorphic/optical/quantum) · Ray/SLURM · DDP at scale · `campaign_queue` as loop driver ·
+  full CEEC integration · `question_first` literature store · a real TUI · **an evaluation consortium**:
+  the fairness contract as a shared constitution, identity cards as the admission ticket, the corrections
+  log as the shared memory.
+
+The comparison stack has five named gaps: rules are independent
+re-implementations with disclosed deviations rather than verified upstream
+code; equal-effort HPO is a protocol, not a kernel invariant; there is no
+blinding; an unregistered claim is labelled rather than refused; and coverage is
+one task family. They are stated in full under [Neutral
+evaluation](#neutral-evaluation--why-a-referee-and-how-this-one-works), and the
+invitation that follows from them is [`docs/CONSORTIUM.md`](docs/CONSORTIUM.md).
 
 ## FAQ / Troubleshooting + Glossary
 

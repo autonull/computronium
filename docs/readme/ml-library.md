@@ -4,7 +4,7 @@ Compose any 6-axis coordinate through the `System` generic or the `compose_*`
 factories, train it through one `SystemTrainer`, and change one axis at a time.
 The axes and their primitives are listed once, under
 [the 6-axis ontology](#the-6-axis-ontology); what exists versus what is
-designed is the [readiness ledger](#what-is-proven-what-is-designed-and-what-is-not).
+designed is stated in [Status and scope](#status-and-scope).
 Beyond the axes, the library carries these instruments:
 
 - **EMA harvest** (`SystemTrainerConfig.harvest_mode`) — probe-free streaming-weight harvest; resurrected depth-50 (0.784 → 0.917).

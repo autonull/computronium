@@ -3,7 +3,7 @@
 Computronium ships three layers, each usable independently. This is the single
 capability inventory; the primitive lists live once under
 [the 6-axis ontology](#the-6-axis-ontology), and what is designed rather than
-built lives in the [readiness ledger](#what-is-proven-what-is-designed-and-what-is-not).
+built lives in [Status and scope](#status-and-scope).
 
 | Layer | What it is | What you get |
 |---|---|---|
