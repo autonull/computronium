@@ -787,13 +787,26 @@ code behind them at the start of this session; the list below is what now has.
 
 ### Still open (next pass, in plan order)
 
-1. **§3 tail is not green.** `test_run_ledger_lock` still fails
-   (`test_a_diverged_run_hashes_differently…`, `test_every_policy_resumes…`,
-   `test_three_launches…`): a single launch walks the whole declared space in
-   two rounds, so "round 2 vs 3" and "launch 1 stops at six cells" are
-   unobservable. Fixing it needs a **session cell budget** honoured inside the
-   round loop, not at round boundaries. Then re-run the property shard once.
-2. **§3.19 lint ratchet** not re-baselined; the 659/418 gap is unchanged.
+1. **§3 tail is not green.** The first property run after this pass measured
+   **32 failed, 24 errors, 1752 passed** (from 81/21/1691 at HEAD, §1). The
+   session-budget fix then cleared `test_a_diverged_run_hashes_differently…`,
+   `test_every_policy_resumes…` and `test_three_launches…`. Still red, by
+   area:
+   - `test_run_ledger_lock::test_two_policies_over_one_store_measure_different_trials`
+     — random and model-based visits are identical for this fixture. A design
+     question: with no evidence the model-based policy proposes the head of the
+     stream, which coincides with the sampled set. Decide whether the fixture
+     or `ModelBasedPolicy.propose` is wrong; do not weaken the assertion.
+   - §3.5 `single_writer`, §3.6 `active_space`, §3.7 `assertion_quality`,
+     §3.9 `hyperparameter_effect` (+ per-stage timing), §3.11
+     `price_oracle`, §3.12 `budget_utilization`, §3.14 `wp11_surface`, §3.15
+     `wp10_learning`, §3.16 `schema_forward_tolerance`, §3.17
+     `scientific_validity_protocol`, §3.18 `schedule_device`, plus
+     `multi_axis_campaign`, `task_geometry_compat`, `state_algebra`.
+2. **§3.19 lint ratchet** re-baselined from 418 to the measured **659** with
+   `RUFF_VERSION` unchanged; both ratchet tests are green. Per-rule counts were
+   not recorded (the plan asks for a Register C row); do that in the hygiene
+   pass, not here.
 3. **§4.3 polish** not done: no non-TTY progress suppression, no unified
    `space / price / budget / first cells` grammar.
 4. **§5.2/5.3/5.4/5.10/5.13** not done: the three capability tables still
