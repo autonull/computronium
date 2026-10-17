@@ -739,3 +739,66 @@ artefacts cannot drift). Beat 4's printed price is what makes the ask quantitati
 repository ever produced a comparison whose arm ordering flipped between the pre-registered threshold
 and a favourable post-hoc one, the neutrality claim would be dead. The corrections log exists to make
 that visible rather than fatal — but it must be read as a commitment, not a feature.
+
+---
+
+## 12. Implementation progress
+
+**Session 2026-10-17 (first implementation pass).** Plan commits `5c0b23cc…` had no
+code behind them at the start of this session; the list below is what now has.
+
+### Landed, with its lock
+
+| Plan item | Change | Evidence |
+|---|---|---|
+| §2.5 | `Budget`/`CostModel`/`SimpleCostModel` resolve to `kernel.resources`; `execution/budget.py` deleted; `pipeline.py` accepts only the canonical `Budget` | `test_policy_generation_lock`, `test_sampler_lock`, `test_stage_model_lock` green |
+| §2.7 | Dead map rows pruned (`BatchSizer`, `CellStream*`, `validate_record_*`); moved submodules dropped from the lock; `kernel.*` targets resolve absolutely | `test_lazy_export_lock` green |
+| §2.8 | Six test imports repointed at `kernel.compose` / `kernel.search_space` | those locks green |
+| §3.8 | `resolve_objectives` fails closed on `metric_key is None`; `test_acc`, `test_loss`, `f1_score`, `bleu_score`, `mean_reward` no longer claim to be measured | `test_sampler_lock` green (27) |
+| §2.1 | `StatisticalVerdict` (PASSED/REJECTED/INSUFFICIENT) with `power_achieved`; underpowered is never REJECTED; a missing baseline is INSUFFICIENT, not a silent pass | new `TestPromotionLadderHonesty` (G3) in `test_seed_separation.py` |
+| §2.2 | CLI `_settle_maturity` resolves the baseline through `BaselineRegistry` and passes a `cell_record` confirmation evaluator; baseline metric reads `val_acc`, not the objective name | `comp run quick-verify` exercised end-to-end |
+| §2.3 | `coverage report` reads `status.gate_verdict` instead of casting the struct | `comp coverage report` exits 0 on a real store |
+| §2.4 | Eligibility is computed from achieved PASS seeds at `DEFAULT_MIN_SEEDS` (no fidelity filter), the same rule `derive_claims` applies; `_min_seeds` is one constant | `comp report` prints `Claim-Eligible Cells: 4` beside four credit claims; `test_claim_report_lock` green |
+| §2.9 | Ablation only for a contrast group that shares the other five axes **and** the swept params; otherwise raw cells. Rows carry `n`, `std`, `[at chance]`; chance read from the task's `output_dim`. Text, HTML and the template generator share one grouping | new `test_ablation_lock.py` (3) |
+| §2.6 | Kernel-isolation lock permits `ceec` only in `ceec_export.py`, enumerated by name | `test_kernel_isolation_lock` green |
+| §3.20 | `UNPREREGISTERED_CLAIM` limitation emitted when a claim's metric has no `configs/preregistrations/*.json` | `test_claim_report_lock` green |
+| §3.21 | `MIN_SEEDS = DEFAULT_MIN_SEEDS` (validated re-export) | both import paths resolve to one object |
+| §4.1/4.2 | `comp demo` dispatches the same `run`/`status`/`report`/`coverage` handlers; `demo` profile holds five axes and params fixed and varies credit. **Four arms, not five:** `thermodynamic_contrast` is unreachable under `instantaneous` dynamics and was removed rather than declared. G13 runs the gradient control check before publishing | `comp demo` in ~31 s, 20 records |
+| §4.3 (partial) | `--profile` is accepted as an alias for the positional profile | `<cli>` lock |
+| §4.4 | `comp --help` lists six core commands; `comp --help-all` lists all; dispatcher lock re-pinned | `test_cli_surface_lock` green (44) |
+| §4.5/4.6 | `docs/DEMO.md` is the shot list; `tests/acceptance/test_demo_script.py` executes the beats, asserts eligibility/claim consistency and coverage, and checks G10 (two clean runs visit the same cells, same replay hash) | `pytest -m demo tests/acceptance/test_demo_script.py` → 2 passed, 72 s |
+| §5.1/5.8/5.9/5.11/5.12 | New `start-here`, `neutral-evaluation`, `findings` snippets; primitive checklist moved out of `AGENTS.md` into the README; `docs/CONSORTIUM.md`; README regenerated | `test_readme_build_lock`, `test_cli_readme_lock`, new `test_findings_lock` (G8) green |
+
+### Measurements that revise the plan
+
+- **The `demo` positive control reaches 0.4389, not ≈0.87.** Same shape as §1.4
+  (hd=32, adam, instantaneous, 3 epochs, `batch_limit=0`,
+  `param_budget=MEASURED_PARAM_BUDGET`), reproduced through `cell_record`
+  (0.54 on one seed) and the pipeline (mean 0.44, 5 seeds). It clears chance by
+  4.4×, so G13 is green under the implemented floor
+  `max(3×chance, chance+0.2)`, but the §4.2/§6.G13 "≈0.87" number is stale.
+  Either correct the number or raise epochs / lower `param_budget` narrowing;
+  the demo budget currently spends ~31 s of 120 s.
+- **`thermodynamic_contrast` is unreachable with `instantaneous` dynamics.** The
+  plan's five-credit sweep cannot be run as written at the measured 0.8 s/cell
+  regime; the demo uses the four legal arms.
+- **`execution.Budget.target_cells` is discarded** when `Budget` is converted to
+  `Deadline`, so a cell-budget interruption cannot stop mid-round.
+
+### Still open (next pass, in plan order)
+
+1. **§3 tail is not green.** `test_run_ledger_lock` still fails
+   (`test_a_diverged_run_hashes_differently…`, `test_every_policy_resumes…`,
+   `test_three_launches…`): a single launch walks the whole declared space in
+   two rounds, so "round 2 vs 3" and "launch 1 stops at six cells" are
+   unobservable. Fixing it needs a **session cell budget** honoured inside the
+   round loop, not at round boundaries. Then re-run the property shard once.
+2. **§3.19 lint ratchet** not re-baselined; the 659/418 gap is unchanged.
+3. **§4.3 polish** not done: no non-TTY progress suppression, no unified
+   `space / price / budget / first cells` grammar.
+4. **§5.2/5.3/5.4/5.10/5.13** not done: the three capability tables still
+   overlap, the readiness ledger is not generated into the README, and the
+   neutrality section is curated prose rather than generated (G12).
+5. **Video** not recorded; `docs/DEMO.md` is ready to shoot.
+6. **G1** was run once at the end of this pass; the summary is in the commit
+   notes/session log. It is not 0-failed yet because of item 1.
