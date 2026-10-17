@@ -550,8 +550,12 @@ shared memory.
 
 **Retired (finding kept):** E1 deep chaotic unfolding — **falsified**, mechanism boundary is
 composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIONS.md`) · legacy
-`experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: legacy
-lint findings, counted per rule below, ratcheted not cleaned (§3.19).
+`experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) ·
+the `step_size_override_<dynamics>_<credit>` multiplier column and its post-construction
+mechanism (29 rows, every one an identity after TODO48b R4; the measurement is
+`docs/CORRECTIONS.md` Correction 3) · 12 unread `step_size_*` rows and 3 unread optimizer
+priors, leaving 28 rows with one reader each (§15) · Register C: legacy lint findings,
+counted per rule below, ratcheted not cleaned (§3.19).
 
 **Register C — legacy lint, ratcheted and censused (not cleaned):** 650 findings measured 2026-10-17
 under ruff 0.16.10; `test_lint_count_ratchet.py` holds `BASELINE = 659`, so the direction is still
@@ -584,12 +588,10 @@ before a comparison is published.
 5. **One language, one task family so far.** Vision/classification on `digits`-class data. Cross-domain
    neutrality needs the 7-domain expansion (Planned, above).
 
-**Results we actually own (the discovery output, to date):** deep EqProp boundary — multi-layer vanilla
-EqProp does not learn (vanishing contrastive signal, slope −1.19, R²=0.80); DirectedEP restores the
-signal without restoring accuracy (9.2% at depth ≥3, gate G2 FAILED); 1-layer EqProp viable
-(`docs/eqprop_deep_limitation.md`) · phantom-knob class + detector (`docs/phantom_knob_audit.md`) ·
-ρ(J)/σ_max conflation caught and corrected, three separated estimators, pre-correction frontier numbers
-flagged `requires_rerun` (`docs/CORRECTIONS.md`, `test_jacobian_amplification`).
+**Results we actually own (the discovery output, to date):** three findings survived the project's own
+audits — deep EqProp boundary (gate G2 FAILED), the phantom-knob defect class, and the ρ(J)/σ_max
+conflation corrected by three separated estimators. [`docs/FINDINGS.md`](docs/FINDINGS.md) carries the
+numbers, source documents, and the lock behind each.
 
 **The handover claim.** What ships is a *laboratory*, not a result: a composable six-axis system, an
 experiment kernel that records what it measured and refuses to overclaim, a demo that shows both, and
@@ -976,3 +978,92 @@ produce.
 | G13 control | green (`0.4389 > 0.30`) |
 
 No TODO67 is opened. The only unbuilt item named by §9 is the recording.
+
+---
+
+## 15. Fourth implementation pass (2026-10-17, priors and presentation)
+
+The tree passed its gates at the end of §14. This pass removes one architecture
+smell that measurement exposed and finishes the README's editorial restructuring.
+
+### The prior registry: a column that did nothing
+
+`step_size_override_<dynamics>_<credit>` was a prior family of **29 rows**, each
+a multiplier applied to `ParameterUpdateConfig.step_size` *after* the factory
+built the config (`ontology/update.py::_apply_step_size_overrides`). TODO48b R4
+had already measured every original multiplier as an unmeasured attenuation and
+re-registered the rows at `1.0`. At that point the mechanism was an identity
+transform with three costs: it polluted the cheatsheet's prior count (72 rows,
+44 of them dead), it bypassed the schema seam (a value changed after the
+hyperparameter declaration cannot be seen by `harvest_schema` or the phantom-knob
+detector), and it made 12 update factories accept `dynamics`/`credit` arguments
+they never needed.
+
+**Fixed by deletion, not annotation:**
+
+- the 29 multiplier rows, `_apply_step_size_overrides`, the `dynamics`/`credit`
+  kwargs on all 12 update factories, and the compose call site are gone;
+- 12 unread `step_size_*` rows and 3 unread optimizer priors (`adam_beta1`,
+  `adam_beta2`, `muon_momentum`) are gone with them;
+- the one live dynamics default was renamed `dynamics_step_size_default`, joining
+  the two calibrated overrides in a single `dynamics_step_size_*` family;
+- `PRIORS_REGISTRY` is now **28 rows, each with exactly one reader**: 23
+  `ruler_lr_*` (via `get_ruler_lr`), 3 `dynamics_step_size_*` (via the schema
+  declaration and `apply_dynamics_step_size`), 2 geometry size priors (declared
+  by `geometry.py`);
+- the retired finding is recorded as `docs/CORRECTIONS.md` Correction 3, the
+  audit-only probe was reduced to the reproducible ladder (there is no longer a
+  column to audit), and `test_no_step_size_multiplier_priors` keeps the column
+  from returning.
+
+**What a prior is, after this pass:** a named hyperparameter default — a
+distribution and a center — declared once in `schema/seed_registries.PRIORS`,
+resolved by `harvest._resolve_value` when a sweep does not supply a value, and
+serialized into `docs/generated/priors.json`. It is not a hidden post-processing
+step. A per-combination correction belongs in the schema declaration or in the
+primitive, where the phantom-knob detector can see it.
+
+`docs/generated/priors.json` was regenerated; the README's prior count follows.
+
+### README and consortium documents
+
+- `docs/readme/neutral-evaluation.md` moved from position 3 to the middle of the
+  README (after core architecture, before validation) and was rewritten as the
+  referee argument: why an inventor cannot be the referee, what procedure this
+  project publishes, what it does not claim, and why a consortium is the
+  institution shaped like the price gap. It links `docs/CONSORTIUM.md` and keeps
+  the generated counts (G12).
+- "Findings we own" left the README. The content is now
+  `docs/FINDINGS.md`, a standalone page that names its source documents and
+  locks; the readiness section and the two inline references link it.
+  `test_findings_lock.py` (G8) now asserts the page quotes its documents *and*
+  that the README links the page.
+- `docs/CONSORTIUM.md` was rewritten as a one-page pitch: the structural
+  problem, the referee apparatus already enforced, what a member gets, what a
+  member accepts, the five honest gaps, and the invitation. The moral framing is
+  still excluded; the argument is price and procedure.
+
+### Evidence (this pass)
+
+| Check | Result |
+|---|---|
+| `test_schema_seam_lock` + `test_harvest_schema_gate2_lock` + `test_wp10_learning_integration_lock` | **33 passed** (9.3 s) |
+| `test_experiment_registries_wiring_lock` + `test_lazy_export_lock` + `test_schema_seam_lock` | **47 passed** (9.4 s) |
+| `test_readme_build_lock` + `test_cli_readme_lock` | **26 passed** in the combined run; `test_findings_lock` **5 passed** after the page links were made repo-relative |
+| `uv run comp run demo --dry-run` | six sections intact; four legal cells composed with the factory signature changes |
+| `pyright` on the four changed library modules | **0 errors, 0 warnings** |
+| `ruff format` / `ruff check` on changed files | formatted; only the three pre-existing `_dynamics.py` complexity findings remain |
+
+### Remaining work, stated plainly
+
+1. **The recording** — unchanged from §14: `docs/DEMO.md` and
+   `test_demo_script.py` are ready; the video is an offline artefact.
+2. **The demo prose numbers** — unchanged: control `0.4389` (not ≈0.87), four
+   legal credit arms, and the printed price excludes the fixed run cost.
+3. **§3.19's 650 lint findings** remain; the census sizes the hygiene pass, it
+   does not perform it.
+4. **The consortium logo is not designed.** `docs/CONSORTIUM.md` is text-only.
+   A standardized "Computronium Consortium" mark is wanted (professional,
+   neutral-referee motif — no algorithm family; SVG with light/dark variants
+   under `docs/assets/`, linked from the page header). This is a design task,
+   not a code task, and no broken image link should precede the asset.

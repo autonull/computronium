@@ -50,27 +50,6 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
 }
 
 
-def _apply_step_size_overrides(
-    base_step_size: float,
-    dynamics: str | None,
-    credit: str | None,
-) -> float:
-    """Apply adaptive step_size overrides for (dynamics, credit) combos.
-
-    Uses PRIORS_REGISTRY via prior_value() as single source (L11).
-    Lazy import avoids circular dependency: ontology -> experiment -> ontology.
-    """
-    if dynamics is None or credit is None:
-        return base_step_size
-    from computronium.experiment.schema.registries import prior_value
-
-    result = prior_value(f"step_size_override_{dynamics}_{credit}")
-    if result is not None:
-        multiplier, _, _ = result
-        return base_step_size * multiplier
-    return base_step_size
-
-
 @dataclass(frozen=True, slots=True)
 class ParameterUpdateConfig:
     """Configuration for parameter update rule.
@@ -123,11 +102,8 @@ class ParameterUpdateConfig:
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
         grad_clip: float = 1.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Euclidean SGD update config."""
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="euclidean",
             step_size=step_size,
@@ -150,8 +126,6 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Riemannian-orthogonal (Muon-class) update config.
 
@@ -163,7 +137,6 @@ class ParameterUpdateConfig:
         COLLAPSES FF×Muon (0.29 vs 0.838) — the local-credit lift is
         whitening-driven, so NS is an opt-in variant, never the default.
         """
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="riemannian_orthogonal",
             step_size=step_size,
@@ -185,8 +158,6 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Muon update config (alias of the exact-polar Muon-class rule).
 
@@ -194,7 +165,6 @@ class ParameterUpdateConfig:
         so the coverage grid can name the axis by its literature identity.
         Same NS caveat: ``ortho_steps > 0`` is an opt-in variant.
         """
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="muon",
             step_size=step_size,
@@ -216,10 +186,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="spectral_constrained",
             step_size=step_size,
@@ -241,10 +208,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="mean_norm",
             step_size=step_size,
@@ -263,11 +227,8 @@ class ParameterUpdateConfig:
         step_size: float = 0.01,
         momentum: float = 0.9,
         grad_clip: float = 1.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Unit-RMS momentum config (the magnitude-only ladder rung)."""
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="unit_rms",
             step_size=step_size,
@@ -288,11 +249,8 @@ class ParameterUpdateConfig:
         momentum: float = 0.9,
         beta2: float = 0.999,
         grad_clip: float = 1.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Per-tensor scalar-second-moment Adam config (LAMB-style)."""
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="local_adam",
             step_size=step_size,
@@ -316,10 +274,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="elastic_consolidation",
             step_size=step_size,
@@ -341,8 +296,6 @@ class ParameterUpdateConfig:
         beta2: float = 0.999,
         eps: float = 1e-8,
         grad_clip: float = 1.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Natural gradient update config (Fisher-geometry preconditioning).
 
@@ -355,7 +308,6 @@ class ParameterUpdateConfig:
         preconditioner, not a uniform per-tensor scale. The D14 regime
         showed this distinction is load-bearing for deep local learning.
         """
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="natural_gradient",
             step_size=step_size,
@@ -379,8 +331,6 @@ class ParameterUpdateConfig:
         beta2: float = 0.999,
         eps: float = 1e-8,
         grad_clip: float = 1.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Adam update config.
 
@@ -392,7 +342,6 @@ class ParameterUpdateConfig:
         load-bearing for deep local learning, and the D16 coverage map
         never swept it (a known instrument gap).
         """
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="adam",
             step_size=step_size,
@@ -415,8 +364,6 @@ class ParameterUpdateConfig:
         momentum: float = 0.9,
         beta2: float = 0.99,
         grad_clip: float = 1.0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """Lion (Chen et al. 2023) update config: sign of the momentum
         interpolant.
@@ -442,7 +389,6 @@ class ParameterUpdateConfig:
         global-clip-invariant above zero — ``grad_clip`` only guards
         exact-zero/non-finite gradients here.
         """
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="lion",
             step_size=step_size,
@@ -467,8 +413,6 @@ class ParameterUpdateConfig:
         eps: float = 1e-8,
         grad_clip: float = 1.0,
         ortho_steps: int = 0,
-        dynamics: str | None = None,
-        credit: str | None = None,
     ) -> ParameterUpdateConfig:
         """OrthoAdam (orthogonalized Adam) update config.
 
@@ -489,7 +433,6 @@ class ParameterUpdateConfig:
         quoting: the D13 whitening lesson says NS may not preserve
         local-credit lifts.
         """
-        step_size = _apply_step_size_overrides(step_size, dynamics, credit)
         return cls(
             update_type="ortho_adam",
             step_size=step_size,

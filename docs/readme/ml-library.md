@@ -11,7 +11,7 @@ Beyond the axes, the library carries these instruments:
 - **Recipe cards** (`recipe_cards.py`) — credit × update → optimizer/geometry/config canonical constructors.
 - **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) — learnability-interaction law, 0.944 held-out lattice accuracy.
 - **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) — ψ-only adaptation, recovery and migration with θ bitwise-invariance audits.
-- **P-axis expressiveness probes** — fixed-θ ψ at probe scale: Kolmogorov compression (2.66× ratio), NCA rule reconfiguration (θ SHA-invariant, 3 seeds), sequential composition over NTM tape; σ_max(J_F) frontier measured. Deep chaotic unfolding (E1) is falsified — see [Findings we own](#findings-we-own).
+- **P-axis expressiveness probes** — fixed-θ ψ at probe scale: Kolmogorov compression (2.66× ratio), NCA rule reconfiguration (θ SHA-invariant, 3 seeds), sequential composition over NTM tape; σ_max(J_F) frontier measured. Deep chaotic unfolding (E1) is falsified — see [findings this project owns](docs/FINDINGS.md).
 - **I(C,U) ψ-orthogonality** — 3-seed measurement: ψ modulation averaged 2.0 percentage points (max 9.1, fa × muon routing); these measurements do not establish equivalence or negligibility (`data/icu_measurements.csv`).
 - **Distributed execution** — in-process P2P, multi-GPU DDP/FSDP/DeepSpeed, ONNX/TorchScript/INT8/ternary export, FastAPI inference server.
 

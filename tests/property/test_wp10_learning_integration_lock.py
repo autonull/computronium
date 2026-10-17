@@ -211,45 +211,10 @@ class TestPriorSingleSource:
         assert get_ruler_lr("mnist") == pytest.approx(center)
 
     def test_override_tables_resolve_via_registry(self) -> None:
-        """L11: every step-size override resolves through prior_value()."""
-        # These are the (dynamics, credit) pairs from the registration function
-        step_size_overrides = [
-            ("energy_minimization", "random_projections"),
-            ("energy_minimization", "gradient"),
-            ("energy_minimization", "thermodynamic_contrast"),
-            ("energy_minimization", "pepita"),
-            ("energy_minimization", "local_goodness"),
-            ("energy_minimization", "temporal_trace"),
-            ("energy_minimization", "target_inversion"),
-            ("diffusion", "random_projections"),
-            ("diffusion", "spectral_constrained"),
-            ("diffusion", "homeostatic"),
-            ("diffusion", "temporal_trace"),
-            ("diffusion", "target_inversion"),
-            ("lazy", "temporal_trace"),
-            ("lazy", "thermodynamic_contrast"),
-            ("lazy", "random_projections"),
-            ("lazy", "local_contrastive"),
-            ("lazy", "local_goodness"),
-            ("lazy", "pepita"),
-            ("lazy", "gradient"),
-            ("instantaneous", "temporal_trace"),
-            ("instantaneous", "pepita"),
-            ("pc_alm", "thermodynamic_contrast"),
-            ("pc_alm", "pc_alm"),
-            ("instantaneous", "homeostatic"),
-            ("spike_integration", "temporal_trace"),
-            ("predictive_settling", "thermodynamic_contrast"),
-            ("predictive_settling", "local_goodness"),
-            ("error_predictive_coding", "thermodynamic_contrast"),
-            ("error_predictive_coding", "local_goodness"),
-        ]
+        """L11: every dynamics step-size override resolves through prior_value()."""
         dynamics_step_sizes = ["diffusion", "predictive_settling"]
 
         missing: list[str] = []
-        for dynamics, credit in step_size_overrides:
-            if prior_value(f"step_size_override_{dynamics}_{credit}") is None:
-                missing.append(f"{dynamics}/{credit}")
         for dynamics in dynamics_step_sizes:
             if prior_value(f"dynamics_step_size_{dynamics}") is None:
                 missing.append(dynamics)

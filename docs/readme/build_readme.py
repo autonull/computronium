@@ -381,7 +381,12 @@ def _readiness_ledger() -> str:
         match = re.match(r"\*\*(.+?):\*\*\s*(.*)", block, re.S)
         if match is None:
             continue
-        rendered.append(f"- **{match.group(1)}.** {match.group(2).strip()}")
+        body = match.group(2).strip().splitlines()
+        if re.match(r"^\d+\.", body[0]):
+            rendered.append(f"- **{match.group(1)}.**")
+            rendered.extend(f"  {line}" for line in body)
+        else:
+            rendered.append(f"- **{match.group(1)}.** " + "\n  ".join(body))
     return "\n".join(rendered)
 
 
@@ -446,8 +451,6 @@ _GENERATORS = {
 _SECTIONS: tuple[str, ...] = (
     "title.md",
     "start-here.md",
-    "neutral-evaluation.md",
-    "findings.md",
     "readiness.md",
     "what-is.md",
     "install.md",
@@ -456,6 +459,7 @@ _SECTIONS: tuple[str, ...] = (
     "ontology.md",
     "ml-library.md",
     "core-architecture.md",
+    "neutral-evaluation.md",
     "validation.md",
     "stability-eval.md",
     "kernel.md",

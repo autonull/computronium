@@ -142,12 +142,28 @@ def test_priors_are_registered_through_the_single_path() -> None:
         "ruler_lr_mnist",
         "ruler_lr_catchall",
         "ruler_lr_non_feedforward",
-        "step_size_override_energy_minimization_thermodynamic_contrast",
+        "dynamics_step_size_default",
         "dynamics_step_size_diffusion",
         "hidden_width",
         "hidden_depth",
     ):
         assert name in PRIORS_REGISTRY, f"prior '{name}' missing from PRIORS_REGISTRY"
+
+
+def test_no_step_size_multiplier_priors() -> None:
+    """The retired ``(dynamics, credit)`` multiplier column stays retired.
+
+    Every row was an identity after TODO48b R4 (the measurement lives in
+    ``docs/CORRECTIONS.md`` Correction 3). A multiplier applied after config
+    construction is invisible to the schema — a phantom knob by construction —
+    so the column may not return as a prior.
+    """
+    offenders = sorted(
+        spec.name
+        for spec in PRIORS_REGISTRY
+        if spec.name.startswith("step_size_override_")
+    )
+    assert not offenders, offenders
 
 
 def test_no_learning_prior_registration_path_remains() -> None:

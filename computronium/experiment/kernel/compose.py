@@ -965,11 +965,7 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     ccfg = c_factory(**active.for_axis(StructuralAxis.CREDIT, coordinate.credit))
 
     u_factory = _axis_factory(ParameterUpdateConfig, coordinate.update)
-    ucfg = u_factory(
-        **active.for_axis(StructuralAxis.UPDATE, coordinate.update),
-        dynamics=dynamics_name,
-        credit=coordinate.credit,
-    )
+    ucfg = u_factory(**active.for_axis(StructuralAxis.UPDATE, coordinate.update))
 
     substrate_config = _build_substrate_config(
         substrate_name,

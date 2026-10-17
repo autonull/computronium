@@ -37,18 +37,6 @@ def get_ruler_lr(task: str | None, topology: str | None = None) -> float:
     return 0.01
 
 
-def get_step_size_multiplier(dynamics: str, credit: str) -> float | None:
-    """Get step size multiplier for (dynamics, credit) combination.
-
-    Returns None if no override exists (use base step_size).
-    """
-    result = prior_value(f"step_size_override_{dynamics}_{credit}")
-    if result is not None:
-        center, _, _ = result
-        return center
-    return None
-
-
 def get_dynamics_step_size(dynamics: str) -> float | None:
     """Get dynamics step size override.
 
@@ -59,20 +47,6 @@ def get_dynamics_step_size(dynamics: str) -> float | None:
         center, _, _ = result
         return center
     return None
-
-
-def apply_step_size_overrides(
-    base_step_size: float,
-    dynamics: str | None,
-    credit: str | None,
-) -> float:
-    """Apply adaptive step_size overrides for (dynamics, credit) combos."""
-    if dynamics is None or credit is None:
-        return base_step_size
-    multiplier = get_step_size_multiplier(dynamics, credit)
-    if multiplier is not None:
-        return base_step_size * multiplier
-    return base_step_size
 
 
 def apply_dynamics_step_size(
@@ -90,8 +64,6 @@ def apply_dynamics_step_size(
 
 __all__ = [
     "apply_dynamics_step_size",
-    "apply_step_size_overrides",
     "get_dynamics_step_size",
     "get_ruler_lr",
-    "get_step_size_multiplier",
 ]

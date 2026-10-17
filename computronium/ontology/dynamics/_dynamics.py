@@ -587,7 +587,7 @@ class StateDynamicsConfig:
             "step_size": {
                 "domain": (1e-5, 1.0, "log"),
                 "availability": None,
-                "prior": "step_size_energy_minimization_backprop",
+                "prior": "dynamics_step_size_default",
                 "override_scope": "coordinate",
             },
             "beta": {
