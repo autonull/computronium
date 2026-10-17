@@ -10,7 +10,7 @@ recording. Everything here either makes an existing promise true or removes a pr
 
 ## 0. What "finished" means
 
-Five sentences, each testable:
+Six sentences, each testable:
 
 1. **Runnable.** A fresh clone + `uv sync --dev --all-extras` runs every command in the demo
    screenplay (§4) with exit code 0 and no traceback, on CPU, in under ~10 minutes total.
@@ -23,19 +23,25 @@ Five sentences, each testable:
    `tests/acceptance/test_demo_script.py`, so the video cannot drift from the software.
 5. **Complete.** No user-facing path raises, no lock is red for a reason we cannot state in one
    sentence, and every unimplemented capability is a **named ledger row** (§8), not a silent absence.
+6. **Credible as a referee.** A reader with no stake can verify, from the tree alone, that a comparison
+   here was pre-registered, that every arm got the same treatment, that each implementation published
+   its deviations from its source paper, and that the project logged its own refutations (§1.3). This
+   is the project's distinctive value: the algorithm zoo cannot neutrally evaluate itself, and this is
+   the one thing a single author with no algorithm of their own can supply (§11.2).
 
 **"100% runnable" is scoped to user-facing paths** — the CLI surface, the documented library API, and
 the demo screenplay. It is not a claim that every experimental research programme in §8 has been run.
 
-### 0.1 Three audiences, three falsifiable statements
+### 0.1 Four audiences, four falsifiable statements
 
-The project serves three people, and each gets a test, not a paragraph.
+The project serves four people, and each gets a test, not a paragraph.
 
 | Audience | They must be able to… | Test |
 |---|---|---|
 | **ML library user** | `uv sync`, paste the README's 60-second snippet, train a 6-axis system | `test_demo_compose_6axis` — **verified green, 15.4 s** (see §1.1); snippet locked to source by `scripts/readme_snippets.json` |
 | **Researcher** | point the engine at a config, get records, a report, and a verdict that says either `PASSED`, `REJECTED`, or `INSUFFICIENT` | §6.G3 + §6.G4 |
-| **Contributor** | add one ontology primitive by following README alone, and see where the project wants to go next | §5.8 + §6.G8 |
+| **Contributor** | add one ontology primitive by following README alone, and see where the project wants to go next | §5.8 + §5.10 + §6.G8 |
+| **Algorithm author / consortium member** | check, without trusting the author, that their rule was represented faithfully and compared under a pre-registered, unfiltered protocol | §1.3 apparatus + G11 + §5.12 |
 
 A deliverable that only satisfies the second row is a demo, not a handover.
 
@@ -112,6 +118,32 @@ The repository already owns three finished pieces of research. None appears in `
 six-minute demo can manufacture: one falsification with a diagnosed mechanism, one methodological
 audit, and one self-correction enforced by a regression lock. §4.6 surfaces them; §5.9 makes that
 surface generated so it cannot drift.
+
+### 1.3 The neutrality apparatus — the project's strongest asset, already 80% built
+
+The system's most defensible value is not the six axes; it is that it can compare an algorithm zoo
+**without the zoo's authors doing the comparing**. The machinery for that already exists, and none of
+it is in `README.md`:
+
+| Instrument | Where | What it enforces | State |
+|---|---|---|---|
+| **Evaluation Fairness Contract** (F-1…F-6), append-only | `docs/FAIRNESS_CONTRACT.md`, `docs/evaluation_fairness_contract.md` | identical treatment of arms on data, budget, stopping, seeds, reporting; all comparisons unfiltered or a *named* correction — "cherry-picking is a triage failure, not an editorial choice" (F-5) | written |
+| **Pre-registered thresholds** | `configs/preregistrations/*.json` (**11** registrations) + `computronium/validation/preregistration.py` | declare metric, superiority margin, error rate and seed budget *before* running; `paired_comparison` returns bootstrap CI, sign-flip permutation p, Cohen's dz | built, **not wired into the claim path** (§3.20) |
+| **Algorithm Identity Cards** | `docs/IDENTITY_CARDS.md` — **31 rows**, generated from `AlgorithmIdentityCard` on each primitive | every rule ships its **paper citation** and a **Deviations** column stating exactly where this implementation departs from the published algorithm | **generated, `--strict` green, drift-locked** (verified) |
+| **Phantom-knob detector** | `computronium/core/construction.py::phantom_knobs` | a search key sampled but silently dropped at construction — the exact "hyperparameters are underexplored" defect | built, `validate_all_rule_spaces()` green |
+| **Compute-matched HPO protocol** | `docs/hpo_protocol.md`, `biopl-hpo` | same patience tier for every family, one Optuna study per model, compute-matched | protocol + separate CLI, not an enforced kernel invariant (§3.21) |
+| **Metric provenance rule** | `docs/metric_provenance.md`, `test_metric_provenance.py` | any metric computed on a nudged/target-conditioned state is excluded from learning claims | locked |
+| **Corrections log** | `docs/CORRECTIONS.md` + `CorrectionRecord` | superseded measurements are recorded with the audit that invalidated them | maintained |
+| **Standalone epistemic ledger** | `packages/ceec-core` | claim decisions held outside the engine that produced them | built, export wired (§2.6) |
+| **Discovery/confirmation seed split** | `execution/statistical_promotion.py`, `registry/seed.py` | promotion only on seeds the search never saw | being repaired (§2.1–2.2) |
+
+**This stack is the consortium's constitution, and it is nobody's marketing.** It is the reason a
+comparison produced here is harder to dismiss than one produced by an inventor. §5.11 promotes it from
+an appendix to the README's first value proposition; §11.2 states the argument and its limits.
+
+**Verified now:** `python scripts/generate_identity_cards.py --strict` exits 0 and its output is
+byte-identical to `docs/IDENTITY_CARDS.md` — i.e. *every* concrete credit/update/plasticity primitive
+already declares its deviations from its source paper, with citations.
 
 ---
 
@@ -230,6 +262,9 @@ Each item is one commit; each names its gate. Do them in this order — later it
 | 3.17 | Protocol-field prefilter | 1 failure, `test_scientific_validity_protocol_lock.py` | Prefilter reads the protocol fields it claims to | lock green |
 | 3.18 | `test_schedule_device_lock::test_device_cuda_recorded_in_store` | 1 failure | Skip-with-reason on a CPU-only host, assert the record on CUDA | lock green or documented skip |
 | 3.19 | Lint ratchet: 659 measured vs `BASELINE = 418` | `test_lint_count_ratchet.py:37` | **Deliberate re-baseline.** 690 was measured at `699ee72b`, so the baseline was already stale. Set `BASELINE` to the measured value in the same commit, record the count **per rule** in §8 as a Register C row, and keep the ratchet's "no increase" direction. Do not lower the number by adding `noqa`. | both ratchet tests green |
+| 3.20 | **The claim path ignores pre-registration.** `ThresholdRegistration` + `paired_comparison` exist (`computronium/validation/preregistration.py`), 11 registrations sit in `configs/preregistrations/`, and **nothing under `computronium/experiment/` references either** (`grep` → 0 hits). A claim can be emitted with no pre-registered threshold, which is the exact hole a biased author would climb through. | verified by grep | **Wire, don't build.** If `derive_claims` can consult an optional `ThresholdRegistration` in ≲40 lines, it must: a claim with no registration is labelled `unpreregistered` in its limitation line, never silently accepted. If it cannot be done in ≲40 lines, **stop and ledger it** — do not grow the claim path in a close-out plan. | `test_claim_report_lock` + a new assertion that an unregistered claim carries the label |
+| 3.21 | `MIN_SEEDS = 5` (`validation/preregistration.py:46`) and `DEFAULT_MIN_SEEDS = 5` (`evidence/claims.py:37`) are two constants, one fact | grep | One re-exports the other; the claim floor has a single source (TODO65 §6.C0's rule) | both import paths resolve to one object |
+| 3.22 | Compute-matched HPO is a protocol document plus a separate `biopl-hpo` CLI; the kernel's per-cell search does not enforce an equal trial budget per arm | `docs/hpo_protocol.md` vs `execution/policy.py` | **Do not wire it** — that is a feature. Ledger it (§8) with the exact reason: "equal-effort HPO is a protocol, enforced by `biopl-hpo`, not by `comp run`." The README's neutrality section must say so (§5.11) | §8 row present; README does not overclaim |
 
 **Not in scope, and said out loud:** driving 659 legacy lint findings to zero. That is a hygiene
 programme with no user-visible payoff, and pretending otherwise is how the previous plans accumulated
@@ -282,7 +317,9 @@ choosing the cell count until a difference appears is precisely what the project
 exist to prevent, and doing it in the *demonstration* would discredit every other number in the report.
 The demo's payoff is instead:
 
-1. **The ablation table** — every credit rule measured, with `n` and `std`, no winner declared.
+1. **The ablation table** — every credit rule measured, with `n` and `std`, no winner declared. This is
+   the neutral comparison in miniature (§11.2): the same data, the same protocol, four rules that
+   belong to different traditions, none of them the author's.
 2. **The verdict** — `PASSED`, `REJECTED`, or `INSUFFICIENT`, with `power_achieved` printed.
 3. **The price of an answer** — beat 4 multiplies the power requirement (`63` seeds/group for d=0.5,
    §2.1) by the dry-run's priced cell, and states the walltime and GPU-hours an *actual* claim about
@@ -358,6 +395,9 @@ and it is the only honest thing available at this budget.
 | 5.8 | **Move the "add an ontology primitive" checklist out of `AGENTS.md` into the README's developer section** (registry row → config classmethod → wiring lock → export surfaces → contract invariants → demo row) | Today README:1417 delegates to `AGENTS.md`. A contributor who is inspired has to find a second file; §0.1 row 3 says README alone must be enough. `AGENTS.md` stays the *agent* contract, not the only ramp. |
 | 5.9 | New `docs/readme/findings.md`, **generated** from `docs/{eqprop_deep_limitation,phantom_knob_audit,CORRECTIONS}.md` (title + headline number + status per result) | The three real results in §1.2 are invisible (`phantom`: 0 hits). Generated, so the README cannot claim a finding the doc no longer supports. |
 | 5.10 | "Good first additions" — the §8 *Designed* rows rendered as a short list with the file each would touch | Converts the ledger from a graveyard into an invitation. This is the concrete form of "inspiring others to grow the system". |
+| 5.11 | **`docs/readme/neutral-evaluation.md`, placed above the capability tables.** States what the apparatus in §1.3 guarantees, in the project's own voice: pre-registered thresholds · equal treatment of arms · every rule's deviations from its paper declared with citation · a corrections log · claims held in a party outside the engine. Then the one sentence that is the point: *no credit rule in this repository is the author's invention.* | This is the differentiator, and today it is invisible. It also gives the video its thesis. |
+| 5.12 | `docs/CONSORTIUM.md` — a one-page leave-behind: what a member gets (a comparison stack they can cite, with the contract version and the corrections log), what a member must accept (pre-registration, unfiltered reporting, publication of nulls, audit of their implementation's declared deviations), and the four things we do **not** yet do (§11.2) | The video is a pitch; a pitch needs something to hand over. One page, no promises the tree cannot keep. |
+| 5.13 | **Hard editorial rule, enforced by review of the diff:** the neutrality section names *our* procedure only. It never asserts that other authors cherry-pick, that other codebases are wrong, or that this project is unbiased. Both are unprovable, and the accusation makes the refutation about the accuser. | §11.2 — the moral framing is the weak one, and it is the one that gets quoted back |
 
 **Constraint:** no claim in the README may exceed what `comp report` emits. If the report says
 `INSUFFICIENT`, the README says underpowered, not "demonstrated".
@@ -380,6 +420,8 @@ Cheap first; each gate is named with the defect it prevents from returning.
 | **G8** every document named in README's findings section exists, and its headline number still appears in that document | §5.9 — a result can be retracted, and the README follows |
 | **G9** `tests/integration/test_demo_compose_6axis.py -m demo` green and still byte-identical to the README snippet | the library quickstart (§1.1) — already true; this makes it a gate, not a fact |
 | **G10** the demo run twice from a clean store produces the same `replay_hash` | determinism, i.e. the only basis for "you can reproduce my result" (§11 ceiling) |
+| **G11** `python scripts/generate_identity_cards.py --strict` exits 0 **and** its output equals `docs/IDENTITY_CARDS.md` | §1.3 — a new primitive without a declared deviation is a neutrality leak. Already green; this stops it going stale. |
+| **G12** README's neutrality section is generated from `docs/FAIRNESS_CONTRACT.md` + `IDENTITY_CARDS.md` + `CORRECTIONS.md`, and names only the project's own procedure | §5.11, §5.13 — a claim about our process cannot drift from the process |
 
 Per commit: G6 always; G4–G5 when the surface or README moves; G1 only at the two close points.
 **Never** `pytest tests/`. **Never** re-run a green shard to confirm.
@@ -393,11 +435,11 @@ Per commit: G6 always; G4–G5 when the surface or README moves; G1 only at the 
 | **A** | §2.5 → §2.7 → §2.8 (map + imports; the 35-failure cluster) | those four locks green |
 | **B** | §2.1 → §2.2 → §2.4 (the ladder; G3) | a `comp run` that emits an honest verdict |
 | **C** | §2.3, §2.6 (crash + isolation decision) | `coverage report` exits 0 |
-| **D** | §3.1–§3.18 (shard tail) | G1 first run: 0 failed |
-| **E** | §3.19 (deliberate re-baseline + §8 row) | ratchet green |
+| **D** | §3.1–§3.18 (shard tail), §3.21 | G1 first run: 0 failed |
+| **E** | §3.19, §3.20, §3.22 (ratchet, preregistration decision, HPO ledger row) | ratchet green; claim path honest |
 | **F** | §4.2 `demo` profile; §4.3 polish; §4.4 grouping | `comp demo` runs in ≤180 s, G10 green |
 | **G** | §4.5 screenplay + `test_demo_script.py`; §4.6 research beats | G4 green; video shot |
-| **H** | §5 README consolidation + §5.8–5.10 + regenerate | G5, G8, G9 green |
+| **H** | §5 README consolidation + §5.8–5.13 + regenerate; `docs/CONSORTIUM.md` | G5, G8, G9, G11, G12 green |
 | **I** | Close: G1 second run, G2, G7; tag; update this file | 0 red |
 
 A–C are the same afternoon. D is the long tail. F–H is the presentation.
@@ -419,15 +461,37 @@ coverage warnings · `capabilities` command · per-stage timing defects · repo-
 silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
 compatibility sampling · `SystemConfig.validate` codegen.
 
-**Planned (intent, no code):** 7-domain task expansion (cifar100, svhn, wikitext2, penn_treebank,
-mountain_car, lunar_lander, diabetes, california_housing, ett_h1, PDE suites) · physical-hardware
-validation (memristive/neuromorphic/optical/quantum) · Ray/SLURM · DDP at scale · `campaign_queue` as
-loop driver · full CEEC integration · `question_first` literature store · a real TUI.
+**Planned (intent, no code):** **fair-HPO recovery study — for each zoo algorithm, re-tune under
+equal effort and publish the delta from its published number** (the "these algorithms may be better than
+commonly believed" programme; needs §3.22's gap closed and real compute) · 7-domain task expansion
+(cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes, california_housing,
+ett_h1, PDE suites) · physical-hardware validation (memristive/neuromorphic/optical/quantum) ·
+Ray/SLURM · DDP at scale · `campaign_queue` as loop driver · full CEEC integration ·
+`question_first` literature store · a real TUI · **an evaluation consortium** (§11.2): the fairness
+contract as a shared constitution, identity cards as the admission ticket, the corrections log as the
+shared memory.
 
 **Retired (finding kept):** E1 deep chaotic unfolding — **falsified**, mechanism boundary is
 composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIONS.md`) · legacy
 `experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: 659
 legacy lint findings, counted per rule, ratcheted not cleaned (§3.19).
+
+**Neutrality apparatus (live, §1.3):** fairness contract F-1…F-6 (append-only) · 11 pre-registered
+threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) · 31 generated identity
+cards, `--strict` green, drift-locked · phantom-knob detector · metric-provenance rule · corrections
+log · CEEC ledger · discovery/confirmation seed split.
+
+**Neutrality gaps (named, so the README cannot imply otherwise):**
+1. **All credit rules are this project's re-implementations**, with deviations declared and cited — not
+   the inventors' reference code, and not verified against it. The defensible claim is "independent
+   re-implementation with disclosed deviations", never "verified upstream".
+2. **Equal-effort HPO is a protocol, not a kernel invariant** (§3.22): `docs/hpo_protocol.md` +
+   `biopl-hpo`, not `comp run`.
+3. **No blinding.** The analyst sees arm identity. A blinded arm-label path is unbuilt.
+4. **Pre-registration was not enforced in the claim path** (§3.20); after this plan an unregistered
+   claim is *labelled*, not refused.
+5. **One language, one task family so far.** Vision/classification on `digits`-class data. Cross-domain
+   neutrality needs the 7-domain expansion (Planned, above).
 
 **Results we actually own (the discovery output, to date):** deep EqProp boundary — multi-layer vanilla
 EqProp does not learn (vanishing contrastive signal, slope −1.19, R²=0.80); DirectedEP restores the
@@ -457,6 +521,10 @@ and it is worth showing.
 - [ ] `docs/DEMO.md` exists; video recorded; length ≤6 min; every command on screen is in the script.
 - [ ] The video's closing beats quote the three results in §1.2, numbers unchanged from their documents.
 - [ ] README alone lets a contributor add one primitive (§5.8) and find a named next step (§5.10).
+- [ ] README's first value proposition is neutral comparison (§5.11), generated and gated (G12); it
+      names only our procedure, never another author's motives (§5.13).
+- [ ] `docs/CONSORTIUM.md` exists, is one page, and promises nothing in §8's neutrality gaps.
+- [ ] G11 green: every concrete primitive declares its deviations from its source paper, `--strict`.
 - [ ] §8 ledger complete; every unimplemented capability named.
 - [ ] `TODO65.md` and this file carry a final progress section; no TODO67 is opened.
 - [ ] Tagged.
@@ -530,3 +598,50 @@ read three findings that survived audit, see the exact cost of a real answer, an
 where to take it next. That is the difference between an impressive repository and a project someone
 else can pick up — which is the only form of "inspiring others to grow the system" that survives
 contact with a stranger's afternoon.
+
+### 11.2 Why a neutral-comparison consortium is the right ask — and how to ask for it
+
+The claim under consideration is that this system can evaluate the algorithm zoo *without the zoo
+competing with itself*, because its author has no algorithm in it. The claim is sound in structure and
+**must be made procedurally, never personally.** Two formulations, one of which will be turned against
+us:
+
+- **Weak (do not use):** "other authors cherry-pick because their publication incentives reward it."
+  Unprovable, adversarial, and it makes the rebuttal about the accuser's motives. It also has an
+  immediate counter: this author has dogs in this hunt — a six-axis ontology, an energy-minimisation
+  dynamics that `IDENTITY_CARDS` already discloses differs from canonical EqProp by batch
+  normalisation, and a published *negative* result about someone else's algorithm. "I am unbiased" is
+  not auditable. "These are my declared deviations" is.
+- **Strong (use this):** *an honest comparison has a price, and no single participant can pay it.*
+  Beat 4 computes that price on screen: `63` seeds per group for a d=0.5 effect, times the number of
+  arms, times the number of axes, times the HPO trials each arm needs to be fairly tuned. An inventor
+  has no incentive to fund a comparison they might lose; a critic has no access to the implementations.
+  The gap is structural, not moral, and a consortium is the only institution shaped like the gap.
+
+**What the repository can already put on the table** (§1.3): an append-only fairness contract with
+pre-registered thresholds and unfiltered reporting (F-5); per-implementation deviations with citations
+(`--strict` green over 31 rows); a defect class detector for silently dropped hyperparameters; a
+corrections log that records its own refuted estimates; and a claim ledger held outside the engine that
+produced the claim. Almost no benchmark suite has all five, and none of them is a marketing artefact —
+each is a lock that fails when violated.
+
+**What the ask must not promise** (§8 gaps 1–5): verified *upstream* code, enforced equal-effort HPO in
+`comp run`, blinding, refused unregistered claims, or cross-domain coverage. A consortium recruited on
+those promises would discover the gap in its first meeting, and the project would lose the only asset it
+actually has — that everything it says is checkable.
+
+**The invitation, in one sentence:** *bring your algorithm and the paper whose deviations we must
+declare; we will pre-register the comparison, publish the result unfiltered including the nulls, and
+log our own corrections — and neither of us gets to choose the outcome.* That sentence is defensible
+because the tree already enforces four of its five clauses, and §3.20 adds a label to the fifth.
+
+**Where this touches the plan.** Nothing above is a new feature: it is §5.11 (README positions the
+existing apparatus), §5.12 (`docs/CONSORTIUM.md`, one page), §5.13 (the editorial rule that keeps the
+framing procedural), §3.20 (label an unregistered claim), §3.22 (state the HPO gap rather than imply
+it away), §4.6/beat 6 (show the refuted hypothesis beside the corrections log), and G11–G12 (the
+artefacts cannot drift). Beat 4's printed price is what makes the ask quantitative.
+
+**The one thing that would falsify the whole framing,** stated so a reader can hold us to it: if this
+repository ever produced a comparison whose arm ordering flipped between the pre-registered threshold
+and a favourable post-hoc one, the neutrality claim would be dead. The corrections log exists to make
+that visible rather than fatal — but it must be read as a commitment, not a feature.
