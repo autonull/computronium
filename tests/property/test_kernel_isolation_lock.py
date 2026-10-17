@@ -45,6 +45,11 @@ FORBIDDEN_PREFIXES = (
     "ceec",
 )
 
+# The CEEC export is the sanctioned boundary (TODO65 §3.W3): CEEC is a declared
+# dependency and this one module's purpose is to cross into it. Enumerated by
+# name, like KNOWN_BLOCKED — the prefix is not widened globally.
+CEEC_BOUNDARY_MODULES = frozenset({"ceec_export.py"})
+
 PRE_KERNEL_FLAT = frozenset({
     "producer",
     "staircase",
@@ -113,6 +118,8 @@ class TestKernelImportIsolation:
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for mod, lineno in _imported_modules(tree):
                 hit = _is_forbidden(mod)
+                if hit == "ceec" and path.name in CEEC_BOUNDARY_MODULES:
+                    continue
                 if hit is not None:
                     violations.append(f"{path.name}:{lineno}: imports {mod} ({hit})")
         assert not violations, "kernel→legacy imports:\n" + "\n".join(violations)

@@ -448,20 +448,28 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
     def limitations(self, run_id: str) -> tuple[Limitation, ...]:
         """Every limitation derivable from the run's records, none asserted."""
         spec = self._spec(run_id)
+        claims = self.claims(run_id)
         return derive_limitations(
             self._store.query_records(run_id=run_id),
             achieved=self.achieved_seeds(run_id),
             n_seeds=spec.n_seeds if spec else None,
             fidelity=spec.fidelity if spec else None,
             objectives=spec.objectives if spec else (),
-            claim_count=len(self.claims(run_id)),
+            claim_count=len(claims),
             required_seeds=GateThresholds().required_seeds_per_group,
+            preregistered=self._claims_preregistered(claims),
         )
 
     def _spec(self, run_id: str) -> RunSpec | None:
         """The run's persisted spec, or None when the run is unknown."""
         info = self._store.query_run(run_id)
         return info.spec if info is not None else None
+
+    def _claims_preregistered(self, claims: tuple[Claim, ...]) -> bool | None:
+        """Whether every claimed metric has a pre-registered threshold on disk."""
+        if not claims:
+            return None
+        return all(claim.metric in preregistered_metrics() for claim in claims)
 
     def _min_seeds(self, run_id: str) -> int:
         """The seed floor every claim-side derivation agrees on."""
@@ -796,6 +804,28 @@ _ABLATION_METRICS: Final = (
     "spectral_radius",
     "psi_capacity",
 )
+
+
+def preregistered_metrics() -> frozenset[str]:
+    """Metric names carrying a pre-registered threshold in ``configs/``.
+
+    A claim whose metric is absent is exploratory: the report says so beside
+    the claim rather than implying a confirmatory result.
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3] / "configs" / "preregistrations"
+    metrics: set[str] = set()
+    for path in root.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except OSError, ValueError:
+            continue
+        metric = payload.get("metric")
+        if isinstance(metric, str):
+            metrics.add(metric)
+    return frozenset(metrics)
 
 
 def chance_level(task_id: str | None, metric: str) -> float | None:

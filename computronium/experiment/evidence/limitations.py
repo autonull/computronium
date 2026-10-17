@@ -46,6 +46,7 @@ class LimitationKind(StrEnum):
     FIDELITY_NOT_REACHED = "fidelity_not_reached"
     UNMEASURED_OBJECTIVES = "unmeasured_objectives"
     INSUFFICIENT_POWER = "insufficient_power"
+    UNPREREGISTERED_CLAIM = "unpreregistered_claim"
     NO_ELIGIBLE_CLAIM = "no_eligible_claim"
 
 
@@ -96,6 +97,7 @@ class _Context:
     objectives: Sequence[str] = ()
     claim_count: int | None = None
     required_seeds: int | None = None
+    preregistered: bool | None = None
 
 
 def _quarantined(ctx: _Context) -> tuple[Limitation, ...]:
@@ -234,6 +236,22 @@ def _insufficient_power(ctx: _Context) -> tuple[Limitation, ...]:
     )
 
 
+def _unpreregistered_claim(ctx: _Context) -> tuple[Limitation, ...]:
+    if ctx.preregistered is not False or not ctx.claim_count:
+        return ()
+    return (
+        Limitation(
+            kind=LimitationKind.UNPREREGISTERED_CLAIM,
+            detail=(
+                f"{ctx.claim_count} claim(s) have no pre-registered threshold; "
+                "this is an exploratory comparison, not a confirmatory one"
+            ),
+            count=ctx.claim_count,
+            evidence="claim metric not found in configs/preregistrations/*.json",
+        ),
+    )
+
+
 def _no_eligible_claim(ctx: _Context) -> tuple[Limitation, ...]:
     if ctx.claim_count is None or ctx.claim_count > 0:
         return ()
@@ -256,6 +274,7 @@ _DERIVATIONS: Final[tuple[Callable[[_Context], tuple[Limitation, ...]], ...]] = 
     _fidelity_not_reached,
     _unmeasured_objectives,
     _insufficient_power,
+    _unpreregistered_claim,
     _no_eligible_claim,
 )
 
@@ -269,6 +288,7 @@ def derive_limitations(
     objectives: Sequence[str] = (),
     claim_count: int | None = None,
     required_seeds: int | None = None,
+    preregistered: bool | None = None,
 ) -> tuple[Limitation, ...]:
     """Derive a run's limitations from its records and its own declaration.
 
@@ -283,6 +303,8 @@ def derive_limitations(
             derived, which suppresses that limitation rather than guessing.
         required_seeds: Seeds per cell the power analysis asks for; ``None``
             when not derived, which suppresses the underpowered line.
+        preregistered: Whether the run's claimed metric has a pre-registered
+            threshold; ``None`` suppresses the label.
 
     Returns:
         Limitations in a fixed order, one per kind that applies.
@@ -295,5 +317,6 @@ def derive_limitations(
         objectives=objectives,
         claim_count=claim_count,
         required_seeds=required_seeds,
+        preregistered=preregistered,
     )
     return tuple(chain.from_iterable(derive(ctx) for derive in _DERIVATIONS))

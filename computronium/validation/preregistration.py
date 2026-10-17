@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from computronium.experiment.evidence.claims import DEFAULT_MIN_SEEDS
 from computronium.validation.statistics import (
     bootstrap_percentile_ci,
     cohens_dz,
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-MIN_SEEDS = 5
+MIN_SEEDS = DEFAULT_MIN_SEEDS
 DEFAULT_ALPHA = 0.05
 
 
