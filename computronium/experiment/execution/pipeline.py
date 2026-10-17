@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
@@ -755,7 +756,7 @@ class PipelineRunner:
             total=round_controller.max_rounds or 0,
             desc="Rounds",
             unit="round",
-            disable=tqdm is None,
+            disable=tqdm is None or not sys.stdout.isatty(),
         )
 
     def _should_stop_round_loop(
@@ -914,7 +915,7 @@ class PipelineRunner:
                 desc=f"Round {self._state.current_round} cells",
                 unit="cell",
                 leave=False,
-                disable=tqdm is None,
+                disable=tqdm is None or not sys.stdout.isatty(),
             )
             if tqdm
             else None
