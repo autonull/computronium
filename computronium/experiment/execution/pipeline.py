@@ -118,6 +118,9 @@ class PipelineConfig:
     budget: Any = (
         None  # Backward compatibility: accepts legacy Budget, converts to deadline
     )
+    # Cells this launch may measure before stopping. Read from the legacy
+    # Budget's ``target_cells``; a per-launch cap, so a resume continues.
+    session_cell_limit: int | None = None
     cost_model: CostModel | None = None
     policy: Policy | None = None
     allocator: EvidenceDrivenAllocator | None = None
@@ -135,17 +138,21 @@ class PipelineConfig:
     code_sha: str = "unknown"
 
     def __post_init__(self) -> None:
-        # Convert legacy Budget to Deadline if provided
-        if self.budget is not None and self.deadline is None:
+        # Convert legacy Budget to Deadline if provided, and carry its
+        # per-launch cell cap. ``dataclasses.replace`` re-runs this even when a
+        # deadline is already present, so the cap cannot depend on conversion.
+        if self.budget is not None:
             from computronium.experiment.execution.deadline import Deadline
             from computronium.experiment.kernel.resources import Budget as LegacyBudget
 
             if isinstance(self.budget, LegacyBudget):
-                object.__setattr__(
-                    self,
-                    "deadline",
-                    Deadline.from_seconds(self.budget.soft_seconds or 3600),
-                )
+                object.__setattr__(self, "session_cell_limit", self.budget.target_cells)
+                if self.deadline is None:
+                    object.__setattr__(
+                        self,
+                        "deadline",
+                        Deadline.from_seconds(self.budget.soft_seconds or 3600),
+                    )
 
 
 def _resolve_tasks(config: PipelineConfig) -> tuple[str, ...]:
@@ -891,6 +898,15 @@ class PipelineRunner:
         if not self._state.pending_proposals:
             return
 
+        limit = self._config.session_cell_limit
+        if limit is not None:
+            remaining = limit - len(all_records)
+            if remaining <= 0:
+                self._state.pending_proposals.clear()
+                self._shutdown = True
+                return
+            self._state.pending_proposals = self._state.pending_proposals[:remaining]
+
         # Progress bar for proposals in this round
         pbar_proposals = (
             tqdm(
@@ -917,6 +933,9 @@ class PipelineRunner:
 
         if pbar_proposals:
             pbar_proposals.close()
+
+        if limit is not None and len(all_records) >= limit:
+            self._shutdown = True
 
     async def _attribute_allocation(self, records: list[Record]) -> None:
         """Re-allocate after measuring, before S10 decides (R19 allocator)."""

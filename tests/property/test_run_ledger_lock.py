@@ -241,8 +241,8 @@ def test_a_diverged_run_hashes_differently_though_its_spec_did_not(
 ) -> None:
     """A spec-only hash cannot detect a run that measured different cells."""
     spec = _run_spec()
-    short = _replay_hash_of(tmp_path, "replay_short.duckdb", spec, rounds=2)
-    long = _replay_hash_of(tmp_path, "replay_long.duckdb", spec, rounds=3)
+    short = _replay_hash_of(tmp_path, "replay_short.duckdb", spec, rounds=1)
+    long = _replay_hash_of(tmp_path, "replay_long.duckdb", spec, rounds=2)
 
     assert short != long
 
