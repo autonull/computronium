@@ -27,6 +27,18 @@ Five sentences, each testable:
 **"100% runnable" is scoped to user-facing paths** — the CLI surface, the documented library API, and
 the demo screenplay. It is not a claim that every experimental research programme in §8 has been run.
 
+### 0.1 Three audiences, three falsifiable statements
+
+The project serves three people, and each gets a test, not a paragraph.
+
+| Audience | They must be able to… | Test |
+|---|---|---|
+| **ML library user** | `uv sync`, paste the README's 60-second snippet, train a 6-axis system | `test_demo_compose_6axis` — **verified green, 15.4 s** (see §1.1); snippet locked to source by `scripts/readme_snippets.json` |
+| **Researcher** | point the engine at a config, get records, a report, and a verdict that says either `PASSED`, `REJECTED`, or `INSUFFICIENT` | §6.G3 + §6.G4 |
+| **Contributor** | add one ontology primitive by following README alone, and see where the project wants to go next | §5.8 + §6.G8 |
+
+A deliverable that only satisfies the second row is a demo, not a handover.
+
 ---
 
 ## 1. Measured starting state (evidence, not opinion)
@@ -71,6 +83,35 @@ $ uv run comp coverage report --store demo.duckdb
 
 The report is otherwise genuinely excellent (credit-ablation table with `n`/`std`, Pareto, hypervolume,
 seed-variability with CI). The engine works. **The promotion ladder and one CLI command do not.**
+
+### 1.1 The library layer — verified, not assumed
+
+The plan's scope is the experiment kernel, so the library was measured separately rather than trusted:
+
+| Check | Result |
+|---|---|
+| `pytest tests/integration/test_demo_compose_6axis.py -m demo` | **1 passed, 15.4 s** — composes RecurrentGeometry + ThermodynamicContrast + DigitalSubstrate and trains on MNIST |
+| root public surface | **142 names**, all lazy (`computronium/__init__.py::_LAZY`) |
+| README snippet lock | `scripts/readme_snippets.json` maps `composition_6axis` → that exact demo test; `test_readme_build_lock` fails if they diverge |
+
+So the library layer is *usable today* and already locked. **Nothing in this plan needs to touch it**,
+and §10's anti-goal ("no new capability") applies to `computronium/` core without exception.
+
+### 1.2 The research layer — three real results already exist and are invisible
+
+The repository already owns three finished pieces of research. None appears in `README.md`
+(`vanishing contrastive`: 0 hits; `phantom`: 0 hits):
+
+| Result | Where | What it establishes |
+|---|---|---|
+| **Deep EqProp boundary** | `docs/eqprop_deep_limitation.md` | Multi-layer vanilla EqProp does not learn: vanishing contrastive signal, slope −1.19, R²=0.80 at β=0.01. DirectedEP restores the signal (slope +0.16, R²=0.85) but **not** accuracy — 9.2% at depth ≥3, chance for 10 classes, 5 epochs, 3 seeds. Gate G2 **FAILED**. 1-layer EqProp remains viable. |
+| **Phantom-knob audit** | `docs/phantom_knob_audit.md` | A search-space key sampled by a sweep but silently dropped at construction poisons parity and liveness identically; detected by `computronium.core.construction.phantom_knobs`, enforced by `validate_all_rule_spaces()`. |
+| **ρ(J) vs σ_max conflation** | `docs/CORRECTIONS.md` | Power iteration reported as "spectral radius" on nonnormal J ([[0.5,10],[0,0.5]]) converges to ≈0.5 while ‖J‖₂ ≈ 10.025 — caught by the repo's own `test_jacobian_amplification`, replaced by three separated estimators, old frontier numbers flagged `requires_rerun`. |
+
+**These are the discovery output of the project so far**, and they are stronger than any result a
+six-minute demo can manufacture: one falsification with a diagnosed mechanism, one methodological
+audit, and one self-correction enforced by a regression lock. §4.6 surfaces them; §5.9 makes that
+surface generated so it cannot drift.
 
 ---
 
@@ -196,7 +237,7 @@ asserted-done rows. The ratchet's job is to stop growth; it stays.
 
 ---
 
-## 4. The demonstration: one entry point, six beats
+## 4. The demonstration: one entry point, seven beats
 
 **Design constraint.** TODO65 §0 defines turn-key as "**one** configurable entry point". Today the
 entry is a 33-command CLI where the honest answers are buried among `dashboard`, `dataset`,
@@ -210,20 +251,21 @@ TODO65 §0 promised one entry point; §9 marked the promise done; the promise is
 rejected, the fallback is a shell script in `docs/DEMO.md` with identical beats — decide once, in the
 first commit, and record the decision.
 
-`comp demo` prints six beats, each with a heading, the command it is equivalent to, and the result:
+`comp demo` prints seven beats, each with a heading, the command it is equivalent to, and the result:
 
 | Beat | Shows | Underlying command |
 |---|---|---|
 | 0 | the machine is ready | `import optuna, scipy, torchvision, duckdb` + device resolve |
 | 1 | **the declared space, priced** | `comp run demo --dry-run` |
-| 2 | **execution**: cells, rounds, promotions | `comp run demo --store demo.duckdb` |
+| 2 | **execution**: cells, rounds, verdicts | `comp run demo --store demo.duckdb` |
 | 3 | **the ledger**: what landed | `comp status --store demo.duckdb` |
-| 4 | **the governed result**: claim + limitations | `comp report --store demo.duckdb --format text` |
+| 4 | **the governed result**: verdict + limitations + the price of a real answer | `comp report --store demo.duckdb --format text` |
 | 5 | **what is unreached** | `comp coverage report --store demo.duckdb` |
+| 6 | **what we learned** — the results we already own | §4.6; no command |
 
 ### 4.2 The `demo` profile (data, not code)
-A `RunProfile` row — the config surface exists for exactly this. Regime chosen so beat 4 produces a
-*real* claim and the whole run fits a video:
+A `RunProfile` row — the config surface exists for exactly this. Regime chosen so beat 4 produces an
+*discriminating* verdict and the whole run fits a video:
 
 - task `digits`, full batches (`batch_limit=0`), `epochs=3`, **`n_seeds=5`** (the claim floor,
   `claims.py:37`);
@@ -231,9 +273,23 @@ A `RunProfile` row — the config surface exists for exactly this. Regime chosen
 - objectives `("validation_accuracy", "walltime_total")`;
 - `budget_seconds` sized from the dry-run's own projection, not a guess.
 
-Target: **≤180 s on CPU**, ≥1 claim with `n=5`, and at least one axis value measurably ahead so the
-video has a finding rather than a shrug. If 180 s is not achievable, reduce to 4 cells — never raise
-`batch_limit` to fake speed.
+Target: **≤180 s on CPU** and ≥1 honest verdict per cell. If 180 s is not achievable, reduce to 4
+cells — never raise `batch_limit` to fake speed.
+
+**The payoff is not "a win".** An earlier draft of this section asked the regime to deliver "at least
+one axis value measurably ahead so the video has a finding". That is selection bias with a nicer name:
+choosing the cell count until a difference appears is precisely what the project's statistical gates
+exist to prevent, and doing it in the *demonstration* would discredit every other number in the report.
+The demo's payoff is instead:
+
+1. **The ablation table** — every credit rule measured, with `n` and `std`, no winner declared.
+2. **The verdict** — `PASSED`, `REJECTED`, or `INSUFFICIENT`, with `power_achieved` printed.
+3. **The price of an answer** — beat 4 multiplies the power requirement (`63` seeds/group for d=0.5,
+   §2.1) by the dry-run's priced cell, and states the walltime and GPU-hours an *actual* claim about
+   this axis would cost, on this machine.
+
+That third line is the most valuable sentence in the video: it tells the viewer what a real answer
+costs and why the project refuses to pretend it has one.
 
 ### 4.3 Make the plan screen legible
 `comp run … --dry-run` output is already the best teaching artifact in the repo (declared 450 cells,
@@ -252,8 +308,9 @@ presentation change; §1 of TODO65 ("prefer wire over delete") is honoured. Re-p
 
 ### 4.5 The screenplay (`docs/DEMO.md`)
 Cold open on `README.md`'s first screen; narrate the motivating hypothesis in one sentence; then the
-six beats, each with: exact command, the *expected output* (pasted, locked), and **one sentence to
-say**. Close on the ledger: what the engine does not yet know. Total budget: **6 minutes**.
+six command beats, each with: exact command, the *expected output* (pasted, locked), and **one
+sentence to say**. Close on beat 6 (the research we own) and the ledger: what the engine does not yet
+know. Total budget: **6 minutes**.
 
 `tests/acceptance/test_demo_script.py` executes every command in the screenplay against a `tmp_path`
 store with the recorded timings, asserting the contract of each beat:
@@ -265,6 +322,22 @@ store with the recorded timings, asserting the contract of each beat:
 - beat 5 exits 0 (**locks §2.3 forever**).
 
 This test is the video's truth condition. If it is green, the video is honest.
+
+### 4.6 Beat 6 — the research we already own
+
+The screenplay closes on three slides, one per result in §1.2, each with the document, the number, and
+the mechanism. Not a summary of the codebase — the *findings*. This is the beat that answers "has this
+project ever discovered anything?", and the answer is yes, including a falsification the authors
+accepted against their own hypothesis.
+
+Rules for these slides:
+- the number is quoted from the document, never recomputed for the video;
+- the failure is named as a failure (G2 FAILED, 9.2% = chance), not softened;
+- each slide names the lock or audit that makes it checkable (`test_jacobian_amplification`,
+  `validate_all_rule_spaces`, the B2 autopsy slope/R²).
+
+A project that shows its own refuted hypothesis is more credible than one that shows a 99% digits run,
+and it is the only honest thing available at this budget.
 
 ---
 
@@ -282,6 +355,9 @@ This test is the video's truth condition. If it is green, the video is honest.
 | 5.5 | The quickstart's Python compose snippet stays, but moves **after** the product path | Both audiences exist; the *engine* audience is the pitch |
 | 5.6 | Link `docs/DEMO.md` (the video) from the first screen | Demonstrability is the deliverable |
 | 5.7 | Regenerate; `test_readme_build_lock` green; every generated count reads from the registry | TODO65 §4, unchanged and still binding |
+| 5.8 | **Move the "add an ontology primitive" checklist out of `AGENTS.md` into the README's developer section** (registry row → config classmethod → wiring lock → export surfaces → contract invariants → demo row) | Today README:1417 delegates to `AGENTS.md`. A contributor who is inspired has to find a second file; §0.1 row 3 says README alone must be enough. `AGENTS.md` stays the *agent* contract, not the only ramp. |
+| 5.9 | New `docs/readme/findings.md`, **generated** from `docs/{eqprop_deep_limitation,phantom_knob_audit,CORRECTIONS}.md` (title + headline number + status per result) | The three real results in §1.2 are invisible (`phantom`: 0 hits). Generated, so the README cannot claim a finding the doc no longer supports. |
+| 5.10 | "Good first additions" — the §8 *Designed* rows rendered as a short list with the file each would touch | Converts the ledger from a graveyard into an invitation. This is the concrete form of "inspiring others to grow the system". |
 
 **Constraint:** no claim in the README may exceed what `comp report` emits. If the report says
 `INSUFFICIENT`, the README says underpowered, not "demonstrated".
@@ -301,6 +377,9 @@ Cheap first; each gate is named with the defect it prevents from returning.
 | **G5** `test_readme_build_lock` | §5, and every hand-written count |
 | **G6** `ruff format` clean; `ruff check <changed>` no **new** findings; `pyright` 0 errors on changed library files | per-commit quality |
 | **G7** `comp --help` shows ≤6 core commands; `comp --help-all` shows all | §4.4 |
+| **G8** every document named in README's findings section exists, and its headline number still appears in that document | §5.9 — a result can be retracted, and the README follows |
+| **G9** `tests/integration/test_demo_compose_6axis.py -m demo` green and still byte-identical to the README snippet | the library quickstart (§1.1) — already true; this makes it a gate, not a fact |
+| **G10** the demo run twice from a clean store produces the same `replay_hash` | determinism, i.e. the only basis for "you can reproduce my result" (§11 ceiling) |
 
 Per commit: G6 always; G4–G5 when the surface or README moves; G1 only at the two close points.
 **Never** `pytest tests/`. **Never** re-run a green shard to confirm.
@@ -312,13 +391,13 @@ Per commit: G6 always; G4–G5 when the surface or README moves; G1 only at the 
 | Phase | Work | Exit |
 |---|---|---|
 | **A** | §2.5 → §2.7 → §2.8 (map + imports; the 35-failure cluster) | those four locks green |
-| **B** | §2.1 → §2.2 → §2.4 (the ladder; G3) | a `comp run` that earns a claim |
+| **B** | §2.1 → §2.2 → §2.4 (the ladder; G3) | a `comp run` that emits an honest verdict |
 | **C** | §2.3, §2.6 (crash + isolation decision) | `coverage report` exits 0 |
 | **D** | §3.1–§3.18 (shard tail) | G1 first run: 0 failed |
 | **E** | §3.19 (deliberate re-baseline + §8 row) | ratchet green |
-| **F** | §4.2 `demo` profile; §4.3 polish; §4.4 grouping | `comp demo` runs in ≤180 s |
-| **G** | §4.5 screenplay + `test_demo_script.py` | G4 green; video shot |
-| **H** | §5 README consolidation + regenerate | G5 green |
+| **F** | §4.2 `demo` profile; §4.3 polish; §4.4 grouping | `comp demo` runs in ≤180 s, G10 green |
+| **G** | §4.5 screenplay + `test_demo_script.py`; §4.6 research beats | G4 green; video shot |
+| **H** | §5 README consolidation + §5.8–5.10 + regenerate | G5, G8, G9 green |
 | **I** | Close: G1 second run, G2, G7; tag; update this file | 0 red |
 
 A–C are the same afternoon. D is the long tail. F–H is the presentation.
@@ -350,10 +429,18 @@ composition-error compounding · older "ρ(J)=estimator" claims (`docs/CORRECTIO
 `experiment/cli` runners · the `execution/budget.py` stub (wrong API, deleted §2.5) · Register C: 659
 legacy lint findings, counted per rule, ratcheted not cleaned (§3.19).
 
+**Results we actually own (the discovery output, to date):** deep EqProp boundary — multi-layer vanilla
+EqProp does not learn (vanishing contrastive signal, slope −1.19, R²=0.80); DirectedEP restores the
+signal without restoring accuracy (9.2% at depth ≥3, gate G2 FAILED); 1-layer EqProp viable
+(`docs/eqprop_deep_limitation.md`) · phantom-knob class + detector (`docs/phantom_knob_audit.md`) ·
+ρ(J)/σ_max conflation caught and corrected, three separated estimators, pre-correction frontier numbers
+flagged `requires_rerun` (`docs/CORRECTIONS.md`, `test_jacobian_amplification`).
+
 **The handover claim.** What ships is a *laboratory*, not a result: a composable six-axis system, an
-experiment kernel that records what it measured and refuses to overclaim, and a demo that shows both.
-Every stronger claim is a ledger row with a name. That is the maximum value available without new
-features, and it is worth showing.
+experiment kernel that records what it measured and refuses to overclaim, a demo that shows both, and
+three findings — two negative, one methodological — that survived the project's own audits. Every
+stronger claim is a ledger row with a name. That is the maximum value available without new features,
+and it is worth showing.
 
 ---
 
@@ -368,6 +455,8 @@ features, and it is worth showing.
 - [ ] `README.md` contains no claim the report cannot emit.
 - [ ] `comp --help` ≤6 core commands; all reachable under `--help-all`.
 - [ ] `docs/DEMO.md` exists; video recorded; length ≤6 min; every command on screen is in the script.
+- [ ] The video's closing beats quote the three results in §1.2, numbers unchanged from their documents.
+- [ ] README alone lets a contributor add one primitive (§5.8) and find a named next step (§5.10).
 - [ ] §8 ledger complete; every unimplemented capability named.
 - [ ] `TODO65.md` and this file carry a final progress section; no TODO67 is opened.
 - [ ] Tagged.
@@ -417,3 +506,27 @@ open a plan for it. That rule, more than the item list, is what makes one plan e
 If, at phase D's close, more than five §3 items are still red **and** each names a design question
 rather than a bug, then the honest answer is not TODO67 — it is to cut the demo to the beats that are
 true and ship. The plan is sized so that outcome is still a shippable project.
+
+### 11.1 The ceiling — what this plan cannot deliver, and must not imply
+
+Stated here so the README cannot quietly promise it:
+
+1. **A positive empirical discovery.** At `n≤10` on digits, with a power requirement of 63
+   seeds/group, an effect large enough to claim would have to be enormous. §4.2 therefore promises a
+   *verdict and a price*, not a finding. Anything stronger requires a scheduled campaign
+   (`claim` profile, `--budget`), which is compute, not code.
+2. **External validation.** Nobody outside this repository has run it. The deliverable is
+   *reproducibility in principle* — G10's replay hash and the demo script — not evidence that anyone
+   reproduced it.
+3. **Hardware or substrate claims.** Every measurement in the tree is digital. Memristive,
+   neuromorphic, optical and quantum staging are ledger rows. The README's motivating hypothesis is an
+   agenda; after this plan it must still read as an agenda.
+4. **Publication-grade statistics.** The `63`-seed requirement is the honest number and it is printed
+   on screen in beat 4. A paper would need that campaign run, which is exactly the "next level" the
+   video is meant to attract investment for.
+
+**What is achievable, and is enough:** a stranger can install it, run it, watch it refuse to overclaim,
+read three findings that survived audit, see the exact cost of a real answer, and find a named list of
+where to take it next. That is the difference between an impressive repository and a project someone
+else can pick up — which is the only form of "inspiring others to grow the system" that survives
+contact with a stranger's afternoon.
