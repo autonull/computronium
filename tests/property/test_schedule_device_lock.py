@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from computronium.experiment.environment import environment_variables
 from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.kernel import cell_record
 from computronium.experiment.schema import (
@@ -139,7 +140,7 @@ def test_device_cuda_recorded_in_store(tmp_path) -> None:
             num_workers=0,
         ),
         provenance=Provenance(
-            env={},
+            env=environment_variables(),
             dataset="digits",
             dataset_version="1.0",
             code_sha="device_test",
@@ -196,7 +197,7 @@ def test_device_auto_defaults_to_cpu_when_no_cuda(tmp_path, monkeypatch) -> None
                 num_workers=0,
             ),
             provenance=Provenance(
-                env={},
+                env=environment_variables(),
                 dataset="digits",
                 dataset_version="1.0",
                 code_sha="device_test",

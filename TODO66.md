@@ -834,3 +834,72 @@ code behind them at the start of this session; the list below is what now has.
 
 **Lint note.** The ratchet is re-baselined to 659 and green; per-rule Register C
 counts remain hygiene-pass work. No new `noqa` was added to buy a green run.
+
+---
+
+## 13. Second implementation pass (2026-10-17, later session)
+
+The first pass left 27 targeted failures and 21 property setup/collection errors.
+All are now closed in the same tree, with the mechanism fixed rather than the
+assertion weakened.
+
+### Closed, by item
+
+| Plan item | What was actually wrong | Fix |
+|---|---|---|
+| §3.2 env fingerprint | Five fixtures and `scripts/run_experiment.py` built `Provenance(env={})`; the store refuses an empty env. `record_intent` did the same, so every intent round-trip failed. | New `environment.environment_variables()` — one source from `EnvironmentCapture`; store intent records and every record-writing fixture use it. `run_experiment` also resolves the dataset/code SHA instead of persisting `"unknown"`. |
+| §3.3 experiment invariants | The fixture called `config.getoption("--experiment-db")`; pytest expects the *dest* (`experiment_db`), and the option was not registered anywhere. | `--experiment-db` / `--run-id` registered in `tests/conftest.py`; fixture reads the dests; the dead module-level hooks were deleted. |
+| §3.1 device hygiene | Fixture declared feedforward geometry as `{"depth": 2}`; the composer's key vocabulary is `num_layers`. | Fixture uses `num_layers`; the file collects and 60 cells run. |
+| §3.4 TYPE_CHECKING call | `pipeline._deserialize_proposal` called `Proposal(...)` while `Proposal` was imported only under `TYPE_CHECKING` — a runtime `NameError` on every checkpoint restore. | `Proposal` imported at runtime; the AST lock is green without an exemption. |
+| §3.5 single writer | `coverage report` opened DuckDB directly. | Rewritten through `RecordStore` (`latest_run_id`, `query_records`, record fields); `duckdb` no longer appears outside the store. |
+| §3.6 MNIST literals | `create_campaign_yaml` hard-coded `784` / `10`. | Shapes resolved per task through `kernel.evaluate.task_shape`. |
+| §3.7 vacuous guards | Three "NaN guard" tests asserted `isinstance(reason, str)`, which cannot fail; the EPC settle also leaked non-finite input without raising. | Tests inject a NaN batch and require `RuntimeError`; EPC gained the missing initial-activation guard. The lock now fails when the guard is removed. |
+| §3.9 substrate sweep / timings | `substrate.sparsity` was never passed to the substrate factory; no stage timing reached the record. | Substrate kwargs are filtered by the declared `AxisSpec.accepted_params`; `PipelineRunner` stamps `stage_timings` into every recorded payload. The effect tests compare whole axis configs (`dataclasses.asdict`) instead of renamed fields, and generate ≤10/50 cells per case. |
+| §3.11 unreachable primitive | `_filter_axes_for_validity` exempted every user-specified axis, so `instantaneous` survived beside `thermodynamic_contrast`. | Exemption removed: a declared primitive survives only if it participates in a legal combination of the declared space. User-axes locks still pass because their declared primitives are all reachable. |
+| §3.12 budget utilization | `scripts/run_experiment._run_loop` could not persist any record (empty env + `unknown` dataset/SHA); the window assertion saw zero cells. | Same provenance fix as §3.2; the 3.6 s run measures cells and closes on the deadline. |
+| §3.14 OperatingPoint | `from_question_first` silently ignored unknown operating-point keys. | Fail closed with `ValueError("unknown field(s) in operating point: …")`. |
+| run ledger (design question) | The pipeline's S3 never called the policy at all: it consumed the cell stream directly, so a `ModelBasedPolicy` was indistinguishable from `StratifiedRandomPolicy`. | S3 now asks a `ModelBasedPolicy` for its proposals (the reserved exploit-policy path); walking policies still consume the stream. The two-policy lock passes with no assertion change. |
+| §3.15/3.16/3.17/3.18 | The four remaining red files were all the same empty-`env` fixture defect. | Same helper; files green. |
+| §4.3 non-TTY | Progress bars emitted escapes when stdout was piped. | Already landed at `18dee0b7`; unchanged. |
+| §5.4 developers | Three developer-tooling sections lived in `acceleration.md`. | Folded into `developers.md` under one `### Kernel development, tooling, and registry locks` section; `acceleration.md` keeps only hardware acceleration. |
+| G12 neutrality | The section was curated prose; its counts could drift. | New generators `identity_card_count`, `corrections_count`, `fairness_clause_count` read `IDENTITY_CARDS.md`, `CORRECTIONS.md`, `FAIRNESS_CONTRACT.md`; `neutral-evaluation.md` renders them. |
+| timeout census | `test_stream_advances_lock` declared 300 s with a 60 s row; twelve acceptance/display markers were unrecorded (pre-existing drift). | Census rows updated/added; `test_timeout_marker_policy.py` is green (91). |
+
+### Measurements / corrections to the plan
+
+- The ablation and demo numbers from the first pass stand: control `0.4389`
+  (not ≈0.87), four legal credit arms (no `thermodynamic_contrast` under
+  `instantaneous`). Neither is a defect; both are measurements the plan's
+  prose had estimated.
+- `test_hyperparameter_effect_lock` is intrinsically expensive. The two
+  effect tests now measure 135 s and 48 s (was >600 s / timeout) after
+  limiting candidate pages and comparing configs instead of building full
+  systems; both carry the required 600 s marker and census rows.
+
+### Still open (honest ledger)
+
+1. **§5.2 / §5.3** — the three capability tables are not yet demoted to one,
+   and the readiness ledger is not generated into the README. The factual
+   generators landed (G12), but the §8 ledger itself remains a TODO66 table.
+2. **§3.19 per-rule counts** — the ratchet is green at 659 but the Register C
+   per-rule breakdown is still hygiene-pass work.
+3. **§4.3 grammar** — non-TTY output is fixed; the unified
+   `space / price / budget / first cells` section grammar is not.
+4. **§4.5 video** — `docs/DEMO.md` and `test_demo_script.py` are ready; the
+   recording is an offline artefact, not a tree change.
+
+### Gate state at the end of this pass
+
+| Gate | State |
+|---|---|
+| G1 property shard | **2085 passed, 60 skipped, 25 xfailed, 1 xpassed, 0 failed, 0 errors** (442 s) — was 32 failed / 24 errors after the first pass |
+| G2 unit + `test_v1_exit` | **551 passed, 1 xfailed** (149 s) |
+| G3 promotion ladder | green |
+| G4 demo screenplay | **2 passed** (72 s) |
+| G5 README build | green after regeneration |
+| G7 core help | green: 6 core / all under `--help-all` |
+| G8 findings | green |
+| G10 same cells | green |
+| G11 identity cards | green |
+| G12 generated neutrality | **green for counts**: identity cards 31, corrections 2, contract F-1…F-6 rendered from source |
+| G13 control | green under `max(3×chance, chance+0.2)`; the plan's ≈0.87 is stale (measured 0.4389) |

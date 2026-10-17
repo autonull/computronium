@@ -3243,49 +3243,25 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
             print(f"Store not found: {store_path}")
             return 1
 
-        import duckdb
-
-        conn = duckdb.connect(str(store_path), read_only=True)
-
-        try:
-            # Get run ID
-            if args.run_id:
-                run_id = args.run_id
-            else:
-                row = conn.execute(
-                    "SELECT run_id FROM runs ORDER BY started_at DESC LIMIT 1"
-                ).fetchone()
-                if not row:
-                    print("No runs found in store")
-                    return 0
-                run_id = row[0]
+        with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
+            run_id = args.run_id or store.latest_run_id()
+            if run_id is None:
+                print("No runs found in store")
+                return 0
 
             print(f"Coverage Report for run {run_id[:12]}")
             print("=" * 80)
 
-            # Get all records for this run
-            rows = conn.execute(
-                """
-                SELECT substrate, geometry, dynamics, plasticity, credit, update,
-                       json_extract(payload, '$.val_acc') as val_acc,
-                       json_extract(payload, '$.perplexity') as perplexity,
-                       json_extract(payload, '$.mean_reward') as mean_reward,
-                       json_extract(payload, '$.f1_score') as f1_score
-                FROM records
-                WHERE run_id = ? AND status.gate_verdict = 'PASS'
-                """,
-                [run_id],
-            ).fetchall()
-
-            if not rows:
+            records = [
+                record
+                for record in store.query_records(run_id=run_id)
+                if record.status.gate_verdict.value == "PASS"
+            ]
+            if not records:
                 print("No PASS records found")
                 return 0
 
-            # Build coverage matrix
-            registry = TaskRegistry()
-            # For now, just show basic coverage
-            domains_seen = set()
-            primitives_seen = {
+            primitives_seen: dict[str, set[str]] = {
                 "substrate": set(),
                 "geometry": set(),
                 "dynamics": set(),
@@ -3293,31 +3269,20 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
                 "credit": set(),
                 "update": set(),
             }
+            for record in records:
+                for axis in primitives_seen:
+                    primitives_seen[axis].add(getattr(record, axis))
 
-            for row in rows:
-                primitives_seen["substrate"].add(row[0])
-                primitives_seen["geometry"].add(row[1])
-                primitives_seen["dynamics"].add(row[2])
-                primitives_seen["plasticity"].add(row[3])
-                primitives_seen["credit"].add(row[4])
-                primitives_seen["update"].add(row[5])
+            print(f"Total PASS cells: {len(records)}")
+            for axis, names in primitives_seen.items():
+                print(f"{axis.title()}: {sorted(names)}")
 
-            print(f"Total PASS cells: {len(rows)}")
-            print(f"Substrates: {sorted(primitives_seen['substrate'])}")
-            print(f"Geometries: {sorted(primitives_seen['geometry'])}")
-            print(f"Dynamics: {sorted(primitives_seen['dynamics'])}")
-            print(f"Plasticity: {sorted(primitives_seen['plasticity'])}")
-            print(f"Credit: {sorted(primitives_seen['credit'])}")
-            print(f"Updates: {sorted(primitives_seen['update'])}")
-
-            # Show domain coverage if we can infer from tasks
+            registry = TaskRegistry()
             print("\nNote: Full domain×primitive matrix requires task-aware scheduling")
             print(
-                f"Registry has {len(registry._enrichments)} tasks across {len(registry.all_domains())} domains"
+                f"Registry has {len(registry._enrichments)} tasks across "
+                f"{len(registry.all_domains())} domains"
             )
-
-        finally:
-            conn.close()
 
         return 0
 

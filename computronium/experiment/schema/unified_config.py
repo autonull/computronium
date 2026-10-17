@@ -220,8 +220,19 @@ class ExperimentConfig:
         task: str,
         operating_point: dict[str, Any] | None = None,
     ) -> ExperimentConfig:
-        """Create config from question-first parameters."""
+        """Create config from question-first parameters.
+
+        Raises:
+            ValueError: The operating point names a field the config does not
+                carry; a silently ignored constraint is dead configuration.
+        """
+        # Create config from question-first parameters
         point = dict(operating_point or {})
+        known = {"budget_seconds", "epochs", "fidelity", "n_seeds", "seed"}
+        unknown = sorted(set(point) - known)
+        if unknown:
+            msg = f"unknown field(s) in operating point: {unknown}"
+            raise ValueError(msg)
         return cls(
             profile="question_first",
             task=task,

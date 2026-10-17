@@ -36,10 +36,9 @@ from computronium.experiment.kernel.search_space import (
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.metrics import (
-    UnmeasuredObjectiveError,
     UnknownObjectiveError,
+    UnmeasuredObjectiveError,
     measured_objectives,
-    objective_metric,
     objective_values,
 )
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY

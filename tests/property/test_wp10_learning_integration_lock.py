@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
     from computronium.experiment.learning.surrogate import SurrogateTrainingData
 
+from computronium.experiment.environment import environment_variables
 from computronium.experiment.evidence.claims import claim_eligible_by_achieved_seeds
 from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
@@ -112,7 +113,7 @@ def _status() -> Status:
 
 def _prov(origin: DataOrigin = DataOrigin.EXPLORATION) -> Provenance:
     return Provenance(
-        env={},
+        env=environment_variables(),
         dataset="test",
         dataset_version="1.0",
         code_sha="sha",

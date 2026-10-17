@@ -11,6 +11,7 @@ from .snapshots import (
     PythonEnvironment,
     SystemEnvironment,
     create_environment_snapshot,
+    environment_variables,
     verify_environment,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "PythonEnvironment",
     "SystemEnvironment",
     "create_environment_snapshot",
+    "environment_variables",
     "verify_environment",
 ]

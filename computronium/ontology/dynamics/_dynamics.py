@@ -1977,6 +1977,11 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         transitions = layered.transitions
 
         xf = x.flatten(1) if x.dim() > 2 else x
+        if not torch.isfinite(xf).all():
+            raise RuntimeError(
+                "NaN/Inf detected in initial activations "
+                "(error_predictive_coding settle)"
+            )
         with torch.no_grad():
             probe_states, _ = self._build_forward_with_errors(
                 xf, transitions, substrate, [], residual=layered.residual

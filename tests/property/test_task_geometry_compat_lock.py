@@ -107,7 +107,7 @@ def test_compose_accepts_causal_transformer_for_token_task() -> None:
         geometry="causal_transformer",
         dynamics="instantaneous",
         plasticity="null",
-        credit="gradient",
+        credit="random_projections",
         update="adam",
         params={},
     )

@@ -50,7 +50,7 @@ _DYNAMICS = (
 )
 
 _TOPOLOGY = "feedforward"
-_GEOMETRY: dict[str, object] = {"depth": 2, "hidden_dim": 16}
+_GEOMETRY: dict[str, object] = {"num_layers": 2, "hidden_dim": 16}
 
 
 def _viable_cells() -> list[tuple[str, str, str]]:

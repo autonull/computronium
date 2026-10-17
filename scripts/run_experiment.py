@@ -18,10 +18,12 @@ from pathlib import Path
 
 import torch
 
+from computronium.experiment.environment import environment_variables
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.stream import CellStream
+from computronium.experiment.execution.sysctx import resolve_code_sha
 from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import (
     declared_cell_count,
@@ -235,10 +237,12 @@ async def _run_loop(  # ruff: ignore[complex-structure, too-many-locals]
             from computronium.experiment.schema.coordinate import Provenance
 
             prov = Provenance(
-                env={},
-                dataset="unknown",
-                dataset_version="1.0",
-                code_sha="unknown",
+                env=environment_variables(),
+                dataset=spec.dataset
+                if spec.dataset not in {"", "unknown"}
+                else spec.task_names[0],
+                dataset_version=spec.dataset_version,
+                code_sha=resolve_code_sha(spec.code_sha),
                 policy=spec.policy or "unknown",
                 links={"run_id": run_id},
             )

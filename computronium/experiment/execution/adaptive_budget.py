@@ -530,6 +530,10 @@ def create_campaign_yaml(plan: BudgetPlan, output_path: str | Path) -> str:
     """Generate campaign YAML from budget plan."""
     import yaml
 
+    from computronium.experiment.kernel.evaluate import task_shape
+
+    shapes = {task: task_shape(task) for task in plan.tasks}
+    primary = shapes[plan.tasks[0]] if plan.tasks else None
     store_path = f"results/adaptive_{plan.strategy.value}_{plan.time_budget_hours}h.db"
 
     data = {
@@ -566,8 +570,8 @@ def create_campaign_yaml(plan: BudgetPlan, output_path: str | Path) -> str:
         },
         "arms": {
             "adaptive": {
-                "input_dim": 784,
-                "num_classes": 10,
+                "input_dim": primary.input_dim if primary else 0,
+                "num_classes": primary.output_dim if primary else 0,
                 "flatten": True,
                 "max_params": 500000,
                 "substrates": plan.substrates,
@@ -579,7 +583,12 @@ def create_campaign_yaml(plan: BudgetPlan, output_path: str | Path) -> str:
             }
         },
         "tasks": [
-            {"name": t, "epochs": plan.epochs, "input_dim": 784, "num_classes": 10}
+            {
+                "name": t,
+                "epochs": plan.epochs,
+                "input_dim": shapes[t].input_dim,
+                "num_classes": shapes[t].output_dim,
+            }
             for t in plan.tasks
         ],
         "hpo": {

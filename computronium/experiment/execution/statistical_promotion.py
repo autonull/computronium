@@ -244,8 +244,12 @@ def check_superiority_gate(
     # Calculate achieved power (C1: verdict reports power_achieved)
     from computronium.core.statistics import power_for_two_sample
 
-    power_achieved = power_for_two_sample(
-        effect_size, max(len(cell_values), 1), thresholds.alpha
+    power_achieved = (
+        power_for_two_sample(
+            effect_size, min(len(cell_values), len(baseline_values)), thresholds.alpha
+        )
+        if min(len(cell_values), len(baseline_values)) >= 2
+        else 0.0
     )
 
     if len(cell_values) < required_seeds:

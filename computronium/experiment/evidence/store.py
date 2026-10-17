@@ -1467,6 +1467,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         ``intent_id`` via ``schedule.task_id``, so redelivery dedups through
         the single writer like any other measurement.
         """
+        from computronium.experiment.environment import environment_variables
         from computronium.experiment.schema.coordinate import Coordinate, DataOrigin
 
         intent_id = str(intent.get("intent_id", uuid.uuid4()))
@@ -1491,7 +1492,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 task_id=intent_id,
             ),
             provenance=Provenance(
-                env={},
+                env=environment_variables(),
                 dataset="operator",
                 dataset_version="v1",
                 code_sha="kernel",

@@ -336,6 +336,17 @@ class EnvironmentCapture:
         return env_vars
 
 
+def environment_variables() -> dict[str, str]:
+    """The environment variables a record's provenance carries.
+
+    One source for every provenance that needs a non-empty ``env``: the store
+    refuses a record without one, and a hand-built dict per caller is the drift
+    this function removes.
+    """
+    captured = EnvironmentCapture(include_git=False)._capture_env_vars()
+    return captured or {"python": platform.python_version()}
+
+
 class ContainerManager:
     """Manage Docker containers for reproducible environments."""
 
@@ -548,5 +559,6 @@ __all__ = [
     "PythonEnvironment",
     "SystemEnvironment",
     "create_environment_snapshot",
+    "environment_variables",
     "verify_environment",
 ]

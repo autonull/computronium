@@ -45,6 +45,9 @@ order lives in :data:`_SECTIONS`, the one place it is decided.
 * ``<!-- gen:schema_version -->`` — current schema version.
 * ``<!-- gen:record_field_count -->`` — number of Record fields.
 * ``<!-- gen:package_count -->`` — number of workspace packages.
+* ``<!-- gen:identity_card_count -->`` — primitive identity cards in the tree.
+* ``<!-- gen:corrections_count -->`` — entries in the corrections log.
+* ``<!-- gen:fairness_clause_count -->`` — highest F-n fairness-contract clause.
 
 The contents list is generated too, from the headings the section files
 actually contain, so it cannot list a section that was renamed or deleted.
@@ -350,6 +353,34 @@ def _package_count() -> str:
     return str(len(pkgs))
 
 
+def _identity_card_count() -> str:
+    """Number of declared primitive identity cards (markdown table data rows)."""
+    rows = [
+        line
+        for line in (REPO / "docs" / "IDENTITY_CARDS.md").read_text().splitlines()
+        if line.startswith("|") and not line.startswith("|---") and "Name |" not in line
+    ]
+    return str(len(rows))
+
+
+def _corrections_count() -> str:
+    """Number of correction records in the corrections log."""
+    return str(
+        (REPO / "docs" / "CORRECTIONS.md").read_text().count("| Field | Correction")
+    )
+
+
+def _fairness_clause_count() -> str:
+    """Highest fairness-contract clause number (F-1…F-n)."""
+    numbers = [
+        int(match)
+        for match in re.findall(
+            r"F-(\d+)", (REPO / "docs" / "FAIRNESS_CONTRACT.md").read_text()
+        )
+    ]
+    return str(max(numbers))
+
+
 _GENERATORS = {
     "cli_table": _cli_table,
     "policy_table": _policy_table,
@@ -387,6 +418,9 @@ _GENERATORS = {
     "schema_version": _schema_version,
     "record_field_count": _record_field_count,
     "package_count": _package_count,
+    "identity_card_count": _identity_card_count,
+    "corrections_count": _corrections_count,
+    "fairness_clause_count": _fairness_clause_count,
 }
 
 

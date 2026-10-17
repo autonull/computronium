@@ -26,6 +26,7 @@ import asyncio
 import contextlib
 import logging
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
@@ -39,7 +40,7 @@ from computronium.experiment.execution.deadline import (
     _PipelineStateSnapshot,
 )
 from computronium.experiment.execution.decision import Decision, RoundController
-from computronium.experiment.execution.stage import StageId, get_stage_spec
+from computronium.experiment.execution.stage import Proposal, StageId, get_stage_spec
 from computronium.experiment.execution.stream import CellStream, CellStreamState
 from computronium.experiment.execution.sysctx import (
     SystemContext,
@@ -65,7 +66,6 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.policy import Policy
     from computronium.experiment.execution.stage import (
         Fragment,
-        Proposal,
         StageContext,
     )
     from computronium.experiment.kernel.resources import CostModel
@@ -247,6 +247,8 @@ class PipelineState:
     last_zero_yield_cause: str | None = None
     # System context with environment snapshot (WP19/R75/K10)
     system_context: SystemContext | None = None
+    # Last measured duration per stage, stamped into every record payload
+    stage_timings: dict[str, float] = field(default_factory=dict)
 
 
 class PipelineRunner:
@@ -973,6 +975,7 @@ class PipelineRunner:
 
         # Run the stage
         stage_impl = impl_class()
+        started = time.perf_counter()
         try:
             fragment = await stage_impl.run(ctx)
         except Exception as e:
@@ -985,6 +988,8 @@ class PipelineRunner:
                 metadata={"error": str(e)},
                 coverage={"stage": stage_id.value, "error": True},
             )
+        finally:
+            self._state.stage_timings[stage_id.value] = time.perf_counter() - started
         return fragment
 
     def _create_stage_context(self, stage_id: StageId, stage_spec) -> StageContext:
@@ -1405,6 +1410,9 @@ class PipelineRunner:
                 case Success(records=records):
                     stored_here: list[Record] = []
                     for record in records:
+                        record.payload.setdefault(
+                            "stage_timings", dict(self._state.stage_timings)
+                        )
                         # Check for checkpoint artifact
                         artifacts = []
                         if "checkpoint_bytes_b64" in record.payload:

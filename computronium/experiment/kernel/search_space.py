@@ -251,8 +251,10 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     For large spaces (>100k combinations), uses per-primitive validation
     instead of full Cartesian product to avoid 50s+ startup.
 
-    User-specified axes (explicit AxisSelection in spec) are NEVER filtered.
-    Only profile-default axes are filtered for validity.
+    Every primitive is filtered to those that participate in at least one legal
+    combination of the declared space. A primitive that cannot compose with the
+    rest of the declaration is unreachable, whether the declaration named it or
+    inherited it.
     """
     from computronium.experiment.legality.dsl import (
         CoordinateContext,
@@ -262,12 +264,6 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     )
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
-
-    # Determine which axes were explicitly specified by the user
-    user_specified_axes: set[StructuralAxis] = set()
-    for axis in StructuralAxis:
-        if spec.selection(axis) is not None:
-            user_specified_axes.add(axis)
 
     # Check cache
     cache_key = _filter_axes_cache_key(axes_snapshot, spec)
@@ -279,12 +275,9 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
 
         filtered_snapshot = []
         for axis_spec in axes_snapshot:
-            # Never filter user-specified axes
-            if (
-                axis_spec.axis_kind in user_specified_axes
-                or axis_spec.name in valid_names_by_axis.get(axis_spec.axis_kind, set())
-                or not valid_names_by_axis.get(axis_spec.axis_kind)
-            ):
+            if axis_spec.name in valid_names_by_axis.get(
+                axis_spec.axis_kind, set()
+            ) or not valid_names_by_axis.get(axis_spec.axis_kind):
                 filtered_snapshot.append(axis_spec)
         return filtered_snapshot
 
@@ -401,12 +394,6 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
         max_checks_per_primitive = 5000
 
         for axis in axes_order:
-            # Skip user-specified axes entirely - they pass through unfiltered
-            if axis in user_specified_axes:
-                for primitive in primitives_by_axis.get(axis, []):
-                    valid_by_axis[axis].add(primitive)
-                continue
-
             for primitive in primitives_by_axis.get(axis, []):
                 # Try to find a valid combination with this primitive fixed
                 found = False
@@ -525,12 +512,9 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     # Filter axes_snapshot to only primitives that appear in at least one valid tuple
     filtered_snapshot = []
     for axis_spec in axes_snapshot:
-        # Never filter user-specified axes
-        if (
-            axis_spec.axis_kind in user_specified_axes
-            or axis_spec.name in valid_by_axis.get(axis_spec.axis_kind, set())
-            or not valid_by_axis.get(axis_spec.axis_kind)
-        ):
+        if axis_spec.name in valid_by_axis.get(
+            axis_spec.axis_kind, set()
+        ) or not valid_by_axis.get(axis_spec.axis_kind):
             filtered_snapshot.append(axis_spec)
 
     return filtered_snapshot

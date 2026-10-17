@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from computronium.experiment.environment import environment_variables
 from computronium.experiment.evidence import (
     SYNTHETIC_FIXTURE,
     ComparisonGuard,
@@ -490,7 +491,7 @@ class TestScientificValidityProtocolIntegration:
                         budget_id="test",
                     )
                     prov = Provenance(
-                        env={},
+                        env=environment_variables(),
                         dataset="test",
                         dataset_version="1.0",
                         code_sha="sha",

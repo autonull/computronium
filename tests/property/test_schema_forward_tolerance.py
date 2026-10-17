@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from computronium.experiment.environment import environment_variables
 from computronium.experiment.evidence import (
     RecordStore,
     StoreConfig,
@@ -53,7 +54,7 @@ def _make_record(
         fidelity="L1", seed=42, n_seeds=1, epochs=1, batch_limit=10, budget_id="test"
     )
     prov = Provenance(
-        env={},
+        env=environment_variables(),
         dataset="test",
         dataset_version="1.0",
         code_sha="sha",

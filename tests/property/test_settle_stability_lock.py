@@ -10,8 +10,28 @@ from __future__ import annotations
 import pytest
 import torch
 
-from computronium.experiment.kernel.compose import _dry_run_trainable
+from computronium.experiment.kernel.compose import (
+    _dry_run_trainable,
+    compose_cell_system,
+)
 from computronium.experiment.schema import Coordinate
+from computronium.ontology import SystemState
+
+
+def _settle_nan_input(coord: Coordinate) -> None:
+    """Settle the composed cell on a non-finite input; the guard must fire."""
+    cell = compose_cell_system(
+        coordinate=coord,
+        geometry={},
+        input_shape=(784,),
+        output_dim=10,
+        param_budget=50000,
+    )
+    x = torch.full((2, 784), float("nan"))
+    y = torch.zeros(2, dtype=torch.long)
+    cell.system.dynamics.settle(
+        SystemState(x=x, y=y), cell.system.geometry, cell.system.substrate, target=None
+    )
 
 
 def test_error_predictive_coding_nan_guard() -> None:
@@ -32,17 +52,8 @@ def test_error_predictive_coding_nan_guard() -> None:
             "step_size": 10.0,
         },  # Large step_size to trigger instability
     )
-    dry_ok, dry_reason = _dry_run_trainable(
-        coordinate=coord,
-        geometry={},
-        input_shape=(784,),
-        output_dim=10,
-        param_budget=50000,
-    )
-    # The dry-run should catch the instability
-    # (may pass if stable, may fail with NaN/Inf if unstable)
-    # The key is that it doesn't silently produce NaN
-    assert isinstance(dry_reason, str)
+    with pytest.raises(RuntimeError, match="NaN/Inf"):
+        _settle_nan_input(coord)
 
 
 def test_predictive_settling_nan_guard() -> None:
@@ -56,14 +67,8 @@ def test_predictive_settling_nan_guard() -> None:
         update="euclidean",
         params={"hidden_dim": 64, "num_layers": 3, "max_steps": 10, "step_size": 10.0},
     )
-    dry_ok, dry_reason = _dry_run_trainable(
-        coordinate=coord,
-        geometry={},
-        input_shape=(784,),
-        output_dim=10,
-        param_budget=50000,
-    )
-    assert isinstance(dry_reason, str)
+    with pytest.raises(RuntimeError, match="NaN/Inf"):
+        _settle_nan_input(coord)
 
 
 def test_pc_alm_nan_guard() -> None:
@@ -83,14 +88,8 @@ def test_pc_alm_nan_guard() -> None:
             "rho": 10.0,
         },
     )
-    dry_ok, dry_reason = _dry_run_trainable(
-        coordinate=coord,
-        geometry={},
-        input_shape=(784,),
-        output_dim=10,
-        param_budget=50000,
-    )
-    assert isinstance(dry_reason, str)
+    with pytest.raises(RuntimeError, match="NaN/Inf"):
+        _settle_nan_input(coord)
 
 
 def test_energy_minimization_max_energy_clamp() -> None:

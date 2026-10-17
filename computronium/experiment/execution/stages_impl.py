@@ -319,17 +319,47 @@ class ScheduleStage:
                 logger.info("BatchSizer returned n_propose=0, stopping")
                 return Fragment(stage_id=self.stage_id, proposals=[])
 
-            # Get fresh cells from CellStream (unbounded, advancing)
-            stream_results = ctx.cell_stream.next(n_propose)
-            for coord, sched in stream_results:
-                proposals.append(
-                    Proposal(
-                        coordinate=coord,
-                        schedule=sched,
-                        rationale="cell_stream",
-                        metadata={},
+            # A model-based policy proposes the cells it has learned to
+            # propose; a walking policy consumes the stream's next page. The
+            # stream stays the only source of *structural* cells, and the
+            # policy's own `cells()` walks that same space with the store as
+            # its freshness oracle.
+            from computronium.experiment.execution.policy import (
+                ModelBasedPolicy,
+                ProposalContext,
+            )
+
+            if isinstance(ctx.policy, ModelBasedPolicy):
+                from computronium.experiment.kernel.evaluate import task_shape
+
+                proposals.extend(
+                    ctx.policy.propose(
+                        ProposalContext(
+                            search_space=ctx.search_space,
+                            spec=ctx.run_spec,
+                            run_id=ctx.run_id,
+                            deadline=ctx.deadline,
+                            evidence=ctx.store,
+                            task=ctx.run_spec.task_names[0]
+                            if ctx.run_spec.task_names
+                            else None,
+                            shape=task_shape,
+                            n_propose=n_propose,
+                        )
                     )
                 )
+            else:
+                # Get fresh cells from CellStream (unbounded, advancing)
+                stream_results = ctx.cell_stream.next(n_propose)
+                for coord, sched in stream_results:
+                    proposals.append(
+                        Proposal(
+                            coordinate=coord,
+                            schedule=sched,
+                            rationale="cell_stream",
+                            metadata={},
+                        )
+                    )
 
         # Apply data-origin allocation from stage params
         allocation = ctx.stage_params.get(

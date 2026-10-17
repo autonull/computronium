@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from computronium.experiment.environment import environment_variables
 from computronium.experiment.evidence import (
     DEFAULT_MIN_SEEDS,
     MIN_SHARED_CELLS,
@@ -128,7 +129,7 @@ def _store_run(
     with RecordStore(StoreConfig(path=path)) as store:
         run_id = store.create_run(spec=_spec())
         provenance = Provenance(
-            env={},
+            env=environment_variables(),
             dataset="digits",
             dataset_version="1.0",
             code_sha="test",
@@ -281,7 +282,7 @@ class TestPairing:
 
     def _records(self) -> list[Record]:
         provenance = Provenance(
-            env={},
+            env=environment_variables(),
             dataset="digits",
             dataset_version="1.0",
             code_sha="test",

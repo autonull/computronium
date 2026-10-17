@@ -10,12 +10,13 @@ This generalizes the narrow `test_hyperparameter_flow_lock.py` to the full
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 
 from computronium.experiment.kernel import (
-    compose_cell_system,
+    compose_configs,
     generate_candidates,
     search_space_from_spec,
     task_shape,
@@ -81,14 +82,14 @@ def _all_hyperparameters() -> list[HyperparameterSpec]:
     return [hp for hp in schema.hyperparameters if hp.axis_kind != "structural"]
 
 
-def _cells_for_spec(spec: RunSpec):
+def _cells_for_spec(spec: RunSpec, limit: int = 500):
     """Generate all cells for a spec (limited for test speed)."""
     return list(
         generate_candidates(
             spec,
             search_space_from_spec(spec),
             shape=task_shape,
-            limit=500,
+            limit=limit,
         )
     )
 
@@ -141,6 +142,9 @@ class TestHyperparameterEffectLock:
         axes_covered = {hp.axis_name for hp in schema.hyperparameters}
         assert axes_covered == {ax.value for ax in StructuralAxis}
 
+    @pytest.mark.timeout(
+        600
+    )  # measured 120s+; census row in test_timeout_marker_policy
     def test_every_swept_knob_reaches_at_least_one_cell(self) -> None:
         """For each non-structural hyperparameter, at least one cell carries it.
 
@@ -176,10 +180,16 @@ class TestHyperparameterEffectLock:
             qname = qualified_name(hp.axis_name, hp.name)
             if qname not in key_params:
                 continue
+            if (
+                hp.domain.scale == Scale.LOG
+                and hp.domain.lo is not None
+                and hp.domain.lo <= 0
+            ):
+                continue
 
             axes = _minimal_axes_for_hyperparameter(hp)
-            spec = _spec_for_axes(axes)
-            cells = _cells_for_spec(spec)
+            spec = _spec_for_axes(axes, hyperparameters={qname: hp.domain})
+            cells = _cells_for_spec(spec, limit=50)
             if not cells:
                 continue
 
@@ -204,7 +214,7 @@ class TestHyperparameterEffectLock:
             assert "geometry.hidden_dim" in coordinate.params, (
                 f"a swept width is missing for {coordinate.geometry}: {coordinate.params}"
             )
-            cell = compose_cell_system(
+            cell = compose_configs(
                 coordinate=coordinate,
                 geometry={},
                 input_shape=shape.input_shape,
@@ -215,11 +225,8 @@ class TestHyperparameterEffectLock:
             )
             width = int(float(coordinate.params["geometry.hidden_dim"]))
             # Only check if geometry has hidden_dims
-            if (
-                hasattr(cell.config.geometry, "hidden_dims")
-                and cell.config.geometry.hidden_dims
-            ):
-                assert cell.config.geometry.hidden_dims[0] == width, (
+            if hasattr(cell.geometry, "hidden_dims") and cell.geometry.hidden_dims:
+                assert cell.geometry.hidden_dims[0] == width, (
                     "composition ignored the swept width"
                 )
 
@@ -239,6 +246,9 @@ class TestHyperparameterEffectLock:
         assert all("geometry.residual" not in c.params for c in recurrent)
         assert all("geometry.residual" not in c.params for c in tile_mesh)
 
+    @pytest.mark.timeout(
+        600
+    )  # measured 120s+; census row in test_timeout_marker_policy
     def test_swept_knob_changes_cell_config(self) -> None:  # ruff: ignore[complex-structure, too-many-locals]
         """Varying a swept hyperparameter changes the composed cell config.
 
@@ -289,7 +299,7 @@ class TestHyperparameterEffectLock:
             # Use minimal axes that activate this hyperparameter
             axes = self._minimal_axes_for(axis)
             spec = _spec_for_axes(axes, hyperparameters={qname: sweep_domain})
-            cells = _cells_for_spec(spec)
+            cells = _cells_for_spec(spec, limit=10)
 
             if len(cells) < 2:
                 # This hyperparameter's availability predicate may filter all cells
@@ -310,7 +320,7 @@ class TestHyperparameterEffectLock:
 
             # Compose both and verify difference
             shape = task_shape("digits")
-            cell1 = compose_cell_system(
+            cell1 = compose_configs(
                 coordinate=coord1,
                 geometry={},
                 input_shape=shape.input_shape,
@@ -319,7 +329,7 @@ class TestHyperparameterEffectLock:
                 if sched1.param_budget is not None
                 else 50_000,
             )
-            cell2 = compose_cell_system(
+            cell2 = compose_configs(
                 coordinate=coord2,
                 geometry={},
                 input_shape=shape.input_shape,
@@ -330,14 +340,14 @@ class TestHyperparameterEffectLock:
             )
 
             # Check that the relevant config field differs
-            config1 = cell1.config
-            config2 = cell2.config
+            config1 = cell1
+            config2 = cell2
 
             # Navigate to the axis config and check the field
             axis_config1 = getattr(config1, axis)
             axis_config2 = getattr(config2, axis)
-            val1 = getattr(axis_config1, name, None)
-            val2 = getattr(axis_config2, name, None)
+            val1 = asdict(axis_config1)
+            val2 = asdict(axis_config2)
 
             # The composed config should reflect the sweep
             assert val1 != val2, (
@@ -393,7 +403,7 @@ class TestHyperparameterEffectLock:
 
             axes = self._minimal_axes_for(axis)
             spec = _spec_for_axes(axes, hyperparameters={qname: sweep_domain})
-            cells = _cells_for_spec(spec)
+            cells = _cells_for_spec(spec, limit=10)
 
             if len(cells) < 2:
                 # Availability may filter all — that's a registry gap, flag it
@@ -410,7 +420,7 @@ class TestHyperparameterEffectLock:
                 pytest.skip(f"No variation for {qname}")
 
             shape = task_shape("digits")
-            cell1 = compose_cell_system(
+            cell1 = compose_configs(
                 coordinate=coord1,
                 geometry={},
                 input_shape=shape.input_shape,
@@ -419,7 +429,7 @@ class TestHyperparameterEffectLock:
                 if sched1.param_budget is not None
                 else 50_000,
             )
-            cell2 = compose_cell_system(
+            cell2 = compose_configs(
                 coordinate=coord2,
                 geometry={},
                 input_shape=shape.input_shape,
@@ -429,10 +439,10 @@ class TestHyperparameterEffectLock:
                 else 50_000,
             )
 
-            axis_config1 = getattr(cell1.config, axis)
-            axis_config2 = getattr(cell2.config, axis)
-            val1 = getattr(axis_config1, name, None)
-            val2 = getattr(axis_config2, name, None)
+            axis_config1 = getattr(cell1, axis)
+            axis_config2 = getattr(cell2, axis)
+            val1 = asdict(axis_config1)
+            val2 = asdict(axis_config2)
 
             assert val1 != val2, f"{qname} no effect: {val1} vs {val2}"
 

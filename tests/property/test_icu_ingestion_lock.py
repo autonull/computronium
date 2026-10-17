@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import pytest
 
+from computronium.experiment.environment import environment_variables
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.learning.icu import DataOrigin, ICUModel
 from computronium.experiment.schema import (
@@ -40,7 +41,7 @@ _RUN = "icu-ingest"
 
 def _provenance(origin: DataOrigin) -> Provenance:
     return Provenance(
-        env={},
+        env=environment_variables(),
         dataset="digits",
         dataset_version="1.0",
         code_sha="test",

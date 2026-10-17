@@ -102,11 +102,11 @@ class TestExperimentInvariants:
     @pytest.fixture(autouse=True)
     def _setup_store(self, request):
         """Setup store from experiment database."""
-        db_path = request.config.getoption("--experiment-db")
+        db_path = request.config.getoption("experiment_db")
         if not db_path:
             pytest.skip("No --experiment-db provided")
         self.store = RecordStore(StoreConfig(path=db_path, read_only=True))
-        self.run_id = request.config.getoption("--run-id")
+        self.run_id = request.config.getoption("run_id")
         with self.store:
             if self.run_id is None:
                 run_info = self.store.latest_run_id()
@@ -231,28 +231,3 @@ class TestExperimentInvariants:
         # This is implicitly tested by the pareto computation, but we can verify
         # by checking that for any two points on the frontier, one doesn't dominate both
         # Pareto property is mathematical; frontier generation ensures it
-
-
-# CLI integration for running against experiment DB
-def pytest_addoption(parser):
-    """Add custom CLI options for experiment tests."""
-    parser.addoption(
-        "--experiment-db",
-        action="store",
-        default=None,
-        help="Path to experiment database for integration tests",
-    )
-    parser.addoption(
-        "--run-id",
-        action="store",
-        default=None,
-        help="Specific run ID to test (default: latest)",
-    )
-
-
-# Pytest configuration
-def pytest_configure(config):
-    """Register custom markers."""
-    config.addinivalue_line(
-        "markers", "experiment: mark test as requiring an experiment database"
-    )

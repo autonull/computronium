@@ -69,6 +69,16 @@ def pytest_addoption(parser: Any) -> None:
         default=None,
         help="Write every test's measured call seconds to PATH as a markdown table.",
     )
+    parser.addoption(
+        "--experiment-db",
+        default=None,
+        help="Path to an experiment database for the experiment-invariant tests.",
+    )
+    parser.addoption(
+        "--run-id",
+        default=None,
+        help="Run id for the experiment-invariant tests (default: latest).",
+    )
 
 
 def pytest_configure(config: Any) -> None:

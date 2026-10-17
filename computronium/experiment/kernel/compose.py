@@ -782,8 +782,11 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
             raise ProposalComposeError(msg)  # pragma: no cover - guarded above
 
 
-def _build_substrate_config(substrate_name: str, dynamics: str):
-    """Build substrate config, adding noise for diffusion dynamics."""
+def _build_substrate_config(
+    substrate_name: str, dynamics: str, params: Mapping[str, object] | None = None
+):
+    """Build substrate config from the cell's swept substrate values."""
+    from computronium.experiment.schema.axis import get_axis_spec
     from computronium.ontology.substrate._substrate import SubstrateConfig
 
     name_lower = substrate_name.lower()
@@ -800,9 +803,12 @@ def _build_substrate_config(substrate_name: str, dynamics: str):
     }
     factory = factory_map.get(name_lower, SubstrateConfig.digital)
 
+    axis_spec = get_axis_spec(StructuralAxis.SUBSTRATE, substrate_name)
+    accepted = set(axis_spec.accepted_params) if axis_spec is not None else set()
+    kwargs = {key: value for key, value in (params or {}).items() if key in accepted}
     if dynamics in {"diffusion", "spike_integration", "pc_alm"}:
-        return factory(noise_level=0.05)
-    return factory()
+        kwargs.setdefault("noise_level", 0.05)
+    return factory(**kwargs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -965,7 +971,11 @@ def compose_configs(  # ruff: ignore[too-many-locals]
         credit=coordinate.credit,
     )
 
-    substrate_config = _build_substrate_config(substrate_name, dynamics_name)
+    substrate_config = _build_substrate_config(
+        substrate_name,
+        dynamics_name,
+        active.for_axis(StructuralAxis.SUBSTRATE, substrate_name),
+    )
     m_factory = _axis_factory(PlasticityConfig, coordinate.plasticity)
     mcfg = m_factory(
         **active.for_axis(StructuralAxis.PLASTICITY, coordinate.plasticity)

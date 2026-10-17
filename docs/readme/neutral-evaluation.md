@@ -8,11 +8,11 @@ therefore publishes its procedure, not its motives:
   (`configs/preregistrations/*.json`, `computronium.validation.preregistration`).
   A claim with no matching registration is labelled `[unpreregistered_claim]`
   beside the claim; the report does not imply otherwise.
-- **Equal treatment of arms.** `docs/FAIRNESS_CONTRACT.md` (F-1…F-6,
+- **Equal treatment of arms.** `docs/FAIRNESS_CONTRACT.md` (F-1…F-<!-- gen:fairness_clause_count -->,
   append-only) fixes data, budget, stopping rule, seeds and reporting. All
   comparisons are reported unfiltered, or a correction is named.
-- **Declared deviations.** Every concrete credit, update and plasticity
-  primitive ships an `AlgorithmIdentityCard` with its paper citation and a
+- **Declared deviations.** <!-- gen:identity_card_count --> concrete credit,
+  update and plasticity primitives ship an `AlgorithmIdentityCard` with its paper citation and a
   *Deviations* column (`docs/IDENTITY_CARDS.md`, generated; `--strict` is a
   gate). The defensible statement is "independent re-implementation with
   disclosed deviations", never "verified upstream".
@@ -21,7 +21,7 @@ therefore publishes its procedure, not its motives:
   fixed; every row carries `n` and `std`; an arm at chance is labelled
   `[at chance]`; and the run checks a known-good control arm before publishing
   the comparison.
-- **A corrections log.** Superseded measurements are recorded with the audit
+- **A corrections log.** <!-- gen:corrections_count --> superseded measurements are recorded with the audit
   that invalidated them (`docs/CORRECTIONS.md`), and claims are held in a
   ledger outside the engine that produced them (`packages/ceec-core`).
 

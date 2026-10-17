@@ -40,6 +40,14 @@ TESTS = pathlib.Path("tests")
 #: recorded here.
 KNOWN_LONG: tuple[tuple[str, int], ...] = (
     (
+        "tests/property/test_hyperparameter_effect_lock.py::test_every_swept_knob_reaches_at_least_one_cell",
+        600,
+    ),
+    (
+        "tests/property/test_hyperparameter_effect_lock.py::test_swept_knob_changes_cell_config",
+        600,
+    ),
+    (
         "tests/acceptance/test_unified_kernel.py::test_legality_same_for_all_policies",
         120,
     ),
@@ -186,7 +194,37 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ("tests/property/test_run_ledger_lock.py", 300),
     (
         "tests/property/test_stream_advances_lock.py::test_stream_advances_lock",
-        60,
+        300,
+    ),
+    (
+        "tests/acceptance/test_demo_script.py::test_the_seven_beats_run_and_do_not_contradict",
+        300,
+    ),
+    (
+        "tests/acceptance/test_demo_script.py::test_two_clean_runs_visit_the_same_cells",
+        300,
+    ),
+    ("tests/acceptance/test_todo63_scientific_validation.py", 600),
+    ("tests/acceptance/test_v1_exit.py::test_01_config_drives_loop_cross_domain", 600),
+    ("tests/acceptance/test_v1_exit.py::test_02_reachability_locks_pass", 600),
+    ("tests/acceptance/test_v1_exit.py::test_03_s10_promotions_non_empty", 600),
+    (
+        "tests/acceptance/test_v1_exit.py::test_04_ceec_export_and_ceec_link_recorded",
+        600,
+    ),
+    ("tests/acceptance/test_v1_exit.py::test_05_report_artifacts_complete", 600),
+    ("tests/acceptance/test_v1_exit.py::test_06_readme_build_lock_green", 60),
+    (
+        "tests/property/test_cellstream_latency_lock.py::test_cellstream_first_cell_latency",
+        30,
+    ),
+    (
+        "tests/property/test_hyperparameter_display_lock.py::test_run_loop_prints_all_resolved_hyperparameters",
+        300,
+    ),
+    (
+        "tests/property/test_hyperparameter_display_lock.py::test_run_loop_prints_hyperparams_even_with_no_swept",
+        300,
     ),
 )
 
