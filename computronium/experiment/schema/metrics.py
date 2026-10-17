@@ -124,12 +124,7 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
 MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "validation_accuracy": "val_acc",
     "validation_loss": "val_loss",
-    "test_accuracy": "test_acc",
-    "test_loss": "test_loss",
-    "f1_score": "f1_score",
     "perplexity": "val_ppl",
-    "bleu_score": "bleu_score",
-    "mean_reward": "mean_reward",
     "walltime_total": "walltime_s",
     "param_count": "param_count",
     "settle_steps": "settle_steps",

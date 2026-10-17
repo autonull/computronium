@@ -484,10 +484,10 @@ def test_multi_axis_campaign_unmeasured_objectives_fail_at_use() -> None:
     with pytest.raises(ValueError, match="have no measurement"):
         RunSpec(**spec_dict)
 
-    # But test_accuracy is now measured and should work
-    spec_dict["objectives"] = (*spec.objectives, "test_accuracy")
+    # But validation_accuracy is measured and should work
+    spec_dict["objectives"] = (*spec.objectives, "validation_accuracy")
     spec_with_measured = RunSpec(**spec_dict)
-    assert "test_accuracy" in spec_with_measured.objectives
+    assert "validation_accuracy" in spec_with_measured.objectives
 
 
 __all__ = [

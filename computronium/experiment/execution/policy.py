@@ -35,7 +35,13 @@ from computronium.experiment.kernel.search_space import (
 )
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
-from computronium.experiment.schema.metrics import objective_metric, objective_values
+from computronium.experiment.schema.metrics import (
+    UnmeasuredObjectiveError,
+    UnknownObjectiveError,
+    measured_objectives,
+    objective_metric,
+    objective_values,
+)
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 
 if TYPE_CHECKING:
@@ -83,9 +89,23 @@ def resolve_objectives(
             optimize a number that does not exist, which is the silent maximize
             this replaces.
     """
+    specs = []
     for name in objective_names:
-        objective_metric(name)
-    specs = [OBJECTIVES_REGISTRY[name] for name in objective_names]
+        spec = OBJECTIVES_REGISTRY.get(name)
+        if spec is None:
+            msg = (
+                f"unknown objective {name!r}; available: "
+                f"{sorted(OBJECTIVES_REGISTRY.keys())}"
+            )
+            raise UnknownObjectiveError(msg)
+        if spec.metric_key is None:
+            msg = (
+                f"objective {name!r} is registered but unmeasured: "
+                f"{spec.unavailable_reason or 'no evaluator metric is declared for it'}. "
+                f"Measured objectives: {list(measured_objectives())}"
+            )
+            raise UnmeasuredObjectiveError(msg)
+        specs.append(spec)
     return tuple(spec.name for spec in specs), tuple(spec.direction for spec in specs)
 
 
