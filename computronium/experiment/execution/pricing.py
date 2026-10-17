@@ -75,7 +75,14 @@ class PricePlan:
 
     def render(self) -> str:
         """The plan as report lines: price, stop point, unreachable axes."""
+        return "\n".join([*self.render_price(), self.render_budget()])
+
+    def render_price(self) -> list[str]:
+        """What the declaration costs, and which primitives it cannot reach."""
         legal = f"{self.legal_cells}+" if self.truncated else str(self.legal_cells)
+        total = f"{self.projected_seconds:.1f}s"
+        if self.projected_seconds >= 60:
+            total += f" ({self.projected_seconds / 60:.1f}m)"
         lines = [
             f"declared cells: {self.declared_cells}  legal: {legal}"
             + (
@@ -83,8 +90,7 @@ class PricePlan:
                 if self.truncated
                 else ""
             ),
-            f"projected total: {self.projected_seconds:.1f}s "
-            f"({self.projected_seconds / 60:.1f}m)",
+            f"projected total: {total}",
             f"price regime: {MEASURED_CELL_SECONDS_REGIME}",
             f"per cell: n_seeds records at "
             f"{MEASURED_PARALLEL_SPEEDUP:.2f}x measured concurrency; "
@@ -98,21 +104,21 @@ class PricePlan:
                 )
             )
             lines.append(f"per dynamics: {priced}")
-        if self.budget_stop_cell is None:
-            lines.append("budget: never binds — the space ends first")
-        elif self.budget_stop_cell > self.legal_cells:
-            lines.append(
-                f"budget: affords all {self.legal_cells} legal cell(s); "
-                f"the space ends first"
-            )
-        else:
-            lines.append(
-                f"budget: stops at cell {self.budget_stop_cell} of {self.legal_cells}"
-            )
         if self.unreachable:
             named = ", ".join(f"{axis}={name}" for axis, name in self.unreachable)
             lines.append(f"declared but unreachable: {named}")
-        return "\n".join(lines)
+        return lines
+
+    def render_budget(self) -> str:
+        """Where a declared budget stops the space."""
+        if self.budget_stop_cell is None:
+            return "budget: never binds — the space ends first"
+        if self.budget_stop_cell > self.legal_cells:
+            return (
+                f"budget: affords all {self.legal_cells} legal cell(s); "
+                f"the space ends first"
+            )
+        return f"budget: stops at cell {self.budget_stop_cell} of {self.legal_cells}"
 
 
 def price_plan(

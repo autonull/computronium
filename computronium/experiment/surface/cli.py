@@ -1808,19 +1808,19 @@ def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
     tasks = _resolve_tasks(PipelineConfig(run_id="dry-run", run_spec=spec))
     space = search_space_from_spec(spec, tasks=tasks)
     lines = [
-        f"profile: {spec.profile}",
-        f"task(s): {', '.join(tasks)}",
-        f"fidelity: {spec.fidelity}  epochs: {spec.epochs}  seeds: {spec.n_seeds}",
-        f"batch_limit: {spec.batch_limit}  param_budget: {spec.param_budget}",
-        f"budget: {spec.budget_seconds if spec.budget_seconds is not None else 'none'}",
-        f"policy: {policy_name}",
-        f"objectives: {', '.join(spec.objectives) or 'all'}",
-        f"spec version: {spec.version}",
+        "space:",
+        f"  profile: {spec.profile}",
+        f"  task(s): {', '.join(tasks)}",
+        f"  fidelity: {spec.fidelity}  epochs: {spec.epochs}  seeds: {spec.n_seeds}",
+        f"  batch_limit: {spec.batch_limit}  param_budget: {spec.param_budget}",
+        f"  policy: {policy_name}",
+        f"  objectives: {', '.join(spec.objectives) or 'all'}",
+        f"  spec version: {spec.version}",
     ]
     for axis in StructuralAxis:
         names = space.primitives(axis)
         lines.append(
-            f"axis {axis.value}: {len(names)} \u2014 {', '.join(names) or 'none'}"
+            f"  axis {axis.value}: {len(names)} \u2014 {', '.join(names) or 'none'}"
         )
 
     cells: list[str] = []
@@ -1839,16 +1839,20 @@ def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
         )
         if len(cells) >= limit:
             break
-    lines.append(f"first {len(cells)} legal cell(s):")
-    lines.extend(cells)
 
     # The price, the stop point, and the primitives no legal cell reaches
     # (TODO48b R2): every fixture-sizing guess a session makes by trial is a
     # print here instead.
     from computronium.experiment.execution.pricing import price_plan
 
+    plan = price_plan(spec, space)
+    budget = f"{spec.budget_seconds:g}s" if spec.budget_seconds is not None else "none"
     lines.append("")
-    lines.extend(f"  {line}" for line in price_plan(spec, space).render().splitlines())
+    lines.append("price:")
+    lines.extend(f"  {line}" for line in plan.render_price())
+    lines.extend(["", "budget:", f"  declared: {budget}", f"  {plan.render_budget()}"])
+    lines.extend(["", f"first cells ({len(cells)} of {plan.legal_cells} legal):"])
+    lines.extend(cells)
     return "\n".join(lines)
 
 

@@ -26,11 +26,15 @@ uv run comp run demo --dry-run
 Expected excerpt (4 legal cells, budget never binds):
 
 ```
-axis credit: 4 — gradient, random_projections, pepita, local_goodness
-first 4 legal cell(s):
+space:
+  axis credit: 4 — gradient, random_projections, pepita, local_goodness
+price:
+  declared cells: 4  legal: 4
+budget:
+  declared: 120s
+  budget: never binds — the space ends first
+first cells (4 of 4 legal):
   cell 1: ... credit=gradient, update=adam [geometry.hidden_dim=32]
-declared cells: 4  legal: 4
-budget: never binds — the space ends first
 ```
 
 ## Beat 2 — execution, and the control

@@ -123,7 +123,11 @@ class TestTierZeroIsReal:
         assert code == 0
         out = capsys.readouterr().out
         assert "task(s): digits" in out
-        assert "legal cell(s)" in out
+        for section in ("space:", "price:", "budget:"):
+            assert section in out.splitlines(), (
+                f"dry-run plan lost its {section!r} section"
+            )
+        assert "first cells (" in out and " legal)" in out
         assert not store.exists(), "a dry run created the store (D22)"
         assert list(tmp_path.iterdir()) == [], "a dry run wrote to disk (D22)"
 
