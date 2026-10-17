@@ -145,6 +145,20 @@ an appendix to the README's first value proposition; §11.2 states the argument 
 byte-identical to `docs/IDENTITY_CARDS.md` — i.e. *every* concrete credit/update/plasticity primitive
 already declares its deviations from its source paper, with citations.
 
+### 1.4 Feasibility measurements — the numbers the plan is sized from
+
+Every estimate below was measured on this machine (CPU, 1 seed unless stated), not inferred. They are
+what make §4.2 and §7 real rather than optimistic.
+
+| Measurement | Result | Consequence |
+|---|---|---|
+| `comp run quick-verify --overrides '{"batch_limit":0,"epochs":3,"n_seeds":5}'` | **50 records in 520 s → 10.4 s/record** | The earlier "128 s projected" was priced at `batch_limit=2`. Full-batch cells cost ~10× more. |
+| one cell, `digits`, full batch, 3 epochs, `hd=32`, `energy_minimization`, `gradient` | `euclidean` 22.9 s / val **0.339**; `adam` 21.5 s / val **0.861**; `muon` 21.7 s / val **0.950** | The backprop control *does* learn. `euclidean` learns slowly at the default step; it is not broken. |
+| same cell, `dynamics=instantaneous` | **0.8 s** / val **0.869** | Settle dynamics are the runtime; `instantaneous` is ~27× cheaper and still learns. This is the lever that makes a ≤180 s demo possible. |
+| the 50-record run's report, "Credit Ablation" | `gradient` **0.094**, `random_projections` 0.095, `thermodynamic_contrast` 0.089, `local_goodness` 0.393, `pepita` 0.528 | **The control is at chance while local rules "win".** Not a finding — a confound (§2.9). |
+| `RunSpec` fields | includes `code_sha` | The replay hash changes per commit; G10 must be stated within-commit (§6). |
+| `compute_run_replay_hash` | `sha256(spec, sorted(measurement_keys))`, **measured values deliberately excluded** | A stable hash proves the same *cells* were visited, **not** that a metric reproduces. §11.1 must not overclaim it. |
+
 ---
 
 ## 2. P0 — Blocking defects (the product does not currently finish its own story)
@@ -235,6 +249,43 @@ already has, minus the stale fixtures).
 `test_task_geometry_compat_lock.py:174`, `test_dry_run_gate_lock.py:100`. Both live in `kernel/`.
 **Repair.** Repoint the six imports at `computronium.experiment.kernel.*`.
 
+### 2.9 The report's "per-axis ablation" is a confound presented as a finding — the worst possible defect here
+
+Measured (§1.4): on a 50-record `quick-verify` run, the report prints a **Credit Ablation** table
+saying `gradient` 0.094, `random_projections` 0.095, `thermodynamic_contrast` 0.089, `local_goodness`
+0.393, `pepita` 0.528. A reader concludes PEPITA beats backprop 5×. What actually happened is that each
+credit value landed on a **different** `hidden_dim`, `update`, and `dynamics`, because the profile
+sweeps all six axes at once:
+
+```
+gradient               euclidean  feedforward energy_minimization  val=0.097   ← hd≈8
+pepita                 adam       feedforward energy_minimization  val=0.711   ← hd≈64
+local_goodness         muon       feedforward lazy                 val=0.639
+random_projections     adam       recurrent   instantaneous        val=0.094
+```
+
+The control arm is at chance and the "winner" is a bigger network with a better optimizer. **This is
+precisely the cherry-pickable, hyperparameter-confounded comparison the project exists to prevent**,
+emitted by the project's own flagship artifact. Publishing it would end the neutrality claim on day one.
+
+Three defects, one repair each:
+
+1. **The table does not know it is confounded.** `payload` carries no `hidden_dim`, so neither the
+   table nor a reader can see the difference. The ablation must either (a) group only cells that share
+   the other five axes and say so in the header, or (b) print a `confounded: arms differ on N of 5
+   axes` banner naming them. Silence is not an option. **Prefer (a)**: a cell set that does not share
+   five axes produces **no** ablation table, only the raw per-cell list.
+2. **No chance-line floor.** `docs/FAIRNESS_CONTRACT.md` names it (E-10: "lr=0 planted control,
+   chance-line floor"); the report does not apply it. Any arm at chance must be labelled `at chance`
+   in its row, so a 0.094 cannot be read as "backprop is bad".
+3. **No positive control.** The profile can sweep a space in which *no* arm works. A comparison is
+   invalid unless a known-good arm (backprop + a competent update) clears chance by a wide margin in
+   the same regime. That becomes G13 and it is the demo's precondition.
+
+**Gate:** `test_ablation_is_not_confounded` — a run whose measured cells differ on any axis other than
+the ablated one must produce no ablation table; a run with a shared-five-axes group must produce one,
+and every row must carry `n`, `std`, and a `at chance` flag when applicable.
+
 ---
 
 ## 3. P1 — Repairs that make the shard truthful
@@ -262,7 +313,7 @@ Each item is one commit; each names its gate. Do them in this order — later it
 | 3.17 | Protocol-field prefilter | 1 failure, `test_scientific_validity_protocol_lock.py` | Prefilter reads the protocol fields it claims to | lock green |
 | 3.18 | `test_schedule_device_lock::test_device_cuda_recorded_in_store` | 1 failure | Skip-with-reason on a CPU-only host, assert the record on CUDA | lock green or documented skip |
 | 3.19 | Lint ratchet: 659 measured vs `BASELINE = 418` | `test_lint_count_ratchet.py:37` | **Deliberate re-baseline.** 690 was measured at `699ee72b`, so the baseline was already stale. Set `BASELINE` to the measured value in the same commit, record the count **per rule** in §8 as a Register C row, and keep the ratchet's "no increase" direction. Do not lower the number by adding `noqa`. | both ratchet tests green |
-| 3.20 | **The claim path ignores pre-registration.** `ThresholdRegistration` + `paired_comparison` exist (`computronium/validation/preregistration.py`), 11 registrations sit in `configs/preregistrations/`, and **nothing under `computronium/experiment/` references either** (`grep` → 0 hits). A claim can be emitted with no pre-registered threshold, which is the exact hole a biased author would climb through. | verified by grep | **Wire, don't build.** If `derive_claims` can consult an optional `ThresholdRegistration` in ≲40 lines, it must: a claim with no registration is labelled `unpreregistered` in its limitation line, never silently accepted. If it cannot be done in ≲40 lines, **stop and ledger it** — do not grow the claim path in a close-out plan. | `test_claim_report_lock` + a new assertion that an unregistered claim carries the label |
+| 3.20 | **The claim path ignores pre-registration.** `ThresholdRegistration` + `paired_comparison` exist (`computronium/validation/preregistration.py`), 11 registrations sit in `configs/preregistrations/`, and **nothing under `computronium/experiment/` references either** (`grep` → 0 hits). A claim can be emitted with no pre-registered threshold, which is the exact hole a biased author would climb through. | verified by grep | **Label, do not restructure.** `Claim` is a frozen dataclass with 7 required fields and no limitation/registration slot, so adding one touches every construction site and its locks — too invasive for a close-out. Instead add a `_unpreregistered` sibling to `_no_eligible_claim` in `evidence/limitations.py` (measured: ~20 lines, the pattern is established) and emit it whenever a claim's run has no matching registration. **A claim with no registration says so, in the report, next to the claim.** | `test_claim_report_lock` + an assertion that an unregistered claim carries the limitation line |
 | 3.21 | `MIN_SEEDS = 5` (`validation/preregistration.py:46`) and `DEFAULT_MIN_SEEDS = 5` (`evidence/claims.py:37`) are two constants, one fact | grep | One re-exports the other; the claim floor has a single source (TODO65 §6.C0's rule) | both import paths resolve to one object |
 | 3.22 | Compute-matched HPO is a protocol document plus a separate `biopl-hpo` CLI; the kernel's per-cell search does not enforce an equal trial budget per arm | `docs/hpo_protocol.md` vs `execution/policy.py` | **Do not wire it** — that is a feature. Ledger it (§8) with the exact reason: "equal-effort HPO is a protocol, enforced by `biopl-hpo`, not by `comp run`." The README's neutrality section must say so (§5.11) | §8 row present; README does not overclaim |
 
@@ -298,35 +349,56 @@ first commit, and record the decision.
 | 5 | **what is unreached** | `comp coverage report --store demo.duckdb` |
 | 6 | **what we learned** — the results we already own | §4.6; no command |
 
-### 4.2 The `demo` profile (data, not code)
-A `RunProfile` row — the config surface exists for exactly this. Regime chosen so beat 4 produces an
-*discriminating* verdict and the whole run fits a video:
+### 4.2 The `demo` profile — sized from measurement, built as a controlled contrast
 
-- task `digits`, full batches (`batch_limit=0`), `epochs=3`, **`n_seeds=5`** (the claim floor,
-  `claims.py:37`);
-- credit ∈ {`gradient`, `random_projections`, `pepita`} × update ∈ {`adam`, `muon`} → 6 cells;
-- objectives `("validation_accuracy", "walltime_total")`;
-- `budget_seconds` sized from the dry-run's own projection, not a guess.
+A `RunProfile` row (the config surface exists for exactly this) **plus a contrast design**, because a
+profile that sweeps six axes at once cannot support an ablation (§2.9). Measured unit costs are in §1.4.
 
-Target: **≤180 s on CPU** and ≥1 honest verdict per cell. If 180 s is not achievable, reduce to 4
-cells — never raise `batch_limit` to fake speed.
+**Fixed (the contrast group — every arm identical):**
+
+| Knob | Value | Why |
+|---|---|---|
+| task | `digits` | fast, offline, 10-class chance = 0.10 |
+| geometry | `feedforward`, `hidden_dim=32` | measured to learn (§1.4); `hd≈8` is the degenerate case that produced the confound |
+| dynamics | `instantaneous` | measured **0.8 s/cell** vs 21.5 s for `energy_minimization` — the whole reason ≤180 s is achievable |
+| plasticity | `null` | not the axis under test |
+| update | `adam` | the competent optimizer; fixes the confound |
+| fidelity / epochs / batch | `L1` / 3 / full (`batch_limit=0`) | the measured regime |
+| `n_seeds` | **5** | the claim floor, `claims.py:37` |
+
+**Swept (the only thing that varies):** `credit` ∈ {`gradient`, `random_projections`, `pepita`,
+`thermodynamic_contrast`, `local_goodness`} → 5 cells × 5 seeds = **25 records**.
+Measured cost ≈ 0.8 s/record at `instantaneous`, so **~20–30 s wall**; budget `120s`, which leaves
+headroom without letting the space expand.
+
+**Positive control, mandatory.** `gradient` is arm zero and must reach ≈0.87 (measured, §1.4). If the
+control is at chance, the run is **invalid** and the demo must not be recorded: that is a defect, not a
+result. This is G13, and it is what separates a demonstration from a table of noise.
+
+**Expected outcome, stated in advance.** `gradient` highest, `pepita` competitive, `thermodynamic_contrast`
+and `random_projections` behind. If that ordering holds it is a *reproduction of the literature under a
+shared protocol*, not a discovery — and the video must say so. If it does not hold, that is the
+interesting case, and it still gets published with `n=5` and `INSUFFICIENT`.
 
 **The payoff is not "a win".** An earlier draft of this section asked the regime to deliver "at least
 one axis value measurably ahead so the video has a finding". That is selection bias with a nicer name:
-choosing the cell count until a difference appears is precisely what the project's statistical gates
-exist to prevent, and doing it in the *demonstration* would discredit every other number in the report.
-The demo's payoff is instead:
+choosing the cell count until a difference appears is precisely what the statistical gates exist to
+prevent, and doing it in the *demonstration* would discredit every other number in the report. The
+demo's payoff is instead:
 
-1. **The ablation table** — every credit rule measured, with `n` and `std`, no winner declared. This is
-   the neutral comparison in miniature (§11.2): the same data, the same protocol, four rules that
-   belong to different traditions, none of them the author's.
+1. **A controlled ablation table** — one axis varies, `n` and `std` on every row, the chance line drawn,
+   no winner declared. This is the neutral comparison in miniature (§11.2): five rules from different
+   traditions, one protocol, none of them the author's, and the control arm proving the apparatus works.
 2. **The verdict** — `PASSED`, `REJECTED`, or `INSUFFICIENT`, with `power_achieved` printed.
 3. **The price of an answer** — beat 4 multiplies the power requirement (`63` seeds/group for d=0.5,
-   §2.1) by the dry-run's priced cell, and states the walltime and GPU-hours an *actual* claim about
+   §2.1) by the measured per-cell cost, and states the walltime and GPU-hours an *actual* claim about
    this axis would cost, on this machine.
 
 That third line is the most valuable sentence in the video: it tells the viewer what a real answer
 costs and why the project refuses to pretend it has one.
+
+**Fallback if §2.9's repair is not done:** the demo ships with the raw per-cell list and **no**
+ablation table. A missing table is honest; a confounded one is fatal.
 
 ### 4.3 Make the plan screen legible
 `comp run … --dry-run` output is already the best teaching artifact in the repo (declared 450 cells,
@@ -395,7 +467,7 @@ and it is the only honest thing available at this budget.
 | 5.8 | **Move the "add an ontology primitive" checklist out of `AGENTS.md` into the README's developer section** (registry row → config classmethod → wiring lock → export surfaces → contract invariants → demo row) | Today README:1417 delegates to `AGENTS.md`. A contributor who is inspired has to find a second file; §0.1 row 3 says README alone must be enough. `AGENTS.md` stays the *agent* contract, not the only ramp. |
 | 5.9 | New `docs/readme/findings.md`, **generated** from `docs/{eqprop_deep_limitation,phantom_knob_audit,CORRECTIONS}.md` (title + headline number + status per result) | The three real results in §1.2 are invisible (`phantom`: 0 hits). Generated, so the README cannot claim a finding the doc no longer supports. |
 | 5.10 | "Good first additions" — the §8 *Designed* rows rendered as a short list with the file each would touch | Converts the ledger from a graveyard into an invitation. This is the concrete form of "inspiring others to grow the system". |
-| 5.11 | **`docs/readme/neutral-evaluation.md`, placed above the capability tables.** States what the apparatus in §1.3 guarantees, in the project's own voice: pre-registered thresholds · equal treatment of arms · every rule's deviations from its paper declared with citation · a corrections log · claims held in a party outside the engine. Then the one sentence that is the point: *no credit rule in this repository is the author's invention.* | This is the differentiator, and today it is invisible. It also gives the video its thesis. |
+| 5.11 | **`docs/readme/neutral-evaluation.md`, placed above the capability tables.** States what the apparatus in §1.3 guarantees, in the project's own voice: pre-registered thresholds · equal treatment of arms · every rule's deviations from its paper declared with citation · a corrections log · claims held in a party outside the engine · **an ablation table only where five of six axes are held fixed, with a chance line and a positive control**. Then the one sentence that is the point: *no credit rule in this repository is the author's invention.* | This is the differentiator, and today it is invisible. It also gives the video its thesis, and it makes §2.9 a published promise rather than an internal fix. |
 | 5.12 | `docs/CONSORTIUM.md` — a one-page leave-behind: what a member gets (a comparison stack they can cite, with the contract version and the corrections log), what a member must accept (pre-registration, unfiltered reporting, publication of nulls, audit of their implementation's declared deviations), and the four things we do **not** yet do (§11.2) | The video is a pitch; a pitch needs something to hand over. One page, no promises the tree cannot keep. |
 | 5.13 | **Hard editorial rule, enforced by review of the diff:** the neutrality section names *our* procedure only. It never asserts that other authors cherry-pick, that other codebases are wrong, or that this project is unbiased. Both are unprovable, and the accusation makes the refutation about the accuser. | §11.2 — the moral framing is the weak one, and it is the one that gets quoted back |
 
@@ -419,7 +491,8 @@ Cheap first; each gate is named with the defect it prevents from returning.
 | **G7** `comp --help` shows ≤6 core commands; `comp --help-all` shows all | §4.4 |
 | **G8** every document named in README's findings section exists, and its headline number still appears in that document | §5.9 — a result can be retracted, and the README follows |
 | **G9** `tests/integration/test_demo_compose_6axis.py -m demo` green and still byte-identical to the README snippet | the library quickstart (§1.1) — already true; this makes it a gate, not a fact |
-| **G10** the demo run twice from a clean store produces the same `replay_hash` | determinism, i.e. the only basis for "you can reproduce my result" (§11 ceiling) |
+| **G10** the demo run twice from a clean store, **within one commit**, produces the same sorted `measurement_key` set and therefore the same `replay_hash` | policy determinism. **Note:** the hash covers the spec (including `code_sha`) and the visited cells, and *deliberately excludes measured values* (§1.4) — so it proves the same cells were visited, never that a metric reproduces. Do not describe it as reproducibility. |
+| **G13** the demo's `gradient` control arm beats chance by a wide margin (measured ≈0.87 vs 0.10); the run aborts with a diagnostic if it does not | §2.9 — a comparison with a broken control is a table of noise, and recording it would be fatal |
 | **G11** `python scripts/generate_identity_cards.py --strict` exits 0 **and** its output equals `docs/IDENTITY_CARDS.md` | §1.3 — a new primitive without a declared deviation is a neutrality leak. Already green; this stops it going stale. |
 | **G12** README's neutrality section is generated from `docs/FAIRNESS_CONTRACT.md` + `IDENTITY_CARDS.md` + `CORRECTIONS.md`, and names only the project's own procedure | §5.11, §5.13 — a claim about our process cannot drift from the process |
 
@@ -433,16 +506,21 @@ Per commit: G6 always; G4–G5 when the surface or README moves; G1 only at the 
 | Phase | Work | Exit |
 |---|---|---|
 | **A** | §2.5 → §2.7 → §2.8 (map + imports; the 35-failure cluster) | those four locks green |
-| **B** | §2.1 → §2.2 → §2.4 (the ladder; G3) | a `comp run` that emits an honest verdict |
+| **B** | §2.1 → §2.2 → §2.4 (the ladder; G3), then **§2.9** (the confounded ablation — see the note below) | a `comp run` that emits an honest verdict *and* an unabused ablation table |
 | **C** | §2.3, §2.6 (crash + isolation decision) | `coverage report` exits 0 |
 | **D** | §3.1–§3.18 (shard tail), §3.21 | G1 first run: 0 failed |
-| **E** | §3.19, §3.20, §3.22 (ratchet, preregistration decision, HPO ledger row) | ratchet green; claim path honest |
-| **F** | §4.2 `demo` profile; §4.3 polish; §4.4 grouping | `comp demo` runs in ≤180 s, G10 green |
+| **E** | §3.19, §3.20, §3.22 (ratchet, preregistration label, HPO ledger row) | ratchet green; claim path honest |
+| **F** | §4.2 `demo` profile + contrast design; §4.3 polish; §4.4 grouping | `comp demo` in ≤180 s; **G13 green — control at ≈0.87** |
 | **G** | §4.5 screenplay + `test_demo_script.py`; §4.6 research beats | G4 green; video shot |
 | **H** | §5 README consolidation + §5.8–5.13 + regenerate; `docs/CONSORTIUM.md` | G5, G8, G9, G11, G12 green |
-| **I** | Close: G1 second run, G2, G7; tag; update this file | 0 red |
+| **I** | Close: G1 second run, G2, G7, G10; tag; update this file | 0 red |
 
 A–C are the same afternoon. D is the long tail. F–H is the presentation.
+
+**§2.9 outranks everything after §2.5.** Measured (§1.4), the report's flagship ablation table currently
+shows `gradient` at 0.094 while `pepita` sits at 0.528 — a confound caused by sweeping six axes at once.
+That table is the project's single most quotable artifact and its most damaging one if wrong. Fix the
+confound before polishing anything that displays it.
 
 ---
 
@@ -481,6 +559,12 @@ threshold JSONs + `paired_comparison` (bootstrap CI, sign-flip p, Cohen's dz) ·
 cards, `--strict` green, drift-locked · phantom-knob detector · metric-provenance rule · corrections
 log · CEEC ledger · discovery/confirmation seed split.
 
+**Neutrality defects found by measurement (§1.4):** the per-axis ablation table aggregates cells that
+differ on all other five axes, so its "credit ablation" reports `hidden_dim` and optimizer choice
+(`gradient` 0.094 vs `pepita` 0.528) — §2.9 · the fairness contract's chance-line floor (E-10) is
+written but not applied by the report · no positive control is required before a comparison is
+presented.
+
 **Neutrality gaps (named, so the README cannot imply otherwise):**
 1. **All credit rules are this project's re-implementations**, with deviations declared and cited — not
    the inventors' reference code, and not verified against it. The defensible claim is "independent
@@ -510,8 +594,13 @@ and it is worth showing.
 
 ## 9. Definition of done
 
-- [ ] §2.1–§2.8 repaired; each with the lock that prevents its return.
-- [ ] `comp run demo` produces ≥1 claim with `n` and variance on CPU in ≤180 s, from a clean tree.
+- [ ] §2.1–§2.9 repaired; each with the lock that prevents its return.
+- [ ] The ablation table appears **only** for a shared-five-axes contrast group, carries `n`/`std` per
+      row, and flags any arm at chance (§2.9).
+- [ ] G13 green: the `gradient` control arm beats chance by a wide margin (≈0.87 measured) before any
+      comparison is published or recorded.
+- [ ] `comp run demo` produces an honest verdict on CPU in ≤180 s, from a clean tree (measured ≈20–30 s
+      at `instantaneous` dynamics, §1.4).
 - [ ] `comp coverage report` exits 0.
 - [ ] Every demo-script command exits 0; `test_demo_script.py` green.
 - [ ] Property shard: **0 failed, 0 errors**. Unit + acceptance green.
@@ -560,6 +649,10 @@ open a plan for it. That rule, more than the item list, is what makes one plan e
 
 **Where it breaks, honestly:**
 
+0. **The confound in §2.9 is the plan's biggest risk, and it was found late.** The flagship artifact
+   currently reports a 5× "win" for PEPITA over backprop that is entirely `hidden_dim` and optimizer
+   (§1.4). The repair is contained (group by shared axes; draw a chance line; require a control), but it
+   must land before any screenshot exists, or the project's most quotable table is its most damaging.
 1. **§2.1 has a real design fork.** If `INSUFFICIENT` promotion is judged unsound (a claim from 5 seeds
    is weak), the alternative is to keep the 63-seed gate and make the `demo` profile take ~4 hours on
    CPU. That kills the video for the "one sitting" audience. Recommendation: `INSUFFICIENT` is a
@@ -583,9 +676,10 @@ Stated here so the README cannot quietly promise it:
    seeds/group, an effect large enough to claim would have to be enormous. §4.2 therefore promises a
    *verdict and a price*, not a finding. Anything stronger requires a scheduled campaign
    (`claim` profile, `--budget`), which is compute, not code.
-2. **External validation.** Nobody outside this repository has run it. The deliverable is
-   *reproducibility in principle* — G10's replay hash and the demo script — not evidence that anyone
-   reproduced it.
+2. **External validation.** Nobody outside this repository has run it. What G10 buys is *determinism of
+   the visited cells*, not reproducibility of a number — the replay hash excludes measured values by
+   design (§1.4). Metric-level reproduction is `replay_survives`, which is exactly the gate that always
+   fails (§2.2). Say "you can re-run it and visit the same cells", never "you can reproduce the result".
 3. **Hardware or substrate claims.** Every measurement in the tree is digital. Memristive,
    neuromorphic, optical and quantum staging are ledger rows. The README's motivating hypothesis is an
    agenda; after this plan it must still read as an agenda.
