@@ -10,7 +10,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -43,6 +43,7 @@ from computronium.experiment.evidence.claims import (
     replication_key,
     strongest_axis,
 )
+from computronium.experiment.execution.statistical_promotion import GateThresholds
 from computronium.experiment.evidence.limitations import (
     Limitation,
     derive_limitations,
@@ -95,7 +96,7 @@ class RunSummary:
     started_at: datetime
     finished_at: datetime | None
     record_count: int
-    claim_eligible_count: int
+    claim_eligible_cells: int
     promoted_count: int
     declared_cells: int
 
@@ -220,7 +221,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
 
         record_count = self._store.count_records(run_id)
         eligible = self.claim_eligible_records(run_id)
-        claim_eligible_count = len(eligible)
+        claim_eligible_cells = len(self._claim_eligible_cells(run_id))
         promoted_count = len(filter_promoted(eligible))
 
         # Calculate declared cells from the spec
@@ -239,7 +240,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             started_at=info.started_at,
             finished_at=info.finished_at,
             record_count=record_count,
-            claim_eligible_count=claim_eligible_count,
+            claim_eligible_cells=claim_eligible_cells,
             promoted_count=promoted_count,
             declared_cells=declared_cells,
         )
@@ -260,19 +261,24 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         executor writes one record per seed, so a record-level filter cannot
         see a replication group. One definition, read by every consumer here.
         """
-        spec = self._spec(run_id)
-        min_seeds = spec.n_seeds if spec else 5
-        fidelity = spec.fidelity if spec else "L2"
-        cells = set(
-            self._store.claim_eligible_replication_keys(
-                run_id, min_n_seeds=min_seeds, fidelity=fidelity
-            )
-        )
+        cells = self._claim_eligible_cells(run_id)
         return [
             record
             for record in self._store.query_records(run_id=run_id)
             if replication_key(record) in cells
         ]
+
+    def _claim_eligible_cells(self, run_id: str) -> set[str]:
+        """Cells that reached the claim floor of achieved PASS seeds.
+
+        The same rule ``derive_claims`` applies, so the summary's eligibility
+        count and the Claims section cannot contradict each other.
+        """
+        return set(
+            self._store.claim_eligible_replication_keys(
+                run_id, min_n_seeds=DEFAULT_MIN_SEEDS, fidelity="L2"
+            )
+        )
 
     def promoted_records(self, run_id: str) -> list[Record]:
         """Get the promoted records of a run."""
@@ -449,6 +455,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             fidelity=spec.fidelity if spec else None,
             objectives=spec.objectives if spec else (),
             claim_count=len(self.claims(run_id)),
+            required_seeds=GateThresholds().required_seeds_per_group,
         )
 
     def _spec(self, run_id: str) -> RunSpec | None:
@@ -458,8 +465,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
 
     def _min_seeds(self, run_id: str) -> int:
         """The seed floor every claim-side derivation agrees on."""
-        spec = self._spec(run_id)
-        return spec.n_seeds if spec else DEFAULT_MIN_SEEDS
+        return DEFAULT_MIN_SEEDS
 
     def front_objectives(self, run_id: str, limit: int = 2) -> tuple[str, ...]:
         """The payload keys a whole-run front defaults to.
@@ -773,61 +779,140 @@ def _axis_frontiers_section(generator: ReportGenerator, run_id: str) -> list[str
     return lines
 
 
-def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
-    """Per-axis ablation tables: credit swap, substrate swap, plasticity swap."""
-    import statistics
+_ABLATION_AXES: Final = ("credit", "substrate", "plasticity")
+_STRUCTURAL_AXES: Final = (
+    "substrate",
+    "geometry",
+    "dynamics",
+    "plasticity",
+    "credit",
+    "update",
+)
+_ACCURACY_METRICS: Final = frozenset({"val_acc", "train_acc", "test_acc", "accuracy"})
+_ABLATION_METRICS: Final = (
+    "val_acc",
+    "walltime_total",
+    "param_count",
+    "spectral_radius",
+    "psi_capacity",
+)
+
+
+def chance_level(task_id: str | None, metric: str) -> float | None:
+    """The chance rate for an accuracy metric, or ``None`` for a cost metric.
+
+    Read from the task's own output dimension, so a 10-class run draws its line
+    at 0.1 rather than at a hand-written constant. A metric that is not an
+    accuracy has no chance line.
+    """
+    if metric not in _ACCURACY_METRICS or task_id is None:
+        return None
+    from computronium.experiment.registry.task_registry import get_task_registry
+
+    output_dim = get_task_registry().get(task_id).output_dim
+    if not output_dim or output_dim < 2:
+        return None
+    return 1.0 / output_dim
+
+
+def contrast_groups(records: list, axis: str) -> list[dict[str, list]]:
+    """Contrast groups for ablating ``axis``, or none when the run is confounded.
+
+    An ablation table is only a comparison when every arm holds the other five
+    structural axes and the swept hyperparameters fixed. Cells that differ on
+    any of them are *not* comparable: aggregating them reports ``hidden_dim``
+    and optimizer choice as if it were the ablated axis (TODO66 §2.9).
+    """
+    import json
     from collections import defaultdict
 
+    groups: dict[tuple, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for record in records:
+        key = (
+            tuple(getattr(record, name) for name in _STRUCTURAL_AXES if name != axis),
+            json.dumps(record.params, sort_keys=True, default=str),
+        )
+        groups[key][getattr(record, axis)].append(record)
+    return [dict(group) for group in groups.values() if len(group) > 1]
+
+
+def _row_stats(
+    arm: list, metric: str, chance: float | None
+) -> tuple[float, float, int, bool]:
+    import statistics
+
+    values = [
+        float(record.payload[metric])
+        for record in arm
+        if isinstance(record.payload.get(metric), (int, float))
+        and not isinstance(record.payload.get(metric), bool)
+    ]
+    mean = statistics.mean(values) if values else 0.0
+    std = statistics.stdev(values) if len(values) > 1 else 0.0
+    at_chance = chance is not None and mean <= chance
+    return mean, std, len(values), at_chance
+
+
+def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
+    """Per-axis ablation tables, only where the other five axes are held fixed."""
     records = list(store.query_records(run_id=run_id))
     if not records:
         return []
 
     lines = _section("Per-Axis Ablation Tables:")
-
-    # Define ablation axes
-    ablation_axes = ["credit", "substrate", "plasticity"]
-    primary_metrics = [
-        "val_acc",
-        "walltime_total",
-        "param_count",
-        "spectral_radius",
-        "psi_capacity",
-    ]
-
-    for axis in ablation_axes:
-        # Get unique values for this axis
-        axis_values = sorted(set(getattr(r, axis) for r in records))
-        if len(axis_values) <= 1:
-            continue  # Skip if only one value
-
-        lines.append(
-            f"  {axis.capitalize()} Ablation (over {axis} values: {', '.join(axis_values)}):"
-        )
-
-        for metric in primary_metrics:
-            # Collect metric values per axis value
-            groups: dict[str, list[float]] = defaultdict(list)
-            for r in records:
-                val = r.payload.get(metric)
-                if val is not None:
-                    groups[getattr(r, axis)].append(float(val))
-
-            if not groups:
-                continue
-
-            lines.append(f"    {metric}:")
-            for axis_val in axis_values:
-                vals = groups.get(axis_val, [])
-                if vals:
-                    mean_val = statistics.mean(vals)
-                    std_val = statistics.stdev(vals) if len(vals) > 1 else 0.0
+    reported = False
+    for axis in _ABLATION_AXES:
+        groups = contrast_groups(records, axis)
+        for index, group in enumerate(groups, start=1):
+            fixed = ", ".join(
+                f"{name}={getattr(next(iter(group.values()))[0], name)}"
+                for name in _STRUCTURAL_AXES
+                if name != axis
+            )
+            lines.append(
+                f"  {axis.capitalize()} Ablation [group {index}, fixed: {fixed}]:"
+            )
+            task_id = next(iter(group.values()))[0].schedule.task_id
+            for metric in _ABLATION_METRICS:
+                present = {
+                    value: arm
+                    for value, arm in group.items()
+                    if any(metric in record.payload for record in arm)
+                }
+                if not present:
+                    continue
+                lines.append(f"    {metric}:")
+                chance = chance_level(task_id, metric)
+                for axis_value, arm in sorted(present.items()):
+                    mean, std, n, at_chance = _row_stats(arm, metric, chance)
+                    flag = " [at chance]" if at_chance else ""
                     lines.append(
-                        f"      {axis_val}: mean={mean_val:.4g}, std={std_val:.4g}, n={len(vals)}"
+                        f"      {axis_value}: mean={mean:.4g}, std={std:.4g}, n={n}{flag}"
                     )
-                else:
-                    lines.append(f"      {axis_val}: N/A")
-            lines.append("")  # Empty line between metrics
+            lines.append("")
+            reported = True
 
+    if not reported:
+        lines.append(
+            "  No contrast group holds the other five axes fixed; no ablation "
+            "table is reported. Raw cells:"
+        )
+        for record in records:
+            value = record.payload.get("val_acc")
+            rendered = f"{value:.4g}" if isinstance(value, (int, float)) else "N/A"
+            chance = chance_level(record.schedule.task_id, "val_acc")
+            flag = (
+                " [at chance]"
+                if chance is not None
+                and isinstance(value, (int, float))
+                and value <= chance
+                else ""
+            )
+            lines.append(
+                f"    {record.substrate}/{record.geometry}/{record.dynamics}/"
+                f"{record.plasticity}/{record.credit}/{record.update} "
+                f"val_acc={rendered}{flag}"
+            )
     return lines
 
 
@@ -1067,7 +1152,7 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
         "",
         "Record Statistics:",
         f"  Total Records: {summary.record_count}",
-        f"  Claim Eligible: {summary.claim_eligible_count}",
+        f"  Claim-Eligible Cells: {summary.claim_eligible_cells}",
         f"  Promoted: {summary.promoted_count}",
         f"  Declared Cells: {summary.declared_cells}",
         *_economics_section(generator, run_id),
@@ -1240,80 +1325,68 @@ def _compute_ablation_table(
 
 
 def _generate_ablation_html(generator: ReportGenerator, run_id: str) -> str:
-    """Generate HTML tables for per-axis ablation analysis."""
-    import statistics
-    from collections import defaultdict
-
+    """HTML ablation tables, grouped by the axes the contrast holds fixed."""
     records = list(generator._store.query_records(run_id=run_id))
     if not records:
         return ""
 
-    ablation_axes = ["credit", "substrate", "plasticity"]
-    primary_metrics = [
-        "val_acc",
-        "walltime_total",
-        "param_count",
-        "spectral_radius",
-        "psi_capacity",
-    ]
-
     html_parts = [
-        "<div style='margin: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;'>",
+        "<div style='margin: 40px; padding: 20px; background-color: #f8f9fa; "
+        "border-radius: 8px;'>",
         "<h2>Per-Axis Ablation Tables</h2>",
     ]
-
-    for axis in ablation_axes:
-        axis_values = sorted(set(getattr(r, axis) for r in records))
-        if len(axis_values) <= 1:
-            continue
-
-        html_parts.append(f"<h3>{axis.capitalize()} Ablation</h3>")
-
-        for metric in primary_metrics:
-            groups: dict[str, list[float]] = defaultdict(list)
-            for r in records:
-                val = r.payload.get(metric)
-                if val is not None:
-                    groups[getattr(r, axis)].append(float(val))
-
-            if not groups:
-                continue
-
-            html_parts.append(f"<h4>{metric}</h4>")
-            html_parts.append(
-                "<table style='border-collapse: collapse; width: 100%; margin-bottom: 20px;'>"
-                "<thead><tr style='background-color: #e9ecef;'>"
-                f"<th style='border: 1px solid #dee2e6; padding: 8px;'>{axis}</th>"
-                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Mean</th>"
-                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Std</th>"
-                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Count</th>"
-                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Min</th>"
-                "<th style='border: 1px solid #dee2e6; padding: 8px;'>Max</th>"
-                "</tr></thead><tbody>"
+    reported = False
+    for axis in _ABLATION_AXES:
+        for index, group in enumerate(contrast_groups(records, axis), start=1):
+            fixed = ", ".join(
+                f"{name}={getattr(next(iter(group.values()))[0], name)}"
+                for name in _STRUCTURAL_AXES
+                if name != axis
             )
-
-            for axis_val in axis_values:
-                vals = groups.get(axis_val, [])
-                if vals:
-                    mean_val = statistics.mean(vals)
-                    std_val = statistics.stdev(vals) if len(vals) > 1 else 0.0
+            task_id = next(iter(group.values()))[0].schedule.task_id
+            html_parts.append(
+                f"<h3>{axis.capitalize()} Ablation "
+                f"<small>(group {index}; fixed: {fixed})</small></h3>"
+            )
+            for metric in _ABLATION_METRICS:
+                present = {
+                    value: arm
+                    for value, arm in group.items()
+                    if any(metric in record.payload for record in arm)
+                }
+                if not present:
+                    continue
+                html_parts.append(f"<h4>{metric}</h4>")
+                html_parts.append(
+                    "<table style='border-collapse: collapse; width: 100%; "
+                    "margin-bottom: 20px;'><thead><tr "
+                    "style='background-color: #e9ecef;'>"
+                    f"<th style='border: 1px solid #dee2e6; padding: 8px;'>{axis}</th>"
+                    "<th style='border: 1px solid #dee2e6; padding: 8px;'>Mean</th>"
+                    "<th style='border: 1px solid #dee2e6; padding: 8px;'>Std</th>"
+                    "<th style='border: 1px solid #dee2e6; padding: 8px;'>n</th>"
+                    "</tr></thead><tbody>"
+                )
+                chance = chance_level(task_id, metric)
+                for axis_value, arm in sorted(present.items()):
+                    mean, std, n, at_chance = _row_stats(arm, metric, chance)
+                    flag = " (at chance)" if at_chance else ""
                     html_parts.append(
-                        f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{axis_val}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{mean_val:.4g}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{std_val:.4g}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{len(vals)}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{min(vals):.4g}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{max(vals):.4g}</td>"
+                        f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>"
+                        f"{axis_value}{flag}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{mean:.4g}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{std:.4g}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{n}</td>"
                         "</tr>"
                     )
-                else:
-                    html_parts.append(
-                        f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>{axis_val}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;' colspan='5'>N/A</td></tr>"
-                    )
+                html_parts.append("</tbody></table>")
+            reported = True
 
-            html_parts.append("</tbody></table>")
-
+    if not reported:
+        html_parts.append(
+            "<p>No contrast group holds the other five axes fixed; no ablation "
+            "table is reported.</p>"
+        )
     html_parts.append("</div>")
     return "\n".join(html_parts)
 
@@ -2173,7 +2246,7 @@ def narrative_handoff_summary(store: RecordStore, run_id: str) -> str:
     lines = [
         f"Handoff: run {run_id} [{summary.status}]",
         f"Records: {summary.record_count} total, "
-        f"{summary.claim_eligible_count} claim-eligible, "
+        f"{summary.claim_eligible_cells} claim-eligible, "
         f"{summary.promoted_count} promoted.",
     ]
     if eligible:
@@ -2295,7 +2368,7 @@ def _generate_latex_report(
         r"  \textbf{Metric} & \textbf{Value} \\",
         r"  \midrule",
         f"  Total Records & {summary.record_count} \\",
-        f"  Claim Eligible & {summary.claim_eligible_count} \\",
+        f"  Claim-Eligible Cells & {summary.claim_eligible_cells} \\",
         f"  Promoted & {summary.promoted_count} \\",
         f"  Declared Cells & {summary.declared_cells} \\",
         r"\end{tabular}",

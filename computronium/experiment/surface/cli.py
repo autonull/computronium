@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from computronium.experiment.schema.record import Record
+
 from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
@@ -1945,11 +1947,15 @@ def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
     Uses statistical promotion gates (L1: superiority, CI width, train/val gap,
     rho band; L2: replay) with config-driven thresholds.
     """
+    from dataclasses import replace
+
     from computronium.experiment.evidence.claims import compute_and_store_uncertainty
     from computronium.experiment.execution.statistical_promotion import (
         GateThresholds,
         promote_with_stats,
     )
+    from computronium.experiment.kernel import cell_record
+    from computronium.experiment.schema.coordinate import Coordinate
     from computronium.experiment.schema.record import Maturity
     from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
 
@@ -1961,13 +1967,32 @@ def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
         superiority_margin_sigma=1.0 if spec.n_seeds < 5 else 2.0,
         ci_width_threshold=0.1 if spec.n_seeds < 5 else 0.05,
     )
+    baselines = _resolve_baselines(store, run_id, spec)
+
+    def confirmation_evaluator(
+        cell_records: list[Record], confirmation_seeds: list[int]
+    ) -> list[Record]:
+        base = cell_records[0]
+        coordinate = Coordinate.from_record(base)
+        confirmed: list[Record] = []
+        for seed in confirmation_seeds:
+            record = cell_record(
+                coordinate=coordinate,
+                schedule=replace(base.schedule, seed=seed),
+                provenance=base.provenance,
+            )
+            store.append(record)
+            confirmed.append(record)
+        return confirmed
+
     history = promote_with_stats(
         store,
         run_id,
         spec,
         tolerance=REPLAY_METRIC_TOLERANCE,
         thresholds=thresholds,
-        baselines=None,  # Baselines not yet wired; gates run without baseline comparison
+        baselines=baselines,
+        confirmation_evaluator=confirmation_evaluator,
     )
     logger.info(
         "Promotion: %d cell(s) assessed, %d earned L2",
@@ -1990,6 +2015,35 @@ def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
         len(uncertainty),
         spec.n_seeds,
     )
+
+
+def _resolve_baselines(
+    store: RecordStore, run_id: str, spec: RunSpec
+) -> dict[str, Any] | None:
+    """The same-task backprop ruler for this run's eligible cells, if present.
+
+    Read from the store by the same registry call the loop driver makes: the
+    run's own ``gradient × instantaneous`` cells are the ruler when they exist.
+    Absent a ruler the superiority gate is skipped rather than failed.
+    """
+    from computronium.experiment.execution.promotion import eligible_cells
+    from computronium.experiment.registry.baseline import BaselineRegistry
+
+    if spec.budget_seconds is None or not spec.task_names:
+        return None
+    registry = BaselineRegistry(store=store)
+    try:
+        fingerprint = registry.compute_hardware_fingerprint()
+    except Exception as exc:  # ruff: ignore[blind-except] - fingerprint is best-effort
+        logger.warning("Hardware fingerprint unavailable: %s", exc)
+        return None
+    baseline = registry.get_baseline(
+        spec.task_names[0], fingerprint, spec.budget_seconds, spec.n_seeds
+    )
+    if baseline is None:
+        return None
+    keys = eligible_cells(store.query_records(run_id=run_id), spec.n_seeds).keys()
+    return dict.fromkeys(keys, baseline)
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -2495,7 +2549,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
                         "run_id": run.run_id,
                         "status": run.status,
                         "record_count": run.record_count,
-                        "claim_eligible_count": run.claim_eligible_count,
+                        "claim_eligible_cells": run.claim_eligible_cells,
                         "promoted_count": run.promoted_count,
                         "started_at": run.started_at,
                     })
@@ -2505,7 +2559,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
                 for run in runs:
                     lines.append(
                         f"  {run.run_id[:8]}... | {run.status:12} | "
-                        f"recs={run.record_count:4} | claim={run.claim_eligible_count:3} | "
+                        f"recs={run.record_count:4} | claim={run.claim_eligible_cells:3} | "
                         f"promo={run.promoted_count:3} | {run.started_at}"
                     )
                 output = "\n".join(lines)
@@ -2530,7 +2584,7 @@ def _print_detailed_status(summary: RunSummary) -> None:
     print()
     print("Record Statistics:")
     print(f"  Total Records: {summary.record_count}")
-    print(f"  Claim Eligible: {summary.claim_eligible_count}")
+    print(f"  Claim-Eligible Cells: {summary.claim_eligible_cells}")
     print(f"  Promoted: {summary.promoted_count}")
     print(f"  Declared Cells: {summary.declared_cells}")
     print()
@@ -3015,7 +3069,7 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
                        json_extract(payload, '$.mean_reward') as mean_reward,
                        json_extract(payload, '$.f1_score') as f1_score
                 FROM records
-                WHERE run_id = ? AND status->>'$.gate_verdict' = 'PASS'
+                WHERE run_id = ? AND status.gate_verdict = 'PASS'
                 """,
                 [run_id],
             ).fetchall()

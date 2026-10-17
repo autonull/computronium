@@ -45,6 +45,7 @@ class LimitationKind(StrEnum):
     CELLS_ABANDONED = "cells_abandoned"
     FIDELITY_NOT_REACHED = "fidelity_not_reached"
     UNMEASURED_OBJECTIVES = "unmeasured_objectives"
+    INSUFFICIENT_POWER = "insufficient_power"
     NO_ELIGIBLE_CLAIM = "no_eligible_claim"
 
 
@@ -94,6 +95,7 @@ class _Context:
     fidelity: str | None = None
     objectives: Sequence[str] = ()
     claim_count: int | None = None
+    required_seeds: int | None = None
 
 
 def _quarantined(ctx: _Context) -> tuple[Limitation, ...]:
@@ -209,6 +211,29 @@ def _unmeasured_objectives(ctx: _Context) -> tuple[Limitation, ...]:
     )
 
 
+def _insufficient_power(ctx: _Context) -> tuple[Limitation, ...]:
+    if ctx.achieved is None or ctx.required_seeds is None:
+        return ()
+    keys = replication_keys_of(ctx.records)
+    short = [key for key in keys if ctx.achieved.get(key, 0) < ctx.required_seeds]
+    if not short:
+        return ()
+    return (
+        Limitation(
+            kind=LimitationKind.INSUFFICIENT_POWER,
+            detail=(
+                f"{len(short)} of {len(keys)} cell(s) have fewer than the "
+                f"{ctx.required_seeds} seeds needed to detect the target effect; "
+                "the verdict is INSUFFICIENT, not 'no effect'"
+            ),
+            count=len(short),
+            evidence=(
+                f"count_achieved_seeds(replication_key) < {ctx.required_seeds}, per cell"
+            ),
+        ),
+    )
+
+
 def _no_eligible_claim(ctx: _Context) -> tuple[Limitation, ...]:
     if ctx.claim_count is None or ctx.claim_count > 0:
         return ()
@@ -230,6 +255,7 @@ _DERIVATIONS: Final[tuple[Callable[[_Context], tuple[Limitation, ...]], ...]] = 
     _cells_abandoned,
     _fidelity_not_reached,
     _unmeasured_objectives,
+    _insufficient_power,
     _no_eligible_claim,
 )
 
@@ -242,6 +268,7 @@ def derive_limitations(
     fidelity: str | None = None,
     objectives: Sequence[str] = (),
     claim_count: int | None = None,
+    required_seeds: int | None = None,
 ) -> tuple[Limitation, ...]:
     """Derive a run's limitations from its records and its own declaration.
 
@@ -254,6 +281,8 @@ def derive_limitations(
         objectives: Objective names the spec declared, for the unmeasured check.
         claim_count: How many claims the run could make; ``None`` when not
             derived, which suppresses that limitation rather than guessing.
+        required_seeds: Seeds per cell the power analysis asks for; ``None``
+            when not derived, which suppresses the underpowered line.
 
     Returns:
         Limitations in a fixed order, one per kind that applies.
@@ -265,5 +294,6 @@ def derive_limitations(
         fidelity=fidelity,
         objectives=objectives,
         claim_count=claim_count,
+        required_seeds=required_seeds,
     )
     return tuple(chain.from_iterable(derive(ctx) for derive in _DERIVATIONS))

@@ -395,69 +395,58 @@ class JinjaReportGenerator:
     def _compute_ablation_results(
         self, generator: SurfaceReportGenerator, run_id: str
     ) -> list[AblationResult]:
-        """Compute per-axis ablation tables."""
-        import statistics
-        from collections import defaultdict
+        """Per-axis ablation tables, only for shared-five-axes contrast groups."""
+        from computronium.experiment.surface.report import (
+            _ABLATION_AXES,
+            _ABLATION_METRICS,
+            _STRUCTURAL_AXES,
+            _row_stats,
+            chance_level,
+            contrast_groups,
+        )
 
         records = list(generator._store.query_records(run_id=run_id))
         if not records:
             return []
 
-        ablation_axes = [
-            "credit",
-            "substrate",
-            "plasticity",
-            "dynamics",
-            "update",
-            "geometry",
-        ]
-        primary_metrics = [
-            "val_acc",
-            "walltime_total",
-            "param_count",
-            "spectral_radius",
-            "psi_capacity",
-        ]
-
         results = []
-        for axis in ablation_axes:
-            axis_values = sorted(set(getattr(r, axis) for r in records))
-            if len(axis_values) <= 1:
-                continue
-
-            for metric in primary_metrics:
-                groups: dict[str, list[float]] = defaultdict(list)
-                for r in records:
-                    val = r.payload.get(metric)
-                    if val is not None:
-                        groups[getattr(r, axis)].append(float(val))
-
-                if not groups:
-                    continue
-
-                values = []
-                for axis_val in axis_values:
-                    vals = groups.get(axis_val, [])
-                    if vals:
+        for axis in _ABLATION_AXES:
+            for group in contrast_groups(records, axis):
+                representative = next(iter(group.values()))[0]
+                task_id = representative.schedule.task_id
+                fixed_axes = {
+                    name: getattr(representative, name)
+                    for name in _STRUCTURAL_AXES
+                    if name != axis
+                }
+                for metric in _ABLATION_METRICS:
+                    present = {
+                        value: arm
+                        for value, arm in group.items()
+                        if any(metric in record.payload for record in arm)
+                    }
+                    if not present:
+                        continue
+                    chance = chance_level(task_id, metric)
+                    values = []
+                    for axis_value, arm in sorted(present.items()):
+                        mean, std, n, at_chance = _row_stats(arm, metric, chance)
                         values.append({
-                            "axis_value": axis_val,
-                            "mean": statistics.mean(vals),
-                            "std": statistics.stdev(vals) if len(vals) > 1 else 0.0,
-                            "count": len(vals),
-                            "min": min(vals),
-                            "max": max(vals),
+                            "axis_value": axis_value,
+                            "mean": mean,
+                            "std": std,
+                            "count": n,
+                            "at_chance": at_chance,
                         })
-
-                if values:
-                    results.append(
-                        AblationResult(
-                            axis=axis,
-                            metric=metric,
-                            fixed_axes={},  # Could be enhanced with conditional ablations
-                            values=values,
+                    if values:
+                        results.append(
+                            AblationResult(
+                                axis=axis,
+                                metric=metric,
+                                fixed_axes=fixed_axes,
+                                values=values,
+                            )
                         )
-                    )
-
         return results
 
     def render_html(

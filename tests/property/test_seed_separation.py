@@ -203,6 +203,39 @@ class TestGateThresholdsPowerAnalysis:
         assert result.details["required_seeds"] > 10
 
 
+class TestPromotionLadderHonesty:
+    """G3: three verdicts, not two — underpowered is never "no effect"."""
+
+    def test_below_required_seeds_is_insufficient_never_rejected(self):
+        from computronium.experiment.execution.statistical_promotion import (
+            StatisticalVerdict,
+            check_superiority_gate,
+        )
+
+        thresholds = GateThresholds(effect_size_target=0.5)
+        n = max(2, thresholds.required_seeds_per_group // 4)
+        values = [0.75 + 0.02 * (i % 5) for i in range(n)]
+        result = check_superiority_gate(values, values, thresholds)
+
+        assert result.passed is False
+        assert result.verdict is StatisticalVerdict.INSUFFICIENT
+        assert result.details["power_achieved"] < thresholds.power_target
+
+    def test_at_required_seeds_and_no_effect_is_rejected(self):
+        from computronium.experiment.execution.statistical_promotion import (
+            StatisticalVerdict,
+            check_superiority_gate,
+        )
+
+        thresholds = GateThresholds(effect_size_target=2.0)
+        n = thresholds.required_seeds_per_group
+        values = [0.5 + 0.01 * (i % 3) for i in range(n)]
+        result = check_superiority_gate(values, values, thresholds)
+
+        assert result.passed is False
+        assert result.verdict is StatisticalVerdict.REJECTED
+
+
 class TestSeedContextManager:
     """Tests for SeedContextManager integration."""
 

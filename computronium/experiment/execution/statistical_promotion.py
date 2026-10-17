@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -24,6 +25,20 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
+
+
+class StatisticalVerdict(StrEnum):
+    """What a statistical gate decided.
+
+    Three states, not two: a comparison can show an effect (PASSED), show no
+    effect at adequate power (REJECTED), or be too underpowered to distinguish
+    the two (INSUFFICIENT). Collapsing the third into REJECTED reports "no
+    effect" for a test that could not have detected one.
+    """
+
+    PASSED = "PASSED"
+    REJECTED = "REJECTED"
+    INSUFFICIENT = "INSUFFICIENT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +123,7 @@ class GateResult:
     threshold: float | None
     reason: str
     details: dict[str, Any] = field(default_factory=dict)
+    verdict: StatisticalVerdict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -116,6 +132,7 @@ class GateResult:
             "statistic": self.statistic,
             "threshold": self.threshold,
             "reason": self.reason,
+            "verdict": self.verdict.value if self.verdict else None,
             "details": self.details,
         }
 
@@ -128,6 +145,7 @@ class PromotionGateResult:
     replication_key: str
     all_passed: bool
     gate_results: list[GateResult]
+    verdict: StatisticalVerdict = StatisticalVerdict.INSUFFICIENT
     baseline: BaselineRecord | None = None
     discovery_seeds_used: bool = (
         False  # True if using discovery seeds (not confirmation)
@@ -138,6 +156,7 @@ class PromotionGateResult:
             "cell_key": self.cell_key,
             "replication_key": self.replication_key,
             "all_passed": self.all_passed,
+            "verdict": self.verdict.value,
             "gates": [g.to_dict() for g in self.gate_results],
             "baseline": self.baseline.to_dict() if self.baseline else None,
             "discovery_seeds_used": self.discovery_seeds_used,
@@ -176,22 +195,6 @@ def check_superiority_gate(
     """
     # Use power analysis to determine required seeds (C0/C1)
     required_seeds = thresholds.required_seeds_per_group
-    if len(cell_values) < required_seeds:
-        return GateResult(
-            gate_name="superiority",
-            passed=False,
-            statistic=len(cell_values),
-            threshold=required_seeds,
-            reason=f"Insufficient seeds for statistical test (power analysis): {len(cell_values)} < {required_seeds}",
-            details={
-                "n_cell": len(cell_values),
-                "n_baseline": len(baseline_values),
-                "required_seeds": required_seeds,
-                "power_target": thresholds.power_target,
-                "effect_size_target": thresholds.effect_size_target,
-                "alpha": thresholds.alpha,
-            },
-        )
 
     if not baseline_values:
         # No baseline available - skip this gate (pass with note)
@@ -200,13 +203,17 @@ def check_superiority_gate(
             passed=True,
             statistic=None,
             threshold=None,
-            reason="No baseline available; superiority gate skipped",
+            reason=(
+                "No baseline available; superiority gate skipped, so the "
+                "comparison is INSUFFICIENT rather than PASSED"
+            ),
             details={"n_cell": len(cell_values), "n_baseline": 0},
+            verdict=StatisticalVerdict.INSUFFICIENT,
         )
 
     cell_mean = np.mean(cell_values)
     baseline_mean = np.mean(baseline_values)
-    cell_std = np.std(cell_values, ddof=1)
+    cell_std = np.std(cell_values, ddof=1) if len(cell_values) > 1 else 0.0
     cell_se = (
         cell_std / math.sqrt(len(cell_values)) if len(cell_values) > 1 else float("inf")
     )
@@ -218,8 +225,6 @@ def check_superiority_gate(
     sigma_superior = bool(
         cell_mean > baseline_mean + thresholds.superiority_margin_sigma * cell_se
     )
-
-    passed = absolute_superior and sigma_superior
 
     # Calculate effect size (Cohen's d)
     pooled_std = (
@@ -240,8 +245,40 @@ def check_superiority_gate(
     from computronium.core.statistics import power_for_two_sample
 
     power_achieved = power_for_two_sample(
-        effect_size, len(cell_values), thresholds.alpha
+        effect_size, max(len(cell_values), 1), thresholds.alpha
     )
+
+    if len(cell_values) < required_seeds:
+        # Too few seeds to detect the target effect: the honest verdict is
+        # INSUFFICIENT, never REJECTED. The claim line carries n, so a reader
+        # sees the weakness rather than reading it as "no effect".
+        return GateResult(
+            gate_name="superiority",
+            passed=False,
+            statistic=cell_mean - baseline_mean,
+            threshold=required_seeds,
+            reason=(
+                f"Underpowered: {len(cell_values)} < {required_seeds} seeds needed "
+                f"for d={thresholds.effect_size_target} at power={thresholds.power_target}; "
+                f"observed Δ={cell_mean - baseline_mean:.4f}, "
+                f"effect_size={effect_size:.3f}, power_achieved={power_achieved:.2f}"
+            ),
+            details={
+                "n_cell": len(cell_values),
+                "n_baseline": len(baseline_values),
+                "required_seeds": required_seeds,
+                "cell_mean": float(cell_mean),
+                "baseline_mean": float(baseline_mean),
+                "effect_size": float(effect_size),
+                "power_achieved": float(power_achieved),
+                "power_target": thresholds.power_target,
+                "effect_size_target": thresholds.effect_size_target,
+                "alpha": thresholds.alpha,
+            },
+            verdict=StatisticalVerdict.INSUFFICIENT,
+        )
+
+    passed = absolute_superior and sigma_superior
 
     return GateResult(
         gate_name="superiority",
@@ -264,6 +301,7 @@ def check_superiority_gate(
             "power_achieved": float(power_achieved),
             "required_seeds": required_seeds,
         },
+        verdict=(StatisticalVerdict.PASSED if passed else StatisticalVerdict.REJECTED),
     )
 
 
@@ -477,7 +515,7 @@ def run_l1_statistical_gates(  # ruff: ignore[too-many-locals] - one accumulator
 
     # Gate 1: Superiority over baseline
     if baseline and baseline.metrics:
-        baseline_metric = baseline.metrics.get(metric_key, 0.0)
+        baseline_metric = baseline.metrics.get(val_key, 0.0)
         # For baseline, we only have aggregate, so use as single value
         baseline_vals = [baseline_metric]
     else:
@@ -497,12 +535,19 @@ def run_l1_statistical_gates(  # ruff: ignore[too-many-locals] - one accumulator
     gate_results.append(check_rho_band_gate(rho_values, thresholds))
 
     all_passed = all(g.passed for g in gate_results)
+    if any(g.verdict is StatisticalVerdict.INSUFFICIENT for g in gate_results):
+        verdict = StatisticalVerdict.INSUFFICIENT
+    elif all_passed:
+        verdict = StatisticalVerdict.PASSED
+    else:
+        verdict = StatisticalVerdict.REJECTED
 
     return PromotionGateResult(
         cell_key=cell_key,
         replication_key=replication_key,
         all_passed=all_passed,
         gate_results=gate_results,
+        verdict=verdict,
         baseline=baseline,
         discovery_seeds_used=use_discovery_seeds,
     )
@@ -697,6 +742,7 @@ def promote_with_stats(
             "replication_key": key,
             "maturity": maturity,
             "replay": replay_status,
+            "verdict": gate_result.verdict.value,
             "statistical_gates": gate_result.to_dict(),
             "confirmation_gates": confirmation_gate_result.to_dict()
             if confirmation_gate_result
@@ -711,6 +757,7 @@ __all__ = [
     "GateThresholds",
     "PromotionGateResult",
     "StatisticalGateRunner",
+    "StatisticalVerdict",
     "check_ci_width_gate",
     "check_rho_band_gate",
     "check_superiority_gate",
