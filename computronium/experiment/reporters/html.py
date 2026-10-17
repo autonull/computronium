@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.record import Record
 
