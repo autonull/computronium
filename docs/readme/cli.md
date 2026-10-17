@@ -9,7 +9,7 @@ This table is locked against the dispatcher by `tests/property/test_cli_readme_l
 Kernel operations:
 
 ```bash
-uv run comp --help                    # every command above
+uv run comp --help-all                # every command above
 uv run comp run quick-verify --dry-run   # resolve the plan; writes nothing
 uv run comp run quick-verify --store experiment.duckdb
 uv run comp status --store experiment.duckdb

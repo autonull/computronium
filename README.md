@@ -33,6 +33,89 @@ The library is usable independently of the research hypotheses; the research pro
 
 The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
 
+## Start here
+
+Six commands, no second document.
+
+```bash
+uv sync --dev --all-extras
+uv run comp run demo --dry-run          # the declared space, priced
+uv run comp demo --store demo.duckdb    # seven beats: space, run, ledger, report, coverage, results
+uv run comp report --store demo.duckdb --format text
+uv run comp coverage report --store demo.duckdb
+uv run comp --help                      # core commands; --help-all shows every command
+```
+
+What comes out:
+
+- a controlled contrast — five of six axes fixed, one varied — with `n`, `std`
+  and an `[at chance]` flag on every row;
+- claims with `n` and variance, and limitations that name the filter which
+  re-derives them (`[insufficient_power]`, `[unpreregistered_claim]`,
+  `[cells_abandoned]`, …);
+- a verdict of `PASSED`, `REJECTED`, or `INSUFFICIENT`, with `power_achieved`;
+- the price of a real answer: 63 seeds per group for a d=0.5 effect, times
+  every arm and every axis.
+
+The demo does not promise a win. It promises a protocol: the control arm must
+clear chance before a comparison is published, and an underpowered run says so
+instead of declaring "no effect".
+
+The Python library is separate and usable on its own — see
+[Machine learning library](#machine-learning-library) below, or run the
+60-second snippet it contains.
+
+## Neutral evaluation — what this repository does, in its own voice
+
+A comparison is only useful if a reader can check how it was run. This project
+therefore publishes its procedure, not its motives:
+
+- **Pre-registered thresholds.** A claim's metric, superiority margin, error
+  rate and seed budget can be declared before the run
+  (`configs/preregistrations/*.json`, `computronium.validation.preregistration`).
+  A claim with no matching registration is labelled `[unpreregistered_claim]`
+  beside the claim; the report does not imply otherwise.
+- **Equal treatment of arms.** `docs/FAIRNESS_CONTRACT.md` (F-1…F-6,
+  append-only) fixes data, budget, stopping rule, seeds and reporting. All
+  comparisons are reported unfiltered, or a correction is named.
+- **Declared deviations.** Every concrete credit, update and plasticity
+  primitive ships an `AlgorithmIdentityCard` with its paper citation and a
+  *Deviations* column (`docs/IDENTITY_CARDS.md`, generated; `--strict` is a
+  gate). The defensible statement is "independent re-implementation with
+  disclosed deviations", never "verified upstream".
+- **A chance line and a positive control.** An ablation table is printed only
+  when the other five structural axes and the swept hyperparameters are held
+  fixed; every row carries `n` and `std`; an arm at chance is labelled
+  `[at chance]`; and the run checks a known-good control arm before publishing
+  the comparison.
+- **A corrections log.** Superseded measurements are recorded with the audit
+  that invalidated them (`docs/CORRECTIONS.md`), and claims are held in a
+  ledger outside the engine that produced them (`packages/ceec-core`).
+
+**What this does not claim.** All credit rules here are this project's
+re-implementations, with deviations declared and cited — not the inventors'
+reference code. Equal-effort HPO is a protocol (`docs/hpo_protocol.md`,
+`biopl-hpo`), not enforced by `comp run`. There is no blinding. And no rule in
+this repository is the author's invention; the comparison stack is the
+contribution.
+
+## Findings we own
+
+Three results survived the project's own audits. Numbers are quoted from the
+documents, never recomputed here; each names the lock or audit that makes it
+checkable.
+
+| Result | Number | Status | Document |
+|---|---|---|---|
+| Deep EqProp boundary | Vanishing contrastive signal: slope −1.19, R²=0.80 at β=0.01. DirectedEP restores the signal (slope +0.16, R²=0.85) but not accuracy: 9.2% at depth ≥3 — chance for 10 classes. | **G2 FAILED**; 1-layer EqProp remains viable | `docs/eqprop_deep_limitation.md` |
+| Phantom-knob audit | A search key sampled by a sweep but silently dropped at construction poisons parity and liveness identically. | Detected by `construction.phantom_knobs`; enforced by `validate_all_rule_spaces()` | `docs/phantom_knob_audit.md` |
+| ρ(J) vs σ_max conflation | Power iteration reported as "spectral radius" on a nonnormal J converged to ≈0.5 while ‖J‖₂ ≈ 10.025. | Caught by `test_jacobian_amplification`; replaced by three separated estimators; old frontier numbers flagged `requires_rerun` | `docs/CORRECTIONS.md` |
+
+A project that shows its own refuted hypothesis is more credible than one that
+shows only a favourable run. These three are the discovery output to date; the
+readiness ledger below names everything that is designed or planned but not
+built.
+
 ## What is Computronium
 
 Computronium ships three layers, each usable independently:
@@ -136,9 +219,9 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 | Panel | Key Contents |
 |-------|--------------|
-| **🚪 Entry Points** | 35 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
+| **🚪 Entry Points** | 36 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
 | **🎯 Tasks & Data** | 7 domains, 24 tasks |
-| **🧪 Experiment Kernel** | 11 pipeline stages, 8 policies, 48 objectives (46 measured), 72 priors, 88 capabilities, 41 constraints |
+| **🧪 Experiment Kernel** | 11 pipeline stages, 8 policies, 48 objectives (41 measured), 72 priors, 88 capabilities, 41 constraints |
 | **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
 | **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (27 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
@@ -968,6 +1051,7 @@ six-axis systems and assert real accuracies.
 
 | Command | Purpose |
 |---|---|
+| `demo` | Run the seven-beat demonstration: space, run, ledger, report, coverage |
 | `run` | Execute a run profile (dry-run with --dry-run) |
 | `report` | Generate report from store |
 | `export` | Export store data for round-trip |
@@ -1009,7 +1093,7 @@ This table is locked against the dispatcher by `tests/property/test_cli_readme_l
 Kernel operations:
 
 ```bash
-uv run comp --help                    # every command above
+uv run comp --help-all                # every command above
 uv run comp run quick-verify --dry-run   # resolve the plan; writes nothing
 uv run comp run quick-verify --store experiment.duckdb
 uv run comp status --store experiment.duckdb
@@ -1414,7 +1498,19 @@ uv run python -m pytest tests/property/test_kernel_isolation_lock.py \
 
 **Commit checklist** (per commit, scoped): dev-env smoke → `ruff format` + `ruff check --fix` on changed files → `pyright` on changed files → targeted tests. Full suite, repo-wide lint/type, and `pip-audit` are round-close work only.
 
-**Adding an ontology primitive** — follow the checklist in [`AGENTS.md`](AGENTS.md) (registry row, config classmethod, wiring lockstep lock, export surfaces, contract invariants). **Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
+**Adding an ontology primitive** — the whole ramp is in this README:
+
+1. add the class to the layer's registry (`DYNAMICS_REGISTRY` in `computronium/ontology/dynamics/__init__.py` for `StateDynamics`);
+2. add a `StateDynamicsConfig.<primitive>()` classmethod whose `dynamics_type` matches the registry key;
+3. run `tests/property/test_dynamics_wiring_lock.py` — it proves registry ↔ config ↔ root `__all__`/`_LAZY` ↔ `TYPE_CHECKING` stay in sync;
+4. export it on the root surface (`__all__` + `_LAZY` + the `TYPE_CHECKING` block) and in `ontology/__init__.py`;
+5. read the `StateDynamics` protocol docstring for the activation, settle-mutation/autograd and free/nudged contracts;
+6. whitelist the new `dynamics_type` in every `SystemConfig.validate()` credit/substrate branch;
+7. if shipping a demo, add one `DEMOS` row in `computronium/visualization/gallery.py` and re-pin `docs/figures/manifest.json`.
+
+**Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
+
+**Good first additions** (designed, not built): `capabilities` command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware compatibility sampling. Each is a named row in the readiness ledger, not a silent absence.
 
 ### Two Entry Points, One Config Surface
 

@@ -93,7 +93,7 @@ class TestDocumentedInvocationsResolve:
     )
     def test_documented_invocation_resolves(self, argv: list[str]) -> None:
         assert argv, "documented invocation is empty"
-        if argv[0] in {"-h", "--help"}:  # the dispatcher's own help is not a command
+        if argv[0] in {"-h", "--help", "--help-all"}:  # the dispatcher's own help is not a command
             assert dispatcher_main(argv) == 0
             return
         command, rest = argv[0], argv[1:]

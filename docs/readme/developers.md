@@ -25,7 +25,19 @@ uv run python -m pytest tests/property/test_kernel_isolation_lock.py \
 
 **Commit checklist** (per commit, scoped): dev-env smoke → `ruff format` + `ruff check --fix` on changed files → `pyright` on changed files → targeted tests. Full suite, repo-wide lint/type, and `pip-audit` are round-close work only.
 
-**Adding an ontology primitive** — follow the checklist in [`AGENTS.md`](AGENTS.md) (registry row, config classmethod, wiring lockstep lock, export surfaces, contract invariants). **Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
+**Adding an ontology primitive** — the whole ramp is in this README:
+
+1. add the class to the layer's registry (`DYNAMICS_REGISTRY` in `computronium/ontology/dynamics/__init__.py` for `StateDynamics`);
+2. add a `StateDynamicsConfig.<primitive>()` classmethod whose `dynamics_type` matches the registry key;
+3. run `tests/property/test_dynamics_wiring_lock.py` — it proves registry ↔ config ↔ root `__all__`/`_LAZY` ↔ `TYPE_CHECKING` stay in sync;
+4. export it on the root surface (`__all__` + `_LAZY` + the `TYPE_CHECKING` block) and in `ontology/__init__.py`;
+5. read the `StateDynamics` protocol docstring for the activation, settle-mutation/autograd and free/nudged contracts;
+6. whitelist the new `dynamics_type` in every `SystemConfig.validate()` credit/substrate branch;
+7. if shipping a demo, add one `DEMOS` row in `computronium/visualization/gallery.py` and re-pin `docs/figures/manifest.json`.
+
+**Adding a kernel policy** — subclass the `Policy` protocol in `computronium/experiment/execution/policy.py` and register it in `POLICY_CATALOG`; the interchangeability guarantees then apply for free.
+
+**Good first additions** (designed, not built): `capabilities` command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware compatibility sampling. Each is a named row in the readiness ledger, not a silent absence.
 
 ### Two Entry Points, One Config Surface
 

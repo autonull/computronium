@@ -395,6 +395,9 @@ _GENERATORS = {
 # moving a section between files does not rename anything.
 _SECTIONS: tuple[str, ...] = (
     "title.md",
+    "start-here.md",
+    "neutral-evaluation.md",
+    "findings.md",
     "what-is.md",
     "install.md",
     "quickstart.md",
