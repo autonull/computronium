@@ -43,7 +43,6 @@ from computronium.experiment.evidence.claims import (
     replication_key,
     strongest_axis,
 )
-from computronium.experiment.execution.statistical_promotion import GateThresholds
 from computronium.experiment.evidence.limitations import (
     Limitation,
     derive_limitations,
@@ -53,6 +52,7 @@ from computronium.experiment.evidence.significance import (
     Significance,
     paired_significance,
 )
+from computronium.experiment.execution.statistical_promotion import GateThresholds
 from computronium.experiment.kernel.search_space import (
     declared_cell_count,
     search_space_from_spec,
@@ -677,14 +677,15 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         Returns contrast groups for each ablation axis, with metrics per arm.
         Only includes groups where the other five axes are held fixed.
         """
+        import statistics
+
         from computronium.experiment.surface.report import (
             _ABLATION_AXES,
             _ABLATION_METRICS,
             _STRUCTURAL_AXES,
-            contrast_groups,
             chance_level,
+            contrast_groups,
         )
-        import statistics
 
         records = list(self._store.query_records(run_id=run_id))
         if not records:

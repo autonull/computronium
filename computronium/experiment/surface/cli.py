@@ -309,6 +309,7 @@ CORE_COMMANDS: frozenset[str] = frozenset({
     "demo",
     "coverage",
     "gallery",
+    "dashboard",
 })
 
 

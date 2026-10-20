@@ -2,6 +2,10 @@
 
 # 🌌 Computronium: A Composable Laboratory for Learning Mechanisms
 
+![Computronium Dashboard](assets/dashboard-hero.png)
+
+*Computronium is a composable laboratory for learning mechanisms. Watch algorithms battle it out under a neutral, pre-registered evaluation protocol.*
+
 > **Computronium** is a composable ML library and experimental laboratory for studying how learning mechanisms interact with dynamics, writable state, communication, precision, and resource constraints. Its six-axis interface supports controlled comparisons; its research program investigates when particular combinations offer measurable benefits.
 
 **Computronium** (from [Wikipedia](https://en.wikipedia.org/wiki/Computronium)): the theoretical limit of physical computation. The name reflects the framework's aim to bridge abstract algorithms and the physical constraints of optical, memristive, neuromorphic, biological, quantum, and other substrate models.
@@ -38,6 +42,16 @@ uv run comp demo --store demo.duckdb    # seven beats: space, run, ledger, repor
 uv run comp report --store demo.duckdb --format text
 uv run comp coverage report --store demo.duckdb
 uv run comp --help                      # core commands; --help-all shows every command
+```
+
+**Live dashboard** (watch campaigns in real time):
+
+```bash
+# Terminal 1: launch dashboard
+uv run comp dashboard --store experiment.duckdb
+
+# Terminal 2: run a campaign
+uv run comp run demo --store experiment.duckdb
 ```
 
 What comes out:

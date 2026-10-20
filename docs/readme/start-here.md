@@ -11,6 +11,16 @@ uv run comp coverage report --store demo.duckdb
 uv run comp --help                      # core commands; --help-all shows every command
 ```
 
+**Live dashboard** (watch campaigns in real time):
+
+```bash
+# Terminal 1: launch dashboard
+uv run comp dashboard --store experiment.duckdb
+
+# Terminal 2: run a campaign
+uv run comp run demo --store experiment.duckdb
+```
+
 What comes out:
 
 - a controlled contrast — five of six axes fixed, one varied — with `n`, `std`

@@ -86,6 +86,8 @@ dev = [
     "build",
     "twine",
     "pip-audit",
+    # Browser automation for dashboard screenshots
+    "playwright>=1.40.0",
     # Test dependencies
     "torchvision",
     "scikit-learn",
