@@ -52,17 +52,17 @@
                            │ three.js frontend (new)
                            ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Browser: three.js Scene                                                │
+│  Browser: three.js Scene + uPlot Canvases                                 │
 │    ├─ Discovery Map: 3D grid (fog-of-war)                               │
 │    │   ├─ Measured: glowing pillars (height=val_acc, color=arm)        │
 │    │   ├─ Legal/unmeasured: wireframe cubes (hover=price)              │
 │    │   └─ Void: red X markers                                          │
 │    ├─ Cell Drawer: HTML overlay panel (detail on click)                │
-│    ├─ Plotter: 3D charts (three.js)                                     │
-│    │   ├─ Pareto: 3D scatter (val_acc, walltime_s, param_count)        │
-│    │   ├─ Ablation: 3D bars + chance plane                             │
-│    │   └─ Seed variability: 3D violin plots                            │
-│    ├─ Live Rail: WebGL text overlay (bottom)                           │
+│    ├─ Plotter: uPlot canvases (Pareto, Ablation, Variability)          │
+│    │   ├─ Pareto: scatter (val_acc vs 1/walltime_s), Pareto highlighted│
+│    │   ├─ Ablation: grouped bars + chance line                          │
+│    │   └─ Seed Variability: box/violin plots per arm                   │
+│    ├─ Live Rail: HTML overlay (bottom)                                  │
 │    └─ HUD: 3D resource bars (top-right)                                │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -71,46 +71,43 @@
 
 ## Phased Development Plan (Dependency-Ordered)
 
-### Phase 0: Frontend Scaffold (three.js + TypeScript)
-**Goal**: Minimal three.js app connecting to WebSocket, rendering a blank scene
+### Phase 0: Frontend Scaffold + Elegance Foundations (Day 1)
+**Goal**: Build scaffold, backend fixes, AND elegance infrastructure (registries, codegen, serializers)
 
 **Tasks**:
-1. **Create `computronium/experiment/execution/dashboard/package.json`**:
-   ```json
-   {
-     "name": "computronium-dashboard",
-     "type": "module",
-     "scripts": {
-       "dev": "vite",
-       "build": "tsc && vite build",
-       "preview": "vite preview"
-     },
-     "dependencies": {
-       "three": "^0.160.0"
-     },
-     "devDependencies": {
-       "typescript": "^5.0.0",
-       "vite": "^5.0.0"
-     }
-   }
-   ```
-2. **Create `tsconfig.json`** — ES2022, module: ESNext, strict
-3. **Create `vite.config.ts`** — output to `../templates/static/js/dashboard.js`
-3. **Create `src/main.ts`**:
-   - three.js scene: renderer, perspective camera, orbit controls
-   - WebSocket client: auto-reconnect, message router
-   - Animation loop: `renderer.render(scene, camera)`
-4. **Modify `web.py`**:
-   - Mount `/static` → `templates/static` (already exists at line 68-71)
-   - Ensure `dashboard.js` served at `/static/js/dashboard.js`
-5. **Rewrite `index.html`** — minimal:
+1. **Backend Critical Fixes** (web.py):
+   - Add `read_only` to `DashboardConfig`
+   - Add `/api/campaigns/{id}/metrics` endpoint (thin wrapper around `ReportGenerator`)
+   - Extend WebSocket broadcast: `campaign_metrics` + `pipeline_event`
+   - All store access uses `read_only=True`
+
+2. **Elegance Infrastructure** (New — Do First):
+   - **`scripts/generate_palette.py`** → generates `_palette.py` (Python), `palette.ts` (three.js), `palette.css` (HTML)
+   - **`scripts/generate_axis_metadata.py`** → generates `axis-metadata.json` from Python `StructuralAxis` registries
+   - **`ReportGenerator.get_ablation_groups()`** → structured ablation data for API
+   - **`RecordSerializer`** (`evidence/serializers.py`) → single serialization point
+   - **`MessageRouter` base class** (`src/ws-client.ts`) → components self-register handlers
+   - **`ComponentRegistry` base class** (`src/components/registry.ts`) → auto-discovery
+
+3. **Frontend Scaffold**:
+   - `package.json` — deps: `three`, `three-stdlib`, `uplot` (fast, lightweight, Canvas 2D)
+   - `tsconfig.json`, `vite.config.ts` (output to `../templates/static/js/dashboard.js`)
+   - `src/main.ts` — three.js boilerplate, uses `ComponentRegistry` auto-init
+   - `src/ws-client.ts` — `MessageRouter` with auto-reconnect
+   - `src/style.ts` — imports generated `palette.ts`
+
+4. **Rewrite `index.html`** — minimal:
    ```html
    <canvas id="dashboard-canvas"></canvas>
    <div id="ui-overlay"></div>
    <script type="module" src="/static/js/dashboard.js"></script>
    ```
 
-**Acceptance**: `npm run build` produces `dashboard.js`; opening `localhost:8080` shows black three.js canvas, WebSocket connects, console logs `status_update` messages.
+**Acceptance**: 
+- `npm run build` produces `dashboard.js`
+- `uv run comp dashboard` launches with WebSocket + 3 critical endpoints
+- Palette/axis metadata generated from single Python source
+- Components use registries from Day 1 (zero boilerplate additions later)
 
 ---
 
@@ -167,21 +164,26 @@
 
 ---
 
-### Phase 3: Plotter — 3D Interactive Charts
-**Goal**: Three.js charts that beat any 2D library
+### Phase 3: Plotter — Charts First (uPlot), Custom 3D Later
+**Goal**: Working interactive charts NOW (uPlot), custom three.js 3D as v2 polish
 
-| Chart | three.js Implementation |
-|-------|------------------------|
-| **Pareto Frontier** | 3D scatter: x=val_acc, y=1/walltime_s (speed), z=1/param_count (efficiency). Color = credit arm. Pareto points = larger, glowing. Drag to rotate. |
-| **Ablation Bars** | 3D grouped bars: x=credit arm, y=val_acc, z=replicate (seed). Chance = semi-transparent plane at y=0.10. Hover = tooltip with n, std. |
-| **Seed Variability** | 3D violin plots per arm: x=arm, y=val_acc, width=density. Mean line, std band. |
+**Chart Library**: **uPlot** — 25KB, 60fps, Canvas 2D, no deps, excellent for time-series/scatter/bars
+- Pareto: scatter (val_acc vs 1/walltime_s), color=arm, Pareto points = larger
+- Ablation: grouped bars (credit arm × val_acc), chance line = horizontal rule
+- Seed Variability: box plots or violin (uPlot hooks) per arm
 
 **Implementation** (`src/plotter.ts`):
-- Each chart = separate `Scene` + `Camera` + `Renderer` in hidden canvas → composite into main UI
-- Or: single scene, toggle visibility via radio buttons
-- Data from `/api/campaigns/{id}/metrics` endpoint (extend `web.py`)
+- Three `<canvas>` elements (or one, switched via tabs)
+- uPlot instances per chart, data from `/api/campaigns/{id}/metrics`
+- Toolbar: pan/zoom, reset, download PNG
+- Tooltip: shows n, mean±std, chance line value
 
-**Acceptance**: Three tabs (Pareto / Ablation / Variability), all interactive, real data.
+**Custom 3D (Deferred to v2)**:
+- Pareto: 3D scatter (val_acc, 1/walltime_s, 1/param_count)
+- Ablation: 3D bars + chance plane
+- Seed Variability: 3D violin plots
+
+**Acceptance**: Three tabs render instantly with real data, interactive pan/zoom, tooltips show n/mean/std.
 
 ---
 
@@ -265,19 +267,24 @@
 
 | File | Change |
 |------|--------|
-| `computronium/experiment/execution/dashboard/package.json` | **New** — three.js, vite, typescript |
+| `computronium/experiment/execution/dashboard/package.json` | **New** — three.js, three-stdlib, uPlot, vite, typescript |
 | `computronium/experiment/execution/dashboard/tsconfig.json` | **New** |
 | `computronium/experiment/execution/dashboard/vite.config.ts` | **New** |
-| `computronium/experiment/execution/dashboard/src/main.ts` | **New** — three.js entry |
-| `computronium/experiment/execution/dashboard/src/discovery-map.ts` | **New** — 3D fog-of-war |
+| `computronium/experiment/execution/dashboard/src/main.ts` | **New** — three.js entry, uses ComponentRegistry |
+| `computronium/experiment/execution/dashboard/src/discovery-map.ts` | **New** — 3D fog-of-war, registers with MessageRouter |
 | `computronium/experiment/execution/dashboard/src/cell-drawer.ts` | **New** — HTML overlay panel |
-| `computronium/experiment/execution/dashboard/src/plotter.ts` | **New** — 3D charts |
-| `computronium/experiment/execution/dashboard/src/live-rail.ts` | **New** — bottom log |
-| `computronium/experiment/execution/dashboard/src/hud.ts` | **New** — top-right resources |
-| `computronium/experiment/execution/dashboard/src/ws-client.ts` | **New** — WebSocket client with reconnect |
-| `computronium/experiment/execution/dashboard/src/style.ts` | **New** — centralized palette |
+| `computronium/experiment/execution/dashboard/src/plotter.ts` | **New** — uPlot charts (Pareto, Ablation, Variability) |
+| `computronium/experiment/execution/dashboard/src/live-rail.ts` | **New** — bottom log, registers with MessageRouter |
+| `computronium/experiment/execution/dashboard/src/hud.ts` | **New** — top-right resources, registers with MessageRouter |
+| `computronium/experiment/execution/dashboard/src/ws-client.ts` | **New** — MessageRouter base class + auto-reconnect |
+| `computronium/experiment/execution/dashboard/src/components/registry.ts` | **New** — ComponentRegistry for auto-discovery |
+| `computronium/experiment/execution/dashboard/src/style.ts` | **New** — imports generated `palette.ts` |
 | `computronium/experiment/execution/dashboard/templates/index.html` | **Rewrite** — minimal, loads dashboard.js |
 | `computronium/experiment/execution/dashboard/web.py` | **Critical**: add 3 endpoints + WebSocket extensions + read_only |
+| `computronium/experiment/evidence/serializers.py` | **New** — RecordSerializer (single source) |
+| `computronium/experiment/surface/report.py` | Add `get_ablation_groups()` method |
+| `scripts/generate_palette.py` | **New** — generates `_palette.py`, `palette.ts`, `palette.css` |
+| `scripts/generate_axis_metadata.py` | **New** — generates `axis-metadata.json` from Python registries |
 | `pyproject.toml` | Add `playwright` (dev extra) |
 | `scripts/launch_demo_campaign.py` | **New** |
 | `scripts/capture_dashboard_screenshot.py` | **New** — Playwright + WebGL |
@@ -293,23 +300,33 @@ class DashboardConfig:
     ...
     read_only: bool = False  # NEW
 
-# 2. New REST endpoint for per-cell metrics
+# 2. Add RecordSerializer import and usage
+from computronium.experiment.evidence.serializers import serializer
+
+# 3. New REST endpoint for per-cell metrics (thin wrapper)
 @app.get("/api/campaigns/{campaign_id}/metrics")
 async def api_campaign_metrics(campaign_id: str) -> JSONResponse:
     if not config.store_path:
         return JSONResponse({"error": "No store path configured"})
-    config = StoreConfig(path=Path(config.store_path), read_only=True)  # CRITICAL
-    store = RecordStore(config)
+    store_config = StoreConfig(path=Path(config.store_path), read_only=True)  # CRITICAL
+    store = RecordStore(store_config)
     with store:
-        records = store.query_records(run_id=campaign_id)
-        # Compute Pareto, ablation grouping, etc.
+        generator = ReportGenerator(store)
+        records = list(generator._store.query_records(run_id=campaign_id))
+        
+        # Reuse ReportGenerator logic
+        pareto_points, _ = compute_pareto_frontier(records, ["val_acc", "walltime_s"])
+        pareto_ids = {p["record_id"] for p in pareto_points}
+        
+        ablation_groups = generator.get_ablation_groups(campaign_id)
+        
         return JSONResponse({
-            "records": [record_to_dict(r) for r in records],
-            "pareto": compute_pareto_flags(records),
-            "ablation_groups": contrast_groups(records, "credit"),
+            "records": [serializer.to_api_dict(r) for r in records],
+            "pareto": [r.record_id in pareto_ids for r in records],
+            "ablation_groups": ablation_groups,
         })
 
-# 3. Extend WebSocket broadcast in _update_loop()
+# 4. Extend WebSocket broadcast in _update_loop()
 async def _update_loop(self) -> None:
     while self._running:
         await asyncio.sleep(self.config.update_interval)
@@ -325,48 +342,86 @@ async def _update_loop(self) -> None:
                     "data": metrics,
                     "timestamp": datetime.now().isoformat(),
                 })
-        # NEW: Broadcast pipeline events (if available from CampaignQueue)
-        # This requires CampaignQueue to emit stage events
+        # NEW: Broadcast pipeline events (mock for v1)
+        await self._broadcast_update({
+            "type": "pipeline_event",
+            "stage": "s6_train",
+            "message": "compose joint system",
+            "level": "ok",
+            "timestamp": datetime.now().isoformat(),
+        })
 ```
 
-### WebSocket Message Types (Extended)
+### WebSocket Message Types (Extended) — Handled via MessageRouter
 
 ```typescript
-// Client receives:
-type WSMessage = 
-  | { type: 'status_update'; data: StatusData }
-  | { type: 'queue_update'; data: QueueData }
-  | { type: 'periodic_update'; status: StatusData; queue: QueueData }
-  | { type: 'campaign_metrics'; campaign_id: string; data: CampaignMetrics }  // NEW
-  | { type: 'pipeline_event'; stage: string; message: string; level: 'ok' | 'warn' | 'error' }; // NEW
+// src/types/ws-messages.ts — Single source (manual for v1, codegen for v2)
+export interface StatusUpdate {
+  type: 'status_update';
+  data: StatusData;
+}
+
+export interface QueueUpdate {
+  type: 'queue_update';
+  data: QueueData;
+}
+
+export interface CampaignMetrics {
+  type: 'campaign_metrics';
+  campaign_id: string;
+  data: CampaignMetricsData;
+}
+
+export interface PipelineEvent {
+  type: 'pipeline_event';
+  stage: string;
+  message: string;
+  level: 'ok' | 'warn' | 'error';
+}
+
+export type WSMessage = StatusUpdate | QueueUpdate | CampaignMetrics | PipelineEvent;
+
+// In components — self-register (no central switch):
+// src/discovery-map.ts
+router.register('queue_update', this.onQueueUpdate.bind(this));
+router.register('campaign_metrics', this.onMetrics.bind(this));
+
+// src/live-rail.ts
+router.register('pipeline_event', this.onPipelineEvent.bind(this));
+
+// src/hud.ts
+router.register('status_update', this.onStatus.bind(this));
 ```
 
-### Color Palette (three.js + CSS) — `src/style.ts`
+**Benefits**: Zero boilerplate in `ws-client.ts`, components declare dependencies explicitly, testable.
+
+### Color Palette — Generated from Single Source
+
+**Source**: `scripts/generate_palette.py` → reads `PALETTE_SOURCE` dict
+
+**Outputs**:
+- `computronium/visualization/_palette.py` — Python dict (for matplotlib backend)
+- `src/palette.ts` — TypeScript const (for three.js)
+- `templates/static/css/palette.css` — CSS variables (for HTML overlays)
 
 ```typescript
-export const PALETTE = {
-  bg: 0x0a0e14,
-  grid: 0x1f2a3a,
-  measured: 0xd4a843,      // amber glow
-  legal: 0x30363d,         // wireframe
-  void: 0xf85149,          // red X
-  arms: {
-    gradient: 0x58a6ff,        // blue
-    pepita: 0xd4a843,          // amber
-    random_projections: 0x3fb950, // green
-    local_goodness: 0xa371f7,   // purple
-  },
-  chance: 0x888888,
-  insufficient: 0xd4a843,
-  passed: 0x3fb950,
-  rejected: 0xf85149,
-  gpu: 0x58a6ff,
-  cpu: 0x3fb950,
-  memory: 0xd4a843,
-} as const;
+// src/style.ts — IMPORTS GENERATED PALETTE
+import { PALETTE } from './palette.js';  // generated
 
-export type ArmName = keyof typeof PALETTE.arms;
+export const PALETTE; // re-export
+
+// CSS variables (in palette.css):
+:root {
+  --bg: #0a0e14;
+  --grid: #1f2a3a;
+  --measured: #d4a843;
+  --arms-gradient: #58a6ff;
+  --arms-pepita: #d4a843;
+  /* ... */
+}
 ```
+
+**Benefits**: One source → Python/TS/CSS always in sync. New arm color = one dict entry.
 
 ### Data Flow Summary
 
@@ -390,6 +445,21 @@ CampaignQueue (global singleton)
 
 ---
 
+### Elegance Patterns (Active from Phase 0)
+
+| Pattern | Implementation | Benefit |
+|---------|----------------|---------|
+| **MessageRouter** | `src/ws-client.ts` — components `router.register('type', handler)` | Zero boilerplate, explicit deps |
+| **ComponentRegistry** | `src/components/registry.ts` — auto-discovery + `init`/`destroy` | No `main.ts` edits for new components |
+| **Palette Codegen** | `scripts/generate_palette.py` → `_palette.py`, `palette.ts`, `palette.css` | Single source for Python/TS/CSS |
+| **Axis Metadata Codegen** | `scripts/generate_axis_metadata.py` → `axis-metadata.json` | Python registries → frontend |
+| **RecordSerializer** | `evidence/serializers.py` → `serializer.to_api_dict(record)` | One serialization logic |
+| **ReportGenerator Reuse** | `get_ablation_groups()` + `compute_pareto_frontier()` | API = thin wrapper, zero logic dup |
+
+These patterns are established in Phase 0 — components use them from Day 1 with zero boilerplate additions later.
+
+---
+
 ## Risk Mitigation
 
 | Risk | Mitigation |
@@ -400,6 +470,7 @@ CampaignQueue (global singleton)
 | Screenshot timing flaky | Poll `/api/queue` until `running > 0`, then wait 2s for render |
 | Mobile performance | Desktop-only for v1; responsive not required |
 | Font rendering in WebGL | Use HTML overlay for all text (Cell Drawer, HUD, Live Rail) — only geometry in three.js |
+| **Custom 3D chart complexity** | **uPlot for v1 (25KB, Canvas 2D, instant)** — 3D deferred to v2 |
 | **Store lock contention** | **`StoreConfig(read_only=True)` for ALL dashboard store access** |
 | **Missing per-cell metrics endpoint** | **Add `/api/campaigns/{id}/metrics` in Phase 0** |
 | **WebSocket missing campaign_metrics** | **Extend `_update_loop()` broadcast in Phase 0** |
@@ -417,7 +488,7 @@ CampaignQueue (global singleton)
 - [ ] `uv run comp run demo --store experiment.duckdb` populates live data
 - [ ] Discovery Map: 3D grid, measured cells glow, click → Cell Drawer
 - [ ] Cell Drawer: metrics, sparkline, verdict, seeds-to-claim
-- [ ] Plotter: 3 tabs (Pareto, Ablation, Variability), interactive
+- [ ] Plotter: 3 tabs (Pareto, Ablation, Variability) via uPlot, interactive pan/zoom/tooltips
 - [ ] Live Rail: scrolling pipeline events (mock for v1)
 - [ ] HUD: GPU/CPU/memory 3D bars, burn rate, claim price
 - [ ] `scripts/capture_dashboard_screenshot.py` produces `dashboard-hero.png` (1920×1080)
@@ -434,6 +505,7 @@ CampaignQueue (global singleton)
 - ❌ Historical replay / time-travel — v3
 - ❌ Mobile touch controls — v2
 - ❌ Custom shader effects (bloom, SSAO) — v2 polish
+- ❌ Custom three.js 3D charts (Pareto 3D scatter, Ablation 3D bars, Violin 3D) — v2, uPlot works for v1
 
 ---
 
