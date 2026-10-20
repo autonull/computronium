@@ -10,6 +10,7 @@ import { plotter } from "./plotter.js";
 import { liveRail } from "./live-rail.js";
 import { caption } from "./caption.js";
 import { hud } from "./hud.js";
+import { viewSwitcher } from "./stage/switcher.js";
 import { PALETTE } from "./palette.js";
 import { detectRenderProfile } from "./render-profile.js";
 
@@ -135,10 +136,12 @@ wsClient.waitForConnection(15000).then((connected) => {
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
 // Keyboard shortcuts: the charts, the panels, and the drawer.
+// The number keys belong to the stage's views (V cycles them); the charts
+// are picked by the letters that name them.
 const TAB_KEYS: Record<string, string> = {
-  "1": "pareto",
-  "2": "ablation",
-  "3": "variability",
+  "p": "pareto",
+  "a": "ablation",
+  "s": "variability",
 };
 window.addEventListener("keydown", (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -277,6 +280,7 @@ requestAnimationFrame(animate);
   liveRail,
   caption,
   hud,
+  viewSwitcher,
   wsClient,
   router,
 };

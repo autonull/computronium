@@ -65,6 +65,9 @@ PASSED = "#3fb950"
 INSUFFICIENT = "#d29922"
 REJECTED = "#f85149"
 PROMOTED = "#a371f7"
+RAMP_LOW = "#1f3a5f"
+RAMP_MID = "#58a6ff"
+RAMP_HIGH = "#d4a843"
 
 # ─── Arm Color Map ────────────────────────────────────────────
 ARM_COLORS: dict[str, str] = {
@@ -156,4 +159,7 @@ PALETTE: dict[str, str] = {
     "insufficient": "#d29922",
     "rejected": "#f85149",
     "promoted": "#a371f7",
+    "ramp_low": "#1f3a5f",
+    "ramp_mid": "#58a6ff",
+    "ramp_high": "#d4a843",
 }

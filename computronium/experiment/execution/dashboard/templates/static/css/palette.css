@@ -65,4 +65,7 @@
   --insufficient: #d29922;
   --rejected: #f85149;
   --promoted: #a371f7;
+  --ramp-low: #1f3a5f;
+  --ramp-mid: #58a6ff;
+  --ramp-high: #d4a843;
 }

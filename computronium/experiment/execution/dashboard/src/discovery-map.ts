@@ -18,13 +18,21 @@ import { router } from "./ws-client.js";
 import { ARM_COLORS, PALETTE } from "./palette.js";
 import { runSelection } from "./run-selection.js";
 import axisMetadata from "./axis-metadata.json";
+import { frameBox } from "./stage/framing.js";
+import {
+  cellKey,
+  mean,
+  meanCurve,
+  stageState,
+  stddev,
+  type AxisSelection,
+  type StageChange,
+} from "./stage/state.js";
+import { createTextSprite } from "./stage/sprites.js";
 import {
   AXIS_NAMES,
   type AxisName,
   type CellData,
-  type CurvePoint,
-  type SpaceCell,
-  type SpacePayload,
 } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
 
@@ -43,80 +51,6 @@ const STATUS_LABELS: Record<CellData["status"], string> = {
   void: "Void — the system refuses this cell",
 };
 
-function mean(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
-}
-
-function stddev(values: number[]): number {
-  if (values.length < 2) return 0;
-  const m = mean(values);
-  const variance =
-    values.reduce((sum, v) => sum + (v - m) ** 2, 0) / (values.length - 1);
-  return Math.sqrt(variance);
-}
-
-function meanCurve(curves: CurvePoint[][]): CurvePoint[] {
-  // Average the per-epoch accuracy of every seed that recorded a curve.
-  const byEpoch = new Map<number, number[]>();
-  for (const curve of curves) {
-    for (const point of curve) {
-      const values = byEpoch.get(point.epoch) ?? [];
-      values.push(point.val_acc);
-      byEpoch.set(point.epoch, values);
-    }
-  }
-  return Array.from(byEpoch.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([epoch, values]) => ({ epoch, val_acc: mean(values) }));
-}
-
-/** Break a label into lines that fit the gap between two cells.
-
-    A long name written on one line is wider than the space it has, and the
-    labels then read as a smear; breaking it at its underscores keeps every
-    word whole.
-*/
-function wrapLabel(text: string, maxChars = 10): string[] {
-  if (text.length <= maxChars) return [text];
-
-  const lines: string[] = [];
-  let current = "";
-  for (const part of text.split("_")) {
-    const candidate = current ? `${current}_${part}` : part;
-    if (candidate.length > maxChars && current) {
-      lines.push(current);
-      current = part;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-/** The part of the window the panels leave free: the map is framed into it.
-
-    The legend sits at the bottom left and the plotter at the bottom right, so
-    a map framed into the whole window would be half hidden behind them.
-*/
-const FREE_WIDTH = 0.72;
-const FREE_HEIGHT = 0.86;
-
-interface GridAxes {
-  x: AxisName;
-  y: AxisName;
-  z: AxisName;
-}
-interface CellAggregate {
-  acc: number[];
-  walltime: number[];
-  params: number[];
-  curves: CurvePoint[][];
-  pareto: boolean;
-  coordinate: CellData["coordinate"];
-}
-
 export class DiscoveryMap implements Component {
   name = "DiscoveryMap";
 
@@ -128,25 +62,9 @@ export class DiscoveryMap implements Component {
   cellDataMap: Map<string, CellData> = new Map();
   /** The height each cell's pillar currently stands at. */
   private cellHeights: Map<string, number> = new Map();
-  private axes: GridAxes = { x: "credit", y: "geometry", z: "dynamics" };
   private xValues: string[] = [];
   private yValues: string[] = [];
   private zValues: string[] = [];
-  /** The declared space the grid shows, as the backend judges it. */
-  private space: SpacePayload | null = null;
-  /** The backend's verdict per cell, by the cell's key. */
-  private spaceCells: Map<string, SpaceCell> = new Map();
-  /** The values the run actually measured, per axis. */
-  private measuredValues: Record<AxisName, string[]> = {
-    credit: [],
-    geometry: [],
-    dynamics: [],
-    substrate: [],
-    plasticity: [],
-    update: [],
-  };
-  /** What the space was last asked for, so it is only asked again when it changes. */
-  private spaceRequest = "";
   private cellSize = 0.8;
   private spacing = 1.1;
   private raycaster = new THREE.Raycaster();
@@ -161,11 +79,9 @@ export class DiscoveryMap implements Component {
   private axisLabelMeshes: THREE.Object3D[] = [];
   /** Every void marker, in one mesh: they are never picked, only drawn. */
   private voidMesh: THREE.LineSegments | null = null;
-  private chance = 0.1;
-  private requiredSeeds = 0;
-  /** The run the grid's evidence comes from. */
-  private runId: string | undefined = undefined;
-  private lastMetrics: any = null;
+  /** Whether the grid stands on the stage: a view that is not active
+      leaves nothing of itself there. */
+  private visible = false;
 
   constructor() {
     // Register WebSocket handlers IMMEDIATELY in constructor
@@ -185,7 +101,12 @@ export class DiscoveryMap implements Component {
     this.setupInteraction();
     this.createLegend();
     this.createReadout();
-    this.buildGrid();
+
+    // The stage's state is the map's state: the space, the records and the
+    // axes the reader picked are shared with the other views. The legend
+    // follows it; the grid is drawn by whoever stands on the stage.
+    stageState.onChange(() => this.updateLegend());
+    runSelection.onChange(() => this.updateRunPicker());
 
     console.log("[DiscoveryMap] Initialized");
   }
@@ -196,6 +117,45 @@ export class DiscoveryMap implements Component {
     this.clearGrid();
     this.legendElement?.remove();
     this.readoutElement?.remove();
+  }
+
+  /** The grid is one of the stage's views: it stands on it when it is chosen. */
+  show(): void {
+    this.visible = true;
+    this.applyAxes();
+  }
+
+  /** The grid leaves the stage: nothing of it may remain. */
+  hide(): void {
+    this.visible = false;
+    this.clearGrid();
+  }
+
+  /** Re-read the shared state and redraw the grid. */
+  refreshView(change: StageChange): void {
+    if (!this.visible) return;
+    if (change === "space") {
+      // The space carries the grid's shape: the values it shows and the
+      // verdict on every cell.
+      this.applyAxes();
+      return;
+    }
+    if (change === "evidence") {
+      this.applyAggregates();
+    }
+  }
+
+  /** Whether the grid holds a cell the run measured. */
+  hasMeasured(): boolean {
+    return this.cellDataMap.size > 0 && this.cellHeights.size > 0;
+  }
+
+  /** The legend follows the stage: the arms the run measured, the axes it
+      shows, and the tally of what it declared. */
+  private updateLegend(): void {
+    this.refreshAxisOptions();
+    this.updateLegendArms();
+    this.updateLegendAxes();
   }
 
   private setupInteraction(): void {
@@ -318,8 +278,9 @@ export class DiscoveryMap implements Component {
     `;
 
     this.legendElement.innerHTML = `
-      <div style="font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">Discovery Map</div>
-      <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div id="legend-title" style="font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">Discovery Map</div>
+      <div id="legend-view"></div>
+      <div id="legend-marks" style="display: flex; flex-direction: column; gap: 8px;">
         <div class="legend-item" style="display: flex; align-items: center; gap: 8px;">
           <div style="width: 16px; height: 16px; background: var(--measured); border-radius: 3px; box-shadow: 0 0 8px var(--measured);"></div>
           <span>Measured (glowing pillar)</span>
@@ -374,7 +335,6 @@ export class DiscoveryMap implements Component {
     select.addEventListener("change", () => {
       runSelection.select(select.value || null);
     });
-    runSelection.onChange(() => this.refresh());
   }
 
   private updateRunPicker(): void {
@@ -424,7 +384,7 @@ export class DiscoveryMap implements Component {
     const container = this.legendElement?.querySelector("#legend-axis-picker");
     if (!container) return;
 
-    const dimensions: (keyof GridAxes)[] = ["x", "y", "z"];
+    const dimensions: (keyof AxisSelection)[] = ["x", "y", "z"];
     dimensions.forEach((dimension) => {
       const row = document.createElement("div");
       row.style.cssText =
@@ -446,8 +406,10 @@ export class DiscoveryMap implements Component {
         padding: 2px 4px;
       `;
       select.addEventListener("change", () => {
-        this.axes = { ...this.axes, [dimension]: select.value as AxisName };
-        void this.syncSpace();
+        stageState.setAxes({
+          ...stageState.axes,
+          [dimension]: select.value as AxisName,
+        });
       });
 
       row.appendChild(label);
@@ -466,11 +428,11 @@ export class DiscoveryMap implements Component {
 
     selects.forEach((select) => {
       const dimension = (select as HTMLSelectElement).dataset
-        .dimension as keyof GridAxes;
+        .dimension as keyof AxisSelection;
       const taken = new Set<AxisName>(
-        (["x", "y", "z"] as (keyof GridAxes)[])
+        (["x", "y", "z"] as (keyof AxisSelection)[])
           .filter((other) => other !== dimension)
-          .map((other) => this.axes[other]),
+          .map((other) => stageState.axes[other]),
       );
 
       select.innerHTML = "";
@@ -479,7 +441,7 @@ export class DiscoveryMap implements Component {
         option.value = axis;
         option.textContent = AXIS_META[axis]?.display_name ?? axis;
         option.disabled = taken.has(axis);
-        option.selected = this.axes[dimension] === axis;
+        option.selected = stageState.axes[dimension] === axis;
         select.appendChild(option);
       });
     });
@@ -489,7 +451,7 @@ export class DiscoveryMap implements Component {
     const container = this.legendElement?.querySelector("#legend-arms");
     if (!container) return;
 
-    const arms = this.measuredValues.credit;
+    const arms = stageState.values.credit;
     if (arms.length === 0) {
       container.innerHTML =
         '<span style="color: var(--text-muted); font-size: 11px;">No arm measured yet.</span>';
@@ -508,7 +470,7 @@ export class DiscoveryMap implements Component {
     const container = this.legendElement?.querySelector("#legend-axes");
     if (!container) return;
 
-    const space = this.space;
+    const space = stageState.space;
     if (!space) {
       container.textContent =
         "Waiting for the run's declared space — the axes come from the ontology.";
@@ -526,10 +488,16 @@ export class DiscoveryMap implements Component {
     const held = Object.entries(space.held).map(
       ([axis, value]) => `${axis}=${value}`,
     );
-    const counts = { measured: 0, legal: 0, void: 0 };
-    this.cellDataMap.forEach((cell) => {
-      counts[cell.status] += 1;
-    });
+    // The tally is the space's, not the grid's: the grid is off the stage
+    // when another view is on, and a legend that counted an empty grid
+    // would say the run measured nothing.
+    const counts = {
+      measured: Array.from(stageState.aggregates.keys()).filter((key) =>
+        stageState.spaceCells.has(key),
+      ).length,
+      legal: space.counts.legal,
+      void: space.counts.void,
+    };
     const total = space.cells.length;
 
     const rules = Object.entries(space.void_rules ?? {})
@@ -538,9 +506,9 @@ export class DiscoveryMap implements Component {
       .map(([rule, count]) => `${rule.replace(/_/g, " ")} (${count})`);
 
     container.innerHTML = [
-      `<div>X: ${axisLine(this.axes.x, space.values[this.axes.x] ?? [])}</div>`,
-      `<div>Y: ${axisLine(this.axes.y, space.values[this.axes.y] ?? [])}</div>`,
-      `<div>Z: ${axisLine(this.axes.z, space.values[this.axes.z] ?? [])}</div>`,
+      `<div>X: ${axisLine(stageState.axes.x, space.values[stageState.axes.x] ?? [])}</div>`,
+      `<div>Y: ${axisLine(stageState.axes.y, space.values[stageState.axes.y] ?? [])}</div>`,
+      `<div>Z: ${axisLine(stageState.axes.z, space.values[stageState.axes.z] ?? [])}</div>`,
       `<div style="margin-top: 6px;">held: ${held.join(" · ") || "—"}</div>`,
       `<div style="margin-top: 6px;">${counts.measured} measured · ${counts.legal} legal · ${counts.void} void (of ${total})</div>`,
       rules.length > 0
@@ -551,18 +519,18 @@ export class DiscoveryMap implements Component {
 
   /** Re-read the selected axes from the declared space and rebuild the grid. */
   private applyAxes(): void {
-    const space = this.space;
-    this.xValues = space?.values[this.axes.x] ?? [];
-    this.yValues = space?.values[this.axes.y] ?? [];
-    this.zValues = space?.values[this.axes.z] ?? [];
+    const space = stageState.space;
+    const axes = stageState.axes;
+    this.xValues = space?.values[axes.x] ?? [];
+    this.yValues = space?.values[axes.y] ?? [];
+    this.zValues = space?.values[axes.z] ?? [];
     this.buildGrid();
-    this.refreshAxisOptions();
-    this.updateLegendArms();
-    this.updateLegendAxes();
+    this.updateLegend();
   }
 
   private buildGrid(): void {
     this.clearGrid();
+    if (!this.visible) return;
 
     this.createAxisLabels();
 
@@ -571,15 +539,15 @@ export class DiscoveryMap implements Component {
     this.yValues.forEach((yVal, yIdx) => {
       this.zValues.forEach((zVal, zIdx) => {
         this.xValues.forEach((xVal, xIdx) => {
-          const key = this.cellKey(xVal, yVal, zVal);
-          const spaceCell = this.spaceCells.get(key);
+          const key = cellKey(xVal, yVal, zVal);
+          const spaceCell = stageState.spaceCells.get(key);
           const status = spaceCell?.status ?? "legal";
           const cellData: CellData = {
             coordinate: this.coordinateFor(xVal, yVal, zVal),
             status,
-            chance: this.chance,
-            requiredSeeds: this.requiredSeeds,
-            runId: this.runId,
+            chance: stageState.chance,
+            requiredSeeds: stageState.requiredSeeds,
+            runId: stageState.runId ?? undefined,
             voidReason: spaceCell?.reason,
             inDeclaration: spaceCell?.in_declaration,
           };
@@ -616,19 +584,15 @@ export class DiscoveryMap implements Component {
       plasticity: "",
       update: "",
     };
-    coordinate[this.axes.x] = xVal;
-    coordinate[this.axes.y] = yVal;
-    coordinate[this.axes.z] = zVal;
+    coordinate[stageState.axes.x] = xVal;
+    coordinate[stageState.axes.y] = yVal;
+    coordinate[stageState.axes.z] = zVal;
     AXIS_NAMES.forEach((axis) => {
       if (coordinate[axis]) return;
-      const held = this.space?.held?.[axis];
+      const held = stageState.space?.held?.[axis];
       if (held) coordinate[axis] = held;
     });
     return coordinate;
-  }
-
-  private cellKey(x: string, y: string, z: string): string {
-    return `${x}|${y}|${z}`;
   }
 
   private createAxisLabels(): void {
@@ -655,7 +619,7 @@ export class DiscoveryMap implements Component {
     // The values the row names, under the cells.
     this.xValues.forEach((val, idx) => {
       const x = (idx - (this.xValues.length - 1) / 2) * this.spacing;
-      const sprite = this.createTextSprite(
+      const sprite = createTextSprite(
         val,
         0.3,
         valueMaterial,
@@ -667,67 +631,22 @@ export class DiscoveryMap implements Component {
     });
 
     // The axis the row runs along, at the row's end.
-    const xSprite = this.createTextSprite(this.axes.x, 0.3, nameMaterial);
+    const xSprite = createTextSprite(stageState.axes.x, 0.3, nameMaterial);
     xSprite.position.set(gridWidth / 2 + 1.15, labelY, labelZ);
     this.scene.add(xSprite);
     this.axisLabelMeshes.push(xSprite);
 
     // The axis that comes at the camera, on its own line in front.
-    const zSprite = this.createTextSprite(this.axes.z, 0.3, nameMaterial);
+    const zSprite = createTextSprite(stageState.axes.z, 0.3, nameMaterial);
     zSprite.position.set(0, labelY, labelZ + 1.1);
     this.scene.add(zSprite);
     this.axisLabelMeshes.push(zSprite);
 
     // The axis the rows stack along, beside the rows it stacks.
-    const ySprite = this.createTextSprite(this.axes.y, 0.3, nameMaterial);
+    const ySprite = createTextSprite(stageState.axes.y, 0.3, nameMaterial);
     ySprite.position.set(-(gridWidth / 2) - 1.5, 1.3, 0);
     this.scene.add(ySprite);
     this.axisLabelMeshes.push(ySprite);
-  }
-
-  /** A label that fits the space it has: wrapped, and never wider than the gap. */
-  private createTextSprite(
-    text: string,
-    worldHeight: number,
-    material: THREE.SpriteMaterial,
-    maxWidth?: number,
-  ): THREE.Sprite {
-    const lines = wrapLabel(text);
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d")!;
-    const fontSize = 64;
-    const lineHeight = 72;
-
-    context.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
-    const textWidth =
-      Math.max(...lines.map((line) => context.measureText(line).width)) + 16;
-    canvas.width = Math.max(64, Math.ceil(textWidth));
-    canvas.height = lines.length * lineHeight + 16;
-
-    // Resizing the canvas resets the context, so the font is set after.
-    context.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
-    context.fillStyle = "#ffffff";
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    lines.forEach((line, i) => {
-      context.fillText(line, canvas.width / 2, lineHeight * i + lineHeight / 2 + 8);
-    });
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-
-    const spriteMaterial = material.clone();
-    spriteMaterial.map = texture;
-    spriteMaterial.transparent = true;
-
-    const sprite = new THREE.Sprite(spriteMaterial);
-    const aspect = canvas.width / canvas.height;
-    let height = worldHeight * lines.length;
-    if (maxWidth !== undefined) {
-      height = Math.min(height, maxWidth / aspect);
-    }
-    sprite.scale.set(height * aspect, height, 1);
-    return sprite;
   }
 
   private createCell(
@@ -900,52 +819,12 @@ export class DiscoveryMap implements Component {
     const front = halfZ + 1.8;
     const floor = -0.8;
 
-    const target = new THREE.Vector3(0, top / 2, 0);
-    const direction = this.camera.position.clone().sub(context.controls.target);
-    if (direction.lengthSq() === 0) direction.set(0.4, 0.5, 0.8);
-    direction.normalize();
-
-    const view = direction.clone().negate();
-    const right = new THREE.Vector3()
-      .crossVectors(view, new THREE.Vector3(0, 1, 0))
-      .normalize();
-    const up = new THREE.Vector3().crossVectors(right, view).normalize();
-
-    const tanV = Math.tan(((this.camera.fov ?? 60) * Math.PI) / 360);
-    const tanH = tanV * (this.camera.aspect || 1);
-    // The map is framed into the part of the window the panels leave free.
-    const freeTanV = tanV * FREE_HEIGHT;
-    const freeTanH = tanH * FREE_WIDTH;
-
-    let distance = 0;
-    [-1, 1].forEach((sx) => {
-      [floor, top].forEach((y) => {
-        [-halfZ, front].forEach((z) => {
-          const corner = new THREE.Vector3(sx * halfX, y, z);
-          const need =
-            Math.max(
-              Math.abs(corner.dot(right)) / freeTanH,
-              Math.abs(corner.dot(up)) / freeTanV,
-            ) + corner.dot(direction);
-          distance = Math.max(distance, need);
-        });
-      });
-    });
-    distance *= 1.06;
-
-    // The free area is not the middle of the window, so the camera looks
-    // beside the grid's centre rather than at it.
-    const ndcX = FREE_WIDTH - 1;
-    const ndcY = 1 - FREE_HEIGHT;
-    target
-      .add(right.clone().multiplyScalar(-ndcX * tanH * distance))
-      .add(up.clone().multiplyScalar(-ndcY * tanV * distance));
-
-    context.controls.target.copy(target);
-    this.camera.position
-      .copy(target)
-      .add(direction.clone().multiplyScalar(distance));
-    context.controls.update();
+    frameBox(
+      context,
+      new THREE.Vector3(-halfX, floor, -halfZ),
+      new THREE.Vector3(halfX, top, front),
+      new THREE.Vector3(0, top / 2, 0),
+    );
   }
 
   private clearGrid(): void {
@@ -956,6 +835,12 @@ export class DiscoveryMap implements Component {
     this.cells.clear();
     this.cellDataMap.clear();
     this.cellHeights.clear();
+
+    this.axisLabelMeshes.forEach((mesh) => {
+      this.scene.remove(mesh);
+      this.disposeMesh(mesh);
+    });
+    this.axisLabelMeshes = [];
 
     if (this.voidMesh) {
       this.scene.remove(this.voidMesh);
@@ -990,93 +875,10 @@ export class DiscoveryMap implements Component {
     runSelection.observe(runId, metricsData);
   };
 
-  /** Draw the run the grid shows, and the space it declares. */
-  private refresh(): void {
-    const runId = runSelection.selectedId;
-    const metrics = runSelection.selected;
-    this.lastMetrics = metrics ?? null;
-    this.runId = runId ?? undefined;
-
-    if (metrics) {
-      if (typeof metrics.chance === "number") this.chance = metrics.chance;
-      if (typeof metrics.required_seeds === "number") {
-        this.requiredSeeds = metrics.required_seeds;
-      }
-      this.absorbMeasuredValues(metrics.records ?? []);
-    }
-    this.updateRunPicker();
-    void this.syncSpace();
-  }
-
-  /** Ask for the declared space, and redraw the grid when it arrives.
-
-      The space is asked for again only when it could have changed: a new run,
-      a new set of axes, or a new value measured on one of them.
-  */
-  private async syncSpace(): Promise<void> {
-    if (!this.runId) {
-      this.applyAggregates(this.aggregate(this.lastMetrics));
-      return;
-    }
-
-    const request = [
-      this.runId,
-      this.axes.x,
-      this.axes.y,
-      this.axes.z,
-      ...AXIS_NAMES.map((axis) => this.measuredValues[axis].join(",")),
-    ].join("|");
-    if (request !== this.spaceRequest) {
-      const space = await this.fetchSpace();
-      // The request is only remembered once it has been answered: a space
-      // that failed to arrive is asked for again, not waited for.
-      if (!space) return;
-      this.spaceRequest = request;
-      this.space = space;
-      this.spaceCells = this.indexSpaceCells(space);
-      this.applyAxes();
-    }
-
-    this.applyAggregates(this.aggregate(this.lastMetrics));
-  }
-
-  private async fetchSpace(): Promise<SpacePayload | null> {
-    try {
-      const response = await fetch(`/api/cells/${this.runId}/space`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          axes: [this.axes.x, this.axes.y, this.axes.z],
-        }),
-      });
-      if (!response.ok) {
-        console.warn("[DiscoveryMap] The space was refused", response.status);
-        return null;
-      }
-      return (await response.json()) as SpacePayload;
-    } catch (error) {
-      console.warn("[DiscoveryMap] The space could not be read", error);
-      return null;
-    }
-  }
-
-  /** The backend's verdict per cell, by the key the grid knows the cell by. */
-  private indexSpaceCells(space: SpacePayload): Map<string, SpaceCell> {
-    const indexed = new Map<string, SpaceCell>();
-    space.cells.forEach((cell) => {
-      const key = this.cellKey(
-        cell.coordinate[this.axes.x],
-        cell.coordinate[this.axes.y],
-        cell.coordinate[this.axes.z],
-      );
-      indexed.set(key, cell);
-    });
-    return indexed;
-  }
-
   /** Mark the cells that have records and light them up. */
-  private applyAggregates(aggregates: Map<string, CellAggregate>): void {
-    aggregates.forEach((aggregate, key) => {
+  private applyAggregates(): void {
+    if (!this.visible) return;
+    stageState.aggregates.forEach((aggregate, key) => {
       const cellData = this.cellDataMap.get(key);
       if (!cellData) return;
       cellData.status = "measured";
@@ -1090,86 +892,12 @@ export class DiscoveryMap implements Component {
       };
       cellData.curve = meanCurve(aggregate.curves);
       cellData.pareto = aggregate.pareto;
-      cellData.chance = this.chance;
-      cellData.requiredSeeds = this.requiredSeeds;
-      cellData.runId = this.runId;
+      cellData.chance = stageState.chance;
+      cellData.requiredSeeds = stageState.requiredSeeds;
+      cellData.runId = stageState.runId ?? undefined;
       this.updateCellVisual(key, cellData, aggregate.pareto);
     });
     this.updateLegendAxes();
-  }
-
-  /** Fold the records into one aggregate per cell. */
-  private aggregate(metricsData: any): Map<string, CellAggregate> {
-    const aggregates = new Map<string, CellAggregate>();
-    if (!metricsData?.records) return aggregates;
-
-    metricsData.records.forEach((record: any, idx: number) => {
-      const coord = record.coordinate;
-      if (!coord) return;
-      const key = this.cellKey(
-        coord[this.axes.x],
-        coord[this.axes.y],
-        coord[this.axes.z],
-      );
-      let aggregate = aggregates.get(key);
-      if (!aggregate) {
-        aggregate = {
-          acc: [],
-          walltime: [],
-          params: [],
-          curves: [],
-          pareto: false,
-          coordinate: { ...coord },
-        };
-        aggregates.set(key, aggregate);
-      }
-      const payload = record.payload ?? {};
-      if (typeof payload.val_acc === "number") aggregate.acc.push(payload.val_acc);
-      if (typeof payload.walltime_s === "number")
-        aggregate.walltime.push(payload.walltime_s);
-      if (typeof payload.param_count === "number")
-        aggregate.params.push(payload.param_count);
-      if (Array.isArray(payload.convergence_curve)) {
-        const curve = payload.convergence_curve
-          .filter(
-            (point: any) =>
-              typeof point?.epoch === "number" &&
-              typeof point?.val_acc === "number",
-          )
-          .map((point: any) => ({ epoch: point.epoch, val_acc: point.val_acc }));
-        if (curve.length > 0) aggregate.curves.push(curve);
-      }
-      if (metricsData.pareto?.[idx]) aggregate.pareto = true;
-    });
-
-    return aggregates;
-  }
-
-  /** Learn which values each axis takes, from the records themselves. */
-  private absorbMeasuredValues(records: any[]): void {
-    const observed: Record<AxisName, Set<string>> = {
-      credit: new Set(),
-      geometry: new Set(),
-      dynamics: new Set(),
-      substrate: new Set(),
-      plasticity: new Set(),
-      update: new Set(),
-    };
-
-    records.forEach((record) => {
-      const coord = record?.coordinate;
-      if (!coord) return;
-      AXIS_NAMES.forEach((axis) => {
-        const value = coord[axis];
-        if (typeof value === "string" && value.length > 0) {
-          observed[axis].add(value);
-        }
-      });
-    });
-
-    AXIS_NAMES.forEach((axis) => {
-      this.measuredValues[axis] = Array.from(observed[axis]).sort();
-    });
   }
 
   /** A pillar's height: the cell's accuracy, measured. */
@@ -1238,6 +966,10 @@ export class DiscoveryMap implements Component {
   }
 
   update(delta: number): void {
+    if (!this.visible) {
+      this.hideReadout();
+      return;
+    }
     // Pillars ease into the height they were measured at.
     const ease = 1 - Math.exp(-delta * 8);
     this.cells.forEach((mesh, key) => {
@@ -1340,7 +1072,7 @@ export class DiscoveryMap implements Component {
     if (xIdx < 0 || xIdx >= this.xValues.length) return null;
     if (yIdx < 0 || yIdx >= this.yValues.length) return null;
     if (zIdx < 0 || zIdx >= this.zValues.length) return null;
-    return this.cellKey(
+    return cellKey(
       this.xValues[xIdx],
       this.yValues[yIdx],
       this.zValues[zIdx],

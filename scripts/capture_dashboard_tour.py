@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import logging
 import struct
@@ -93,6 +94,10 @@ class Outcome:
 TOUR: tuple[Shot, ...] = (
     Shot("dashboard-hero.png", "the overview: the map, the panels, the rail"),
     Shot("dashboard-map.png", "the discovery map alone"),
+    Shot("dashboard-terrain.png", "the terrain: the space as a heightfield"),
+    Shot("dashboard-frontier.png", "the frontier: accuracy, speed and parameters"),
+    Shot("dashboard-matrix.png", "the evidence matrix: the space, flat"),
+    Shot("dashboard-convergence.png", "the convergence: accuracy against epoch"),
     Shot("dashboard-cell.png", "a measured cell's drawer"),
     Shot("dashboard-void.png", "a void cell, and the rule that refuses it"),
     Shot("dashboard-pareto.png", "the Pareto chart"),
@@ -107,6 +112,21 @@ TOUR: tuple[Shot, ...] = (
     ),
     Shot("report-text.png", "the run's report, in a terminal"),
 )
+
+# The main view area, one shot per view. The space's shot is the map's: the
+# map is one of the views, and its picture is the tour's first one.
+VIEW_SHOTS: tuple[tuple[str, str], ...] = (
+    ("space", "dashboard-map.png"),
+    ("terrain", "dashboard-terrain.png"),
+    ("frontier", "dashboard-frontier.png"),
+    ("matrix", "dashboard-matrix.png"),
+    ("convergence", "dashboard-convergence.png"),
+)
+
+# Two views of the run must not be the same picture. The share of the pixels
+# that differ is the measure: a reader who cannot tell the shots apart is
+# looking at one picture with different furniture in front of it.
+MIN_VIEW_DIFFERENCE = 0.02
 
 
 def png_size(path: Path) -> tuple[int, int]:
@@ -329,6 +349,72 @@ def wait_for_caption(page: Page, timeout_ms: int) -> None:
     )
 
 
+def wait_for_view(page: Page, view_id: str, timeout_ms: int) -> None:
+    """Wait for the stage to show a view, and for the view to have drawn."""
+    page.wait_for_function(
+        """(viewId) => {
+            const dbg = window.__DASHBOARD__;
+            if (!dbg || !dbg.viewSwitcher) return false;
+            if (dbg.viewSwitcher.activeId !== viewId) return false;
+            return dbg.viewSwitcher.isReady(viewId);
+        }""",
+        arg=view_id,
+        timeout=timeout_ms,
+    )
+
+
+def picture_difference(page: Page, first: Path, second: Path) -> float:
+    """The share of the pixels in which two pictures differ.
+
+    The browser decodes the two shots and compares them: the tour's own
+    check that the views are different pictures of the run, and not one
+    picture with different furniture in front of it.
+    """
+    return float(
+        page.evaluate(
+            """async (args) => {
+                const load = (src) => new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error('image'));
+                    img.src = src;
+                });
+                const [left, right] = await Promise.all([
+                    load(args.first), load(args.second)]);
+                const canvas = document.createElement('canvas');
+                canvas.width = 240;
+                canvas.height = 135;
+                const ctx = canvas.getContext('2d');
+                const pixels = (image) => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+                    return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                };
+                const a = pixels(left);
+                const b = pixels(right);
+                let different = 0;
+                for (let i = 0; i < a.length; i += 4) {
+                    const delta = Math.abs(a[i] - b[i])
+                        + Math.abs(a[i + 1] - b[i + 1])
+                        + Math.abs(a[i + 2] - b[i + 2]);
+                    if (delta > 30) different += 1;
+                }
+                return different / (a.length / 4);
+            }""",
+            {
+                "first": data_uri(first),
+                "second": data_uri(second),
+            },
+        )
+    )
+
+
+def data_uri(path: Path) -> str:
+    """A file the browser can load: a picture as a data URI."""
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
 def space(port: int, run_id: str, axes: Sequence[str]) -> dict[str, Any]:
     """The declared space of a slice, as the dashboard computes it."""
     request = urllib.request.Request(
@@ -441,6 +527,7 @@ class Tour:
         self.run_id = latest_run(self.port)
         self.page.wait_for_timeout(3000)
         self.overview()
+        self.views()
         self.measured_cell()
         self.charts()
         self.caption()
@@ -456,6 +543,57 @@ class Tour:
         set_panels(self.page, False)
         self.page.wait_for_timeout(1500)
         self.shoot("dashboard-map.png")
+
+    def views(self) -> None:
+        """The main view area, one shot per view.
+
+        The view is a choice: the number keys pick it, the way a reader
+        would. Each view is a different kind of picture of the same run, and
+        the check that follows proves they are different pictures.
+        """
+        set_panels(self.page, False)
+        for index, (view_id, shot_name) in enumerate(VIEW_SHOTS[1:], start=2):
+            self.page.keyboard.press(str(index))
+            try:
+                wait_for_view(self.page, view_id, self.timeout_ms)
+            except Exception as exc:  # ruff: ignore[blind-except] - reported, not swallowed
+                self.fail(shot_name, f"the {view_id} view did not draw: {exc}")
+                continue
+            self.page.wait_for_timeout(1200)
+            self.shoot(shot_name)
+
+        # The space is where the tour goes on from: the void view cuts the
+        # space another way, and the grid has to be the one on the stage.
+        self.page.keyboard.press("1")
+        wait_for_view(self.page, "space", self.timeout_ms)
+        self.check_views_differ()
+
+    def check_views_differ(self) -> None:
+        """The views must be different pictures of the run, not one picture.
+
+        The map's shot is in the set: the map is one of the views, and it
+        was the same picture in every frame until the stage could show more
+        than one thing.
+        """
+        shots = [
+            (view_id, self.output_dir / shot_name)
+            for view_id, shot_name in VIEW_SHOTS
+            if (self.output_dir / shot_name).exists()
+        ]
+        for (first_id, first), (second_id, second) in combinations(shots, 2):
+            difference = picture_difference(self.page, first, second)
+            logger.info(
+                "%s and %s differ in %.1f%% of the picture",
+                first_id,
+                second_id,
+                difference * 100,
+            )
+            if difference < MIN_VIEW_DIFFERENCE:
+                self.fail(
+                    first.name,
+                    f"{first_id} and {second_id} are the same picture "
+                    f"({difference * 100:.1f}% differs)",
+                )
 
     def measured_cell(self) -> None:
         """The cell the run is proudest of, and its evidence."""

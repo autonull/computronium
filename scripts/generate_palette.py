@@ -85,6 +85,10 @@ PALETTE_SOURCE: dict[str, str] = {
     "insufficient": "#d29922",
     "rejected": "#f85149",
     "promoted": "#a371f7",
+    # ── Value Ramp (low → mid → high) ──────────────────────────────────
+    "ramp_low": "#1f3a5f",
+    "ramp_mid": "#58a6ff",
+    "ramp_high": "#d4a843",
 }
 
 # ─── Derived Computed Values ──────────────────────────────────────────

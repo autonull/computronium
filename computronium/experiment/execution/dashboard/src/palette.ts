@@ -65,6 +65,9 @@ export const PASSED = "#3fb950";
 export const INSUFFICIENT = "#d29922";
 export const REJECTED = "#f85149";
 export const PROMOTED = "#a371f7";
+export const RAMP_LOW = "#1f3a5f";
+export const RAMP_MID = "#58a6ff";
+export const RAMP_HIGH = "#d4a843";
 
 // ─── Arm Color Map ────────────────────────────────────────────
 export const ARM_COLORS: Record<string, string> = {
@@ -156,6 +159,9 @@ export const PALETTE: Record<string, string> = {
   "insufficient": "#d29922",
   "rejected": "#f85149",
   "promoted": "#a371f7",
+  "ramp_low": "#1f3a5f",
+  "ramp_mid": "#58a6ff",
+  "ramp_high": "#d4a843",
 };
 
 // Type helper for arm names

@@ -54,14 +54,51 @@ Open <http://localhost:8080> in a browser.
 
 ---
 
+## The Stage (the main view area)
+
+The canvas is a **stage**, and a view is what stands on it. The discovery map
+is one view; the stage can show five.
+
+| Key | View | The picture | What a reader would say |
+|-----|------|-------------|------------------------|
+| `1` | **Space** | the declared space: the gaps as wireframe cages, the measured cells as glowing pillars, the refusals as red crosses | "the run measured four of the cells it declared, and here they are" |
+| `2` | **Terrain** | the same space as a heightfield: accuracy is the height, the gaps are flat ground, the refusals are craters | "the arms that were measured stand up, and the region the system refuses is a hole in the ground" |
+| `3` | **Frontier** | every measured record as a point in accuracy, speed and parameters; the front the run computed is drawn through them; the chance level is the floor | "nothing beat these cells on all three counts at once" |
+| `4` | **Evidence matrix** | the space flat: one axis against another, every column a number, the refusals in the void colour | "the credit arm mattered, and here is where" |
+| `5` | **Convergence** | accuracy against epoch, one curve per arm, the chance level under them | "the arms separate in the second epoch, not the first" |
+
+`V` cycles the views; the number keys pick one. The **View** selector in the
+legend names the view where it is chosen, and the legend's title is the view's
+name, so the picture says what it is.
+
+**The views share one picture of the run.** `src/stage/state.ts` holds the run
+the dashboard shows, the axes the reader picked, the space the backend declares
+and the records the run measured; every view reads it, so the map, the terrain
+and the matrix cannot disagree about what the run found. The run and the
+space are chosen once, in `src/run-selection.ts` and the legend.
+
+**A view that is not active leaves nothing of itself on the stage.** Each view
+puts its objects in the shared scene (`src/components/context.ts`) and takes
+them off again when it is replaced: the map clears its grid, the terrain and
+the frontier free their meshes, and the two flat views share one canvas that
+is hidden when neither is on.
+
+**The flat views do not need three.js.** The matrix and the convergence are
+drawn on a 2D canvas over the stage (`src/stage/canvas2d.ts`), in the part of
+the window the panels leave free. What they share with the 3D views is the
+switcher, the data and the tour shot.
+
+---
+
 ## Components
 
 ### 1. Discovery Map (3D Fog-of-War)
 
-**The core visual.** A 3D grid that shows a *slice* of the ontology's
-declared space: three axes are free and the other three are held at one value
-each, so every cell on the grid is a whole coordinate and the system can judge
-it. The backend judges each cell — the grid draws what it is told.
+**The core visual, and the first of the stage's views.** A 3D grid that shows
+a *slice* of the ontology's declared space: three axes are free and the other
+three are held at one value each, so every cell on the grid is a whole
+coordinate and the system can judge it. The backend judges each cell — the
+grid draws what it is told.
 
 | Cell Type | Visual | Meaning |
 |-----------|--------|---------|
@@ -333,9 +370,11 @@ knowing the interface.
 
 | Key | Action |
 |-----|--------|
-| `1` | Switch to Pareto tab |
-| `2` | Switch to Ablation tab |
-| `3` | Switch to Variability tab |
+| `1`–`5` | Pick a view of the stage: space, terrain, frontier, matrix, convergence |
+| `V` | Cycle the views |
+| `P` | Switch to Pareto tab |
+| `A` | Switch to Ablation tab |
+| `S` | Switch to Variability tab |
 | `H` | Toggle HUD visibility |
 | `L` | Toggle Live Rail visibility |
 | `C` | Toggle Caption visibility |
@@ -471,6 +510,19 @@ Single source: `scripts/generate_palette.py` → generates:
 3. Add tab button and switch logic
 4. Implement `update(data)` to consume `campaign_metrics.records`
 
+### Add a New View of the Stage
+
+1. Create `src/stage/my-view.ts` with a class that implements `StageView`:
+   `enter()` puts the view's objects on the shared scene, `exit()` takes them
+   off again, `refresh()` re-reads the shared state, and `ready()` says
+   whether there is anything to show
+2. Read the run, the axes, the space and the records from `stageState`
+   (`src/stage/state.ts`) — never from a second source
+3. Register the view in `src/stage/switcher.ts`: it takes a number key, a
+   name and a caption
+4. Add a shot of it to the tour (`scripts/capture_dashboard_tour.py`) — the
+   tour checks that the views are different pictures of one another
+
 ---
 
 ## Troubleshooting
@@ -567,18 +619,22 @@ The screenshot is embedded in `docs/readme/title.md` and appears on the README f
 ## The Tour (every view of the system)
 
 ```bash
-# Twelve views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+# Sixteen views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
 uv run python scripts/capture_dashboard_tour.py
 ```
 
 One store, one dashboard, one browser: the tour takes the whole system in
-twelve pictures, and the pictures are of *different things*, not of the same
+sixteen pictures, and the pictures are of *different things*, not of the same
 scene from different angles.
 
 | Shot | What it shows |
 |------|---------------|
 | `dashboard-hero.png` | the overview: the map, the panels, the rail |
-| `dashboard-map.png` | the discovery map alone — the fog of war |
+| `dashboard-map.png` | the discovery map alone — the fog of war (the **space** view) |
+| `dashboard-terrain.png` | the terrain: the space as a heightfield |
+| `dashboard-frontier.png` | the frontier: accuracy, speed and parameters |
+| `dashboard-matrix.png` | the evidence matrix: the space, flat |
+| `dashboard-convergence.png` | the convergence: accuracy against epoch |
 | `dashboard-cell.png` | the leading cell's drawer: its accuracy, its curve, its verdict, the seeds it still owes |
 | `dashboard-void.png` | a cell the system refuses, in a slice of the space cut a different way, and the rule that refuses it |
 | `dashboard-pareto.png` | the Pareto chart |
@@ -596,6 +652,12 @@ machine produces the same picture as a fast one. A view that cannot be
 reached is reported, not silently skipped: a tour with a hole in it is worse
 than no tour. Every shot is checked for its size and for having something in
 it before it is written.
+
+**The views must be different pictures of the run.** The tour measures it:
+the browser decodes each pair of the stage's shots and reports the share of
+the pixels that differ, and a pair that is too alike fails the tour. The map
+was the same picture in every frame once; the check is what stopped it from
+being the same picture again.
 
 `scripts/dashboard_capture.py` holds the machinery the tour, the hero shot
 and the recording share: the server on a thread, the campaign in this
