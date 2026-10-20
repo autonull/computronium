@@ -21,6 +21,10 @@ uv run comp dashboard --store experiment.duckdb
 uv run comp run demo --store experiment.duckdb
 ```
 
+The dashboard shows the run as it happens: the cells it measured, the gaps
+nobody has measured, and the cells the system refuses — with the rule that
+refuses each one under the cursor.
+
 What comes out:
 
 - a controlled contrast — five of six axes fixed, one varied — with `n`, `std`

@@ -984,3 +984,103 @@ rules are read through one function too: `legality.engine.void_rules()`.
 - **A void cell cannot be hovered.** The reason a cell is void is in the
   legend (which rules refuse how many), not under the cursor: the void
   markers are one mesh, so the cursor cannot name one of them.
+
+---
+
+## Session Progress — Two Terminals, and a Reason Under the Cursor (2026-10-20)
+
+The last session's "still open" list had four entries. Three of them were
+structural — the console could not show the space, the axis metadata was a
+second source of truth, and a dashboard in another terminal could not see a
+running campaign at all. The fourth was small but it was the kind of small
+that makes a picture a lie: a cell the system refuses could not be *named*,
+and the evidence could not be *clicked*.
+
+### The four, closed
+
+| # | Was | Now |
+|---|-----|-----|
+| 1 | The console dashboard had no picture of the legal space | `comp dashboard --console` draws the space: `█` measured, `·` a gap, `×` refused, with the rule that refuses each |
+| 2 | `generate_axis_metadata.py` hand-wrote the primitive lists, and its names were not the registry's | it reads the registries; the metadata is a projection of them, and a lock test keeps it so |
+| 3 | A dashboard in another process saw nothing until the campaign let go of the store | the writer publishes a **mirror** — a consistent copy, swapped in atomically — and the reader falls back to it |
+| 4 | A void cell could not be hovered, and a measured pillar could not be clicked | the cursor names the cell under it, void or not, and the evidence wins the click |
+
+### The decisions worth keeping
+
+- **The writer publishes the picture.** DuckDB's lock on a store is exclusive
+  whichever way round it is taken: a reader in another process cannot open a
+  store a writer holds, and a writer cannot open a store a reader holds. The
+  writer is the only party that can take a consistent picture of the store
+  while it writes, so the writer takes one: `COPY FROM DATABASE` inside its
+  own connection, staged beside the target and moved into place. A reader
+  that cannot open the original opens the mirror, and the panel says which it
+  is reading (`live`, or `snapshot <time>`). A snapshot lags by the writer's
+  publish interval, and a reader that does not know which it is looking at
+  cannot tell a finished run from a paused one.
+- **A reader waits for nothing it cannot have.** The writer waits a reader
+  out — a dashboard polling the store must not stop a campaign — but a reader
+  never waits for a writer: the writer holds the file for the whole run, and
+  the reader's answer is the mirror, not a wait that could last minutes.
+- **The evidence wins the click.** The grid is dense and every gap carries
+  an invisible pick target, so the nearest cell along the ray is often a gap
+  standing in front of a pillar. A measured cell the ray met wins: the
+  evidence is what the researcher was aiming at, and a gap is picked when
+  nothing measured is in the way. Before this rule the measured pillars were
+  *unclickable* — the gaps' pick boxes swallowed every click aimed at them.
+- **A reason belongs under the cursor.** The void markers are one mesh,
+  drawn and never picked, so the cursor cannot pick one: the point the ray
+  met says which cell the marker belongs to, and the readout says what
+  refuses it. The drawer agrees — `VOID`, the rule, and no verb that would
+  be refused.
+- **The metadata is a projection, not a copy.** The registries are the single
+  source; the generator reads them, and a test compares the committed file
+  with them, so a second list cannot creep back in. (The hand-written list
+  had it backwards: the *registry* says `temporal_psi` and `pc_alm`, and the
+  file said `stdp` and `pca_lm`.)
+- **The probes share their scaffolding.** Six dashboard probes each carried
+  their own copy of the Chromium flags, the wait for the server and the
+  store they read. One copy of each lives in `scripts/probes/dashboard_probe.py`,
+  so a probe says what it measures and nothing else.
+
+### Defects found on the way
+
+| # | Defect | Cause | Fix |
+|---|--------|-------|-----|
+| 57 | A void cell could not be named | the void markers are one mesh, drawn and never picked | the point the ray met says which cell it is; the readout says the rule |
+| 58 | The measured pillars could not be clicked | the gaps' invisible pick boxes stood in front of them and won the nearest-hit rule | the evidence wins the click |
+| 59 | The actions probe had been failing for a session | it aimed at a pillar's middle, which a nearer gap intercepted, and then pressed a button that was disabled for the cell it actually opened | the probe moves the mouse and checks what the page says is under it |
+| 60 | The read-only connection waited six seconds before giving up | the store retried a "different configuration" refusal, which only an in-process writer causes | a reader does not retry; the writer waits a reader out |
+| 61 | A writer could be turned away by a reader in another process | the retry only caught the in-process refusal | the retry catches the cross-process lock too, and only for writers |
+| 62 | The console drew a measured cell as a gap | the space payload carries the system's verdict, not the run's evidence | the console marks the cells the run measured |
+| 63 | The axis metadata disagreed with the system | a hand-written list of primitives | the generator reads the registries; a lock test keeps it |
+
+### Files
+
+| File | Change |
+|------|--------|
+| `computronium/experiment/evidence/mirror.py` | **New** — the mirror: where it lives, how it is published, how a reader falls back to it |
+| `computronium/experiment/evidence/store.py` | `StoreConfig.mirror_path` / `mirror_interval`; the mirror is published on every append and on close; a writer waits a reader out |
+| `computronium/experiment/execution/dashboard/web.py` | the store is read through the shared reader; the metrics say where the picture came from |
+| `computronium/experiment/execution/dashboard/console.py` | the declared space, drawn; the store's source in the footer |
+| `computronium/experiment/execution/campaign.py`, `experiment/surface/cli.py` | a run publishes the mirror the dashboard in another terminal reads |
+| `dashboard/src/discovery-map.ts` | the readout under the cursor; the void cell it names; the evidence wins the click |
+| `dashboard/src/cell-drawer.ts` | a void cell says `VOID`, says the rule, and offers no verb the system would refuse |
+| `dashboard/src/hud.ts` | the `PICTURE` row: `live`, or the snapshot's time |
+| `scripts/generate_axis_metadata.py` | the registries, read |
+| `scripts/probes/dashboard_probe.py` | **New** — the Chromium flags, the wait, the store |
+| `scripts/probes/probe_dashboard_void.py` | **New** — the void cell is nameable, and the drawer agrees |
+| `tests/unit/experiment/dashboard_store.py` | **New** — the store a dashboard test reads: one run, five seeds, one cell |
+| `tests/unit/experiment/test_dashboard_mirror.py` | **New** — the writer publishes, the reader reads, the writer waits |
+| `tests/unit/experiment/test_console_dashboard.py` | **New** — the console's space, and the marks in it |
+| `tests/unit/experiment/test_axis_metadata.py` | **New** — the metadata is the registry's |
+| `docs/DASHBOARD.md`, `docs/readme/start-here.md`, `README.md` | the mirror, the readout, the console's space |
+
+### Still open
+
+- **Custom 3D charts** — the plan's v2 Pareto scatter, ablation bars and
+  violin plots in three.js. uPlot with an explicitly stated range is what
+  ships.
+- **The drawer's verbs write files and queue work, but the drawer's own
+  "adopt as quest" flow is still one click deep**: a quest is registered, and
+  nothing yet schedules the campaign that would answer it. The queue verb
+  does that; the quest verb is the question without the run.

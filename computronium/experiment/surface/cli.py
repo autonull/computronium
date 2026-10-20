@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
 
 from computronium.core.logging import get_logger
+from computronium.experiment.evidence.mirror import mirror_path
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
@@ -1973,7 +1974,9 @@ def execute_spec(
 
     policy_name = spec.policy or "round_robin_grid"
 
-    with RecordStore(StoreConfig(path=Path(store_path))) as store:
+    with RecordStore(
+        StoreConfig(path=Path(store_path), mirror_path=mirror_path(Path(store_path)))
+    ) as store:
         run = run_id or store.create_run(spec=spec)
         logger.info("Run ID: %s", run)
 

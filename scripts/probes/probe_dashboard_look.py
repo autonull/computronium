@@ -17,33 +17,20 @@ import argparse
 import logging
 import tempfile
 import threading
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
+
+from dashboard_probe import (
+    CHROMIUM_ARGS,
+    wait_for_http,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def wait_for_http(port: int, timeout: float = 60.0) -> bool:
-    """Wait for the dashboard HTTP server to answer."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(
-                f"http://localhost:{port}/api/status", timeout=2
-            ) as r:
-                if r.status == 200:
-                    return True
-        except urllib.error.URLError, OSError:
-            pass
-        time.sleep(0.5)
-    return False
 
 
 def capture(port: int, output: Path, settle_ms: int) -> int:
@@ -53,16 +40,7 @@ def capture(port: int, output: Path, settle_ms: int) -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                "--use-gl=angle",
-                "--use-angle=swiftshader",
-                "--enable-unsafe-swiftshader",
-                "--enable-webgl",
-                "--ignore-gpu-blocklist",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--force-device-scale-factor=1",
-            ],
+            args=CHROMIUM_ARGS,
         )
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         page.on("pageerror", lambda e: logger.warning("pageerror: %s", e))

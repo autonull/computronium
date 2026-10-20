@@ -17,29 +17,13 @@ from __future__ import annotations
 
 import json
 import threading
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
+
+from dashboard_probe import CHROMIUM_ARGS, wait_for_http
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PORT = 8100
 STORE = REPO_ROOT / "experiment.duckdb"
-
-
-def wait_for_http(port: int, timeout: float = 60.0) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(
-                f"http://localhost:{port}/api/status", timeout=2
-            ) as response:
-                if response.status == 200:
-                    return True
-        except urllib.error.URLError, OSError:
-            pass
-        time.sleep(0.5)
-    return False
 
 
 def main() -> int:
@@ -67,13 +51,7 @@ def main() -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                "--use-gl=angle",
-                "--use-angle=swiftshader",
-                "--enable-unsafe-swiftshader",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ],
+            args=CHROMIUM_ARGS,
         )
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         errors: list[str] = []

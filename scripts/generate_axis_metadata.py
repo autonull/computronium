@@ -1,67 +1,66 @@
 #!/usr/bin/env python3
-"""Generate axis metadata JSON from Python registries for frontend consumption.
+"""Generate the dashboard's axis metadata from the primitive registries.
 
-Single source of truth for structural axis definitions, primitives, and metadata.
+The registries are the single source. A primitive's name, its description and
+whether it is available are read from the registry the run itself reads, so
+the frontend cannot end up calling a primitive something the system does not
+call it — the last hand-written list here called ``photonic`` ``optical`` and
+``stdp`` ``temporal_psi``.
+
+What the registry does not carry is how an axis is *named* for a reader, so
+the six labels live here, in the one place that generates them.
 """
 
 from __future__ import annotations
 
 import json
-
-# Import the registries from the Python codebase
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from computronium.ontology.credit import (
-    GradientCredit,
-    HomeostaticCredit,
-    LemmaCredit,
-    LocalContrastiveCredit,
-    LocalGoodnessCredit,
-    PCALMCredit,
-    PepitaCredit,
-    RandomProjectionsCredit,
-    TargetInversionCredit,
-    TemporalTraceCredit,
-)
-from computronium.ontology.dynamics._registry import DYNAMICS_REGISTRY
-from computronium.ontology.geometry import _GEOMETRY_BACKENDS
-from computronium.ontology.plasticity import (
-    ClosedFormRidgePlasticity,
-    ConflictAdaptivePsiPlasticity,
-    FastWeightPlasticity,
-    NullPlasticity,
-    RoutingPlasticity,
-    RuleStatePlasticity,
-    SubstrateCoupledPlasticity,
-    TemporalPsiPlasticity,
-)
-from computronium.ontology.substrate import (
-    AnalogSubstrate,
-    ComplexSubstrate,
-    DigitalSubstrate,
-    MemristiveSubstrate,
-    NeuromorphicSubstrate,
-    NoisySubstrate,
-    OpticalSubstrate,
-    QuantizedSubstrate,
-    QuantumSubstrate,
-    SparseSubstrate,
-    TernarySubstrate,
-)
-from computronium.ontology.update import _UPDATE_BACKENDS
+from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+from computronium.experiment.schema.harvest import AXIS_KIND_ORDER
+
+# How each axis is named for a reader, and what it is for.
+AXIS_LABELS: dict[StructuralAxis, tuple[str, str]] = {
+    StructuralAxis.SUBSTRATE: ("Substrate", "Physical or computational substrate"),
+    StructuralAxis.GEOMETRY: ("Geometry", "Network architecture and connectivity"),
+    StructuralAxis.DYNAMICS: ("Dynamics", "State evolution and settling"),
+    StructuralAxis.PLASTICITY: ("Plasticity", "Local learning and adaptation"),
+    StructuralAxis.CREDIT: (
+        "Credit Assignment",
+        "How learning signals reach parameters",
+    ),
+    StructuralAxis.UPDATE: ("Update Rule", "How parameters are updated"),
+}
 
 
-def primitive_to_dict(name: str, cls: type) -> dict:
-    """Convert a primitive class to a metadata dict."""
-    doc = cls.__doc__ or ""
-    summary = doc.strip().split("\n")[0] if doc else ""
+def primitive_to_dict(spec: Any) -> dict[str, Any]:
+    """One primitive, as the dashboard reads it."""
     return {
-        "name": name,
-        "summary": summary,
-        "class_name": cls.__name__,
+        "name": spec.name,
+        "summary": spec.description,
+        "available": spec.available,
+    }
+
+
+def build_metadata() -> dict[str, Any]:
+    """The metadata, read from the registries."""
+    axes: dict[str, Any] = {}
+    for axis in AXIS_KIND_ORDER:
+        display_name, description = AXIS_LABELS[axis]
+        axes[axis.value] = {
+            "display_name": display_name,
+            "description": description,
+            "primitives": [
+                primitive_to_dict(spec) for spec in AXES_REGISTRIES[axis].values()
+            ],
+        }
+    return {
+        "axes": axes,
+        "axis_order": [axis.value for axis in AXIS_KIND_ORDER],
     }
 
 
@@ -77,110 +76,7 @@ def main() -> None:
         / "axis-metadata.json"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Substrate primitives
-    substrate_classes = {
-        "digital": DigitalSubstrate,
-        "memristive": MemristiveSubstrate,
-        "neuromorphic": NeuromorphicSubstrate,
-        "photonic": OpticalSubstrate,
-        "complex": ComplexSubstrate,
-        "analog": AnalogSubstrate,
-        "quantum": QuantumSubstrate,
-        "sparse": SparseSubstrate,
-        "noisy": NoisySubstrate,
-        "quantized": QuantizedSubstrate,
-        "ternary": TernarySubstrate,
-    }
-
-    # Credit primitives (from credit.py)
-    credit_classes = {
-        "gradient": GradientCredit,
-        "pepita": PepitaCredit,
-        "random_projections": RandomProjectionsCredit,
-        "local_goodness": LocalGoodnessCredit,
-        "local_contrastive": LocalContrastiveCredit,
-        "target_inversion": TargetInversionCredit,
-        "temporal_trace": TemporalTraceCredit,
-        "homeostatic": HomeostaticCredit,
-        "pca_lm": PCALMCredit,
-        "lemma": LemmaCredit,
-    }
-
-    # Geometry primitives (from registry)
-    geometry_classes = {k: v.cls for k, v in _GEOMETRY_BACKENDS.items()}
-
-    # Dynamics primitives (from registry)
-    dynamics_classes = DYNAMICS_REGISTRY
-
-    # Plasticity primitives
-    plasticity_classes = {
-        "null": NullPlasticity,
-        "routing": RoutingPlasticity,
-        "fast_weights": FastWeightPlasticity,
-        "substrate_coupled": SubstrateCoupledPlasticity,
-        "hebbian_plasticity": ClosedFormRidgePlasticity,
-        "stdp": TemporalPsiPlasticity,
-        "conflict_adaptive_psi": ConflictAdaptivePsiPlasticity,
-        "rule_state": RuleStatePlasticity,
-    }
-
-    # Update primitives (from registry)
-    update_classes = _UPDATE_BACKENDS
-
-    axes = {
-        "credit": {
-            "display_name": "Credit Assignment",
-            "description": "How learning signals are assigned to parameters",
-            "primitives": [
-                primitive_to_dict(name, cls) for name, cls in credit_classes.items()
-            ],
-        },
-        "substrate": {
-            "display_name": "Substrate",
-            "description": "Physical/computational substrate for computation",
-            "primitives": [
-                primitive_to_dict(name, cls) for name, cls in substrate_classes.items()
-            ],
-        },
-        "geometry": {
-            "display_name": "Geometry",
-            "description": "Network architecture and connectivity pattern",
-            "primitives": [
-                primitive_to_dict(name, cls) for name, cls in geometry_classes.items()
-            ],
-        },
-        "dynamics": {
-            "display_name": "Dynamics",
-            "description": "State evolution and settling dynamics",
-            "primitives": [
-                primitive_to_dict(name, cls) for name, cls in dynamics_classes.items()
-            ],
-        },
-        "plasticity": {
-            "display_name": "Plasticity",
-            "description": "Local learning and adaptation mechanisms",
-            "primitives": [
-                primitive_to_dict(name, cls) for name, cls in plasticity_classes.items()
-            ],
-        },
-        "update": {
-            "display_name": "Update Rule",
-            "description": "Parameter update optimization algorithm",
-            "primitives": [
-                primitive_to_dict(name, cls) for name, cls in update_classes.items()
-            ],
-        },
-    }
-
-    axis_order = ["credit", "geometry", "dynamics", "substrate", "plasticity", "update"]
-
-    metadata = {
-        "axes": axes,
-        "axis_order": axis_order,
-    }
-
-    out_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    out_path.write_text(json.dumps(build_metadata(), indent=2), encoding="utf-8")
     print(f"✓ Generated {out_path}")
 
 

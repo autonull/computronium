@@ -146,6 +146,10 @@ export class CellDrawer implements Component {
     // A cell nobody measured has no verdict: it is a gap, not a result.
     let verdict = "UNMEASURED";
     let verdictColor = PALETTE.legal_unmeasured;
+    if (status === "void") {
+      verdict = "VOID";
+      verdictColor = PALETTE.void;
+    }
     if (status === "measured") {
       if (valAcc <= chance) {
         verdict = "REJECTED";
@@ -225,6 +229,11 @@ export class CellDrawer implements Component {
           ">${verdict}</span>
           <span style="font-size: 12px; color: var(--text-secondary);">Chance level: ${chance}</span>
         </div>
+        ${
+          data.voidReason
+            ? `<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">${data.voidReason}</div>`
+            : ""
+        }
         <div style="height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;">
           <div style="
             width: ${Math.min(100, (valAcc / (chance * 2)) * 100)}%;
@@ -344,6 +353,11 @@ export class CellDrawer implements Component {
 
   /** What the three verbs do to this cell, and which of them apply. */
   private actionStates(data: CellData): Record<string, boolean> {
+    // The system refuses a void cell, and the verbs refuse it too: the mark
+    // on the picture and the behaviour of the dashboard agree.
+    if (data.status === "void") {
+      return { replicate: false, preregister: false, quest: false };
+    }
     const measured = data.status === "measured";
     const seeds = data.metrics?.n_seeds ?? 0;
     const required = data.requiredSeeds ?? 0;
@@ -388,6 +402,11 @@ export class CellDrawer implements Component {
   private actionNote(data: CellData): string {
     if (!data.runId) {
       return "This cell belongs to no run yet, so there is nothing to queue or register.";
+    }
+    if (data.status === "void") {
+      return `The system refuses this cell, so nothing can be measured here.${
+        data.voidReason ? ` ${data.voidReason}.` : ""
+      }`;
     }
     if (data.status === "measured") {
       const seeds = data.metrics?.n_seeds ?? 0;

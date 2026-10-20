@@ -50,6 +50,7 @@ from computronium.experiment.execution.events import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
+    from computronium.experiment.evidence.mirror import StoreView
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.campaign_queue import (
         CampaignQueue,
@@ -146,7 +147,11 @@ def run_status(
 
 @dataclass(frozen=True, slots=True)
 class DashboardConfig:
-    """Configuration for the web dashboard."""
+    """Configuration for the web dashboard.
+
+    The dashboard never writes to the store: it reads the store when it can
+    and the writer's published mirror when the writer is elsewhere.
+    """
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -156,7 +161,6 @@ class DashboardConfig:
     enable_websockets: bool = True
     template_dir: Path | None = None
     static_dir: Path | None = None
-    read_only: bool = True  # Dashboard never writes: avoids DuckDB lock contention
     registration_dir: Path | None = None  # where the dashboard writes registrations
 
 
@@ -502,7 +506,8 @@ class WebDashboard:
             )
 
             # CRITICAL: read_only=True for all dashboard store access
-            with self._readable_store() as store:
+            with self._store_view() as view:
+                store = view.store
                 generator = ReportGenerator(store)
                 records = list(generator._store.query_records(run_id=campaign_id))
 
@@ -566,6 +571,12 @@ class WebDashboard:
                     "chance": chance,
                     "required_seeds": GateThresholds().required_seeds_per_group,
                     "resources": resources,
+                    "store": {
+                        "source": view.source,
+                        "published_at": (
+                            view.published_at.isoformat() if view.published_at else None
+                        ),
+                    },
                     "run": run_status(
                         run.spec if run else None,
                         campaign_id,
@@ -918,38 +929,27 @@ class WebDashboard:
         return self._work_dir
 
     @contextlib.contextmanager
-    def _readable_store(self) -> Generator[RecordStore]:
-        """Open the store for reading, tolerating a live writer.
+    def _store_view(self) -> Generator[StoreView]:
+        """The store to read: the live one, or the mirror a writer published.
 
-        DuckDB allows one writer at a time, and a read-only connection cannot
-        join a read-write one — not even in the same process, where DuckDB
-        shares one instance per path. So the dashboard opens read-only first
-        (which coexists with a writer in another process) and falls back to
-        read-write when the writer is this process, which is how an in-process
-        campaign stays visible while it runs.
+        DuckDB allows one writer at a time, and its lock on the file is
+        exclusive: a read-only connection cannot join a read-write one — not
+        even in the same process, where DuckDB shares one instance per path —
+        and a reader in another process cannot open a file a writer holds at
+        all. So the dashboard reads the store when it can, and reads the
+        writer's published mirror when the writer is elsewhere.
         """
-        from computronium.experiment.evidence.store import RecordStore, StoreConfig
+        from computronium.experiment.evidence.mirror import readable_store
 
         path = Path(self.config.store_path or "")
-        modes = (True, False) if self.config.read_only else (False,)
-        failure: Exception | None = None
+        with readable_store(path) as view:
+            yield view
 
-        for read_only in modes:
-            if not read_only and not path.exists():
-                # The dashboard never brings a store into being.
-                break
-            with contextlib.ExitStack() as stack:
-                store = RecordStore(StoreConfig(path=path, read_only=read_only))
-                try:
-                    stack.enter_context(store)
-                except Exception as exc:
-                    failure = exc
-                    continue
-                yield store
-                return
-
-        msg = f"store {path} is held by another writer: {failure}"
-        raise RuntimeError(msg)
+    @contextlib.contextmanager
+    def _readable_store(self) -> Generator[RecordStore]:
+        """Open the store for reading, tolerating a live writer."""
+        with self._store_view() as view:
+            yield view.store
 
     async def _handle_websocket(self, websocket: WebSocket) -> None:
         """Handle WebSocket connections for real-time updates."""

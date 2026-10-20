@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Capture the dashboard hero screenshot (TODO68 Phase 5).
 
-The dashboard, the campaign and the capture run in ONE process on purpose.
-DuckDB allows a single writer per file, and a read-only connection cannot
-join a read-write one — not even inside one process. So a dashboard in
-another terminal sees nothing until the writer lets go of the store. Running
-the campaign in-process lets the dashboard read the store while it is being
-written, which is the live view the screenshot is meant to show.
+The dashboard, the campaign and the capture run in ONE process on purpose: the
+campaign holds the store, and the capture wants the records the campaign has
+just written. (A dashboard in another process would see them too, through the
+mirror the writer publishes — but one process has no such gap to fall
+through.)
 
 Flow:
 1. Start the dashboard server on a thread.

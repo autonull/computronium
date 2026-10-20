@@ -21,6 +21,10 @@ from computronium.experiment.evidence.artifacts import (
     ArtifactInput,
     ArtifactStore,
 )
+from computronium.experiment.evidence.mirror import (
+    is_lock_conflict,
+    publish_mirror,
+)
 from computronium.experiment.schema.coordinate import (
     Provenance,
     Schedule,
@@ -105,6 +109,10 @@ class StoreConfig:
     read_only: bool = False
     artifact_inline_threshold_mb: float = 10.0
     artifact_external_path: Path | None = None
+    # Where a copy of the store is published for readers in other processes.
+    mirror_path: Path | None = None
+    # How often the mirror may be published, at most.
+    mirror_interval: float = 2.0
 
 
 def _assessed_at_least(records: list[Record], version: str | None) -> list[Record]:
@@ -146,6 +154,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         self._write_lock = threading.RLock()
         self._initialized = False
         self._artifact_store: ArtifactStore | None = None
+        self._last_mirror: float = 0.0
 
     def __enter__(self) -> Self:
         self._conn = self._connect()
@@ -177,6 +186,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         turned away. A reader that holds it for a moment — the dashboard
         polling the store while a campaign starts — must not stop the writer
         from running, so the writer waits for the reader to let go.
+
+        The lock is exclusive across processes too. A reader does not wait
+        that out: a writer in another process holds the file for the whole
+        run, and the reader's answer is the mirror the writer publishes, not
+        a wait that could last minutes.
         """
         delay = 0.2
         for attempt in range(_CONNECT_ATTEMPTS):
@@ -185,20 +199,42 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                     str(self._config.path),
                     read_only=self._config.read_only,
                 )
-            except duckdb.ConnectionException as exc:
-                if (
-                    "different configuration" not in str(exc)
-                    or attempt == _CONNECT_ATTEMPTS - 1
-                ):
+            except duckdb.Error as exc:
+                waitable = not self._config.read_only and is_lock_conflict(exc)
+                if not waitable or attempt == _CONNECT_ATTEMPTS - 1:
                     raise
                 logger.debug(
-                    "Store %s is held by a reader in another mode; waiting",
+                    "Store %s is held by another reader in another mode; waiting",
                     self._config.path,
                 )
                 time.sleep(delay)
                 delay *= 2
         msg = "the store could not be opened"
         raise StoreError(msg)
+
+    def _publish_mirror(self, *, force: bool = False) -> None:
+        """Publish a copy of the store a reader in another process can open.
+
+        DuckDB's lock is exclusive, so a dashboard in another terminal cannot
+        open a store this process is writing: it sees nothing until the run
+        ends. The mirror is the picture the writer publishes for that reader,
+        and it is published at most once per ``mirror_interval``.
+        """
+        target = self._config.mirror_path
+        if target is None or self._conn is None:
+            return
+        if str(self._config.path) == ":memory:":
+            # A store that lives in memory has nothing to copy.
+            return
+        now = time.monotonic()
+        if not force and now - self._last_mirror < self._config.mirror_interval:
+            return
+        try:
+            publish_mirror(self._conn, target)
+        except Exception as exc:  # ruff: ignore[blind-except] - a mirror is a convenience
+            logger.debug("Mirror %s could not be published: %s", target, exc)
+            return
+        self._last_mirror = now
 
     def _assert_identity_recomputable(self) -> None:
         """Refuse a store that cannot reproduce a record's ``measurement_key``.
@@ -259,6 +295,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
     ) -> None:
         if self._conn is not None:
             if not self._config.read_only:
+                self._publish_mirror(force=True)
                 self._checkpoint()
             self._conn.close()
             self._conn = None
@@ -774,6 +811,10 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             if result is None:
                 raise StoreError("Failed to retrieve seq after insert")
 
+            # A reader in another process cannot open this store: publish the
+            # picture for it.
+            self._publish_mirror()
+
             # Create new record with assigned seq, preserving original objects
             return Record(
                 record_id=record.record_id,
@@ -895,6 +936,10 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
 
             if result is None:
                 raise StoreError("Failed to retrieve seq after insert")
+
+            # A reader in another process cannot open this store: publish the
+            # picture for it.
+            self._publish_mirror()
 
             return Record(
                 record_id=record.record_id,

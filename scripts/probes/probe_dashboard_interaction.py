@@ -15,36 +15,22 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import tempfile
 import threading
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
+
+from dashboard_probe import (
+    CHROMIUM_ARGS,
+    SHOT_DIR,
+    wait_for_http,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SHOT_DIR = Path(tempfile.gettempdir()) / "computronium"
-
-
-def wait_for_http(port: int, timeout: float = 60.0) -> bool:
-    """Wait for the dashboard HTTP server to answer."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(
-                f"http://localhost:{port}/api/status", timeout=2
-            ) as r:
-                if r.status == 200:
-                    return True
-        except urllib.error.URLError, OSError:
-            pass
-        time.sleep(0.5)
-    return False
 
 
 def probe(port: int) -> dict[str, object]:
@@ -54,16 +40,7 @@ def probe(port: int) -> dict[str, object]:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                "--use-gl=angle",
-                "--use-angle=swiftshader",
-                "--enable-unsafe-swiftshader",
-                "--enable-webgl",
-                "--ignore-gpu-blocklist",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--force-device-scale-factor=1",
-            ],
+            args=CHROMIUM_ARGS,
         )
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         errors: list[str] = []
@@ -84,10 +61,12 @@ def probe(port: int) -> dict[str, object]:
         )
         page.wait_for_timeout(2000)
 
-        # Where is a measured pillar on the screen?
-        target = page.evaluate(
+        # Where is a measured pillar on the screen? A pillar can hide behind
+        # another cell, so the cursor has to land on the one the probe means.
+        candidates = page.evaluate(
             """() => {
                 const dbg = window.__DASHBOARD__;
+                const found = [];
                 for (const [key, cell] of dbg.discoveryMap.cellDataMap.entries()) {
                     if (cell.status !== 'measured') continue;
                     const mesh = dbg.discoveryMap.cells.get(key);
@@ -95,15 +74,25 @@ def probe(port: int) -> dict[str, object]:
                     const point = mesh.position.clone();
                     point.y += 1.0;
                     point.project(dbg.camera);
-                    return {
+                    found.push({
                         key,
                         x: (point.x * 0.5 + 0.5) * window.innerWidth,
                         y: (-point.y * 0.5 + 0.5) * window.innerHeight,
-                    };
+                    });
                 }
-                return null;
+                return found;
             }"""
         )
+        target = None
+        for candidate in candidates:
+            page.mouse.move(candidate["x"], candidate["y"])
+            page.wait_for_timeout(250)
+            hovered = page.evaluate(
+                "() => window.__DASHBOARD__.discoveryMap.hoveredCell"
+            )
+            if hovered == candidate["key"]:
+                target = candidate
+                break
 
         drawer_before = page.evaluate(
             "() => getComputedStyle(document.getElementById('cell-drawer')).transform"

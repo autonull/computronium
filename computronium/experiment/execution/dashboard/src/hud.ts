@@ -54,6 +54,7 @@ export class HUD implements Component {
   private rowElements: Map<string, { fill: HTMLElement; value: HTMLElement }> =
     new Map();
   private claimValue: HTMLElement | null = null;
+  private sourceValue: HTMLElement | null = null;
   private statusData: StatusData = {};
   private resources: CampaignResources = {};
   private requiredSeeds = 0;
@@ -124,6 +125,10 @@ export class HUD implements Component {
       </div>
       <div id="hud-meters" style="display: flex; flex-direction: column; gap: 9px;"></div>
       <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline;">
+        <span style="color: var(--text-secondary);">PICTURE</span>
+        <span id="hud-source" style="font-weight: 600; color: ${PALETTE.text_secondary};">—</span>
+      </div>
+      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline;">
         <span style="color: var(--text-secondary);">SEEDS TO CLAIM</span>
         <span id="hud-claim" style="font-weight: 700; color: ${PALETTE.insufficient};">—</span>
       </div>
@@ -141,6 +146,7 @@ export class HUD implements Component {
 
     this.claimValue = this.panel.querySelector("#hud-claim");
     this.connectionPill = this.panel.querySelector("#hud-connection");
+    this.sourceValue = this.panel.querySelector("#hud-source");
   }
 
   private addMeter(
@@ -259,9 +265,38 @@ export class HUD implements Component {
     }
     this.measuredSeeds = this.resources.seeds_per_arm ?? metrics.records?.length ?? 0;
     this.updateModeChip(metrics.run as RunStatus | undefined);
+    this.updateSource(metrics.store);
     this.updateResourceRows();
     this.updateClaim();
   };
+
+  /** Where the picture came from: the store itself, or the writer's mirror.
+
+      A snapshot lags the run by the writer's publish interval, and a reader
+      that does not know which it is looking at cannot tell a finished run
+      from a paused one.
+  */
+  private updateSource(store: { source?: string; published_at?: string } | undefined): void {
+    if (!this.sourceValue) return;
+    const source = store?.source;
+    if (!source) {
+      this.sourceValue.textContent = "—";
+      this.sourceValue.style.color = PALETTE.text_secondary;
+      return;
+    }
+    if (source === "snapshot") {
+      const published = store?.published_at
+        ? new Date(store.published_at).toLocaleTimeString()
+        : "";
+      this.sourceValue.textContent = published ? `snapshot ${published}` : "snapshot";
+      this.sourceValue.style.color = PALETTE.insufficient;
+      this.sourceValue.title = "The writer published this copy; it is as fresh as its last publish.";
+      return;
+    }
+    this.sourceValue.textContent = "live";
+    this.sourceValue.style.color = PALETTE.passed;
+    this.sourceValue.title = "The store itself, read as it is written.";
+  }
 
   private updateQueueRows(): void {
     const status = this.statusData;

@@ -10,23 +10,118 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Container, Mapping, Sequence
+
     from computronium.experiment.execution.campaign_queue import CampaignQueue
+    from computronium.experiment.schema.record import Record
 
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 from rich.text import Text
 
 from computronium.experiment.evidence.serializers import serializer
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.schema.axis import StructuralAxis
 
 logger = logging.getLogger(__name__)
+
+# The axes the console shows, as a slice of the declared space: three free,
+# the rest held at the value the run used.
+FREE_AXES = (
+    StructuralAxis.CREDIT,
+    StructuralAxis.GEOMETRY,
+    StructuralAxis.DYNAMICS,
+)
+
+# The marks the space is drawn with: what the run measured, what the system
+# would measure and nobody has, and what the system refuses.
+MARK_MEASURED = "█"
+MARK_LEGAL = "·"
+MARK_VOID = "×"
+
+
+def measured_keys(records: Sequence[Record], axes: Sequence[str]) -> set[str]:
+    """The cells the run measured, in the grid's own key form.
+
+    The key is the cell's values on the axes the grid shows, joined the way
+    the grid joins them, so a measured cell can be found among the space's
+    cells without a second convention for naming one.
+    """
+    return {
+        "|".join(str(getattr(record, axis, "")) for axis in axes) for record in records
+    }
+
+
+def _marks(
+    space: Mapping[str, Any], measured: Container[str]
+) -> dict[tuple[str, str, str], tuple[str, str]]:
+    """What each cell of the space is: refused, measured, or a gap."""
+    axes = list(space.get("axes", []))
+    if len(axes) < 3:
+        return {}
+    x_axis, y_axis, z_axis = axes[0], axes[1], axes[2]
+
+    marks: dict[tuple[str, str, str], tuple[str, str]] = {}
+    for cell in space.get("cells", []):
+        coordinate = cell.get("coordinate", {})
+        key = (
+            str(coordinate.get(x_axis, "")),
+            str(coordinate.get(y_axis, "")),
+            str(coordinate.get(z_axis, "")),
+        )
+        if cell.get("status") == "void":
+            marks[key] = (MARK_VOID, "red")
+        elif "|".join(key) in measured:
+            marks[key] = (MARK_MEASURED, "green")
+        else:
+            marks[key] = (MARK_LEGAL, "yellow")
+    return marks
+
+
+def space_grid(space: Mapping[str, Any], measured: Container[str] = ()) -> Text:
+    """Draw the declared space as a grid of marks.
+
+    One block per value of the third axis, so a slice that holds several
+    values is drawn in full rather than collapsed. The rows are the second
+    axis, the columns the first, and every cell says what the system thinks
+    of it — and whether the run has been there.
+    """
+    text = Text()
+    axes: list[str] = list(space.get("axes", []))
+    values: Mapping[str, list[str]] = space.get("values", {})
+    if len(axes) < 3:
+        return Text("the space names no axes", style="dim")
+
+    x_axis, y_axis, z_axis = axes[0], axes[1], axes[2]
+    x_values = list(values.get(x_axis, []))
+    y_values = list(values.get(y_axis, []))
+    z_values = list(values.get(z_axis, []))
+    marks = _marks(space, measured)
+
+    width = max((len(str(value)) for value in x_values), default=6) + 2
+    for z_value in z_values:
+        text.append(f"{z_axis}={z_value}\n", style="bold cyan")
+        text.append(" " * 14)
+        for x_value in x_values:
+            text.append(str(x_value)[:width].ljust(width), style="dim")
+        text.append("\n")
+        for y_value in y_values:
+            text.append(str(y_value)[:14].ljust(14), style="dim")
+            for x_value in x_values:
+                mark, style = marks.get(
+                    (x_value, y_value, z_value),
+                    (MARK_VOID, "dim"),
+                )
+                text.append(mark.ljust(width - 1), style=style)
+            text.append("\n")
+        text.append("\n")
+
+    return text
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +151,9 @@ class ConsoleDashboard:
         self._latest_metrics: dict[str, any] = {}
         self._latest_queue: dict[str, any] = {}
         self._latest_resources: dict[str, any] = {}
+        self._latest_space: dict[str, Any] | None = None
+        self._latest_measured: set[str] = set()
+        self._store_source = "none"
 
     def _make_layout(self) -> Layout:
         """Create the dashboard layout."""
@@ -63,6 +161,7 @@ class ConsoleDashboard:
 
         layout.split(
             Layout(name="header", size=3),
+            Layout(name="space", size=10),
             Layout(name="main", ratio=1),
             Layout(name="footer", size=3),
         )
@@ -97,9 +196,48 @@ class ConsoleDashboard:
         store = Path(self.config.store_path).name if self.config.store_path else "none"
         queue_status = f"Queue: {self._latest_queue.get('queued', 0)} queued, {self._latest_queue.get('running', 0)} running"
         return Panel.fit(
-            Text(f"{status} | Store: {store} | {queue_status}", style="dim"),
+            Text(
+                f"{status} | Store: {store} ({self._store_source}) | {queue_status}",
+                style="dim",
+            ),
             border_style="dim",
         )
+
+    def _render_space(self) -> Panel:
+        """Render the declared space: what was measured, what is a gap, what is refused."""
+        space = self._latest_space
+        if not space:
+            return Panel(
+                Text("No declared space yet", style="dim"),
+                title="🌌 Declared Space",
+                border_style="blue",
+            )
+
+        counts = space.get("counts", {})
+        rules = space.get("void_rules", {})
+        refused = ", ".join(
+            f"{rule.replace('_', ' ')} ({count})"
+            for rule, count in sorted(rules.items(), key=lambda item: -item[1])[:3]
+        )
+        held = space.get("held", {})
+
+        content = Text()
+        content.append_text(space_grid(space, self._latest_measured))
+        content.append(
+            f"measured █ · legal gap · void ×   "
+            f"({counts.get('legal', 0)} gaps, {counts.get('void', 0)} refused)\n",
+            style="dim",
+        )
+        if held:
+            content.append(
+                "held: "
+                + " · ".join(f"{axis}={value}" for axis, value in held.items()),
+                style="dim",
+            )
+        if refused:
+            content.append(f"\nrefused by: {refused}", style="dim red")
+
+        return Panel(content, title="🌌 Declared Space", border_style="blue")
 
     def _render_queue(self) -> Panel:
         """Render the queue status panel."""
@@ -113,7 +251,7 @@ class ConsoleDashboard:
         completed = self._latest_queue.get("completed", 0)
         max_concurrent = self._latest_queue.get("max_concurrent", 0)
 
-        table.add_row("⏳ Queued", str(queued), f"waiting for resources")
+        table.add_row("⏳ Queued", str(queued), "waiting for resources")
         table.add_row("🟢 Running", str(running), f"/ {max_concurrent} max concurrent")
         table.add_row("✅ Completed", str(completed), "finished campaigns")
 
@@ -149,9 +287,9 @@ class ConsoleDashboard:
             filled = int(pct * 10)
             return "█" * filled + "░" * (10 - filled)
 
-        table.add_row("GPU", f"{gpu*100:.0f}%", bar(gpu))
-        table.add_row("CPU", f"{cpu*100:.0f}%", bar(cpu))
-        table.add_row("MEM", f"{mem*100:.0f}%", bar(mem))
+        table.add_row("GPU", f"{gpu * 100:.0f}%", bar(gpu))
+        table.add_row("CPU", f"{cpu * 100:.0f}%", bar(cpu))
+        table.add_row("MEM", f"{mem * 100:.0f}%", bar(mem))
 
         used_gpus = self._latest_resources.get("used_gpus", 0)
         max_gpus = self._latest_resources.get("max_gpus", 0)
@@ -166,7 +304,12 @@ class ConsoleDashboard:
         # Pareto info
         pareto_count = self._latest_metrics.get("pareto_count", 0)
         total_records = self._latest_metrics.get("total_records", 0)
-        lines.append(Text(f"📈 Pareto Frontier: {pareto_count}/{total_records} records", style="bold yellow"))
+        lines.append(
+            Text(
+                f"📈 Pareto Frontier: {pareto_count}/{total_records} records",
+                style="bold yellow",
+            )
+        )
 
         # Best record
         best = self._latest_metrics.get("best_record")
@@ -208,7 +351,12 @@ class ConsoleDashboard:
                 if values:
                     mean = sum(values) / len(values)
                     std = (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
-                    lines.append(Text(f"  {arm[:12]}: {mean:.3f}±{std:.3f} (n={len(values)})", style="cyan"))
+                    lines.append(
+                        Text(
+                            f"  {arm[:12]}: {mean:.3f}±{std:.3f} (n={len(values)})",
+                            style="cyan",
+                        )
+                    )
 
         content = Text().join(lines) if lines else Text("No metrics yet", style="dim")
         return Panel(content, title="📈 Metrics", border_style="yellow")
@@ -217,7 +365,11 @@ class ConsoleDashboard:
         """Render the recent records panel."""
         records = self._latest_metrics.get("records", [])
         if not records:
-            return Panel(Text("No records yet", style="dim"), title="📝 Recent Records", border_style="magenta")
+            return Panel(
+                Text("No records yet", style="dim"),
+                title="📝 Recent Records",
+                border_style="magenta",
+            )
 
         table = Table(show_header=True, header_style="bold", box=None)
         table.add_column("Arm", style="cyan", width=14)
@@ -248,11 +400,29 @@ class ConsoleDashboard:
                 arm,
                 f"{acc:.3f}",
                 f"{wt:.1f}s",
-                f"{params/1000:.1f}K",
+                f"{params / 1000:.1f}K",
                 "⭐" if is_pareto else "",
             )
 
         return Panel(table, title="📝 Top Records", border_style="magenta")
+
+    def _declared_space(self, run: Any, records: list[Any]) -> dict[str, Any] | None:
+        """The declared space the run's evidence sits in.
+
+        The same space the browser draws, read through the same rules: a gap
+        the console cannot show is a gap a researcher cannot act on.
+        """
+        from computronium.experiment.execution.dashboard.space import declared_space
+
+        spec = getattr(run, "spec", None)
+        task = spec.task_names[0] if spec and spec.task_names else None
+        if not task and records:
+            task = records[0].schedule.task_id or None
+        try:
+            return declared_space(spec, records, FREE_AXES, task=task)
+        except Exception as exc:  # ruff: ignore[blind-except] - the space is a convenience
+            logger.debug("The declared space could not be read: %s", exc)
+            return None
 
     async def _update_loop(self) -> None:
         """Background loop to fetch updates."""
@@ -275,47 +445,89 @@ class ConsoleDashboard:
 
                 # Fetch resource usage
                 if self.config.campaign_queue:
-                    self._latest_resources = await self.config.campaign_queue.get_resource_usage()
+                    self._latest_resources = (
+                        await self.config.campaign_queue.get_resource_usage()
+                    )
 
                 # Fetch campaign metrics from store
                 if self.config.store_path:
                     try:
-                        store = RecordStore(StoreConfig(path=Path(self.config.store_path), read_only=True))
-                        with store:
+                        from computronium.experiment.evidence.mirror import (
+                            readable_store,
+                        )
+
+                        with readable_store(Path(self.config.store_path)) as view:
+                            self._store_source = view.source
+                            store = view.store
                             runs = list(store.query_runs())
                             if runs:
                                 # Get most recent run with records
                                 for run in reversed(runs):
-                                    records = list(store.query_records(run_id=run.run_id))
+                                    records = list(
+                                        store.query_records(run_id=run.run_id)
+                                    )
                                     if records:
                                         # Compute Pareto
-                                        from computronium.experiment.analysis import compute_pareto_frontier
+                                        from computronium.experiment.analysis import (
+                                            compute_pareto_frontier,
+                                        )
 
-                                        pareto_points, _ = compute_pareto_frontier(records, ["val_acc", "walltime_s"])
-                                        pareto_ids = {p["record_id"] for p in pareto_points}
+                                        pareto_points, _ = compute_pareto_frontier(
+                                            records, ["val_acc", "walltime_s"]
+                                        )
+                                        pareto_ids = {
+                                            p["record_id"] for p in pareto_points
+                                        }
 
                                         # Get ablation groups
-                                        from computronium.experiment.surface.report import ReportGenerator
+                                        from computronium.experiment.surface.report import (
+                                            ReportGenerator,
+                                        )
+
                                         generator = ReportGenerator(store)
-                                        ablation_groups = generator.get_ablation_groups(run.run_id)
+                                        ablation_groups = generator.get_ablation_groups(
+                                            run.run_id
+                                        )
 
                                         self._latest_metrics = {
                                             "total_records": len(records),
                                             "pareto_count": len(pareto_ids),
-                                            "pareto": [r.record_id in pareto_ids for r in records],
-                                            "records": [serializer.to_api_dict(r) for r in records],
+                                            "pareto": [
+                                                r.record_id in pareto_ids
+                                                for r in records
+                                            ],
+                                            "records": [
+                                                serializer.to_api_dict(r)
+                                                for r in records
+                                            ],
                                             "ablation_groups": ablation_groups,
-                                            "best_record": max(records, key=lambda r: r.payload.get("val_acc", 0))
+                                            # The panel reads the record the way
+                                            # the API serves it: a mapping, not
+                                            # a record object.
+                                            "best_record": serializer.to_api_dict(
+                                                max(
+                                                    records,
+                                                    key=lambda r: r.payload.get(
+                                                        "val_acc", 0
+                                                    ),
+                                                )
+                                            )
                                             if records
                                             else None,
                                         }
+                                        self._latest_space = self._declared_space(
+                                            run, records
+                                        )
+                                        self._latest_measured = measured_keys(
+                                            records, FREE_AXES
+                                        )
                                         break
                     except Exception as e:
                         logger.debug(f"Error fetching metrics: {e}")
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in console dashboard update loop")
                 await asyncio.sleep(5)
 
@@ -323,6 +535,7 @@ class ConsoleDashboard:
         """Render all panels into the layout."""
         layout["header"].update(self._render_header())
         layout["footer"].update(self._render_footer())
+        layout["space"].update(self._render_space())
         layout["queue"].update(self._render_queue())
         layout["resources"].update(self._render_resources())
         layout["metrics"].update(self._render_metrics())
@@ -337,7 +550,12 @@ class ConsoleDashboard:
         layout = self._make_layout()
 
         try:
-            with Live(self._render(layout), console=self.console, refresh_per_second=4, screen=True) as live:
+            with Live(
+                self._render(layout),
+                console=self.console,
+                refresh_per_second=4,
+                screen=True,
+            ) as live:
                 while self._running:
                     await asyncio.sleep(self.config.update_interval)
                     live.update(self._render(layout))

@@ -91,8 +91,21 @@ Changing one asks the backend for that slice's space and redraws the grid.
 
 **Interactions:**
 - **OrbitControls**: Left-drag = rotate, Right-drag = pan, Scroll = zoom
-- **Click** a cell → opens the Cell Drawer (measured or legal)
-- **Hover** highlights the cell (a pillar glows, a cage brightens)
+- **Click** a cell → opens the Cell Drawer (measured, legal or void)
+- **Hover** highlights the cell (a pillar glows, a cage brightens) and names it
+  in a readout that follows the cursor: the cell's coordinate, what it is, and
+  — for a void cell — the rule that refuses it
+
+**The evidence wins the click.** The grid is dense and every gap carries an
+invisible pick target (a wireframe cube is hollow, so a ray through its middle
+hits nothing, and a gap nobody can click is a gap nobody can act on). The
+nearest cell along the ray is therefore often a gap standing in front of a
+pillar. A measured cell the ray met wins: the evidence is what the researcher
+was aiming at, and a gap is picked when nothing measured is in the way.
+
+**Void cells are nameable.** The void markers are one mesh, drawn and never
+picked, so the cursor cannot pick one: the point the ray met says which cell
+the marker belongs to, and the readout says what refuses it.
 
 **Axis labels:** sprites on the grid's edges — the values the row names, and
 each axis's name at the end of its axis. A long value is wrapped at its
@@ -223,6 +236,7 @@ stands.
 | **WALLTIME** | measured `payload.walltime_s` | seconds burned so far |
 | **RECORDS** | store | records measured |
 | **GPU / CPU** | `queue.get_resource_usage()` | `—` when no campaign queue is attached |
+| **PICTURE** | the store the dashboard read | `live`, or `snapshot <time>` when it read the writer's mirror |
 | **SEEDS TO CLAIM** | `GateThresholds().required_seeds_per_group` | seeds still missing for a claim |
 
 Every number is measured or derived from a registry — none is a placeholder.
@@ -300,14 +314,22 @@ PipelineRunner ──► event bus ─────────────┤
                               └─ preregister / quest ──► configs/preregistrations/
 ```
 
-**Critical — the store is read-only, and that has a consequence.** DuckDB
-gives one writer the file, and a read-only connection cannot join a
-read-write one — not even inside the same process, where DuckDB shares one
-instance per path. So the dashboard opens the store read-only, and falls
-back to read-write only when the writer is *this* process (an in-process
-campaign). A campaign in another terminal therefore holds the file, and the
-dashboard shows no records until it lets go. Run the campaign in the
-dashboard's process, or wait for the run to finish.
+**Critical — the store's lock is exclusive, and the writer publishes a
+mirror.** DuckDB gives one writer the file, and a read-only connection cannot
+join a read-write one — not even inside the same process, where DuckDB shares
+one instance per path. Across processes it is worse: a reader cannot open a
+file a writer holds at all, and a writer cannot open a file a reader holds.
+
+So the writer publishes a **mirror**: a copy of the whole database, taken by
+DuckDB inside the writer's own transaction and swapped in atomically, next to
+the store (`experiment.mirror.duckdb`). A dashboard in another terminal reads
+the mirror while the campaign runs, and the store itself once the campaign
+lets go. The Mission Control panel says which it is reading (`live` or
+`snapshot <time>`), because a snapshot lags the run by the writer's publish
+interval.
+
+The mirror is a copy, not a second truth: the store remains the record of
+account, and a reader that can open it always prefers it.
 
 **A queued replication needs the queue.** The dashboard attaches the process's
 campaign queue, so `comp dashboard` can queue work; a dashboard built without
@@ -373,9 +395,24 @@ Single source: `scripts/generate_palette.py` → generates:
 |-------|-----|
 | Blank canvas / WebGL not working | Browser needs WebGL2. Try Chrome/Edge/Firefox. In headless CI: `--use-gl=angle` |
 | WebSocket connection fails | Check dashboard port (default 8080). Firewall? |
-| No data appearing | Ensure campaign is running and writing to the same DuckDB file (`--store experiment.duckdb`) |
-| Store locked | A campaign in another process holds the DuckDB file. The dashboard reads it once the writer releases it, or immediately when the campaign runs in the dashboard's own process. |
+| No data appearing | Ensure campaign is running and writing to the same DuckDB file (`--store experiment.duckdb`). The dashboard reads the writer's mirror while the writer holds the file. |
+| Store locked | A campaign in another process holds the DuckDB file. The dashboard reads the mirror it publishes (`<store>.mirror.duckdb`), or the store itself once the writer lets go. |
 | Three.js errors in console | Check `npm run build` output. Vite bundles to `templates/static/js/dashboard.js` |
+
+---
+
+## Console Dashboard (no browser)
+
+```bash
+uv run comp dashboard --store experiment.duckdb --console
+```
+
+The same picture in the terminal, for a headless machine: the campaign queue,
+the resources, the metrics, the recent records — and the **declared space**,
+drawn as a grid of marks. `█` is a cell the run measured, `·` a gap nobody has
+measured, `×` a cell the system refuses, with the rule that refuses it. The
+space is read through the same rules the browser uses, so the two cannot
+disagree about what is possible.
 
 ---
 
@@ -406,7 +443,13 @@ uv run python scripts/probes/probe_ws_delivery.py          # message latency
 uv run python scripts/probes/probe_plot_scale.py            # axes cover the data
 uv run python scripts/probes/probe_dashboard_plot_drawer.py # drawer + plot state
 uv run python scripts/probes/probe_dashboard_space.py        # the gap is visible and actionable
+uv run python scripts/probes/probe_dashboard_void.py         # the void cell says why
+uv run python scripts/probes/probe_dashboard_actions.py      # the verbs act
 ```
+
+The probes share `scripts/probes/dashboard_probe.py`: the Chromium flags that
+make WebGL work without a GPU, the wait for the server, and the store they
+read.
 
 ---
 
@@ -420,10 +463,12 @@ uv run python scripts/capture_dashboard_screenshot.py
 Requires: `playwright` (in `dev` extra), Chromium. Uses `--use-gl=angle`
 with the SwiftShader rasterizer for headless WebGL.
 
-The dashboard, the campaign and the capture run in **one process**: DuckDB
-gives one writer the file, so a dashboard in another process would see
-nothing until the campaign finished. The script starts the server on a
-thread, runs the demo campaign on the main thread, and screenshots from a
-third thread once the records have landed.
+The dashboard, the campaign and the capture run in **one process**: the
+campaign holds the store, and the capture wants the records the campaign has
+just written. (A dashboard in another process would see them too, through the
+mirror the writer publishes — but one process has no such gap to fall
+through.) The script starts the server on a thread, runs the demo campaign on
+the main thread, and screenshots from a third thread once the records have
+landed.
 
 The screenshot is embedded in `docs/readme/title.md` and appears on the README front page.

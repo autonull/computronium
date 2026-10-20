@@ -18,6 +18,7 @@ from typing import Any
 import yaml
 
 from computronium.core.logging import get_logger
+from computronium.experiment.evidence.mirror import mirror_path
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.deadline import Deadline
@@ -176,7 +177,12 @@ class CampaignRunner:
         """
         policy_name = spec.policy or "round_robin_grid"
 
-        with RecordStore(StoreConfig(path=Path(self.spec.store))) as store:
+        with RecordStore(
+            StoreConfig(
+                path=Path(self.spec.store),
+                mirror_path=mirror_path(Path(self.spec.store)),
+            )
+        ) as store:
             if run_id is None:
                 run_id = store.create_run(spec=spec)
             else:

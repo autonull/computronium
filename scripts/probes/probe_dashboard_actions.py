@@ -17,121 +17,22 @@ import json
 import logging
 import tempfile
 import threading
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
+
+from dashboard_probe import (
+    CHROMIUM_ARGS,
+    SHOT_DIR,
+    build_store,
+    wait_for_http,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SHOT_DIR = Path(tempfile.gettempdir()) / "computronium"
-
-COORDINATE = {
-    "substrate": "digital",
-    "geometry": "feedforward",
-    "dynamics": "instantaneous",
-    "plasticity": "null",
-    "credit": "gradient",
-    "update": "adam",
-}
-
-
-def wait_for_http(port: int, timeout: float = 60.0) -> bool:
-    """Wait for the dashboard HTTP server to answer."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(
-                f"http://localhost:{port}/api/status", timeout=2
-            ) as r:
-                if r.status == 200:
-                    return True
-        except urllib.error.URLError, OSError:
-            pass
-        time.sleep(0.5)
-    return False
-
-
-def build_store(path: Path) -> str:
-    """A store holding one run with five measured seeds of one cell."""
-    from computronium.experiment.evidence.store import RecordStore, StoreConfig
-    from computronium.experiment.schema.coordinate import (
-        Coordinate,
-        Provenance,
-        Schedule,
-    )
-    from computronium.experiment.schema.record import (
-        FailureCause,
-        GateVerdict,
-        Maturity,
-        Record,
-        ReproducibilityClass,
-        Severity,
-        Status,
-    )
-    from computronium.experiment.schema.run_spec import RunSpec
-    from computronium.experiment.schema.seed_registries import seed_all_registries
-
-    seed_all_registries()
-    spec = RunSpec(
-        profile="demo",
-        task="digits",
-        objectives=("validation_accuracy",),
-        fidelity="L1",
-        n_seeds=5,
-        epochs=1,
-        budget_seconds=120.0,
-    )
-
-    with RecordStore(StoreConfig(path=path)) as store:
-        run_id = store.create_run(spec=spec)
-        for seed in range(5):
-            store.append(
-                Record.create(
-                    run_id=run_id,
-                    coordinate=Coordinate(**COORDINATE, params={}),
-                    schedule=Schedule(
-                        fidelity="L1",
-                        seed=seed,
-                        n_seeds=1,
-                        epochs=1,
-                        batch_limit=0,
-                        budget_id="probe",
-                        task_id="digits",
-                        param_budget=0,
-                    ),
-                    provenance=Provenance(
-                        env={"python": "3.14", "platform": "linux"},
-                        dataset="digits",
-                        dataset_version="1.0",
-                        code_sha="probe",
-                        policy="probe",
-                        links={"run_id": run_id},
-                    ),
-                    status=Status(
-                        gate_verdict=GateVerdict.PASS_,
-                        defect="",
-                        cause=FailureCause.UNKNOWN,
-                        severity=Severity.LOW,
-                        quarantine=False,
-                        maturity=Maturity.L1,
-                        uncertainty={},
-                        reproducibility=ReproducibilityClass.REPLAYABLE,
-                        assessment_procedure_version="1.0",
-                        ceec_link=None,
-                    ),
-                    payload={
-                        "val_acc": 0.40 + 0.02 * seed,
-                        "walltime_s": 3.0,
-                        "param_count": 1024,
-                    },
-                )
-            )
-    return run_id
 
 
 def probe(port: int, registry: Path) -> dict[str, object]:
@@ -141,16 +42,7 @@ def probe(port: int, registry: Path) -> dict[str, object]:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                "--use-gl=angle",
-                "--use-angle=swiftshader",
-                "--enable-unsafe-swiftshader",
-                "--enable-webgl",
-                "--ignore-gpu-blocklist",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--force-device-scale-factor=1",
-            ],
+            args=CHROMIUM_ARGS,
         )
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         errors: list[str] = []
@@ -170,9 +62,10 @@ def probe(port: int, registry: Path) -> dict[str, object]:
         )
         page.wait_for_timeout(1500)
 
-        target = page.evaluate(
+        candidates = page.evaluate(
             """() => {
                 const dbg = window.__DASHBOARD__;
+                const found = [];
                 for (const [key, cell] of dbg.discoveryMap.cellDataMap.entries()) {
                     if (cell.status !== 'measured') continue;
                     const mesh = dbg.discoveryMap.cells.get(key);
@@ -182,21 +75,32 @@ def probe(port: int, registry: Path) -> dict[str, object]:
                     const point = mesh.position.clone();
                     point.y += (box.min.y + box.max.y) / 2;
                     point.project(dbg.camera);
-                    return {
+                    found.push({
                         key,
                         x: (point.x * 0.5 + 0.5) * window.innerWidth,
                         y: (-point.y * 0.5 + 0.5) * window.innerHeight,
-                    };
+                    });
                 }
-                return null;
+                return found;
             }"""
         )
+        # A pillar can hide behind another cell, so the cursor has to land on
+        # the one the probe means: move, and check what the page says is
+        # under it.
+        target = None
+        for candidate in candidates:
+            page.mouse.move(candidate["x"], candidate["y"])
+            page.wait_for_timeout(250)
+            hovered = page.evaluate(
+                "() => window.__DASHBOARD__.discoveryMap.hoveredCell"
+            )
+            if hovered == candidate["key"]:
+                target = candidate
+                break
         if not target:
             browser.close()
             return {"error": "no measured pillar on the page"}
 
-        page.mouse.move(target["x"], target["y"])
-        page.wait_for_timeout(300)
         page.mouse.click(target["x"], target["y"])
         page.wait_for_timeout(900)
 

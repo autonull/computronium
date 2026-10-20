@@ -1,368 +1,333 @@
 {
   "axes": {
-    "credit": {
-      "display_name": "Credit Assignment",
-      "description": "How learning signals are assigned to parameters",
-      "primitives": [
-        {
-          "name": "gradient",
-          "summary": "Standard backprop credit (for comparison).",
-          "class_name": "GradientCredit"
-        },
-        {
-          "name": "pepita",
-          "summary": "Published PEPITA credit (arXiv 2201.11665) \u2014 the second-pass family.",
-          "class_name": "PepitaCredit"
-        },
-        {
-          "name": "random_projections",
-          "summary": "Fixed random feedback pathways (FA/DFA) with an autograd readout.",
-          "class_name": "RandomProjectionsCredit"
-        },
-        {
-          "name": "local_goodness",
-          "summary": "Layer-local contrastive credit \u2014 two realized algorithms.",
-          "class_name": "LocalGoodnessCredit"
-        },
-        {
-          "name": "local_contrastive",
-          "summary": "Per-layer recomputed goodness-contrast credit \u2014 the O(1)-memory FF",
-          "class_name": "LocalContrastiveCredit"
-        },
-        {
-          "name": "target_inversion",
-          "summary": "Propagating local targets (Target Prop) with transpose feedback.",
-          "class_name": "TargetInversionCredit"
-        },
-        {
-          "name": "temporal_trace",
-          "summary": "Spike-timing correlations (STDP).",
-          "class_name": "TemporalTraceCredit"
-        },
-        {
-          "name": "homeostatic",
-          "summary": "Homeostatic credit assignment (autonomous Lipschitz scaling).",
-          "class_name": "HomeostaticCredit"
-        },
-        {
-          "name": "pca_lm",
-          "summary": "PC-ALM local credit assignment: \u0394W_l = -\u03b7 * \u03bb_l @ h_{l-1}^T / B.",
-          "class_name": "PCALMCredit"
-        },
-        {
-          "name": "lemma",
-          "summary": "LEMMA per-layer closed-form credit (TODO18 2.4 disambiguation).",
-          "class_name": "LemmaCredit"
-        }
-      ]
-    },
     "substrate": {
       "display_name": "Substrate",
-      "description": "Physical/computational substrate for computation",
+      "description": "Physical or computational substrate",
       "primitives": [
         {
           "name": "digital",
-          "summary": "Reference substrate: infinite precision, continuous time, no noise.",
-          "class_name": "DigitalSubstrate"
-        },
-        {
-          "name": "memristive",
-          "summary": "Memristive crossbar substrate with differential-pair conductances.",
-          "class_name": "MemristiveSubstrate"
-        },
-        {
-          "name": "neuromorphic",
-          "summary": "Neuromorphic substrate: low precision, additive state noise, and",
-          "class_name": "NeuromorphicSubstrate"
-        },
-        {
-          "name": "photonic",
-          "summary": "Photonic/optical substrate with phase interference.",
-          "class_name": "OpticalSubstrate"
-        },
-        {
-          "name": "complex",
-          "summary": "Complex-valued substrate (emulated via real/imag channels).",
-          "class_name": "ComplexSubstrate"
+          "summary": "Digital substrate: exact arithmetic, full precision",
+          "available": true
         },
         {
           "name": "analog",
-          "summary": "Analog substrate with additive noise and weight bounds.",
-          "class_name": "AnalogSubstrate"
+          "summary": "Analog substrate: continuous-valued physical state",
+          "available": true
+        },
+        {
+          "name": "memristive",
+          "summary": "Memristive substrate: conductance, IR-drop, noise",
+          "available": true
+        },
+        {
+          "name": "neuromorphic",
+          "summary": "Neuromorphic substrate: asynchronous spike events",
+          "available": true
+        },
+        {
+          "name": "optical",
+          "summary": "Photonic substrate: phase/amplitude modulation",
+          "available": true
         },
         {
           "name": "quantum",
-          "summary": "Quantum substrate with complex-valued state space.",
-          "class_name": "QuantumSubstrate"
+          "summary": "Quantum substrate: unitary gate simulation",
+          "available": true
+        },
+        {
+          "name": "complex",
+          "summary": "Complex-valued substrate",
+          "available": true
         },
         {
           "name": "sparse",
-          "summary": "Sparse substrate with dynamic sparsity masks.",
-          "class_name": "SparseSubstrate"
-        },
-        {
-          "name": "noisy",
-          "summary": "Substrate with additive noise (for testing/backwards compatibility).",
-          "class_name": "NoisySubstrate"
-        },
-        {
-          "name": "quantized",
-          "summary": "Quantized substrate (int8 precision) for backward compatibility.",
-          "class_name": "QuantizedSubstrate"
+          "summary": "Sparse substrate: sparsity-masked state",
+          "available": true
         },
         {
           "name": "ternary",
-          "summary": "Ternary substrate with STE-based quantization to {-\u03b1, 0, +\u03b1}.",
-          "class_name": "TernarySubstrate"
+          "summary": "Ternary substrate: weights in {-alpha, 0, +alpha}",
+          "available": true
         }
       ]
     },
     "geometry": {
       "display_name": "Geometry",
-      "description": "Network architecture and connectivity pattern",
+      "description": "Network architecture and connectivity",
       "primitives": [
         {
           "name": "feedforward",
-          "summary": "Standard feedforward DAG topology (MLP, CNN).",
-          "class_name": "FeedforwardGeometry"
-        },
-        {
-          "name": "causal_transformer",
-          "summary": "Causal transformer language-model topology (G-axis).",
-          "class_name": "TransformerGeometry"
+          "summary": "Feedforward DAG (MLP/CNN)",
+          "available": true
         },
         {
           "name": "recurrent",
-          "summary": "Recurrent attractor topology (Hopfield, EqProp MLPs).",
-          "class_name": "RecurrentGeometry"
+          "summary": "Recurrent attractor (Hopfield/EqProp)",
+          "available": true
         },
         {
-          "name": "recurrent_attractor",
-          "summary": "Recurrent attractor topology (Hopfield, EqProp MLPs).",
-          "class_name": "RecurrentGeometry"
-        },
-        {
-          "name": "tile_mesh",
-          "summary": "TileNet mesh topology: modular independent tiles with local boundaries and asynchronous routing.",
-          "class_name": "TileGeometry"
+          "name": "causal_transformer",
+          "summary": "Causal transformer with KV cache",
+          "available": true
         },
         {
           "name": "tile",
-          "summary": "TileNet mesh topology: modular independent tiles with local boundaries and asynchronous routing.",
-          "class_name": "TileGeometry"
+          "summary": "TileNet modular tile mesh",
+          "available": true
+        },
+        {
+          "name": "tile_mesh",
+          "summary": "TileNet mesh topology",
+          "available": true
         },
         {
           "name": "conv",
-          "summary": "Convolutional topology: shared kernels routed through the substrate operator.",
-          "class_name": "ConvGeometry"
+          "summary": "Convolutional geometry",
+          "available": true
         },
         {
           "name": "graph",
-          "summary": "Graph topology: message passing over an edge index.",
-          "class_name": "GraphGeometry"
+          "summary": "Arbitrary node-edge fabric (FabricPC)",
+          "available": true
         },
         {
           "name": "attention",
-          "summary": "Attention topology: multi-head self-attention blocks.",
-          "class_name": "AttentionGeometry"
+          "summary": "Attention geometry",
+          "available": true
         },
         {
           "name": "spatial_lattice",
-          "summary": "3D Spatial Lattice topology: local connectivity on a 3D grid.",
-          "class_name": "SpatialLattice3DGeometry"
+          "summary": "3-D spatial lattice (neural_cube)",
+          "available": true
         },
         {
           "name": "nca",
-          "summary": "Neural cellular automaton: one shared cell MLP on a 2D grid (G-axis).",
-          "class_name": "NcaGeometry"
+          "summary": "Neural cellular automaton fabric",
+          "available": true
         },
         {
           "name": "ntm",
-          "summary": "Neural Turing machine: LSTM controller + content-addressed external",
-          "class_name": "NtmGeometry"
+          "summary": "Neural Turing Machine tape",
+          "available": true
         }
       ]
     },
     "dynamics": {
       "display_name": "Dynamics",
-      "description": "State evolution and settling dynamics",
+      "description": "State evolution and settling",
       "primitives": [
         {
           "name": "energy_minimization",
-          "summary": "Energy-based settling (Equilibrium Propagation, Hopfield, CHL).",
-          "class_name": "EnergyMinimizationDynamics"
+          "summary": "Equilibrium propagation energy minimization",
+          "available": true
         },
         {
           "name": "predictive_settling",
-          "summary": "Predictive coding settling (Rao & Ballard, Whittington & Bogacz).",
-          "class_name": "PredictiveSettlingDynamics"
+          "summary": "Predictive coding settling",
+          "available": true
         },
         {
           "name": "error_predictive_coding",
-          "summary": "Error-parameterized predictive coding (ePC) \u2014 Goemaere et al., \"ePC: Fast",
-          "class_name": "ErrorPredictiveCodingDynamics"
-        },
-        {
-          "name": "pc_alm",
-          "summary": "Augmented Lagrangian Predictive Coding (PC-ALM; Seely & Gould 2026,",
-          "class_name": "PCALMDynamics"
+          "summary": "Error predictive coding",
+          "available": true
         },
         {
           "name": "spike_integration",
-          "summary": "Spiking neuron integration (LIF, AdEx).",
-          "class_name": "SpikeIntegrationDynamics"
+          "summary": "LIF/Izhikevich spike integration",
+          "available": true
         },
         {
           "name": "instantaneous",
-          "summary": "Single-pass feedforward (Backprop, Forward-Forward).",
-          "class_name": "InstantaneousDynamics"
+          "summary": "Instantaneous pass (FF/Backprop)",
+          "available": true
         },
         {
           "name": "diffusion",
-          "summary": "Langevin dynamics over the geometry's Hopfield energy.",
-          "class_name": "DiffusionDynamics"
+          "summary": "Continuous-time diffusion settling",
+          "available": true
         },
         {
           "name": "lazy",
-          "summary": "Sequential (Gauss\u2013Seidel) EqProp settle \u2014 lazy per-layer activation.",
-          "class_name": "LazyStateDynamics"
+          "summary": "Lazy/on-demand state dynamics",
+          "available": true
+        },
+        {
+          "name": "pc_alm",
+          "summary": "Augmented Lagrangian predictive coding",
+          "available": true
         }
       ]
     },
     "plasticity": {
       "display_name": "Plasticity",
-      "description": "Local learning and adaptation mechanisms",
+      "description": "Local learning and adaptation",
       "primitives": [
         {
           "name": "null",
-          "summary": "Null plasticity: \u03c8_{t+1} = \u03c8_t \u2014 Joint system with M=Null \u2261 5-D system.",
-          "class_name": "NullPlasticity"
+          "summary": "Null plasticity (5-D slice)",
+          "available": true
         },
         {
           "name": "routing",
-          "summary": "Routing plasticity: state-dependent pathway gating.",
-          "class_name": "RoutingPlasticity"
+          "summary": "Routing plasticity: state-dependent gating",
+          "available": true
         },
         {
           "name": "fast_weights",
-          "summary": "Fast weight plasticity: episode-local associative memory.",
-          "class_name": "FastWeightPlasticity"
+          "summary": "Fast-weight episode-local memory",
+          "available": true
         },
         {
           "name": "substrate_coupled",
-          "summary": "Substrate-coupled plasticity: reuse substrate adapters as physical plasticity.",
-          "class_name": "SubstrateCoupledPlasticity"
-        },
-        {
-          "name": "hebbian_plasticity",
-          "summary": "\u03c8 = closed-form ridge readout residual on NUDGED settled activity.",
-          "class_name": "ClosedFormRidgePlasticity"
-        },
-        {
-          "name": "stdp",
-          "summary": "\u03c8 = trace-decayed ridge readout residual on NUDGED settled activity.",
-          "class_name": "TemporalPsiPlasticity"
-        },
-        {
-          "name": "conflict_adaptive_psi",
-          "summary": "\u03c8 = ridge readout whose trace decay is driven by detected conflict.",
-          "class_name": "ConflictAdaptivePsiPlasticity"
+          "summary": "Physical substrate-coupled plasticity",
+          "available": true
         },
         {
           "name": "rule_state",
-          "summary": "Rule State Plasticity (Z3): Operator selection via \u03c8 for frozen-\u03b8 task switching.",
-          "class_name": "RuleStatePlasticity"
+          "summary": "Rule-state plasticity (Z3)",
+          "available": true
+        },
+        {
+          "name": "temporal_psi",
+          "summary": "Trace-decayed supervised psi",
+          "available": true
+        },
+        {
+          "name": "conflict_adaptive",
+          "summary": "Conflict-adaptive psi",
+          "available": true
+        }
+      ]
+    },
+    "credit": {
+      "display_name": "Credit Assignment",
+      "description": "How learning signals reach parameters",
+      "primitives": [
+        {
+          "name": "thermodynamic_contrast",
+          "summary": "EqProp free/nudged contrast (Scellier-Bengio)",
+          "available": true
+        },
+        {
+          "name": "random_projections",
+          "summary": "Fixed random feedback (FA/DFA)",
+          "available": true
+        },
+        {
+          "name": "local_goodness",
+          "summary": "Forward-Forward / PEPITA goodness",
+          "available": true
+        },
+        {
+          "name": "local_contrastive",
+          "summary": "Local contrastive credit",
+          "available": true
+        },
+        {
+          "name": "temporal_trace",
+          "summary": "Hebbian/STDP temporal trace",
+          "available": true
+        },
+        {
+          "name": "target_inversion",
+          "summary": "Target propagation inversion",
+          "available": true
+        },
+        {
+          "name": "homeostatic",
+          "summary": "Autonomous Lipschitz scaling",
+          "available": true
+        },
+        {
+          "name": "pepita",
+          "summary": "PEPITA input-modulation credit",
+          "available": true
+        },
+        {
+          "name": "gradient",
+          "summary": "Backprop gradient credit (ruler reference)",
+          "available": true
+        },
+        {
+          "name": "pc_alm",
+          "summary": "PC-ALM primal-dual credit",
+          "available": true
         }
       ]
     },
     "update": {
       "display_name": "Update Rule",
-      "description": "Parameter update optimization algorithm",
+      "description": "How parameters are updated",
       "primitives": [
         {
           "name": "euclidean",
-          "summary": "Standard Euclidean update: plain SGD (optionally with momentum).",
-          "class_name": "EuclideanUpdate"
-        },
-        {
-          "name": "unit_rms",
-          "summary": "Unit-RMS momentum: the magnitude-only ladder rung (TODO12 A1).",
-          "class_name": "UnitRMSUpdate"
-        },
-        {
-          "name": "local_adam",
-          "summary": "Per-tensor scalar-second-moment Adam (LAMB-style; RESEARCH4 A1 rung).",
-          "class_name": "LocalAdamUpdate"
+          "summary": "SGD/Adam Euclidean update",
+          "available": true
         },
         {
           "name": "adam",
-          "summary": "Adam (Kingma & Ba 2015) on pseudo-gradients.",
-          "class_name": "AdamUpdate"
+          "summary": "Adam adaptive moment",
+          "available": true
+        },
+        {
+          "name": "local_adam",
+          "summary": "Local Adam",
+          "available": true
         },
         {
           "name": "ortho_adam",
-          "summary": "Orthogonalized Adam: Adam moments, Muon's matrix direction.",
-          "class_name": "OrthoAdamUpdate"
-        },
-        {
-          "name": "lion",
-          "summary": "Lion (Chen et al. 2023): sign of the momentum interpolant.",
-          "class_name": "LionUpdate"
+          "summary": "Orthogonal Adam",
+          "available": true
         },
         {
           "name": "riemannian_orthogonal",
-          "summary": "Muon-style orthogonal update: orthogonalize the momentum buffer.",
-          "class_name": "RiemannianOrthogonalUpdate"
+          "summary": "Riemannian orthogonal update (Muon-family)",
+          "available": true
         },
         {
           "name": "muon",
-          "summary": "Muon-style orthogonal update: orthogonalize the momentum buffer.",
-          "class_name": "RiemannianOrthogonalUpdate"
+          "summary": "Muon update",
+          "available": true
+        },
+        {
+          "name": "lion",
+          "summary": "Lion optimizer",
+          "available": true
         },
         {
           "name": "spectral_constrained",
-          "summary": "Lipschitz-bounded update: constrain spectral norm of updates.",
-          "class_name": "SpectralConstrainedUpdate"
-        },
-        {
-          "name": "spectral",
-          "summary": "Lipschitz-bounded update: constrain spectral norm of updates.",
-          "class_name": "SpectralConstrainedUpdate"
+          "summary": "Spectral-norm constrained update",
+          "available": true
         },
         {
           "name": "mean_norm",
-          "summary": "Fisher-information geometry update (natural gradient).",
-          "class_name": "MeanNormUpdate"
-        },
-        {
-          "name": "natural_gradient",
-          "summary": "Fisher-information geometry update (natural gradient).",
-          "class_name": "NaturalGradientUpdate"
+          "summary": "Mean-norm update",
+          "available": true
         },
         {
           "name": "elastic_consolidation",
-          "summary": "EWC-style importance-weighted update.",
-          "class_name": "ElasticConsolidationUpdate"
+          "summary": "EWC elastic consolidation",
+          "available": true
         },
         {
-          "name": "ewc",
-          "summary": "EWC-style importance-weighted update.",
-          "class_name": "ElasticConsolidationUpdate"
+          "name": "natural_gradient",
+          "summary": "Natural gradient (Fisher)",
+          "available": true
         },
         {
           "name": "role_split",
-          "summary": "Per-name dispatcher: the ``on_role`` rule on ``role_names``, the",
-          "class_name": "RoleSplitUpdate"
+          "summary": "Role-split update",
+          "available": true
         }
       ]
     }
   },
   "axis_order": [
-    "credit",
+    "substrate",
     "geometry",
     "dynamics",
-    "substrate",
     "plasticity",
+    "credit",
     "update"
   ]
 }

@@ -35,6 +35,13 @@ interface AxisMeta {
 
 const AXIS_META = axisMetadata.axes as unknown as Record<AxisName, AxisMeta>;
 
+/** What a cell's status reads as, under the cursor. */
+const STATUS_LABELS: Record<CellData["status"], string> = {
+  measured: "Measured — the run has evidence here",
+  legal: "Legal — a gap nobody has measured",
+  void: "Void — the system refuses this cell",
+};
+
 function mean(values: number[]): number {
   if (values.length === 0) return 0;
   return values.reduce((sum, v) => sum + v, 0) / values.length;
@@ -146,6 +153,10 @@ export class DiscoveryMap implements Component {
   private selectedCell: string | null = null;
   private hoveredCell: string | null = null;
   private legendElement: HTMLElement | null = null;
+  /** The readout that names the cell under the cursor. */
+  private readoutElement: HTMLElement | null = null;
+  private pointerX = 0;
+  private pointerY = 0;
   private axisLabelMeshes: THREE.Object3D[] = [];
   /** Every void marker, in one mesh: they are never picked, only drawn. */
   private voidMesh: THREE.LineSegments | null = null;
@@ -172,6 +183,7 @@ export class DiscoveryMap implements Component {
 
     this.setupInteraction();
     this.createLegend();
+    this.createReadout();
     this.buildGrid();
 
     console.log("[DiscoveryMap] Initialized");
@@ -182,16 +194,29 @@ export class DiscoveryMap implements Component {
     router.unregister("campaign_metrics", this.onCampaignMetrics);
     this.clearGrid();
     this.legendElement?.remove();
+    this.readoutElement?.remove();
   }
 
   private setupInteraction(): void {
     const canvas = this.renderer?.domElement;
     if (!canvas) return;
 
+    // A line is picked within a threshold of the ray, and the default
+    // threshold is a whole cell: the cursor would name a cell it is nowhere
+    // near. The cells that matter are solid — a pillar, or a pick target
+    // behind the wireframe — so the threshold can be tight.
+    this.raycaster.params.Line.threshold = this.cellSize * 0.2;
+
     canvas.addEventListener("mousemove", (event) => {
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      this.pointerX = event.clientX;
+      this.pointerY = event.clientY;
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      this.hideReadout();
     });
 
     canvas.addEventListener("click", () => {
@@ -199,6 +224,76 @@ export class DiscoveryMap implements Component {
         this.selectCell(this.hoveredCell);
       }
     });
+  }
+
+  /** The readout that names the cell under the cursor. */
+  private createReadout(): void {
+    const overlay = document.getElementById("ui-overlay");
+    if (!overlay) return;
+
+    this.readoutElement = document.createElement("div");
+    this.readoutElement.id = "cell-readout";
+    this.readoutElement.style.cssText = `
+      position: fixed;
+      pointer-events: none;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.5;
+      z-index: 300;
+      display: none;
+      max-width: 340px;
+    `;
+    overlay.appendChild(this.readoutElement);
+  }
+
+  private showReadout(cell: CellData): void {
+    const element = this.readoutElement;
+    if (!element) return;
+
+    const coordinate = document.createElement("div");
+    coordinate.style.color = "var(--text-secondary)";
+    coordinate.textContent = Object.entries(cell.coordinate)
+      .filter(([, value]) => value)
+      .map(([axis, value]) => `${axis}=${value}`)
+      .join("  ");
+    element.replaceChildren(coordinate);
+
+    const status = document.createElement("div");
+    status.style.marginTop = "4px";
+    status.style.fontWeight = "600";
+    status.style.color =
+      cell.status === "void"
+        ? PALETTE.void
+        : cell.status === "measured"
+          ? PALETTE.measured
+          : PALETTE.legal_unmeasured;
+    status.textContent = STATUS_LABELS[cell.status];
+    element.appendChild(status);
+
+    if (cell.voidReason) {
+      const reason = document.createElement("div");
+      reason.style.marginTop = "4px";
+      reason.style.color = "var(--text-secondary)";
+      reason.textContent = cell.voidReason;
+      element.appendChild(reason);
+    }
+
+    element.style.display = "block";
+    const box = element.getBoundingClientRect();
+    const left = Math.min(
+      this.pointerX + 16,
+      window.innerWidth - box.width - 8,
+    );
+    const top = Math.min(this.pointerY + 16, window.innerHeight - box.height - 8);
+    element.style.left = `${Math.max(8, left)}px`;
+    element.style.top = `${Math.max(8, top)}px`;
+  }
+
+  private hideReadout(): void {
+    if (this.readoutElement) this.readoutElement.style.display = "none";
   }
 
   private createLegend(): void {
@@ -1084,17 +1179,82 @@ export class DiscoveryMap implements Component {
       true,
     );
 
+    let key: string | null = null;
     if (intersects.length > 0) {
-      const mesh = intersects[0].object;
-      const key = mesh.userData.cellKey || mesh.parent?.userData.cellKey;
-      if (key && key !== this.hoveredCell) {
-        this.hoveredCell = key;
-        this.highlightCell(key, true);
-      }
-    } else if (this.hoveredCell) {
-      this.highlightCell(this.hoveredCell, false);
-      this.hoveredCell = null;
+      key = this.pickCell(intersects);
     }
+    if (!key) {
+      key = this.voidCellUnderCursor();
+    }
+
+    if (key !== this.hoveredCell) {
+      if (this.hoveredCell) this.highlightCell(this.hoveredCell, false);
+      this.hoveredCell = key;
+      if (key) this.highlightCell(key, true);
+    }
+
+    const hovered = key ? this.cellDataMap.get(key) : undefined;
+    if (hovered) {
+      this.showReadout(hovered);
+    } else {
+      this.hideReadout();
+    }
+  }
+
+  /** The cell a click means.
+
+      The grid is dense, and every gap carries an invisible pick target so it
+      can be acted on — which means the nearest cell along the ray is often a
+      gap standing in front of a pillar. The evidence wins: a measured cell
+      the ray met is what the researcher was aiming at, glowing and
+      unmistakable, and a gap is picked when nothing measured is in the way.
+  */
+  private pickCell(intersects: THREE.Intersection[]): string | null {
+    let nearest: string | null = null;
+    for (const hit of intersects) {
+      const key =
+        hit.object.userData.cellKey || hit.object.parent?.userData.cellKey;
+      if (!key) continue;
+      nearest ??= key;
+      if (this.cellDataMap.get(key)?.status === "measured") {
+        return key;
+      }
+    }
+    return nearest;
+  }
+
+  /** The void cell under the cursor, if any.
+
+      The void markers are one mesh, drawn and never picked, so the cursor
+      cannot name one of them by picking it: the point the ray met says which
+      cell the marker belongs to.
+  */
+  private voidCellUnderCursor(): string | null {
+    if (!this.voidMesh) return null;
+    const threshold = this.raycaster.params.Line.threshold;
+    this.raycaster.params.Line.threshold = this.cellSize * 0.3;
+    try {
+      const hits = this.raycaster.intersectObject(this.voidMesh, false);
+      if (hits.length === 0) return null;
+      return this.cellAt(hits[0].point);
+    } finally {
+      this.raycaster.params.Line.threshold = threshold;
+    }
+  }
+
+  /** The cell a point in the world belongs to. */
+  private cellAt(point: THREE.Vector3): string | null {
+    const xIdx = Math.round(point.x / this.spacing + (this.xValues.length - 1) / 2);
+    const yIdx = Math.round(point.y / this.spacing);
+    const zIdx = Math.round(point.z / this.spacing + (this.zValues.length - 1) / 2);
+    if (xIdx < 0 || xIdx >= this.xValues.length) return null;
+    if (yIdx < 0 || yIdx >= this.yValues.length) return null;
+    if (zIdx < 0 || zIdx >= this.zValues.length) return null;
+    return this.cellKey(
+      this.xValues[xIdx],
+      this.yValues[yIdx],
+      this.zValues[zIdx],
+    );
   }
 
   private highlightCell(key: string, highlight: boolean): void {
