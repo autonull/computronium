@@ -143,8 +143,9 @@ export class CellDrawer implements Component {
     // Verdict: what the cell's own evidence supports. A cell with fewer
     // seeds than the gate asks for cannot support a claim, however good its
     // mean looks — the run's verdict is INSUFFICIENT, and so is the cell's.
-    let verdict = "UNKNOWN";
-    let verdictColor = PALETTE.text_secondary;
+    // A cell nobody measured has no verdict: it is a gap, not a result.
+    let verdict = "UNMEASURED";
+    let verdictColor = PALETTE.legal_unmeasured;
     if (status === "measured") {
       if (valAcc <= chance) {
         verdict = "REJECTED";
@@ -393,7 +394,12 @@ export class CellDrawer implements Component {
       const required = data.requiredSeeds ?? 0;
       return `Queue Rest measures the ${Math.max(0, required - seeds)} seeds this cell still owes. Preregister writes down the protocol a confirming run must meet.`;
     }
-    return "Queue measures this cell. Adopt as Quest writes the question down before it is measured.";
+    const outside =
+      data.inDeclaration === false
+        ? " It lies outside this run's declaration, so the run did not set out to measure it."
+        : "";
+    const seeds = data.requiredSeeds ?? 0;
+    return `The system would measure this cell and nobody has. Queue measures it (${seeds} seeds). Adopt as Quest writes the question down before it is measured.${outside}`;
   }
 
   private setStatus(message: string, isError = false): void {

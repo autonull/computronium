@@ -181,9 +181,6 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(3.3, 4.4, 8.8);
 camera.lookAt(0, 1.0, 0.1);
 
-// Publish the shared scene so components bind to the live scene, not copies
-setSceneContext({ scene, camera, renderer });
-
 // Orbit controls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.0, 0.1);
@@ -193,6 +190,11 @@ controls.enablePan = true;
 controls.minDistance = 5;
 controls.maxDistance = 80;
 controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+// Publish the shared scene so components bind to the live scene, not copies.
+// The controls are part of it: the discovery map frames the grid it builds,
+// and framing is a move of the camera's target.
+setSceneContext({ scene, camera, renderer, controls });
 
 // Lights
 const ambientLight = new THREE.AmbientLight(0x444466, 0.6);

@@ -14,6 +14,7 @@ from computronium.experiment.legality.dsl import (
     evaluate,
     expr_hash,
     expr_to_json,
+    references_params,
 )
 
 if TYPE_CHECKING:
@@ -340,6 +341,42 @@ class LegalityEngine:
         return len(self._constraints)
 
 
+@dataclass(frozen=True, slots=True)
+class VoidRule:
+    """One of the system's void rules.
+
+    A void rule makes a coordinate meaningless rather than merely expensive:
+    the run cannot measure it, so the space must not offer it.
+    """
+
+    name: str
+    description: str
+    predicate: Expr
+
+
+def void_rules() -> tuple[VoidRule, ...]:
+    """The system's own void rules.
+
+    The search space applies them before it proposes a cell and the gate
+    applies them before it expands one, so a consumer that asks here gets the
+    answer the run would get. A rule that reads a hyperparameter is left out:
+    it cannot be decided from the structural axes alone.
+    """
+    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+
+    rules: list[VoidRule] = []
+    for spec in CONSTRAINTS_REGISTRY.values():
+        predicate = spec.predicate
+        if spec.kind.value != "void" or predicate is None:
+            continue
+        if references_params(predicate):
+            continue
+        rules.append(
+            VoidRule(name=spec.name, description=spec.description, predicate=predicate)
+        )
+    return tuple(rules)
+
+
 def create_constraint(
     expr: Expr,
     origin: ConstraintOrigin,
@@ -371,5 +408,7 @@ __all__ = [
     "ConstraintScope",
     "ConstraintViolation",
     "LegalityEngine",
+    "VoidRule",
     "create_constraint",
+    "void_rules",
 ]

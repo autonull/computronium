@@ -75,6 +75,18 @@ class CellAction(BaseModel):
     min_seeds: int | None = Field(default=None, gt=0)
 
 
+class SpaceRequest(BaseModel):
+    """Which axes the grid shows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    axes: list[str] = Field(
+        default_factory=lambda: ["credit", "geometry", "dynamics"],
+        min_length=3,
+        max_length=3,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ActionResult:
     """What an action did."""
@@ -278,6 +290,14 @@ class WebDashboard:
             result = await self._adopt_quest(run_id, body)
             return JSONResponse(result.payload, status_code=result.status_code)
 
+        @self.app.post("/api/cells/{run_id}/space")
+        async def api_cell_space(
+            run_id: str,
+            body: SpaceRequest,
+        ) -> JSONResponse:
+            result = await self._cell_space(run_id, body)
+            return JSONResponse(result.payload, status_code=result.status_code)
+
     async def _get_status(self) -> dict[str, Any]:
         """Get overall dashboard status."""
         status = {
@@ -470,15 +490,15 @@ class WebDashboard:
             return {"error": "No store path configured"}
 
         try:
+            from computronium.experiment.analysis import (
+                compute_pareto_frontier as analysis_compute_pareto_frontier,
+            )
             from computronium.experiment.execution.statistical_promotion import (
                 GateThresholds,
             )
             from computronium.experiment.surface.report import (
                 ReportGenerator,
                 chance_level,
-            )
-            from computronium.experiment.analysis import (
-                compute_pareto_frontier as analysis_compute_pareto_frontier,
             )
 
             # CRITICAL: read_only=True for all dashboard store access
@@ -586,7 +606,13 @@ class WebDashboard:
         metric = metrics[0] if metrics else default_metric()
         target = CellTarget(run_id=run_id, coordinate=body.coordinate)
         records = records_for_cell(run_records, target.coordinate)
-        task_id = records[0].schedule.task_id if records else ""
+        # A cell nobody measured has no record to name its task, but the run
+        # does: the chance level a claim is measured against is the run's.
+        task_id = (
+            records[0].schedule.task_id
+            if records
+            else (source.task_names[0] if source.task_names else "")
+        )
         gate = GateThresholds()
 
         return CellContext(
@@ -600,6 +626,49 @@ class WebDashboard:
             required_seeds=gate.required_seeds_per_group,
             alpha=gate.alpha,
         )
+
+    async def _cell_space(self, run_id: str, body: SpaceRequest) -> ActionResult:
+        """The declared space the grid shows, and the system's verdict on it.
+
+        The space is the ontology's, cut to a slice: three axes free, the rest
+        held at one value each, so every cell on the grid is a whole
+        coordinate the system can judge.
+        """
+        from computronium.experiment.execution.dashboard.space import declared_space
+        from computronium.experiment.schema.axis import StructuralAxis
+
+        axes: list[StructuralAxis] = []
+        for name in body.axes:
+            try:
+                axes.append(StructuralAxis(name))
+            except ValueError:
+                return ActionResult({"error": f"unknown axis: {name}"}, status_code=409)
+        if len(set(axes)) != len(axes):
+            return ActionResult(
+                {"error": "the grid shows three different axes"},
+                status_code=409,
+            )
+
+        if not self.config.store_path:
+            return ActionResult({"error": "no store path configured"}, status_code=409)
+
+        with self._readable_store() as store:
+            info = store.query_run(run_id)
+            if info is None or info.spec is None:
+                return ActionResult(
+                    {"error": f"run {run_id} is not in the store"},
+                    status_code=409,
+                )
+            spec = info.spec
+            records = list(store.query_records(run_id=run_id))
+
+        task = spec.task_names[0] if spec.task_names else None
+        if not task and records:
+            task = records[0].schedule.task_id or None
+
+        payload = declared_space(spec, records, axes, task=task)
+        payload["run_id"] = run_id
+        return ActionResult(payload)
 
     async def _replicate_cell(self, run_id: str, body: CellAction) -> ActionResult:
         """Queue the measurements a cell still owes."""
@@ -620,6 +689,10 @@ class WebDashboard:
         except ActionUnavailableError as exc:
             return ActionResult({"error": str(exc)}, status_code=409)
 
+        refusal = self._refusal(context)
+        if refusal:
+            return ActionResult({"error": refusal}, status_code=409)
+
         measured = len(context.records)
         missing = max(0, context.required_seeds - measured)
         seeds = body.seeds or missing
@@ -629,7 +702,10 @@ class WebDashboard:
                 status_code=409,
             )
 
-        plan = context.source.n_seeds + seeds
+        # The plan is the seeds the cell has plus the ones it still owes: the
+        # run's own plan covers the seeds it already measured, and a cell it
+        # never measured owes the gate's count and no more.
+        plan = measured + seeds
         measurements = plan - measured
         per_seed = self._per_seed_seconds(context)
         budget = replication_budget(per_seed, measurements)
@@ -729,6 +805,10 @@ class WebDashboard:
                 status_code=409,
             )
 
+        refusal = self._refusal(context)
+        if refusal:
+            return ActionResult({"error": refusal}, status_code=409)
+
         threshold = body.threshold
         if threshold is None:
             spread = run_spread(context.run_records, context.metric)
@@ -791,6 +871,21 @@ class WebDashboard:
 
         return PREREGISTRATION_ROOT
 
+    def _refusal(self, context: CellContext) -> str | None:
+        """Why the system refuses this cell, or ``None`` when it does not.
+
+        A cell the system's own void rules reject cannot be measured, so
+        neither a replication nor a registration may name it. The grid marks
+        those cells void, and the verbs agree with the mark.
+        """
+        from computronium.experiment.execution.dashboard.space import void_reason
+
+        task = context.source.task_names[0] or context.task_id or None
+        reason = void_reason(context.target.coordinate, task)
+        if reason is None:
+            return None
+        return f"the system refuses this cell — {reason}"
+
     def _measured_effect(self, context: CellContext) -> float:
         """The effect the cell showed, in the metric's own units."""
         values = [
@@ -823,7 +918,7 @@ class WebDashboard:
         return self._work_dir
 
     @contextlib.contextmanager
-    def _readable_store(self) -> Generator[RecordStore, None, None]:
+    def _readable_store(self) -> Generator[RecordStore]:
         """Open the store for reading, tolerating a live writer.
 
         DuckDB allows one writer at a time, and a read-only connection cannot

@@ -470,7 +470,7 @@ class GateStage:
     async def run(self, ctx: StageContext) -> Fragment:
         """Enforce legality constraints on proposals."""
         from computronium.experiment.execution.stage import Fragment
-        from computronium.experiment.legality.dsl import Expr, Var
+        from computronium.experiment.legality.dsl import references_params
         from computronium.experiment.legality.engine import (
             ConstraintEnforcement,
             ConstraintKind,
@@ -482,23 +482,6 @@ class GateStage:
         from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
         logger.info("S4 Gate: Enforcing legality constraints")
-
-        def _references_params(expr: Expr) -> bool:
-            """Check if expression references params.* variables."""
-            if isinstance(expr, Var) and expr.name.startswith("params."):
-                return True
-            for field_name in ("expr", "left", "right", "obj", "key"):
-                child = getattr(expr, field_name, None)
-                if isinstance(child, Expr) and _references_params(child):
-                    return True
-            # Check for Call.args (Call has args attribute)
-            if hasattr(expr, "args"):
-                args = getattr(expr, "args", None)
-                if args is not None:
-                    for arg in args:
-                        if isinstance(arg, Expr) and _references_params(arg):
-                            return True
-            return False
 
         # Create and seed legality engine with constraints from registry
         engine = LegalityEngine()
@@ -512,7 +495,7 @@ class GateStage:
                     continue
                 # Skip constraints that reference params (hyperparameters) - those
                 # are evaluated at compose time (S5) when params are available
-                if _references_params(spec.predicate):
+                if references_params(spec.predicate):
                     continue
 
                 # Map registry constraint to engine constraint

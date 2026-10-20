@@ -258,9 +258,8 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     """
     from computronium.experiment.legality.dsl import (
         CoordinateContext,
-        Expr,
-        Var,
         evaluate,
+        references_params,
     )
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
@@ -281,24 +280,6 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
                 filtered_snapshot.append(axis_spec)
         return filtered_snapshot
 
-    def _references_params(expr: Expr) -> bool:
-        """Check if expression references params.* variables."""
-        if isinstance(expr, Var) and expr.name.startswith("params."):
-            return True
-        # Recursively check nested expressions
-        for field_name in ("expr", "left", "right", "obj", "key"):
-            child = getattr(expr, field_name, None)
-            if isinstance(child, Expr) and _references_params(child):
-                return True
-        # Check for Call.args (Call has args attribute)
-        if hasattr(expr, "args"):
-            args = getattr(expr, "args", None)
-            if args is not None:
-                for arg in args:
-                    if isinstance(arg, Expr) and _references_params(arg):
-                        return True
-        return False
-
     # Group primitives by axis
     primitives_by_axis: dict[StructuralAxis, list[str]] = {}
     for axis_spec in axes_snapshot:
@@ -311,7 +292,7 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
         for c in CONSTRAINTS_REGISTRY.values()
         if c.kind.value == "void"
         and c.predicate is not None
-        and not _references_params(c.predicate)
+        and not references_params(c.predicate)
     ]
 
     # If no void constraints, keep all primitives
@@ -956,28 +937,10 @@ def iter_candidates(  # ruff: ignore[complex-structure]
     """
     from computronium.experiment.legality.dsl import (
         CoordinateContext,
-        Expr,
-        Var,
         evaluate,
+        references_params,
     )
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
-
-    def _references_params(expr: Expr) -> bool:
-        """Check if expression references params.* variables."""
-        if isinstance(expr, Var) and expr.name.startswith("params."):
-            return True
-        for field_name in ("expr", "left", "right", "obj", "key"):
-            child = getattr(expr, field_name, None)
-            if isinstance(child, Expr) and _references_params(child):
-                return True
-        # Check for Call.args (Call has args attribute)
-        if hasattr(expr, "args"):
-            args = getattr(expr, "args", None)
-            if args is not None:
-                for arg in args:
-                    if isinstance(arg, Expr) and _references_params(arg):
-                        return True
-        return False
 
     # Use ALL void constraints that don't require hyperparameters
     void_constraints = [
@@ -985,7 +948,7 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         for c in CONSTRAINTS_REGISTRY.values()
         if c.kind.value == "void"
         and c.predicate is not None
-        and not _references_params(c.predicate)
+        and not references_params(c.predicate)
     ]
 
     # Get void cache for this run (persisted across runs)

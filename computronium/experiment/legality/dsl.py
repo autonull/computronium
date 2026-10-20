@@ -1067,6 +1067,29 @@ def evaluate(expr: Expr, ctx: CoordinateContext | CampaignContext) -> bool:  # r
     return bool(_eval_value(expr, ctx))
 
 
+def references_params(expr: Expr) -> bool:
+    """Whether an expression reads a hyperparameter.
+
+    A rule that reads ``params.*`` cannot be decided from the structural axes
+    alone: the parameter is only known once the cell is composed. The search
+    space and the gate both have to tell such a rule from one that does not,
+    so the question is asked here, once, rather than answered twice and
+    differently.
+    """
+    if isinstance(expr, Var) and expr.name.startswith("params."):
+        return True
+    for field_name in ("expr", "left", "right", "obj", "key"):
+        child = getattr(expr, field_name, None)
+        if isinstance(child, Expr) and references_params(child):
+            return True
+    args = getattr(expr, "args", None)
+    if args is not None:
+        for arg in args:
+            if isinstance(arg, Expr) and references_params(arg):
+                return True
+    return False
+
+
 def expr_from_string(s: str) -> Expr:
     """Parse a simple expression string into an Expr.
 
@@ -1322,6 +1345,7 @@ __all__ = [
     "not_in",
     "or_",
     "ratio",
+    "references_params",
     "std",
     "sub",
     "template",

@@ -501,6 +501,7 @@ These patterns are established in Phase 0 — components use them from Day 1 wit
 - [x] **Backend**: All dashboard store access uses `read_only=True` (falling back to read-write only for an in-process writer)
 - [x] `uv run comp run demo --store experiment.duckdb` populates live data
 - [x] Discovery Map: 3D grid, measured cells glow, click → Cell Drawer
+- [x] **The grid is the declared legal space**: measured, legal (a gap) and void cells, and a cell the system refuses cannot be queued or registered
 - [x] Cell Drawer: metrics, sparkline, verdict, seeds-to-claim
 - [x] Plotter: 3 tabs (Pareto, Ablation, Variability) via uPlot, interactive pan/zoom/tooltips
 - [x] Live Rail: scrolling pipeline events (mock for v1)
@@ -870,6 +871,116 @@ registration from lying about a run.
   verb works (the endpoint, the tests and the probe reach it), but a
   researcher cannot yet *see* a gap in the picture. Bringing the declared
   legal space into the grid is the next piece of work.
+  → **Done** (next section).
 - **Cross-process live monitoring** — as above: DuckDB's single-writer lock.
 - **Custom 3D charts** — the plan's v2 Pareto scatter, ablation bars and
   violin plots in three.js.
+
+---
+
+## Session Progress — The Fog of War (2026-10-20)
+
+The quest verb worked, and the map could not show a gap. The grid's axes
+came from the records, so every cell on it carried a measurement: the legal
+cells nobody had measured were not on the grid, and a researcher could not
+*see* the hole their own run had left. This session brought the declared
+legal space into the grid — and, in making it real, found the four things
+that were quietly broken behind it.
+
+### The grid is a slice of the declared space
+
+| Piece | What it is |
+|-------|------------|
+| **The free axes** | Three of the six axes, chosen by the reader. Their values come from the primitive registry, not from the records: the ontology's declared space. |
+| **The held axes** | The other three, fixed at one value each — the value the run used, so the run's evidence lies inside the slice. The legend says which value and where it came from. |
+| **The verdict** | Every cell is a whole coordinate, and the server judges it with the system's own void rules: the ones the gate applies to a proposal and the search space applies before it offers a cell. |
+
+A cell is then one of three things: **measured** (the run has evidence
+there), **legal** (the system would measure it and nobody has — a gap), or
+**void** (the system's rules refuse the combination). The demo's slice holds
+512 cells: 4 measured, 74 legal, 434 void.
+
+### The decisions worth keeping
+
+- **The space is read where the run reads it.** The registry says which
+  values an axis may take; `CONSTRAINTS_REGISTRY` says which combinations
+  mean anything. Both are read on the server, through the same helpers the
+  gate and the search space use, so the picture and the run cannot disagree
+  about what is possible.
+- **The grid is capped; the evidence is not.** An axis shows at most eight
+  values — a wider grid stops being readable — and the run's own evidence
+  is never among the values left out. The legend says how many of the axis's
+  values are on screen.
+- **A void cell is not a decoration.** The rules that mark a cell void also
+  refuse it at the verbs: a replication or a registration about an
+  impossible combination is answered with `409` and the rule that refuses
+  it. The mark on the picture and the behaviour of the dashboard agree.
+- **A gap must be clickable.** A wireframe cube is hollow, so a ray through
+  its middle hits nothing: a gap nobody can click is a gap nobody can act
+  on. Each legal cell carries an invisible pick target — the solid cell,
+  drawn never and picked always.
+- **The void markers are one mesh.** They are never picked, only drawn, and
+  a mesh each would have been hundreds of draw calls.
+- **The camera frames a slab, not a ball.** The grid is fitted by its
+  corners against the frustum, and into the part of the window the panels
+  leave free, so the map is neither cut off nor half hidden behind a legend.
+
+### Defects found on the way
+
+| # | Defect | Cause | Fix |
+|---|--------|-------|-----|
+| 46 | There was no gap to see | the grid's axes came from the records | the axes come from the declared space; the records only decide which cells are measured |
+| 47 | The grid held 880 cells instead of 512 | a run that narrows nothing declares the whole registry, so the cap never applied | the cap applies to the axis's value list; the evidence is never dropped |
+| 48 | A gap was almost impossible to click | a wireframe cube is hollow: a ray through its middle hits nothing, so only the edges could be picked | the invisible pick target |
+| 49 | The void markers cost hundreds of draw calls | one mesh per cell | one merged mesh |
+| 50 | The map spilled off the screen | the camera framed a bounding sphere, which is much larger than a flat slab | the corners are fitted against the frustum, into the free area |
+| 51 | A quest about an unmeasured cell stated a chance level of 0.000 | the cell has no record to name its task, so the chance level was asked with no task | the run's own task names it |
+| 52 | The verbs accepted a coordinate the system refuses | nothing checked the void rules before acting | a void cell is refused, with the rule that refuses it |
+| 53 | The space was asked for on every metrics frame | the request was remembered before it was answered | it is remembered only once it has been answered |
+| 54 | The legend counted the measured cell twice | the tally came from the server, which counts a measured cell as legal too | the tally counts the grid as drawn |
+| 55 | The axis labels stood on the front row | they sat on the grid's own plane | they stand below the floor, in front of the cells |
+| 56 | The README's hero image was broken | the snippet said `assets/dashboard-hero.png`, which resolves against the repository root — where the image is not | the snippet says `docs/readme/assets/dashboard-hero.png`, and the README is rebuilt |
+
+### The duplication that came with it
+
+"Does this rule read a hyperparameter?" was written twice — once in the search
+space, once in the gate — and two copies of a rule are two rules to keep in
+step. It is one function now, in the legality DSL, and the system's void
+rules are read through one function too: `legality.engine.void_rules()`.
+
+### Files
+
+| File | Change |
+|------|--------|
+| `computronium/experiment/execution/dashboard/space.py` | **New** — the declared space: the axis values, the held axes, the verdict on every cell |
+| `computronium/experiment/execution/dashboard/web.py` | `POST /api/cells/{run_id}/space`; the verbs refuse a void cell; a cell with no record takes the run's task |
+| `computronium/experiment/legality/dsl.py` | `references_params` — one copy of the question |
+| `computronium/experiment/legality/engine.py` | `void_rules()` — the system's own void rules, read once |
+| `computronium/experiment/kernel/search_space.py` | the shared helper |
+| `computronium/experiment/execution/stages_impl.py` | the shared helper |
+| `dashboard/src/discovery-map.ts` | the grid is the space; the void markers are one mesh; the pick target; the framing |
+| `dashboard/src/cell-data.ts` | the space's shape |
+| `dashboard/src/cell-drawer.ts` | an unmeasured cell says so; the note says what the cell is |
+| `dashboard/src/components/context.ts`, `main.ts` | the controls are part of the shared scene, so the map can frame itself |
+| `tests/unit/experiment/test_dashboard_space.py` | **New** — the space, the held axes, the void refusal, the endpoint |
+| `scripts/probes/probe_dashboard_space.py` | **New** — the gap is visible, clickable, and adoptable in a browser |
+| `docs/readme/assets/dashboard-hero.png` | the hero, re-shot: the map is a field of possibilities with the run's evidence glowing in it |
+| `docs/readme/title.md`, `README.md` | the hero image's path, which resolved to nothing |
+
+### Still open
+
+- **The console dashboard does not show the space.** `comp dashboard
+  --console` reports the queue, the resources and the metrics; it has no
+  picture of the legal space, so the gaps are only visible in a browser.
+- **`scripts/generate_axis_metadata.py` still hand-writes the primitive
+  lists**, and its names are not the registry's (`optical` for `photonic`,
+  `temporal_psi` for `stdp`, `pca_lm` for `pc_alm`). The grid's values come
+  from the registry now, so the mismatch no longer reaches the picture, but
+  the metadata is still a second source and should read the registry.
+- **Cross-process live monitoring** — as above: DuckDB's single-writer lock.
+- **Custom 3D charts** — the plan's v2 Pareto scatter, ablation bars and
+  violin plots in three.js. uPlot with an explicitly stated range is what
+  ships.
+- **A void cell cannot be hovered.** The reason a cell is void is in the
+  legend (which rules refuse how many), not under the cursor: the void
+  markers are one mesh, so the cursor cannot name one of them.

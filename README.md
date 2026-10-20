@@ -2,7 +2,7 @@
 
 # 🌌 Computronium: A Composable Laboratory for Learning Mechanisms
 
-![Computronium Dashboard](assets/dashboard-hero.png)
+![Computronium Dashboard](docs/readme/assets/dashboard-hero.png)
 
 *Computronium is a composable laboratory for learning mechanisms. Watch algorithms battle it out under a neutral, pre-registered evaluation protocol.*
 

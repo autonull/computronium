@@ -58,24 +58,41 @@ Open <http://localhost:8080> in a browser.
 
 ### 1. Discovery Map (3D Fog-of-War)
 
-**The core visual.** A 3D grid whose axes are **derived from the data**: every
-coordinate axis the records carry, with the values the records actually used.
+**The core visual.** A 3D grid that shows a *slice* of the ontology's
+declared space: three axes are free and the other three are held at one value
+each, so every cell on the grid is a whole coordinate and the system can judge
+it. The backend judges each cell — the grid draws what it is told.
 
 | Cell Type | Visual | Meaning |
 |-----------|--------|---------|
 | **Measured** | Glowing pillar (height = val_acc, color = credit arm) | At least one seed completed |
-| **Legal/Unmeasured** | Semi-transparent wireframe cube | In search space, not yet run |
-| **Void** | Red X marker | Outside declared search space |
+| **Legal/Unmeasured** | Semi-transparent wireframe cube | The system would measure it and nobody has — a gap |
+| **Void** | Red X marker | The system's own rules refuse the combination |
+
+**Where the space comes from.** The primitive registry says which values an
+axis may take; the system's void rules (`CONSTRAINTS_REGISTRY`, the same ones
+the gate applies to a proposal) say which combinations of them mean anything.
+Both are read on the server, so the picture and the run cannot disagree about
+what is possible.
+
+**What the grid shows.** The values an axis takes are the run's own evidence
+first, then the run's declaration, then the rest of the axis in registry
+order — up to eight per axis, because a wider grid stops being readable. The
+run's evidence is never among the things left out, and the legend says how
+many of the axis's values are on screen (`8 of 10`).
+
+**The held axes.** The three axes the grid does not show are held at the
+value the run used, so the run's evidence lies inside the slice. The legend
+names them (`held: substrate=digital · plasticity=null · update=adam`).
 
 **Axis picker** (in the legend): three selects — X, Y, Z — over the six
 coordinate axes (credit, geometry, dynamics, substrate, plasticity, update).
-The values shown are the ones the records used, ordered by the primitive
-registry; the legend states how many of the known primitives were observed.
+Changing one asks the backend for that slice's space and redraws the grid.
 
 **Interactions:**
 - **OrbitControls**: Left-drag = rotate, Right-drag = pan, Scroll = zoom
-- **Click** a measured cell → opens Cell Drawer
-- **Hover** highlights cell (emissive pulse)
+- **Click** a cell → opens the Cell Drawer (measured or legal)
+- **Hover** highlights the cell (a pillar glows, a cage brightens)
 
 **Axis labels:** sprites on the grid's edges — the values the row names, and
 each axis's name at the end of its axis. A long value is wrapped at its
@@ -85,7 +102,12 @@ neighbours.
 **Pillars grow** into the height they were measured at; they do not appear at
 it.
 
-**Legend** (top-left of map): Shows credit arm color coding and cell type key.
+**Framing:** the camera frames the grid into the part of the window the
+panels leave free, so the map is not half hidden behind the legend.
+
+**Legend** (bottom-left of the map): the cell-type key, the credit arm
+colours, the axis picker, and the tally — how many cells are measured, legal
+and void, and which rules refuse the void ones.
 
 ---
 
@@ -123,6 +145,11 @@ The threshold field overrides the derived one. The buttons post to
 `/api/cells/{run_id}/{replicate,preregister,quest}` and the drawer's status
 line says what happened — the campaign that was queued, or the file that was
 written.
+
+**A cell the system refuses cannot be acted on.** The void rules that mark a
+cell on the grid also refuse it at the verbs: a replication or a registration
+about an impossible combination is answered with `409` and the rule that
+refuses it. The mark on the picture and the behaviour of the dashboard agree.
 
 **Where the registrations go.** `configs/preregistrations/<run>_<kind>_<cell>.json`,
 the same directory the report reads, in the shape
@@ -295,6 +322,11 @@ Write endpoints (the drawer's actions): `/api/cells/{run_id}/replicate`,
 `{"coordinate": {...}}` and answers with what it did, or with an `error` and a
 status that says why not.
 
+The map's own endpoint: `POST /api/cells/{run_id}/space` with
+`{"axes": ["credit", "geometry", "dynamics"]}`. It answers with the slice —
+the values each free axis takes, the value each held axis is fixed at, the
+run's declaration per axis, and every cell with the system's verdict on it.
+
 ---
 
 ## Color Palette
@@ -373,6 +405,7 @@ processed, and the dashboard looks frozen while the server is fine.
 uv run python scripts/probes/probe_ws_delivery.py          # message latency
 uv run python scripts/probes/probe_plot_scale.py            # axes cover the data
 uv run python scripts/probes/probe_dashboard_plot_drawer.py # drawer + plot state
+uv run python scripts/probes/probe_dashboard_space.py        # the gap is visible and actionable
 ```
 
 ---
