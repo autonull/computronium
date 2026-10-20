@@ -42,7 +42,7 @@ def _serialize_provenance(provenance: Any) -> dict[str, Any]:
         "data_origin": provenance.data_origin.value,
         "env": provenance.env,
         "training_tasks": list(provenance.training_tasks),
-        "hardware_hash": getattr(provenance, 'hardware_hash', None),
+        "hardware_hash": getattr(provenance, "hardware_hash", None),
         "links": provenance.links,
     }
 
@@ -71,6 +71,18 @@ class RecordSerializer:
         api_dict = serializer.to_api_dict(record)
     """
 
+    @staticmethod
+    def _coordinate(record: Record) -> dict[str, str]:
+        """Serialize the six-axis coordinate of a record."""
+        return {
+            "substrate": record.substrate,
+            "geometry": record.geometry,
+            "dynamics": record.dynamics,
+            "plasticity": record.plasticity,
+            "credit": record.credit,
+            "update": record.update,
+        }
+
     def to_api_dict(self, record: Record) -> dict[str, Any]:
         """Convert a Record to an API-friendly dict."""
         return {
@@ -80,12 +92,7 @@ class RecordSerializer:
             "schema_version": record.schema_version,
             "cell_key": record.cell_key,
             "measurement_key": record.measurement_key,
-            "substrate": record.substrate,
-            "geometry": record.geometry,
-            "dynamics": record.dynamics,
-            "plasticity": record.plasticity,
-            "credit": record.credit,
-            "update": record.update,
+            "coordinate": self._coordinate(record),
             "params": record.params,
             "effective_params": record.effective_params,
             "schedule": _serialize_schedule(record.schedule),
@@ -101,14 +108,7 @@ class RecordSerializer:
             "record_id": record.record_id,
             "run_id": record.run_id,
             "cell_key": record.cell_key,
-            "coordinate": {
-                "substrate": record.substrate,
-                "geometry": record.geometry,
-                "dynamics": record.dynamics,
-                "plasticity": record.plasticity,
-                "credit": record.credit,
-                "update": record.update,
-            },
+            "coordinate": self._coordinate(record),
             "schedule": {
                 "fidelity": record.schedule.fidelity,
                 "seed": record.schedule.seed,

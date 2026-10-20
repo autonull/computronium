@@ -145,7 +145,13 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             str(self._config.path), read_only=self._config.read_only
         )
         if not self._initialized and not self._config.read_only:
-            self._init_schema()
+            if not self._schema_present():
+                try:
+                    self._init_schema()
+                except duckdb.Error:
+                    # Another connection is creating the schema right now.
+                    if not self._schema_present():
+                        raise
             self._initialized = True
         # Initialize artifact store
         self._artifact_store = ArtifactStore(
@@ -216,10 +222,25 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
     ) -> None:
         if self._conn is not None:
             if not self._config.read_only:
-                self._conn.execute("CHECKPOINT")
+                self._checkpoint()
             self._conn.close()
             self._conn = None
         self._artifact_store = None
+
+    def _checkpoint(self) -> None:
+        """Fold the write-ahead log into the database file, best effort.
+
+        A checkpoint needs exclusive write access, so it fails while another
+        connection holds a write transaction — a dashboard reading a store a
+        campaign is writing, for instance. The log is durable without it, and
+        a failed checkpoint must not keep the connection open.
+        """
+        if self._conn is None:
+            return
+        try:
+            self._conn.execute("CHECKPOINT")
+        except duckdb.Error as exc:
+            logger.debug("Checkpoint deferred: %s", exc)
 
     @property
     def is_open(self) -> bool:
@@ -232,6 +253,23 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         if self._artifact_store is None:
             raise StoreError("Artifact store not initialized (enter context first)")
         return self._artifact_store
+
+    def _schema_present(self) -> bool:
+        """Whether the store already carries the whole schema.
+
+        A second connection to a store that already has it must not re-run the
+        DDL: two connections creating the same sequence is a catalog
+        write-write conflict, and the reader of a live campaign is exactly
+        that second connection.
+        """
+        if self._conn is None:
+            return False
+        row = self._conn.execute(
+            "SELECT count(*) FROM information_schema.tables "
+            "WHERE table_name IN "
+            "('runs', 'records', 'artifacts', 'vector_index', 'checkpoints')"
+        ).fetchone()
+        return bool(row) and int(row[0]) == 5
 
     def _init_schema(self) -> None:
         """Initialize the database schema."""

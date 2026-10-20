@@ -229,25 +229,25 @@
 
 ---
 
-### Phase 5: Campaign Launch & Hero Screenshot ✅ COMPLETE (backend) / 📋 SCREENSHOT PENDING
+### Phase 5: Campaign Launch & Hero Screenshot ✅ COMPLETE
 **Goal**: Real campaign running → authentic screenshot
 
 **Tasks**:
 1. **Created `scripts/launch_demo_campaign.py`** — launches campaign queue, submits demo campaign, waits for records
-2. **Created `scripts/capture_dashboard_screenshot.py`** (Playwright) — starts campaign + dashboard, waits for WS + metrics, captures 1920x1080 screenshot with `--use-gl=angle`
+2. **Rewrote `scripts/capture_dashboard_screenshot.py`** (Playwright) — dashboard, campaign and capture in ONE process; waits for the records to land; captures 1920x1080 with `--use-gl=angle` + SwiftShader
 3. **Updated `docs/readme/title.md`** — added hero image placeholder + tagline
 4. **Regenerated README** — `uv run python docs/readme/build_readme.py`
 5. **Added `playwright>=1.40.0`, `websockets>=13.0`, `aiohttp>=3.9` to dev dependencies** in `pyproject.toml`
 
-**Acceptance**: 
-- Backend: Campaign launch + dashboard data flow verified (20 records, Pareto, ablation groups broadcast via WS)
-- Screenshot: Generated but blank (headless WebGL/ANGLE rendering issue with three.js scene initialization timing). File exists at `docs/screenshots/dashboard-hero.png` and `docs/readme/assets/dashboard-hero.png` but shows white canvas. Need to debug Playwright WebGL context + three.js render loop timing.
+**Acceptance**: ✅ ALL MET
+- Backend: Campaign launch + dashboard data flow verified (20 records, 6 Pareto points, ablation groups broadcast via WS)
+- Screenshot: `docs/readme/assets/dashboard-hero.png` (1920×1080) shows the live scene — four glowing pillars, the Pareto frontier and chance line, the mission-control panel with measured numbers, the legend and the live rail
+- The built bundle is committed and shipped: `templates/static/js/dashboard.js` + `main.css`, with `pyproject.toml` package-data covering `dashboard/templates/**/*`
 
-**Notes**: 
-- Screenshot pipeline uses `aiohttp` for HTTP health checks and `websockets` for WS metric polling
-- Headless WebGL via `--use-gl=angle` (software rasterizer) for CI compatibility
-- Run `uv run python scripts/capture_dashboard_screenshot.py` to attempt screenshot generation
-- Known issue: New page navigation reinitializes three.js before receiving broadcast metrics
+**Notes**:
+- The dashboard, the campaign and the capture run in ONE process on purpose: DuckDB gives one writer the file, and a read-only connection cannot join a read-write one — not even in the same process. A dashboard in another terminal sees nothing until the writer lets go.
+- Headless WebGL via `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader` (software rasterizer) for CI compatibility
+- The capture polls the dashboard's `/api/runs` (new endpoint) for the record count rather than opening the store itself
 
 ---
 
@@ -495,16 +495,17 @@ These patterns are established in Phase 0 — components use them from Day 1 wit
 
 - [x] `npm run build` in dashboard dir produces `dashboard.js` (< 500KB gzipped) — 163KB gzipped
 - [x] `uv run comp dashboard --store experiment.duckdb` launches three.js dashboard
-- [x] **Backend**: `/api/campaigns/{id}/metrics` returns records + Pareto flags
+- [x] **Backend**: `/api/campaigns/{id}/metrics` returns records + Pareto flags + chance + required seeds + measured resources
+- [x] **Backend**: `/api/runs` lists the store's runs with their record counts
 - [x] **Backend**: WebSocket broadcasts `campaign_metrics` for running campaigns
-- [x] **Backend**: All dashboard store access uses `read_only=True`
+- [x] **Backend**: All dashboard store access uses `read_only=True` (falling back to read-write only for an in-process writer)
 - [x] `uv run comp run demo --store experiment.duckdb` populates live data
 - [x] Discovery Map: 3D grid, measured cells glow, click → Cell Drawer
 - [x] Cell Drawer: metrics, sparkline, verdict, seeds-to-claim
 - [x] Plotter: 3 tabs (Pareto, Ablation, Variability) via uPlot, interactive pan/zoom/tooltips
 - [x] Live Rail: scrolling pipeline events (mock for v1)
-- [x] HUD: GPU/CPU/memory 3D bars, burn rate, claim price
-- [x] `scripts/capture_dashboard_screenshot.py` produces `dashboard-hero.png` (1920×1080)
+- [x] Mission control panel: device, memory, walltime, records, queue quota, seeds-to-claim
+- [x] `scripts/capture_dashboard_screenshot.py` produces `dashboard-hero.png` (1920×1080) with real data on screen
 - [x] `docs/readme/title.md` has hero image + tagline
 - [x] `comp --help` shows `dashboard` command
 - [x] `docs/DASHBOARD.md` explains the 3D UI
@@ -534,3 +535,74 @@ The demo profile (`RUN_PROFILES["demo"]` in `cli.py`) guarantees:
 - **Verdict**: INSUFFICIENT (63 seeds needed for d=0.5)
 
 This contract is locked by `tests/acceptance/test_demo_script.py` — the dashboard displays this live.
+---
+
+## Session Progress — Hero Screenshot Completion (2026-10-20)
+
+The plan's phases 0–4 were implemented but never actually ran: the dashboard
+served a blank page, and the hero screenshot was a white PNG. This session
+made the dashboard real and produced the image.
+
+### What was broken (and why the screenshot was blank)
+
+| # | Defect | Cause |
+|---|--------|-------|
+| 1 | `/static/js/dashboard.js` 404 | `web.py` mounted `/static` from `dashboard/static` (no such directory); the build writes to `dashboard/templates/static/js/` |
+| 2 | White page, no styles | `index.html` linked no stylesheet, and `src/style.ts` — which carried the global CSS — was imported by nothing, so it was dead code |
+| 3 | Every cell stayed "legal" | The API returned the six axes flat; the frontend read `record.coordinate.credit`. `to_api_dict` now emits a nested `coordinate` (the shape `to_minimal_dict` and `console.py` already used) |
+| 4 | No Pareto highlights | The frontier was computed over `["val_acc", "walltime_s"]` — payload keys, not objective names — so it was empty; and Pareto points are keyed by `measurement_key`, not `record_id` |
+| 5 | Half the pillar underground | `createCell` overwrote the mesh's `y` after the geometry was positioned; the geometry is now translated so the base sits on the floor |
+| 6 | Plotter showed an empty canvas | uPlot was handed a `<canvas>` target and builds its own DOM; the stray canvas took the space and the chart was pushed out of view. uPlot now gets a `<div>` |
+| 7 | Every panel had two instances | Each component self-registered *and* `main.ts` registered its own copy, so every WebSocket message was handled twice — half by an uninitialized instance. Components now export one singleton |
+| 8 | Legend and live rail overlapped | The legend sat under the 120px live rail; the axes were also set after the legend was built, so the legend's arm list was empty |
+| 9 | Live rail read "Disconnected" over "Idle" | `childNodes[1]` was the dot, not the label (whitespace node); the label has its own element now |
+| 10 | `router.unregister` never removed anything | `.bind(this)` makes a new function each call; the handlers are stable arrow properties now |
+| 11 | A second store connection could not read | `RecordStore.__exit__` ran `CHECKPOINT` unguarded, which fails while another connection holds a write transaction; the checkpoint is best effort now |
+| 12 | Two connections raced to create the schema | `_init_schema` ran on every read-write connection → "Catalog write-write conflict"; a connection now checks for the schema first |
+| 13 | The HUD was a wall of giant sprites | 3D sprites scale with the camera, so HUD text was either unreadable or a slab across the screen. It is an HTML panel now — which is what the plan's own risk table asked for ("use HTML overlay for all text") |
+
+### Design decisions worth keeping
+
+- **One process for dashboard + campaign + capture.** DuckDB gives one writer
+  the file, and a read-only connection cannot join a read-write one — not even
+  in the same process, where DuckDB shares one instance per path. A dashboard
+  in another terminal therefore shows nothing until the campaign finishes.
+  The dashboard reads the store read-only, and falls back to read-write only
+  when the writer is its own process. `docs/DASHBOARD.md` says so plainly.
+- **Every number on screen is measured.** The mission-control panel reads
+  `payload.memory_mb`, `payload.walltime_s`, `schedule.device` and the store's
+  record count; the chance line comes from `chance_level(task_id, ...)`; the
+  seeds-to-claim comes from `GateThresholds().required_seeds_per_group`; the
+  per-cell accuracy is the mean ± std over that cell's seeds. Nothing is a
+  placeholder constant any more.
+- **`spec_from_profile` is public.** `comp run demo` and the capture pipeline
+  now declare the same run through one function, so the screenshot cannot
+  drift from the demo contract.
+
+### Deviations from the plan
+
+| Plan said | Now | Why |
+|-----------|-----|-----|
+| `src/style.ts` imports the generated palette | deleted; `templates/static/css/dashboard.css` carries the layout, `palette.css` the colors | `style.ts` was never imported — dead code — and a CSS file needs no runtime injection |
+| HUD is 3D sprites | HUD is an HTML panel | sprites scale with the camera; the plan's risk table says to put text in the DOM |
+| `read_only=True` everywhere | read-only first, read-write only for an in-process writer | DuckDB's single-writer lock makes read-only the only cross-process option, and the only in-process option is read-write |
+| `scripts/launch_demo_campaign.py` drives the capture | the capture script owns the flow | one script, one process, no subprocess coordination |
+| `Pareto` chart target is a canvas | a div | uPlot builds its own DOM |
+
+### Remaining work (not part of this session)
+
+- **Pipeline events are still mocked.** The live rail repeats "compose joint
+  system" every 2s. The queue does not emit stage events; `CampaignQueue`
+  would need to publish them and the dashboard would need to forward them.
+- **The cell drawer has no sparkline data.** It renders the training curve
+  from `payload.convergence_curve`, which the demo does not populate; the
+  drawer shows an empty frame until a run records one.
+- **Write capability.** The drawer's buttons (`queue rest`, `preregister`,
+  `adopt as quest`) are still disabled, as planned for v1.
+- **Multi-cell discovery.** The grid axes are hardcoded to the demo's four
+  credit arms; the plan's "axes derived from data" is only partly true —
+  `axis-metadata.json` carries the primitives, but the DiscoveryMap still
+  seeds its axes from the demo profile.
+- **Cross-process live monitoring** needs a store that tolerates a reader
+  while a writer works (a copy-on-write snapshot, or the campaign writing
+  through a service). Out of scope here; documented instead.

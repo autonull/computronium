@@ -22,8 +22,8 @@ export class LiveRail implements Component {
 
   constructor() {
     // Register WebSocket handlers IMMEDIATELY in constructor
-    router.register("pipeline_event", this.onPipelineEvent.bind(this));
-    router.register("status_update", this.onStatusUpdate.bind(this));
+    router.register("pipeline_event", this.onPipelineEvent);
+    router.register("status_update", this.onStatusUpdate);
   }
 
   async init(): Promise<void> {
@@ -32,8 +32,8 @@ export class LiveRail implements Component {
   }
 
   async destroy(): Promise<void> {
-    router.unregister("pipeline_event", this.onPipelineEvent.bind(this));
-    router.unregister("status_update", this.onStatusUpdate.bind(this));
+    router.unregister("pipeline_event", this.onPipelineEvent);
+    router.unregister("status_update", this.onStatusUpdate);
     this.container?.remove();
   }
 
@@ -80,7 +80,7 @@ export class LiveRail implements Component {
           color: var(--error);
         ">
           <span class="dot" style="width: 6px; height: 6px; border-radius: 50%; background: var(--error);"></span>
-          Disconnected
+          <span class="rail-label">Disconnected</span>
         </span>
         <div style="flex: 1;"></div>
         <span id="rail-count">0 events</span>
@@ -102,13 +102,13 @@ export class LiveRail implements Component {
     this.logContainer = this.container.querySelector("#rail-log")!;
   }
 
-  private onPipelineEvent(data: PipelineEvent): void {
+  private onPipelineEvent = (data: PipelineEvent): void => {
     this.events.unshift(data);
     if (this.events.length > this.maxEvents) this.events.pop();
     this.render();
-  }
+  };
 
-  private onStatusUpdate(data: any): void {
+  private onStatusUpdate = (data: any): void => {
     const connEl = this.container?.querySelector(
       "#rail-connection",
     ) as HTMLElement | null;
@@ -116,7 +116,8 @@ export class LiveRail implements Component {
 
     const dot = connEl.querySelector(".dot") as HTMLElement | null;
     if (!dot) return;
-    const text = connEl.childNodes[1] as Text;
+    const text = connEl.querySelector(".rail-label") as HTMLElement | null;
+    if (!text) return;
 
     if (data.data?.running_campaigns > 0) {
       dot.style.background = PALETTE.ok;
@@ -131,7 +132,7 @@ export class LiveRail implements Component {
       connEl.style.color = PALETTE.warn;
       text.textContent = "Idle";
     }
-  }
+  };
 
   private render(): void {
     if (!this.logContainer) return;
@@ -178,4 +179,5 @@ export class LiveRail implements Component {
   }
 }
 
-registry.register(new LiveRail());
+export const liveRail = new LiveRail();
+registry.register(liveRail);

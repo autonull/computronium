@@ -6,6 +6,7 @@ FastAPI-based web dashboard with three.js frontend for real-time updates.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -17,14 +18,20 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from computronium.experiment.evidence.serializers import serializer
+
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.campaign_queue import (
         CampaignQueue,
     )
 
 logger = logging.getLogger(__name__)
 
-from computronium.experiment.evidence.serializers import serializer
+# Pareto objectives: maximize task accuracy, minimize wall cost.
+PARETO_OBJECTIVES = ("validation_accuracy", "walltime_total")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +46,7 @@ class DashboardConfig:
     enable_websockets: bool = True
     template_dir: Path | None = None
     static_dir: Path | None = None
-    read_only: bool = False  # NEW: all dashboard store access uses read_only=True
+    read_only: bool = True  # Dashboard never writes: avoids DuckDB lock contention
 
 
 class WebDashboard:
@@ -67,7 +74,9 @@ class WebDashboard:
         template_dir = self.config.template_dir or Path(__file__).parent / "templates"
         self.templates = Jinja2Templates(directory=str(template_dir))
 
-        static_dir = self.config.static_dir or Path(__file__).parent / "static"
+        static_dir = (
+            self.config.static_dir or Path(__file__).parent / "templates" / "static"
+        )
         if static_dir.exists():
             self.app.mount(
                 "/static", StaticFiles(directory=str(static_dir)), name="static"
@@ -95,6 +104,10 @@ class WebDashboard:
         @self.app.get("/api/campaigns")
         async def api_campaigns() -> JSONResponse:
             return JSONResponse(await self._get_all_campaigns())
+
+        @self.app.get("/api/runs")
+        async def api_runs() -> JSONResponse:
+            return JSONResponse(await self._get_store_runs())
 
         @self.app.get("/api/campaigns/{campaign_id}")
         async def api_campaign_detail(campaign_id: str) -> JSONResponse:
@@ -199,6 +212,26 @@ class WebDashboard:
             ]
         }
 
+    async def _get_store_runs(self) -> dict[str, Any]:
+        """List the runs in the store with their record counts."""
+        if not self.config.store_path:
+            return {"error": "No store path configured"}
+
+        try:
+            with self._readable_store() as store:
+                runs = [
+                    {
+                        "run_id": run.run_id,
+                        "status": run.status,
+                        "records": len(list(store.query_records(run_id=run.run_id))),
+                    }
+                    for run in store.query_runs()
+                ]
+            return {"runs": runs}
+        except Exception as e:
+            logger.debug("Store unavailable for run listing: %s", e)
+            return {"error": str(e), "runs": []}
+
     async def _get_campaign_detail(self, campaign_id: str) -> dict[str, Any]:
         """Get detailed status for a specific campaign."""
         if not self.config.campaign_queue:
@@ -250,10 +283,7 @@ class WebDashboard:
             return {"error": "No store path configured"}
 
         try:
-            from computronium.experiment.evidence.store import RecordStore, StoreConfig
-
-            store = RecordStore(StoreConfig(path=Path(self.config.store_path)))
-            with store:
+            with self._readable_store() as store:
                 records = store.query_records()
                 campaign_records = [
                     r
@@ -311,20 +341,19 @@ class WebDashboard:
             return {"error": "No store path configured"}
 
         try:
-            from computronium.experiment.evidence.store import RecordStore, StoreConfig
+            from computronium.experiment.execution.statistical_promotion import (
+                GateThresholds,
+            )
             from computronium.experiment.surface.report import (
                 ReportGenerator,
+                chance_level,
             )
             from computronium.experiment.analysis import (
                 compute_pareto_frontier as analysis_compute_pareto_frontier,
             )
 
             # CRITICAL: read_only=True for all dashboard store access
-            store_config = StoreConfig(
-                path=Path(self.config.store_path), read_only=self.config.read_only
-            )
-            store = RecordStore(store_config)
-            with store:
+            with self._readable_store() as store:
                 generator = ReportGenerator(store)
                 records = list(generator._store.query_records(run_id=campaign_id))
 
@@ -336,23 +365,90 @@ class WebDashboard:
                         "message": "No records found for this campaign",
                     }
 
-                # Compute Pareto frontier over val_acc and walltime_s
+                # Compute Pareto frontier over registered objectives
                 pareto_points, _ = analysis_compute_pareto_frontier(
-                    records, ["val_acc", "walltime_s"]
+                    records, list(PARETO_OBJECTIVES)
                 )
+                # Pareto points are keyed by measurement_key, not record_id
                 pareto_ids = {p["record_id"] for p in pareto_points}
 
                 # Get structured ablation groups
                 ablation_groups = generator.get_ablation_groups(campaign_id)
 
+                # Chance line and power requirement come from the task and the
+                # gate thresholds, never from a hand-written constant.
+                chance = chance_level(
+                    records[0].schedule.task_id, "validation_accuracy"
+                )
+
+                # What the campaign has actually burned, measured.
+                memory_values = [
+                    float(r.payload["memory_mb"])
+                    for r in records
+                    if isinstance(r.payload.get("memory_mb"), int | float)
+                ]
+                walltime_values = [
+                    float(r.payload["walltime_s"])
+                    for r in records
+                    if isinstance(r.payload.get("walltime_s"), int | float)
+                ]
+                seeds_per_cell: dict[tuple[str, str, str], int] = {}
+                for r in records:
+                    key = (r.credit, r.geometry, r.dynamics)
+                    seeds_per_cell[key] = seeds_per_cell.get(key, 0) + 1
+                resources = {
+                    "device": records[0].schedule.device,
+                    "memory_mb": max(memory_values, default=0.0),
+                    "walltime_s": sum(walltime_values),
+                    "records": len(records),
+                    "seeds_per_arm": max(seeds_per_cell.values(), default=0),
+                }
+
                 return {
                     "records": [serializer.to_api_dict(r) for r in records],
-                    "pareto": [r.record_id in pareto_ids for r in records],
+                    "pareto": [r.measurement_key in pareto_ids for r in records],
                     "ablation_groups": ablation_groups,
+                    "chance": chance,
+                    "required_seeds": GateThresholds().required_seeds_per_group,
+                    "resources": resources,
                 }
         except Exception as e:
             logger.exception("Error fetching detailed campaign metrics")
             return {"error": str(e)}
+
+    @contextlib.contextmanager
+    def _readable_store(self) -> Generator[RecordStore, None, None]:
+        """Open the store for reading, tolerating a live writer.
+
+        DuckDB allows one writer at a time, and a read-only connection cannot
+        join a read-write one — not even in the same process, where DuckDB
+        shares one instance per path. So the dashboard opens read-only first
+        (which coexists with a writer in another process) and falls back to
+        read-write when the writer is this process, which is how an in-process
+        campaign stays visible while it runs.
+        """
+        from computronium.experiment.evidence.store import RecordStore, StoreConfig
+
+        path = Path(self.config.store_path or "")
+        modes = (True, False) if self.config.read_only else (False,)
+        failure: Exception | None = None
+
+        for read_only in modes:
+            if not read_only and not path.exists():
+                # The dashboard never brings a store into being.
+                break
+            with contextlib.ExitStack() as stack:
+                store = RecordStore(StoreConfig(path=path, read_only=read_only))
+                try:
+                    stack.enter_context(store)
+                except Exception as exc:
+                    failure = exc
+                    continue
+                yield store
+                return
+
+        msg = f"store {path} is held by another writer: {failure}"
+        raise RuntimeError(msg)
 
     async def _handle_websocket(self, websocket: WebSocket) -> None:
         """Handle WebSocket connections for real-time updates."""
@@ -460,19 +556,16 @@ class WebDashboard:
                 # This handles campaigns run directly via CLI (not through queue)
                 if self.config.store_path:
                     try:
-                        from computronium.experiment.evidence.store import (
-                            RecordStore, StoreConfig
-                        )
                         # Get run IDs with records, then close store before calling metrics
-                        store = RecordStore(StoreConfig(path=Path(self.config.store_path), read_only=True))
-                        with store:
+                        with self._readable_store() as store:
                             runs = store.query_runs()
-                            run_ids = []
-                            for run in runs:
-                                records = store.query_records(run_id=run.run_id)
-                                if run.status == "running" or len(records) > 0:
-                                    run_ids.append(run.run_id)
-                        
+                            run_ids = [
+                                run.run_id
+                                for run in runs
+                                if run.status == "running"
+                                or store.query_records(run_id=run.run_id)
+                            ]
+
                         # Now query metrics for each run (each call opens its own connection)
                         for run_id in run_ids:
                             metrics = await self._get_campaign_metrics_detailed(run_id)
@@ -484,7 +577,7 @@ class WebDashboard:
                                     "timestamp": datetime.now().isoformat(),
                                 })
                     except Exception:
-                        pass  # Silently ignore store errors in broadcast loop
+                        logger.debug("Store unavailable for broadcast", exc_info=True)
 
                 # NEW: Broadcast pipeline events (mock for v1)
                 await self._broadcast_update({

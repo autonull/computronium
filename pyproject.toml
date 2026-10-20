@@ -10,7 +10,12 @@ include-package-data = true
 # this project has neither: measured against a built wheel, every package .json
 # was being dropped. `ruler_table.json` is the load-bearing one -- without it
 # campaign._ruler_lr falls back to a flat 1e-2 for tasks calibrated at 1e-3.
-computronium = ["**/*.json"]
+# The dashboard ships its built bundle: the server serves the three.js frontend
+# straight from the package, so a wheel without it has a blank dashboard.
+computronium = [
+    "**/*.json",
+    "experiment/execution/dashboard/templates/**/*",
+]
 
 [tool.setuptools.packages.find]
 include = ["computronium*"]

@@ -17,10 +17,12 @@ interface CellData {
   status: "measured" | "legal" | "void";
   metrics?: {
     val_acc?: number;
+    val_acc_std?: number;
     walltime_s?: number;
     param_count?: number;
     n_seeds?: number;
   };
+  requiredSeeds?: number;
   price?: number;
 }
 
@@ -138,6 +140,7 @@ export class CellDrawer implements Component {
     const valAcc = metrics?.val_acc ?? 0;
     const nSeeds = metrics?.n_seeds ?? 0;
     const chance = 0.1; // digits task = 10 classes
+    const requiredSeeds = data.requiredSeeds ?? 0;
 
     // Verdict logic
     let verdict = "UNKNOWN";
@@ -155,10 +158,10 @@ export class CellDrawer implements Component {
       }
     }
 
-    // Seeds to claim (simplified)
+    // Seeds to claim: the power analysis asks for a fixed seed count
     const seedsToClaim =
-      status === "measured" && valAcc > chance
-        ? Math.max(0, 58 - nSeeds) // placeholder calculation
+      status === "measured" && requiredSeeds > 0
+        ? Math.max(0, requiredSeeds - nSeeds)
         : "N/A";
 
     this.content.innerHTML = `
@@ -197,7 +200,7 @@ export class CellDrawer implements Component {
             line-height: 1;
           ">${valAcc.toFixed(3)}</div>
           <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-            ± ${(metrics.val_acc ? 0.115 : 0).toFixed(3)} (n=${nSeeds})
+            ± ${(metrics.val_acc_std ?? 0).toFixed(3)} (n=${nSeeds})
           </div>
         </div>
       `
@@ -412,4 +415,5 @@ export class CellDrawer implements Component {
   }
 }
 
-registry.register(new CellDrawer());
+export const cellDrawer = new CellDrawer();
+registry.register(cellDrawer);

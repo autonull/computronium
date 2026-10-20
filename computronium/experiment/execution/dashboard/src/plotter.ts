@@ -54,10 +54,11 @@ export class Plotter implements Component {
   private records: RecordData[] = [];
   private ablationGroups: AblationGroup[] = [];
   private paretoFlags: boolean[] = [];
+  private chance = 0.1;
 
   constructor() {
     // Register WebSocket handlers IMMEDIATELY in constructor
-    router.register("campaign_metrics", this.onCampaignMetrics.bind(this));
+    router.register("campaign_metrics", this.onCampaignMetrics);
   }
 
   async init(): Promise<void> {
@@ -66,7 +67,7 @@ export class Plotter implements Component {
   }
 
   async destroy(): Promise<void> {
-    router.unregister("campaign_metrics", this.onCampaignMetrics.bind(this));
+    router.unregister("campaign_metrics", this.onCampaignMetrics);
     this.paretoPlot?.destroy();
     this.ablationPlot?.destroy();
     this.variabilityPlot?.destroy();
@@ -106,9 +107,9 @@ export class Plotter implements Component {
         <button class="plotter-tab" data-tab="variability" style="flex: 1;">Variability</button>
       </div>
       <div id="plotter-content" style="flex: 1; position: relative; overflow: hidden;">
-        <canvas id="plotter-pareto" style="width: 100%; height: 100%; display: block;"></canvas>
-        <canvas id="plotter-ablation" style="width: 100%; height: 100%; display: none;"></canvas>
-        <canvas id="plotter-variability" style="width: 100%; height: 100%; display: none;"></canvas>
+        <div id="plotter-pareto" style="width: 100%; height: 100%; display: block;"></div>
+        <div id="plotter-ablation" style="width: 100%; height: 100%; display: none;"></div>
+        <div id="plotter-variability" style="width: 100%; height: 100%; display: none;"></div>
       </div>
       <div id="plotter-toolbar" style="
         padding: 8px 12px;
@@ -148,6 +149,9 @@ export class Plotter implements Component {
     this.container
       .querySelector("#plotter-download")!
       .addEventListener("click", () => this.downloadCurrent());
+
+    // Render the initially active tab
+    this.switchTab(this.currentTab);
   }
 
   private switchTab(tab: string): void {
@@ -158,16 +162,16 @@ export class Plotter implements Component {
       btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
     });
 
-    // Show/hide canvases
-    const canvases = {
+    // Show/hide the chart panels
+    const panels = {
       pareto: "plotter-pareto",
       ablation: "plotter-ablation",
       variability: "plotter-variability",
     };
 
-    Object.entries(canvases).forEach(([key, id]) => {
-      const canvas = document.getElementById(id) as HTMLCanvasElement;
-      if (canvas) canvas.style.display = key === tab ? "block" : "none";
+    Object.entries(panels).forEach(([key, id]) => {
+      const panel = document.getElementById(id);
+      if (panel) panel.style.display = key === tab ? "block" : "none";
     });
 
     // Initialize plot if needed
@@ -180,16 +184,17 @@ export class Plotter implements Component {
     this.updatePlots();
   }
 
-  private onCampaignMetrics(data: any): void {
+  private onCampaignMetrics = (data: any): void => {
     const { data: metricsData } = data;
     if (!metricsData?.records) return;
 
     this.records = metricsData.records;
     this.paretoFlags = metricsData.pareto || [];
     this.ablationGroups = metricsData.ablation_groups || [];
+    if (typeof metricsData.chance === "number") this.chance = metricsData.chance;
     this.updatePlots();
     this.updateStatus();
-  }
+  };
 
   private updateStatus(): void {
     const statusEl = this.container?.querySelector("#plotter-status");
@@ -209,14 +214,12 @@ export class Plotter implements Component {
 
   // ─── Pareto Plot (scatter: val_acc vs 1/walltime_s) ───
   private initParetoPlot(): void {
-    const canvas = document.getElementById(
-      "plotter-pareto",
-    ) as HTMLCanvasElement;
-    if (!canvas) return;
+    const panel = document.getElementById("plotter-pareto") as HTMLDivElement;
+    if (!panel) return;
 
     const opts: uPlot.Options = {
-      width: canvas.clientWidth,
-      height: canvas.clientHeight,
+      width: panel.clientWidth,
+      height: panel.clientHeight,
       title: "Pareto Frontier: val_acc vs 1/walltime_s",
       axes: [
         { grid: { stroke: PALETTE.border } },
@@ -231,7 +234,6 @@ export class Plotter implements Component {
         {
           label: "val_acc",
           stroke: PALETTE.gradient,
-          fill: PALETTE.gradient + "33",
           width: 0,
           points: {
             show: true,
@@ -267,18 +269,15 @@ export class Plotter implements Component {
               });
               paretoPoints.sort((a, b) => a[0] - b[0]);
 
+              const ctx = u.ctx;
+
               if (paretoPoints.length > 1) {
-                const ctx = u.ctx;
                 ctx.beginPath();
                 ctx.strokeStyle = PALETTE.pareto;
                 ctx.lineWidth = 2;
                 ctx.setLineDash([5, 5]);
 
                 paretoPoints.forEach((p, i) => {
-                  const [px, py] = [
-                    u.posToVal(p[0], "x"),
-                    u.posToVal(p[1], "y"),
-                  ];
                   // Use valToPos for canvas coordinates
                   const pxCanvas = u.valToPos(p[0], "x");
                   const pyCanvas = u.valToPos(p[1], "y");
@@ -288,6 +287,17 @@ export class Plotter implements Component {
                 ctx.stroke();
                 ctx.setLineDash([]);
               }
+
+              // Chance line
+              const chanceY = u.valToPos(this.chance, "y");
+              ctx.strokeStyle = PALETTE.chance_line;
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([4, 4]);
+              ctx.beginPath();
+              ctx.moveTo(u.bbox.left, chanceY);
+              ctx.lineTo(u.bbox.width, chanceY);
+              ctx.stroke();
+              ctx.setLineDash([]);
             }
           },
         ],
@@ -299,7 +309,7 @@ export class Plotter implements Component {
       },
     };
 
-    this.paretoPlot = new uPlot(opts, [[], []], canvas);
+    this.paretoPlot = new uPlot(opts, [[], []], panel);
   }
 
   private updateParetoPlot(): void {
@@ -325,14 +335,12 @@ export class Plotter implements Component {
 
   // ─── Ablation Plot (grouped bars) ───
   private initAblationPlot(): void {
-    const canvas = document.getElementById(
-      "plotter-ablation",
-    ) as HTMLCanvasElement;
-    if (!canvas) return;
+    const panel = document.getElementById("plotter-ablation") as HTMLDivElement;
+    if (!panel) return;
 
     const opts: uPlot.Options = {
-      width: canvas.clientWidth,
-      height: canvas.clientHeight,
+      width: panel.clientWidth,
+      height: panel.clientHeight,
       title: "Ablation: Credit Arm vs val_acc",
       axes: [
         { grid: { stroke: PALETTE.border } },
@@ -391,7 +399,7 @@ export class Plotter implements Component {
             });
 
             // Chance line
-            const chanceY = u.valToPos(0.1, "y");
+            const chanceY = u.valToPos(this.chance, "y");
             ctx.strokeStyle = PALETTE.chance_line;
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
@@ -406,7 +414,7 @@ export class Plotter implements Component {
       cursor: { show: true, drag: { setScale: true } },
     };
 
-    this.ablationPlot = new uPlot(opts, [[], []], canvas);
+    this.ablationPlot = new uPlot(opts, [[], []], panel);
   }
 
   private updateAblationPlot(): void {
@@ -430,14 +438,14 @@ export class Plotter implements Component {
 
   // ─── Variability Plot (box plots per arm) ───
   private initVariabilityPlot(): void {
-    const canvas = document.getElementById(
+    const panel = document.getElementById(
       "plotter-variability",
-    ) as HTMLCanvasElement;
-    if (!canvas) return;
+    ) as HTMLDivElement;
+    if (!panel) return;
 
     const opts: uPlot.Options = {
-      width: canvas.clientWidth,
-      height: canvas.clientHeight,
+      width: panel.clientWidth,
+      height: panel.clientHeight,
       title: "Seed Variability: val_acc per Credit Arm",
       axes: [
         { grid: { stroke: PALETTE.border } },
@@ -531,7 +539,7 @@ export class Plotter implements Component {
             });
 
             // Chance line
-            const chanceY = u.valToPos(0.1, "y");
+            const chanceY = u.valToPos(this.chance, "y");
             ctx.strokeStyle = PALETTE.chance_line;
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
@@ -546,7 +554,7 @@ export class Plotter implements Component {
       cursor: { show: true, drag: { setScale: true } },
     };
 
-    this.variabilityPlot = new uPlot(opts, [[], []], canvas);
+    this.variabilityPlot = new uPlot(opts, [[], []], panel);
   }
 
   private updateVariabilityPlot(): void {
@@ -562,21 +570,20 @@ export class Plotter implements Component {
   }
 
   private downloadCurrent(): void {
-    const canvasMap: Record<string, string> = {
-      pareto: "plotter-pareto",
-      ablation: "plotter-ablation",
-      variability: "plotter-variability",
+    const plotMap: Record<string, uPlot | null> = {
+      pareto: this.paretoPlot,
+      ablation: this.ablationPlot,
+      variability: this.variabilityPlot,
     };
-    const canvas = document.getElementById(
-      canvasMap[this.currentTab],
-    ) as HTMLCanvasElement;
-    if (!canvas) return;
+    const plot = plotMap[this.currentTab];
+    if (!plot) return;
 
     const link = document.createElement("a");
     link.download = `computronium-${this.currentTab}-${Date.now()}.png`;
-    link.href = canvas.toDataURL("image/png");
+    link.href = plot.ctx.canvas.toDataURL("image/png");
     link.click();
   }
 }
 
-registry.register(new Plotter());
+export const plotter = new Plotter();
+registry.register(plotter);

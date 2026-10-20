@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
-"""Capture dashboard hero screenshot using Playwright with WebGL support.
+"""Capture the dashboard hero screenshot (TODO68 Phase 5).
 
-This script:
-1. Starts a demo campaign (background)
-2. Starts the dashboard server (background)
-3. Waits for WebSocket connection and first records
-4. Uses Playwright to navigate and capture 1920x1080 screenshot
-5. Saves to docs/readme/assets/dashboard-hero.png
-6. Cleans up subprocesses
+The dashboard, the campaign and the capture run in ONE process on purpose.
+DuckDB allows a single writer per file, and a read-only connection cannot
+join a read-write one — not even inside one process. So a dashboard in
+another terminal sees nothing until the writer lets go of the store. Running
+the campaign in-process lets the dashboard read the store while it is being
+written, which is the live view the screenshot is meant to show.
+
+Flow:
+1. Start the dashboard server on a thread.
+2. Start the demo campaign on the main thread (it installs signal handlers).
+3. On a capture thread, wait for records to land, drive Chromium through
+   Playwright, and write the 1920x1080 hero image.
+
+Usage:
+    uv run python scripts/capture_dashboard_screenshot.py
 """
 
 from __future__ import annotations
 
-import asyncio
+import argparse
+import json
 import logging
-import subprocess
-import sys
+import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 logging.basicConfig(
@@ -24,290 +34,213 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
-async def wait_for_dashboard(port: int, timeout: float = 60.0) -> bool:
-    """Wait for dashboard HTTP server to be ready."""
-    import aiohttp
 
-    start = time.time()
-    while time.time() - start < timeout:
+def wait_for_http(port: int, timeout: float = 60.0) -> bool:
+    """Wait for the dashboard HTTP server to answer."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://localhost:{port}/api/status") as resp:
-                    if resp.status == 200:
-                        logger.info("Dashboard HTTP server is ready")
-                        return True
-        except Exception:
+            with urllib.request.urlopen(
+                f"http://localhost:{port}/api/status", timeout=2
+            ) as r:
+                if r.status == 200:
+                    return True
+        except urllib.error.URLError, OSError:
             pass
-        await asyncio.sleep(0.5)
+        time.sleep(0.5)
     return False
 
 
-async def wait_for_ws_and_records(
-    port: int, run_id: str, timeout: float = 120.0
-) -> bool:
-    """Wait for WebSocket connection and first campaign_metrics broadcast."""
-    import json
+def wait_for_records(port: int, min_records: int, timeout: float = 180.0) -> str:
+    """Wait for a run to land records; return its run id.
 
-    import websockets
-
-    start = time.time()
-    while time.time() - start < timeout:
+    The dashboard is asked, not the store: DuckDB gives one writer the file,
+    and a second connection to it fails while the campaign is writing.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
         try:
-            async with websockets.connect(f"ws://localhost:{port}/ws") as ws:
-                # Wait for campaign_metrics message
-                async for msg in ws:
-                    data = json.loads(msg)
-                    if (
-                        data.get("type") == "campaign_metrics"
-                        and data.get("campaign_id") == run_id
-                    ):
-                        records = data.get("data", {}).get("records", [])
-                        if records:
-                            logger.info(
-                                f"Received campaign_metrics with {len(records)} records"
-                            )
-                            return True
-        except Exception as e:
-            logger.debug(f"WebSocket not ready: {e}")
-        await asyncio.sleep(1.0)
-    return False
+            with urllib.request.urlopen(
+                f"http://localhost:{port}/api/runs", timeout=5
+            ) as response:
+                payload = json.loads(response.read())
+            for run in payload.get("runs", []):
+                if run.get("records", 0) >= min_records:
+                    logger.info("Run %s has %d records", run["run_id"], run["records"])
+                    return str(run["run_id"])
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            logger.debug("Runs not readable yet: %s", exc)
+        time.sleep(1.0)
+    raise TimeoutError(f"no run reached {min_records} records in {timeout}s")
 
 
-async def main() -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    store_path = repo_root / "experiment.duckdb"
-    dashboard_port = 8080
-    output_path = repo_root / "docs" / "readme" / "assets" / "dashboard-hero.png"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+def capture(
+    port: int,
+    run_id: str,
+    output: Path,
+    min_records: int,
+    timeout_ms: int,
+) -> int:
+    """Drive Chromium, wait for the scene to show measured cells, screenshot."""
+    from playwright.sync_api import sync_playwright
 
-    # Clean up any existing store
+    url = f"http://localhost:{port}/"
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--use-gl=angle",
+                "--use-angle=swiftshader",
+                "--enable-unsafe-swiftshader",
+                "--enable-webgl",
+                "--ignore-gpu-blocklist",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--force-device-scale-factor=1",
+            ],
+        )
+        page = browser.new_page(viewport={"width": 1920, "height": 1080})
+        page.on("console", lambda m: logger.debug("console %s: %s", m.type, m.text))
+        page.on("pageerror", lambda e: logger.warning("pageerror: %s", e))
+
+        page.goto(url, wait_until="load")
+        page.wait_for_selector("#dashboard-canvas", state="visible", timeout=30000)
+
+        # The discovery map lights a cell when a record for it arrives.
+        page.wait_for_function(
+            """(runId) => {
+                const dbg = window.__DASHBOARD__;
+                if (!dbg || !dbg.discoveryMap) return false;
+                const cells = dbg.discoveryMap.cellDataMap;
+                let measured = 0;
+                for (const cell of cells.values()) {
+                    if (cell.status === 'measured' && cell.metrics?.n_seeds) measured++;
+                }
+                return measured > 0;
+            }""",
+            arg=run_id,
+            timeout=timeout_ms,
+        )
+        logger.info("Discovery map shows measured cells")
+
+        # Let the plotter and the live rail fill in.
+        page.wait_for_timeout(4000)
+
+        output.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(output))
+        browser.close()
+
+    logger.info("Screenshot written to %s", output)
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument(
+        "--store",
+        type=Path,
+        default=REPO_ROOT / "experiment.duckdb",
+        help="Store the campaign writes and the dashboard reads.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=REPO_ROOT / "docs" / "readme" / "assets" / "dashboard-hero.png",
+    )
+    parser.add_argument(
+        "--mirror",
+        type=Path,
+        default=REPO_ROOT / "docs" / "screenshots" / "dashboard-hero.png",
+    )
+    parser.add_argument(
+        "--min-records",
+        type=int,
+        default=20,
+        help="Records to wait for before the shot: the demo campaign's full set.",
+    )
+    parser.add_argument("--timeout", type=int, default=90000)
+    args = parser.parse_args()
+
+    store_path = args.store
     if store_path.exists():
         store_path.unlink()
-        logger.info(f"Removed existing store: {store_path}")
+        logger.info("Removed existing store: %s", store_path)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
 
-    processes: list[subprocess.Popen] = []
+    from computronium.experiment.execution.dashboard.web import (
+        DashboardConfig,
+        WebDashboard,
+    )
+    from computronium.experiment.surface.cli import (
+        RUN_PROFILES,
+        execute_spec,
+        spec_from_profile,
+    )
 
-    def cleanup() -> None:
-        logger.info("Cleaning up subprocesses...")
-        for proc in processes:
-            if proc.poll() is None:
-                proc.terminate()
-        for proc in processes:
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-
-    # Register cleanup on exit
-    import atexit
-
-    atexit.register(cleanup)
-
-    try:
-        # 1. Start campaign queue
-        logger.info("Starting campaign queue...")
-        queue_proc = subprocess.Popen(
-            [sys.executable, "-m", "computronium.experiment.execution.campaign_queue"],
-            cwd=repo_root,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+    dashboard = WebDashboard(
+        DashboardConfig(
+            host="127.0.0.1",
+            port=args.port,
+            store_path=str(store_path),
         )
-        processes.append(queue_proc)
-        await asyncio.sleep(2.0)
+    )
 
-        # 2. Submit demo campaign
-        logger.info("Submitting demo campaign...")
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "computronium.cli.__main__",
-                "run",
-                "demo",
-                "--store",
-                str(store_path),
-            ],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
+    server_error: list[BaseException] = []
 
-        if result.returncode != 0:
-            logger.error(f"Campaign submission failed: {result.stderr}")
-            return 1
+    def serve() -> None:
+        import asyncio
 
-        # Extract run_id
-        run_id = None
-        import re
+        try:
+            asyncio.run(dashboard.run())
+        except BaseException as exc:  # ruff: ignore[BLE001] - reported to the main thread
+            server_error.append(exc)
 
-        for line in result.stdout.splitlines():
-            match = re.search(
-                r"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})", line
-            )
-            if match:
-                run_id = match.group(1)
-                break
+    server_thread = threading.Thread(target=serve, daemon=True)
+    server_thread.start()
 
-        if not run_id:
-            from computronium.experiment.evidence.store import RecordStore, StoreConfig
-
-            store = RecordStore(StoreConfig(path=store_path, read_only=True))
-            with store:
-                runs = list(store.query_runs())
-                if runs:
-                    run_id = runs[-1].run_id
-
-        if not run_id:
-            logger.error("Could not determine run_id")
-            return 1
-
-        logger.info(f"Campaign submitted: {run_id}")
-
-        # 3. Start dashboard
-        logger.info("Starting dashboard server...")
-        dash_proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "computronium.cli.__main__",
-                "dashboard",
-                "--store",
-                str(store_path),
-                "--host",
-                "0.0.0.0",
-                "--port",
-                str(dashboard_port),
-            ],
-            cwd=repo_root,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        processes.append(dash_proc)
-
-        # Wait for dashboard HTTP
-        if not await wait_for_dashboard(dashboard_port):
-            logger.error("Dashboard HTTP server did not start in time")
-            return 1
-
-        # Wait for WebSocket + records
-        logger.info("Waiting for WebSocket and campaign metrics...")
-        if not await wait_for_ws_and_records(dashboard_port, run_id):
-            logger.error("WebSocket or campaign metrics not received in time")
-            return 1
-
-        # Give three.js time to render
-        logger.info("Dashboard ready, waiting for three.js render...")
-        await asyncio.sleep(3.0)
-
-        # 4. Capture screenshot with Playwright
-        logger.info("Capturing screenshot with Playwright...")
-        from playwright.async_api import async_playwright
-
-        async with async_playwright() as p:
-            # Use chromium with WebGL support via angle
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--use-gl=angle",
-                    "--enable-webgl",
-                    "--enable-accelerated-2d-canvas",
-                    "--disable-gpu-sandbox",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                ],
-            )
-            page = await browser.new_page(viewport={"width": 1920, "height": 1080})
-
-            # Track when campaign_metrics is received via WebSocket
-            metrics_received = asyncio.Event()
-            metrics_data = {}
-
-            async def handle_ws(ws):
-                async for msg in ws:
-                    try:
-                        data = json.loads(msg)
-                        if data.get("type") == "campaign_metrics" and data.get("data", {}).get("records"):
-                            metrics_data["records"] = data["data"]["records"]
-                            metrics_received.set()
-                            break
-                    except Exception:
-                        pass
-
-            # Navigate to dashboard and capture WebSocket
-            await page.goto(f"http://localhost:{dashboard_port}", wait_until="networkidle")
-
-            # Wait for three.js canvas
-            await page.wait_for_selector("#dashboard-canvas", state="visible", timeout=30000)
-
-            # Listen for WebSocket messages from the page
-            page.on("websocket", lambda ws: asyncio.create_task(handle_ws(ws)))
-
-            # Wait for campaign_metrics to arrive via WebSocket on this page
-            logger.info("Waiting for campaign_metrics on new page...")
-            try:
-                await asyncio.wait_for(metrics_received.wait(), timeout=30.0)
-                logger.info(f"Received campaign_metrics with {len(metrics_data.get('records', []))} records")
-            except asyncio.TimeoutError:
-                logger.warning("Timeout waiting for campaign_metrics, waiting for next broadcast cycle...")
-                # Wait for the next periodic broadcast (dashboard broadcasts every 2s)
-                await asyncio.sleep(10.0)
-
-            # Wait for three.js to render AND for campaign metrics to be processed (measured cells exist)
-            await page.wait_for_function(
-                """() => {
-                    const canvas = document.getElementById('dashboard-canvas');
-                    const ctx = canvas.getContext('webgl2') || canvas.getContext('webgl');
-                    if (!ctx || canvas.width === 0 || canvas.height === 0) return false;
-                    // Check if canvas has been drawn to (not just cleared)
-                    const pixels = new Uint8Array(4);
-                    ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
-                    // Not all white/transparent
-                    const hasContent = pixels[0] !== 255 || pixels[1] !== 255 || pixels[2] !== 255 || pixels[3] !== 0;
-                    if (!hasContent) return false;
-                    
-                    // Check if DiscoveryMap has measured cells (glowing pillars)
-                    const dashboard = window.__DASHBOARD__;
-                    if (!dashboard || !dashboard.discoveryMap) return false;
-                    
-                    // Check cellDataMap for any measured cells
-                    const cellDataMap = dashboard.discoveryMap.cellDataMap;
-                    if (!cellDataMap || cellDataMap.size === 0) return false;
-                    
-                    for (const [key, data] of cellDataMap.entries()) {
-                        if (data.status === 'measured' && data.metrics?.val_acc !== undefined) {
-                            return true; // Found at least one measured cell with metrics
-                        }
-                    }
-                    return false; // No measured cells yet
-                }""",
-                timeout=60000,
-            )
-
-            # Extra render frames
-            await page.wait_for_timeout(2000)
-
-            # Capture screenshot
-            await page.screenshot(path=str(output_path), full_page=False)
-            await browser.close()
-
-        logger.info(f"✓ Screenshot saved to {output_path}")
-        print(f"SCREENSHOT={output_path}")
-
-        return 0
-
-    except Exception as e:
-        logger.exception(f"Screenshot capture failed: {e}")
+    if not wait_for_http(args.port):
+        logger.error("Dashboard server did not start")
         return 1
-    finally:
-        cleanup()
+    logger.info("Dashboard serving on port %d", args.port)
+
+    capture_result: list[int] = []
+
+    def run_capture() -> None:
+        try:
+            run_id = wait_for_records(args.port, args.min_records)
+            capture_result.append(
+                capture(args.port, run_id, args.output, args.min_records, args.timeout)
+            )
+        except Exception as exc:  # ruff: ignore[BLE001] - reported to the main thread
+            logger.exception("Capture failed")
+            capture_result.append(1)
+
+    capture_thread = threading.Thread(target=run_capture, daemon=True)
+    capture_thread.start()
+
+    logger.info("Running the demo campaign in-process...")
+    spec = spec_from_profile(RUN_PROFILES["demo"])
+    exit_code = execute_spec(spec, store_path=str(store_path))
+
+    capture_thread.join(timeout=180)
+    if not capture_result:
+        logger.error("Capture produced no image")
+        return 1
+
+    if capture_result[0] != 0:
+        return 1
+
+    if args.mirror != args.output:
+        args.mirror.parent.mkdir(parents=True, exist_ok=True)
+        args.mirror.write_bytes(args.output.read_bytes())
+        logger.info("Mirrored to %s", args.mirror)
+
+    print(json.dumps({"screenshot": str(args.output), "campaign_exit": exit_code}))
+    return 0
 
 
 if __name__ == "__main__":
-    try:
-        exit_code = asyncio.run(main())
-        sys.exit(exit_code)
-    except KeyboardInterrupt:
-        logger.info("Interrupted")
-        sys.exit(130)
+    raise SystemExit(main())

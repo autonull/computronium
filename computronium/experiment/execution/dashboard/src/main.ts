@@ -2,13 +2,13 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
-import { registry } from "./components/registry.js";
 import { router, wsClient } from "./ws-client.js";
-import { DiscoveryMap } from "./discovery-map.js";
-import { CellDrawer } from "./cell-drawer.js";
-import { Plotter } from "./plotter.js";
-import { LiveRail } from "./live-rail.js";
-import { HUD } from "./hud.js";
+import { setSceneContext } from "./components/context.js";
+import { discoveryMap } from "./discovery-map.js";
+import { cellDrawer } from "./cell-drawer.js";
+import { plotter } from "./plotter.js";
+import { liveRail } from "./live-rail.js";
+import { hud } from "./hud.js";
 import { PALETTE } from "./palette.js";
 
 // Global error handler
@@ -129,18 +129,8 @@ wsClient.waitForConnection(15000).then((connected) => {
   }
 });
 
-// Create and register core components
-const discoveryMap = new DiscoveryMap();
-const cellDrawer = new CellDrawer();
-const plotter = new Plotter();
-const liveRail = new LiveRail();
-const hud = new HUD();
-
-registry.register(discoveryMap);
-registry.register(cellDrawer);
-registry.register(plotter);
-registry.register(liveRail);
-registry.register(hud);
+// Components self-register with the registry on import; the registry
+// initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
 // Three.js scene setup (shared by DiscoveryMap and HUD)
 const canvas = document.getElementById("dashboard-canvas") as HTMLCanvasElement;
@@ -168,11 +158,15 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   200,
 );
-camera.position.set(15, 12, 15);
-camera.lookAt(0, 0, 0);
+camera.position.set(3.5, 4.8, 9.5);
+camera.lookAt(0, 1.1, 0);
+
+// Publish the shared scene so components bind to the live scene, not copies
+setSceneContext({ scene, camera, renderer });
 
 // Orbit controls
 const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.1, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.enablePan = true;
@@ -201,9 +195,12 @@ scene.add(directionalLight);
 const hemiLight = new THREE.HemisphereLight(0x88aaff, 0x222233, 0.5);
 scene.add(hemiLight);
 
-// Grid helper (subtle)
-const gridHelper = new THREE.GridHelper(40, 40, 0x2a3a4a, 0x1a2330);
+// Grid helper (subtle, sized to the discovery map)
+const gridHelper = new THREE.GridHelper(8, 8, 0x243040, 0x161d28);
 gridHelper.position.y = -0.01;
+const gridMaterial = gridHelper.material as THREE.Material;
+gridMaterial.transparent = true;
+gridMaterial.opacity = 0.35;
 scene.add(gridHelper);
 
 // Axis labels (will be updated by DiscoveryMap)

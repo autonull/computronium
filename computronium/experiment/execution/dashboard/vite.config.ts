@@ -5,7 +5,7 @@ export default defineConfig({
   root: ".",
   base: "/static/js/",
   build: {
-    outDir: "../templates/static/js",
+    outDir: "./templates/static/js",
     emptyOutDir: true,
     sourcemap: true,
     minify: "esbuild",

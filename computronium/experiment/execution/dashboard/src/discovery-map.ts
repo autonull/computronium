@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { Line2 } from "three-stdlib";
 import { LineGeometry, LineMaterial } from "three-stdlib";
 import { registry } from "./components/registry.js";
+import { getSceneContext } from "./components/context.js";
 import { router } from "./ws-client.js";
 import { ARM_COLORS, PALETTE } from "./palette.js";
 import type { Component } from "./components/registry.js";
@@ -20,11 +21,26 @@ interface CellData {
   status: "measured" | "legal" | "void";
   metrics?: {
     val_acc?: number;
+    val_acc_std?: number;
     walltime_s?: number;
     param_count?: number;
     n_seeds?: number;
   };
+  requiredSeeds?: number;
   price?: number; // for legal/unmeasured cells
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function stddev(values: number[]): number {
+  if (values.length < 2) return 0;
+  const m = mean(values);
+  const variance =
+    values.reduce((sum, v) => sum + (v - m) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
 }
 
 interface GridAxes {
@@ -36,9 +52,9 @@ interface GridAxes {
 export class DiscoveryMap implements Component {
   name = "DiscoveryMap";
 
-  private scene: THREE.Scene;
-  private camera: THREE.Camera;
-  private renderer: THREE.WebGLRenderer;
+  private scene: THREE.Scene = new THREE.Scene();
+  private camera: THREE.Camera = new THREE.Camera();
+  private renderer: THREE.WebGLRenderer | null = null;
   private cells: Map<string, THREE.Mesh | THREE.LineSegments | THREE.Line> =
     new Map();
   cellDataMap: Map<string, CellData> = new Map();
@@ -46,8 +62,8 @@ export class DiscoveryMap implements Component {
   private xValues: string[] = [];
   private yValues: string[] = [];
   private zValues: string[] = [];
-  private cellSize = 1.0;
-  private spacing = 1.2;
+  private cellSize = 0.8;
+  private spacing = 1.1;
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private selectedCell: string | null = null;
@@ -57,31 +73,22 @@ export class DiscoveryMap implements Component {
   private initialized = false;
 
   constructor() {
-    // Will be initialized in init() with references from main.ts
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.Camera();
-    this.renderer = new THREE.WebGLRenderer();
-
     // Register WebSocket handlers IMMEDIATELY in constructor
     // This ensures handlers are ready before any WebSocket messages arrive
-    router.register("queue_update", this.onQueueUpdate.bind(this));
-    router.register("campaign_metrics", this.onCampaignMetrics.bind(this));
+    router.register("queue_update", this.onQueueUpdate);
+    router.register("campaign_metrics", this.onCampaignMetrics);
   }
 
   async init(): Promise<void> {
-    // Get references from global dashboard
-    const dashboard = (window as any).__DASHBOARD__;
-    if (dashboard) {
-      this.scene = dashboard.scene;
-      this.camera = dashboard.camera;
-      this.renderer = dashboard.renderer;
+    const context = getSceneContext();
+    if (context) {
+      this.scene = context.scene;
+      this.camera = context.camera;
+      this.renderer = context.renderer;
     }
 
     // Setup mouse interaction
     this.setupInteraction();
-
-    // Create legend
-    this.createLegend();
 
     // Default axes values (from demo campaign)
     this.xValues = [
@@ -93,6 +100,9 @@ export class DiscoveryMap implements Component {
     this.yValues = ["feedforward"];
     this.zValues = ["instantaneous"];
 
+    // Create legend once the axes it names are known
+    this.createLegend();
+
     // Build initial empty grid
     this.buildGrid();
 
@@ -100,14 +110,15 @@ export class DiscoveryMap implements Component {
   }
 
   async destroy(): Promise<void> {
-    router.unregister("queue_update", this.onQueueUpdate.bind(this));
-    router.unregister("campaign_metrics", this.onCampaignMetrics.bind(this));
+    router.unregister("queue_update", this.onQueueUpdate);
+    router.unregister("campaign_metrics", this.onCampaignMetrics);
     this.clearGrid();
     this.legendElement?.remove();
   }
 
   private setupInteraction(): void {
-    const canvas = this.renderer.domElement;
+    const canvas = this.renderer?.domElement;
+    if (!canvas) return;
 
     canvas.addEventListener("mousemove", (event) => {
       const rect = canvas.getBoundingClientRect();
@@ -130,7 +141,7 @@ export class DiscoveryMap implements Component {
     this.legendElement.id = "discovery-legend";
     this.legendElement.style.cssText = `
       position: fixed;
-      bottom: 20px;
+      bottom: 140px;
       left: 20px;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
@@ -224,38 +235,30 @@ export class DiscoveryMap implements Component {
 
     const labelMaterial = new THREE.SpriteMaterial({
       color: 0x8b98a8,
-      sizeAttenuation: false,
+      sizeAttenuation: true,
     });
 
-    // X-axis labels (credit arms)
+    // X-axis labels (credit arms), on the ground under the cells they name
     this.xValues.forEach((val, idx) => {
       const x = (idx - (this.xValues.length - 1) / 2) * this.spacing;
-      const sprite = this.createTextSprite(val, 0.6, labelMaterial);
-      sprite.position.set(
-        x,
-        -1.5,
-        ((this.zValues.length - 1) / 2) * this.spacing + 2,
-      );
+      const sprite = this.createTextSprite(val, 0.3, labelMaterial);
+      sprite.position.set(x, -0.06, 0.72);
       this.scene.add(sprite);
       this.axisLabelMeshes.push(sprite);
     });
 
-    // Y-axis label
-    const ySprite = this.createTextSprite(this.axes.y, 0.7, labelMaterial);
-    ySprite.position.set(
-      (-(this.xValues.length - 1) / 2) * this.spacing - 2,
-      -1.5,
-      0,
-    );
+    // Y-axis label, above the cells
+    const ySprite = this.createTextSprite(this.axes.y, 0.28, labelMaterial);
+    ySprite.position.set(0, 3.5, 0);
     this.scene.add(ySprite);
     this.axisLabelMeshes.push(ySprite);
 
-    // Z-axis label
-    const zSprite = this.createTextSprite(this.axes.z, 0.7, labelMaterial);
+    // Z-axis label, past the end of the row
+    const zSprite = this.createTextSprite(this.axes.z, 0.28, labelMaterial);
     zSprite.position.set(
-      ((this.xValues.length - 1) / 2) * this.spacing + 2,
-      -1.5,
-      (-(this.zValues.length - 1) / 2) * this.spacing - 2,
+      ((this.xValues.length - 1) / 2) * this.spacing + 1.7,
+      -0.06,
+      0.72,
     );
     this.scene.add(zSprite);
     this.axisLabelMeshes.push(zSprite);
@@ -263,18 +266,24 @@ export class DiscoveryMap implements Component {
 
   private createTextSprite(
     text: string,
-    size: number,
+    worldHeight: number,
     material: THREE.SpriteMaterial,
   ): THREE.Sprite {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d")!;
-    canvas.width = 256;
-    canvas.height = 64;
-    context.font = `bold ${size * 40}px "JetBrains Mono", monospace`;
+    const fontSize = 64;
+
+    context.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
+    const textWidth = Math.ceil(context.measureText(text).width) + 16;
+    canvas.width = Math.max(64, textWidth);
+    canvas.height = 96;
+
+    // Resizing the canvas resets the context, so the font is set after.
+    context.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
     context.fillStyle = "#8b98a8";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(text, 128, 32);
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
@@ -284,7 +293,8 @@ export class DiscoveryMap implements Component {
     spriteMaterial.transparent = true;
 
     const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(size * 4, size, 1);
+    const aspect = canvas.width / canvas.height;
+    sprite.scale.set(worldHeight * aspect, worldHeight, 1);
     return sprite;
   }
 
@@ -322,7 +332,7 @@ export class DiscoveryMap implements Component {
   }
 
   private createMeasuredCell(data: CellData): THREE.Mesh {
-    const height = THREE.MathUtils.lerp(0.5, 3.0, data.metrics?.val_acc ?? 0);
+    const height = THREE.MathUtils.lerp(0.4, 3.4, data.metrics?.val_acc ?? 0);
     const color = ARM_COLORS[data.coordinate.credit] || PALETTE.gradient;
 
     const geometry = new THREE.BoxGeometry(
@@ -330,6 +340,7 @@ export class DiscoveryMap implements Component {
       height,
       this.cellSize,
     );
+    geometry.translate(0, height / 2, 0);
     const material = new THREE.MeshStandardMaterial({
       color: new THREE.Color(color),
       emissive: new THREE.Color(color),
@@ -343,7 +354,6 @@ export class DiscoveryMap implements Component {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.position.y = height / 2;
 
     // Add glow effect
     const glowGeometry = new THREE.BoxGeometry(
@@ -351,6 +361,7 @@ export class DiscoveryMap implements Component {
       height * 1.1,
       this.cellSize * 1.1,
     );
+    glowGeometry.translate(0, height / 2, 0);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color(color),
       transparent: true,
@@ -358,7 +369,6 @@ export class DiscoveryMap implements Component {
       depthWrite: false,
     });
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.y = height / 2;
     mesh.add(glow);
     mesh.userData.glow = glow;
 
@@ -372,13 +382,13 @@ export class DiscoveryMap implements Component {
       this.cellSize,
     );
     const edges = new THREE.EdgesGeometry(geometry);
+    edges.translate(0, this.cellSize / 2, 0);
     const material = new THREE.LineBasicMaterial({
       color: PALETTE["legal_unmeasured"],
       transparent: true,
       opacity: 0.4,
     });
     const mesh = new THREE.LineSegments(edges, material);
-    mesh.position.y = this.cellSize / 2;
     return mesh;
   }
 
@@ -425,40 +435,61 @@ export class DiscoveryMap implements Component {
     this.cellDataMap.clear();
   }
 
-  private onQueueUpdate(data: any): void {
+  private onQueueUpdate = (data: any): void => {
     // Update grid based on queue status
     // For now, just rebuild with current axes
     if (data.campaigns) {
       // Could update axes based on running campaigns
     }
-  }
+  };
 
-  private onCampaignMetrics(data: any): void {
-    const { campaign_id, data: metricsData } = data;
-    if (!metricsData?.records) return;
+  private onCampaignMetrics = (data: any): void => {
+    const { data: metricsData } = data;
+    if (!metricsData?.records?.length) return;
 
-    // Update cell statuses based on records
+    interface CellAggregate {
+      acc: number[];
+      walltime: number[];
+      params: number[];
+      pareto: boolean;
+    }
+
+    const aggregates = new Map<string, CellAggregate>();
     metricsData.records.forEach((record: any, idx: number) => {
       const coord = record.coordinate;
+      if (!coord) return;
       const key = `${coord.credit}|${coord.geometry}|${coord.dynamics}`;
-      const cellData = this.cellDataMap.get(key);
-
-      if (cellData) {
-        const isPareto = metricsData.pareto?.[idx] ?? false;
-        cellData.status = "measured";
-        cellData.metrics = {
-          val_acc: record.payload.val_acc,
-          walltime_s: record.payload.walltime_s,
-          param_count: record.payload.param_count,
-          n_seeds: record.schedule?.n_seeds,
-        };
-        this.updateCellVisual(key, cellData, isPareto);
+      let aggregate = aggregates.get(key);
+      if (!aggregate) {
+        aggregate = { acc: [], walltime: [], params: [], pareto: false };
+        aggregates.set(key, aggregate);
       }
+      const payload = record.payload ?? {};
+      if (typeof payload.val_acc === "number") aggregate.acc.push(payload.val_acc);
+      if (typeof payload.walltime_s === "number")
+        aggregate.walltime.push(payload.walltime_s);
+      if (typeof payload.param_count === "number")
+        aggregate.params.push(payload.param_count);
+      if (metricsData.pareto?.[idx]) aggregate.pareto = true;
     });
 
-    // Mark void cells (combinations not in legal space)
-    // For demo, all combinations in the grid are legal
-  }
+    const requiredSeeds = metricsData.required_seeds as number | undefined;
+
+    aggregates.forEach((aggregate, key) => {
+      const cellData = this.cellDataMap.get(key);
+      if (!cellData) return;
+      cellData.status = "measured";
+      cellData.metrics = {
+        val_acc: mean(aggregate.acc),
+        val_acc_std: stddev(aggregate.acc),
+        walltime_s: mean(aggregate.walltime),
+        param_count: mean(aggregate.params),
+        n_seeds: aggregate.acc.length,
+      };
+      cellData.requiredSeeds = requiredSeeds;
+      this.updateCellVisual(key, cellData, aggregate.pareto);
+    });
+  };
 
   private updateCellVisual(
     key: string,
@@ -579,4 +610,5 @@ export class DiscoveryMap implements Component {
 }
 
 // Register with global registry
-registry.register(new DiscoveryMap());
+export const discoveryMap = new DiscoveryMap();
+registry.register(discoveryMap);

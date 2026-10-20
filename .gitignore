@@ -50,6 +50,11 @@ autoscientist_campaigns
 # probe-local dataset caches (tiny-shakespeare etc.)
 scripts/probes/data/
 
+# Dashboard frontend: node_modules is local, the built bundle is committed
+# (the server serves it from the package), the sourcemap is not.
+node_modules/
+computronium/experiment/execution/dashboard/templates/static/js/*.map
+
 *.duckdb*
 
 checkpoint_epoch_*.pt

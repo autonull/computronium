@@ -1868,6 +1868,45 @@ def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
+def spec_from_profile(
+    profile: RunProfile,
+    *,
+    task: str | None = None,
+    device: str | None = "auto",
+) -> RunSpec:
+    """Build the run declaration a profile names.
+
+    The single mapping from a profile to a spec, so every path that runs a
+    profile — the CLI, the dashboard screenshot pipeline — declares the same
+    run.
+
+    Args:
+        profile: The named profile to declare.
+        task: Task override; the profile's own when omitted.
+        device: Device for the run.
+
+    Returns:
+        The run declaration.
+    """
+    return RunSpec(
+        profile=profile.name,
+        task=task or profile.task,
+        objectives=profile.objectives,
+        stages=tuple(profile.stages),
+        fidelity=profile.fidelity,
+        n_seeds=profile.n_seeds,
+        epochs=profile.epochs,
+        batch_limit=profile.batch_limit,
+        budget_seconds=profile.budget_seconds,
+        param_budget=profile.param_budget,
+        policy=profile.policy,
+        axes=profile.axes,
+        hyperparameters=dict(profile.hyperparameters),
+        checkpoint_every_n=profile.checkpoint_every_n,
+        device=device,
+    )
+
+
 def _resolve_spec(args: argparse.Namespace) -> RunSpec:
     """The run's declaration: the spec file's, or a profile's.
 
@@ -1903,23 +1942,7 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
         f" Epochs: {profile.epochs}"
     )
     logger.info(f"  Objectives: {profile.objectives}")
-    return RunSpec(
-        profile=profile.name,
-        task=args.task or profile.task,
-        objectives=profile.objectives,
-        stages=tuple(profile.stages),
-        fidelity=profile.fidelity,
-        n_seeds=profile.n_seeds,
-        epochs=profile.epochs,
-        batch_limit=profile.batch_limit,
-        budget_seconds=profile.budget_seconds,
-        param_budget=profile.param_budget,
-        policy=profile.policy,
-        axes=profile.axes,
-        hyperparameters=dict(profile.hyperparameters),
-        checkpoint_every_n=profile.checkpoint_every_n,
-        device=args.device,
-    )
+    return spec_from_profile(profile, task=args.task, device=args.device)
 
 
 def execute_spec(
@@ -6198,7 +6221,9 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
     import asyncio
 
     if args.console:
-        from computronium.experiment.execution.dashboard.console import run_console_dashboard
+        from computronium.experiment.execution.dashboard.console import (
+            run_console_dashboard,
+        )
 
         logger.info(f"Starting console dashboard")
         logger.info(f"Store: {args.store}")
@@ -6207,7 +6232,9 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
         # Get campaign queue if available (for queue monitoring)
         campaign_queue = None
         try:
-            from computronium.experiment.execution.campaign_queue import get_campaign_queue
+            from computronium.experiment.execution.campaign_queue import (
+                get_campaign_queue,
+            )
 
             campaign_queue = get_campaign_queue()
         except Exception:
