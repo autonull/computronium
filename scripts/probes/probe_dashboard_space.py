@@ -154,7 +154,15 @@ def probe(port: int, registry: Path) -> dict[str, object]:
         )
 
         page.click('.drawer-btn[data-action="quest"]')
-        page.wait_for_timeout(1500)
+        # The verb writes a file; the page says when it is done, and
+        # "Working…" is not an answer.
+        page.wait_for_function(
+            """() => {
+                const text = document.getElementById('drawer-status')?.textContent ?? '';
+                return text.trim().length > 0 && !text.includes('Working');
+            }""",
+            timeout=60000,
+        )
         status = page.evaluate(
             "() => document.getElementById('drawer-status')?.textContent?.trim() ?? ''"
         )

@@ -130,7 +130,15 @@ def probe(port: int, registry: Path) -> dict[str, object]:
         # The confirmation: register the effect the cell showed.
         if buttons:
             page.click('.drawer-btn[data-action="preregister"]')
-            page.wait_for_timeout(1500)
+            # The verb writes a file; the page says when it is done, and
+            # "Working…" is not an answer.
+            page.wait_for_function(
+                """() => {
+                    const text = document.getElementById('drawer-status')?.textContent ?? '';
+                    return text.trim().length > 0 && !text.includes('Working');
+                }""",
+                timeout=60000,
+            )
         status = page.evaluate(
             "() => document.getElementById('drawer-status')?.textContent?.trim() ?? ''"
         )

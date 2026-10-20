@@ -3,6 +3,7 @@
 import { registry } from "./components/registry.js";
 import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
+import { runSelection, type RunMetrics } from "./run-selection.js";
 import type { Component } from "./components/registry.js";
 
 interface StatusData {
@@ -34,6 +35,7 @@ interface RunStatus {
   fidelity?: string;
   objectives?: string[];
   mode?: string;
+  started_at?: string;
 }
 
 interface MeterRow {
@@ -65,6 +67,7 @@ export class HUD implements Component {
   constructor() {
     router.register("status_update", this.onStatusUpdate);
     router.register("campaign_metrics", this.onCampaignMetrics);
+    runSelection.onChange(this.onRunChanged);
   }
 
   async init(): Promise<void> {
@@ -259,6 +262,14 @@ export class HUD implements Component {
     const metrics = data?.data;
     if (!metrics) return;
 
+    // The panel reports the run the dashboard shows, not whichever run
+    // reported last.
+    runSelection.observe(data?.campaign_id, metrics);
+  };
+
+  /** The panel reads the run the reader is looking at. */
+  private onRunChanged = (_runId: string | null, metrics: RunMetrics | null): void => {
+    if (!metrics) return;
     this.resources = (metrics.resources ?? {}) as CampaignResources;
     if (typeof metrics.required_seeds === "number") {
       this.requiredSeeds = metrics.required_seeds;

@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from computronium.experiment.execution.campaign_queue import CampaignQueue
+
 logger = logging.getLogger(__name__)
 
 SHOT_DIR = Path(tempfile.gettempdir()) / "computronium"
@@ -155,16 +157,18 @@ def serving_dashboard(
     store_path: Path,
     port: int,
     registration_dir: Path | None = None,
-) -> Generator[None]:
+    queue: CampaignQueue | None = None,
+) -> Generator[CampaignQueue | None]:
     """Serve the dashboard on ``port`` while the block runs.
 
     Args:
         store_path: The store the dashboard reads.
         port: The port to serve on.
         registration_dir: Where the dashboard writes registrations.
+        queue: The queue the dashboard's verbs act through.
 
     Yields:
-        Nothing: the block is the probe.
+        The queue, so a probe can read what the dashboard queued.
     """
     from computronium.experiment.execution.dashboard.web import (
         DashboardConfig,
@@ -177,6 +181,7 @@ def serving_dashboard(
             port=port,
             store_path=str(store_path),
             registration_dir=registration_dir,
+            campaign_queue=queue,
         )
     )
 
@@ -190,4 +195,4 @@ def serving_dashboard(
     if not wait_for_http(port):
         msg = f"the dashboard did not start on port {port}"
         raise RuntimeError(msg)
-    yield
+    yield queue

@@ -16,6 +16,7 @@ import { registry } from "./components/registry.js";
 import { getSceneContext } from "./components/context.js";
 import { router } from "./ws-client.js";
 import { ARM_COLORS, PALETTE } from "./palette.js";
+import { runSelection } from "./run-selection.js";
 import axisMetadata from "./axis-metadata.json";
 import {
   AXIS_NAMES,
@@ -337,6 +338,19 @@ export class DiscoveryMap implements Component {
         <div id="legend-arms" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
       </div>
       <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+        <div style="font-weight: 600; margin-bottom: 8px;">Run</div>
+        <select id="legend-run-picker" style="
+          width: 100%;
+          background: var(--bg-tertiary);
+          color: var(--text-primary);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          font-size: 11px;
+          padding: 2px 4px;
+        "></select>
+        <div id="legend-run" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;"></div>
+      </div>
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
         <div style="font-weight: 600; margin-bottom: 8px;">Axes</div>
         <div id="legend-axis-picker" style="display: flex; flex-direction: column; gap: 6px;"></div>
         <div id="legend-axes" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;"></div>
@@ -344,9 +358,66 @@ export class DiscoveryMap implements Component {
     `;
 
     overlay.appendChild(this.legendElement);
+    this.createRunPicker();
     this.createAxisPicker();
     this.updateLegendArms();
     this.updateLegendAxes();
+  }
+
+  /** The run the grid shows, chosen by the reader. */
+  private createRunPicker(): void {
+    const select = this.legendElement?.querySelector<HTMLSelectElement>(
+      "#legend-run-picker",
+    );
+    if (!select) return;
+
+    select.addEventListener("change", () => {
+      runSelection.select(select.value || null);
+    });
+    runSelection.onChange(() => this.refresh());
+  }
+
+  private updateRunPicker(): void {
+    const select = this.legendElement?.querySelector<HTMLSelectElement>(
+      "#legend-run-picker",
+    );
+    const detail = this.legendElement?.querySelector("#legend-run");
+    if (!select) return;
+
+    const runs = runSelection.runs;
+    select.innerHTML = "";
+    runs.forEach(([runId, metrics]) => {
+      const option = document.createElement("option");
+      const profile = metrics?.run?.profile ?? "run";
+      const records = metrics?.records?.length ?? 0;
+      option.value = runId;
+      option.textContent = `${runId.slice(0, 8)} · ${profile} · ${records}`;
+      option.selected = runId === runSelection.selectedId;
+      select.appendChild(option);
+    });
+    if (runs.length === 0) {
+      select.disabled = true;
+      if (detail) {
+        detail.textContent = "No run has reported yet.";
+      }
+      return;
+    }
+    select.disabled = false;
+
+    const metrics = runSelection.selected;
+    if (!detail) return;
+    if (!metrics) {
+      detail.textContent = "";
+      return;
+    }
+    const run = metrics.run ?? {};
+    detail.textContent = [
+      `run ${(runSelection.selectedId ?? "").slice(0, 8)}`,
+      run.mode,
+      `${metrics.records?.length ?? 0} records`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   private createAxisPicker(): void {
@@ -906,17 +977,32 @@ export class DiscoveryMap implements Component {
     const metricsData = data?.data;
     if (!metricsData?.records?.length) return;
 
-    this.lastMetrics = metricsData;
-    if (typeof data?.campaign_id === "string") this.runId = data.campaign_id;
+    const runId = typeof data?.campaign_id === "string" ? data.campaign_id : null;
+    if (!runId) return;
 
-    if (typeof metricsData.chance === "number") this.chance = metricsData.chance;
-    if (typeof metricsData.required_seeds === "number") {
-      this.requiredSeeds = metricsData.required_seeds;
-    }
-
-    this.absorbMeasuredValues(metricsData.records);
-    void this.syncSpace();
+    // The grid shows one run at a time. A store holds several — a run, and
+    // the runs its own answers spawned — so the choice is made once, in the
+    // shared selection, and the legend names the run the picture shows.
+    runSelection.observe(runId, metricsData);
   };
+
+  /** Draw the run the grid shows, and the space it declares. */
+  private refresh(): void {
+    const runId = runSelection.selectedId;
+    const metrics = runSelection.selected;
+    this.lastMetrics = metrics ?? null;
+    this.runId = runId ?? undefined;
+
+    if (metrics) {
+      if (typeof metrics.chance === "number") this.chance = metrics.chance;
+      if (typeof metrics.required_seeds === "number") {
+        this.requiredSeeds = metrics.required_seeds;
+      }
+      this.absorbMeasuredValues(metrics.records ?? []);
+    }
+    this.updateRunPicker();
+    void this.syncSpace();
+  }
 
   /** Ask for the declared space, and redraw the grid when it arrives.
 

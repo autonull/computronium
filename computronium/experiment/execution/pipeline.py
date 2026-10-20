@@ -1701,6 +1701,18 @@ class PipelineRunner:
         if self._config.backend:
             self._config.backend.shutdown()
 
+    @property
+    def shutdown_requested(self) -> bool:
+        """Whether a signal asked the run to stop.
+
+        A run stops for several reasons — a signal, a spent budget, a spent
+        space, a gate refusing a cell — and only the first one means the run
+        was interrupted and can be resumed. The others are the run finishing
+        what it set out to do, and the caller is told which it was.
+        """
+        handler = self._state.signal_handler
+        return handler.shutdown_requested if handler is not None else False
+
     def get_coverage_report(self) -> dict[str, Any]:
         """Get coverage report (R18)."""
         return self._state.coverage

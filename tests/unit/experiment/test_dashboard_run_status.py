@@ -56,11 +56,10 @@ def test_a_preregistered_claim_is_confirmatory(
     """A metric with a threshold in configs/preregistrations is confirmatory."""
     from computronium.experiment.surface import report
 
-    monkeypatch.setattr(
-        report,
-        "preregistered_metrics",
-        lambda before=None: frozenset({"val_acc"}),
-    )
+    def _registered(before=None, cells=frozenset()) -> frozenset[str]:
+        return frozenset({"val_acc"})
+
+    monkeypatch.setattr(report, "preregistered_metrics", _registered)
 
     status = run_status(_spec("validation_accuracy"), "run-2", ("val_acc",))
 

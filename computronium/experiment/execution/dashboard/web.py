@@ -31,13 +31,13 @@ from computronium.experiment.execution.dashboard.actions import (
     ActionUnavailableError,
     CellTarget,
     cell_evidence,
+    cell_spec,
     claim_sentence,
     default_metric,
+    measurement_budget,
     records_for_cell,
     registration_name,
     registration_payload,
-    replication_budget,
-    replication_spec,
     run_spread,
     write_registration,
 )
@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
+    from computronium.experiment.surface.report import CellKey
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,7 @@ def run_status(
     run_id: str,
     claim_metrics: tuple[str, ...] = (),
     started_at: datetime | None = None,
+    cells: frozenset[CellKey] = frozenset(),
 ) -> dict[str, Any]:
     """What the run declares, and whether its claim is preregistered.
 
@@ -123,11 +125,13 @@ def run_status(
     confirmatory one; every other claim is exploratory. The dashboard reports
     which, rather than asserting a status the run never declared. Only a
     threshold written before the run began counts: one written afterwards was
-    written with the run's own data in hand.
+    written with the run's own data in hand. Only a threshold about a cell
+    the run measured counts: one about another cell says nothing about this
+    run's claims.
     """
     from computronium.experiment.surface.report import preregistered_metrics
 
-    registered = preregistered_metrics(started_at)
+    registered = preregistered_metrics(started_at, cells)
     mode = (
         "PREREGISTERED"
         if claim_metrics and all(metric in registered for metric in claim_metrics)
@@ -142,6 +146,7 @@ def run_status(
         "objectives": list(spec.objectives) if spec else [],
         "claim_metrics": list(claim_metrics),
         "mode": mode,
+        "started_at": started_at.isoformat() if started_at else None,
     }
 
 
@@ -503,6 +508,7 @@ class WebDashboard:
             from computronium.experiment.surface.report import (
                 ReportGenerator,
                 chance_level,
+                measured_cells,
             )
 
             # CRITICAL: read_only=True for all dashboard store access
@@ -582,6 +588,7 @@ class WebDashboard:
                         campaign_id,
                         claim_metrics,
                         run.started_at if run else None,
+                        measured_cells(records),
                     ),
                 }
         except Exception as e:
@@ -719,12 +726,12 @@ class WebDashboard:
         plan = measured + seeds
         measurements = plan - measured
         per_seed = self._per_seed_seconds(context)
-        budget = replication_budget(per_seed, measurements)
+        budget = measurement_budget(per_seed, measurements)
 
-        spec = replication_spec(
+        spec = cell_spec(
             context.source,
             context.target,
-            plan=plan,
+            seeds=plan,
             budget_seconds=budget,
         )
         spec_path = self._write_spec(spec)
@@ -795,7 +802,14 @@ class WebDashboard:
         return self._write_registration(context, payload, KIND_CONFIRMATION)
 
     async def _adopt_quest(self, run_id: str, body: CellAction) -> ActionResult:
-        """Register the question an unmeasured cell answers."""
+        """Register the question an unmeasured cell answers, and queue the run
+        that would answer it.
+
+        A question with no run behind it is a note. The quest writes the
+        protocol down first and queues the measurement second: the run that
+        follows the registration can be confirmatory, and a run that began
+        before it cannot.
+        """
         from computronium.experiment.execution.statistical_promotion import (
             GateThresholds,
         )
@@ -853,7 +867,73 @@ class WebDashboard:
             min_seeds=body.min_seeds or context.required_seeds,
             kind=KIND_QUEST,
         )
-        return self._write_registration(context, payload, KIND_QUEST)
+        written = self._write_registration(context, payload, KIND_QUEST)
+        if written.status_code != 200:
+            return written
+        scheduled = await self._schedule_quest(context, body)
+        return ActionResult({**written.payload, **scheduled})
+
+    async def _schedule_quest(
+        self,
+        context: CellContext,
+        body: CellAction,
+    ) -> dict[str, Any]:
+        """Queue the run that would answer a registered question.
+
+        The run is a new one. A threshold written now cannot confirm a run
+        that has already begun, so the run that answers the question has to
+        begin after the question was written — and the source run began long
+        before. The cell holds no evidence to join either: every seed in the
+        plan is new.
+        """
+        from computronium.experiment.execution.campaign import (
+            CampaignRun,
+            CampaignSpec,
+        )
+
+        queue = self.config.campaign_queue
+        if queue is None:
+            return {
+                "campaign_id": None,
+                "scheduled": False,
+                "note": (
+                    "no campaign queue is attached to this dashboard; the "
+                    "question is registered but nothing is scheduled"
+                ),
+            }
+
+        seeds = body.min_seeds or context.required_seeds
+        per_seed = self._per_seed_seconds(context)
+        budget = measurement_budget(per_seed, seeds)
+        spec = cell_spec(
+            context.source,
+            context.target,
+            seeds=seeds,
+            budget_seconds=budget,
+        )
+        spec_path = self._write_spec(spec)
+
+        store = self.config.store_path or "experiment.duckdb"
+        campaign = CampaignSpec(
+            name=f"quest-{context.target.slug()}",
+            runs=[
+                CampaignRun(
+                    name=f"quest-{context.target.run_id}",
+                    spec_file=str(spec_path),
+                    store=store,
+                )
+            ],
+            store=store,
+        )
+        campaign_id = await queue.enqueue(campaign)
+        return {
+            "campaign_id": campaign_id,
+            "scheduled": True,
+            "measurements": seeds,
+            "plan": seeds,
+            "budget_seconds": budget,
+            "spec_file": str(spec_path),
+        }
 
     def _write_registration(
         self,

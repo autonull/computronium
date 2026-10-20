@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import functools
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.record import Record
@@ -474,13 +475,18 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         """Whether every claimed metric has a pre-registered threshold on disk.
 
         Only a threshold written before the run began counts: one written
-        afterwards was written with the run's own data in hand.
+        afterwards was written with the run's own data in hand. Only a
+        threshold about a cell the run measured counts: one about another
+        cell says nothing about this run's claims.
         """
         if not claims:
             return None
         info = self._store.query_run(run_id)
         before = info.started_at if info is not None else None
-        return all(claim.metric in preregistered_metrics(before) for claim in claims)
+        cells = measured_cells(self._store.query_records(run_id=run_id))
+        return all(
+            claim.metric in preregistered_metrics(before, cells) for claim in claims
+        )
 
     def _min_seeds(self, run_id: str) -> int:
         """The seed floor every claim-side derivation agrees on."""
@@ -900,24 +906,52 @@ _ABLATION_METRICS: Final = (
     "psi_capacity",
 )
 
+# A cell, as the registry names it: the axis-value pairs it holds.
+type CellKey = tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Registration:
+    """One registration in the registry, as the report reads it.
+
+    ``cell`` is the cell the registration is about, or ``None`` when the
+    registration names none — a protocol about the metric itself.
+    """
+
+    metric: str
+    threshold: float
+    min_seeds: int
+    alpha: float
+    cell: CellKey | None
+    written_at: datetime
+    path: Path
+
+
+def coordinate_key(coordinate: Mapping[str, str]) -> CellKey:
+    """A coordinate as a comparable key: the axis-value pairs it holds."""
+    return tuple(sorted((axis, value) for axis, value in coordinate.items() if value))
+
+
+def measured_cells(records: Iterable[Record]) -> frozenset[CellKey]:
+    """The cells a run measured."""
+    return frozenset(
+        coordinate_key({
+            axis.value: getattr(record, axis.value, "") for axis in StructuralAxis
+        })
+        for record in records
+    )
+
 
 @functools.lru_cache(maxsize=8)
-def preregistered_metrics(before: datetime | None = None) -> frozenset[str]:
-    """Metric names carrying a pre-registered threshold in ``configs/``.
+def registrations(before: datetime | None = None) -> tuple[Registration, ...]:
+    """Every registration written before a moment.
 
-    A claim whose metric is absent is exploratory: the report says so beside
-    the claim rather than implying a confirmatory result.
-
-    ``before`` is the moment a run began. A threshold written after a run
-    began cannot confirm that run — it was written with the run's own data in
-    hand — so only the registrations written earlier are counted. The
-    registry is read once per moment: the dashboard asks for it on every poll.
+    The registry is read once per moment: the dashboard asks for it on every
+    poll. A registration that names a cell is a protocol about that cell; one
+    that names none is a protocol about the metric itself.
     """
-    import json
-
-    root = PREREGISTRATION_ROOT
-    metrics: set[str] = set()
-    for path in root.glob("*.json"):
+    entries: list[Registration] = []
+    for path in sorted(PREREGISTRATION_ROOT.glob("*.json")):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except OSError, ValueError:
@@ -925,10 +959,51 @@ def preregistered_metrics(before: datetime | None = None) -> frozenset[str]:
         metric = payload.get("metric")
         if not isinstance(metric, str):
             continue
-        if before is not None and registered_at(payload) >= before:
+        written = registered_at(payload)
+        if before is not None and written >= before:
             continue
-        metrics.add(metric)
-    return frozenset(metrics)
+        try:
+            threshold = float(payload.get("threshold", 0.0))
+            min_seeds = int(payload.get("min_seeds", DEFAULT_MIN_SEEDS))
+            alpha = float(payload.get("alpha", 0.05))
+        except TypeError, ValueError:
+            continue
+        coordinate = payload.get("coordinate")
+        cell = coordinate_key(coordinate) if isinstance(coordinate, Mapping) else None
+        entries.append(
+            Registration(
+                metric=metric,
+                threshold=threshold,
+                min_seeds=min_seeds,
+                alpha=alpha,
+                cell=cell,
+                written_at=written,
+                path=path,
+            )
+        )
+    return tuple(entries)
+
+
+def preregistered_metrics(
+    before: datetime | None,
+    cells: frozenset[CellKey],
+) -> frozenset[str]:
+    """The metrics a run may claim confirmatorily.
+
+    A registration counts when it was written before the run began and it
+    speaks about the run: a registration that names a cell counts only for a
+    run that measured that cell, and one that names no cell is a protocol
+    about the metric itself.
+
+    The cell matters because a dashboard writes registrations for single
+    cells. Without it, one click on one cell would make every run in the
+    repository confirmatory.
+    """
+    return frozenset(
+        registration.metric
+        for registration in registrations(before)
+        if registration.cell is None or registration.cell in cells
+    )
 
 
 def registered_at(payload: Mapping[str, Any]) -> datetime:

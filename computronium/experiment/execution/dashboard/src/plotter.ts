@@ -5,6 +5,7 @@ import "uplot/dist/uPlot.min.css";
 import { registry } from "./components/registry.js";
 import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
+import { runSelection, type RunMetrics } from "./run-selection.js";
 import type { Component } from "./components/registry.js";
 
 /** The chart is what the panel leaves once the title has taken its line. */
@@ -74,6 +75,7 @@ export class Plotter implements Component {
   constructor() {
     // Register WebSocket handlers IMMEDIATELY in constructor
     router.register("campaign_metrics", this.onCampaignMetrics);
+    runSelection.onChange(this.onRunChanged);
   }
 
   async init(): Promise<void> {
@@ -233,10 +235,18 @@ export class Plotter implements Component {
     const { data: metricsData } = data;
     if (!metricsData?.records) return;
 
-    this.records = metricsData.records;
-    this.paretoFlags = metricsData.pareto || [];
-    this.ablationGroups = metricsData.ablation_groups || [];
-    if (typeof metricsData.chance === "number") this.chance = metricsData.chance;
+    // The charts show the run the dashboard shows, not whichever run
+    // reported last.
+    runSelection.observe(data?.campaign_id, metricsData);
+  };
+
+  /** The run the reader picked, or the newest one. */
+  private onRunChanged = (_runId: string | null, metrics: RunMetrics | null): void => {
+    if (!metrics) return;
+    this.records = metrics.records ?? [];
+    this.paretoFlags = metrics.pareto ?? [];
+    this.ablationGroups = metrics.ablation_groups ?? [];
+    if (typeof metrics.chance === "number") this.chance = metrics.chance;
     this.updatePlots();
     this.updateStatus();
   };

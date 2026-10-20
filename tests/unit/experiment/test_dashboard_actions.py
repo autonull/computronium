@@ -20,11 +20,11 @@ from computronium.experiment.execution.dashboard.actions import (
     KIND_CONFIRMATION,
     KIND_QUEST,
     CellTarget,
+    cell_spec,
     claim_sentence,
+    measurement_budget,
     registration_name,
     registration_payload,
-    replication_budget,
-    replication_spec,
     write_registration,
 )
 from computronium.experiment.execution.dashboard.web import (
@@ -134,23 +134,25 @@ class TestReplication:
     """The replication is the run's own declaration, narrowed and grown."""
 
     def test_the_plan_grows_and_the_axes_are_pinned(self) -> None:
+        from computronium.experiment.schema.axis import StructuralAxis
+
         source = _spec(n_seeds=5)
         target = CellTarget(run_id="run-1", coordinate=COORDINATE)
 
-        spec = replication_spec(source, target, plan=63, budget_seconds=300.0)
+        spec = cell_spec(source, target, seeds=63, budget_seconds=300.0)
 
         assert spec.n_seeds == 63
-        assert spec.selected_primitives("credit") == ("gradient",)
-        assert spec.selected_primitives("geometry") == ("feedforward",)
+        assert spec.selected_primitives(StructuralAxis.CREDIT) == ("gradient",)
+        assert spec.selected_primitives(StructuralAxis.GEOMETRY) == ("feedforward",)
         assert spec.budget_seconds == 300.0
         assert spec.task_names == ("digits",)
 
     def test_the_budget_covers_the_missing_work(self) -> None:
         """Three seconds a seed, fifty-eight seeds, and room to be slower."""
-        assert replication_budget(3.0, 58) == pytest.approx(261.0)
+        assert measurement_budget(3.0, 58) == pytest.approx(261.0)
 
     def test_the_budget_is_never_zero(self) -> None:
-        assert replication_budget(0.0, 0) >= 1.0
+        assert measurement_budget(0.0, 0) >= 1.0
 
 
 class TestRegistration:
@@ -253,23 +255,24 @@ class TestRegistration:
         assert "credit-gradient" in name
 
 
+def _dashboard(
+    store_path: Path,
+    queue: CampaignQueue | None,
+    registration_dir: Path | None = None,
+) -> WebDashboard:
+    """A dashboard over one store, with the queue it acts through."""
+    return WebDashboard(
+        DashboardConfig(
+            store_path=str(store_path),
+            campaign_queue=queue,
+            registration_dir=registration_dir,
+            enable_websockets=False,
+        )
+    )
+
+
 class TestEndpoints:
     """The three verbs, as the drawer calls them."""
-
-    def _dashboard(
-        self,
-        store_path: Path,
-        queue: CampaignQueue | None,
-        registration_dir: Path | None = None,
-    ) -> WebDashboard:
-        return WebDashboard(
-            DashboardConfig(
-                store_path=str(store_path),
-                campaign_queue=queue,
-                registration_dir=registration_dir,
-                enable_websockets=False,
-            )
-        )
 
     def test_queue_rest_measures_the_seeds_the_cell_owes(
         self,
@@ -278,7 +281,7 @@ class TestEndpoints:
     ) -> None:
         path, run_id = store_with_run
         queue = CampaignQueue(max_concurrent=0)
-        dashboard = self._dashboard(path, queue)
+        dashboard = _dashboard(path, queue)
 
         with TestClient(dashboard.app) as client:
             response = client.post(
@@ -302,7 +305,7 @@ class TestEndpoints:
         store_with_run: tuple[Path, str],
     ) -> None:
         path, run_id = store_with_run
-        dashboard = self._dashboard(path, None)
+        dashboard = _dashboard(path, None)
 
         with TestClient(dashboard.app) as client:
             response = client.post(
@@ -319,7 +322,7 @@ class TestEndpoints:
 
         with RecordStore(StoreConfig(path=path)):
             pass
-        dashboard = self._dashboard(path, CampaignQueue(max_concurrent=0))
+        dashboard = _dashboard(path, CampaignQueue(max_concurrent=0))
 
         with TestClient(dashboard.app) as client:
             response = client.post(
@@ -337,7 +340,7 @@ class TestEndpoints:
     ) -> None:
         path, run_id = store_with_run
         registry = tmp_path / "preregistrations"
-        dashboard = self._dashboard(path, None, registration_dir=registry)
+        dashboard = _dashboard(path, None, registration_dir=registry)
 
         with TestClient(dashboard.app) as client:
             response = client.post(
@@ -364,7 +367,7 @@ class TestEndpoints:
         tmp_path: Path,
     ) -> None:
         path, run_id = store_with_run
-        dashboard = self._dashboard(path, None, registration_dir=tmp_path / "regs")
+        dashboard = _dashboard(path, None, registration_dir=tmp_path / "regs")
 
         other = {**COORDINATE, "credit": "pepita"}
         with TestClient(dashboard.app) as client:
@@ -383,7 +386,7 @@ class TestEndpoints:
     ) -> None:
         path, run_id = store_with_run
         registry = tmp_path / "preregistrations"
-        dashboard = self._dashboard(path, None, registration_dir=registry)
+        dashboard = _dashboard(path, None, registration_dir=registry)
 
         other = {**COORDINATE, "credit": "pepita"}
         with TestClient(dashboard.app) as client:
@@ -405,7 +408,7 @@ class TestEndpoints:
         tmp_path: Path,
     ) -> None:
         path, run_id = store_with_run
-        dashboard = self._dashboard(path, None, registration_dir=tmp_path / "regs")
+        dashboard = _dashboard(path, None, registration_dir=tmp_path / "regs")
 
         with TestClient(dashboard.app) as client:
             response = client.post(
@@ -415,6 +418,106 @@ class TestEndpoints:
 
         assert response.status_code == 409
         assert "preregister" in response.json()["error"]
+
+
+class TestTheQuestIsAnswered:
+    """A question with no run behind it is a note, not a question."""
+
+    def _quest(
+        self,
+        store_path: Path,
+        run_id: str,
+        registry: Path,
+        queue: CampaignQueue | None,
+    ) -> dict:
+        dashboard = _dashboard(store_path, queue, registration_dir=registry)
+        other = {**COORDINATE, "credit": "pepita"}
+        with TestClient(dashboard.app) as client:
+            response = client.post(
+                f"/api/cells/{run_id}/quest",
+                json={"coordinate": other},
+            )
+        assert response.status_code == 200
+        return response.json()
+
+    def test_the_quest_queues_the_run_that_would_answer_it(
+        self,
+        store_with_run: tuple[Path, str],
+        tmp_path: Path,
+    ) -> None:
+        path, run_id = store_with_run
+        queue = CampaignQueue(max_concurrent=0)
+
+        body = self._quest(path, run_id, tmp_path / "regs", queue)
+
+        assert body["scheduled"] is True
+        assert body["campaign_id"]
+        assert body["measurements"] == 63
+        assert body["plan"] == 63
+        assert body["budget_seconds"] > 0.0
+
+        queued = queue._queue[0]
+        assert queued.spec.runs[0].run_id is None
+        assert queued.spec.runs[0].spec_file is not None
+
+    def test_the_answering_run_is_a_new_one(
+        self,
+        store_with_run: tuple[Path, str],
+        tmp_path: Path,
+    ) -> None:
+        """A threshold written now cannot confirm a run that has begun."""
+        path, run_id = store_with_run
+        queue = CampaignQueue(max_concurrent=0)
+
+        self._quest(path, run_id, tmp_path / "regs", queue)
+
+        assert queue._queue[0].spec.runs[0].run_id is None
+
+    def test_the_budget_is_measured_from_the_run(
+        self,
+        store_with_run: tuple[Path, str],
+        tmp_path: Path,
+    ) -> None:
+        """The run's own seeds say what a measurement costs."""
+        path, run_id = store_with_run
+        queue = CampaignQueue(max_concurrent=0)
+
+        body = self._quest(path, run_id, tmp_path / "regs", queue)
+
+        # Three seconds a seed, sixty-three seeds, and room to be slower.
+        assert body["budget_seconds"] == pytest.approx(3.0 * 63 * 1.5)
+
+    def test_without_a_queue_the_question_is_registered_and_nothing_is_scheduled(
+        self,
+        store_with_run: tuple[Path, str],
+        tmp_path: Path,
+    ) -> None:
+        path, run_id = store_with_run
+        registry = tmp_path / "regs"
+
+        body = self._quest(path, run_id, registry, None)
+
+        assert body["scheduled"] is False
+        assert body["campaign_id"] is None
+        assert "queue" in body["note"]
+        assert body["written"] is True
+        assert list(registry.glob("*.json"))
+
+    def test_the_registration_says_the_cell_and_the_seeds(
+        self,
+        store_with_run: tuple[Path, str],
+        tmp_path: Path,
+    ) -> None:
+        path, run_id = store_with_run
+        registry = tmp_path / "regs"
+
+        body = self._quest(path, run_id, registry, None)
+
+        registration = body["registration"]
+        assert registration["kind"] == KIND_QUEST
+        assert registration["min_seeds"] == 63
+        assert registration["coordinate"]["credit"] == "pepita"
+        assert "before any measurement" in registration["claim"]
 
 
 class TestRunContinuity:
@@ -502,12 +605,13 @@ class TestConfirmationHonesty:
             encoding="utf-8",
         )
         monkeypatch.setattr(report, "PREREGISTRATION_ROOT", tmp_path)
-        report.preregistered_metrics.cache_clear()
+        report.registrations.cache_clear()
 
         try:
-            assert "val_acc" not in report.preregistered_metrics(started)
+            assert "val_acc" not in report.preregistered_metrics(started, frozenset())
             assert "val_acc" in report.preregistered_metrics(
-                written + timedelta(seconds=1)
+                written + timedelta(seconds=1),
+                frozenset(),
             )
         finally:
-            report.preregistered_metrics.cache_clear()
+            report.registrations.cache_clear()

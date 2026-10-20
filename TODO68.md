@@ -510,6 +510,9 @@ These patterns are established in Phase 0 — components use them from Day 1 wit
 - [x] `docs/readme/title.md` has hero image + tagline
 - [x] `comp --help` shows `dashboard` command
 - [x] `docs/DASHBOARD.md` explains the 3D UI
+- [x] The quest verb registers the question **and** queues the run that would answer it
+- [x] A registration confirms the run that measured the cell it names, and no other
+- [x] The dashboard names the run it shows, and the reader can choose another
 
 ---
 
@@ -1084,3 +1087,115 @@ and the evidence could not be *clicked*.
   "adopt as quest" flow is still one click deep**: a quest is registered, and
   nothing yet schedules the campaign that would answer it. The queue verb
   does that; the quest verb is the question without the run.
+  → **Done** (next section).
+
+---
+
+## Session Progress — The Quest That Runs (2026-10-20)
+
+The last session's "still open" list named one thing the drawer's verbs could
+not do: a quest was a question with no run behind it. This session gave the
+quest its run — and, in making it real, found the four things that were
+quietly broken behind it.
+
+### The quest, closed
+
+| | Before | Now |
+|---|--------|-----|
+| **Adopt as Quest** | wrote `configs/preregistrations/<run>_quest_<cell>.json` and stopped | writes the registration **and** queues the campaign that would answer it |
+
+The answering run is a **new** run: a threshold written now cannot confirm a
+run that has already begun, and the run the question came from began long
+before. The cell holds no evidence to join either — every seed in the plan is
+new. The run declares exactly that one cell, with the seed count the
+registration names, and a budget measured from the run's own seeds.
+
+Without a campaign queue the question is still registered, and the status line
+says that nothing was scheduled: a dashboard built without a queue answers
+`409` for the verbs that need one rather than pretending the work was queued.
+
+### The decisions worth keeping
+
+- **A registration speaks about a cell.** The dashboard writes registrations
+  for single cells, and the confirmation rule counted any registration with
+  the run's metric — so one click on one cell would have made every run in
+  the repository confirmatory, which is the failure the timestamp rule was
+  written to stop, one level down. A registration that names a cell now
+  counts only for a run that measured that cell; one that names no cell — a
+  protocol about the metric itself, the kind written by hand — counts as it
+  always did.
+- **A run that finished its work is completed, not interrupted.** The
+  campaign path read the pipeline's shutdown flag, which is also set when the
+  space is spent, a budget expires, or a gate refuses a cell: a run that
+  measured every seed it set out to measure was reported as interrupted, with
+  "resume with `--run-id`" beside it. Only a *signal* means that now, which is
+  the rule the CLI path already used.
+- **The picture names the run it shows.** A store holds several runs — the
+  run, and the runs its own answers spawned — and each reports its own
+  metrics. The map, the charts and the panel each took whichever run
+  reported last, and a quest's new run silently took the picture over. The
+  choice is made once, in `src/run-selection.ts`: the run that started last
+  until the reader picks another, and the legend's **Run** picker says which
+  one the picture is.
+- **The registration is written before the run is queued.** The rule that a
+  threshold cannot confirm a run that has already begun only holds if the
+  threshold lands first, so the verb writes the file and then enqueues the
+  campaign — in that order, every time.
+
+### Defects found on the way
+
+| # | Defect | Cause | Fix |
+|---|--------|-------|-----|
+| 64 | A quest was a note: nothing measured the cell it asked about | the verb wrote the registration and stopped | the verb queues the campaign that would answer it |
+| 65 | The run that answered the question was reported "interrupted" | the campaign read the pipeline's shutdown flag, which is also set when the space is spent | only a signal means interrupted; the run's own CLI path already said so |
+| 66 | One click on one cell would have made every run confirmatory | the confirmation rule counted any registration with the run's metric | a registration counts for the run that measured the cell it names |
+| 67 | The dashboard showed a run without saying which | the map, the charts and the panel each took whichever run reported last | one selection, shared; the legend names the run and lets the reader choose |
+| 68 | The console showed a run without naming it | the header carried the store and the queue, not the run | the header names the run it shows |
+
+### The renaming that came with it
+
+`replication_spec` and `replication_budget` said "replication" because the
+replication was the only verb that built a declaration. Two verbs build one
+now — a replication and a quest — so they are `cell_spec` (the run's own
+declaration, narrowed to one cell and sized for it) and `measurement_budget`
+(the budget the measurements need).
+
+### Files
+
+| File | Change |
+|------|--------|
+| `computronium/experiment/execution/dashboard/web.py` | the quest queues the answering run; the run's status reads the cells it measured |
+| `computronium/experiment/execution/dashboard/actions.py` | `cell_spec`, `measurement_budget` (the two verbs share them) |
+| `computronium/experiment/surface/report.py` | the registry is read as registrations; a registration carries its cell; `preregistered_metrics(before, cells)` |
+| `computronium/experiment/execution/pipeline.py` | `shutdown_requested` — a signal is not the same as a spent space |
+| `computronium/experiment/execution/campaign.py` | a run that finished its space is completed |
+| `computronium/experiment/execution/dashboard/console.py` | the header names the run it shows |
+| `dashboard/src/run-selection.ts` | **New** — the run the dashboard shows, and who decides |
+| `dashboard/src/discovery-map.ts`, `plotter.ts`, `hud.ts` | they read the shared selection; the legend gained the run picker |
+| `dashboard/src/cell-drawer.ts` | the quest says what it did: the file and the campaign |
+| `tests/unit/experiment/test_dashboard_actions.py` | the quest is answered: the campaign, the new run, the measured budget, the queue-less case |
+| `tests/unit/experiment/test_dashboard_preregistration.py` | **New** — a registration confirms the cell it names, and only that cell |
+| `scripts/probes/probe_dashboard_quest.py` | **New** — the quest, pressed in a browser: the file, the campaign, the run |
+| `scripts/probes/probe_quest_run.py` | **New** — the quest, run to the end: the new run's status, its records, what it cost |
+| `scripts/probes/dashboard_probe.py` | the serving helper takes a queue, so a probe can read what the dashboard queued |
+| `scripts/probes/probe_dashboard_space.py`, `probe_dashboard_actions.py` | they wait for the page's answer instead of a fixed pause: under a software rasterizer the page's event loop answers in seconds, and "Working…" is not an answer |
+| `docs/DASHBOARD.md` | the quest, the run picker, the confirmation rule |
+
+### Still open
+
+- **A confirmation has no run either.** `Preregister` writes the protocol a
+  confirming run must meet, and the confirming run — a *new* run, for the
+  same reason the quest's is new — is still the researcher's to schedule.
+  The machinery is there (the quest queues a new run for a cell); what is
+  missing is the verb, and the question of whether registering a protocol
+  should spend compute on the spot the way the quest now does.
+- **Custom 3D charts** — the plan's v2 Pareto scatter, ablation bars and
+  violin plots in three.js. uPlot with an explicitly stated range is what
+  ships.
+- **The budget counts the measurements, not the launch.** The quest's budget
+  is the measured cost of a measurement times the measurements it owes, with
+  half again for a slower machine. The launch's own cost — loading the
+  dataset, composing the system — is not in it: measured, it is ~1.1 s
+  (`scripts/probes/probe_quest_run.py`), which the headroom covers for a
+  63-seed plan and barely covers for a two-seed one.
+

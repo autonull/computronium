@@ -233,9 +233,11 @@ class CampaignRunner:
                 store.finish_run(run_id, "failed", budget_consumed_s=_consumed(runner))
                 return 1
 
-            # PipelineRunner handles shutdown internally via SignalHandler
-            # Check if run was interrupted
-            if runner._shutdown:
+            # A run stops for several reasons: a signal, a spent budget, a
+            # spent space, a gate refusing a cell. Only a signal leaves the
+            # run unfinished and resumable; the others are the run finishing
+            # what it set out to do, which is what the CLI path already says.
+            if runner.shutdown_requested:
                 logger.info(
                     "Run interrupted by signal; resume with --run-id %s", run_id
                 )

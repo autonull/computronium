@@ -157,30 +157,31 @@ def run_spread(records: Sequence[Record], metric: str) -> float:
     return statistics.fmean(spreads) if spreads else 0.0
 
 
-def replication_spec(
+def cell_spec(
     source: RunSpec,
     target: CellTarget,
     *,
-    plan: int,
+    seeds: int,
     budget_seconds: float | None = None,
 ) -> RunSpec:
-    """The run's own declaration, narrowed to one cell and grown to its seeds.
+    """The run's own declaration, narrowed to one cell and sized for it.
 
     The seed plan grows rather than shifts: the run keeps the seeds it has
     already measured, and the pipeline skips the identities the store already
     holds, seed by seed. A replication therefore measures the seeds the cell
-    still owes, and nothing else.
+    still owes, and nothing else. A quest measures a cell nobody measured, so
+    every seed in the plan is new.
     """
     data = source.to_dict()
     data["axes"] = [selection.model_dump(mode="json") for selection in target.axes()]
-    data["n_seeds"] = plan
+    data["n_seeds"] = seeds
     if budget_seconds is not None:
         data["budget_seconds"] = budget_seconds
     return RunSpec.model_validate(data)
 
 
-def replication_budget(per_seed_seconds: float, measurements: int) -> float:
-    """The budget the missing measurements need."""
+def measurement_budget(per_seed_seconds: float, measurements: int) -> float:
+    """The budget the measurements need."""
     return max(1.0, per_seed_seconds * measurements * BUDGET_HEADROOM)
 
 
@@ -313,13 +314,13 @@ __all__ = [
     "CellEvidence",
     "CellTarget",
     "cell_evidence",
+    "cell_spec",
     "claim_sentence",
     "default_metric",
+    "measurement_budget",
     "records_for_cell",
     "registration_name",
     "registration_payload",
-    "replication_budget",
-    "replication_spec",
     "run_spread",
     "write_registration",
 ]

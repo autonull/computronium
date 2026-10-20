@@ -153,6 +153,7 @@ class ConsoleDashboard:
         self._latest_resources: dict[str, any] = {}
         self._latest_space: dict[str, Any] | None = None
         self._latest_measured: set[str] = set()
+        self._latest_run_id: str | None = None
         self._store_source = "none"
 
     def _make_layout(self) -> Layout:
@@ -188,6 +189,12 @@ class ConsoleDashboard:
         time_str = datetime.now().strftime("%H:%M:%S")
         title = Text("🖥️  Computronium Console Dashboard", style="bold cyan")
         subtitle = Text(f"Last update: {time_str}", style="dim")
+        if self._latest_run_id:
+            # The console shows one run at a time, and says which.
+            subtitle = Text(
+                f"run {self._latest_run_id[:8]} · Last update: {time_str}",
+                style="dim",
+            )
         return Panel.fit(title + "\n" + subtitle, border_style="cyan")
 
     def _render_footer(self) -> Panel:
@@ -467,6 +474,7 @@ class ConsoleDashboard:
                                         store.query_records(run_id=run.run_id)
                                     )
                                     if records:
+                                        self._latest_run_id = run.run_id
                                         # Compute Pareto
                                         from computronium.experiment.analysis import (
                                             compute_pareto_frontier,

@@ -418,7 +418,7 @@ export class CellDrawer implements Component {
         ? " It lies outside this run's declaration, so the run did not set out to measure it."
         : "";
     const seeds = data.requiredSeeds ?? 0;
-    return `The system would measure this cell and nobody has. Queue measures it (${seeds} seeds). Adopt as Quest writes the question down before it is measured.${outside}`;
+    return `The system would measure this cell and nobody has. Queue measures it (${seeds} seeds). Adopt as Quest writes the question down first and then queues the run that would answer it — a new run, because a threshold written now cannot confirm a run that has already begun.${outside}`;
   }
 
   private setStatus(message: string, isError = false): void {
@@ -482,7 +482,12 @@ export class CellDrawer implements Component {
       return `Queued campaign ${payload.campaign_id}: ${payload.measurements} measurements in a plan of ${payload.plan}.`;
     }
     const written = payload.written ? "Registered" : "Already registered";
-    return `${written} ${payload.path} — commit it; the run that follows it can be confirmatory.`;
+    const registered = `${written} ${payload.path} — commit it; the run that follows it can be confirmatory.`;
+    if (action !== "quest") return registered;
+    if (!payload.campaign_id) {
+      return `${registered} No campaign queue is attached, so nothing is scheduled.`;
+    }
+    return `${registered} Queued campaign ${payload.campaign_id}: ${payload.measurements} measurements in a plan of ${payload.plan}, in a new run.`;
   }
 
   // Mini 3D sparkline (the measured training curve)

@@ -119,8 +119,17 @@ it.
 panels leave free, so the map is not half hidden behind the legend.
 
 **Legend** (bottom-left of the map): the cell-type key, the credit arm
-colours, the axis picker, and the tally — how many cells are measured, legal
-and void, and which rules refuse the void ones.
+colours, the run picker, the axis picker, and the tally — how many cells are
+measured, legal and void, and which rules refuse the void ones.
+
+**The run the picture shows.** A store holds several runs — the run, and the
+runs its own answers spawned — and each of them reports its own metrics. A
+picture can only show one at a time, so the choice is made once, in
+`src/run-selection.ts`: the run that started last until the reader picks
+another, and the map, the charts and the mission-control panel all read the
+same answer. The legend's **Run** picker names the runs the dashboard knows
+about (`307e2baf · demo · 5`) and says which one the picture shows
+(`run 307e2baf · EXPLORATORY · 5 records`).
 
 ---
 
@@ -152,12 +161,25 @@ aside while it is open.
 |--------|--------------|-----------------|
 | `[Queue Rest]` | Queues the measurements the cell still owes: the run's seed plan grows, and the pipeline measures only the seeds the store does not hold | a measured cell (a legal one is labelled `[Queue]` and measures the cell) |
 | `[Preregister]` | Writes a registration for the confirmation: the threshold is the effect the cell showed | a measured cell |
-| `[Adopt as Quest]` | Writes a registration for the question: the threshold is the material effect the gate asks for, in the run's own units | a cell with no measurement |
+| `[Adopt as Quest]` | Writes a registration for the question — the threshold is the material effect the gate asks for, in the run's own units — **and queues the run that would answer it** | a cell with no measurement |
 
 The threshold field overrides the derived one. The buttons post to
 `/api/cells/{run_id}/{replicate,preregister,quest}` and the drawer's status
 line says what happened — the campaign that was queued, or the file that was
 written.
+
+**A quest is answered by a new run.** The quest writes the protocol down
+first and queues the measurement second, and the run it queues is a *new*
+one: a threshold written now cannot confirm a run that has already begun,
+and the run the question came from began long before. The cell holds no
+evidence to join either — every seed in the plan is new. The answering run
+declares exactly that one cell, with the seed count the registration names,
+and a budget measured from the run's own seeds.
+
+Without a campaign queue the question is still registered, and the status
+line says that nothing was scheduled: a dashboard built without a queue
+answers `409` for the verbs that need one, and says so rather than
+pretending the work was queued.
 
 **A cell the system refuses cannot be acted on.** The void rules that mark a
 cell on the grid also refuse it at the verbs: a replication or a registration
@@ -176,6 +198,13 @@ run began was written with that run's data in hand, so it cannot confirm that
 run. The mode chip and the report both compare the registration's timestamp
 with the run's start: the run that produced the observation stays
 `EXPLORATORY`, and the run that follows the registration can be confirmatory.
+
+**And a registration speaks about a cell.** A registration the dashboard
+writes names the cell it is about, and it confirms only a run that measured
+that cell. Without that rule one click on one cell would make every run in
+the repository confirmatory — the same failure the timestamp rule stops, one
+level down. A registration written by hand, naming no cell, is a protocol
+about the metric itself, and counts as it always did.
 
 ---
 
@@ -311,7 +340,12 @@ PipelineRunner ──► event bus ─────────────┤
                               │                  └─ CampaignRun(run_id=…):
                               │                     the run continues, so the
                               │                     seeds join its evidence
-                              └─ preregister / quest ──► configs/preregistrations/
+                              ├─ preregister ──► configs/preregistrations/
+                              └─ quest ────────► configs/preregistrations/
+                                                 + CampaignQueue.enqueue()
+                                                    (a NEW run: a threshold
+                                                    written now cannot confirm
+                                                    a run that has begun)
 ```
 
 **Critical — the store's lock is exclusive, and the writer publishes a
@@ -412,7 +446,10 @@ the resources, the metrics, the recent records — and the **declared space**,
 drawn as a grid of marks. `█` is a cell the run measured, `·` a gap nobody has
 measured, `×` a cell the system refuses, with the rule that refuses it. The
 space is read through the same rules the browser uses, so the two cannot
-disagree about what is possible.
+disagree about what is possible. The header names the run the console shows,
+for the same reason the browser's legend does: a store holds several runs,
+and a picture that does not say which one is a picture of nothing in
+particular.
 
 ---
 
@@ -445,6 +482,8 @@ uv run python scripts/probes/probe_dashboard_plot_drawer.py # drawer + plot stat
 uv run python scripts/probes/probe_dashboard_space.py        # the gap is visible and actionable
 uv run python scripts/probes/probe_dashboard_void.py         # the void cell says why
 uv run python scripts/probes/probe_dashboard_actions.py      # the verbs act
+uv run python scripts/probes/probe_dashboard_quest.py       # the quest is answered by a run
+uv run python scripts/probes/probe_quest_run.py             # the answering run, end to end
 ```
 
 The probes share `scripts/probes/dashboard_probe.py`: the Chromium flags that
