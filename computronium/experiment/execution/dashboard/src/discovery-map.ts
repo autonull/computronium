@@ -41,7 +41,7 @@ export class DiscoveryMap implements Component {
   private renderer: THREE.WebGLRenderer;
   private cells: Map<string, THREE.Mesh | THREE.LineSegments | THREE.Line> =
     new Map();
-  private cellDataMap: Map<string, CellData> = new Map();
+  cellDataMap: Map<string, CellData> = new Map();
   private axes: GridAxes = { x: "credit", y: "geometry", z: "dynamics" };
   private xValues: string[] = [];
   private yValues: string[] = [];
@@ -54,12 +54,18 @@ export class DiscoveryMap implements Component {
   private hoveredCell: string | null = null;
   private legendElement: HTMLElement | null = null;
   private axisLabelMeshes: THREE.Object3D[] = [];
+  private initialized = false;
 
   constructor() {
     // Will be initialized in init() with references from main.ts
     this.scene = new THREE.Scene();
     this.camera = new THREE.Camera();
     this.renderer = new THREE.WebGLRenderer();
+
+    // Register WebSocket handlers IMMEDIATELY in constructor
+    // This ensures handlers are ready before any WebSocket messages arrive
+    router.register("queue_update", this.onQueueUpdate.bind(this));
+    router.register("campaign_metrics", this.onCampaignMetrics.bind(this));
   }
 
   async init(): Promise<void> {
@@ -70,10 +76,6 @@ export class DiscoveryMap implements Component {
       this.camera = dashboard.camera;
       this.renderer = dashboard.renderer;
     }
-
-    // Register WebSocket handlers
-    router.register("queue_update", this.onQueueUpdate.bind(this));
-    router.register("campaign_metrics", this.onCampaignMetrics.bind(this));
 
     // Setup mouse interaction
     this.setupInteraction();

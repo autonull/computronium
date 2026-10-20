@@ -20,10 +20,14 @@ export class LiveRail implements Component {
   private events: PipelineEvent[] = [];
   private maxEvents = 50;
 
-  async init(): Promise<void> {
-    this.createUI();
+  constructor() {
+    // Register WebSocket handlers IMMEDIATELY in constructor
     router.register("pipeline_event", this.onPipelineEvent.bind(this));
     router.register("status_update", this.onStatusUpdate.bind(this));
+  }
+
+  async init(): Promise<void> {
+    this.createUI();
     console.log("[LiveRail] Initialized");
   }
 

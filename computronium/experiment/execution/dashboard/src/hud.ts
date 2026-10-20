@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { registry } from "./components/registry.js";
-import { router } from "./ws-client.js";
+import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import type { Component } from "./components/registry.js";
 
@@ -37,13 +37,24 @@ export class HUD implements Component {
   private burnRateMesh: THREE.Sprite | null = null;
   private claimPriceMesh: THREE.Sprite | null = null;
   private modeChipMesh: THREE.Sprite | null = null;
+  private connectionMesh: THREE.Sprite | null = null;
   private statusData: StatusData = {};
   private animationTime = 0;
+  private wsState: string = "disconnected";
 
   constructor() {
     this.scene = new THREE.Scene();
     this.camera = new THREE.Camera();
     this.renderer = new THREE.WebGLRenderer();
+
+    // Register WebSocket handlers IMMEDIATELY in constructor
+    router.register("status_update", this.onStatusUpdate.bind(this));
+
+    // Subscribe to WebSocket connection state
+    wsClient.onStateChange((state) => {
+      this.wsState = state;
+      this.updateConnectionIndicator();
+    });
   }
 
   async init(): Promise<void> {
@@ -53,8 +64,6 @@ export class HUD implements Component {
       this.camera = dashboard.camera;
       this.renderer = dashboard.renderer;
     }
-
-    router.register("status_update", this.onStatusUpdate.bind(this));
 
     this.createHUD();
     console.log("[HUD] Initialized");
@@ -85,6 +94,8 @@ export class HUD implements Component {
     this.claimPriceMesh?.material.dispose();
     this.modeChipMesh?.material.map?.dispose();
     this.modeChipMesh?.material.dispose();
+    this.connectionMesh?.material.map?.dispose();
+    this.connectionMesh?.material.dispose();
   }
 
   private createHUD(): void {
@@ -112,6 +123,9 @@ export class HUD implements Component {
 
     // Claim price display
     this.createClaimPrice();
+
+    // Connection indicator (top-right, above resource bars)
+    this.createConnectionIndicator();
 
     // Mode chip (top-left)
     this.createModeChip();
@@ -286,6 +300,73 @@ export class HUD implements Component {
     this.scene.add(this.modeChipMesh);
     this.modeChipMesh.userData.canvas = canvas;
     this.modeChipMesh.userData.context = ctx;
+  }
+
+  private createConnectionIndicator(): void {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d")!;
+    canvas.width = 256;
+    canvas.height = 48;
+    ctx.font = "bold 20px 'JetBrains Mono', monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    this.drawConnectionState(ctx, canvas.width, canvas.height);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+    });
+    this.connectionMesh = new THREE.Sprite(material);
+    this.connectionMesh.scale.set(5, 0.9, 1);
+    this.connectionMesh.position.set(18, 8 - 3 * 1.8 - 3.2, 0);
+    this.connectionMesh.renderOrder = 1;
+    this.scene.add(this.connectionMesh);
+    this.connectionMesh.userData.canvas = canvas;
+    this.connectionMesh.userData.context = ctx;
+  }
+
+  private drawConnectionState(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+  ): void {
+    ctx.clearRect(0, 0, width, height);
+    const state = this.wsState;
+    let color: string;
+    let text: string;
+    switch (state) {
+      case "connected":
+        color = PALETTE.ok;
+        text = "● CONNECTED";
+        break;
+      case "connecting":
+      case "reconnecting":
+        color = PALETTE.warn;
+        text = "◐ CONNECTING...";
+        break;
+      default:
+        color = PALETTE.error;
+        text = "○ DISCONNECTED";
+    }
+    ctx.fillStyle = color + "22";
+    ctx.beginPath();
+    ctx.roundRect(8, 4, width - 16, height - 8, 8);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.fillText(text, width - 12, height / 2);
+  }
+
+  private updateConnectionIndicator(): void {
+    if (!this.connectionMesh) return;
+    const canvas = this.connectionMesh.userData.canvas as
+      HTMLCanvasElement | undefined;
+    const ctx = this.connectionMesh.userData.context as
+      CanvasRenderingContext2D | undefined;
+    if (!canvas || !ctx) return;
+    this.drawConnectionState(ctx, canvas.width, canvas.height);
+    this.connectionMesh.material.map!.needsUpdate = true;
   }
 
   private onStatusUpdate(data: any): void {

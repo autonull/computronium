@@ -1544,6 +1544,17 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
     p_dashboard.add_argument(
         "--no-websockets", action="store_true", help="Disable WebSocket updates"
     )
+    p_dashboard.add_argument(
+        "--console",
+        action="store_true",
+        help="Run console-based dashboard instead of web (no browser needed)",
+    )
+    p_dashboard.add_argument(
+        "--update-interval",
+        type=float,
+        default=2.0,
+        help="Update interval in seconds (console mode)",
+    )
 
     # Dataset registry command
     p_dataset = sub.add_parser(
@@ -6183,9 +6194,42 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _cmd_dashboard(args: argparse.Namespace) -> int:
-    """Launch live monitoring web dashboard (Phase E5)."""
+    """Launch live monitoring web dashboard (Phase E5) or console dashboard."""
     import asyncio
 
+    if args.console:
+        from computronium.experiment.execution.dashboard.console import run_console_dashboard
+
+        logger.info(f"Starting console dashboard")
+        logger.info(f"Store: {args.store}")
+        logger.info(f"Update interval: {args.update_interval}s")
+
+        # Get campaign queue if available (for queue monitoring)
+        campaign_queue = None
+        try:
+            from computronium.experiment.execution.campaign_queue import get_campaign_queue
+
+            campaign_queue = get_campaign_queue()
+        except Exception:
+            pass
+
+        try:
+            asyncio.run(
+                run_console_dashboard(
+                    store_path=args.store,
+                    campaign_queue=campaign_queue,
+                    update_interval=args.update_interval,
+                )
+            )
+        except KeyboardInterrupt:
+            logger.info("Console dashboard stopped by user")
+        except Exception as e:
+            logger.exception("Console dashboard failed")
+            print(f"Console dashboard error: {e}", file=sys.stderr)
+            return 1
+        return 0
+
+    # Web dashboard (default)
     from computronium.experiment.execution.dashboard.web import run_dashboard
 
     logger.info(f"Starting dashboard on {args.host}:{args.port}")

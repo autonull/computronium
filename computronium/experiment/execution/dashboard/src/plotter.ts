@@ -55,9 +55,13 @@ export class Plotter implements Component {
   private ablationGroups: AblationGroup[] = [];
   private paretoFlags: boolean[] = [];
 
+  constructor() {
+    // Register WebSocket handlers IMMEDIATELY in constructor
+    router.register("campaign_metrics", this.onCampaignMetrics.bind(this));
+  }
+
   async init(): Promise<void> {
     this.createUI();
-    router.register("campaign_metrics", this.onCampaignMetrics.bind(this));
     console.log("[Plotter] Initialized");
   }
 

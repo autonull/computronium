@@ -259,11 +259,14 @@
 2. **Updated README "Start here"** in `docs/readme/start-here.md` — added live dashboard launch instructions
 3. **Verified end-to-end** — dashboard creation, route registration, palette/axis metadata generation
 4. **Created `docs/DASHBOARD.md`** — comprehensive guide to 3D UI, controls, WebSocket types, architecture
+5. **Added console dashboard** (`console.py`) — text-based live monitoring for debugging/headless environments
+6. **Added `--console` flag** to `comp dashboard` command — run without browser
 
 **Notes**: 
 - Dashboard command was already registered in CLI, now promoted to core visibility
 - All imports pass layering/isolation locks (`tests/property/test_full_import_isolation_lock.py`, `test_layering_lock.py`)
 - Frontend builds: `npm run build` → `dashboard.js` (595KB, 163KB gzipped)
+- Console dashboard uses `rich` for terminal UI, shows queue, resources, metrics (Pareto/ablation/variability), recent records
 
 ---
 
@@ -273,6 +276,7 @@
 
 | File | Change |
 |------|--------|
+| `computronium/experiment/execution/dashboard/console.py` | **New** — console-based live monitoring dashboard (rich TUI) |
 | `computronium/experiment/execution/dashboard/package.json` | **New** — three.js, three-stdlib, uPlot, vite, typescript |
 | `computronium/experiment/execution/dashboard/tsconfig.json` | **New** |
 | `computronium/experiment/execution/dashboard/vite.config.ts` | **New** |

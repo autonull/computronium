@@ -254,7 +254,7 @@ async def main() -> int:
                 # Wait for the next periodic broadcast (dashboard broadcasts every 2s)
                 await asyncio.sleep(10.0)
 
-            # Wait for three.js to render (check canvas has actual content)
+            # Wait for three.js to render AND for campaign metrics to be processed (measured cells exist)
             await page.wait_for_function(
                 """() => {
                     const canvas = document.getElementById('dashboard-canvas');
@@ -264,9 +264,25 @@ async def main() -> int:
                     const pixels = new Uint8Array(4);
                     ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
                     // Not all white/transparent
-                    return pixels[0] !== 255 || pixels[1] !== 255 || pixels[2] !== 255 || pixels[3] !== 0;
+                    const hasContent = pixels[0] !== 255 || pixels[1] !== 255 || pixels[2] !== 255 || pixels[3] !== 0;
+                    if (!hasContent) return false;
+                    
+                    // Check if DiscoveryMap has measured cells (glowing pillars)
+                    const dashboard = window.__DASHBOARD__;
+                    if (!dashboard || !dashboard.discoveryMap) return false;
+                    
+                    // Check cellDataMap for any measured cells
+                    const cellDataMap = dashboard.discoveryMap.cellDataMap;
+                    if (!cellDataMap || cellDataMap.size === 0) return false;
+                    
+                    for (const [key, data] of cellDataMap.entries()) {
+                        if (data.status === 'measured' && data.metrics?.val_acc !== undefined) {
+                            return true; // Found at least one measured cell with metrics
+                        }
+                    }
+                    return false; // No measured cells yet
                 }""",
-                timeout=30000,
+                timeout=60000,
             )
 
             # Extra render frames
