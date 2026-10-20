@@ -149,3 +149,32 @@ class TestTheConsoleSpace:
         content = panel.renderable
         assert isinstance(content, Text)
         assert "No declared space yet" in content.plain
+
+
+class TestTheSnapshot:
+    """One frame of the console dashboard, as text (TODO69).
+
+    The live dashboard draws into a terminal. A snapshot draws the same frame
+    into a string, so a document — or an agent — can show the console
+    dashboard without a terminal.
+    """
+
+    def _dashboard(self, store_path: Path) -> ConsoleDashboard:
+        return ConsoleDashboard(ConsoleDashboardConfig(store_path=str(store_path)))
+
+    def test_the_snapshot_is_a_frame_of_the_dashboard(self, store_path: Path) -> None:
+        dashboard = self._dashboard(store_path)
+
+        frame = dashboard.snapshot(width=120, height=30)
+
+        assert "Computronium Console Dashboard" in frame
+        assert "Declared Space" in frame
+
+    def test_the_snapshot_reads_the_store_first(self, store_path: Path) -> None:
+        """A snapshot of stale numbers is a lie."""
+        dashboard = self._dashboard(store_path)
+
+        frame = dashboard.snapshot(width=160, height=40)
+
+        assert "gradient" in frame
+        assert "records" in frame

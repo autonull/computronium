@@ -25,19 +25,23 @@ report's claims in step.
 |-------|------|--------|
 | The live dashboard | `computronium/experiment/execution/dashboard/web.py` | complete: 3D map, drawer, charts, HUD, live rail, the three verbs |
 | The event bus | `computronium/experiment/execution/events.py` | complete: stage and measurement events, process-wide |
+| The narration | `computronium/experiment/execution/dashboard/narration.py` | complete: the sentences, the account, the state |
+| The caption | `dashboard/src/caption.ts` | complete: the sentences, rendered |
 | The hero capture | `scripts/capture_dashboard_screenshot.py` | one image, one view |
+| The tour | `scripts/capture_dashboard_tour.py` | twelve views, four kinds of picture |
+| The recording | `scripts/capture_dashboard_video.py` | a `.webm` of a live session, uncommitted |
 | The live rail | `dashboard/src/live-rail.ts` | terse pills: `[s6_train] train cells` — a log, not a story |
-| The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal |
+| The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal, and a frame of it as text |
 | The report | `comp report` | the numbers, as prose and tables |
 
-### What is missing
+### What was missing, and what closed it
 
-| Gap | Impact |
-|-----|--------|
-| No narration | the screen shows numbers and a log; it does not *say* what is happening, so a narrator reading the screen has to reconstruct the story from the panels |
-| No closed captions | a recording of the dashboard has no subtitles; the viewer reads a 3D scene in silence |
-| One screenshot | the hero is the dashboard's overview; nothing shows the drawer, the charts, the void cells, the space, the report |
-| No recording | "show me it working" needs a terminal in front of the reader |
+| Gap | Impact | Closed by |
+|-----|--------|-----------|
+| No narration | the screen shows numbers and a log; it does not *say* what is happening, so a narrator reading the screen has to reconstruct the story from the panels | `narration.py`: the sentences, written once |
+| No closed captions | a recording of the dashboard has no subtitles; the viewer reads a 3D scene in silence | `caption.ts`: the server's sentences, rendered |
+| One screenshot | the hero is the dashboard's overview; nothing shows the drawer, the charts, the void cells, the space, the report | the tour: twelve views |
+| No recording | "show me it working" needs a terminal in front of the reader | the recording: a live session, with captions |
 
 ---
 
@@ -130,49 +134,74 @@ these sentences (Phase 1). The server speaks; nothing draws it yet.
    - the latest sentence, in two lines, 22px, high contrast, bottom centre;
    - the state summary when nothing is happening;
    - a sentence stays up for a few seconds, then the summary returns;
-   - `H`/`C` toggles it, like the other panels.
+   - `C` toggles it, like the other panels.
 2. The caption is *rendered*, not composed: the words come from the server.
 
 **Acceptance**: with the browser showing only the dashboard, a reader can say
 what is running, what was measured, and what the number means.
+
+**What the caption does when there is no run yet**: the state has nothing to
+say, so the caption keeps the *last event's* sentence ("Training cells.")
+rather than falling back to a placeholder. The events are the story while
+the run is still running; the state is the story once it has finished.
 
 ### Phase 2: The tour (screenshots) ✅
 
 **Goal**: more than one picture of the system.
 
 `scripts/capture_dashboard_tour.py` — one store, one dashboard, one browser,
-several views:
+twelve views:
 
 | Shot | What it shows |
 |------|---------------|
 | `dashboard-hero.png` | the overview (the existing shot, regenerated) |
 | `dashboard-map.png` | the discovery map alone: the fog of war, panels hidden |
-| `dashboard-cell.png` | a measured cell's drawer: metrics, curve, verdict, seeds to claim |
-| `dashboard-void.png` | a void cell: the rule that refuses it |
-| `dashboard-pareto.png`, `-ablation.png`, `-variability.png` | the three charts |
+| `dashboard-cell.png` | the leading cell's drawer: metrics, curve, verdict, seeds to claim |
+| `dashboard-void.png` | a void cell, in a slice of the space cut a different way, and the rule that refuses it |
+| `dashboard-pareto.png`, `-ablation.png`, `-variability.png` | the three charts, each on its own, over the map |
 | `dashboard-caption.png` | the caption over the map — the narrated picture |
-| `report-run.png` | the run's report, as a reader sees it |
+| `narration-script.png` | the dashboard's account of itself, as text |
+| `report-run.png` | the run's report, in the browser |
+| `console-dashboard.png` | the console dashboard: the same picture, in a terminal |
+| `report-text.png` | the run's report, in a terminal |
 
-**Acceptance**: every shot is 1920×1080, has real data in it, and lands in
-`docs/readme/assets/` (committed) and `docs/screenshots/` (mirrored).
+**Acceptance**: ✅ every shot is 1920×1080, has real data in it, and lands in
+`docs/readme/assets/` (committed) and `docs/screenshots/` (mirrored). ✅ the
+shots are of *different things*: the 3D map, the panels, the charts, a
+browser report, and two terminal views. ✅ a shot that cannot be taken is
+reported, not silently skipped.
+
+**The tour's rule**: it waits for the dashboard's *state* — a measured cell,
+a drawn chart, a caption with words in it — and never for a fixed pause.
 
 ### Phase 3: The recording ✅
 
 **Goal**: a short video of a live session, with the captions on screen.
 
-`scripts/capture_dashboard_video.py` — Playwright records the browser while
-the demo campaign runs; the caption narrates it. The file is a `.webm`, it is
-**not committed** (it is large), and the path is ignored.
+`scripts/capture_dashboard_video.py` — the camera photographs the dashboard
+while the demo campaign runs; the caption narrates it. The file is a
+`.webm`, it is **not committed** (it is large), and it is written outside
+the repository's tracked paths.
 
-**Acceptance**: a `.webm` exists after a run, the captions are legible in it,
-and `git status` stays clean.
+**Acceptance**: ✅ a `.webm` exists after a run, the captions are legible in
+it, and `git status` stays clean.
+
+**The recorder is not Playwright's own**: it needs a particular `ffmpeg`
+build, and a machine without that build records *nothing* without saying so.
+The script photographs the page and encodes the frames with the system
+`ffmpeg`, at the rate the session actually happened.
 
 ### Phase 4: Polish, test, document ✅
 
 - `tests/unit/experiment/test_dashboard_narration.py` — the sentences, the
   summary, the endpoint.
+- `tests/unit/experiment/test_dashboard_events.py` — every event frame
+  carries its sentence, and the frame and the account say the same thing.
+- `tests/unit/experiment/test_console_dashboard.py` — the console
+  dashboard's frame as text.
 - `docs/DASHBOARD.md` — the caption, the narration endpoint, the tour.
-- `docs/readme/` — a "the dashboard, in pictures" section.
+- `docs/readme/dashboard.md` — a "the dashboard, in pictures" section, in
+  the README.
 
 ---
 
@@ -192,10 +221,10 @@ and `git status` stays clean.
 
 - [x] Every event the dashboard forwards becomes a sentence that names a run, a cell, a number or a rule
 - [x] `GET /api/narration` returns the current sentence, the recent lines and the whole story
-- [ ] The dashboard shows the narration as a closed-caption overlay
-- [ ] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption and the report
-- [ ] A short recording of a live session exists, with the captions on screen, and is not committed
-- [ ] `docs/DASHBOARD.md` and the README show the tour
+- [x] The dashboard shows the narration as a closed-caption overlay
+- [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report and the terminal views
+- [x] A short recording of a live session exists, with the captions on screen, and is not committed
+- [x] `docs/DASHBOARD.md` and the README show the tour
 
 ---
 
@@ -203,15 +232,54 @@ and `git status` stays clean.
 
 | Piece | State |
 |-------|-------|
-| `narration.py` — the sentences, the account | ✅ done, 14 tests |
+| `narration.py` — the sentences, the account | ✅ done |
 | `web.py` — the frames, the endpoint, the state refresh | ✅ done |
 | `pipeline.py` — the producer names the cell and the seed | ✅ done |
-| `caption.ts` — the browser renders the sentences | ⬜ next session |
-| the tour — seven views in one browser session | ⬜ next session |
-| the recording — a `.webm` of a live session, uncommitted | ⬜ next session |
-| the docs — the caption, the endpoint, the tour | ⬜ next session |
+| `caption.ts` — the browser renders the sentences | ✅ done |
+| the tour — twelve views in one browser session | ✅ done |
+| the recording — a `.webm` of a live session, uncommitted | ✅ done |
+| the docs — the caption, the endpoint, the tour | ✅ done |
 
-The server already speaks: every event it forwards now carries its sentence,
-`GET /api/narration` answers with the account, and the `narration` frame
-carries the present. What is missing is the part a viewer sees — the caption
-overlay — and the pictures.
+The server speaks, the browser shows it, and the pictures show both.
+
+---
+
+## What the work taught (for whoever comes next)
+
+**The pictures had to be of *different things*, not of the same scene.** The
+first tour changed the panels in front of the map and the map stayed the
+same picture in every frame. A tour of one scene is one picture repeated.
+The tour now spans the 3D map, the panels, the charts, a browser report and
+two terminal views — and the void view cuts the space a *different* way, so
+even the 3D pictures differ from one another.
+
+**A "live" shot of the map is not available, and pretending otherwise would
+be a lie.** The pipeline measures in `s7` and records in `s8`, so the records
+land in a burst at the end: there is no moment when the map is half-lit. The
+tour dropped the live shot rather than re-shoot the finished map under
+another name. The *recording* is where the live session is: the caption
+narrates the events while the run happens.
+
+**The map needs the run's records before it draws anything.** The declared
+space could be drawn from the run's declaration alone, but the dashboard
+only learns of a run through its metrics, and the metrics need records. So
+the first half of a filmed session is an empty stage with the events
+streaming in the rail. The caption carries that half: it keeps the last
+event's sentence when there is no state to fall back to.
+
+**The store's mirror outlives the store.** A capture that deletes the store
+but not its mirror reads the *last* run's records as if they were this run's
+— and the tour then asks the server about a run that is not in the store.
+`dashboard_capture.clear_store` removes both.
+
+**Playwright's own video recorder needs a particular `ffmpeg`.** The
+environment's bundled build is older than the one the Playwright version
+expects: it refuses an option, records nothing, and says nothing. The
+recorder now photographs the page and encodes the frames with the system
+`ffmpeg`, at the rate the session actually happened.
+
+**The console dashboard can hand out a frame of itself.** `ConsoleDashboard`
+read the store inside its update loop, so a reader without a terminal could
+not have the picture. `refresh()`, `read_store()` and `snapshot()` make one
+frame available as text — the same words, in the same order, for a document
+or an agent.

@@ -8,6 +8,7 @@ import { discoveryMap } from "./discovery-map.js";
 import { cellDrawer } from "./cell-drawer.js";
 import { plotter } from "./plotter.js";
 import { liveRail } from "./live-rail.js";
+import { caption } from "./caption.js";
 import { hud } from "./hud.js";
 import { PALETTE } from "./palette.js";
 import { detectRenderProfile } from "./render-profile.js";
@@ -149,6 +150,7 @@ window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (key === "h") hud.toggle();
   if (key === "l") liveRail.toggle();
+  if (key === "c") caption.toggle();
 });
 
 // Three.js scene setup (shared by DiscoveryMap and HUD)
@@ -273,6 +275,7 @@ requestAnimationFrame(animate);
   cellDrawer,
   plotter,
   liveRail,
+  caption,
   hud,
   wsClient,
   router,

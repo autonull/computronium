@@ -6,6 +6,8 @@ Text-based live monitoring dashboard using rich for terminal UI.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -148,9 +150,9 @@ class ConsoleDashboard:
         self.console = Console()
         self._running = False
         self._update_task: asyncio.Task | None = None
-        self._latest_metrics: dict[str, any] = {}
-        self._latest_queue: dict[str, any] = {}
-        self._latest_resources: dict[str, any] = {}
+        self._latest_metrics: dict[str, Any] = {}
+        self._latest_queue: dict[str, Any] = {}
+        self._latest_resources: dict[str, Any] = {}
         self._latest_space: dict[str, Any] | None = None
         self._latest_measured: set[str] = set()
         self._latest_run_id: str | None = None
@@ -326,47 +328,57 @@ class ConsoleDashboard:
             lines.append(Text(f"  Best: {acc:.3f} ({arm})", style="green"))
 
         lines.append(Text(""))
-
-        # Ablation summary
-        ablation = self._latest_metrics.get("ablation_groups", [])
-        if ablation:
-            lines.append(Text("🔬 Ablation (credit arm):", style="bold magenta"))
-            for group in ablation[:3]:
-                metric = group.get("metrics", [{}])[0]
-                for arm_data in metric.get("arms", [])[:4]:
-                    val = arm_data.get("mean", 0)
-                    std = arm_data.get("std", 0)
-                    name = arm_data.get("value", "?")[:12]
-                    at_chance = arm_data.get("at_chance", False)
-                    style = "red" if at_chance else ("yellow" if val < 0.2 else "green")
-                    lines.append(Text(f"  {name}: {val:.3f}±{std:.3f}", style=style))
-
+        lines.extend(self._ablation_lines())
         lines.append(Text(""))
-
-        # Variability
-        records = self._latest_metrics.get("records", [])
-        if records:
-            by_arm: dict[str, list[float]] = {}
-            for r in records:
-                arm = r.get("coordinate", {}).get("credit", "?")
-                acc = r.get("payload", {}).get("val_acc")
-                if acc is not None:
-                    by_arm.setdefault(arm, []).append(acc)
-
-            lines.append(Text("📊 Seed Variability:", style="bold blue"))
-            for arm, values in list(by_arm.items())[:4]:
-                if values:
-                    mean = sum(values) / len(values)
-                    std = (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
-                    lines.append(
-                        Text(
-                            f"  {arm[:12]}: {mean:.3f}±{std:.3f} (n={len(values)})",
-                            style="cyan",
-                        )
-                    )
+        lines.extend(self._variability_lines())
 
         content = Text().join(lines) if lines else Text("No metrics yet", style="dim")
         return Panel(content, title="📈 Metrics", border_style="yellow")
+
+    def _ablation_lines(self) -> list[Text]:
+        """What each arm scored, against the others."""
+        lines: list[Text] = []
+        ablation = self._latest_metrics.get("ablation_groups", [])
+        if not ablation:
+            return lines
+        lines.append(Text("🔬 Ablation (credit arm):", style="bold magenta"))
+        for group in ablation[:3]:
+            metric = group.get("metrics", [{}])[0]
+            for arm_data in metric.get("arms", [])[:4]:
+                val = arm_data.get("mean", 0)
+                std = arm_data.get("std", 0)
+                name = arm_data.get("value", "?")[:12]
+                at_chance = arm_data.get("at_chance", False)
+                style = "red" if at_chance else ("yellow" if val < 0.2 else "green")
+                lines.append(Text(f"  {name}: {val:.3f}±{std:.3f}", style=style))
+        return lines
+
+    def _variability_lines(self) -> list[Text]:
+        """How much each arm moved from seed to seed."""
+        lines: list[Text] = []
+        records = self._latest_metrics.get("records", [])
+        if not records:
+            return lines
+        by_arm: dict[str, list[float]] = {}
+        for record in records:
+            arm = record.get("coordinate", {}).get("credit", "?")
+            acc = record.get("payload", {}).get("val_acc")
+            if acc is not None:
+                by_arm.setdefault(arm, []).append(acc)
+
+        lines.append(Text("📊 Seed Variability:", style="bold blue"))
+        for arm, values in list(by_arm.items())[:4]:
+            if not values:
+                continue
+            mean = sum(values) / len(values)
+            std = (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
+            lines.append(
+                Text(
+                    f"  {arm[:12]}: {mean:.3f}±{std:.3f} (n={len(values)})",
+                    style="cyan",
+                )
+            )
+        return lines
 
     def _render_records(self) -> Panel:
         """Render the recent records panel."""
@@ -431,6 +443,90 @@ class ConsoleDashboard:
             logger.debug("The declared space could not be read: %s", exc)
             return None
 
+    async def refresh(self) -> None:
+        """Read the store and the queue once, and update every panel.
+
+        The live dashboard calls this on a timer. A reader who wants one
+        frame of it — a document, a screenshot, an agent — calls it once and
+        then takes the frame.
+        """
+        if self.config.campaign_queue:
+            queue = self.config.campaign_queue
+            self._latest_queue = {
+                "max_concurrent": queue.max_concurrent,
+                "queued": len(queue._queue),
+                "running": len(queue._running),
+                "completed": len(queue._completed),
+                "resource_usage": await queue.get_resource_usage(),
+            }
+            self._latest_resources = await queue.get_resource_usage()
+
+        self.read_store()
+
+    def read_store(self) -> None:
+        """Read the newest run that measured something, and fill the panels."""
+        path = self.config.store_path
+        if not path:
+            return
+
+        try:
+            self._panels_from_store(path)
+        except Exception as exc:  # ruff: ignore[blind-except] - a frame without data is a frame
+            logger.debug("Error fetching metrics: %s", exc)
+
+    def _panels_from_store(self, path: str) -> None:
+        """The newest run with evidence, and the numbers its panels show."""
+        from computronium.experiment.evidence.mirror import readable_store
+
+        with readable_store(Path(path)) as view:
+            self._store_source = view.source
+            store = view.store
+            for run in reversed(list(store.query_runs())):
+                records = list(store.query_records(run_id=run.run_id))
+                if not records:
+                    continue
+                self._latest_run_id = run.run_id
+                self._latest_metrics = self._metrics_for(store, run, records)
+                self._latest_space = self._declared_space(run, records)
+                self._latest_measured = measured_keys(records, FREE_AXES)
+                break
+
+    def _metrics_for(self, store: Any, run: Any, records: list[Any]) -> dict[str, Any]:
+        """The panels' numbers, for one run's records."""
+        from computronium.experiment.analysis import compute_pareto_frontier
+        from computronium.experiment.surface.report import ReportGenerator
+
+        pareto_points, _ = compute_pareto_frontier(records, ["val_acc", "walltime_s"])
+        pareto_ids = {point["record_id"] for point in pareto_points}
+        ablation_groups = ReportGenerator(store).get_ablation_groups(run.run_id)
+        return {
+            "total_records": len(records),
+            "pareto_count": len(pareto_ids),
+            "pareto": [record.record_id in pareto_ids for record in records],
+            "records": [serializer.to_api_dict(record) for record in records],
+            "ablation_groups": ablation_groups,
+            # The panel reads the record the way the API serves it: a mapping,
+            # not a record object.
+            "best_record": serializer.to_api_dict(
+                max(records, key=lambda record: record.payload.get("val_acc", 0))
+            )
+            if records
+            else None,
+        }
+
+    def snapshot(self, width: int = 170, height: int = 46) -> str:
+        """One frame of the dashboard, as a terminal would show it.
+
+        The live dashboard draws into a terminal; this draws the same frame
+        into a string, so a reader without a terminal — a document, an
+        agent — can see the same picture. The frame is read from the store
+        first: a snapshot of stale numbers is a lie.
+        """
+        self.read_store()
+        console = Console(record=True, width=width, height=height, file=io.StringIO())
+        console.print(self._render(self._make_layout()))
+        return console.export_text()
+
     async def _update_loop(self) -> None:
         """Background loop to fetch updates."""
         while self._running:
@@ -438,101 +534,7 @@ class ConsoleDashboard:
                 await asyncio.sleep(self.config.update_interval)
                 if not self._running:
                     break
-
-                # Fetch queue status
-                if self.config.campaign_queue:
-                    queue = self.config.campaign_queue
-                    self._latest_queue = {
-                        "max_concurrent": queue.max_concurrent,
-                        "queued": len(queue._queue),
-                        "running": len(queue._running),
-                        "completed": len(queue._completed),
-                        "resource_usage": await queue.get_resource_usage(),
-                    }
-
-                # Fetch resource usage
-                if self.config.campaign_queue:
-                    self._latest_resources = (
-                        await self.config.campaign_queue.get_resource_usage()
-                    )
-
-                # Fetch campaign metrics from store
-                if self.config.store_path:
-                    try:
-                        from computronium.experiment.evidence.mirror import (
-                            readable_store,
-                        )
-
-                        with readable_store(Path(self.config.store_path)) as view:
-                            self._store_source = view.source
-                            store = view.store
-                            runs = list(store.query_runs())
-                            if runs:
-                                # Get most recent run with records
-                                for run in reversed(runs):
-                                    records = list(
-                                        store.query_records(run_id=run.run_id)
-                                    )
-                                    if records:
-                                        self._latest_run_id = run.run_id
-                                        # Compute Pareto
-                                        from computronium.experiment.analysis import (
-                                            compute_pareto_frontier,
-                                        )
-
-                                        pareto_points, _ = compute_pareto_frontier(
-                                            records, ["val_acc", "walltime_s"]
-                                        )
-                                        pareto_ids = {
-                                            p["record_id"] for p in pareto_points
-                                        }
-
-                                        # Get ablation groups
-                                        from computronium.experiment.surface.report import (
-                                            ReportGenerator,
-                                        )
-
-                                        generator = ReportGenerator(store)
-                                        ablation_groups = generator.get_ablation_groups(
-                                            run.run_id
-                                        )
-
-                                        self._latest_metrics = {
-                                            "total_records": len(records),
-                                            "pareto_count": len(pareto_ids),
-                                            "pareto": [
-                                                r.record_id in pareto_ids
-                                                for r in records
-                                            ],
-                                            "records": [
-                                                serializer.to_api_dict(r)
-                                                for r in records
-                                            ],
-                                            "ablation_groups": ablation_groups,
-                                            # The panel reads the record the way
-                                            # the API serves it: a mapping, not
-                                            # a record object.
-                                            "best_record": serializer.to_api_dict(
-                                                max(
-                                                    records,
-                                                    key=lambda r: r.payload.get(
-                                                        "val_acc", 0
-                                                    ),
-                                                )
-                                            )
-                                            if records
-                                            else None,
-                                        }
-                                        self._latest_space = self._declared_space(
-                                            run, records
-                                        )
-                                        self._latest_measured = measured_keys(
-                                            records, FREE_AXES
-                                        )
-                                        break
-                    except Exception as e:
-                        logger.debug(f"Error fetching metrics: {e}")
-
+                await self.refresh()
             except asyncio.CancelledError:
                 break
             except Exception:
@@ -577,10 +579,8 @@ class ConsoleDashboard:
         self._running = False
         if self._update_task:
             self._update_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._update_task
-            except asyncio.CancelledError:
-                pass
 
 
 async def run_console_dashboard(

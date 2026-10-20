@@ -463,6 +463,7 @@ _SECTIONS: tuple[str, ...] = (
     "kernel.md",
     "cli.md",
     "demos.md",
+    "dashboard.md",
     "evidence.md",
     "neutral-evaluation.md",
     "validation.md",

@@ -285,6 +285,50 @@ The chip's second line names the run (`demo · digits · L1`).
 
 ---
 
+### 7. Caption (Closed Captions)
+
+The dashboard says what it is doing, in words, at the bottom of the screen.
+
+| Line | What it says |
+|------|--------------|
+| Headline (22px) | the last thing that happened — "Measured the gradient arm." — and, once the run has reported, the run's own state |
+| Context (14px) | the rest of the state: which arm leads, whether the claim can be made, what the queue is doing |
+
+**The words are written once, on the server.** `narration.py` composes them
+from the same payloads the panels render; the browser renders them and writes
+none of its own. So the caption, the live rail and an agent reading
+`/api/narration` all say the same thing in the same vocabulary — there is one
+account, not three.
+
+The narration speaks in **words, not figures**. It does not read out an
+accuracy, a seed count or a threshold: those are on the panels, and a
+voice-over that recites them is worse than useless. What it says is the
+*shape* of what is happening — the run is exploring, one arm is ahead of the
+others, the claim cannot be made yet, the queue is idle — and every claim it
+makes can be checked against the picture.
+
+---
+
+## Narration (the account, without a browser)
+
+```bash
+curl -s localhost:8080/api/narration | python -m json.tool
+```
+
+| Field | What it holds |
+|-------|---------------|
+| `state` | the sentences that describe the present — the run, its mode, the cells measured, the arm that leads, the seeds a claim still needs, the queue |
+| `lines` | the narrated moments, oldest first: `{at, text, level, stage}` |
+| `script` | the whole story as one block of text — the present, then the history |
+
+`?run_id=` asks about a run the dashboard is not showing.
+
+The same text is what the caption shows, and what the recording narrates. A
+person — or a model — reading the screen can say what is happening without
+knowing the interface.
+
+---
+
 ## Keyboard Shortcuts
 
 | Key | Action |
@@ -294,6 +338,7 @@ The chip's second line names the run (`demo · digits · L1`).
 | `3` | Switch to Variability tab |
 | `H` | Toggle HUD visibility |
 | `L` | Toggle Live Rail visibility |
+| `C` | Toggle Caption visibility |
 | `Escape` | Close the Cell Drawer |
 
 ---
@@ -307,7 +352,12 @@ The dashboard consumes these message types (via `MessageRouter` auto-registratio
 | `status_update` | `{gpu, cpu, memory, ...}` | Mission Control, Live Rail |
 | `queue_update` | `{queued, running, completed, resource_usage}` | Discovery Map, Live Rail |
 | `campaign_metrics` | `{campaign_id, data: {records, pareto, ablation_groups, chance, required_seeds, resources, run}}` | Discovery Map, Cell Drawer, Plotter, Mission Control |
-| `pipeline_event` | `{stage, message, level, run_id, timestamp}` | Live Rail |
+| `pipeline_event` | `{stage, message, level, run_id, timestamp, sentence}` | Live Rail, Caption |
+| `narration` | `{state: [sentence, ...], timestamp}` | Caption |
+
+Every `pipeline_event` frame carries its **`sentence`**: the wording is
+written once, on the server, so the caption, the rail and an agent reading
+the story all say the same thing. The browser never writes a sentence.
 
 `run` names the run the metrics are about — its profile, tasks, fidelity,
 objectives, claim metrics and registration status.
@@ -511,3 +561,60 @@ the main thread, and screenshots from a third thread once the records have
 landed.
 
 The screenshot is embedded in `docs/readme/title.md` and appears on the README front page.
+
+---
+
+## The Tour (every view of the system)
+
+```bash
+# Twelve views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+uv run python scripts/capture_dashboard_tour.py
+```
+
+One store, one dashboard, one browser: the tour takes the whole system in
+twelve pictures, and the pictures are of *different things*, not of the same
+scene from different angles.
+
+| Shot | What it shows |
+|------|---------------|
+| `dashboard-hero.png` | the overview: the map, the panels, the rail |
+| `dashboard-map.png` | the discovery map alone — the fog of war |
+| `dashboard-cell.png` | the leading cell's drawer: its accuracy, its curve, its verdict, the seeds it still owes |
+| `dashboard-void.png` | a cell the system refuses, in a slice of the space cut a different way, and the rule that refuses it |
+| `dashboard-pareto.png` | the Pareto chart |
+| `dashboard-ablation.png` | the ablation chart |
+| `dashboard-variability.png` | the variability chart |
+| `dashboard-caption.png` | the caption over the map — the narrated picture |
+| `narration-script.png` | the dashboard's account of itself, as text |
+| `report-run.png` | the run's report, in the browser |
+| `console-dashboard.png` | the console dashboard: the same picture, in a terminal |
+| `report-text.png` | the run's report, in a terminal |
+
+The capture waits for the dashboard's **state** — a measured cell, a drawn
+chart, a caption with words in it — and never for a fixed pause, so a slow
+machine produces the same picture as a fast one. A view that cannot be
+reached is reported, not silently skipped: a tour with a hole in it is worse
+than no tour. Every shot is checked for its size and for having something in
+it before it is written.
+
+`scripts/dashboard_capture.py` holds the machinery the tour, the hero shot
+and the recording share: the server on a thread, the campaign in this
+process, the Chromium that renders without a GPU, and the terminal window the
+text views are photographed in.
+
+---
+
+## The Recording (a live session)
+
+```bash
+# Films a live session to a .webm, outside the repository
+uv run python scripts/capture_dashboard_video.py
+```
+
+The film is a real session: the campaign runs, the live rail carries the
+events as they happen, the caption narrates them, and the map lights up with
+the evidence when the run lands its records.
+
+The film is **not committed**. It is large, and it is a picture of one run
+rather than a claim about the system, so it is written outside the
+repository's tracked paths and `git status` stays clean.

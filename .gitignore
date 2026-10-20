@@ -57,4 +57,7 @@ computronium/experiment/execution/dashboard/templates/static/js/*.map
 
 *.duckdb*
 
+# Dashboard recordings (TODO69): large, and a picture of one run.
+*.webm
+
 checkpoint_epoch_*.pt

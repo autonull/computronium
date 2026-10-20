@@ -145,6 +145,49 @@ class TestDashboardForwarding:
         assert [m["message"] for m in socket.messages] == ["recorded 4 cells"]
 
     @pytest.mark.asyncio
+    async def test_every_event_frame_carries_its_sentence(self) -> None:
+        """The browser never writes a sentence: the frame carries it (TODO69).
+
+        The caption renders what the server said, so the words on the screen,
+        in the rail and in the account an agent reads are the same words.
+        """
+        dashboard = WebDashboard(DashboardConfig(enable_websockets=False))
+        socket = _FakeSocket()
+        dashboard._connected_websockets.add(cast("WebSocket", socket))
+
+        await dashboard.start()
+        try:
+            publish_event("s7_measure", "pepita seed 0: val_acc 0.456")
+            await asyncio.sleep(0.05)
+        finally:
+            await dashboard.stop()
+
+        frames = [m for m in socket.messages if m.get("type") == "pipeline_event"]
+        assert len(frames) == 1
+        assert frames[0]["sentence"]
+        assert frames[0]["sentence"].endswith(".")
+
+    @pytest.mark.asyncio
+    async def test_the_frame_and_the_account_say_the_same_thing(self) -> None:
+        """One account: the caption, the rail and the reader agree."""
+        dashboard = WebDashboard(DashboardConfig(enable_websockets=False))
+        socket = _FakeSocket()
+        dashboard._connected_websockets.add(cast("WebSocket", socket))
+
+        await dashboard.start()
+        try:
+            publish_event("s7_measure", "pepita seed 0: val_acc 0.456")
+            await asyncio.sleep(0.05)
+        finally:
+            await dashboard.stop()
+
+        frame = next(m for m in socket.messages if m.get("type") == "pipeline_event")
+        account = await dashboard._narration_payload()
+
+        assert account["lines"][-1]["text"] == frame["sentence"]
+        assert frame["sentence"] in account["script"]
+
+    @pytest.mark.asyncio
     async def test_a_run_is_not_reported_twice(self) -> None:
         """A run that speaks for itself is not also counted by the store."""
         dashboard = WebDashboard(DashboardConfig(enable_websockets=False))
