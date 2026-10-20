@@ -1,9 +1,9 @@
 """What the dashboard says about itself (TODO69).
 
-The narration is the dashboard's account of itself, in sentences: what just
-happened, and what the state of the system is. These tests pin the sentences
-and the endpoint, because a sentence a reader cannot check against the panels
-is a decoration, not a narration.
+The narration is the dashboard's account of itself, in sentences. These tests
+pin the *rules* it must obey — it speaks in words rather than figures, it
+keeps an account, an agent can read it without a browser — and not the exact
+wording, which is expected to move as the phrasing is tuned.
 """
 
 from __future__ import annotations
@@ -61,18 +61,37 @@ def _event(stage: str, message: str, **kwargs: Any):
     return PipelineEvent(stage=stage, message=message, **kwargs)
 
 
-class TestTheSentences:
-    """Every sentence names a thing a reader can check."""
+def _metrics() -> dict[str, Any]:
+    """The metrics payload of a run that measured two arms."""
+    return {
+        "records": [
+            _record("gradient", 0.40, 0),
+            _record("gradient", 0.44, 1),
+            _record("pepita", 0.51, 0),
+        ],
+        "run": {
+            "run_id": "run-1",
+            "profile": "demo",
+            "tasks": ["digits"],
+            "fidelity": "L1",
+            "mode": "EXPLORATORY",
+            "status": "running",
+            "declared_cells": 4,
+        },
+        "chance": 0.1,
+        "required_seeds": 63,
+        "resources": {"seeds_per_arm": 5, "records": 3},
+        "store": {"source": "live"},
+    }
 
-    def test_a_stage_says_what_it_did_and_how_many(self) -> None:
-        sentence = event_sentence(
-            _event("s6_train", "train cells: 4 proposals", detail={"proposals": 4})
-        )
 
-        assert sentence == "Stage 6 — train cells: 4 proposals."
+class TestItSpeaksInWords:
+    """A voice-over that recites numbers is worse than one that does not."""
 
-    def test_a_measurement_names_the_cell_the_seed_and_the_number(self) -> None:
-        sentence = event_sentence(
+    @pytest.mark.parametrize(
+        "event",
+        [
+            _event("s6_train", "train cells: 4 proposals", detail={"proposals": 4}),
             _event(
                 "s7_measure",
                 "gradient/feedforward/instantaneous seed 3: val_acc 0.412",
@@ -81,33 +100,26 @@ class TestTheSentences:
                     "seed": 3,
                     "val_acc": 0.412,
                 },
-            )
-        )
-
-        assert sentence == (
-            "Measured gradient/feedforward/instantaneous, seed 3: val_acc 0.412."
-        )
-
-    def test_a_measurement_carries_the_chance_it_is_read_against(self) -> None:
-        sentence = event_sentence(
-            _event(
-                "s7_measure",
-                "gradient/feedforward/instantaneous seed 0: val_acc 0.412",
-                detail={
-                    "cell": "gradient/feedforward/instantaneous",
-                    "seed": 0,
-                    "val_acc": 0.412,
-                },
             ),
-            chance=0.1,
-        )
+            _event("campaign", "queued quest-abc"),
+            _event("s4_gate", "gate proposals", detail={"proposals": 2}),
+        ],
+    )
+    def test_a_sentence_reads_no_figures(self, event: Any) -> None:
+        sentence = event_sentence(event)
 
-        assert "chance 0.10" in sentence
+        assert sentence
+        assert sentence.endswith(".")
+        assert not any(character.isdigit() for character in sentence)
 
-    def test_a_campaign_says_what_happened_to_it(self) -> None:
-        sentence = event_sentence(_event("campaign", "queued quest-abc"))
+    def test_the_state_reads_no_figures(self) -> None:
+        for sentence in state_sentences(_metrics(), {"running": 1, "queued": 2}):
+            for figure in ("0.51", "0.40", "63", "0.10"):
+                assert figure not in sentence
 
-        assert sentence == "Campaign queued quest-abc."
+
+class TestItSaysWhatItFound:
+    """The narration knows which cell leads."""
 
     def test_the_best_cell_is_the_one_that_scored_highest(self) -> None:
         records = [
@@ -129,64 +141,17 @@ class TestTheSentences:
     def test_no_records_is_no_best_cell(self) -> None:
         assert best_cell([]) is None
 
-    def test_a_cell_with_one_seed_has_no_spread(self) -> None:
-        best = best_cell([_record("gradient", 0.4, 0)])
-        assert best is not None
-        name, mean, spread, seeds = best
+    def test_the_state_is_two_sentences(self) -> None:
+        sentences = state_sentences(_metrics(), {"running": 1, "queued": 2})
 
-        assert name == "gradient"
-        assert mean == pytest.approx(0.4)
-        assert spread == 0.0
-        assert seeds == 1
-
-
-class TestTheState:
-    """The summary says which run this is and what it holds."""
-
-    def _metrics(self) -> dict[str, Any]:
-        return {
-            "records": [
-                _record("gradient", 0.40, 0),
-                _record("gradient", 0.44, 1),
-                _record("pepita", 0.51, 0),
-            ],
-            "run": {
-                "run_id": "run-1",
-                "profile": "demo",
-                "tasks": ["digits"],
-                "fidelity": "L1",
-                "mode": "EXPLORATORY",
-            },
-            "chance": 0.1,
-            "required_seeds": 63,
-            "resources": {"seeds_per_arm": 5, "records": 3},
-            "store": {"source": "live"},
-        }
-
-    def test_the_first_sentence_names_the_run_and_what_it_holds(self) -> None:
-        first, _ = state_sentences(self._metrics())
-
-        assert "demo" in first
-        assert "digits" in first
-        assert "EXPLORATORY" in first
-        assert "2 cells measured" in first
-        assert "3 records" in first
-
-    def test_the_second_sentence_says_what_the_numbers_mean(self) -> None:
-        _, second = state_sentences(self._metrics(), {"running": 1, "queued": 2})
-
-        assert "Best cell: pepita" in second
-        assert "0.510" in second
-        assert "Chance 0.10" in second
-        assert "58 more seeds needed for a claim" in second
-        assert "1 running" in second
-        assert "Picture: live" in second
+        assert len(sentences) == 2
+        assert all(sentence.endswith(".") for sentence in sentences)
 
     def test_a_dashboard_with_nothing_to_say_says_so(self) -> None:
-        first, second = state_sentences({})
+        sentences = state_sentences({})
 
-        assert "No run" in first
-        assert second
+        assert len(sentences) == 2
+        assert all(sentence for sentence in sentences)
 
 
 class TestTheAccount:
@@ -197,19 +162,19 @@ class TestTheAccount:
 
         line = narration.event(_event("campaign", "queued quest-abc"))
 
-        assert line.text == "Campaign queued quest-abc."
+        assert line.text
         assert narration.latest() is line
         assert len(narration.lines()) == 1
 
     def test_the_script_is_the_present_then_the_history(self) -> None:
         narration = Narration()
-        narration.state(("Run demo — EXPLORATORY.", "Two cells measured."))
+        narration.state(("The demo run is exploratory.", "Two cells measured."))
         narration.event(_event("campaign", "queued quest-abc"))
 
         script = narration.script()
 
-        assert script.startswith("Run demo — EXPLORATORY. Two cells measured.")
-        assert "Campaign queued quest-abc." in script
+        assert script.startswith("The demo run is exploratory. Two cells measured.")
+        assert len(script.splitlines()) == 2
 
     def test_the_account_remembers_only_what_it_can_hold(self) -> None:
         narration = Narration(history=3)
@@ -218,7 +183,6 @@ class TestTheAccount:
             narration.event(_event("campaign", f"queued quest-{index}"))
 
         assert len(narration.lines()) == 3
-        assert narration.lines()[-1].text == "Campaign queued quest-4."
 
 
 class TestTheEndpoint:

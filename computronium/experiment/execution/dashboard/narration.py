@@ -1,17 +1,22 @@
 """What the dashboard is doing, in words (TODO69).
 
 A picture of a system is only as good as what it says about the system's
-state. The panels show the numbers; the narration says what they mean and
-what just changed, in a sentence a reader — a person, or a model looking at
-the screen — can follow without knowing the interface.
+state. The panels show the numbers; the narration says what they *mean* —
+which run this is, what it has found, what is still open — in a sentence a
+reader, or a model looking at the screen, can follow without knowing the
+interface.
+
+The narration speaks in words, not in figures. It does not read out an
+accuracy or a seed count: those are on the panels, and a voice-over that
+recites them is worse than useless. What it says is the *shape* of what is
+happening — the run is exploring, one arm is ahead of the others, the claim
+cannot be made yet, the queue is idle — and every claim it makes can be
+checked against the picture.
 
 The sentences are written here, once, and read by two: the browser renders
 them as captions, and an agent reads them over HTTP. A dashboard that
 composed its own sentences in the browser would have two vocabularies, and
 they would drift.
-
-Every sentence names a run, a cell, a number or a rule. A sentence a reader
-cannot check against the panels is a decoration, not a narration.
 """
 
 from __future__ import annotations
@@ -41,6 +46,9 @@ CELL_AXES: Final[tuple[str, ...]] = (
     "update",
 )
 
+# The stages whose verb does not take the usual "-ing".
+_PARTICIPLES: Final[dict[str, str]] = {"write": "writing"}
+
 
 @dataclass(frozen=True, slots=True)
 class Line:
@@ -52,29 +60,24 @@ class Line:
     stage: str = ""
 
 
-def _number(value: Any, places: int = 3) -> str:
-    """A number as a reader would read it."""
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return str(value)
-    return f"{value:.{places}f}"
+def _gerund(action: str) -> str:
+    """What a stage is doing, said in the present tense."""
+    verb, _, rest = action.partition(" ")
+    participle = _PARTICIPLES.get(verb, f"{verb}ing")
+    phrase = f"{participle} {rest}".strip()
+    return phrase[:1].upper() + phrase[1:]
 
 
-def _stage_number(stage: str) -> str:
-    """The stage's position in the pipeline, when it has one."""
-    head = stage.split("_", 1)[0]
-    return head[1:] if head.startswith("s") and head[1:].isdigit() else ""
+def _arm_from_cell(cell: str) -> str:
+    """The arm a measured cell belongs to: the credit primitive that names it."""
+    head = cell.split("/", 1)[0].strip()
+    return head if head else ""
 
 
-def _cell_label(key: Sequence[str]) -> str:
-    """A cell's name, short enough for a caption.
-
-    The credit arm is what a run compares, so it names the cell; the axes the
-    run held fixed are in the drawer and the legend, not in a caption.
-    """
+def _arm_from_key(key: Sequence[str]) -> str:
+    """The arm a cell belongs to, from the cell's axis values."""
     credit_at = CELL_AXES.index("credit")
-    if credit_at < len(key) and key[credit_at]:
-        return key[credit_at]
-    return "/".join(value for value in key if value)
+    return key[credit_at] if credit_at < len(key) else ""
 
 
 def _cell_key(coordinate: Mapping[str, Any]) -> tuple[str, ...]:
@@ -102,102 +105,117 @@ def best_cell(
 ) -> tuple[str, float, float, int] | None:
     """The cell that scored highest, and what it scored.
 
-    Returns the cell's name, its mean, its spread and its seed count.
+    Returns the cell's arm, its mean, its spread and its seed count. The
+    figures are the panels' business; the narration asks only which arm
+    leads.
     """
     by_cell = measured_cells(records)
     if not by_cell:
         return None
     key, values = max(by_cell.items(), key=lambda item: statistics.fmean(item[1]))
     spread = statistics.stdev(values) if len(values) > 1 else 0.0
-    return _cell_label(key), statistics.fmean(values), spread, len(values)
+    return _arm_from_key(key), statistics.fmean(values), spread, len(values)
 
 
-def event_sentence(event: PipelineEvent, chance: float | None = None) -> str:
+def event_sentence(event: PipelineEvent) -> str:
     """What one event says, in a sentence a reader can check."""
     stage = event.stage
     detail = event.detail or {}
 
     if stage == "s7_measure":
-        cell = detail.get("cell") or "a cell"
-        seed = detail.get("seed")
-        parts = [f"Measured {cell}"]
-        if seed is not None:
-            parts.append(f"seed {seed}")
-        sentence = ", ".join(parts)
-        metric = detail.get("val_acc")
-        if isinstance(metric, int | float) and not isinstance(metric, bool):
-            sentence += f": val_acc {_number(metric)}"
-        if chance is not None:
-            sentence += f" (chance {_number(chance, 2)})"
-        return sentence + "."
+        arm = _arm_from_cell(str(detail.get("cell") or ""))
+        return f"Measured the {arm} arm." if arm else "Measured a cell."
 
     if stage == "campaign":
-        return f"Campaign {event.message}."
+        return f"A campaign {_campaign_verb(event.message)}."
 
     action = STAGE_ACTIONS.get(stage)
     if action is None:
         return f"{event.message}."
 
-    number = _stage_number(stage)
-    where = f"Stage {number} — " if number else ""
-    counts: list[str] = []
-    if detail.get("proposals"):
-        counts.append(f"{detail['proposals']} proposals")
-    if detail.get("records"):
-        counts.append(f"{detail['records']} records")
-    tail = f": {', '.join(counts)}" if counts else ""
-    return f"{where}{action}{tail}."
+    if event.level == "error":
+        return f"The pipeline could not {action}."
+    return f"{_gerund(action)}."
+
+
+def _campaign_verb(message: str) -> str:
+    """What happened to a campaign, in words."""
+    head = message.split(" ", 1)[0].lower()
+    return {
+        "queued": "was queued",
+        "started": "started",
+        "completed": "finished",
+        "failed": "failed",
+        "cancelled": "was cancelled",
+        "preempted": "was preempted",
+    }.get(head, "changed")
 
 
 def _run_sentence(run: Mapping[str, Any], metrics: Mapping[str, Any]) -> str:
-    """Which run this is, and how much of it exists."""
-    where = " · ".join(
-        part
-        for part in (
-            str(run.get("profile") or ""),
-            ", ".join(run.get("tasks") or []),
-            str(run.get("fidelity") or ""),
-        )
-        if part
-    )
+    """Which run this is, and how far it has got."""
+    profile = str(run.get("profile") or "")
+    tasks = ", ".join(run.get("tasks") or [])
+    if profile and tasks:
+        subject = f"{profile} run on {tasks}"
+    elif profile:
+        subject = f"{profile} run"
+    elif tasks:
+        subject = f"run on {tasks}"
+    else:
+        subject = "run"
+    mode = str(run.get("mode") or "EXPLORATORY").lower()
+    sentence = f"The {subject} is {mode}"
+
     records = metrics.get("records") or []
-    cells = len(measured_cells(records))
-    return (
-        f"Run {where or run.get('run_id', '?')} — {run.get('mode', 'EXPLORATORY')}. "
-        f"{cells} cell{'s' if cells != 1 else ''} measured, {len(records)} records."
-    )
+    measured = len(measured_cells(records))
+    declared = run.get("declared_cells") or 0
+    if not measured:
+        sentence += " and has measured nothing yet"
+    elif declared and measured >= declared:
+        sentence += " and has measured every cell it declared"
+    else:
+        sentence += " and part-way through the space it declared"
+
+    if str(run.get("status") or "").lower() == "running":
+        sentence += ". It is still running"
+    return sentence + "."
 
 
-def _meaning_sentence(
-    metrics: Mapping[str, Any],
-    queue: Mapping[str, Any] | None,
-) -> str:
-    """What the numbers mean, and what the machine is doing."""
-    parts: list[str] = []
+def _evidence_sentence(metrics: Mapping[str, Any]) -> str:
+    """What the evidence says, in words."""
     best = best_cell(metrics.get("records") or [])
-    if best is not None:
-        name, mean, spread, seeds = best
-        parts.append(
-            f"best cell: {name} at {_number(mean)} ± {_number(spread)} (n={seeds})"
-        )
+    if best is None:
+        return "Nothing has been measured yet."
+    arm, mean, _spread, _seeds = best
+    if not arm:
+        return "One cell is ahead of the others."
     chance = metrics.get("chance")
+    sentence = f"The {arm} arm is ahead of the others"
     if chance is not None:
-        parts.append(f"chance {_number(chance, 2)}")
+        sentence += " and beats chance" if mean > chance else " but is not above chance"
+    return sentence + "."
+
+
+def _claim_sentence(metrics: Mapping[str, Any]) -> str:
+    """Whether the evidence can carry a claim."""
     required = metrics.get("required_seeds") or 0
-    if required:
-        per_cell = (metrics.get("resources") or {}).get("seeds_per_arm") or 0
-        missing = max(0, int(required) - int(per_cell))
-        parts.append(
-            f"{missing} more seed{'s' if missing != 1 else ''} needed for a claim"
-        )
-    if queue:
-        parts.append(
-            f"queue: {queue.get('running', 0)} running, {queue.get('queued', 0)} queued"
-        )
-    store = metrics.get("store") or {}
-    if store.get("source"):
-        parts.append(f"picture: {store['source']}")
-    return ". ".join(part.capitalize() for part in parts) + "."
+    if not required:
+        return ""
+    per_cell = (metrics.get("resources") or {}).get("seeds_per_arm") or 0
+    if per_cell >= required:
+        return "The claim can be made: the seeds are there."
+    return "The claim cannot be made yet: too few seeds."
+
+
+def _queue_sentence(queue: Mapping[str, Any] | None) -> str:
+    """What the machine is doing."""
+    if not queue:
+        return ""
+    if queue.get("running"):
+        return "A campaign is running."
+    if queue.get("queued"):
+        return "Campaigns are waiting to run."
+    return "The queue is idle."
 
 
 def state_sentences(
@@ -206,13 +224,21 @@ def state_sentences(
 ) -> tuple[str, ...]:
     """What the system is doing right now, in two sentences.
 
-    The first says which run this is and how much of it exists; the second
-    says what the numbers mean and what the machine is doing.
+    The first says which run this is and how far it has got; the second says
+    what it has found, what it cannot yet say, and what the machine is doing.
     """
     run = metrics.get("run") or {}
     if not run:
-        return ("No run has reported yet.", "Waiting for the store to answer.")
-    return (_run_sentence(run, metrics), _meaning_sentence(metrics, queue))
+        return (
+            "No run has reported yet.",
+            "The dashboard is waiting for the store to answer.",
+        )
+    parts = [
+        _evidence_sentence(metrics),
+        _claim_sentence(metrics),
+        _queue_sentence(queue),
+    ]
+    return (_run_sentence(run, metrics), " ".join(part for part in parts if part))
 
 
 class Narration:
@@ -226,7 +252,6 @@ class Narration:
     def __init__(self, history: int = HISTORY) -> None:
         self._lines: deque[Line] = deque(maxlen=history)
         self._state: tuple[str, ...] = ()
-        self._chances: dict[str, float] = {}
         self._current_run_id: str | None = None
 
     @property
@@ -236,10 +261,9 @@ class Narration:
 
     def event(self, event: PipelineEvent) -> Line:
         """Narrate one event."""
-        chance = self._chances.get(event.run_id or "")
         line = Line(
             at=event.timestamp,
-            text=event_sentence(event, chance),
+            text=event_sentence(event),
             level=event.level,
             stage=event.stage,
         )
@@ -251,13 +275,10 @@ class Narration:
         sentences: Sequence[str],
         *,
         run_id: str | None = None,
-        chance: float | None = None,
     ) -> None:
         """Record what the system is doing right now."""
         self._state = tuple(sentences)
         self._current_run_id = run_id
-        if run_id and chance is not None:
-            self._chances[run_id] = chance
 
     def lines(self) -> tuple[Line, ...]:
         """The narrated moments, oldest first."""

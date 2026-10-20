@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import math
 import shutil
 import tempfile
 import uuid
@@ -50,6 +51,7 @@ from computronium.experiment.execution.events import (
     get_event_bus,
     publish_event,
 )
+from computronium.experiment.schema.axis import StructuralAxis
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -116,12 +118,24 @@ class CellContext:
     alpha: float
 
 
+def declared_cells(spec: RunSpec | None) -> int:
+    """How many cells the run's own declaration holds.
+
+    The axes the run does not narrow permit everything on them, so a run
+    that declares nothing declares the whole space.
+    """
+    if spec is None:
+        return 0
+    return math.prod(len(spec.selected_primitives(axis)) for axis in StructuralAxis)
+
+
 def run_status(
     spec: RunSpec | None,
     run_id: str,
     claim_metrics: tuple[str, ...] = (),
     started_at: datetime | None = None,
     cells: frozenset[CellKey] = frozenset(),
+    status: str | None = None,
 ) -> dict[str, Any]:
     """What the run declares, and whether its claim is preregistered.
 
@@ -150,6 +164,8 @@ def run_status(
         "objectives": list(spec.objectives) if spec else [],
         "claim_metrics": list(claim_metrics),
         "mode": mode,
+        "status": status,
+        "declared_cells": declared_cells(spec),
         "started_at": started_at.isoformat() if started_at else None,
     }
 
@@ -603,6 +619,7 @@ class WebDashboard:
                         claim_metrics,
                         run.started_at if run else None,
                         measured_cells(records),
+                        run.status if run else None,
                     ),
                 }
         except Exception as e:
@@ -1255,11 +1272,7 @@ class WebDashboard:
         run = metrics.get("run") or {}
         queue = await self._get_queue_status()
         sentences = state_sentences(metrics, queue)
-        self._narration.state(
-            sentences,
-            run_id=run.get("run_id"),
-            chance=metrics.get("chance"),
-        )
+        self._narration.state(sentences, run_id=run.get("run_id"))
         await self._broadcast_update({
             "type": "narration",
             "state": list(sentences),

@@ -96,19 +96,29 @@ report's claims in step.
 **What the sentences say** (measured, against the probe's store):
 
 ```
-Run demo · digits · L1 — EXPLORATORY. 1 cell measured, 5 records.
-Best cell: gradient at 0.440 ± 0.032 (n=5). Chance 0.10. 58 more seeds
-needed for a claim. Queue: 1 running, 0 queued. Picture: live.
+The demo run on digits is exploratory and has measured every cell it declared.
+The gradient arm is ahead of the others and beats chance. The claim cannot be
+made yet: too few seeds. The queue is idle.
 
-Measured pepita/feedforward/instantaneous, seed 2: val_acc 0.512 (chance 0.10).
-Stage 6 — train cells: 4 proposals.
-Campaign queued quest-abc (normal priority).
+Measured the gradient arm.
+Training cells.
+Recording evidence.
+A campaign was queued.
+The pipeline could not compose systems.
 ```
+
+**The rule the wording obeys**: the narration speaks in words, not in
+figures. It does not read out an accuracy, a seed count or a threshold —
+those are on the panels, and a voice-over that recites them is worse than
+useless. What it says is the *shape* of what is happening: the run is
+exploratory, one arm is ahead of the others, the claim cannot be made yet,
+the queue is idle. Every claim it makes can be checked against the picture.
 
 **Acceptance**: ✅ every sentence names a run, a cell, a number or a rule — no
 sentence a reader cannot check against the panels. ✅ `GET /api/narration`
-returns text an agent can read aloud without the browser.
-
+returns text an agent can read aloud without the browser. ✅ the sentences
+read no figures — the panels carry the numbers, the narration carries the
+meaning.
 **Still to do here**: the browser half — the caption overlay that renders
 these sentences (Phase 1). The server speaks; nothing draws it yet.
 
