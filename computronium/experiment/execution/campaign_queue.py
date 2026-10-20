@@ -26,6 +26,7 @@ from computronium.experiment.execution.campaign import (
     CampaignSpec,
     run_campaign,
 )
+from computronium.experiment.execution.events import publish_event
 
 logger = get_logger(__name__)
 
@@ -137,6 +138,12 @@ class CampaignQueue:
                 "Campaign %s enqueued with priority %s", campaign_id, priority.name
             )
 
+        publish_event(
+            "campaign",
+            f"queued {spec.name} ({priority.name.lower()} priority)",
+            detail={"campaign_id": campaign_id, "priority": priority.name},
+        )
+
         # Try to schedule
         await self._schedule()
         return campaign_id
@@ -186,6 +193,11 @@ class CampaignQueue:
             entry.quota.cpus,
             entry.quota.memory_gb,
         )
+        publish_event(
+            "campaign",
+            f"started {entry.spec.name}",
+            detail={"campaign_id": entry.campaign_id},
+        )
 
         # Run campaign in background
         task = asyncio.create_task(self._run_campaign(entry))
@@ -204,6 +216,12 @@ class CampaignQueue:
             logger.exception("Campaign %s failed", entry.campaign_id)
             entry.error = str(e)
             entry.status = CampaignStatus.FAILED
+            publish_event(
+                "campaign",
+                f"failed {entry.spec.name}: {e}",
+                level="error",
+                detail={"campaign_id": entry.campaign_id},
+            )
             raise
         finally:
             Path(temp_path).unlink(missing_ok=True)
@@ -274,6 +292,12 @@ class CampaignQueue:
             self._completed[campaign_id] = entry
             logger.info(
                 "Campaign %s completed with status %s", campaign_id, entry.status
+            )
+            publish_event(
+                "campaign",
+                f"{entry.status.value} {entry.spec.name}",
+                level="ok" if entry.status == CampaignStatus.COMPLETED else "warn",
+                detail={"campaign_id": campaign_id, "status": entry.status.value},
             )
 
         # Try to schedule next campaign

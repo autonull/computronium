@@ -10,6 +10,7 @@ import { plotter } from "./plotter.js";
 import { liveRail } from "./live-rail.js";
 import { hud } from "./hud.js";
 import { PALETTE } from "./palette.js";
+import { detectRenderProfile } from "./render-profile.js";
 
 // Global error handler
 window.addEventListener("error", (event) => {
@@ -134,15 +135,16 @@ wsClient.waitForConnection(15000).then((connected) => {
 
 // Three.js scene setup (shared by DiscoveryMap and HUD)
 const canvas = document.getElementById("dashboard-canvas") as HTMLCanvasElement;
+const profile = detectRenderProfile();
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  antialias: profile.antialias,
   alpha: true,
   powerPreference: "high-performance",
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(profile.software ? 1 : Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = profile.shadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
@@ -180,7 +182,7 @@ scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
 directionalLight.position.set(10, 20, 10);
-directionalLight.castShadow = true;
+directionalLight.castShadow = profile.shadows;
 directionalLight.shadow.mapSize.width = 2048;
 directionalLight.shadow.mapSize.height = 2048;
 directionalLight.shadow.camera.near = 1;
@@ -211,14 +213,20 @@ function onResize(): void {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(
+    profile.software ? 1 : Math.min(window.devicePixelRatio, 2),
+  );
 }
 window.addEventListener("resize", onResize);
 
-// Animation loop
+// Animation loop — capped so the render never starves the event loop that
+// carries the dashboard's data.
+const frameIntervalMs = 1000 / profile.fps;
 let lastTime = 0;
 function animate(time: number): void {
   requestAnimationFrame(animate);
+
+  if (time - lastTime < frameIntervalMs) return;
 
   const delta = (time - lastTime) / 1000;
   lastTime = time;

@@ -1,7 +1,7 @@
 /** Live Rail — Scrolling Pipeline Event Log (TODO68 Phase 4). */
 
 import { registry } from "./components/registry.js";
-import { router } from "./ws-client.js";
+import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import type { Component } from "./components/registry.js";
 
@@ -10,6 +10,7 @@ interface PipelineEvent {
   message: string;
   level: "ok" | "warn" | "error";
   timestamp: string;
+  run_id?: string;
 }
 
 export class LiveRail implements Component {
@@ -28,6 +29,7 @@ export class LiveRail implements Component {
 
   async init(): Promise<void> {
     this.createUI();
+    wsClient.onStateChange((state) => this.setConnected(state === "connected"));
     console.log("[LiveRail] Initialized");
   }
 
@@ -83,6 +85,7 @@ export class LiveRail implements Component {
           <span class="rail-label">Disconnected</span>
         </span>
         <div style="flex: 1;"></div>
+        <span id="rail-queue" style="color: var(--text-secondary);">0 running · 0 queued</span>
         <span id="rail-count">0 events</span>
       </div>
       <div id="rail-log" style="
@@ -109,30 +112,35 @@ export class LiveRail implements Component {
   };
 
   private onStatusUpdate = (data: any): void => {
+    const running = data?.data?.running_campaigns ?? 0;
+    const queued = data?.data?.queued_campaigns ?? 0;
+    const countEl = this.container?.querySelector(
+      "#rail-queue",
+    ) as HTMLElement | null;
+    if (countEl) {
+      countEl.textContent = `${running} running · ${queued} queued`;
+    }
+  };
+
+  /** The pill reports the socket, not the campaign: one says "connected",
+      the other says "idle". */
+  private setConnected(connected: boolean): void {
     const connEl = this.container?.querySelector(
       "#rail-connection",
     ) as HTMLElement | null;
     if (!connEl) return;
 
     const dot = connEl.querySelector(".dot") as HTMLElement | null;
-    if (!dot) return;
     const text = connEl.querySelector(".rail-label") as HTMLElement | null;
-    if (!text) return;
+    if (!dot || !text) return;
 
-    if (data.data?.running_campaigns > 0) {
-      dot.style.background = PALETTE.ok;
-      connEl.style.background = PALETTE.ok + "22";
-      connEl.style.borderColor = PALETTE.ok + "88";
-      connEl.style.color = PALETTE.ok;
-      text.textContent = "Connected";
-    } else {
-      dot.style.background = PALETTE.warn;
-      connEl.style.background = PALETTE.warn + "22";
-      connEl.style.borderColor = PALETTE.warn + "88";
-      connEl.style.color = PALETTE.warn;
-      text.textContent = "Idle";
-    }
-  };
+    const color = connected ? PALETTE.ok : PALETTE.error;
+    dot.style.background = color;
+    connEl.style.background = color + "22";
+    connEl.style.borderColor = color + "88";
+    connEl.style.color = color;
+    text.textContent = connected ? "Connected" : "Disconnected";
+  }
 
   private render(): void {
     if (!this.logContainer) return;

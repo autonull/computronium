@@ -252,7 +252,9 @@ export class Plotter implements Component {
       hooks: {
         draw: [
           (u: uPlot) => {
-            // Draw Pareto frontier line
+            const ctx = u.ctx;
+
+            // The Pareto frontier: the cells that are not beaten on both axes.
             if (this.paretoFlags.some((f) => f)) {
               const paretoPoints: [number, number][] = [];
               this.records.forEach((r, i) => {
@@ -268,8 +270,6 @@ export class Plotter implements Component {
                 }
               });
               paretoPoints.sort((a, b) => a[0] - b[0]);
-
-              const ctx = u.ctx;
 
               if (paretoPoints.length > 1) {
                 ctx.beginPath();
@@ -287,18 +287,18 @@ export class Plotter implements Component {
                 ctx.stroke();
                 ctx.setLineDash([]);
               }
-
-              // Chance line
-              const chanceY = u.valToPos(this.chance, "y");
-              ctx.strokeStyle = PALETTE.chance_line;
-              ctx.lineWidth = 1.5;
-              ctx.setLineDash([4, 4]);
-              ctx.beginPath();
-              ctx.moveTo(u.bbox.left, chanceY);
-              ctx.lineTo(u.bbox.width, chanceY);
-              ctx.stroke();
-              ctx.setLineDash([]);
             }
+
+            // Chance line: what every point is measured against.
+            const chanceY = u.valToPos(this.chance, "y");
+            ctx.strokeStyle = PALETTE.chance_line;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(u.bbox.left, chanceY);
+            ctx.lineTo(u.bbox.width, chanceY);
+            ctx.stroke();
+            ctx.setLineDash([]);
           },
         ],
       },
@@ -331,6 +331,39 @@ export class Plotter implements Component {
     });
 
     this.paretoPlot.setData([xData, yData]);
+
+    const xs = xData.filter(Number.isFinite);
+    const ys = yData.filter(Number.isFinite);
+    if (xs.length > 0) {
+      this.fitScale(this.paretoPlot, "x", Math.min(...xs), Math.max(...xs));
+    }
+    if (ys.length > 0) {
+      // The chance line is part of what the chart is about: it stays in view.
+      this.fitScale(
+        this.paretoPlot,
+        "y",
+        Math.min(Math.min(...ys), this.chance),
+        Math.max(...ys),
+      );
+    }
+  }
+
+  /**
+   * Fit an axis to the data it shows.
+   *
+   * uPlot's automatic range only ever widens, so a chart that first saw a
+   * partial dataset keeps that window forever — and a chart fed placeholder
+   * data keeps the placeholder's. The range is therefore stated explicitly,
+   * after every set of data.
+   */
+  private fitScale(plot: uPlot, key: "x" | "y", min: number, max: number): void {
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+    if (min === max) {
+      min -= 0.01;
+      max += 0.01;
+    }
+    const pad = (max - min) * 0.05;
+    plot.setScale(key, { min: min - pad, max: max + pad });
   }
 
   // ─── Ablation Plot (grouped bars) ───
@@ -430,6 +463,20 @@ export class Plotter implements Component {
     const yData = metricData.arms.map((a) => a.mean);
 
     this.ablationPlot.setData([xData, yData]);
+    this.fitScale(this.ablationPlot, "x", 0, Math.max(xData.length - 1, 1));
+
+    const values = metricData.arms.flatMap((arm) => [
+      arm.mean - arm.std,
+      arm.mean + arm.std,
+    ]);
+    if (values.length > 0) {
+      this.fitScale(
+        this.ablationPlot,
+        "y",
+        Math.min(Math.min(...values), this.chance),
+        Math.max(...values),
+      );
+    }
     // uPlot doesn't have setTitle, update title via options
     (this.ablationPlot as any).opts.title =
       `Ablation: ${group.axis} vs val_acc (fixed: ${group.fixed_axes})`;
@@ -560,13 +607,32 @@ export class Plotter implements Component {
   private updateVariabilityPlot(): void {
     if (!this.variabilityPlot || !this.records.length) return;
 
-    // Trigger redraw via setData with dummy data
+    // The boxes are drawn by the hook from this.records; the series only
+    // carries the arm positions and the axis range.
     const arms = Array.from(
       new Set(this.records.map((r) => r.coordinate.credit)),
     ).sort();
     const xData = arms.map((_, i) => i);
-    const yData = arms.map(() => 0); // yData not directly used, draw hook reads this.records
+    const yData = arms.map(() => 0);
     this.variabilityPlot.setData([xData, yData]);
+    this.fitScale(
+      this.variabilityPlot,
+      "x",
+      0,
+      Math.max(arms.length - 1, 1),
+    );
+
+    const values = this.records
+      .map((r) => r.payload.val_acc)
+      .filter((v): v is number => typeof v === "number");
+    if (values.length > 0) {
+      this.fitScale(
+        this.variabilityPlot,
+        "y",
+        Math.min(Math.min(...values), this.chance),
+        Math.max(...values),
+      );
+    }
   }
 
   private downloadCurrent(): void {

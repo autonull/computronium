@@ -1,7 +1,7 @@
 /** HUD — Mission Control Panel (TODO68 Phase 4). */
 
 import { registry } from "./components/registry.js";
-import { router } from "./ws-client.js";
+import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import type { Component } from "./components/registry.js";
 
@@ -60,6 +60,10 @@ export class HUD implements Component {
   async init(): Promise<void> {
     this.createPanel();
     this.createModeChip();
+    wsClient.onStateChange((state) => {
+      this.connected = state === "connected";
+      this.updateConnection();
+    });
     console.log("[HUD] Initialized");
   }
 
@@ -192,8 +196,6 @@ export class HUD implements Component {
     const status = (data?.data ?? data) as StatusData;
     if (!status) return;
     this.statusData = status;
-    this.connected = true;
-    this.updateConnection();
     this.updateQueueRows();
   };
 

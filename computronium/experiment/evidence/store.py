@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -38,6 +39,11 @@ from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.versioning import current_schema_version
 
 logger = logging.getLogger(__name__)
+
+# Two connections to a fresh store can try to create its schema at the same
+# moment. The loser waits a little and tries again rather than failing.
+_SCHEMA_INIT_ATTEMPTS = 5
+_SCHEMA_INIT_BACKOFF_S = 0.1
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -272,7 +278,30 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         return bool(row) and int(row[0]) == 5
 
     def _init_schema(self) -> None:
-        """Initialize the database schema."""
+        """Initialize the database schema.
+
+        Two connections to a fresh store race to create it, and the loser
+        gets a catalog write-write conflict on the sequence. Every statement
+        is ``IF NOT EXISTS``, so retrying converges: whatever the winner
+        created is already there, and the loser's statements become no-ops.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+
+        for attempt in range(_SCHEMA_INIT_ATTEMPTS):
+            try:
+                self._create_schema_objects()
+            except duckdb.Error:
+                if self._schema_present():
+                    return
+                if attempt == _SCHEMA_INIT_ATTEMPTS - 1:
+                    raise
+                time.sleep(_SCHEMA_INIT_BACKOFF_S * (attempt + 1))
+            else:
+                return
+
+    def _create_schema_objects(self) -> None:
+        """Create every table, sequence and index the store needs."""
         if self._conn is None:
             raise StoreError("Connection not initialized")
 

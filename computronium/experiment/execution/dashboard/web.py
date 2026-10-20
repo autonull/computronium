@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -19,9 +20,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from computronium.experiment.evidence.serializers import serializer
+from computronium.experiment.execution.events import (
+    PipelineEvent,
+    get_event_bus,
+    publish_event,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
 
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.campaign_queue import (
@@ -66,6 +72,11 @@ class WebDashboard:
         self._connected_websockets: set[WebSocket] = set()
         self._running = False
         self._update_task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._unsubscribe: Callable[[], None] | None = None
+        self._run_record_counts: dict[str, int] = {}
+        self._reported_runs: set[str] = set()
+        self._event_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._setup_routes()
         self._setup_templates()
 
@@ -456,6 +467,9 @@ class WebDashboard:
         self._connected_websockets.add(websocket)
         logger.info(f"WebSocket connected. Total: {len(self._connected_websockets)}")
 
+        # A client that arrives late still sees what happened.
+        await self._replay_events(websocket)
+
         try:
             while True:
                 # Send periodic updates
@@ -486,6 +500,11 @@ class WebDashboard:
                 f"WebSocket disconnected. Total: {len(self._connected_websockets)}"
             )
 
+    async def _replay_events(self, websocket: WebSocket) -> None:
+        """Send the recent events to a client that just connected."""
+        for message in list(self._event_history)[-50:]:
+            await websocket.send_json(message)
+
     async def _broadcast_update(self, message: dict[str, Any]) -> None:
         """Broadcast message to all connected WebSocket clients."""
         if not self._connected_websockets:
@@ -504,6 +523,8 @@ class WebDashboard:
     async def start(self) -> None:
         """Start the dashboard update loop."""
         self._running = True
+        self._loop = asyncio.get_running_loop()
+        self._unsubscribe = get_event_bus().subscribe(self._on_pipeline_event)
         if self.config.enable_websockets:
             self._update_task = asyncio.create_task(self._update_loop())
         logger.info("Dashboard started")
@@ -511,6 +532,9 @@ class WebDashboard:
     async def stop(self) -> None:
         """Stop the dashboard update loop."""
         self._running = False
+        if self._unsubscribe:
+            self._unsubscribe()
+            self._unsubscribe = None
         if self._update_task:
             self._update_task.cancel()
             try:
@@ -518,6 +542,24 @@ class WebDashboard:
             except asyncio.CancelledError:
                 pass
         logger.info("Dashboard stopped")
+
+    def _on_pipeline_event(self, event: PipelineEvent) -> None:
+        """Forward a live event to the clients.
+
+        The bus is process-local and the run may publish from any thread, so
+        the broadcast is scheduled onto the dashboard's loop rather than
+        awaited here.
+        """
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        if event.run_id:
+            self._reported_runs.add(event.run_id)
+        message = event.to_message()
+        self._event_history.append(message)
+        loop.call_soon_threadsafe(
+            lambda: loop.create_task(self._broadcast_update(message))
+        )
 
     async def _update_loop(self) -> None:
         """Background loop to broadcast updates."""
@@ -537,61 +579,89 @@ class WebDashboard:
                     "timestamp": datetime.now().isoformat(),
                 })
 
-                # Broadcast per-campaign metrics for running campaigns (from queue)
-                if self.config.campaign_queue:
-                    campaigns = await self._get_all_campaigns()
-                    for campaign in campaigns.get("campaigns", []):
-                        if campaign["status"] == "running":
-                            metrics = await self._get_campaign_metrics_detailed(
-                                campaign["campaign_id"]
-                            )
-                            await self._broadcast_update({
-                                "type": "campaign_metrics",
-                                "campaign_id": campaign["campaign_id"],
-                                "data": metrics,
-                                "timestamp": datetime.now().isoformat(),
-                            })
-
-                # ALSO: Broadcast metrics for any campaign with records in the store
-                # This handles campaigns run directly via CLI (not through queue)
-                if self.config.store_path:
-                    try:
-                        # Get run IDs with records, then close store before calling metrics
-                        with self._readable_store() as store:
-                            runs = store.query_runs()
-                            run_ids = [
-                                run.run_id
-                                for run in runs
-                                if run.status == "running"
-                                or store.query_records(run_id=run.run_id)
-                            ]
-
-                        # Now query metrics for each run (each call opens its own connection)
-                        for run_id in run_ids:
-                            metrics = await self._get_campaign_metrics_detailed(run_id)
-                            if metrics.get("records"):
-                                await self._broadcast_update({
-                                    "type": "campaign_metrics",
-                                    "campaign_id": run_id,
-                                    "data": metrics,
-                                    "timestamp": datetime.now().isoformat(),
-                                })
-                    except Exception:
-                        logger.debug("Store unavailable for broadcast", exc_info=True)
-
-                # NEW: Broadcast pipeline events (mock for v1)
-                await self._broadcast_update({
-                    "type": "pipeline_event",
-                    "stage": "s6_train",
-                    "message": "compose joint system",
-                    "level": "ok",
-                    "timestamp": datetime.now().isoformat(),
-                })
+                await self._broadcast_campaign_metrics()
+                await self._broadcast_store_metrics()
             except asyncio.CancelledError:
                 break
             except Exception:
                 logger.exception("Error in dashboard update loop")
                 await asyncio.sleep(5)
+
+    async def _broadcast_campaign_metrics(self) -> None:
+        """Metrics for the campaigns the queue is running."""
+        if not self.config.campaign_queue:
+            return
+
+        campaigns = await self._get_all_campaigns()
+        for campaign in campaigns.get("campaigns", []):
+            if campaign["status"] != "running":
+                continue
+            metrics = await self._get_campaign_metrics_detailed(campaign["campaign_id"])
+            await self._broadcast_update({
+                "type": "campaign_metrics",
+                "campaign_id": campaign["campaign_id"],
+                "data": metrics,
+                "timestamp": datetime.now().isoformat(),
+            })
+
+    async def _broadcast_store_metrics(self) -> None:
+        """Metrics for every run with records in the store.
+
+        This covers campaigns run directly via the CLI, which never touch the
+        queue.
+        """
+        if not self.config.store_path:
+            return
+
+        try:
+            with self._readable_store() as store:
+                runs = store.query_runs()
+                record_counts = {
+                    run.run_id: store.count_records(run_id=run.run_id) for run in runs
+                }
+                run_ids = [
+                    run.run_id
+                    for run in runs
+                    if run.status == "running" or record_counts[run.run_id]
+                ]
+
+            # A run writing from another process shows up here as records
+            # landing in the store — the only progress a cross-process
+            # dashboard can honestly report.
+            self._announce_store_progress(record_counts)
+
+            for run_id in run_ids:
+                metrics = await self._get_campaign_metrics_detailed(run_id)
+                if metrics.get("records"):
+                    await self._broadcast_update({
+                        "type": "campaign_metrics",
+                        "campaign_id": run_id,
+                        "data": metrics,
+                        "timestamp": datetime.now().isoformat(),
+                    })
+        except Exception:
+            logger.debug("Store unavailable for broadcast", exc_info=True)
+
+    def _announce_store_progress(self, record_counts: dict[str, int]) -> None:
+        """Report records that landed in the store since the last poll.
+
+        A run that reports itself on the event bus (the pipeline running in
+        this process) already says what it measured, so only runs nobody is
+        reporting for are counted here.
+        """
+        for run_id, count in record_counts.items():
+            previous = self._run_record_counts.get(run_id)
+            self._run_record_counts[run_id] = count
+            if previous is None or count <= previous:
+                continue
+            if run_id in self._reported_runs:
+                continue
+            publish_event(
+                "s8_record",
+                f"run {run_id[:8]}: {count - previous} new cells ({count} total)",
+                run_id=run_id,
+                detail={"records": count},
+            )
 
     async def run(self) -> None:
         """Run the dashboard server (blocking)."""

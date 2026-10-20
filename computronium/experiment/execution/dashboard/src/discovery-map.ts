@@ -1,34 +1,36 @@
-/** Discovery Map — 3D Fog-of-War Grid (TODO68 Phase 1). */
+/** Discovery Map — 3D Fog-of-War Grid (TODO68 Phase 1).
+
+    The grid's axes come from the data: every coordinate axis the records
+    carry, with the values the records actually used. A cell is measured when
+    records landed in it and legal-but-unmeasured when the axis space says the
+    combination exists but nothing ran there.
+*/
 
 import * as THREE from "three";
-import { Line2 } from "three-stdlib";
-import { LineGeometry, LineMaterial } from "three-stdlib";
 import { registry } from "./components/registry.js";
 import { getSceneContext } from "./components/context.js";
 import { router } from "./ws-client.js";
 import { ARM_COLORS, PALETTE } from "./palette.js";
+import axisMetadata from "./axis-metadata.json";
+import {
+  AXIS_NAMES,
+  type AxisName,
+  type CellData,
+  type CurvePoint,
+} from "./cell-data.js";
 import type { Component } from "./components/registry.js";
 
-interface CellData {
-  coordinate: {
-    credit: string;
-    geometry: string;
-    dynamics: string;
-    substrate?: string;
-    plasticity?: string;
-    update?: string;
-  };
-  status: "measured" | "legal" | "void";
-  metrics?: {
-    val_acc?: number;
-    val_acc_std?: number;
-    walltime_s?: number;
-    param_count?: number;
-    n_seeds?: number;
-  };
-  requiredSeeds?: number;
-  price?: number; // for legal/unmeasured cells
+interface AxisMeta {
+  display_name: string;
+  description: string;
+  primitives: { name: string }[];
 }
+
+const AXIS_META = axisMetadata.axes as unknown as Record<AxisName, AxisMeta>;
+
+/** Beyond this the grid stops being readable, so it says so instead.
+    Eight values per axis is 512 cells — the most a scene can carry legibly. */
+const MAX_VALUES_PER_AXIS = 8;
 
 function mean(values: number[]): number {
   if (values.length === 0) return 0;
@@ -43,10 +45,33 @@ function stddev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
+function meanCurve(curves: CurvePoint[][]): CurvePoint[] {
+  // Average the per-epoch accuracy of every seed that recorded a curve.
+  const byEpoch = new Map<number, number[]>();
+  for (const curve of curves) {
+    for (const point of curve) {
+      const values = byEpoch.get(point.epoch) ?? [];
+      values.push(point.val_acc);
+      byEpoch.set(point.epoch, values);
+    }
+  }
+  return Array.from(byEpoch.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([epoch, values]) => ({ epoch, val_acc: mean(values) }));
+}
+
 interface GridAxes {
-  x: string; // credit
-  y: string; // geometry
-  z: string; // dynamics
+  x: AxisName;
+  y: AxisName;
+  z: AxisName;
+}
+
+interface CellAggregate {
+  acc: number[];
+  walltime: number[];
+  params: number[];
+  curves: CurvePoint[][];
+  pareto: boolean;
 }
 
 export class DiscoveryMap implements Component {
@@ -59,6 +84,14 @@ export class DiscoveryMap implements Component {
     new Map();
   cellDataMap: Map<string, CellData> = new Map();
   private axes: GridAxes = { x: "credit", y: "geometry", z: "dynamics" };
+  private axisValues: Record<AxisName, string[]> = {
+    credit: [],
+    geometry: [],
+    dynamics: [],
+    substrate: [],
+    plasticity: [],
+    update: [],
+  };
   private xValues: string[] = [];
   private yValues: string[] = [];
   private zValues: string[] = [];
@@ -70,7 +103,9 @@ export class DiscoveryMap implements Component {
   private hoveredCell: string | null = null;
   private legendElement: HTMLElement | null = null;
   private axisLabelMeshes: THREE.Object3D[] = [];
-  private initialized = false;
+  private chance = 0.1;
+  private requiredSeeds = 0;
+  private lastMetrics: any = null;
 
   constructor() {
     // Register WebSocket handlers IMMEDIATELY in constructor
@@ -87,23 +122,8 @@ export class DiscoveryMap implements Component {
       this.renderer = context.renderer;
     }
 
-    // Setup mouse interaction
     this.setupInteraction();
-
-    // Default axes values (from demo campaign)
-    this.xValues = [
-      "gradient",
-      "random_projections",
-      "pepita",
-      "local_goodness",
-    ];
-    this.yValues = ["feedforward"];
-    this.zValues = ["instantaneous"];
-
-    // Create legend once the axes it names are known
     this.createLegend();
-
-    // Build initial empty grid
     this.buildGrid();
 
     console.log("[DiscoveryMap] Initialized");
@@ -149,7 +169,7 @@ export class DiscoveryMap implements Component {
       padding: 16px;
       font-size: 12px;
       z-index: 100;
-      min-width: 200px;
+      min-width: 220px;
     `;
 
     this.legendElement.innerHTML = `
@@ -174,13 +194,83 @@ export class DiscoveryMap implements Component {
       </div>
       <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
         <div style="font-weight: 600; margin-bottom: 8px;">Axes</div>
-        <div id="legend-axes" style="font-size: 11px; color: var(--text-secondary);"></div>
+        <div id="legend-axis-picker" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        <div id="legend-axes" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;"></div>
       </div>
     `;
 
     overlay.appendChild(this.legendElement);
+    this.createAxisPicker();
     this.updateLegendArms();
     this.updateLegendAxes();
+  }
+
+  private createAxisPicker(): void {
+    const container = this.legendElement?.querySelector("#legend-axis-picker");
+    if (!container) return;
+
+    const dimensions: (keyof GridAxes)[] = ["x", "y", "z"];
+    dimensions.forEach((dimension) => {
+      const row = document.createElement("div");
+      row.style.cssText =
+        "display: flex; align-items: center; gap: 6px; font-size: 11px;";
+
+      const label = document.createElement("span");
+      label.textContent = dimension.toUpperCase();
+      label.style.cssText = "color: var(--text-secondary); width: 12px;";
+
+      const select = document.createElement("select");
+      select.dataset.dimension = dimension;
+      select.style.cssText = `
+        flex: 1;
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 11px;
+        padding: 2px 4px;
+      `;
+      select.addEventListener("change", () => {
+        this.axes = { ...this.axes, [dimension]: select.value as AxisName };
+        this.applyAxes();
+        if (this.lastMetrics) {
+          this.applyAggregates(this.aggregate(this.lastMetrics));
+        }
+      });
+
+      row.appendChild(label);
+      row.appendChild(select);
+      container.appendChild(row);
+    });
+
+    this.refreshAxisOptions();
+  }
+
+  private refreshAxisOptions(): void {
+    const selects = this.legendElement?.querySelectorAll(
+      "#legend-axis-picker select",
+    );
+    if (!selects) return;
+
+    selects.forEach((select) => {
+      const dimension = (select as HTMLSelectElement).dataset
+        .dimension as keyof GridAxes;
+      const taken = new Set<AxisName>(
+        (["x", "y", "z"] as (keyof GridAxes)[])
+          .filter((other) => other !== dimension)
+          .map((other) => this.axes[other]),
+      );
+
+      select.innerHTML = "";
+      AXIS_NAMES.forEach((axis) => {
+        const option = document.createElement("option");
+        option.value = axis;
+        option.textContent = AXIS_META[axis]?.display_name ?? axis;
+        option.disabled = taken.has(axis);
+        option.selected = this.axes[dimension] === axis;
+        select.appendChild(option);
+      });
+    });
   }
 
   private updateLegendArms(): void {
@@ -199,27 +289,67 @@ export class DiscoveryMap implements Component {
     const container = this.legendElement?.querySelector("#legend-axes");
     if (!container) return;
 
-    container.textContent = `X: ${this.axes.x} (${this.xValues.join(", ")}) | Y: ${this.axes.y} (${this.yValues.join(", ")}) | Z: ${this.axes.z} (${this.zValues.join(", ")})`;
+    if (this.xValues.length === 0 && this.yValues.length === 0) {
+      container.textContent = "Waiting for records — the axes come from the data.";
+      return;
+    }
+
+    const known = (axis: AxisName, shown: string[]): string => {
+      const observed = this.axisValues[axis]?.length ?? 0;
+      const legal = AXIS_META[axis]?.primitives.length ?? observed;
+      const trimmed =
+        observed > shown.length ? ` (showing ${shown.length} of ${observed})` : "";
+      return `${shown.join(", ") || "—"}${trimmed} · ${observed} observed / ${legal} known`;
+    };
+
+    container.innerHTML = [
+      `<div>X: ${this.axes.x} — ${known(this.axes.x, this.xValues)}</div>`,
+      `<div>Y: ${this.axes.y} — ${known(this.axes.y, this.yValues)}</div>`,
+      `<div>Z: ${this.axes.z} — ${known(this.axes.z, this.zValues)}</div>`,
+    ].join("");
+  }
+
+  /** Re-read the selected axes from the observed values and rebuild the grid. */
+  private applyAxes(): void {
+    this.xValues = this.trimValues(this.axisValues[this.axes.x]);
+    this.yValues = this.trimValues(this.axisValues[this.axes.y]);
+    this.zValues = this.trimValues(this.axisValues[this.axes.z]);
+    this.buildGrid();
+    this.refreshAxisOptions();
+    this.updateLegendArms();
+    this.updateLegendAxes();
+  }
+
+  /** Keep the grid readable: a wide axis is shown truncated, not hidden. */
+  private trimValues(values: string[]): string[] {
+    return values.slice(0, MAX_VALUES_PER_AXIS);
   }
 
   private buildGrid(): void {
     this.clearGrid();
 
-    // Create axis labels
     this.createAxisLabels();
 
-    // Build cell grid
     this.yValues.forEach((yVal, yIdx) => {
       this.zValues.forEach((zVal, zIdx) => {
         this.xValues.forEach((xVal, xIdx) => {
-          const key = `${xVal}|${yVal}|${zVal}`;
+          const key = this.cellKey(xVal, yVal, zVal);
+          const coordinate: CellData["coordinate"] = {
+            credit: "",
+            geometry: "",
+            dynamics: "",
+            substrate: "",
+            plasticity: "",
+            update: "",
+          };
+          coordinate[this.axes.x] = xVal;
+          coordinate[this.axes.y] = yVal;
+          coordinate[this.axes.z] = zVal;
           const cellData: CellData = {
-            coordinate: {
-              credit: xVal,
-              geometry: yVal,
-              dynamics: zVal,
-            },
+            coordinate,
             status: "legal",
+            chance: this.chance,
+            requiredSeeds: this.requiredSeeds,
           };
           this.cellDataMap.set(key, cellData);
           this.createCell(key, cellData, xIdx, yIdx, zIdx);
@@ -228,8 +358,11 @@ export class DiscoveryMap implements Component {
     });
   }
 
+  private cellKey(x: string, y: string, z: string): string {
+    return `${x}|${y}|${z}`;
+  }
+
   private createAxisLabels(): void {
-    // Remove old labels
     this.axisLabelMeshes.forEach((mesh) => this.scene.remove(mesh));
     this.axisLabelMeshes = [];
 
@@ -238,7 +371,7 @@ export class DiscoveryMap implements Component {
       sizeAttenuation: true,
     });
 
-    // X-axis labels (credit arms), on the ground under the cells they name
+    // X-axis labels (the values they name), on the ground under the cells
     this.xValues.forEach((val, idx) => {
       const x = (idx - (this.xValues.length - 1) / 2) * this.spacing;
       const sprite = this.createTextSprite(val, 0.3, labelMaterial);
@@ -435,46 +568,31 @@ export class DiscoveryMap implements Component {
     this.cellDataMap.clear();
   }
 
-  private onQueueUpdate = (data: any): void => {
-    // Update grid based on queue status
-    // For now, just rebuild with current axes
-    if (data.campaigns) {
-      // Could update axes based on running campaigns
-    }
+  private onQueueUpdate = (_data: unknown): void => {
+    // The queue says what is running; the grid says what was measured.
   };
 
   private onCampaignMetrics = (data: any): void => {
-    const { data: metricsData } = data;
+    const metricsData = data?.data;
     if (!metricsData?.records?.length) return;
 
-    interface CellAggregate {
-      acc: number[];
-      walltime: number[];
-      params: number[];
-      pareto: boolean;
+    this.lastMetrics = metricsData;
+
+    if (typeof metricsData.chance === "number") this.chance = metricsData.chance;
+    if (typeof metricsData.required_seeds === "number") {
+      this.requiredSeeds = metricsData.required_seeds;
     }
 
-    const aggregates = new Map<string, CellAggregate>();
-    metricsData.records.forEach((record: any, idx: number) => {
-      const coord = record.coordinate;
-      if (!coord) return;
-      const key = `${coord.credit}|${coord.geometry}|${coord.dynamics}`;
-      let aggregate = aggregates.get(key);
-      if (!aggregate) {
-        aggregate = { acc: [], walltime: [], params: [], pareto: false };
-        aggregates.set(key, aggregate);
-      }
-      const payload = record.payload ?? {};
-      if (typeof payload.val_acc === "number") aggregate.acc.push(payload.val_acc);
-      if (typeof payload.walltime_s === "number")
-        aggregate.walltime.push(payload.walltime_s);
-      if (typeof payload.param_count === "number")
-        aggregate.params.push(payload.param_count);
-      if (metricsData.pareto?.[idx]) aggregate.pareto = true;
-    });
+    const aggregates = this.aggregate(metricsData);
+    if (this.absorbAxisValues(metricsData.records)) {
+      // The axes moved: the grid was rebuilt, so the cells are re-applied below.
+      this.applyAxes();
+    }
+    this.applyAggregates(aggregates);
+  };
 
-    const requiredSeeds = metricsData.required_seeds as number | undefined;
-
+  /** Mark the cells that have records and light them up. */
+  private applyAggregates(aggregates: Map<string, CellAggregate>): void {
     aggregates.forEach((aggregate, key) => {
       const cellData = this.cellDataMap.get(key);
       if (!cellData) return;
@@ -486,10 +604,103 @@ export class DiscoveryMap implements Component {
         param_count: mean(aggregate.params),
         n_seeds: aggregate.acc.length,
       };
-      cellData.requiredSeeds = requiredSeeds;
+      cellData.curve = meanCurve(aggregate.curves);
+      cellData.pareto = aggregate.pareto;
+      cellData.chance = this.chance;
+      cellData.requiredSeeds = this.requiredSeeds;
       this.updateCellVisual(key, cellData, aggregate.pareto);
     });
-  };
+  }
+
+  /** Fold the records into one aggregate per cell. */
+  private aggregate(metricsData: any): Map<string, CellAggregate> {
+    const aggregates = new Map<string, CellAggregate>();
+
+    metricsData.records.forEach((record: any, idx: number) => {
+      const coord = record.coordinate;
+      if (!coord) return;
+      const key = this.cellKey(
+        coord[this.axes.x],
+        coord[this.axes.y],
+        coord[this.axes.z],
+      );
+      let aggregate = aggregates.get(key);
+      if (!aggregate) {
+        aggregate = { acc: [], walltime: [], params: [], curves: [], pareto: false };
+        aggregates.set(key, aggregate);
+      }
+      const payload = record.payload ?? {};
+      if (typeof payload.val_acc === "number") aggregate.acc.push(payload.val_acc);
+      if (typeof payload.walltime_s === "number")
+        aggregate.walltime.push(payload.walltime_s);
+      if (typeof payload.param_count === "number")
+        aggregate.params.push(payload.param_count);
+      if (Array.isArray(payload.convergence_curve)) {
+        const curve = payload.convergence_curve
+          .filter(
+            (point: any) =>
+              typeof point?.epoch === "number" &&
+              typeof point?.val_acc === "number",
+          )
+          .map((point: any) => ({ epoch: point.epoch, val_acc: point.val_acc }));
+        if (curve.length > 0) aggregate.curves.push(curve);
+      }
+      if (metricsData.pareto?.[idx]) aggregate.pareto = true;
+    });
+
+    return aggregates;
+  }
+
+  /** Learn which values each axis takes, from the records themselves. */
+  private absorbAxisValues(records: any[]): boolean {
+    const observed: Record<AxisName, Set<string>> = {
+      credit: new Set(),
+      geometry: new Set(),
+      dynamics: new Set(),
+      substrate: new Set(),
+      plasticity: new Set(),
+      update: new Set(),
+    };
+
+    records.forEach((record) => {
+      const coord = record?.coordinate;
+      if (!coord) return;
+      AXIS_NAMES.forEach((axis) => {
+        const value = coord[axis];
+        if (typeof value === "string" && value.length > 0) {
+          observed[axis].add(value);
+        }
+      });
+    });
+
+    const changed = AXIS_NAMES.some((axis) => {
+      const values = this.sortValues(axis, Array.from(observed[axis]));
+      if (values.length === this.axisValues[axis].length) {
+        return values.some((value, i) => value !== this.axisValues[axis][i]);
+      }
+      return true;
+    });
+
+    if (!changed) return false;
+
+    AXIS_NAMES.forEach((axis) => {
+      this.axisValues[axis] = this.sortValues(axis, Array.from(observed[axis]));
+    });
+    return true;
+  }
+
+  /** Order values the way the primitive registry does. */
+  private sortValues(axis: AxisName, values: string[]): string[] {
+    const order = (AXIS_META[axis]?.primitives ?? []).map((p) => p.name);
+    return [...values].sort((a, b) => {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+  }
 
   private updateCellVisual(
     key: string,

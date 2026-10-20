@@ -589,20 +589,104 @@ made the dashboard real and produced the image.
 | `scripts/launch_demo_campaign.py` drives the capture | the capture script owns the flow | one script, one process, no subprocess coordination |
 | `Pareto` chart target is a canvas | a div | uPlot builds its own DOM |
 
-### Remaining work (not part of this session)
+### Remaining work (closed in the next section, except where noted)
 
 - **Pipeline events are still mocked.** The live rail repeats "compose joint
   system" every 2s. The queue does not emit stage events; `CampaignQueue`
   would need to publish them and the dashboard would need to forward them.
+  → **Done** (next section).
 - **The cell drawer has no sparkline data.** It renders the training curve
   from `payload.convergence_curve`, which the demo does not populate; the
   drawer shows an empty frame until a run records one.
+  → **Done, and the diagnosis was wrong**: the demo *does* populate
+  `convergence_curve`. The drawer was drawing random noise instead of
+  reading it.
 - **Write capability.** The drawer's buttons (`queue rest`, `preregister`,
-  `adopt as quest`) are still disabled, as planned for v1.
+  `adopt as quest`) are still disabled, as planned for v1. → still v2.
 - **Multi-cell discovery.** The grid axes are hardcoded to the demo's four
   credit arms; the plan's "axes derived from data" is only partly true —
   `axis-metadata.json` carries the primitives, but the DiscoveryMap still
-  seeds its axes from the demo profile.
+  seeds its axes from the demo profile. → **Done** (next section).
 - **Cross-process live monitoring** needs a store that tolerates a reader
   while a writer works (a copy-on-write snapshot, or the campaign writing
-  through a service). Out of scope here; documented instead.
+  through a service). Out of scope here; documented instead. → still out of
+  scope.
+
+---
+
+## Session Progress — Real Events, Real Curves, Real Axes (2026-10-20)
+
+The previous session made the dashboard render; this one removed the last
+three fakes — and the three defects that had been hiding them.
+
+### The remaining work, closed
+
+| # | Item | How it is now |
+|---|------|---------------|
+| 1 | Pipeline events were mocked | `computronium/experiment/execution/events.py` is a process-wide bus. The pipeline publishes a stage event for every stage it runs and a measurement event for every cell it records; the campaign queue publishes its own lifecycle. The dashboard subscribes and forwards each event as a `pipeline_event` frame. The hardcoded broadcast is gone. |
+| 2 | The cell drawer had no sparkline | The drawer was drawing **random noise**. The records have carried `payload.convergence_curve` all along; the discovery map now averages it over the cell's seeds and the drawer draws that. A cell that recorded no curve says so instead of drawing one. |
+| 3 | The grid axes were the demo's four arms | The axes come from the records: every coordinate axis the data uses, with the values it uses, ordered by the primitive registry. The legend's selects switch X/Y/Z over the six axes. |
+
+### Defects found on the way
+
+| # | Defect | Cause | Fix |
+|---|--------|-------|-----|
+| 14 | The live rail repeated "compose joint system" every 2s | the dashboard broadcast a hardcoded frame | the event bus |
+| 15 | The drawer's sparkline was noise | it generated `Math.random()` data | it draws the recorded curve |
+| 16 | The drawer's chance level was `0.1` | a constant | the API's `chance`, which comes from `chance_level(task_id, …)` |
+| 17 | A client that connected late saw an empty rail | events were only pushed to live sockets | the dashboard keeps the last 200 and replays the last 50 on connect |
+| 18 | The capture script failed about half the time: `Catalog write-write conflict on create` | the dashboard's read-write fallback and the campaign raced to create the store's schema | the store's schema creation retries (every statement is `IF NOT EXISTS`, so the retry converges) |
+| 19 | The browser never processed the dashboard's messages | the three.js scene (2048² shadow map, antialias, 60 fps) under SwiftShader starved the page's event loop — 0 messages in 5 s, 19 in 15 s | `src/render-profile.ts` detects a software rasterizer and drops shadows, antialiasing, pixel ratio and the frame rate (12 fps); the data now arrives in seconds |
+| 20 | The Pareto chart's y-axis showed `0.072..0.136` while the data spanned `0.078..0.65` | uPlot's automatic range only ever **widens**, so the chart kept the window of the first, partial dataset it saw | the plotter states the range from the data after every `setData` |
+| 21 | The variability chart's y-axis was `0..0` | its series carries placeholder zeros; the boxes are drawn by a hook from the records | same fix; the axis is fitted to the records |
+| 22 | The rail's pill said "Idle" whenever no campaign queue was attached | the pill reported the campaign count, not the socket | it reports the WebSocket state; the counts moved to the rail's header |
+| 23 | The chart's chance line vanished when no cell was on the frontier | it was drawn inside the frontier branch | it is always drawn — it is what every point is measured against |
+
+### Design decisions worth keeping
+
+- **One event shape, one publisher API.** Producers own the vocabulary
+  (`STAGE_ACTIONS` says what each stage calls itself), consumers only format.
+  A subscriber that raises is logged and skipped: it can never fail the run
+  that produced the event.
+- **The bus is process-local, and says so.** A campaign in another process
+  cannot publish into this process's bus, so the dashboard reports what it
+  can honestly see there — records landing in the store — and skips any run
+  that is already reporting itself.
+- **The axes are the data's.** The discovery map asks the records which
+  values each axis takes; the primitive registry only decides their order
+  and how many are legal. A cell that has no record is legal-but-unmeasured,
+  which is what "fog of war" means.
+- **uPlot needs to be told the range.** Its auto-scaling is designed for
+  streaming data that only grows; a dashboard whose dataset grows *and*
+  shrinks needs the range stated. The plotter now says it.
+
+### Files
+
+| File | Change |
+|------|--------|
+| `computronium/experiment/execution/events.py` | **New** — `PipelineEvent`, `PipelineEventBus`, the process-wide bus |
+| `computronium/experiment/execution/pipeline.py` | publishes stage and measurement events |
+| `computronium/experiment/execution/campaign_queue.py` | publishes the campaign's lifecycle |
+| `computronium/experiment/execution/dashboard/web.py` | subscribes and forwards; replays recent events to late clients; store-derived progress |
+| `computronium/experiment/evidence/store.py` | schema creation survives a catalog conflict |
+| `dashboard/src/cell-data.ts` | **New** — the cell shape the map measures and the drawer reads |
+| `dashboard/src/render-profile.ts` | **New** — how much scene the machine can afford |
+| `dashboard/src/discovery-map.ts` | axes from the data, an axis picker, the averaged curve |
+| `dashboard/src/cell-drawer.ts` | the recorded curve, the measured chance level |
+| `dashboard/src/plotter.ts` | the range is stated from the data; the chance line always drawn |
+| `dashboard/src/live-rail.ts`, `hud.ts` | the socket owns the connection pill |
+| `tests/unit/experiment/test_dashboard_events.py` | **New** — the bus, the forwarding, the replay, the no-double-report rule |
+| `tests/unit/experiment/test_store_schema_init.py` | **New** — the schema race and its retry |
+| `scripts/probes/probe_{ws_delivery,plot_scale,dashboard_plot_drawer}.py` | **New** — the three probes that found the above |
+
+### Still open
+
+- **Write capability** — the drawer's buttons stay disabled (v2, as planned).
+- **Cross-process live monitoring** — DuckDB's single-writer lock still means
+  a dashboard in another process sees nothing until the writer lets go. The
+  event bus cannot cross a process boundary; the store-derived progress is
+  the honest substitute.
+- **Custom 3D charts** — the plan's v2 Pareto scatter, ablation bars and
+  violin plots in three.js. uPlot with an explicitly stated range is what
+  ships.
+- **The drawer's actions and the "adopt as quest" flow** are still v2.

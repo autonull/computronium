@@ -58,13 +58,19 @@ Open <http://localhost:8080> in a browser.
 
 ### 1. Discovery Map (3D Fog-of-War)
 
-**The core visual.** A 3D grid where axes are configurable (default: credit × geometry × dynamics).
+**The core visual.** A 3D grid whose axes are **derived from the data**: every
+coordinate axis the records carry, with the values the records actually used.
 
 | Cell Type | Visual | Meaning |
 |-----------|--------|---------|
 | **Measured** | Glowing pillar (height = val_acc, color = credit arm) | At least one seed completed |
 | **Legal/Unmeasured** | Semi-transparent wireframe cube | In search space, not yet run |
 | **Void** | Red X marker | Outside declared search space |
+
+**Axis picker** (in the legend): three selects — X, Y, Z — over the six
+coordinate axes (credit, geometry, dynamics, substrate, plasticity, update).
+The values shown are the ones the records used, ordered by the primitive
+registry; the legend states how many of the known primitives were observed.
 
 **Interactions:**
 - **OrbitControls**: Left-drag = rotate, Right-drag = pan, Scroll = zoom
@@ -86,7 +92,9 @@ Rich detail for a selected measured cell. HTML overlay (not WebGL) for crisp tex
 - **Verdict banner**: `PASSED` (green, >chance+0.1) / `INSUFFICIENT` (amber, >chance) / `REJECTED` (red, ≤chance)
 - **Seeds to claim**: Simplified calculation (63 seeds for d=0.5 effect)
 - **Wall time & param count**
-- **Mini 3D sparkline**: Training curve (val_acc over epochs) with chance line — small three.js scene
+- **Mini 3D sparkline**: the cell's **recorded** training curve
+  (`payload.convergence_curve`, averaged over the cell's seeds) with the
+  chance line. A cell that recorded no curve says so instead of drawing one.
 
 **Actions** (v1 visual only, disabled):
 - `[queue rest]` — request more seeds for this cell
@@ -115,10 +123,19 @@ Scrolling timeline of pipeline events. HTML overlay with animated pills.
 
 **Event levels:**
 - `✓ ok` — stage completed (green)
-- `⚠ warn` — stage completed at chance / degraded (amber)
-- `✗ error` — stage failed (red)
+- `⚠ warn` — something degraded (amber)
+- `✗ error` — stage or campaign failed (red)
 
-**Source:** WebSocket `pipeline_event` messages (mock in v1, real queue events in v2).
+**Source:** the process-wide event bus
+(`computronium/experiment/execution/events.py`). The pipeline publishes a
+stage event for every stage it runs and a measurement event for every cell it
+records; the campaign queue publishes the campaign's own lifecycle. The
+dashboard subscribes and forwards each event as a `pipeline_event` message.
+
+A campaign running in *another* process cannot publish into this process's
+bus, so the dashboard derives the only progress it can honestly report there:
+records landing in the store. A run that reports itself on the bus is never
+also counted by the store.
 
 ---
 
@@ -171,7 +188,7 @@ The dashboard consumes these message types (via `MessageRouter` auto-registratio
 | `status_update` | `{gpu, cpu, memory, ...}` | Mission Control, Live Rail |
 | `queue_update` | `{queued, running, completed, resource_usage}` | Discovery Map, Live Rail |
 | `campaign_metrics` | `{campaign_id, data: {records, pareto, ablation_groups, chance, required_seeds, resources}}` | Discovery Map, Cell Drawer, Plotter, Mission Control |
-| `pipeline_event` | `{stage, message, level}` | Live Rail |
+| `pipeline_event` | `{stage, message, level, run_id, timestamp}` | Live Rail |
 
 ---
 
@@ -184,6 +201,8 @@ CampaignQueue (singleton)
     │
     └─► CampaignQueue._run_campaign() → RecordStore.append() → DuckDB
                                           │
+                                          ▼
+PipelineRunner ──► event bus ─────────────┤
                                           ▼
     WebDashboard._get_campaign_metrics() ──► RecordStore.query_records(read_only=True)
                                           │
@@ -273,6 +292,19 @@ npm run build        # Production build → templates/static/js/dashboard.js
 ```bash
 uv run python scripts/generate_palette.py
 uv run python scripts/generate_axis_metadata.py
+```
+
+**Without a GPU.** The dashboard detects a software rasterizer (SwiftShader,
+llvmpipe) and drops shadows, antialiasing and the pixel ratio, and caps the
+frame rate at 12 fps. A software-rendered scene otherwise starves the
+browser's event loop: the WebSocket frames that carry the data stop being
+processed, and the dashboard looks frozen while the server is fine.
+
+**Probes** (headless measurements, `scripts/probes/`):
+```bash
+uv run python scripts/probes/probe_ws_delivery.py          # message latency
+uv run python scripts/probes/probe_plot_scale.py            # axes cover the data
+uv run python scripts/probes/probe_dashboard_plot_drawer.py # drawer + plot state
 ```
 
 ---

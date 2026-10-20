@@ -3,28 +3,8 @@
 import * as THREE from "three";
 import { registry } from "./components/registry.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
+import type { CellData } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
-
-interface CellData {
-  coordinate: {
-    credit: string;
-    geometry: string;
-    dynamics: string;
-    substrate?: string;
-    plasticity?: string;
-    update?: string;
-  };
-  status: "measured" | "legal" | "void";
-  metrics?: {
-    val_acc?: number;
-    val_acc_std?: number;
-    walltime_s?: number;
-    param_count?: number;
-    n_seeds?: number;
-  };
-  requiredSeeds?: number;
-  price?: number;
-}
 
 export class CellDrawer implements Component {
   name = "CellDrawer";
@@ -139,7 +119,7 @@ export class CellDrawer implements Component {
     const armColor = ARM_COLORS[coordinate.credit] || PALETTE.gradient;
     const valAcc = metrics?.val_acc ?? 0;
     const nSeeds = metrics?.n_seeds ?? 0;
-    const chance = 0.1; // digits task = 10 classes
+    const chance = data.chance ?? 0.1;
     const requiredSeeds = data.requiredSeeds ?? 0;
 
     // Verdict logic
@@ -312,10 +292,29 @@ export class CellDrawer implements Component {
     this.content.appendChild(style);
   }
 
-  // Mini 3D sparkline (training curve in panel)
+  // Mini 3D sparkline (the measured training curve)
   private startSparkline(data: CellData): void {
     const container = document.getElementById("sparkline-container");
     if (!container) return;
+
+    this.stopSparkline();
+
+    const curve = data.curve ?? [];
+    if (curve.length === 0) {
+      container.innerHTML = `
+        <div style="
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          color: var(--text-muted);
+          text-align: center;
+          padding: 0 12px;
+        ">No convergence curve recorded for this cell.</div>
+      `;
+      return;
+    }
 
     // Create mini three.js scene
     this.sparklineScene = new THREE.Scene();
@@ -333,20 +332,17 @@ export class CellDrawer implements Component {
     this.sparklineRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.sparklineRenderer.domElement);
 
-    // Generate mock training curve data
-    const epochs = 10;
-    const curveData = Array.from({ length: epochs }, (_, i) => {
-      const progress = i / (epochs - 1);
-      const baseAcc = 0.1 + progress * 0.3; // 0.1 to 0.4
-      const noise = (Math.random() - 0.5) * 0.05;
-      return Math.max(0.1, Math.min(0.95, baseAcc + noise));
-    });
+    const chance = data.chance ?? 0.1;
+    const values = curve.map((point) => point.val_acc);
+    const low = Math.min(chance, ...values);
+    const high = Math.max(...values, chance);
+    const span = high - low || 1;
+    const toY = (value: number): number =>
+      THREE.MathUtils.lerp(-0.7, 0.7, (value - low) / span);
 
-    // Create line geometry
-    const points = curveData.map((val, i) => {
-      const x = THREE.MathUtils.lerp(-0.9, 0.9, i / (epochs - 1));
-      const y = THREE.MathUtils.lerp(-0.7, 0.7, (val - 0.1) / 0.85);
-      return new THREE.Vector3(x, y, 0);
+    const points = curve.map((point, i) => {
+      const x = THREE.MathUtils.lerp(-0.9, 0.9, i / (curve.length - 1 || 1));
+      return new THREE.Vector3(x, toY(point.val_acc), 0);
     });
 
     const curveGeometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -354,11 +350,22 @@ export class CellDrawer implements Component {
       color: ARM_COLORS[data.coordinate.credit] || PALETTE.gradient,
       linewidth: 2,
     });
-    const curve = new THREE.Line(curveGeometry, curveMaterial);
-    this.sparklineScene.add(curve);
+    const sparkline = new THREE.Line(curveGeometry, curveMaterial);
+    this.sparklineScene.add(sparkline);
+
+    // The measured points, so the line reads as measurements
+    const markers = new THREE.Points(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.PointsMaterial({
+        color: ARM_COLORS[data.coordinate.credit] || PALETTE.gradient,
+        size: 6,
+        sizeAttenuation: false,
+      }),
+    );
+    this.sparklineScene.add(markers);
 
     // Add chance line
-    const chanceY = THREE.MathUtils.lerp(-0.7, 0.7, (0.1 - 0.1) / 0.85);
+    const chanceY = toY(chance);
     const chanceGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-0.9, chanceY, 0),
       new THREE.Vector3(0.9, chanceY, 0),

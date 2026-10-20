@@ -40,6 +40,10 @@ from computronium.experiment.execution.deadline import (
     _PipelineStateSnapshot,
 )
 from computronium.experiment.execution.decision import Decision, RoundController
+from computronium.experiment.execution.events import (
+    STAGE_ACTIONS,
+    publish_event,
+)
 from computronium.experiment.execution.stage import Proposal, StageId, get_stage_spec
 from computronium.experiment.execution.stream import CellStream, CellStreamState
 from computronium.experiment.execution.sysctx import (
@@ -990,7 +994,37 @@ class PipelineRunner:
             )
         finally:
             self._state.stage_timings[stage_id.value] = time.perf_counter() - started
+        self._announce_stage(stage_id, fragment)
         return fragment
+
+    def _announce_stage(self, stage_id: StageId, fragment: Fragment) -> None:
+        """Tell the live rail what the stage just did."""
+        action = STAGE_ACTIONS.get(stage_id.value, stage_id.value)
+        error = fragment.metadata.get("error")
+        if error:
+            publish_event(
+                stage_id.value,
+                f"could not {action}: {error}",
+                level="error",
+                run_id=self._config.run_id,
+            )
+            return
+
+        counts = []
+        if fragment.proposals:
+            counts.append(f"{len(fragment.proposals)} proposals")
+        if fragment.records:
+            counts.append(f"{len(fragment.records)} records")
+        detail = ", ".join(counts)
+        publish_event(
+            stage_id.value,
+            f"{action}{f': {detail}' if detail else ''}",
+            run_id=self._config.run_id,
+            detail={
+                "proposals": len(fragment.proposals),
+                "records": len(fragment.records),
+            },
+        )
 
     def _create_stage_context(self, stage_id: StageId, stage_spec) -> StageContext:
         """Create StageContext for a stage."""
@@ -1386,6 +1420,13 @@ class PipelineRunner:
                 cell_timing.end_cell()
 
         stored = self._persist_results(batch_items, results)
+        if stored:
+            publish_event(
+                "s8_record",
+                f"recorded {len(stored)} cells",
+                run_id=self._config.run_id,
+                detail={"records": len(stored)},
+            )
         for record in stored:
             self._observe(record)
 
@@ -1455,6 +1496,7 @@ class PipelineRunner:
                         self._state.completed_measurement_keys.add(
                             record.measurement_key
                         )
+                        self._announce_cell(record)
                     self._charge_budget(stored_here)
                     successful.extend(stored_here)
                 case Failure(failure_event=event):
@@ -1471,6 +1513,22 @@ class PipelineRunner:
                         message=event.error_message,
                     )
         return successful
+
+    def _announce_cell(self, record: Record) -> None:
+        """Report one measurement as it lands — the number, not a label."""
+        accuracy = record.payload.get("val_acc")
+        measured = (
+            f"val_acc {float(accuracy):.3f}"
+            if isinstance(accuracy, int | float)
+            else "measured"
+        )
+        publish_event(
+            "s7_measure",
+            f"{record.credit}/{record.geometry}/{record.dynamics} "
+            f"seed {record.schedule.seed}: {measured}",
+            run_id=self._config.run_id,
+            detail={"record_id": record.record_id, "val_acc": accuracy},
+        )
 
     def _observe(self, record: Record) -> None:
         """Hand a stored measurement to the policy.
