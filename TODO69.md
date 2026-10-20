@@ -28,7 +28,7 @@ picture in every shot — a grid of coloured cubes — and every picture the tou
 took of it looked the same.
 
 The canvas is now a **stage**, and a view is what stands on it. There are
-fourteen, and the tour has a shot of each:
+fifteen, and the tour has a shot of each:
 
 | # | View | The picture | The shot |
 |---|------|-------------|----------|
@@ -46,20 +46,21 @@ fourteen, and the tour has a shot of each:
 | 12 | **The contrast** | the arms against one another, over the cells they share, with the test's verdict | `dashboard-contrast.png` |
 | 13 | **The flow** | the run's cells stage by stage: one column per stage, what it carried and what it wrote, and what the gate refused | `dashboard-flow.png` |
 | 14 | **The effect** | one column per axis: a band for an axis whose arms differ, a mark for an axis that was held fixed | `dashboard-effect.png` |
+| 15 | **The layers** | the space cut into sheets: one sheet per value of the third axis, the cells the run measured standing up off their own | `dashboard-layers.png` |
 
 **The switcher that makes them a choice**: `V` cycles the views, the number
 keys pick the first nine (like the plotter's tabs — which moved to `P`, `A`
-and `S` so the numbers could belong to the stage), and the five that do not
+and `S` so the numbers could belong to the stage), and the six that do not
 fit in the numbers have a **letter** of their own — `T` the timeline, `L` the
-ledger, `D` the contrast, `F` the flow, `E` the effect. A **View** selector
-in the legend names the view where it is chosen. The legend's title is the
-view's name, and the caption under the selector says what a reader would say
-after looking at it.
+ledger, `D` the contrast, `F` the flow, `E` the effect, `Y` the layers. A
+**View** selector in the legend names the view where it is chosen. The
+legend's title is the view's name, and the caption under the selector says
+what a reader would say after looking at it.
 
 **The acceptance, in pictures, is now mechanical**: the tour photographs the
-fourteen views and then measures them — the browser decodes each pair of
+fifteen views and then measures them — the browser decodes each pair of
 shots and reports the share of the pixels that differ. A pair that is too
-alike fails the tour. The measured differences run from 2.7 % to 30.5 %; the
+alike fails the tour. The measured differences run from 2.4 % to 30.5 %; the
 floor is 2 %.
 
 The full catalogue — twenty-odd views, 3D and 2D, from the evidence to the
@@ -77,14 +78,14 @@ seed violins, the `comp` reports) are in the table after it.
 | The event bus | `computronium/experiment/execution/events.py` | complete: stage and measurement events, process-wide |
 | The narration | `computronium/experiment/execution/dashboard/narration.py` | complete: the sentences, the account, the state |
 | The caption | `dashboard/src/caption.ts` | complete: the sentences, rendered |
-| **The stage** | `dashboard/src/stage/` | complete: the shared state, fourteen views, the switcher |
+| **The stage** | `dashboard/src/stage/` | complete: the shared state, fifteen views, the switcher |
 | **The run's account** | `computronium/experiment/execution/dashboard/ledger.py` | complete: the ledger, the contrast, the rules they are measured by |
 | **The run's arms** | `computronium/experiment/execution/dashboard/arms.py` | complete: the statistics of an arm, read once for the ledger and the effect |
 | **The run's flow** | `computronium/experiment/execution/dashboard/flow.py` | complete: the stages, the counts, the refusals, the shape in a sentence |
 | **The run's effect** | `computronium/experiment/execution/dashboard/attribution.py` | complete: the axes, the spread, and what the design cannot say |
 | The keys | `dashboard/src/keys.ts` | complete: the panels, the charts and the stage's views, in one list |
 | The hero capture | `scripts/capture_dashboard_screenshot.py` | one image, one view |
-| The tour | `scripts/capture_dashboard_tour.py` | twenty-six views, fourteen kinds of picture on the stage, and a check that they differ |
+| The tour | `scripts/capture_dashboard_tour.py` | thirty-eight pictures: fifteen views on the stage, the gallery, the report's own plots, and the `comp` reports |
 | The recording | `scripts/capture_dashboard_video.py` | a `.webm` of a live session, uncommitted |
 | The live rail | `dashboard/src/live-rail.ts` | terse pills: `[s6_train] train cells` — a log, not a story |
 | The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal, and a frame of it as text |
@@ -174,9 +175,10 @@ seed violins, the `comp` reports) are in the table after it.
 ## Phases
 
 Phases 0–5 are done: the server speaks, the browser shows it, the tour and
-the recording show both, and the canvas can show more than one thing. What is
-left of the stage is the catalogue in Phase 5 — the attribution, the layers,
-the multi-run space, and the family that needs the trained system.
+the recording show both, and the canvas can show more than one thing. The
+surfaces outside the canvas are in the tour too. What is left of the stage is
+the catalogue in Phase 5 — the multi-run space, and the family that needs a
+cell with a state.
 
 ### Phase 0: The narration (server) — the server half is done
 
@@ -380,7 +382,7 @@ to pass: **what can a reader say after looking at it?**
 | **The space** (the map) ✅ | the declared space: gaps as wireframe cubes, measured cells as glowing pillars, refusals as red crosses; the pillar's height carries the value | the space payload, the records | "the run measured four of the cells it declared, and here they are" |
 | **The terrain** ✅ | the same space as a *heightfield*: accuracy as height over the two free axes, the gaps flat ground, the refusals craters in it | the space payload, the records | "the arms that were measured stand up, and the region the system refuses is a hole in the ground" |
 | **The frontier** ✅ | every measured record as a point in (accuracy, speed, parameters); the front the run computed drawn through them; the chance plane as a floor | the records, the `pareto` flags, `chance` | "nothing beat these cells on all three counts at once" |
-| **The layers** ⬜ | the three axes as a stack of 2D slices — the space cut into planes, so a reader can see the space from the side | the space payload | "the run filled a slab, and the slab is thin" |
+| **The layers** ✅ | the space cut into sheets: one sheet per value of the third axis, the cells the run measured standing up off their own sheet, the rest of the space the ground they were not in | the space payload, the records | "the run filled one sheet of eight, and four cells of it" |
 | **The multi-run space** ⬜ | several runs' evidence in one space, coloured by run | the store's runs, the space per run | "the second run went where the first one did not" |
 
 #### The evidence, seen other ways (2D)
@@ -445,29 +447,35 @@ from.
 ### Where to start next
 
 The four flat views of the evidence are built, and the run now has a timeline,
-a ledger, a contrast, a flow and an effect. What is left of the catalogue:
+a ledger, a contrast, a flow and an effect. The layers are built too, and so
+are the surfaces outside the canvas. What is left of the catalogue:
 
 1. **The dynamics views** — the ones that need a cell re-instantiated, and
    the ones worth the most: the settling trajectory, the basin, the energy
    landscape, the spectrum. The machinery is in `computronium.stability` and
    in `computronium/experiment/analysis/energy_landscape.py`; what is
    missing is a server that re-composes a cell from a record and a view
-   that draws the answer.
-2. **The layers and the multi-run space** — the 3D views that are not the
-   space and the terrain.
-3. **The remaining figures** — the gallery, the report's own plots: the
-   `figure` frame kind is there, and each is one `Frame` away.
+   that draws the answer. **The probe says what has to be true first** — the
+   demo's cells have no state to settle, and the transition the stability
+   analysis builds is the identity for them: see the batch at the end of
+   this plan.
+2. **The multi-run space** — several runs' evidence in one space, coloured
+   by run. It needs two runs in one store.
+3. **The remaining surfaces** — the defect registry, the comparison between
+   two runs, and the panels on their own.
 
 **Acceptance**: ✅ the canvas can show the space, the terrain, the frontier,
 the matrix, the convergence, the small multiples, the spread, the claim's
-cost, the uncertainty, the timeline, the ledger, the contrast, the flow and
-the effect, and the tour has a shot of each. ✅ the shots are *visibly
-different pictures* — measured, not asserted, and the tour fails below 2 %.
-✅ a reader can answer "what did the run find?" from any one of them. ✅ a
-view that is not active leaves nothing of itself on the stage. ✅ the view is
-a choice — a key, a number or a letter, and a selector that names it where
-it is chosen. ✅ the tour can photograph a *figure* — a PNG with its caption
-and its provenance under it.
+cost, the uncertainty, the timeline, the ledger, the contrast, the flow, the
+effect and the layers, and the tour has a shot of each. ✅ the shots are
+*visibly different pictures* — measured, not asserted, and the tour fails
+below 2 %. ✅ a reader can answer "what did the run find?" from any one of
+them. ✅ a view that is not active leaves nothing of itself on the stage. ✅
+the view is a choice — a key, a number or a letter, and a selector that names
+it where it is chosen. ✅ the tour can photograph a *figure* — a PNG with its
+caption and its provenance under it — and a *plot* the report drew. ✅ the
+tour photographs the surfaces outside the canvas: the gallery, the report's
+charts, and the `comp` reports.
 
 
 ---
@@ -477,32 +485,33 @@ and its provenance under it.
 The main view area is the biggest miss, but the system has more pictures
 than the dashboard shows, and each is a *different kind* of picture of the
 same evidence. Every row is a real surface in this repository, with the
-command or the module that produces it; none of it is speculative.
+command or the module that produces it; none of it is speculative. **Seven of
+the twelve are now in the tour** — the ones marked ✅ were photographed by
+`scripts/capture_dashboard_tour.py` and are in the README.
 
-| Surface | What it would show | Where it comes from | What it would add |
-|---------|-------------------|--------------------|-------------------|
-| **The gallery** | 21 figures — one per demonstrated capability: swaps, frontiers, coverage, ladders, failure manifestos | `comp gallery` (records in `docs/figures/run_records`, PNGs in `docs/figures/gallery`); the panel vocabulary is bars / graph / heatmap / lines / scatter / tree (`computronium/visualization/_demo_api.py`) | the *scientific* family: static figures with a palette, chance lines and value labels by construction |
-| **The report's own figures** | 3 Pareto fronts (acc×walltime, acc×params, acc×flops), 4 coverage heatmaps (geometry×dynamics, geometry×credit, dynamics×credit, credit×update), failure clustering, convergence, scaling laws, seed stability | `computronium/experiment/reporters/html.py` — they are in the HTML report already, but only as one page | the report's plots, one at a time and at full size |
-| **The energy landscape** | the system's energy as a surface, and where the states sit in it | `computronium/experiment/analysis/energy_landscape.py` (`plot_energy_landscape`) | a picture of *why* a cell settles where it does |
-| **The seed violins** | per-arm distribution across seeds, not a mean | `computronium/experiment/analysis/seed_variability.py` (`plot_violin_plots`) | the spread the narration calls "the claim cannot be made yet" |
-| **The coverage report** | which primitives of each axis the run touched, and which it did not | `comp coverage report` | the run's reach, as a table |
-| **The catalogue** | the store queried by axis — every run and record, filtered | `comp catalog` | the evidence, browsable |
-| **The defect registry** | the constraints, clustered, and which are revoked | `comp defect` | the rules that refuse cells, in the system's own ledger |
-| **The method cards** | a card per primitive: what it is, what it costs, what it was measured at | `comp method-card` | the ontology, pictured |
-| **The comparison** | two runs, differenced, with effect sizes | `comp diff` | what changed between two claims |
-| **The power analysis** | the seeds a design needs, before it runs | `comp power-analysis` | the design, not the result |
-| **The panels alone** | the live rail by itself, the HUD by itself, the legend and the axis picker by themselves | the dashboard's own DOM | each panel, as its own picture |
-| **The map in more slices** | the same run's space, cut three ways, side by side | the legend's axis picker (`#legend-axis-picker`) | the space is not one picture: it is six axes |
+| Surface | What it would show | Where it comes from | What it would add | In the tour |
+|---------|-------------------|--------------------|-------------------|-------------|
+| **The gallery** ✅ | 21 figures — one per demonstrated capability: swaps, frontiers, coverage, ladders, failure manifestos | `comp gallery` (records in `docs/figures/run_records`, the PNGs and the manifest in `docs/figures`); the panel vocabulary is bars / graph / heatmap / lines / scatter / tree (`computronium/visualization/_demo_api.py`) | the *scientific* family: static figures with a palette, chance lines and value labels by construction | four of them: the credit swap, the fast settle, the coverage, the failure manifesto |
+| **The report's own figures** ✅ | 3 Pareto fronts (acc×walltime, acc×params, acc×flops), 4 coverage heatmaps (geometry×dynamics, geometry×credit, dynamics×credit, credit×update), failure clustering, convergence, scaling laws, seed stability | `computronium/experiment/reporters/html.py` — they are in the HTML report already, but only as one page | the report's plots, one at a time and at full size | the Pareto front and the seed stability, each on a page of its own |
+| **The energy landscape** | the system's energy as a surface, and where the states sit in it | `computronium/experiment/analysis/energy_landscape.py` (`plot_energy_landscape`) | a picture of *why* a cell settles where it does | ⬜ with the dynamics family |
+| **The seed violins** ✅ | per-arm distribution across seeds, not a mean | `computronium/experiment/analysis/seed_variability.py` (`plot_violin_plots`) | the spread the narration calls "the claim cannot be made yet" | ✅ |
+| **The coverage report** ✅ | which primitives of each axis the run touched, and which it did not | `comp coverage report` | the run's reach, as a table | ✅ with the objectives the system has *not* measured |
+| **The catalogue** ✅ | the store queried by axis — every run and record, filtered | `comp catalog` | the evidence, browsable | ✅ |
+| **The defect registry** | the constraints, clustered, and which are revoked | `comp defect` | the rules that refuse cells, in the system's own ledger | ⬜ the registry is empty for a run with no defects: a picture of nothing |
+| **The method cards** ✅ | a card per primitive: what it is, what it costs, what it was measured at | `comp method-card` | the ontology, pictured | ✅ |
+| **The comparison** | two runs, differenced, with effect sizes | `comp diff` | what changed between two claims | ⬜ needs two runs in the store |
+| **The power analysis** ✅ | the seeds a design needs, before it runs | `comp power-analysis` | the design, not the result | ✅ |
+| **The panels alone** | the live rail by itself, the HUD by itself, the legend and the axis picker by themselves | the dashboard's own DOM | each panel, as its own picture | ⬜ |
+| **The map in more slices** | the same run's space, cut three ways, side by side | the legend's axis picker (`#legend-axis-picker`) | the space is not one picture: it is six axes | ⬜ one slice is cut today (the void view) |
 
-**How to add them**: the tour already has a `Frame` with two kinds —
-`browser` (a URL) and `terminal` (text in a window). A third kind,
-**`figure`** (a PNG rendered in a page, with its caption and its provenance
-under it), is all the gallery, the report's plots and the analysis figures
-need — and it is built: `dashboard_capture.shoot_figure` and the tour's
-`Frame(kind="figure")` photograph the seed violins of the run. The terminal
-kind already covers every `comp …` command that prints a report, so the
-coverage report, the catalogue, the defect registry and the method cards are
-one `Frame` each.
+**How to add them**: the tour has a `Frame` with four kinds — `browser` (a
+URL), `terminal` (text in a window), `figure` (a PNG rendered in a page, with
+its caption and its provenance under it) and **`plot`** (a chart the report
+drew, taken out of the report and given a window of its own). The terminal
+kind covers every `comp …` command that prints a report, so the coverage
+report, the catalogue, the method cards and the power analysis are one
+`Frame` each; the figure kind photographs the gallery's own PNGs; the plot
+kind photographs the report's charts.
 
 ---
 
@@ -519,6 +528,7 @@ one `Frame` each.
 | A view leaves its objects on the stage | the scene is shared, so a view must clear what it built — the map already knows how (`clearGrid`), and a view that does not clear is a bug the next view shows |
 | The canvas becomes a gallery of pictures | a view is a *choice* with a switcher, not a slideshow: the view is named where it is chosen, and the tour's shots are of views a reader would choose |
 | A view needs the trained system, so it cannot be built from the store | the dynamics views are last, and they are the ones that need a cell to be re-instantiated; the evidence views need nothing the dashboard does not already have |
+| A surface with nothing to say is a picture of nothing | the defect registry holds no constraints for a run with no defects, and the report's coverage heatmaps are one cell wide for a run that varied one axis; neither is in the tour, and a surface is photographed only when it says something |
 | The next session builds one view and stops | the batch is four views *and* a tour shot of each: a switcher with one view on it is a demo, not a dashboard |
 
 ---
@@ -531,10 +541,12 @@ one `Frame` each.
 - [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report and the terminal views
 - [x] A short recording of a live session exists, with the captions on screen, and is not committed
 - [x] `docs/DASHBOARD.md` and the README show the tour
-- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty, the timeline, the ledger, the contrast, the flow and the effect
+- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty, the timeline, the ledger, the contrast, the flow, the effect and the layers
 - [x] The view is a choice — a key and a selector — and the inactive view leaves nothing of itself on the stage
 - [x] The tour has a shot of every main view, and the shots are visibly different pictures of one another — *measured*, not asserted
 - [x] The tour can photograph a *figure* (a PNG with its caption and provenance), not only a page and a terminal
+- [x] The tour can photograph a *plot* the report drew, on a page of its own
+- [x] The tour photographs the surfaces outside the canvas: the gallery's figures, the report's plots, the coverage report, the objectives the system has not measured, the catalogue, the method cards and the power analysis
 - [x] The run's account of itself is on the server: `GET /api/runs/{id}/account` and `GET /api/events`
 - [x] The run's process is on the server: `GET /api/runs/{id}/flow`
 - [x] The run's attribution is on the server: `GET /api/runs/{id}/attribution`
@@ -549,29 +561,30 @@ one `Frame` each.
 | `web.py` — the frames, the endpoint, the state refresh | ✅ done |
 | `pipeline.py` — the producer names the cell and the seed | ✅ done |
 | `caption.ts` — the browser renders the sentences | ✅ done |
-| the tour — twenty-six views in one browser session | ✅ done |
+| the tour — thirty-eight pictures in one browser session | ✅ done (fifteen views on the stage, the gallery, the report's plots, the `comp` reports) |
 | the recording — a `.webm` of a live session, uncommitted | ✅ done |
 | the docs — the caption, the endpoint, the tour, the stage | ✅ done |
 | the dashboard shows a run before it has measured | ✅ done (the space is on screen from the first second) |
-| the main view area — the stage, the views, the switcher | ✅ done: fourteen views, a key, a selector, a shot of each |
+| the main view area — the stage, the views, the switcher | ✅ done: fifteen views, a key, a selector, a shot of each |
 | the flat views — the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty | ✅ done (the canvas, the frame and the ticks are shared) |
 | the gate's rules travel with the run | ✅ done (`gate` in the metrics payload; the browser invents no margin) |
 | the figures — the seed violins | ✅ done (the tour's third frame kind: a PNG, its caption, its provenance) |
+| the surfaces outside the canvas — the gallery, the report's plots, the `comp` reports | ✅ done (eleven more frames: four gallery figures, two report plots, five commands) |
 | `ledger.py` — the run's account of itself | ✅ done (the ledger, the contrast, the rules they are measured by) |
 | the timeline — the run as a process | ✅ done (the events, one lane per stage, the silence named) |
 | `arms.py` — the statistics of an arm | ✅ done (read once for the ledger and the effect) |
 | `flow.py` — the run's cells through the stages | ✅ done (the events' counts, the gate's refusals, the shape in a sentence) |
 | `attribution.py` — what the run can attribute | ✅ done (the axes, the spread, and the design's limits in words) |
-| the other views — the layers, the dynamics | ⬜ the catalogue in Phase 5 |
-| the other figures — the gallery, the report's plots | ⬜ the "surfaces outside the canvas" table |
+| the other views — the dynamics | ⬜ the catalogue in Phase 5; the probe says what has to be true first |
+| the multi-run space | ⬜ needs two runs in one store |
 | the mirror's publish can fail and lag | ⬜ a known flake, diagnosed above |
 | the property suite fails 23 tests at HEAD | ⬜ pre-existing and unrelated: the gallery's `env_sha256` (19), `PROOF.md`'s banned phrases, the priors registry — verified by stashing this batch and re-running |
 | the README was stale against `docs/readme/` | ✅ fixed here (the build lock was failing at the commit before) |
 
 The server speaks, the browser shows it, the pictures show both, and the
 canvas can show more than one thing. What is left of the stage is the
-catalogue: the dynamics family, which needs the trained system, and the
-layers and the multi-run space.
+dynamics family, and the probe below says what has to be true before it can
+be drawn: the demo's own cells have no state to settle.
 
 ---
 
@@ -903,24 +916,116 @@ written", and the numbers are said in words, as the narration says them.
 
 ---
 
+## This batch (the surfaces outside the canvas, and the layers)
+
+**What was built.** Two things: the stage's fifteenth view, and the pictures
+of the system that live *outside* the canvas.
+
+| Piece | The file | What it is |
+|-------|----------|------------|
+| The layers | `dashboard/src/stage/layers.ts` | the space cut into sheets: one sheet per value of the third axis, the cells the run measured standing up off their own sheet, the rest of the space the ground they were not in |
+| The gallery's figures | `scripts/capture_dashboard_tour.py` | four of the gallery's own PNGs, each with its caption and the demo that produced it under it |
+| The report's plots | `scripts/dashboard_capture.py` | a fourth frame kind, `plot`: a chart the report drew, taken out of the report and given a window of its own |
+| The `comp` reports | `scripts/capture_dashboard_tour.py` | five commands, run in the tour's own process, their own words photographed: the coverage report, the objectives the system has *not* measured, the catalogue, the method cards, the power analysis |
+
+The tour is now thirty-eight pictures: the fifteen views of the stage, the
+run's own report and text, the gallery, the report's charts, and the
+commands. The measured spread over the stage's views is 2.4 % to 30.5 % (the
+tightest pair is the uncertainty and the layers, both dark pictures with few
+marks); the floor is 2 %.
+
+**What the work taught.**
+
+**The demo's own cells have no state to settle, and the stability analysis
+does not notice.** The probe (`scripts/probes/todo69_dynamics_probe.py`)
+composes the demo's leading cell — digital / feedforward / instantaneous /
+null / gradient / adam, `geometry.hidden_dim=32`, untrained — and measures
+what the dashboard would draw. The settling norm is `0.0` at every step, and
+the Lyapunov spectrum is `[0.0046, 0.0016, -0.0002]`: the transition being
+measured is the identity. The reason is in `computronium/experiment/surface/
+cli.py`'s `_build_transition_fn`: it calls `forward_pass` and *discards the
+result*, then settles the activity it already had — so for an instantaneous
+dynamics the map is the identity, and for a feedforward geometry the state's
+activity is the *input*, which the output cannot be fed back into. The
+dynamics family cannot be drawn from the demo's measured cells; it has to
+measure a cell of the *declared space* that has a state (the space holds
+`recurrent` geometry and `error_predictive_coding` dynamics), and it has to
+say which cell it measured and whether the weights were trained.
+
+**A basin needs an iterative dynamics and a recurrent geometry, and the
+command already knows it.** `_run_basin_analysis` refuses to run the basin
+for anything else, and the refusal is in the code rather than in a note.
+The dashboard's basin view should read the same rule from the server rather
+than deciding for itself.
+
+**A terminal frame that cuts its text off is a picture of half an answer.**
+The terminal's font was fixed at 14 px, and the method cards' list — sixty-
+eight lines — ran off the bottom of the picture. The font is now sized to
+the text (`dashboard_capture.terminal_font_size`): a short answer is drawn
+large, a long one small, and the whole of it is in the frame.
+
+**A chart that is still drawing moves the thing it is drawn in.** The first
+attempt at the report's plots scrolled the page to the chart and took the
+picture; the chart was still rendering, the page grew under the scroll, and
+the picture held the *bottom* of the plot. The chart is now taken out of the
+report altogether and given a page of its own — a picture of one thing
+deserves the whole frame, and the report's plot is a picture of one thing.
+
+**The report's heatmaps are empty for a run that varied one axis.** The
+demo run measured one geometry and one dynamics, so the coverage heatmap
+over its own records is a single cell and the chart draws nothing but its
+axes. The tour photographs the Pareto front and the seed stability instead,
+and the heatmaps are left for a run that has a grid to draw.
+
+**A letter of its own is not always a free initial.** The layers view would
+have been `L`, and `L` is the ledger's; `A` is the ablation chart's and `S`
+the variability chart's. The view took `Y` — the first free letter in its own
+name — and the rule is now written down: a view takes a letter of its own
+that no panel, chart or view already holds.
+
+**A sheet of eight with four pins on one of them says what a run filled.**
+The layers view is the only picture of the *shape* of the run's reach: the
+demo measured one value of the dynamics axis out of the eight the space
+declares, and four cells of it. The terrain says the same thing as a surface
+and the map says it as a field of cubes; the sheets say it as a stack.
+
+---
+
 ## Where the next session starts
 
-1. **The dynamics views** — the ones that need the trained system, and the
-   ones worth the most: the settling trajectory, the basin, the energy
-   landscape, the spectrum. The machinery is in `computronium.stability`
-   (`measure_settling_time`, `estimate_basin_stability_multistart`,
-   `estimate_lyapunov_spectrum`) and in
-   `computronium/experiment/analysis/energy_landscape.py`; what is missing
-   is a server that re-composes a cell from a record — `comp stability-
-   analysis` already does the re-composition — and a view that draws the
-   answer. The dashboard would need the cell's *trained* system, so the
-   endpoint has to be asked for a cell, not a run.
-2. **The remaining figures** — the gallery, the report's own plots: the
-   `figure` frame kind is there, and each is one `Frame` away.
-3. **The layers and the multi-run space** — the 3D views that are not the
-   space and the terrain.
+1. **The dynamics views** — the ones worth the most, and the ones the probe
+   says are not ready yet. Two things have to be true first:
+   - **the transition must be the system's own.** The transition that
+     `comp stability-analysis` builds is the identity for the demo's cells
+     (the forward pass is computed and discarded), so the picture it would
+     draw is of nothing. A dashboard-side transition has to feed the
+     forward pass into the settle, and it has to be the *same* transition
+     the command uses — one function, in one place, read by both. Whether
+     that changes the command's own numbers is a question for whoever
+     changes it: the numbers are currently the exponents of an identity.
+   - **the cell must have a state.** The demo's measured cells are
+     feedforward with instantaneous dynamics, so they have nothing to settle.
+     The declared space holds cells that do (`recurrent` geometry with
+     `error_predictive_coding` or `predictive_settling`), and the view can
+     measure one of those — but then the picture is of a *cell of the space*,
+     not of a cell the run measured, and the payload must say so.
+   - The machinery is in `computronium.stability`
+     (`measure_settling_time`, `estimate_basin_stability_multistart`,
+     `estimate_lyapunov_spectrum`) and in
+     `computronium/experiment/analysis/energy_landscape.py`; what is missing
+     is the server that composes the cell and the view that draws the
+     answer. The endpoint has to be asked for a *cell*, not a run.
+2. **The multi-run space** — several runs' evidence in one space, coloured
+   by run. It needs two runs in one store, and the tour's campaign writes
+   one: a second campaign (or a second profile) in the same store is the
+   smallest change that makes the view show anything.
+3. **The remaining surfaces** — the defect registry (empty for a run with no
+   defects: a picture of nothing, so it wants a run that has some), the
+   comparison between two runs, and the panels on their own.
 
-**The number keys are full** (fourteen views, the keys `1`–`9` and `T`, `L`,
-`D`, `F`, `E`). The next view needs a letter of its own, and the letter has
-to be one the panels and the charts do not hold — `src/keys.ts` is the list
-that says which, and `buildKeys` refuses a view that claims one.
+**The number keys are full** (fifteen views, the keys `1`–`9` and `T`, `L`,
+`D`, `F`, `E`, `Y`). The next view needs a letter of its own, and the letter
+has to be one the panels and the charts do not hold — `src/keys.ts` is the
+list that says which, and `buildKeys` refuses a view that claims one. The
+free letters are `B`, `G`, `I`, `J`, `K`, `M`, `N`, `O`, `Q`, `U`, `W`, `X`
+and `Z`.

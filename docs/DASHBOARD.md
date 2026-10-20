@@ -57,7 +57,7 @@ Open <http://localhost:8080> in a browser.
 ## The Stage (the main view area)
 
 The canvas is a **stage**, and a view is what stands on it. The discovery map
-is one view; the stage can show fourteen.
+is one view; the stage can show fifteen.
 
 | Key | View | The picture | What a reader would say |
 |-----|------|-------------|------------------------|
@@ -75,12 +75,16 @@ is one view; the stage can show fourteen.
 | `D` | **The contrast** | the arms against one another, over the cells they share, with the test's verdict | "pepita beat random_projections by 0.44, on one shared cell" |
 | `F` | **The flow** | the run's cells stage by stage: one column per stage, the cells it carried and the records it wrote; what the gate refused, in the void colour | "four cells went through the pipeline, the gate refused none, and twenty records were written" |
 | `E` | **The effect** | one column per axis: a band for an axis whose arms differ, a mark for an axis that was held fixed | "one axis varied and five were held fixed, so this run can speak about credit alone" |
+| `Y` | **The layers** | the space cut into sheets, one per value of the third axis: the cells the run measured stand up off their own sheet, the rest of the space is the ground they were not in | "the run filled one sheet of eight, and four cells of it" |
 
 `V` cycles the views; the number keys pick the first nine, and a view that
 does not fit in the numbers has a letter of its own (`src/keys.ts` holds the
 keys the panels and the charts already own, so a view cannot steal one). The
-**View** selector in the legend names the view where it is chosen, and the
-legend's title is the view's name, so the picture says what it is.
+letter is the view's own first free letter: `T` the timeline, `L` the ledger,
+`D` the contrast, `F` the flow, `E` the effect, and `Y` the layers — the
+*layers* are the only one whose initials are spoken for. The **View** selector
+in the legend names the view where it is chosen, and the legend's title is the
+view's name, so the picture says what it is.
 
 **The views share one picture of the run.** `src/stage/state.ts` holds the run
 the dashboard shows, the axes the reader picked, the space the backend declares
@@ -453,6 +457,7 @@ process-local: this is the run *this dashboard watched*.
 | `D` | The contrast |
 | `F` | The flow |
 | `E` | The effect |
+| `Y` | The layers |
 | `V` | Cycle the views |
 | `P` | Switch to Pareto tab |
 | `A` | Switch to Ablation tab |
@@ -463,9 +468,11 @@ process-local: this is the run *this dashboard watched*.
 | `Escape` | Close the Cell Drawer |
 
 The stage's views are the main view area, so they hold the first claim on a
-key: the live rail moved from `L` to `R` to leave `L` to the ledger. The
-keys everything else owns live in `src/keys.ts`, and a view that claims one of
-them is refused.
+key: the live rail moved from `L` to `R` to leave `L` to the ledger. A view
+that wants a letter takes one no panel, chart or view holds — the first free
+letter in its own name is the default, which is why the layers are `Y` and
+not `L`. The keys everything else owns live in `src/keys.ts`, and a view that
+claims one of them is refused.
 
 ---
 
@@ -607,8 +614,10 @@ Single source: `scripts/generate_palette.py` → generates:
    (`src/stage/state.ts`) — never from a second source
 3. Register the view in `src/stage/switcher.ts`: it takes a number key, a
    name and a caption. A view that does not fit in the first nine declares a
-   letter of its own (`key = "t"`); the keys the panels and the charts hold
-   are in `src/keys.ts`, and a view that claims one of them is refused
+   letter of its own (`key = "t"`), and the letter is the first one in its
+   own name that no panel, chart or view holds; the keys the panels and the
+   charts hold are in `src/keys.ts`, and a view that claims one of them is
+   refused
 4. Add a shot of it to the tour (`scripts/capture_dashboard_tour.py`) — the
    tour checks that the views are different pictures of one another
 
@@ -708,12 +717,12 @@ The screenshot is embedded in `docs/readme/title.md` and appears on the README f
 ## The Tour (every view of the system)
 
 ```bash
-# Twenty-six views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+# Thirty-eight pictures, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
 uv run python scripts/capture_dashboard_tour.py
 ```
 
 One store, one dashboard, one browser: the tour takes the whole system in
-twenty-six pictures, and the pictures are of *different things*, not of the same
+thirty-eight pictures, and the pictures are of *different things*, not of the same
 scene from different angles.
 
 | Shot | What it shows |
@@ -733,6 +742,7 @@ scene from different angles.
 | `dashboard-contrast.png` | the contrast: the arms against one another, and the test |
 | `dashboard-flow.png` | the flow: the run's cells, stage by stage, and what the gate refused |
 | `dashboard-effect.png` | the effect: which axis moved the objective, and which the run held fixed |
+| `dashboard-layers.png` | the layers: the space cut into sheets, and the one sheet the run entered |
 | `dashboard-cell.png` | the leading cell's drawer: its accuracy, its curve, its verdict, the seeds it still owes |
 | `dashboard-void.png` | a cell the system refuses, in a slice of the space cut a different way, and the rule that refuses it |
 | `dashboard-pareto.png` | the Pareto chart |
@@ -744,6 +754,17 @@ scene from different angles.
 | `console-dashboard.png` | the console dashboard: the same picture, in a terminal |
 | `report-text.png` | the run's report, in a terminal |
 | `figure-seed-violins.png` | the seed violins: the spread, as a figure |
+| `figure-gallery-swap-credit.png` | the gallery: the credit axis, swapped |
+| `figure-gallery-epc-settle.png` | the gallery: how fast the state comes to rest |
+| `figure-gallery-coverage.png` | the gallery: what the run reached, and what it did not |
+| `figure-gallery-failures.png` | the gallery: the failure manifesto |
+| `report-pareto.png` | the report's own Pareto front, on a page of its own |
+| `report-seed-stability.png` | the report's own seed stability, on a page of its own |
+| `coverage-report.png` | `comp coverage report`: what the run touched |
+| `coverage-gaps.png` | `comp coverage unmeasured`: the objectives the system has not measured |
+| `catalog.png` | `comp catalog search`: the run's records, browsable |
+| `method-cards.png` | `comp method-card list`: the ontology, one card per primitive |
+| `power-analysis.png` | `comp power-analysis`: the seeds a design needs, before it runs |
 
 The capture waits for the dashboard's **state** — a measured cell, a drawn
 chart, a caption with words in it — and never for a fixed pause, so a slow
@@ -757,15 +778,28 @@ the browser decodes each pair of the stage's shots and reports the share of
 the pixels that differ, and a pair that is too alike fails the tour. The map
 was the same picture in every frame once; the check is what stopped it from
 being the same picture again. The floor is 2 %; the measured spread over the
-fourteen views is 2.7 % to 30.5 %.
+fifteen views is 2.4 % to 30.5 %.
 
-**A figure is a third kind of frame.** A page in the browser and a terminal
-window cover the dashboard and the report; a *figure* — a PNG the system drew
-somewhere else — is the same evidence in another hand. The tour photographs
-it with its caption and its provenance under it, so the reader knows what
-made it. The seed violins are one: `computronium.experiment.analysis.
-seed_variability`, the analysis that measures the spread the dashboard's
-spread view draws.
+**A figure is a third kind of frame, and a plot is a fourth.** A page in the
+browser and a terminal window cover the dashboard and the report; a *figure* —
+a PNG the system drew somewhere else — is the same evidence in another hand.
+The tour photographs it with its caption and its provenance under it, so the
+reader knows what made it. The seed violins are one:
+`computronium.experiment.analysis.seed_variability`, the analysis that
+measures the spread the dashboard's spread view draws. The gallery's figures
+are the other: the system's own pictures of its capabilities, with the demo
+that produced each one named underneath. A *plot* is a chart the report drew:
+it is taken out of the report and given a window of its own, because a
+picture of one thing deserves the whole frame.
+
+**The surfaces outside the canvas are frames too.** The system has more
+pictures than the dashboard shows — the report's own plots, the gallery, the
+coverage report, the catalogue, the method cards, the power analysis — and
+each is one frame: the command is run, its own words are photographed, and
+nothing is paraphrased. The terminal's font is sized to the text, so a
+command's whole answer is in the picture rather than half of it, and the
+report's charts are taken out of the report and given a window of their own
+— a picture of one thing deserves the whole frame.
 
 `scripts/dashboard_capture.py` holds the machinery the tour, the hero shot
 and the recording share: the server on a thread, the campaign in this

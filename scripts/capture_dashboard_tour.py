@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
+import io
 import json
 import logging
 import struct
@@ -40,6 +42,7 @@ from dashboard_capture import (
     open_dashboard,
     run_demo_campaign,
     shoot_figure,
+    shoot_plot,
     shoot_terminal,
     start_dashboard,
     wait_for_http,
@@ -122,6 +125,45 @@ TOUR: tuple[Shot, ...] = (
     Shot("dashboard-contrast.png", "the contrast: the arms against one another"),
     Shot("dashboard-flow.png", "the flow: the run's cells, stage by stage"),
     Shot("dashboard-effect.png", "the effect: which axis moved the objective"),
+    Shot("dashboard-layers.png", "the layers: the space cut into sheets"),
+    Shot("figure-gallery-swap-credit.png", "the gallery: the credit swap"),
+    Shot("figure-gallery-epc-settle.png", "the gallery: the fast settle"),
+    Shot("figure-gallery-coverage.png", "the gallery: the coverage of the axes"),
+    Shot("figure-gallery-failures.png", "the gallery: the failure manifesto"),
+    Shot("report-pareto.png", "the report's own Pareto front"),
+    Shot("report-seed-stability.png", "the report's own seed stability"),
+    Shot("coverage-report.png", "the coverage report: what the run touched"),
+    Shot("coverage-gaps.png", "the objectives the system has not measured"),
+    Shot("catalog.png", "the catalogue: the run's records, browsable"),
+    Shot("method-cards.png", "the method cards: the ontology, card by card"),
+    Shot("power-analysis.png", "the power analysis: the seeds a design needs"),
+)
+
+# The gallery's own figures: the system's pictures, drawn by the demos that
+# demonstrated them. Each one is a different kind of evidence about the same
+# system, and the manifest says which demo produced it.
+GALLERY_FIGURES: tuple[tuple[str, str, str], ...] = (
+    (
+        "swap_credit",
+        "figure-gallery-swap-credit.png",
+        "The credit axis, swapped: one system, four credit rules, and what "
+        "each of them learned.",
+    ),
+    (
+        "epc_fast_settle",
+        "figure-gallery-epc-settle.png",
+        "The settling: how fast the state comes to rest under each dynamics.",
+    ),
+    (
+        "uaxis_coverage",
+        "figure-gallery-coverage.png",
+        "The coverage: what the run reached along each axis, and what it did not.",
+    ),
+    (
+        "failure_manifesto",
+        "figure-gallery-failures.png",
+        "The failure manifesto: every way the system refused to work, and why.",
+    ),
 )
 
 # The main view area, one shot per view. The space's shot is the map's: the
@@ -142,6 +184,7 @@ VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
     ("contrast", "dashboard-contrast.png", "d"),
     ("flow", "dashboard-flow.png", "f"),
     ("effect", "dashboard-effect.png", "e"),
+    ("layers", "dashboard-layers.png", "y"),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels
@@ -161,8 +204,14 @@ def png_size(path: Path) -> tuple[int, int]:
     return width, height
 
 
-def check_shot(path: Path) -> None:
+def check_shot(path: Path, min_bytes: int = MIN_SHOT_BYTES) -> None:
     """The shot is the size it must be, and holds something.
+
+    Args:
+        path: The shot to check.
+        min_bytes: How small the picture may be. A terminal's ink is text,
+            not a scene, and a command's whole answer can be a few hundred
+            characters.
 
     Raises:
         ValueError: The shot is the wrong size, or a picture of nothing.
@@ -171,7 +220,7 @@ def check_shot(path: Path) -> None:
     if (width, height) != (1920, 1080):
         msg = f"the shot is {width}x{height}, not 1920x1080"
         raise ValueError(msg)
-    if path.stat().st_size < MIN_SHOT_BYTES:
+    if path.stat().st_size < min_bytes:
         msg = f"the shot is {path.stat().st_size} bytes: an empty picture"
         raise ValueError(msg)
 
@@ -710,6 +759,10 @@ class Frame:
     title: str = ""
     caption: str = ""
     provenance: str = ""
+    """The chart to take out of the page, for a plot frame."""
+    selector: str = ""
+    """How small the picture may be. A terminal's ink is text, not a scene."""
+    min_bytes: int = MIN_SHOT_BYTES
 
 
 def capture_frame(
@@ -723,7 +776,7 @@ def capture_frame(
     path = output_dir / shot.name
     if frame.kind == "browser":
         page.goto(frame.payload, wait_until="load")
-        page.wait_for_timeout(1500)
+        page.wait_for_timeout(2000)
         page.screenshot(path=str(path))
     elif frame.kind == "figure":
         shoot_figure(
@@ -733,12 +786,139 @@ def capture_frame(
             frame.provenance,
             path,
         )
+    elif frame.kind == "plot":
+        shoot_plot(
+            page,
+            frame.payload,
+            frame.selector,
+            frame.caption or frame.what,
+            frame.provenance,
+            path,
+        )
     else:
         shoot_terminal(page, frame.title or frame.what, frame.payload, path)
-    check_shot(path)
+    check_shot(path, min_bytes=frame.min_bytes)
     mirror_shot(path, mirror_dir / shot.name)
     logger.info("Shot %s: %s", shot.name, frame.what)
     return Outcome(shot=shot, detail=frame.what)
+
+
+def command_output(main: Any, argv: list[str]) -> str:
+    """A command's own text, as its terminal would show it.
+
+    The command is run in this process, with its output captured, so the
+    picture is the command's words and not a paraphrase of them.
+    """
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+        try:
+            main(argv)
+        except SystemExit as exc:
+            if exc.code not in {0, None}:
+                logger.warning("Command %s exited with %s", argv, exc.code)
+    return buffer.getvalue()
+
+
+def gallery_frames(figure_dir: Path) -> list[Frame]:
+    """The gallery's own figures, with their captions and their provenance."""
+    manifest = json.loads((figure_dir / "manifest.json").read_text(encoding="utf-8"))
+    by_capability = {
+        figure["capability_name"]: figure for figure in manifest["figures"]
+    }
+    frames: list[Frame] = []
+    for capability, name, caption in GALLERY_FIGURES:
+        figure = by_capability.get(capability)
+        if figure is None:
+            logger.warning("The gallery has no figure for %s", capability)
+            continue
+        image = figure_dir / figure["figure_png"]
+        if not image.exists():
+            logger.warning("The gallery figure %s is missing", image)
+            continue
+        frames.append(
+            Frame(
+                name,
+                caption,
+                "figure",
+                str(image),
+                caption=caption,
+                provenance=(
+                    f"computronium.visualization.gallery — {figure['capability_id']} "
+                    f"{capability} · {figure['demo_test']} · {figure['scope_label']}"
+                ),
+            )
+        )
+    return frames
+
+
+def surface_frames(store_path: Path) -> list[Frame]:
+    """The surfaces outside the canvas: what the system says about itself.
+
+    Every one of these is a command the reader could type, and the picture
+    is the command's own words.
+    """
+    from computronium.experiment.documentation import catalog, method_cards
+    from computronium.experiment.surface import cli as surface
+
+    store = str(store_path)
+    commands: tuple[tuple[str, str, str, Any, list[str]], ...] = (
+        (
+            "coverage-report.png",
+            "the coverage report: what the run touched, and what it did not",
+            "comp coverage report",
+            surface.main,
+            ["coverage", "report", "--store", store],
+        ),
+        (
+            "coverage-gaps.png",
+            "the objectives the system has not measured: the gaps it knows of",
+            "comp coverage unmeasured",
+            surface.main,
+            ["coverage", "unmeasured", "--format", "text"],
+        ),
+        (
+            "catalog.png",
+            "the catalogue: the run's records, browsable",
+            "comp catalog search --credit gradient",
+            catalog.main,
+            ["search", "--store", store, "--credit", "gradient", "--limit", "6"],
+        ),
+        (
+            "method-cards.png",
+            "the method cards: the ontology, one card per primitive",
+            "comp method-card list",
+            method_cards.main,
+            ["list"],
+        ),
+        (
+            "power-analysis.png",
+            "the power analysis: the seeds a design needs, before it runs",
+            "comp power-analysis --effect-size 0.5 --solve-for n",
+            surface.main,
+            [
+                "power-analysis",
+                "--effect-size",
+                "0.5",
+                "--solve-for",
+                "n",
+                "--format",
+                "text",
+            ],
+        ),
+    )
+    frames: list[Frame] = []
+    for name, what, title, main, argv in commands:
+        frames.append(
+            Frame(
+                name,
+                what,
+                "terminal",
+                command_output(main, argv),
+                title=title,
+                min_bytes=3_000,
+            )
+        )
+    return frames
 
 
 def seed_violins(store_path: Path, run_id: str) -> Path:
@@ -821,7 +1001,38 @@ def capture_report(
                 "group_by_axis='credit')"
             ),
         ),
+        Frame(
+            "report-pareto.png",
+            "the report's own Pareto front: accuracy against walltime",
+            "plot",
+            report.resolve().as_uri(),
+            caption=(
+                "The report's own Pareto front: every measured cell, and the "
+                "front the run computed through them."
+            ),
+            provenance=(
+                "computronium.experiment.reporters.html — "
+                "_generate_pareto_plot(val_acc against walltime_s)"
+            ),
+            selector="div[id^='pareto-walltime']",
+        ),
+        Frame(
+            "report-seed-stability.png",
+            "the report's own seed stability: each cell's mean against its spread",
+            "plot",
+            report.resolve().as_uri(),
+            caption=(
+                "The report's own seed stability: every cell's mean accuracy "
+                "against the spread of its own seeds."
+            ),
+            provenance=(
+                "computronium.experiment.reporters.html — _generate_seed_stability"
+            ),
+            selector="div[id^='seed-stability']",
+        ),
     )
+    frames += tuple(gallery_frames(REPO_ROOT / "docs" / "figures"))
+    frames += tuple(surface_frames(store_path))
     outcomes: list[Outcome] = []
     with sync_playwright() as playwright:
         browser = launch_browser(playwright)

@@ -16,6 +16,7 @@ import { ConvergenceView } from "./convergence.js";
 import { EffectView } from "./effect.js";
 import { FlowView } from "./flow.js";
 import { FrontierView } from "./frontier.js";
+import { LayersView } from "./layers.js";
 import { LedgerView } from "./ledger.js";
 import { MatrixView } from "./matrix.js";
 import { SmallMultiplesView } from "./small-multiples.js";
@@ -80,6 +81,7 @@ export class ViewSwitcher implements Component {
       new ContrastView(),
       new FlowView(),
       new EffectView(),
+      new LayersView(),
     ];
   }
 

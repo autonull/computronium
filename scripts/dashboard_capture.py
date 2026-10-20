@@ -242,13 +242,16 @@ def mirror_shot(source: Path, mirror: Path) -> None:
 TERMINAL_HTML = """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #05080c; }
+  body { margin: 0; background: #05080c; height: 100vh; display: flex;
+         flex-direction: column; }
   .bar { display: flex; align-items: center; gap: 10px; padding: 12px 18px;
          background: #161d28; color: #8b98a8;
          font: 14px 'DejaVu Sans Mono', 'Noto Sans Mono', monospace; }
   .dot { width: 12px; height: 12px; border-radius: 50%; }
-  pre { margin: 0; padding: 18px 22px; color: #e8ecf0;
-        font: 14px/1.32 'DejaVu Sans Mono', 'Noto Sans Mono', monospace;
+  pre { margin: 0; padding: 18px 22px; color: #e8ecf0; flex: 1;
+        display: flex; align-items: center;
+        font-size: $size px; line-height: 1.34;
+        font-family: 'DejaVu Sans Mono', 'Noto Sans Mono', monospace;
         white-space: pre; }
 </style></head><body>
   <div class="bar"><span class="dot" style="background:#f85149"></span>\
@@ -258,18 +261,43 @@ TERMINAL_HTML = """<!DOCTYPE html>
   <pre>$body</pre>
 </body></html>"""
 
+# The terminal's own furniture: the title bar and the padding around the text.
+TERMINAL_CHROME = 110
 
-def terminal_page(title: str, body: str) -> str:
+# A monospace advance is a little over half the font's size.
+TERMINAL_ADVANCE = 0.62
+
+# The largest a terminal's own text is drawn: a short answer is still an
+# answer, and it is read at a distance.
+TERMINAL_MAX_SIZE = 22
+
+
+def terminal_font_size(body: str, width: int = 1920, height: int = 1080) -> int:
+    """The font size that lets the whole text fit the window.
+
+    A terminal frame that cuts its text off is a picture of half an answer:
+    the reader cannot tell what the command said after the cut.
+    """
+    lines = body.splitlines() or [""]
+    longest = max(len(line) for line in lines)
+    by_height = int((height - TERMINAL_CHROME) / (1.34 * len(lines)))
+    by_width = int((width - 50) / (TERMINAL_ADVANCE * max(longest, 1)))
+    return max(8, min(TERMINAL_MAX_SIZE, by_height, by_width))
+
+
+def terminal_page(title: str, body: str, size: int = 14) -> str:
     """A terminal window showing text, as a page the browser can shoot."""
     return Template(TERMINAL_HTML).substitute(
         title=html.escape(title),
         body=html.escape(body),
+        size=size,
     )
 
 
 def shoot_terminal(page: Page, title: str, body: str, path: Path) -> None:
     """Show text in a terminal window and take the picture."""
-    page.set_content(terminal_page(title, body), wait_until="load")
+    size = terminal_font_size(body)
+    page.set_content(terminal_page(title, body, size), wait_until="load")
     page.wait_for_timeout(300)
     page.screenshot(path=str(path))
 
@@ -325,6 +353,71 @@ def shoot_figure(
     page.screenshot(path=str(path))
 
 
+# A plot the report drew, on a page of its own. The report's charts are
+# interactive HTML, not pictures, so the frame is the chart's own markup:
+# a page that holds one chart, with its caption and its provenance under it.
+PLOT_HTML = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; background: #0a0e14; color: #e8ecf0;
+         font: 16px 'DejaVu Sans Mono', 'Noto Sans Mono', monospace;
+         display: flex; align-items: center; justify-content: center; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center;
+           gap: 14px; max-width: 1600px; }
+  .chart { background: #ffffff; border-radius: 6px; padding: 8px;
+           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55); width: 1500px; }
+  figcaption { color: #8b98a8; font-size: 16px; text-align: center; }
+  .provenance { color: #5a6a7a; font-size: 12px; text-align: center; }
+</style></head><body>
+  <figure>
+    <div class="chart">$plot</div>
+    <figcaption>$caption</figcaption>
+    <div class="provenance">$provenance</div>
+  </figure>
+</body></html>"""
+
+
+def plot_page(plot: str, caption: str, provenance: str) -> str:
+    """A page holding one chart, with its caption and its provenance."""
+    return Template(PLOT_HTML).substitute(
+        plot=plot,
+        caption=html.escape(caption),
+        provenance=html.escape(provenance),
+    )
+
+
+def shoot_plot(
+    page: Page,
+    source: str,
+    selector: str,
+    caption: str,
+    provenance: str,
+    path: Path,
+) -> None:
+    """Photograph one chart of a page, on a page of its own.
+
+    The chart is taken out of its page and given a window of its own: a
+    report's plot is a picture of one thing, and a picture of one thing
+    deserves the whole frame.
+    """
+    page.goto(source, wait_until="load")
+    page.wait_for_timeout(2000)
+    markup = page.evaluate(
+        """(selector) => {
+            const element = document.querySelector(selector);
+            if (!element) return null;
+            return element.parentElement.outerHTML;
+        }""",
+        selector,
+    )
+    if not markup:
+        msg = f"no chart matched {selector}"
+        raise ValueError(msg)
+    page.set_content(plot_page(markup, caption, provenance), wait_until="load")
+    page.wait_for_timeout(2500)
+    page.screenshot(path=str(path))
+
+
 __all__ = [
     "CHROMIUM_ARGS",
     "REPO_ROOT",
@@ -335,10 +428,13 @@ __all__ = [
     "launch_browser",
     "mirror_shot",
     "open_dashboard",
+    "plot_page",
     "run_demo_campaign",
     "shoot_figure",
+    "shoot_plot",
     "shoot_terminal",
     "start_dashboard",
+    "terminal_font_size",
     "terminal_page",
     "wait_for_http",
     "wait_for_records",

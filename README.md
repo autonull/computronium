@@ -808,9 +808,9 @@ The live dashboard is a three.js application that watches a campaign and shows
 what it is doing: the space it is searching, the cells it has measured, the
 cells the system refuses, and the charts the evidence draws. Its canvas is a
 stage: the same run can be seen as a space, a terrain, a frontier, a matrix, a
-family of curves, or as the spread and the cost of its own evidence. It says
-what it is doing in words, at the bottom of the screen, so a reader who sees
-only the picture can follow it.
+family of curves, a stack of sheets, or as the spread and the cost of its own
+evidence. It says what it is doing in words, at the bottom of the screen, so a
+reader who sees only the picture can follow it.
 
 ```bash
 uv run comp dashboard --store experiment.duckdb   # the dashboard
@@ -856,6 +856,13 @@ attribute to the axes it varied:
 |---|---|
 | ![The flow](docs/readme/assets/dashboard-flow.png) | ![The effect](docs/readme/assets/dashboard-effect.png) |
 
+And the space cut into sheets — which slab of it the run entered, and how
+thin that slab was:
+
+| The layers |
+|---|
+| ![The layers](docs/readme/assets/dashboard-layers.png) |
+
 The same run, told three other ways — as a report in the browser, as the
 console dashboard in a terminal, and as the dashboard's own account of itself:
 
@@ -869,6 +876,27 @@ the canvas:
 | The seed violins |
 |---|
 | ![The seed violins](docs/readme/assets/figure-seed-violins.png) |
+
+The system has more pictures than the dashboard shows, and each is a different
+kind of picture of the same evidence. The gallery's own figures — the credit
+swap, the settling, the coverage, and the failures the system knows about:
+
+| The credit swap | The fast settle | The coverage | The failures |
+|---|---|---|---|
+| ![The credit swap](docs/readme/assets/figure-gallery-swap-credit.png) | ![The fast settle](docs/readme/assets/figure-gallery-epc-settle.png) | ![The coverage](docs/readme/assets/figure-gallery-coverage.png) | ![The failures](docs/readme/assets/figure-gallery-failures.png) |
+
+The report's own plots, at full size rather than as one page:
+
+| The report's Pareto front | The report's seed stability |
+|---|---|
+| ![The report's Pareto front](docs/readme/assets/report-pareto.png) | ![The report's seed stability](docs/readme/assets/report-seed-stability.png) |
+
+And the commands that answer what the run touched, what it did not, and what a
+design would need before it ran:
+
+| The coverage report | The catalogue | The method cards | The power analysis |
+|---|---|---|---|
+| ![The coverage report](docs/readme/assets/coverage-report.png) | ![The catalogue](docs/readme/assets/catalog.png) | ![The method cards](docs/readme/assets/method-cards.png) | ![The power analysis](docs/readme/assets/power-analysis.png) |
 
 The narration is written once, on the server, and read by two: the browser
 renders it as captions, and `GET /api/narration` hands the same sentences to
