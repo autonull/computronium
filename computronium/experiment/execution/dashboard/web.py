@@ -314,7 +314,9 @@ class WebDashboard:
             from computronium.experiment.evidence.store import RecordStore, StoreConfig
             from computronium.experiment.surface.report import (
                 ReportGenerator,
-                compute_pareto_frontier,
+            )
+            from computronium.experiment.analysis import (
+                compute_pareto_frontier as analysis_compute_pareto_frontier,
             )
 
             # CRITICAL: read_only=True for all dashboard store access
@@ -335,7 +337,7 @@ class WebDashboard:
                     }
 
                 # Compute Pareto frontier over val_acc and walltime_s
-                pareto_points, _ = compute_pareto_frontier(
+                pareto_points, _ = analysis_compute_pareto_frontier(
                     records, ["val_acc", "walltime_s"]
                 )
                 pareto_ids = {p["record_id"] for p in pareto_points}
@@ -439,7 +441,7 @@ class WebDashboard:
                     "timestamp": datetime.now().isoformat(),
                 })
 
-                # NEW: Broadcast per-campaign metrics for running campaigns
+                # Broadcast per-campaign metrics for running campaigns (from queue)
                 if self.config.campaign_queue:
                     campaigns = await self._get_all_campaigns()
                     for campaign in campaigns.get("campaigns", []):
@@ -453,6 +455,36 @@ class WebDashboard:
                                 "data": metrics,
                                 "timestamp": datetime.now().isoformat(),
                             })
+
+                # ALSO: Broadcast metrics for any campaign with records in the store
+                # This handles campaigns run directly via CLI (not through queue)
+                if self.config.store_path:
+                    try:
+                        from computronium.experiment.evidence.store import (
+                            RecordStore, StoreConfig
+                        )
+                        # Get run IDs with records, then close store before calling metrics
+                        store = RecordStore(StoreConfig(path=Path(self.config.store_path), read_only=True))
+                        with store:
+                            runs = store.query_runs()
+                            run_ids = []
+                            for run in runs:
+                                records = store.query_records(run_id=run.run_id)
+                                if run.status == "running" or len(records) > 0:
+                                    run_ids.append(run.run_id)
+                        
+                        # Now query metrics for each run (each call opens its own connection)
+                        for run_id in run_ids:
+                            metrics = await self._get_campaign_metrics_detailed(run_id)
+                            if metrics.get("records"):
+                                await self._broadcast_update({
+                                    "type": "campaign_metrics",
+                                    "campaign_id": run_id,
+                                    "data": metrics,
+                                    "timestamp": datetime.now().isoformat(),
+                                })
+                    except Exception:
+                        pass  # Silently ignore store errors in broadcast loop
 
                 # NEW: Broadcast pipeline events (mock for v1)
                 await self._broadcast_update({

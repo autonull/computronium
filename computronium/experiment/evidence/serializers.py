@@ -41,8 +41,8 @@ def _serialize_provenance(provenance: Any) -> dict[str, Any]:
         "dataset_version": provenance.dataset_version,
         "data_origin": provenance.data_origin.value,
         "env": provenance.env,
-        "task_versions": provenance.task_versions,
-        "hardware_hash": provenance.hardware_hash,
+        "training_tasks": list(provenance.training_tasks),
+        "hardware_hash": getattr(provenance, 'hardware_hash', None),
         "links": provenance.links,
     }
 
