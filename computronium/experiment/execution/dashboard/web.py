@@ -272,6 +272,26 @@ class WebDashboard:
             """
             return JSONResponse(await self._account_payload(run_id))
 
+        @self.app.get("/api/runs/{run_id}/flow")
+        async def api_run_flow(run_id: str) -> JSONResponse:
+            """The run's cells, from the space to the evidence (TODO69).
+
+            The stages the run reached, the counts each one reported, and
+            what the gate refused: the run as a process, read from the
+            events this dashboard watched.
+            """
+            return JSONResponse(self._flow_payload(run_id))
+
+        @self.app.get("/api/runs/{run_id}/attribution")
+        async def api_run_attribution(run_id: str) -> JSONResponse:
+            """What the run can attribute, and what it cannot (TODO69).
+
+            The axes that varied, how far apart their arms stand, and the
+            axes that were held fixed — which is what a run's design cannot
+            speak about, and says so.
+            """
+            return JSONResponse(await self._attribution_payload(run_id))
+
         @self.app.get("/api/resources")
         async def api_resources() -> JSONResponse:
             return JSONResponse(await self._get_resource_usage())
@@ -1419,6 +1439,35 @@ class WebDashboard:
                 }
         except Exception as e:
             logger.exception("Error reading the run's account")
+            return {"error": str(e)}
+
+    def _flow_payload(self, run_id: str) -> dict[str, Any]:
+        """The run's cells, from the space to the evidence.
+
+        The flow is read from the events this dashboard watched, so a run
+        that happened elsewhere has no flow here — and the picture says so
+        rather than drawing a run it never saw.
+        """
+        from computronium.experiment.execution.dashboard.flow import flow_payload
+
+        frames = [
+            frame for frame in self._event_history if frame.get("run_id") == run_id
+        ]
+        return flow_payload(frames, run_id)
+
+    async def _attribution_payload(self, run_id: str) -> dict[str, Any]:
+        """What the run can attribute, and what its design cannot say."""
+        from computronium.experiment.execution.dashboard.attribution import (
+            attribution_payload,
+        )
+
+        if not self.config.store_path:
+            return {"error": "no store path configured"}
+        try:
+            with self._readable_store() as store:
+                return attribution_payload(store, run_id)
+        except Exception as e:
+            logger.exception("Error reading the run's attribution")
             return {"error": str(e)}
 
     def _announce_store_progress(self, record_counts: dict[str, int]) -> None:

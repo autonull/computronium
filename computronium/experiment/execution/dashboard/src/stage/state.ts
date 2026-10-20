@@ -143,6 +143,58 @@ export interface RunAccount {
   contrast: Contrast;
 }
 
+/** One stage of the run, and what it handled. */
+export interface FlowStage {
+  stage: string;
+  action: string;
+  count: number;
+  kind: string;
+  refused: number;
+  events: number;
+}
+
+/** The run's cells, from the space to the evidence. */
+export interface RunFlow {
+  run_id: string | null;
+  stages: FlowStage[];
+  cells: number;
+  refused: number;
+  measured: number;
+  records: number;
+  summary: string;
+}
+
+/** One arm of one axis, as the attribution reads it. */
+export interface AttributionArm {
+  value: string;
+  mean: number;
+  sd: number;
+  n: number;
+  cells: number;
+  verdict: string;
+}
+
+/** One axis of the run, and whether it varied. */
+export interface AttributionAxis {
+  axis: string;
+  varied: boolean;
+  spread: number;
+  values: AttributionArm[];
+}
+
+/** What the run can attribute, and what its design cannot say. */
+export interface RunAttribution {
+  run_id: string;
+  metric: string;
+  records: number;
+  axes: AttributionAxis[];
+  varied_axes: string[];
+  held_axes: string[];
+  attributable: boolean;
+  reason: string;
+  summary: string;
+}
+
 
 /** What the run measured at one cell, folded over its seeds. */
 export interface CellAggregate {
@@ -343,10 +395,18 @@ class StageState {
   timeline: RunTimeline | null = null;
   /** The run's account of itself: what it can say, and how it compares. */
   account: RunAccount | null = null;
+  /** The run's cells, from the space to the evidence. */
+  flow: RunFlow | null = null;
+  /** What the run can attribute, and what its design cannot say. */
+  attribution: RunAttribution | null = null;
   /** What the space was last asked for, so it is only asked again when it changes. */
   private spaceRequest = "";
   /** What the account was last asked for: the run, and how much it measured. */
   private accountRequest = "";
+  /** What the attribution was last asked for: the run, and how much it measured. */
+  private attributionRequest = "";
+  /** What the flow was last asked for: the run, and how many events it has. */
+  private flowRequest = "";
   /** The run the timeline belongs to, and whether it is out of date. */
   private timelineRun = "";
   private timelineStale = true;
@@ -392,6 +452,7 @@ class StageState {
     this.recomputeEvidence();
     await this.syncSpace();
     void this.syncAccount();
+    void this.syncAttribution();
     void this.syncTimeline();
   }
 
@@ -499,8 +560,63 @@ class StageState {
       this.timelineRun = this.runId;
       this.timelineStale = false;
       this.notify("events");
+      void this.syncFlow();
     } catch (error) {
       console.warn("[StageState] The timeline could not be read", error);
+    }
+  }
+
+  /** The run's cells, from the space to the evidence. */
+  async syncFlow(): Promise<void> {
+    if (!this.runId) {
+      this.flow = null;
+      this.flowRequest = "";
+      return;
+    }
+    const events = this.timeline?.events.length ?? 0;
+    const request = `${this.runId}|${events}`;
+    if (request === this.flowRequest) return;
+
+    try {
+      const response = await fetch(
+        `/api/runs/${encodeURIComponent(this.runId)}/flow`,
+      );
+      if (!response.ok) {
+        console.warn("[StageState] The flow was refused", response.status);
+        return;
+      }
+      this.flow = (await response.json()) as RunFlow;
+      this.flowRequest = request;
+      this.notify("events");
+    } catch (error) {
+      console.warn("[StageState] The flow could not be read", error);
+    }
+  }
+
+  /** What the run can attribute, and what its design cannot say. */
+  async syncAttribution(): Promise<void> {
+    if (!this.runId) {
+      this.attribution = null;
+      this.attributionRequest = "";
+      return;
+    }
+    const measured = this.metrics?.records?.length ?? 0;
+    const request = `${this.runId}|${measured}`;
+    if (request === this.attributionRequest) return;
+
+    try {
+      const response = await fetch(
+        `/api/runs/${encodeURIComponent(this.runId)}/attribution`,
+      );
+      if (!response.ok) {
+        console.warn("[StageState] The attribution was refused", response.status);
+        return;
+      }
+      this.attribution = (await response.json()) as RunAttribution;
+      this.attributionRequest = request;
+      this.notify("evidence");
+    } catch (error) {
+      console.warn("[StageState] The attribution could not be read", error);
     }
   }
 

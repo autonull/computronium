@@ -1015,6 +1015,10 @@ class PipelineRunner:
             counts.append(f"{len(fragment.proposals)} proposals")
         if fragment.records:
             counts.append(f"{len(fragment.records)} records")
+        refused = fragment.metadata.get("rejected_count", 0)
+        refused = int(refused) if isinstance(refused, int) else 0
+        if refused:
+            counts.append(f"{refused} refused")
         detail = ", ".join(counts)
         publish_event(
             stage_id.value,
@@ -1023,6 +1027,9 @@ class PipelineRunner:
             detail={
                 "proposals": len(fragment.proposals),
                 "records": len(fragment.records),
+                # What the gate threw away: the flow view needs it, and the
+                # live rail is the only place it is said while it happens.
+                "refused": refused,
             },
         )
 

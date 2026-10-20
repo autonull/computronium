@@ -28,7 +28,7 @@ picture in every shot — a grid of coloured cubes — and every picture the tou
 took of it looked the same.
 
 The canvas is now a **stage**, and a view is what stands on it. There are
-twelve, and the tour has a shot of each:
+fourteen, and the tour has a shot of each:
 
 | # | View | The picture | The shot |
 |---|------|-------------|----------|
@@ -44,20 +44,23 @@ twelve, and the tour has a shot of each:
 | 10 | **The timeline** | the run's stages, one lane each, and the time each held it; the longest silence named | `dashboard-timeline.png` |
 | 11 | **The ledger** | every arm the run measured, its evidence, and the gate's standing on it; the report's limitations beneath | `dashboard-ledger.png` |
 | 12 | **The contrast** | the arms against one another, over the cells they share, with the test's verdict | `dashboard-contrast.png` |
+| 13 | **The flow** | the run's cells stage by stage: one column per stage, what it carried and what it wrote, and what the gate refused | `dashboard-flow.png` |
+| 14 | **The effect** | one column per axis: a band for an axis whose arms differ, a mark for an axis that was held fixed | `dashboard-effect.png` |
 
 **The switcher that makes them a choice**: `V` cycles the views, the number
 keys pick the first nine (like the plotter's tabs — which moved to `P`, `A`
-and `S` so the numbers could belong to the stage), and the three that do not
+and `S` so the numbers could belong to the stage), and the five that do not
 fit in the numbers have a **letter** of their own — `T` the timeline, `L` the
-ledger, `D` the contrast. A **View** selector in the legend names the view
-where it is chosen. The legend's title is the view's name, and the caption
-under the selector says what a reader would say after looking at it.
+ledger, `D` the contrast, `F` the flow, `E` the effect. A **View** selector
+in the legend names the view where it is chosen. The legend's title is the
+view's name, and the caption under the selector says what a reader would say
+after looking at it.
 
 **The acceptance, in pictures, is now mechanical**: the tour photographs the
-twelve views and then measures them — the browser decodes each pair of shots
-and reports the share of the pixels that differ. A pair that is too alike
-fails the tour. The measured differences run from 2.7 % to 29.7 %; the floor
-is 2 %.
+fourteen views and then measures them — the browser decodes each pair of
+shots and reports the share of the pixels that differ. A pair that is too
+alike fails the tour. The measured differences run from 2.4 % to 30.5 %; the
+floor is 2 %.
 
 The full catalogue — twenty-odd views, 3D and 2D, from the evidence to the
 dynamics of a cell — is in **Phase 5** below, and the surfaces *outside* the
@@ -74,11 +77,14 @@ seed violins, the `comp` reports) are in the table after it.
 | The event bus | `computronium/experiment/execution/events.py` | complete: stage and measurement events, process-wide |
 | The narration | `computronium/experiment/execution/dashboard/narration.py` | complete: the sentences, the account, the state |
 | The caption | `dashboard/src/caption.ts` | complete: the sentences, rendered |
-| **The stage** | `dashboard/src/stage/` | complete: the shared state, twelve views, the switcher |
+| **The stage** | `dashboard/src/stage/` | complete: the shared state, fourteen views, the switcher |
 | **The run's account** | `computronium/experiment/execution/dashboard/ledger.py` | complete: the ledger, the contrast, the rules they are measured by |
+| **The run's arms** | `computronium/experiment/execution/dashboard/arms.py` | complete: the statistics of an arm, read once for the ledger and the effect |
+| **The run's flow** | `computronium/experiment/execution/dashboard/flow.py` | complete: the stages, the counts, the refusals, the shape in a sentence |
+| **The run's effect** | `computronium/experiment/execution/dashboard/attribution.py` | complete: the axes, the spread, and what the design cannot say |
 | The keys | `dashboard/src/keys.ts` | complete: the panels, the charts and the stage's views, in one list |
 | The hero capture | `scripts/capture_dashboard_screenshot.py` | one image, one view |
-| The tour | `scripts/capture_dashboard_tour.py` | twenty-four views, twelve kinds of picture on the stage, and a check that they differ |
+| The tour | `scripts/capture_dashboard_tour.py` | twenty-six views, fourteen kinds of picture on the stage, and a check that they differ |
 | The recording | `scripts/capture_dashboard_video.py` | a `.webm` of a live session, uncommitted |
 | The live rail | `dashboard/src/live-rail.ts` | terse pills: `[s6_train] train cells` — a log, not a story |
 | The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal, and a frame of it as text |
@@ -90,10 +96,11 @@ seed violins, the `comp` reports) are in the table after it.
 |-----|--------|-----------|
 | No narration | the screen shows numbers and a log; it does not *say* what is happening, so a narrator reading the screen has to reconstruct the story from the panels | `narration.py`: the sentences, written once |
 | No closed captions | a recording of the dashboard has no subtitles; the viewer reads a 3D scene in silence | `caption.ts`: the server's sentences, rendered |
-| One screenshot | the hero is the dashboard's overview; nothing shows the drawer, the charts, the void cells, the space, the report | the tour: twenty-four views |
+| One screenshot | the hero is the dashboard's overview; nothing shows the drawer, the charts, the void cells, the space, the report | the tour: twenty-six views |
 | No recording | "show me it working" needs a terminal in front of the reader | the recording: a live session, with captions |
-| One picture in the content area | every shot of the canvas was the same field of cubes, so the tour's variety was the furniture in front of the scene | the stage: twelve views, a switcher, and a shot of each |
+| One picture in the content area | every shot of the canvas was the same field of cubes, so the tour's variety was the furniture in front of the scene | the stage: fourteen views, a switcher, and a shot of each |
 | The run was only its evidence | a reader saw what the run measured and nothing of what it *decided*, what it *cannot say*, or how long it took | the ledger, the contrast and the timeline |
+| The run was only its records | a reader saw what the run measured and nothing of how the cells got there, or of what the run's design can and cannot be credited for | the flow and the effect |
 
 ---
 
@@ -124,6 +131,7 @@ seed violins, the `comp` reports) are in the table after it.
 │  Browser: stage/state.ts — the run's evidence, once                        │
 │    the run · the axes · the declared space · the records per cell          │
 │    the gate's rules · the chance level · the run's account · its stages    │
+│    its flow · its attribution                                               │
 │         │                                                                 │
 │         ├──► the space (the discovery map)   ──► the 3D scene              │
 │         ├──► the terrain                      ──► the 3D scene              │
@@ -136,8 +144,10 @@ seed violins, the `comp` reports) are in the table after it.
 │         ├──► the uncertainty                  ──► the 2D canvas            │
 │         ├──► the timeline                     ──► the 2D canvas            │
 │         ├──► the ledger                       ──► the 2D canvas            │
-│         └──► the contrast                     ──► the 2D canvas            │
-│    stage/switcher.ts — V cycles · 1–9 and T L D pick · the selector        │
+│         ├──► the contrast                     ──► the 2D canvas            │
+│         ├──► the flow                         ──► the 2D canvas            │
+│         └──► the effect                       ──► the 2D canvas            │
+│    stage/switcher.ts — V cycles · 1–9 and T L D F E pick · the selector     │
 └───────────────────────────────────────────────────────────────────────────┘
 
 ┌───────────────────────────────────────────────────────────────────────────┐
@@ -145,6 +155,17 @@ seed violins, the `comp` reports) are in the table after it.
 │    the ledger  — every arm, its evidence, the gate's standing on it        │
 │    the contrast — the arms against one another, and the test               │
 │    GET /api/runs/{id}/account     GET /api/events?run_id=                  │
+├───────────────────────────────────────────────────────────────────────────┤
+│  arms.py  (TODO69) — what an arm measured, read once for both              │
+│    the arms of every axis · their means, their spread, their standing      │
+├───────────────────────────────────────────────────────────────────────────┤
+│  flow.py  (TODO69) — the run as a process                                  │
+│    the stages · the count each one handled · what the gate refused         │
+│    GET /api/runs/{id}/flow                                                 │
+├───────────────────────────────────────────────────────────────────────────┤
+│  attribution.py  (TODO69) — what the run can attribute                     │
+│    the axes · the spread of their arms · what the design cannot say       │
+│    GET /api/runs/{id}/attribution                                          │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -372,7 +393,7 @@ to pass: **what can a reader say after looking at it?**
 | **The spread** ✅ | one violin per arm across the seeds, and the seeds a claim still needs under it | the records' seeds | "this arm is wide, and that is why the claim is not made" |
 | **The claim's cost** ✅ | seeds measured against seeds needed, per cell, with the gap | the records' seeds, `required_seeds` | "the claim is 232 seeds short over four cells" |
 | **The pairwise contrast** ✅ | arm against arm: which beat which, by how much, and whether the test was even run | the records, the report's contrast design | "pepita beat random_projections, and here is the margin" |
-| **The attribution** ⬜ | the objective attributed to the axis values — which axis moved it, and by how much | the attribution analysis over the records (`computronium/experiment/analysis/axis_attribution.py`: `analyze_axis_importance`, `compute_shap_attribution`, `compute_ice_curves`) | "the credit rule mattered most, and here is how much" |
+| **The attribution** ✅ | the objective attributed to the axis values — which axis moved it, and by how much — and the axes the run held fixed | the arms of every axis, read from the records (`arms.py`), and the report's own claim machinery | "one axis varied and five were held fixed, so this run can speak about credit alone" |
 | **The uncertainty** ✅ | each cell's interval against the threshold a claim would need — the gate's own margin, against the chance level | the records' spread, the gate's thresholds (`gate`) | "which cells are separable from chance, and which are not yet" |
 
 #### The run, as a process (not as evidence)
@@ -380,7 +401,7 @@ to pass: **what can a reader say after looking at it?**
 | View | What the main area shows | The data it needs | A reader would say |
 |------|---------------------------|-------------------|-------------------|
 | **The timeline** ✅ | the run's stages, one lane each, and the time each held it; the longest silence named | the pipeline's events (`GET /api/events`), with their timestamps | "the run trained for 34 seconds and measured nothing until the end" |
-| **The pipeline flow** ⬜ | the cells flowing through the stages, with the gate's refusals at the gate | the events, the space's refusals | "four proposals went in and one cell came out" |
+| **The pipeline flow** ✅ | the cells flowing through the stages, with the gate's refusals at the gate | the events' own counts, and the space's rules (`GET /api/runs/{id}/flow`) | "four cells went through the pipeline, the gate refused none, and twenty records were written" |
 | **The ledger** ✅ | every arm the run measured, its evidence, and the gate's standing on it — PASSED, INSUFFICIENT, REJECTED; the report's limitations and its test beneath | the report's claims and limitations, the records' gate verdicts (`GET /api/runs/{id}/account`) | "nothing here is a claim yet, and the report says why" |
 | **The contrast** ✅ | the arms of the axis that spread widest on the run's objective, against one another, over the cells they share, with the paired test's verdict | the records, the paired test (`GET /api/runs/{id}/account`) | "pepita beat random_projections by 0.44, on one shared cell" |
 
@@ -424,31 +445,29 @@ from.
 ### Where to start next
 
 The four flat views of the evidence are built, and the run now has a timeline,
-a ledger and a contrast. What is left of the catalogue:
+a ledger, a contrast, a flow and an effect. What is left of the catalogue:
 
-1. **The attribution** — the analysis exists
-   (`computronium/experiment/analysis/axis_attribution.py`); the view is the
-   work. With twenty records and one varied axis, a random forest over
-   one-hot features is a *worse* attribution than the spread the ledger
-   already draws, so the view should either use the report's own claim
-   machinery or say plainly that the design is too small to attribute.
-2. **The pipeline flow** — the cells through the stages, with the gate's
-   refusals at the gate: the events carry the counts, and the space carries
-   the refusals.
-3. **The dynamics views** — the ones that need a cell re-instantiated, and
-   the ones worth the most.
-4. **The layers and the multi-run space** — the 3D views that are not the
+1. **The dynamics views** — the ones that need a cell re-instantiated, and
+   the ones worth the most: the settling trajectory, the basin, the energy
+   landscape, the spectrum. The machinery is in `computronium.stability` and
+   in `computronium/experiment/analysis/energy_landscape.py`; what is
+   missing is a server that re-composes a cell from a record and a view
+   that draws the answer.
+2. **The layers and the multi-run space** — the 3D views that are not the
    space and the terrain.
+3. **The remaining figures** — the gallery, the report's own plots: the
+   `figure` frame kind is there, and each is one `Frame` away.
 
 **Acceptance**: ✅ the canvas can show the space, the terrain, the frontier,
 the matrix, the convergence, the small multiples, the spread, the claim's
-cost, the uncertainty, the timeline, the ledger and the contrast, and the tour
-has a shot of each. ✅ the shots are *visibly different pictures* — measured,
-not asserted, and the tour fails below 2 %. ✅ a reader can answer "what did
-the run find?" from any one of them. ✅ a view that is not active leaves
-nothing of itself on the stage. ✅ the view is a choice — a key, a number or
-a letter, and a selector that names it where it is chosen. ✅ the tour can
-photograph a *figure* — a PNG with its caption and its provenance under it.
+cost, the uncertainty, the timeline, the ledger, the contrast, the flow and
+the effect, and the tour has a shot of each. ✅ the shots are *visibly
+different pictures* — measured, not asserted, and the tour fails below 2 %.
+✅ a reader can answer "what did the run find?" from any one of them. ✅ a
+view that is not active leaves nothing of itself on the stage. ✅ the view is
+a choice — a key, a number or a letter, and a selector that names it where
+it is chosen. ✅ the tour can photograph a *figure* — a PNG with its caption
+and its provenance under it.
 
 
 ---
@@ -512,11 +531,13 @@ one `Frame` each.
 - [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report and the terminal views
 - [x] A short recording of a live session exists, with the captions on screen, and is not committed
 - [x] `docs/DASHBOARD.md` and the README show the tour
-- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty, the timeline, the ledger and the contrast
+- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty, the timeline, the ledger, the contrast, the flow and the effect
 - [x] The view is a choice — a key and a selector — and the inactive view leaves nothing of itself on the stage
 - [x] The tour has a shot of every main view, and the shots are visibly different pictures of one another — *measured*, not asserted
 - [x] The tour can photograph a *figure* (a PNG with its caption and provenance), not only a page and a terminal
 - [x] The run's account of itself is on the server: `GET /api/runs/{id}/account` and `GET /api/events`
+- [x] The run's process is on the server: `GET /api/runs/{id}/flow`
+- [x] The run's attribution is on the server: `GET /api/runs/{id}/attribution`
 
 ---
 
@@ -528,17 +549,20 @@ one `Frame` each.
 | `web.py` — the frames, the endpoint, the state refresh | ✅ done |
 | `pipeline.py` — the producer names the cell and the seed | ✅ done |
 | `caption.ts` — the browser renders the sentences | ✅ done |
-| the tour — twenty-four views in one browser session | ✅ done |
+| the tour — twenty-six views in one browser session | ✅ done |
 | the recording — a `.webm` of a live session, uncommitted | ✅ done |
 | the docs — the caption, the endpoint, the tour, the stage | ✅ done |
 | the dashboard shows a run before it has measured | ✅ done (the space is on screen from the first second) |
-| the main view area — the stage, the views, the switcher | ✅ done: twelve views, a key, a selector, a shot of each |
+| the main view area — the stage, the views, the switcher | ✅ done: fourteen views, a key, a selector, a shot of each |
 | the flat views — the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty | ✅ done (the canvas, the frame and the ticks are shared) |
 | the gate's rules travel with the run | ✅ done (`gate` in the metrics payload; the browser invents no margin) |
 | the figures — the seed violins | ✅ done (the tour's third frame kind: a PNG, its caption, its provenance) |
 | `ledger.py` — the run's account of itself | ✅ done (the ledger, the contrast, the rules they are measured by) |
 | the timeline — the run as a process | ✅ done (the events, one lane per stage, the silence named) |
-| the other views — the layers, the attribution, the pipeline flow, the dynamics | ⬜ the catalogue in Phase 5 |
+| `arms.py` — the statistics of an arm | ✅ done (read once for the ledger and the effect) |
+| `flow.py` — the run's cells through the stages | ✅ done (the events' counts, the gate's refusals, the shape in a sentence) |
+| `attribution.py` — what the run can attribute | ✅ done (the axes, the spread, and the design's limits in words) |
+| the other views — the layers, the dynamics | ⬜ the catalogue in Phase 5 |
 | the other figures — the gallery, the report's plots | ⬜ the "surfaces outside the canvas" table |
 | the mirror's publish can fail and lag | ⬜ a known flake, diagnosed above |
 | the property suite fails 23 tests at HEAD | ⬜ pre-existing and unrelated: the gallery's `env_sha256` (19), `PROOF.md`'s banned phrases, the priors registry — verified by stashing this batch and re-running |
@@ -546,8 +570,8 @@ one `Frame` each.
 
 The server speaks, the browser shows it, the pictures show both, and the
 canvas can show more than one thing. What is left of the stage is the
-catalogue: the attribution, the pipeline flow, and the family that needs the
-trained system.
+catalogue: the dynamics family, which needs the trained system, and the
+layers and the multi-run space.
 
 ---
 
@@ -802,25 +826,101 @@ sacrifice.
 
 ---
 
+## This batch (the flow, and the effect)
+
+**What was built.** Two more views of the stage — one of the run as a
+*process*, one of what the run can *attribute* — and the server half that
+both of them draw:
+
+| Piece | The file | What it is |
+|-------|----------|------------|
+| The flow | `src/stage/flow.ts` | one column per stage, in the order the run reached it: the cells it carried, the records it wrote, and what the gate refused drawn on top of the stage that refused it |
+| The effect | `src/stage/effect.ts` | one column per axis: a band spanning the arms of an axis that varied, a mark for an axis that was held fixed |
+| The run's arms | `dashboard/arms.py` | the statistics of an arm — its mean, its spread, its seed count, the gate's standing — read once for the ledger and the effect |
+| The run's flow | `dashboard/flow.py` | the stages, the count each handled, the refusals, and the run's shape in a sentence |
+| The run's effect | `dashboard/attribution.py` | every axis, whether it varied, the spread of its arms, and the reason the run can or cannot attribute |
+| The endpoints | `web.py` | `GET /api/runs/{id}/flow` and `GET /api/runs/{id}/attribution` |
+
+And one small change to the producer: `_announce_stage` now publishes the
+gate's refusals with the stage's counts (`rejected_count` off the stage's
+fragment), so the flow can say what the gate threw away.
+
+**The rules came from the server, as always.** The flow's counts are the
+events' own — the stage announcement carries them, and the measurements carry
+the cell they measured. The effect's arms are the records' own, read through
+the same `arms.py` the ledger reads, so the two pictures cannot disagree
+about what an arm measured. The effect's *judgement* — whether the run is
+big enough to attribute anything — is the server's sentence, not the
+browser's: *"one axis varied (credit) and five were held fixed: this run can
+speak about credit alone."*
+
+**The forest was not run, on purpose.** The plan's caution was right, and it
+is worth keeping in the code rather than only in the plan: over twenty
+records and one varied axis, a random forest over one-hot features has
+nothing to fit, and what it returns is a worse attribution than the spread
+the ledger already draws. The view says plainly that the design is too small
+to attribute, which is both the honest answer and the more useful one — a
+reader who knows which axes were held fixed cannot be misled by a number.
+
+**What the work taught.**
+
+**A stage that shares a canvas with the view before it must clear it.**
+Every flat view draws on one 2D canvas, and a view with nothing to draw
+returned *before* it cleared anything: the picture of the view it replaced
+stayed on the stage while the legend named the new one. The canvas now
+clears itself when it is shown, so a view that has nothing to say leaves an
+empty stage instead of a stale one.
+
+**Two arms that stand at the same level write their names on top of one
+another.** The demo's `gradient` and `local_goodness` arms are 0.0008 apart
+on `val_acc` — one pixel on the picture — and the first version of the
+effect drew their names over each other. A name that would collide is now
+stepped aside, and the arms' names sit *beside* their dots rather than
+above them, so a name is never mistaken for a neighbour's.
+
+**The run's stages say three different things, and the picture has to know
+which is which.** The stage announcement says how many *cells* the stage
+handled; the records arrive one *batch* at a time; and the measurements
+arrive one *cell* at a time, each naming the cell it measured. Adding them
+up gives a number that is none of them. The flow reads them apart: the
+count of a stage is the cells it carried, else the records it wrote, else
+the measurements it made.
+
+**The picture's own furniture is worth looking at.** The flow's first
+version put the rules that refuse a cell in the top right, and the gold
+record columns ran straight through the text. The rules were also a copy of
+what the map's legend already says, in a panel that is on screen in every
+view. The rules moved to the empty top left, and the picture got a column
+of its own for the run's own refusals — the gate's, which is the part the
+plan asked for and the part that is about the *run*.
+
+**A summary is a sentence, not a list of facts.** The flow's first summary
+read "four cells went through · 5 stages · the gate refused none · four
+cells measured · twenty records written" — five facts, none of them
+attached to a verb. It reads better as "four cells went through the
+pipeline; the gate refused none; four cells measured; twenty records
+written", and the numbers are said in words, as the narration says them.
+
+---
+
 ## Where the next session starts
 
-1. **The attribution** — the analysis exists
-   (`computronium/experiment/analysis/axis_attribution.py`); the view is the
-   work. Note the caution: with twenty records and one varied axis, a random
-   forest over one-hot features is a *worse* attribution than the spread the
-   ledger already draws, so the view should use the report's own claim
-   machinery or say plainly that the design is too small to attribute.
-2. **The pipeline flow** — the cells through the stages, with the gate's
-   refusals at the gate: the events carry the counts, the space carries the
-   refusals.
-3. **The dynamics views** — the ones that need the trained system, and the
-   ones worth the most.
-4. **The remaining figures** — the gallery, the report's own plots: the
+1. **The dynamics views** — the ones that need the trained system, and the
+   ones worth the most: the settling trajectory, the basin, the energy
+   landscape, the spectrum. The machinery is in `computronium.stability`
+   (`measure_settling_time`, `estimate_basin_stability_multistart`,
+   `estimate_lyapunov_spectrum`) and in
+   `computronium/experiment/analysis/energy_landscape.py`; what is missing
+   is a server that re-composes a cell from a record — `comp stability-
+   analysis` already does the re-composition — and a view that draws the
+   answer. The dashboard would need the cell's *trained* system, so the
+   endpoint has to be asked for a cell, not a run.
+2. **The remaining figures** — the gallery, the report's own plots: the
    `figure` frame kind is there, and each is one `Frame` away.
-5. **The layers and the multi-run space** — the 3D views that are not the
+3. **The layers and the multi-run space** — the 3D views that are not the
    space and the terrain.
 
-**The number keys are full** (twelve views, the keys `1`–`9` and `T`, `L`,
-`D`). The thirteenth view needs a letter of its own, and the letter has to
-be one the panels and the charts do not hold — `src/keys.ts` is the list that
-says which.
+**The number keys are full** (fourteen views, the keys `1`–`9` and `T`, `L`,
+`D`, `F`, `E`). The next view needs a letter of its own, and the letter has
+to be one the panels and the charts do not hold — `src/keys.ts` is the list
+that says which, and `buildKeys` refuses a view that claims one.

@@ -120,6 +120,8 @@ TOUR: tuple[Shot, ...] = (
     Shot("dashboard-timeline.png", "the timeline: the run's stages, and their time"),
     Shot("dashboard-ledger.png", "the ledger: every arm, and where it stands"),
     Shot("dashboard-contrast.png", "the contrast: the arms against one another"),
+    Shot("dashboard-flow.png", "the flow: the run's cells, stage by stage"),
+    Shot("dashboard-effect.png", "the effect: which axis moved the objective"),
 )
 
 # The main view area, one shot per view. The space's shot is the map's: the
@@ -138,6 +140,8 @@ VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
     ("timeline", "dashboard-timeline.png", "t"),
     ("ledger", "dashboard-ledger.png", "l"),
     ("contrast", "dashboard-contrast.png", "d"),
+    ("flow", "dashboard-flow.png", "f"),
+    ("effect", "dashboard-effect.png", "e"),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels

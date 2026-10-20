@@ -57,7 +57,7 @@ Open <http://localhost:8080> in a browser.
 ## The Stage (the main view area)
 
 The canvas is a **stage**, and a view is what stands on it. The discovery map
-is one view; the stage can show twelve.
+is one view; the stage can show fourteen.
 
 | Key | View | The picture | What a reader would say |
 |-----|------|-------------|------------------------|
@@ -73,6 +73,8 @@ is one view; the stage can show twelve.
 | `T` | **The timeline** | the run's stages, one lane each, and the time each held it; the longest silence is named | "the run trained for 43 seconds and measured nothing until the end" |
 | `L` | **The ledger** | every arm the run measured, its evidence, and the gate's standing on it; the report's limitations and its test beneath | "nothing here is a claim yet, and the report says why" |
 | `D` | **The contrast** | the arms against one another, over the cells they share, with the test's verdict | "pepita beat random_projections by 0.44, on one shared cell" |
+| `F` | **The flow** | the run's cells stage by stage: one column per stage, the cells it carried and the records it wrote; what the gate refused, in the void colour | "four cells went through the pipeline, the gate refused none, and twenty records were written" |
+| `E` | **The effect** | one column per axis: a band for an axis whose arms differ, a mark for an axis that was held fixed | "one axis varied and five were held fixed, so this run can speak about credit alone" |
 
 `V` cycles the views; the number keys pick the first nine, and a view that
 does not fit in the numbers has a letter of its own (`src/keys.ts` holds the
@@ -94,9 +96,10 @@ is hidden when none of them is on.
 
 **The flat views do not need three.js.** The matrix, the convergence, the
 small multiples, the spread, the claim's cost, the uncertainty, the timeline,
-the ledger and the contrast are drawn on a 2D canvas over the stage
-(`src/stage/canvas2d.ts`), in the part of the window the panels leave free.
-What they share with the 3D views is the switcher, the data and the tour shot.
+the ledger, the contrast, the flow and the effect are drawn on a 2D canvas
+over the stage (`src/stage/canvas2d.ts`), in the part of the window the panels
+leave free. What they share with the 3D views is the switcher, the data and
+the tour shot.
 
 **The rules a claim is measured against travel with the run.** The margin the
 statistical gate asks for, the seeds a claim needs and the confidence level
@@ -120,6 +123,25 @@ process-local, so `GET /api/events?run_id=` is the history of the run the
 server saw: one lane per stage, in the order the run reached it, with the
 events it left on the clock. A run that happened in another process has no
 timeline here, and the view says so rather than inventing one.
+
+**The flow is the same events, read as a process.** `GET /api/runs/{run_id}/
+flow` lays the stages out in the order the run reached them, with the count
+each one handled — the cells it carried, the records it wrote — and what the
+gate refused. The counts are the events' own: the stage's announcement
+carries them, and the pipeline now publishes the gate's refusals with them
+(`_announce_stage` reads `rejected_count` off the stage's fragment).
+
+**The effect says what the run can attribute, and what it cannot.** `GET
+/api/runs/{run_id}/attribution` returns every axis, whether it varied, how
+far apart its arms stand, and the arms themselves — the same statistics the
+ledger draws (`src/stage/arms.py` computes them once for both). An
+attribution needs a design that varied more than one thing, so a run that
+varied one axis is told so in words: *"one axis varied (credit) and five were
+held fixed: this run can speak about credit alone."* The random forest in
+`computronium/experiment/analysis/axis_attribution.py` is deliberately not
+run here — over twenty records and one varied axis it has nothing to fit,
+and what it returned would be a worse attribution than the spread the ledger
+already draws.
 
 ---
 
@@ -403,17 +425,21 @@ knowing the interface.
 
 ```bash
 curl -s localhost:8080/api/runs/<run_id>/account | python -m json.tool
+curl -s localhost:8080/api/runs/<run_id>/flow | python -m json.tool
+curl -s localhost:8080/api/runs/<run_id>/attribution | python -m json.tool
 curl -s "localhost:8080/api/events?run_id=<run_id>" | python -m json.tool
 ```
 
 | Endpoint | What it holds |
 |----------|---------------|
 | `GET /api/runs/{run_id}/account` | `ledger` — every arm the run measured, its evidence, the gate's standing on it (`PASSED`, `INSUFFICIENT`, `REJECTED`), the axes that did not vary, the report's limitations and the report's own significance line; and `contrast` — the arms of the axis that spread widest on the run's objective, the pairs between them with the cells they share, and the paired test's verdict |
+| `GET /api/runs/{run_id}/flow` | the run as a process: `stages` — one per stage, with the count it handled (the cells it carried, the records it wrote) and what the gate refused; `cells`, `refused`, `measured`, `records`, and the run's shape in one sentence |
+| `GET /api/runs/{run_id}/attribution` | every axis, whether it varied, the spread of its arms, the arms themselves with the gate's standing on them; the axes that varied and those that were held fixed; and whether the run is big enough to attribute anything at all |
 | `GET /api/events?run_id=` | the run's stages, as they happened: `stages` (one per stage, with its first and last word and its reach), `events` (every event, with its sentence), and the run's span in seconds |
 
-Both are what the stage's ledger, contrast and timeline draw, so an agent can
-read the same three pictures as text. The events are process-local: this is the
-run *this dashboard watched*.
+All four are what the stage's ledger, contrast, timeline, flow and effect
+draw, so an agent can read the same pictures as text. The events are
+process-local: this is the run *this dashboard watched*.
 
 ---
 
@@ -425,6 +451,8 @@ run *this dashboard watched*.
 | `T` | The timeline |
 | `L` | The ledger |
 | `D` | The contrast |
+| `F` | The flow |
+| `E` | The effect |
 | `V` | Cycle the views |
 | `P` | Switch to Pareto tab |
 | `A` | Switch to Ablation tab |
@@ -680,12 +708,12 @@ The screenshot is embedded in `docs/readme/title.md` and appears on the README f
 ## The Tour (every view of the system)
 
 ```bash
-# Twenty-four views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+# Twenty-six views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
 uv run python scripts/capture_dashboard_tour.py
 ```
 
 One store, one dashboard, one browser: the tour takes the whole system in
-twenty-four pictures, and the pictures are of *different things*, not of the same
+twenty-six pictures, and the pictures are of *different things*, not of the same
 scene from different angles.
 
 | Shot | What it shows |
@@ -703,6 +731,8 @@ scene from different angles.
 | `dashboard-timeline.png` | the timeline: the run's stages, and the silence between them |
 | `dashboard-ledger.png` | the ledger: every arm, its evidence, and where it stands |
 | `dashboard-contrast.png` | the contrast: the arms against one another, and the test |
+| `dashboard-flow.png` | the flow: the run's cells, stage by stage, and what the gate refused |
+| `dashboard-effect.png` | the effect: which axis moved the objective, and which the run held fixed |
 | `dashboard-cell.png` | the leading cell's drawer: its accuracy, its curve, its verdict, the seeds it still owes |
 | `dashboard-void.png` | a cell the system refuses, in a slice of the space cut a different way, and the rule that refuses it |
 | `dashboard-pareto.png` | the Pareto chart |

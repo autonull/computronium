@@ -13,6 +13,8 @@ import { CYCLE_KEY, RESERVED_KEYS } from "../keys.js";
 import { ClaimCostView } from "./claim-cost.js";
 import { ContrastView } from "./contrast.js";
 import { ConvergenceView } from "./convergence.js";
+import { EffectView } from "./effect.js";
+import { FlowView } from "./flow.js";
 import { FrontierView } from "./frontier.js";
 import { LedgerView } from "./ledger.js";
 import { MatrixView } from "./matrix.js";
@@ -76,6 +78,8 @@ export class ViewSwitcher implements Component {
       new TimelineView(),
       new LedgerView(),
       new ContrastView(),
+      new FlowView(),
+      new EffectView(),
     ];
   }
 

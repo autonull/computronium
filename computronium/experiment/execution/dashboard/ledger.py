@@ -21,6 +21,8 @@ import math
 import statistics
 from typing import TYPE_CHECKING, Any
 
+from computronium.experiment.execution.dashboard.arms import axis_arms, metric_values
+
 if TYPE_CHECKING:
     from computronium.experiment.evidence.claims import Claim
     from computronium.experiment.evidence.store import RecordStore
@@ -36,17 +38,6 @@ def _number(value: float | None) -> float | None:
     return float(value)
 
 
-def _metric_values(records: list[Record], metric: str) -> list[float]:
-    """The records' values of one metric, and only the ones that carry it."""
-    values: list[float] = []
-    for record in records:
-        value = record.payload.get(metric)
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            continue
-        values.append(float(value))
-    return values
-
-
 def _arm_rows(
     records: list[Record],
     metric: str,
@@ -60,51 +51,19 @@ def _arm_rows(
     one either. The arms that fall short are here, because a ledger that
     lists only the claims is a ledger that hides the holes.
     """
-    from computronium.experiment.evidence.claims import replication_key
-    from computronium.experiment.execution.statistical_promotion import (
-        StatisticalVerdict,
-    )
-    from computronium.experiment.schema.axis import StructuralAxis
-
     rows: list[dict[str, Any]] = []
-    for axis in StructuralAxis:
-        arms: dict[str, list[Record]] = {}
-        for record in records:
-            arms.setdefault(getattr(record, axis.value), []).append(record)
-        if len(arms) < 2:
+    for arms in axis_arms(records, metric, min_seeds):
+        if not arms.varied:
             continue
-
-        for value, arm in arms.items():
-            cells: dict[str, list[Record]] = {}
-            for record in arm:
-                cells.setdefault(replication_key(record), []).append(record)
-            passed = max(
-                (
-                    sum(
-                        1
-                        for record in cell
-                        if record.status.gate_verdict.value == "PASS"
-                    )
-                    for cell in cells.values()
-                ),
-                default=0,
-            )
-            if passed == 0:
-                verdict = StatisticalVerdict.REJECTED
-            elif passed < min_seeds:
-                verdict = StatisticalVerdict.INSUFFICIENT
-            else:
-                verdict = StatisticalVerdict.PASSED
-
-            values = _metric_values(arm, metric)
+        for arm in arms.values:
             rows.append({
-                "axis": axis.value,
-                "value": value,
-                "mean": statistics.fmean(values) if values else 0.0,
-                "sd": statistics.stdev(values) if len(values) > 1 else 0.0,
-                "n": len(values),
-                "cells": len(cells),
-                "verdict": verdict.value,
+                "axis": arms.axis,
+                "value": arm.value,
+                "mean": arm.mean,
+                "sd": arm.sd,
+                "n": arm.n,
+                "cells": arm.cells,
+                "verdict": arm.verdict,
             })
     return rows
 
@@ -121,7 +80,7 @@ def _fixed_rows(records: list[Record], metric: str) -> list[dict[str, Any]]:
             continue
         value = next(iter(values))
         cells = {replication_key(record) for record in records}
-        measured = _metric_values(records, metric)
+        measured = metric_values(records, metric)
         rows.append({
             "axis": axis.value,
             "value": value,

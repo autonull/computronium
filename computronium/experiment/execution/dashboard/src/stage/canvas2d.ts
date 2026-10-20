@@ -47,6 +47,9 @@ export class StageCanvas {
     this.visible = true;
     this.canvas.style.display = "block";
     this.resize();
+    // The canvas is cleared, so a view that has nothing to draw leaves an
+    // empty stage rather than the picture of the view it replaced.
+    this.begin();
   }
 
   hide(): void {

@@ -72,11 +72,15 @@ def demo_record(
     val_acc: float,
     seed: int,
     credit: str = "gradient",
+    geometry: str = "feedforward",
 ) -> Record:
     """One measurement of the demo's cell."""
     return Record.create(
         run_id=run_id,
-        coordinate=Coordinate(**{**COORDINATE, "credit": credit}, params={}),
+        coordinate=Coordinate(
+            **{**COORDINATE, "credit": credit, "geometry": geometry},
+            params={},
+        ),
         schedule=Schedule(
             fidelity="L1",
             seed=seed,

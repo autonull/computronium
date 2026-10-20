@@ -45,6 +45,13 @@ say, and how its arms compare:
 |---|---|---|
 | ![The timeline](docs/readme/assets/dashboard-timeline.png) | ![The ledger](docs/readme/assets/dashboard-ledger.png) | ![The contrast](docs/readme/assets/dashboard-contrast.png) |
 
+And the run's cells as they went through the pipeline, and what that run can
+attribute to the axes it varied:
+
+| The flow | The effect |
+|---|---|
+| ![The flow](docs/readme/assets/dashboard-flow.png) | ![The effect](docs/readme/assets/dashboard-effect.png) |
+
 The same run, told three other ways — as a report in the browser, as the
 console dashboard in a terminal, and as the dashboard's own account of itself:
 
