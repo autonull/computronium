@@ -220,28 +220,57 @@ async def main() -> int:
             )
             page = await browser.new_page(viewport={"width": 1920, "height": 1080})
 
-            # Navigate to dashboard
-            await page.goto(
-                f"http://localhost:{dashboard_port}", wait_until="networkidle"
-            )
+            # Track when campaign_metrics is received via WebSocket
+            metrics_received = asyncio.Event()
+            metrics_data = {}
 
-            # Wait for three.js canvas to be rendered
-            await page.wait_for_selector(
-                "#dashboard-canvas", state="visible", timeout=30000
-            )
+            async def handle_ws(ws):
+                async for msg in ws:
+                    try:
+                        data = json.loads(msg)
+                        if data.get("type") == "campaign_metrics" and data.get("data", {}).get("records"):
+                            metrics_data["records"] = data["data"]["records"]
+                            metrics_received.set()
+                            break
+                    except Exception:
+                        pass
 
-            # Additional wait for three.js first frame
+            # Navigate to dashboard and capture WebSocket
+            await page.goto(f"http://localhost:{dashboard_port}", wait_until="networkidle")
+
+            # Wait for three.js canvas
+            await page.wait_for_selector("#dashboard-canvas", state="visible", timeout=30000)
+
+            # Listen for WebSocket messages from the page
+            page.on("websocket", lambda ws: asyncio.create_task(handle_ws(ws)))
+
+            # Wait for campaign_metrics to arrive via WebSocket on this page
+            logger.info("Waiting for campaign_metrics on new page...")
+            try:
+                await asyncio.wait_for(metrics_received.wait(), timeout=30.0)
+                logger.info(f"Received campaign_metrics with {len(metrics_data.get('records', []))} records")
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for campaign_metrics, waiting for next broadcast cycle...")
+                # Wait for the next periodic broadcast (dashboard broadcasts every 2s)
+                await asyncio.sleep(10.0)
+
+            # Wait for three.js to render (check canvas has actual content)
             await page.wait_for_function(
                 """() => {
                     const canvas = document.getElementById('dashboard-canvas');
                     const ctx = canvas.getContext('webgl2') || canvas.getContext('webgl');
-                    return ctx && canvas.width > 0 && canvas.height > 0;
+                    if (!ctx || canvas.width === 0 || canvas.height === 0) return false;
+                    // Check if canvas has been drawn to (not just cleared)
+                    const pixels = new Uint8Array(4);
+                    ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
+                    // Not all white/transparent
+                    return pixels[0] !== 255 || pixels[1] !== 255 || pixels[2] !== 255 || pixels[3] !== 0;
                 }""",
                 timeout=30000,
             )
 
             # Extra render frames
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(2000)
 
             # Capture screenshot
             await page.screenshot(path=str(output_path), full_page=False)

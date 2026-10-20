@@ -229,7 +229,7 @@
 
 ---
 
-### Phase 5: Campaign Launch & Hero Screenshot ✅ COMPLETE
+### Phase 5: Campaign Launch & Hero Screenshot ✅ COMPLETE (backend) / 📋 SCREENSHOT PENDING
 **Goal**: Real campaign running → authentic screenshot
 
 **Tasks**:
@@ -237,14 +237,17 @@
 2. **Created `scripts/capture_dashboard_screenshot.py`** (Playwright) — starts campaign + dashboard, waits for WS + metrics, captures 1920x1080 screenshot with `--use-gl=angle`
 3. **Updated `docs/readme/title.md`** — added hero image placeholder + tagline
 4. **Regenerated README** — `uv run python docs/readme/build_readme.py`
-5. **Added `playwright>=1.40.0` to dev dependencies** in `pyproject.toml`
+5. **Added `playwright>=1.40.0`, `websockets>=13.0`, `aiohttp>=3.9` to dev dependencies** in `pyproject.toml`
 
-**Acceptance**: Scripts created and tested; backend endpoints verified; Playwright + Chromium installed.
+**Acceptance**: 
+- Backend: Campaign launch + dashboard data flow verified (20 records, Pareto, ablation groups broadcast via WS)
+- Screenshot: Generated but blank (headless WebGL/ANGLE rendering issue with three.js scene initialization timing). File exists at `docs/screenshots/dashboard-hero.png` and `docs/readme/assets/dashboard-hero.png` but shows white canvas. Need to debug Playwright WebGL context + three.js render loop timing.
 
 **Notes**: 
 - Screenshot pipeline uses `aiohttp` for HTTP health checks and `websockets` for WS metric polling
 - Headless WebGL via `--use-gl=angle` (software rasterizer) for CI compatibility
-- Run `uv run python scripts/capture_dashboard_screenshot.py` to generate `docs/readme/assets/dashboard-hero.png`
+- Run `uv run python scripts/capture_dashboard_screenshot.py` to attempt screenshot generation
+- Known issue: New page navigation reinitializes three.js before receiving broadcast metrics
 
 ---
 
