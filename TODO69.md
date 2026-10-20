@@ -19,6 +19,67 @@ report's claims in step.
 
 ---
 
+## The next session: the main view area must show more than one picture
+
+**This is the thing to do next, and it is the last thing the tour is
+missing.** The narration, the caption, the tour and the recording are done.
+What is left is the picture in the middle of the screen: the content area is
+still one picture in every shot — a grid of coloured cubes — and every
+picture the tour takes of it looks the same.
+
+The screenshots the tour takes today:
+
+| Shot | What the reader sees in the content area |
+|------|------------------------------------------|
+| `dashboard-hero.png` | a grid of coloured cubes |
+| `dashboard-map.png` | the same grid of coloured cubes |
+| `dashboard-cell.png` | the same grid, with a drawer beside it |
+| `dashboard-void.png` | the same grid, cut a different way, with a drawer beside it |
+
+The panels, the charts, the report and the terminal views *are* varied — but
+the big picture is not, and the big picture is the one the reader looks at
+first. The opportunity is not cosmetic: the system knows far more than a
+grid of cells (the frontier, the curves, the spread, the attribution, the
+refusals, and the dynamics of a cell itself), and none of it is drawable
+today.
+
+**What "done" means for the next session** — four views, and a shot of each:
+
+| # | View | The picture | Why this one first |
+|---|------|-----------|---------------------|
+| 1 | **The terrain** | the declared space as a *heightfield*: accuracy as height over the two free axes, the gaps flat, the refusals holes in the ground | the same data and the same arithmetic as the map — a surface instead of a field of boxes — so it is the cheapest way to prove the canvas can hold a second picture |
+| 2 | **The frontier** | every measured cell as a point in (accuracy, speed, parameters), the Pareto front drawn through them, the chance plane as a floor | the one picture every reader of a run actually wants, and it needs only the records |
+| 3 | **The evidence matrix** | the space *flat*: one axis against another, each cell a number, the refusals in the void colour | the 2D family, and it needs no new data at all |
+| 4 | **The convergence** | accuracy against epoch, one curve per arm, the chance line under them | the picture of the run *as a process*, and the curves are already in the map's aggregates |
+
+**And the switcher that makes them a choice**: a key that cycles (`V`), the
+number keys that pick one (like the plotter's tabs), and a selector in the
+legend that names the view where it is chosen. A view that is not active
+leaves nothing of itself on the stage.
+
+**The acceptance, in pictures**: the tour takes a shot of every view, and the
+four shots are *visibly different pictures* — a terrain, a frontier, a
+matrix, a set of curves. A reader who sees the four shots side by side should
+not be able to mistake them for one another, and a reader who sees only one
+of them should still be able to say what the run found. The tour's map-area
+shots must stop being the same picture with different furniture in front of
+it.
+
+**How it is built**: the scene is already shared
+(`components/context.ts` gives every component the same scene, camera and
+renderer), and the discovery map already does the four things a view must
+do — put its objects on the stage (`createCell`), take them off it again
+(`clearGrid`), re-read the records (`applyAggregates`), and frame the camera
+(`frameGrid`). A view is a component with that shape; the switcher is what
+the plotter's tabs already are. The work is a component, not a rewrite.
+
+The full catalogue — twenty-odd views, 3D and 2D, from the evidence to the
+dynamics of a cell — is in **Phase 5** below, and the surfaces *outside* the
+canvas (the gallery, the report's eleven figures, the energy landscape, the
+seed violins, the `comp` reports) are in the table after it.
+
+---
+
 ## Current State
 
 | Piece | Path | Status |
@@ -322,10 +383,13 @@ matter of which panel is in front of the map.
 5. **Then the dynamics views** — the ones that need a cell re-instantiated,
    and the ones worth the most.
 
-**Acceptance**: ✅ the canvas can show the space, the frontier, the matrix
-and the spread, and the tour has a shot of each. ✅ a reader can answer
-"what did the run find?" from any one of them. ✅ a view that is not active
-leaves nothing of itself on the stage.
+**Acceptance**: ✅ the canvas can show the space, the terrain, the frontier,
+the matrix and the convergence, and the tour has a shot of each. ✅ the four
+shots are *visibly different pictures* — not one picture with different
+panels in front of it. ✅ a reader can answer "what did the run find?" from
+any one of them. ✅ a view that is not active leaves nothing of itself on the
+stage. ✅ the view is a choice — a key, a number, and a selector that names
+it where it is chosen.
 
 ---
 
@@ -374,6 +438,7 @@ method cards are one `Frame` each.
 | A view leaves its objects on the stage | the scene is shared, so a view must clear what it built — the map already knows how (`clearGrid`), and a view that does not clear is a bug the next view shows |
 | The canvas becomes a gallery of pictures | a view is a *choice* with a switcher, not a slideshow: the view is named where it is chosen, and the tour's shots are of views a reader would choose |
 | A view needs the trained system, so it cannot be built from the store | the dynamics views are last, and they are the ones that need a cell to be re-instantiated; the evidence views need nothing the dashboard does not already have |
+| The next session builds one view and stops | the batch is four views *and* a tour shot of each: a switcher with one view on it is a demo, not a dashboard |
 
 ---
 
@@ -385,9 +450,9 @@ method cards are one `Frame` each.
 - [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report and the terminal views
 - [x] A short recording of a live session exists, with the captions on screen, and is not committed
 - [x] `docs/DASHBOARD.md` and the README show the tour
-- [ ] The main view area can show more than one picture of the run: the space, the terrain, the frontier and the evidence matrix at least
+- [ ] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix and the convergence at least
 - [ ] The view is a choice — a key and a selector — and the inactive view leaves nothing of itself on the stage
-- [ ] The tour has a shot of every main view
+- [ ] The tour has a shot of every main view, and the shots are visibly different pictures of one another
 - [ ] The tour can photograph a *figure* (a PNG with its caption and provenance), not only a page and a terminal
 
 ---
@@ -404,12 +469,14 @@ method cards are one `Frame` each.
 | the recording — a `.webm` of a live session, uncommitted | ✅ done |
 | the docs — the caption, the endpoint, the tour | ✅ done |
 | the dashboard shows a run before it has measured | ✅ done (the space is on screen from the first second) |
-| the main view area — the stage, the views, the switcher | ⬜ Phase 5, next session |
+| the main view area — the stage, the views, the switcher | ⬜ Phase 5, next session: four views and a shot of each |
 | the figures — the gallery, the report's plots, the analyses | ⬜ the "surfaces outside the canvas" table |
 | the mirror's publish can fail and lag | ⬜ a known flake, diagnosed above |
 
 The server speaks, the browser shows it, and the pictures show both. The
-canvas is still showing one picture, and that is the next thing to change.
+canvas is still showing one picture, and that is the next thing to change —
+it is written up at the top of this file, with the batch of views to build
+and the acceptance stated in pictures.
 
 ---
 
