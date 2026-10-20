@@ -59,7 +59,7 @@ after looking at it.
 **The acceptance, in pictures, is now mechanical**: the tour photographs the
 fourteen views and then measures them — the browser decodes each pair of
 shots and reports the share of the pixels that differ. A pair that is too
-alike fails the tour. The measured differences run from 2.4 % to 30.5 %; the
+alike fails the tour. The measured differences run from 2.7 % to 30.5 %; the
 floor is 2 %.
 
 The full catalogue — twenty-odd views, 3D and 2D, from the evidence to the

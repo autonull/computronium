@@ -757,7 +757,7 @@ the browser decodes each pair of the stage's shots and reports the share of
 the pixels that differ, and a pair that is too alike fails the tour. The map
 was the same picture in every frame once; the check is what stopped it from
 being the same picture again. The floor is 2 %; the measured spread over the
-twelve views is 2.7 % to 29.7 %.
+fourteen views is 2.7 % to 30.5 %.
 
 **A figure is a third kind of frame.** A page in the browser and a terminal
 window cover the dashboard and the report; a *figure* — a PNG the system drew
