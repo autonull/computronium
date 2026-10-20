@@ -41,6 +41,10 @@ from computronium.experiment.execution.dashboard.actions import (
     run_spread,
     write_registration,
 )
+from computronium.experiment.execution.dashboard.narration import (
+    Narration,
+    state_sentences,
+)
 from computronium.experiment.execution.events import (
     PipelineEvent,
     get_event_bus,
@@ -191,6 +195,7 @@ class WebDashboard:
         self._run_record_counts: dict[str, int] = {}
         self._reported_runs: set[str] = set()
         self._event_history: deque[dict[str, Any]] = deque(maxlen=200)
+        self._narration = Narration()
         self._work_dir: Path | None = None
         self._setup_routes()
         self._setup_templates()
@@ -222,6 +227,15 @@ class WebDashboard:
         @self.app.get("/api/queue")
         async def api_queue() -> JSONResponse:
             return JSONResponse(await self._get_queue_status())
+
+        @self.app.get("/api/narration")
+        async def api_narration(run_id: str | None = None) -> JSONResponse:
+            """What the dashboard is doing, in words (TODO69).
+
+            The same sentences the browser renders as captions, so an agent
+            can read the screen's story without a browser.
+            """
+            return JSONResponse(await self._narration_payload(run_id))
 
         @self.app.get("/api/resources")
         async def api_resources() -> JSONResponse:
@@ -1121,14 +1135,18 @@ class WebDashboard:
 
         The bus is process-local and the run may publish from any thread, so
         the broadcast is scheduled onto the dashboard's loop rather than
-        awaited here.
+        awaited here. The frame carries the event's *sentence*: the wording is
+        written once, on the server, so the caption, the rail and an agent
+        reading the story all say the same thing.
         """
         loop = self._loop
         if loop is None or loop.is_closed():
             return
         if event.run_id:
             self._reported_runs.add(event.run_id)
+        line = self._narration.event(event)
         message = event.to_message()
+        message["sentence"] = line.text
         self._event_history.append(message)
         loop.call_soon_threadsafe(
             lambda: loop.create_task(self._broadcast_update(message))
@@ -1198,6 +1216,12 @@ class WebDashboard:
                     if run.status == "running" or record_counts[run.run_id]
                 ]
 
+            # The run the dashboard is about is the one that has evidence: the
+            # last run in the store that measured something. Its numbers are
+            # what the narration says.
+            measured = [run.run_id for run in runs if record_counts[run.run_id]]
+            newest_with_records = measured[-1] if measured else None
+
             # A run writing from another process shows up here as records
             # landing in the store — the only progress a cross-process
             # dashboard can honestly report.
@@ -1212,8 +1236,50 @@ class WebDashboard:
                         "data": metrics,
                         "timestamp": datetime.now().isoformat(),
                     })
+                    # The run the dashboard is about is the one that has
+                    # evidence: the last run in the store that measured
+                    # something. Its numbers are what the narration says.
+                    if run_id == newest_with_records:
+                        await self._refresh_narration(metrics)
         except Exception:
             logger.debug("Store unavailable for broadcast", exc_info=True)
+
+    async def _refresh_narration(self, metrics: dict[str, Any]) -> None:
+        """Say what the system is doing, now, and tell the clients.
+
+        The sentences are the dashboard's own account of itself: the run, how
+        much of it exists, what the best cell scored, what a claim still
+        needs, and what the machine is doing. A reader who sees only the
+        screen can say all of it.
+        """
+        run = metrics.get("run") or {}
+        queue = await self._get_queue_status()
+        sentences = state_sentences(metrics, queue)
+        self._narration.state(
+            sentences,
+            run_id=run.get("run_id"),
+            chance=metrics.get("chance"),
+        )
+        await self._broadcast_update({
+            "type": "narration",
+            "state": list(sentences),
+            "timestamp": datetime.now().isoformat(),
+        })
+
+    async def _narration_payload(self, run_id: str | None = None) -> dict[str, Any]:
+        """The dashboard's account of itself, for a reader without a browser."""
+        payload: dict[str, Any] = {
+            "state": list(self._narration.current()),
+            "lines": [asdict(line) for line in self._narration.lines()],
+            "script": self._narration.script(),
+        }
+        if run_id and run_id != self._narration.current_run_id:
+            # A reader may ask about a run the dashboard is not showing.
+            metrics = await self._get_campaign_metrics_detailed(run_id)
+            if metrics.get("records"):
+                queue = await self._get_queue_status()
+                payload["state"] = list(state_sentences(metrics, queue))
+        return payload
 
     def _announce_store_progress(self, record_counts: dict[str, int]) -> None:
         """Report records that landed in the store since the last poll.

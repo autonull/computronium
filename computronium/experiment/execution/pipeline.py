@@ -1527,7 +1527,14 @@ class PipelineRunner:
             f"{record.credit}/{record.geometry}/{record.dynamics} "
             f"seed {record.schedule.seed}: {measured}",
             run_id=self._config.run_id,
-            detail={"record_id": record.record_id, "val_acc": accuracy},
+            detail={
+                "record_id": record.record_id,
+                "val_acc": accuracy,
+                # The narration names the cell and the seed it read here, so
+                # the sentence needs no parsing of the message (TODO69).
+                "cell": f"{record.credit}/{record.geometry}/{record.dynamics}",
+                "seed": record.schedule.seed,
+            },
         )
 
     def _observe(self, record: Record) -> None:
