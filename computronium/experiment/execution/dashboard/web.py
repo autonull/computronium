@@ -253,6 +253,25 @@ class WebDashboard:
             """
             return JSONResponse(await self._narration_payload(run_id))
 
+        @self.app.get("/api/events")
+        def api_events(run_id: str | None = None) -> JSONResponse:
+            """The run's stages, as they happened (TODO69).
+
+            The events are process-local, so this is the run *this dashboard
+            watched* — and a run that happened elsewhere has no timeline here.
+            """
+            return JSONResponse(self._event_payload(run_id))
+
+        @self.app.get("/api/runs/{run_id}/account")
+        async def api_run_account(run_id: str) -> JSONResponse:
+            """The run's account of itself (TODO69).
+
+            The ledger is what the run can say — its claims, the gate's
+            verdicts, the limitations that hold it back. The contrast is its
+            arms against one another, with the test it could or could not run.
+            """
+            return JSONResponse(await self._account_payload(run_id))
+
         @self.app.get("/api/resources")
         async def api_resources() -> JSONResponse:
             return JSONResponse(await self._get_resource_usage())
@@ -1347,6 +1366,60 @@ class WebDashboard:
                 queue = await self._get_queue_status()
                 payload["state"] = list(state_sentences(metrics, queue))
         return payload
+
+    def _event_payload(self, run_id: str | None = None) -> dict[str, Any]:
+        """The run's events, and the stages they came from.
+
+        The events are the ones this dashboard saw: the bus is process-local,
+        so a run that happened in another process has no timeline here, and
+        the picture says so rather than inventing one.
+        """
+        from computronium.experiment.execution.events import stage_spans
+
+        frames = [
+            frame
+            for frame in self._event_history
+            if run_id is None or frame.get("run_id") == run_id
+        ]
+        spans = stage_spans(frames)
+        first = min((span.first for span in spans), default=0.0)
+        last = max((span.last for span in spans), default=0.0)
+        return {
+            "run_id": run_id,
+            "start": first,
+            "seconds": last - first,
+            "events": [
+                {
+                    "stage": frame.get("stage"),
+                    "message": frame.get("message"),
+                    "level": frame.get("level"),
+                    "sentence": frame.get("sentence"),
+                    "at": frame.get("at"),
+                }
+                for frame in frames
+            ],
+            "stages": [asdict(span) for span in spans],
+        }
+
+    async def _account_payload(self, run_id: str) -> dict[str, Any]:
+        """The run's account: what it can say, and how its arms compare."""
+        from computronium.experiment.execution.dashboard.ledger import (
+            contrast_payload,
+            ledger_payload,
+        )
+
+        if not self.config.store_path:
+            return {"error": "no store path configured"}
+        try:
+            with self._readable_store() as store:
+                return {
+                    "run_id": run_id,
+                    "ledger": ledger_payload(store, run_id),
+                    "contrast": contrast_payload(store, run_id),
+                }
+        except Exception as e:
+            logger.exception("Error reading the run's account")
+            return {"error": str(e)}
 
     def _announce_store_progress(self, record_counts: dict[str, int]) -> None:
         """Report records that landed in the store since the last poll.

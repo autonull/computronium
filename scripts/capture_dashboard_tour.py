@@ -117,20 +117,27 @@ TOUR: tuple[Shot, ...] = (
     ),
     Shot("report-text.png", "the run's report, in a terminal"),
     Shot("figure-seed-violins.png", "the seed violins: the spread, as a figure"),
+    Shot("dashboard-timeline.png", "the timeline: the run's stages, and their time"),
+    Shot("dashboard-ledger.png", "the ledger: every arm, and where it stands"),
+    Shot("dashboard-contrast.png", "the contrast: the arms against one another"),
 )
 
 # The main view area, one shot per view. The space's shot is the map's: the
-# map is one of the views, and its picture is the tour's first one.
-VIEW_SHOTS: tuple[tuple[str, str], ...] = (
-    ("space", "dashboard-map.png"),
-    ("terrain", "dashboard-terrain.png"),
-    ("frontier", "dashboard-frontier.png"),
-    ("matrix", "dashboard-matrix.png"),
-    ("convergence", "dashboard-convergence.png"),
-    ("multiples", "dashboard-multiples.png"),
-    ("spread", "dashboard-spread.png"),
-    ("cost", "dashboard-claim-cost.png"),
-    ("uncertainty", "dashboard-uncertainty.png"),
+# map is one of the views, and its picture is the tour's first one. The key
+# is the one a reader presses to pick the view.
+VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
+    ("space", "dashboard-map.png", "1"),
+    ("terrain", "dashboard-terrain.png", "2"),
+    ("frontier", "dashboard-frontier.png", "3"),
+    ("matrix", "dashboard-matrix.png", "4"),
+    ("convergence", "dashboard-convergence.png", "5"),
+    ("multiples", "dashboard-multiples.png", "6"),
+    ("spread", "dashboard-spread.png", "7"),
+    ("cost", "dashboard-claim-cost.png", "8"),
+    ("uncertainty", "dashboard-uncertainty.png", "9"),
+    ("timeline", "dashboard-timeline.png", "t"),
+    ("ledger", "dashboard-ledger.png", "l"),
+    ("contrast", "dashboard-contrast.png", "d"),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels
@@ -557,13 +564,13 @@ class Tour:
     def views(self) -> None:
         """The main view area, one shot per view.
 
-        The view is a choice: the number keys pick it, the way a reader
-        would. Each view is a different kind of picture of the same run, and
-        the check that follows proves they are different pictures.
+        The view is a choice: the key picks it, the way a reader would. Each
+        view is a different kind of picture of the same run, and the check
+        that follows proves they are different pictures.
         """
         set_panels(self.page, False)
-        for index, (view_id, shot_name) in enumerate(VIEW_SHOTS[1:], start=2):
-            self.page.keyboard.press(str(index))
+        for view_id, shot_name, key in VIEW_SHOTS[1:]:
+            self.page.keyboard.press(key)
             try:
                 wait_for_view(self.page, view_id, self.timeout_ms)
             except Exception as exc:  # ruff: ignore[blind-except] - reported, not swallowed
@@ -587,7 +594,7 @@ class Tour:
         """
         shots = [
             (view_id, self.output_dir / shot_name)
-            for view_id, shot_name in VIEW_SHOTS
+            for view_id, shot_name, _key in VIEW_SHOTS
             if (self.output_dir / shot_name).exists()
         ]
         for (first_id, first), (second_id, second) in combinations(shots, 2):

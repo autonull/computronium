@@ -23,6 +23,7 @@ import {
   type GateThresholds,
   type RunMetrics,
 } from "../run-selection.js";
+import { router } from "../ws-client.js";
 
 /** The three axes the stage shows, and the three it holds. */
 export interface AxisSelection {
@@ -30,6 +31,118 @@ export interface AxisSelection {
   y: AxisName;
   z: AxisName;
 }
+
+/** One thing that happened, as the dashboard saw it. */
+export interface StageEvent {
+  stage: string;
+  message: string;
+  level: string;
+  sentence: string;
+  at: number;
+}
+
+/** One stage of the run, and the time it took. */
+export interface StageSpan {
+  stage: string;
+  action: string;
+  events: number;
+  first: number;
+  last: number;
+  offset: number;
+  duration: number;
+}
+
+/** The run's stages, as they happened. */
+export interface RunTimeline {
+  run_id: string | null;
+  start: number;
+  seconds: number;
+  events: StageEvent[];
+  stages: StageSpan[];
+}
+
+/** One arm of the run, with its evidence and the gate's standing on it. */
+export interface LedgerArm {
+  axis: string;
+  value: string;
+  mean: number;
+  sd: number;
+  n: number;
+  cells: number;
+  verdict: string;
+}
+
+/** An axis that did not vary: one value, and the whole run behind it. */
+export interface FixedAxis {
+  axis: string;
+  value: string;
+  mean: number;
+  n: number;
+  cells: number;
+}
+
+/** What the run can say. */
+export interface Ledger {
+  run_id: string;
+  metric: string;
+  claims: LedgerArm[];
+  fixed: FixedAxis[];
+  /** How many arms stand each way: the ledger's headline. */
+  standings: Record<string, number>;
+  limitations: { kind: string; detail: string; count: number }[];
+  significance: string;
+  min_seeds: number;
+  chance: number | null;
+}
+
+/** One arm, as the contrast sees it. */
+export interface ContrastArm {
+  value: string;
+  mean: number;
+  sd: number;
+  n: number;
+  cells: number;
+}
+
+/** One pair of arms, and what separates them. */
+export interface ContrastPair {
+  a: string;
+  b: string;
+  difference: number | null;
+  shared_cells: number;
+}
+
+/** The test the run could or could not run. */
+export interface ContrastTest {
+  tested: boolean;
+  significant: boolean;
+  p_value: number | null;
+  ci_lower: number | null;
+  ci_upper: number | null;
+  cohens_dz: number | null;
+  mean_diff: number | null;
+  shared_cells: number;
+  required_cells: number;
+  alpha: number;
+}
+
+/** The run's arms against one another. */
+export interface Contrast {
+  run_id: string;
+  axis: string;
+  metric: string;
+  arms: ContrastArm[];
+  pairs: ContrastPair[];
+  test: ContrastTest;
+}
+
+/** The run's account of itself: what it can say, and how it compares. */
+export interface RunAccount {
+  run_id: string;
+  ledger: Ledger;
+  contrast: Contrast;
+}
+
 
 /** What the run measured at one cell, folded over its seeds. */
 export interface CellAggregate {
@@ -44,7 +157,7 @@ export interface CellAggregate {
 }
 
 /** What changed, so a view knows how much of itself to redraw. */
-export type StageChange = "axes" | "space" | "evidence";
+export type StageChange = "axes" | "space" | "evidence" | "events";
 
 export function cellKey(x: string, y: string, z: string): string {
   return `${x}|${y}|${z}`;
@@ -226,8 +339,18 @@ class StageState {
   requiredSeeds = 0;
   /** The gate's thresholds: the rules a claim is measured against. */
   gate: GateThresholds | null = null;
+  /** The run's stages, as they happened. */
+  timeline: RunTimeline | null = null;
+  /** The run's account of itself: what it can say, and how it compares. */
+  account: RunAccount | null = null;
   /** What the space was last asked for, so it is only asked again when it changes. */
   private spaceRequest = "";
+  /** What the account was last asked for: the run, and how much it measured. */
+  private accountRequest = "";
+  /** The run the timeline belongs to, and whether it is out of date. */
+  private timelineRun = "";
+  private timelineStale = true;
+  private timelineTimer: number | null = null;
   private listeners: ((change: StageChange) => void)[] = [];
 
   constructor() {
@@ -236,6 +359,9 @@ class StageState {
     runSelection.onChange((runId, metrics) => {
       void this.absorb(runId, metrics);
     });
+    // A live event means the run's story has moved: the timeline is read
+    // again, a moment after the burst.
+    router.register("pipeline_event", () => this.scheduleTimeline());
   }
 
   onChange(listener: (change: StageChange) => void): void {
@@ -265,6 +391,8 @@ class StageState {
     }
     this.recomputeEvidence();
     await this.syncSpace();
+    void this.syncAccount();
+    void this.syncTimeline();
   }
 
   /** The axes the reader picked: another slice of the same space. */
@@ -321,6 +449,69 @@ class StageState {
       console.warn("[StageState] The space could not be read", error);
       return null;
     }
+  }
+
+  /** The run's account: what it can say, and how its arms compare. */
+  async syncAccount(): Promise<void> {
+    if (!this.runId) {
+      this.account = null;
+      this.accountRequest = "";
+      return;
+    }
+    const measured = this.metrics?.records?.length ?? 0;
+    const request = `${this.runId}|${measured}`;
+    if (request === this.accountRequest) return;
+
+    try {
+      const response = await fetch(
+        `/api/runs/${encodeURIComponent(this.runId)}/account`,
+      );
+      if (!response.ok) {
+        console.warn("[StageState] The account was refused", response.status);
+        return;
+      }
+      this.account = (await response.json()) as RunAccount;
+      this.accountRequest = request;
+      this.notify("evidence");
+    } catch (error) {
+      console.warn("[StageState] The account could not be read", error);
+    }
+  }
+
+  /** The run's stages, as they happened. */
+  async syncTimeline(): Promise<void> {
+    if (!this.runId) {
+      this.timeline = null;
+      this.timelineRun = "";
+      return;
+    }
+    if (!this.timelineStale && this.timelineRun === this.runId) return;
+
+    try {
+      const response = await fetch(
+        `/api/events?run_id=${encodeURIComponent(this.runId)}`,
+      );
+      if (!response.ok) {
+        console.warn("[StageState] The timeline was refused", response.status);
+        return;
+      }
+      this.timeline = (await response.json()) as RunTimeline;
+      this.timelineRun = this.runId;
+      this.timelineStale = false;
+      this.notify("events");
+    } catch (error) {
+      console.warn("[StageState] The timeline could not be read", error);
+    }
+  }
+
+  /** A live event: the run's story has moved, so the timeline is read again. */
+  private scheduleTimeline(): void {
+    this.timelineStale = true;
+    if (this.timelineTimer !== null) return;
+    this.timelineTimer = window.setTimeout(() => {
+      this.timelineTimer = null;
+      void this.syncTimeline();
+    }, 300);
   }
 }
 

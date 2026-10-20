@@ -57,7 +57,7 @@ Open <http://localhost:8080> in a browser.
 ## The Stage (the main view area)
 
 The canvas is a **stage**, and a view is what stands on it. The discovery map
-is one view; the stage can show nine.
+is one view; the stage can show twelve.
 
 | Key | View | The picture | What a reader would say |
 |-----|------|-------------|------------------------|
@@ -70,10 +70,15 @@ is one view; the stage can show nine.
 | `7` | **The spread** | one violin per arm, across its seeds; the seeds a claim still needs written under it | "this arm is wide, and that is why the claim is not made" |
 | `8` | **The claim's cost** | the seeds each cell measured against the seeds a claim needs, with the gap | "the claim is 236 seeds short over four cells" |
 | `9` | **The uncertainty** | each cell's mean and the margin the gate asks for, against the chance level | "which cells are separable from chance, and which are not yet" |
+| `T` | **The timeline** | the run's stages, one lane each, and the time each held it; the longest silence is named | "the run trained for 43 seconds and measured nothing until the end" |
+| `L` | **The ledger** | every arm the run measured, its evidence, and the gate's standing on it; the report's limitations and its test beneath | "nothing here is a claim yet, and the report says why" |
+| `D` | **The contrast** | the arms against one another, over the cells they share, with the test's verdict | "pepita beat random_projections by 0.44, on one shared cell" |
 
-`V` cycles the views; the number keys pick one. The **View** selector in the
-legend names the view where it is chosen, and the legend's title is the view's
-name, so the picture says what it is.
+`V` cycles the views; the number keys pick the first nine, and a view that
+does not fit in the numbers has a letter of its own (`src/keys.ts` holds the
+keys the panels and the charts already own, so a view cannot steal one). The
+**View** selector in the legend names the view where it is chosen, and the
+legend's title is the view's name, so the picture says what it is.
 
 **The views share one picture of the run.** `src/stage/state.ts` holds the run
 the dashboard shows, the axes the reader picked, the space the backend declares
@@ -88,10 +93,10 @@ the frontier free their meshes, and the flat views share one canvas that
 is hidden when none of them is on.
 
 **The flat views do not need three.js.** The matrix, the convergence, the
-small multiples, the spread, the claim's cost and the uncertainty are drawn
-on a 2D canvas over the stage (`src/stage/canvas2d.ts`), in the part of the
-window the panels leave free. What they share with the 3D views is the
-switcher, the data and the tour shot.
+small multiples, the spread, the claim's cost, the uncertainty, the timeline,
+the ledger and the contrast are drawn on a 2D canvas over the stage
+(`src/stage/canvas2d.ts`), in the part of the window the panels leave free.
+What they share with the 3D views is the switcher, the data and the tour shot.
 
 **The rules a claim is measured against travel with the run.** The margin the
 statistical gate asks for, the seeds a claim needs and the confidence level
@@ -99,6 +104,22 @@ are the gate's, and the gate is on the server: the metrics payload carries
 them under `gate` (`GateThresholds().to_dict()`), and the browser draws what
 it is given. A view that measured the run against a margin of its own would
 be measuring a different run from the one the report describes.
+
+**The ledger and the contrast ask the server for the run's account.**
+`GET /api/runs/{run_id}/account` returns both: the ledger (every arm, its
+evidence, the gate's standing on it, the report's limitations and the
+report's own significance line) and the contrast (the arms of the axis that
+spread widest on the run's objective, the pairs between them, and the
+paired test's verdict with the coverage that decided it). The rules — the
+seed floor, the shared-cell floor, the significance test itself — are the
+report's and the gate's, and they are on the server
+(`src/stage/ledger.py` is a thin reader of them).
+
+**The timeline is the run this dashboard watched.** The events are
+process-local, so `GET /api/events?run_id=` is the history of the run the
+server saw: one lane per stage, in the order the run reached it, with the
+events it left on the clock. A run that happened in another process has no
+timeline here, and the view says so rather than inventing one.
 
 ---
 
@@ -378,19 +399,45 @@ knowing the interface.
 
 ---
 
+## The Run's Account (what it can say, and how it compares)
+
+```bash
+curl -s localhost:8080/api/runs/<run_id>/account | python -m json.tool
+curl -s "localhost:8080/api/events?run_id=<run_id>" | python -m json.tool
+```
+
+| Endpoint | What it holds |
+|----------|---------------|
+| `GET /api/runs/{run_id}/account` | `ledger` — every arm the run measured, its evidence, the gate's standing on it (`PASSED`, `INSUFFICIENT`, `REJECTED`), the axes that did not vary, the report's limitations and the report's own significance line; and `contrast` — the arms of the axis that spread widest on the run's objective, the pairs between them with the cells they share, and the paired test's verdict |
+| `GET /api/events?run_id=` | the run's stages, as they happened: `stages` (one per stage, with its first and last word and its reach), `events` (every event, with its sentence), and the run's span in seconds |
+
+Both are what the stage's ledger, contrast and timeline draw, so an agent can
+read the same three pictures as text. The events are process-local: this is the
+run *this dashboard watched*.
+
+---
+
 ## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
 | `1`–`9` | Pick a view of the stage: space, terrain, frontier, matrix, convergence, small multiples, spread, the claim's cost, the uncertainty |
+| `T` | The timeline |
+| `L` | The ledger |
+| `D` | The contrast |
 | `V` | Cycle the views |
 | `P` | Switch to Pareto tab |
 | `A` | Switch to Ablation tab |
 | `S` | Switch to Variability tab |
 | `H` | Toggle HUD visibility |
-| `L` | Toggle Live Rail visibility |
+| `R` | Toggle Live Rail visibility |
 | `C` | Toggle Caption visibility |
 | `Escape` | Close the Cell Drawer |
+
+The stage's views are the main view area, so they hold the first claim on a
+key: the live rail moved from `L` to `R` to leave `L` to the ledger. The
+keys everything else owns live in `src/keys.ts`, and a view that claims one of
+them is refused.
 
 ---
 
@@ -531,7 +578,9 @@ Single source: `scripts/generate_palette.py` → generates:
 2. Read the run, the axes, the space and the records from `stageState`
    (`src/stage/state.ts`) — never from a second source
 3. Register the view in `src/stage/switcher.ts`: it takes a number key, a
-   name and a caption
+   name and a caption. A view that does not fit in the first nine declares a
+   letter of its own (`key = "t"`); the keys the panels and the charts hold
+   are in `src/keys.ts`, and a view that claims one of them is refused
 4. Add a shot of it to the tour (`scripts/capture_dashboard_tour.py`) — the
    tour checks that the views are different pictures of one another
 
@@ -631,12 +680,12 @@ The screenshot is embedded in `docs/readme/title.md` and appears on the README f
 ## The Tour (every view of the system)
 
 ```bash
-# Twenty-one views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+# Twenty-four views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
 uv run python scripts/capture_dashboard_tour.py
 ```
 
 One store, one dashboard, one browser: the tour takes the whole system in
-twenty-one pictures, and the pictures are of *different things*, not of the same
+twenty-four pictures, and the pictures are of *different things*, not of the same
 scene from different angles.
 
 | Shot | What it shows |
@@ -651,6 +700,9 @@ scene from different angles.
 | `dashboard-spread.png` | the spread: one violin per arm |
 | `dashboard-claim-cost.png` | the claim's cost: the seeds a claim still needs |
 | `dashboard-uncertainty.png` | the uncertainty: each cell's margin |
+| `dashboard-timeline.png` | the timeline: the run's stages, and the silence between them |
+| `dashboard-ledger.png` | the ledger: every arm, its evidence, and where it stands |
+| `dashboard-contrast.png` | the contrast: the arms against one another, and the test |
 | `dashboard-cell.png` | the leading cell's drawer: its accuracy, its curve, its verdict, the seeds it still owes |
 | `dashboard-void.png` | a cell the system refuses, in a slice of the space cut a different way, and the rule that refuses it |
 | `dashboard-pareto.png` | the Pareto chart |
@@ -674,7 +726,8 @@ it before it is written.
 the browser decodes each pair of the stage's shots and reports the share of
 the pixels that differ, and a pair that is too alike fails the tour. The map
 was the same picture in every frame once; the check is what stopped it from
-being the same picture again.
+being the same picture again. The floor is 2 %; the measured spread over the
+twelve views is 2.7 % to 29.7 %.
 
 **A figure is a third kind of frame.** A page in the browser and a terminal
 window cover the dashboard and the report; a *figure* — a PNG the system drew

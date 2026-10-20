@@ -14,6 +14,8 @@ export interface StageView {
   name: string;
   /** What a reader would say after looking at it. */
   caption: string;
+  /** The key that picks this view, when it has one of its own. */
+  key?: string;
   /** Put the view on the stage. */
   enter(): void;
   /** Take the view off the stage: nothing of it may remain. */

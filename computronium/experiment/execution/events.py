@@ -5,16 +5,24 @@ publish API: producers own the vocabulary, consumers only format.
 
 Events are process-local and best-effort. A subscriber that raises is logged
 and skipped — it must never fail the run that produced the event.
+
+An event carries its time twice: as the ISO string a reader sees, and as the
+epoch seconds a picture measures. The string has no timezone, so a browser
+would have to guess where it was written; the epoch does not need guessing.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +55,7 @@ class PipelineEvent:
     run_id: str | None = None
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     detail: dict[str, Any] = field(default_factory=dict)
+    at: float = field(default_factory=time.time)
 
     def to_message(self) -> dict[str, Any]:
         """The dashboard payload for this event."""
@@ -58,7 +67,69 @@ class PipelineEvent:
             "run_id": self.run_id,
             "timestamp": self.timestamp,
             "detail": self.detail,
+            "at": self.at,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class StageSpan:
+    """One stage of a run, and the time it took.
+
+    Attributes:
+        stage: The stage's id, as the pipeline names it.
+        action: What the stage does, in words.
+        events: How many times the stage spoke.
+        first: When it first spoke, in epoch seconds.
+        last: When it last spoke, in epoch seconds.
+        offset: Seconds from the run's first event to this stage's first.
+        duration: Seconds from this stage's first event to its last.
+    """
+
+    stage: str
+    action: str
+    events: int
+    first: float
+    last: float
+    offset: float
+    duration: float
+
+
+def stage_spans(events: Sequence[Mapping[str, Any]]) -> tuple[StageSpan, ...]:
+    """The stages a run went through, in the order it reached them.
+
+    A stage that spoke more than once — a second round, a second batch — is
+    one span with a longer reach: the timeline is about the run's shape, not
+    about every sentence it said.
+
+    Args:
+        events: The event frames, in the order they arrived.
+
+    Returns:
+        One span per stage, in the order the stages first spoke.
+    """
+    spoken: dict[str, list[float]] = {}
+    for event in events:
+        stage = str(event.get("stage") or "")
+        at = event.get("at")
+        if not stage or not isinstance(at, int | float) or isinstance(at, bool):
+            continue
+        spoken.setdefault(stage, []).append(float(at))
+    if not spoken:
+        return ()
+
+    start = min(times[0] for times in spoken.values())
+    return tuple(
+        StageSpan(
+            stage=stage,
+            action=STAGE_ACTIONS.get(stage, stage),
+            events=len(times),
+            first=min(times),
+            last=max(times),
+            offset=min(times) - start,
+            duration=max(times) - min(times),
+        )
+        for stage, times in spoken.items()
+    )
 
 
 EventListener = Callable[[PipelineEvent], None]
@@ -136,7 +207,9 @@ __all__ = [
     "EventListener",
     "PipelineEvent",
     "PipelineEventBus",
+    "StageSpan",
     "get_event_bus",
     "publish_event",
     "set_event_bus",
+    "stage_spans",
 ]

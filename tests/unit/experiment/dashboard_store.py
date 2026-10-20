@@ -67,11 +67,16 @@ def demo_spec() -> RunSpec:
     )
 
 
-def demo_record(run_id: str, val_acc: float, seed: int) -> Record:
+def demo_record(
+    run_id: str,
+    val_acc: float,
+    seed: int,
+    credit: str = "gradient",
+) -> Record:
     """One measurement of the demo's cell."""
     return Record.create(
         run_id=run_id,
-        coordinate=Coordinate(**COORDINATE, params={}),
+        coordinate=Coordinate(**{**COORDINATE, "credit": credit}, params={}),
         schedule=Schedule(
             fidelity="L1",
             seed=seed,

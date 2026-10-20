@@ -2,20 +2,25 @@
 
     The canvas is a stage, and a view is what stands on it. The switcher is
     what turns "a picture" into "a canvas that can show more than one thing":
-    a key that cycles the views, the number keys that pick one, and a
-    selector in the legend, so the choice is visible where it is made.
+    a key that cycles the views, the number keys that pick one, a letter for
+    the views that do not fit in the numbers, and a selector in the legend,
+    so the choice is visible where it is made.
 */
 
 import { registry } from "../components/registry.js";
 import { discoveryMap } from "../discovery-map.js";
+import { CYCLE_KEY, RESERVED_KEYS } from "../keys.js";
 import { ClaimCostView } from "./claim-cost.js";
+import { ContrastView } from "./contrast.js";
 import { ConvergenceView } from "./convergence.js";
 import { FrontierView } from "./frontier.js";
+import { LedgerView } from "./ledger.js";
 import { MatrixView } from "./matrix.js";
 import { SmallMultiplesView } from "./small-multiples.js";
 import { SpreadView } from "./spread.js";
 import { stageState, type StageChange } from "./state.js";
 import { TerrainView } from "./terrain.js";
+import { TimelineView } from "./timeline.js";
 import { UncertaintyView } from "./uncertainty.js";
 import type { StageView } from "./views.js";
 import type { Component } from "../components/registry.js";
@@ -52,6 +57,10 @@ export class ViewSwitcher implements Component {
   private selector: HTMLSelectElement | null = null;
   private captionElement: HTMLElement | null = null;
   private section: HTMLElement | null = null;
+  /** The key that picks each view: the numbers first, then the letters. */
+  private keys = new Map<string, StageView>();
+  /** The key each view is picked by, so the legend can name it. */
+  private keyOf = new Map<string, string>();
 
   constructor() {
     this.views = [
@@ -64,12 +73,16 @@ export class ViewSwitcher implements Component {
       new SpreadView(),
       new ClaimCostView(),
       new UncertaintyView(),
+      new TimelineView(),
+      new LedgerView(),
+      new ContrastView(),
     ];
   }
 
   async init(): Promise<void> {
     window.addEventListener("keydown", this.onKeyDown);
     stageState.onChange((change) => this.active?.refresh(change));
+    this.buildKeys();
     this.buildSection();
     this.attachSection();
     this.show(this.views[0].id);
@@ -106,7 +119,7 @@ export class ViewSwitcher implements Component {
     this.updateLegend();
   }
 
-  /** The next view, in the order the number keys pick them. */
+  /** The next view, in the order they are listed. */
   cycle(): void {
     if (this.views.length === 0) return;
     const index = this.views.findIndex((view) => view === this.active);
@@ -125,15 +138,61 @@ export class ViewSwitcher implements Component {
     }
 
     const key = event.key.toLowerCase();
-    if (key === "v") {
+    if (key === CYCLE_KEY) {
       this.cycle();
       return;
     }
-    const index = Number.parseInt(event.key, 10) - 1;
-    if (!Number.isNaN(index) && index >= 0 && index < this.views.length) {
-      this.show(this.views[index].id);
+    const view = this.keys.get(key);
+    if (view) {
+      this.show(view.id);
     }
   };
+
+  /** The key that picks each view: the numbers first, then the letters.
+
+    A view may name a key of its own, but not one another part of the
+    dashboard already holds.
+  */
+  private buildKeys(): void {
+    this.keys.clear();
+    this.keyOf.clear();
+    this.views.forEach((view, index) => {
+      const digit = index < 9 ? String(index + 1) : "";
+      if (digit) {
+        this.keys.set(digit, view);
+        this.keyOf.set(view.id, digit);
+      }
+      if (view.key && !RESERVED_KEYS.has(view.key)) {
+        this.keys.set(view.key, view);
+        this.keyOf.set(view.id, view.key);
+      }
+    });
+  }
+
+  /** The name of a view, and the key that picks it. */
+  private optionLabel(view: StageView): string {
+    const key = this.keyOf.get(view.id);
+    return key ? `${key.toUpperCase()} · ${view.name}` : view.name;
+  }
+
+  /** The keys the reader can press, as the legend names them. */
+  private keyHint(): string {
+    const digits: string[] = [];
+    const letters: string[] = [];
+    this.views.forEach((view, index) => {
+      if (index < 9) {
+        digits.push(String(index + 1));
+        return;
+      }
+      if (view.key && !RESERVED_KEYS.has(view.key)) {
+        letters.push(view.key.toUpperCase());
+      }
+    });
+    const parts = ["V cycles"];
+    if (digits.length > 0) parts.push(`${digits[0]}–${digits[digits.length - 1]} pick`);
+    if (letters.length > 0) parts.push(`${letters.join(" ")} pick`);
+    return parts.join(" · ");
+  }
 
   /** The selector, and what the active view says about itself. */
   private buildSection(): void {
@@ -160,7 +219,7 @@ export class ViewSwitcher implements Component {
     this.views.forEach((view) => {
       const option = document.createElement("option");
       option.value = view.id;
-      option.textContent = view.name;
+      option.textContent = this.optionLabel(view);
       select.appendChild(option);
     });
     select.addEventListener("change", () => this.show(select.value));
@@ -175,7 +234,7 @@ export class ViewSwitcher implements Component {
     this.captionElement = caption;
 
     const keys = document.createElement("div");
-    keys.textContent = `V cycles · 1–${this.views.length} pick`;
+    keys.textContent = this.keyHint();
     keys.style.cssText = "font-size: 10px; color: var(--text-muted); margin-top: 6px;";
     section.appendChild(keys);
 

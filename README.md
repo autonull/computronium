@@ -826,7 +826,8 @@ uv run comp run demo --store experiment.duckdb     # a campaign to watch
 | ![A void cell](docs/readme/assets/dashboard-void.png) | ![The Pareto chart](docs/readme/assets/dashboard-pareto.png) | ![The caption](docs/readme/assets/dashboard-caption.png) |
 
 The canvas is a stage, and the view is a choice: `V` cycles the views, the
-number keys pick one, and the legend names the view that is on. The same run,
+number keys pick one — and a view that does not fit in the numbers has a
+letter of its own — and the legend names the view that is on. The same run,
 drawn four ways — a heightfield, a frontier, a table and a family of curves:
 
 | The terrain | The frontier | The evidence matrix | The convergence |
@@ -840,6 +841,13 @@ around each mean:
 | The small multiples | The spread | The claim's cost | The uncertainty |
 |---|---|---|---|
 | ![The small multiples](docs/readme/assets/dashboard-multiples.png) | ![The spread](docs/readme/assets/dashboard-spread.png) | ![The claim's cost](docs/readme/assets/dashboard-claim-cost.png) | ![The uncertainty](docs/readme/assets/dashboard-uncertainty.png) |
+
+And the run as a process, and as a judgement — the time it took, what it can
+say, and how its arms compare:
+
+| The timeline | The ledger | The contrast |
+|---|---|---|
+| ![The timeline](docs/readme/assets/dashboard-timeline.png) | ![The ledger](docs/readme/assets/dashboard-ledger.png) | ![The contrast](docs/readme/assets/dashboard-contrast.png) |
 
 The same run, told three other ways — as a report in the browser, as the
 console dashboard in a terminal, and as the dashboard's own account of itself:

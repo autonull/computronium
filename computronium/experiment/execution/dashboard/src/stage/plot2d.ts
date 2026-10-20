@@ -171,6 +171,33 @@ export function drawFrame(
   return frame;
 }
 
+/** Break a sentence into lines that fit the width it has.
+
+    The other label helper breaks a name at its underscores, which is right for
+    a cell and wrong for a sentence: a limitation is prose, and prose breaks
+    at its spaces.
+*/
+export function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.split(/\s+/).filter((word) => word.length > 0);
+  const lines: string[] = [];
+  let current = "";
+  words.forEach((word) => {
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && ctx.measureText(candidate).width > maxWidth) {
+      lines.push(current);
+      current = word;
+      return;
+    }
+    current = candidate;
+  });
+  if (current) lines.push(current);
+  return lines;
+}
+
 /** A line of text under the picture: what the reader is looking at. */
 export function drawNote(
   ctx: CanvasRenderingContext2D,

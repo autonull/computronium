@@ -12,6 +12,7 @@ import { caption } from "./caption.js";
 import { hud } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
 import { PALETTE } from "./palette.js";
+import { PANEL_KEYS, TAB_KEYS } from "./keys.js";
 import { detectRenderProfile } from "./render-profile.js";
 
 // Global error handler
@@ -137,23 +138,21 @@ wsClient.waitForConnection(15000).then((connected) => {
 
 // Keyboard shortcuts: the charts, the panels, and the drawer.
 // The number keys belong to the stage's views (V cycles them); the charts
-// are picked by the letters that name them.
-const TAB_KEYS: Record<string, string> = {
-  "p": "pareto",
-  "a": "ablation",
-  "s": "variability",
-};
+// are picked by the letters that name them, and the panels by their own.
+const TAB_BY_KEY = new Map<string, string>(
+  Object.entries(TAB_KEYS).map(([name, key]) => [key, name]),
+);
 window.addEventListener("keydown", (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
-  const tab = TAB_KEYS[event.key];
+  const key = event.key.toLowerCase();
+  const tab = TAB_BY_KEY.get(key);
   if (tab) {
     plotter.showTab(tab);
     return;
   }
-  const key = event.key.toLowerCase();
-  if (key === "h") hud.toggle();
-  if (key === "l") liveRail.toggle();
-  if (key === "c") caption.toggle();
+  if (key === PANEL_KEYS.hud) hud.toggle();
+  if (key === PANEL_KEYS.rail) liveRail.toggle();
+  if (key === PANEL_KEYS.caption) caption.toggle();
 });
 
 // Three.js scene setup (shared by DiscoveryMap and HUD)
