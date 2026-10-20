@@ -38,7 +38,13 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class CampaignRun:
-    """A single run within a campaign."""
+    """A single run within a campaign.
+
+    ``run_id`` names the run this campaign writes into. A campaign that does
+    not name one starts a new run; one that does continues that run, so the
+    seeds it measures join the evidence the run already holds instead of
+    landing beside it in a run of its own.
+    """
 
     name: str
     profile: str | None = None
@@ -47,6 +53,7 @@ class CampaignRun:
     depends_on: list[int] = field(default_factory=list)
     device: str = "auto"
     store: str = "experiment.duckdb"
+    run_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,15 +139,19 @@ class CampaignRunner:
         start_time = time.time()
 
         spec = self._build_run_spec(run)
-        exit_code = await self._run_pipeline_with_lock(spec)
+        exit_code = await self._run_pipeline_with_lock(spec, run.run_id)
         elapsed = time.time() - start_time
 
         return self._make_result(run_idx, exit_code, elapsed)
 
-    async def _run_pipeline_with_lock(self, spec: RunSpec) -> int:
+    async def _run_pipeline_with_lock(
+        self,
+        spec: RunSpec,
+        run_id: str | None = None,
+    ) -> int:
         """Run pipeline with store lock."""
         async with self._store_lock:
-            return await self._run_pipeline(spec)
+            return await self._run_pipeline(spec, run_id)
 
     def _make_result(
         self, run_idx: int, exit_code: int, elapsed: float
@@ -154,15 +165,22 @@ class CampaignRunner:
             "elapsed_s": elapsed,
         }
 
-    async def _run_pipeline(self, spec: RunSpec) -> int:
+    async def _run_pipeline(self, spec: RunSpec, run_id: str | None = None) -> int:
         """Run the pipeline for a spec directly.
 
         Uses hard deadline enforcement instead of predicted budget.
+
+        A ``run_id`` continues that run: the declaration is rewritten to the
+        one this launch runs under, and the seeds the store already holds are
+        skipped seed by seed, so the launch measures only what is left.
         """
         policy_name = spec.policy or "round_robin_grid"
 
         with RecordStore(StoreConfig(path=Path(self.spec.store))) as store:
-            run_id = store.create_run(spec=spec)
+            if run_id is None:
+                run_id = store.create_run(spec=spec)
+            else:
+                store.update_run_spec(run_id, spec)
             logger.info("Run ID: %s", run_id)
 
             deadline = (
@@ -426,6 +444,7 @@ def load_campaign(path: str | Path) -> CampaignSpec:
                 depends_on=run_data.get("depends_on", []),
                 device=run_data.get("device", "auto"),
                 store=run_data.get("store", data.get("store", "experiment.duckdb")),
+                run_id=run_data.get("run_id"),
             )
         )
 
@@ -479,6 +498,7 @@ async def run_campaign(
                     depends_on=run.depends_on,
                     device=device or run.device,
                     store=run.store,
+                    run_id=run.run_id,
                 )
             )
         spec = CampaignSpec(

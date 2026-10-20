@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import shutil
+import tempfile
+import uuid
 from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -18,8 +22,25 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ConfigDict, Field
 
 from computronium.experiment.evidence.serializers import serializer
+from computronium.experiment.execution.dashboard.actions import (
+    KIND_CONFIRMATION,
+    KIND_QUEST,
+    ActionUnavailableError,
+    CellTarget,
+    cell_evidence,
+    claim_sentence,
+    default_metric,
+    records_for_cell,
+    registration_name,
+    registration_payload,
+    replication_budget,
+    replication_spec,
+    run_spread,
+    write_registration,
+)
 from computronium.experiment.execution.events import (
     PipelineEvent,
     get_event_bus,
@@ -33,6 +54,7 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.campaign_queue import (
         CampaignQueue,
     )
+    from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
@@ -41,20 +63,58 @@ logger = logging.getLogger(__name__)
 PARETO_OBJECTIVES = ("validation_accuracy", "walltime_total")
 
 
+class CellAction(BaseModel):
+    """What the dashboard asks for when it acts on a cell."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    coordinate: dict[str, str]
+    seeds: int | None = Field(default=None, gt=0)
+    threshold: float | None = None
+    alpha: float | None = Field(default=None, gt=0.0, lt=1.0)
+    min_seeds: int | None = Field(default=None, gt=0)
+
+
+@dataclass(frozen=True, slots=True)
+class ActionResult:
+    """What an action did."""
+
+    payload: dict[str, Any]
+    status_code: int = 200
+
+
+@dataclass(frozen=True, slots=True)
+class CellContext:
+    """Everything an action needs to know about one cell."""
+
+    source: RunSpec
+    target: CellTarget
+    records: list[Record]
+    run_records: list[Record]
+    metric: str
+    task_id: str
+    chance: float | None
+    required_seeds: int
+    alpha: float
+
+
 def run_status(
     spec: RunSpec | None,
     run_id: str,
     claim_metrics: tuple[str, ...] = (),
+    started_at: datetime | None = None,
 ) -> dict[str, Any]:
     """What the run declares, and whether its claim is preregistered.
 
     A metric carrying a threshold in ``configs/preregistrations/`` is a
     confirmatory one; every other claim is exploratory. The dashboard reports
-    which, rather than asserting a status the run never declared.
+    which, rather than asserting a status the run never declared. Only a
+    threshold written before the run began counts: one written afterwards was
+    written with the run's own data in hand.
     """
     from computronium.experiment.surface.report import preregistered_metrics
 
-    registered = preregistered_metrics()
+    registered = preregistered_metrics(started_at)
     mode = (
         "PREREGISTERED"
         if claim_metrics and all(metric in registered for metric in claim_metrics)
@@ -85,6 +145,7 @@ class DashboardConfig:
     template_dir: Path | None = None
     static_dir: Path | None = None
     read_only: bool = True  # Dashboard never writes: avoids DuckDB lock contention
+    registration_dir: Path | None = None  # where the dashboard writes registrations
 
 
 class WebDashboard:
@@ -109,6 +170,7 @@ class WebDashboard:
         self._run_record_counts: dict[str, int] = {}
         self._reported_runs: set[str] = set()
         self._event_history: deque[dict[str, Any]] = deque(maxlen=200)
+        self._work_dir: Path | None = None
         self._setup_routes()
         self._setup_templates()
 
@@ -191,6 +253,30 @@ class WebDashboard:
                 "success": False,
                 "error": "No campaign queue configured",
             })
+
+        @self.app.post("/api/cells/{run_id}/replicate")
+        async def api_replicate_cell(
+            run_id: str,
+            body: CellAction,
+        ) -> JSONResponse:
+            result = await self._replicate_cell(run_id, body)
+            return JSONResponse(result.payload, status_code=result.status_code)
+
+        @self.app.post("/api/cells/{run_id}/preregister")
+        async def api_preregister_cell(
+            run_id: str,
+            body: CellAction,
+        ) -> JSONResponse:
+            result = await self._preregister_cell(run_id, body)
+            return JSONResponse(result.payload, status_code=result.status_code)
+
+        @self.app.post("/api/cells/{run_id}/quest")
+        async def api_adopt_quest(
+            run_id: str,
+            body: CellAction,
+        ) -> JSONResponse:
+            result = await self._adopt_quest(run_id, body)
+            return JSONResponse(result.payload, status_code=result.status_code)
 
     async def _get_status(self) -> dict[str, Any]:
         """Get overall dashboard status."""
@@ -461,12 +547,280 @@ class WebDashboard:
                     "required_seeds": GateThresholds().required_seeds_per_group,
                     "resources": resources,
                     "run": run_status(
-                        run.spec if run else None, campaign_id, claim_metrics
+                        run.spec if run else None,
+                        campaign_id,
+                        claim_metrics,
+                        run.started_at if run else None,
                     ),
                 }
         except Exception as e:
             logger.exception("Error fetching detailed campaign metrics")
             return {"error": str(e)}
+
+    def _cell_context(self, run_id: str, body: CellAction) -> CellContext:
+        """Everything an action needs to know about one cell.
+
+        Raises:
+            ActionUnavailableError: The store is not attached, or the run is not
+                in it.
+        """
+        from computronium.experiment.execution.statistical_promotion import (
+            GateThresholds,
+        )
+        from computronium.experiment.surface.report import (
+            ReportGenerator,
+            chance_level,
+        )
+
+        if not self.config.store_path:
+            raise ActionUnavailableError("no store path configured")
+
+        with self._readable_store() as store:
+            info = store.query_run(run_id)
+            if info is None or info.spec is None:
+                raise ActionUnavailableError(f"run {run_id} is not in the store")
+            source = info.spec
+            run_records = list(store.query_records(run_id=run_id))
+            metrics = ReportGenerator(store).claim_metrics(run_id)
+
+        metric = metrics[0] if metrics else default_metric()
+        target = CellTarget(run_id=run_id, coordinate=body.coordinate)
+        records = records_for_cell(run_records, target.coordinate)
+        task_id = records[0].schedule.task_id if records else ""
+        gate = GateThresholds()
+
+        return CellContext(
+            source=source,
+            target=target,
+            records=records,
+            run_records=run_records,
+            metric=metric,
+            task_id=task_id,
+            chance=chance_level(task_id or None, metric),
+            required_seeds=gate.required_seeds_per_group,
+            alpha=gate.alpha,
+        )
+
+    async def _replicate_cell(self, run_id: str, body: CellAction) -> ActionResult:
+        """Queue the measurements a cell still owes."""
+        from computronium.experiment.execution.campaign import (
+            CampaignRun,
+            CampaignSpec,
+        )
+
+        queue = self.config.campaign_queue
+        if queue is None:
+            return ActionResult(
+                {"error": "no campaign queue is attached to this dashboard"},
+                status_code=409,
+            )
+
+        try:
+            context = self._cell_context(run_id, body)
+        except ActionUnavailableError as exc:
+            return ActionResult({"error": str(exc)}, status_code=409)
+
+        measured = len(context.records)
+        missing = max(0, context.required_seeds - measured)
+        seeds = body.seeds or missing
+        if seeds <= 0:
+            return ActionResult(
+                {"error": "the cell already holds the seeds a claim asks for"},
+                status_code=409,
+            )
+
+        plan = context.source.n_seeds + seeds
+        measurements = plan - measured
+        per_seed = self._per_seed_seconds(context)
+        budget = replication_budget(per_seed, measurements)
+
+        spec = replication_spec(
+            context.source,
+            context.target,
+            plan=plan,
+            budget_seconds=budget,
+        )
+        spec_path = self._write_spec(spec)
+
+        campaign = CampaignSpec(
+            name=f"replicate-{context.target.slug()}",
+            runs=[
+                CampaignRun(
+                    name=f"replicate-{run_id}",
+                    spec_file=str(spec_path),
+                    store=self.config.store_path or "experiment.duckdb",
+                    run_id=run_id,
+                )
+            ],
+            store=self.config.store_path or "experiment.duckdb",
+        )
+        campaign_id = await queue.enqueue(campaign)
+
+        return ActionResult({
+            "campaign_id": campaign_id,
+            "run_id": run_id,
+            "measurements": measurements,
+            "plan": plan,
+            "budget_seconds": budget,
+            "spec_file": str(spec_path),
+        })
+
+    async def _preregister_cell(self, run_id: str, body: CellAction) -> ActionResult:
+        """Register the protocol a confirming run of this cell must meet."""
+        try:
+            context = self._cell_context(run_id, body)
+        except ActionUnavailableError as exc:
+            return ActionResult({"error": str(exc)}, status_code=409)
+
+        if not context.records:
+            return ActionResult(
+                {
+                    "error": (
+                        "the cell carries no measurement to confirm; "
+                        "adopt it as a quest instead"
+                    )
+                },
+                status_code=409,
+            )
+
+        chance = context.chance or 0.0
+        threshold = body.threshold
+        if threshold is None:
+            threshold = round(self._measured_effect(context) - chance, 6)
+
+        payload = registration_payload(
+            context.target,
+            claim=claim_sentence(
+                context.target,
+                metric=context.metric,
+                task=context.task_id or "the task",
+                chance=chance,
+                threshold=threshold,
+                min_seeds=body.min_seeds or context.required_seeds,
+                kind=KIND_CONFIRMATION,
+            ),
+            metric=context.metric,
+            threshold=threshold,
+            alpha=body.alpha or context.alpha,
+            min_seeds=body.min_seeds or context.required_seeds,
+            kind=KIND_CONFIRMATION,
+        )
+        return self._write_registration(context, payload, KIND_CONFIRMATION)
+
+    async def _adopt_quest(self, run_id: str, body: CellAction) -> ActionResult:
+        """Register the question an unmeasured cell answers."""
+        from computronium.experiment.execution.statistical_promotion import (
+            GateThresholds,
+        )
+
+        try:
+            context = self._cell_context(run_id, body)
+        except ActionUnavailableError as exc:
+            return ActionResult({"error": str(exc)}, status_code=409)
+
+        if context.records:
+            return ActionResult(
+                {
+                    "error": (
+                        "the cell is already measured; "
+                        "preregister the confirmation instead"
+                    )
+                },
+                status_code=409,
+            )
+
+        threshold = body.threshold
+        if threshold is None:
+            spread = run_spread(context.run_records, context.metric)
+            if spread <= 0.0:
+                return ActionResult(
+                    {
+                        "error": (
+                            "the run has no measured spread to state the effect "
+                            "in; declare the threshold yourself"
+                        )
+                    },
+                    status_code=409,
+                )
+            threshold = round(GateThresholds().effect_size_target * spread, 6)
+
+        chance = context.chance or 0.0
+        payload = registration_payload(
+            context.target,
+            claim=claim_sentence(
+                context.target,
+                metric=context.metric,
+                task=context.task_id or "the task",
+                chance=chance,
+                threshold=threshold,
+                min_seeds=body.min_seeds or context.required_seeds,
+                kind=KIND_QUEST,
+            ),
+            metric=context.metric,
+            threshold=threshold,
+            alpha=body.alpha or context.alpha,
+            min_seeds=body.min_seeds or context.required_seeds,
+            kind=KIND_QUEST,
+        )
+        return self._write_registration(context, payload, KIND_QUEST)
+
+    def _write_registration(
+        self,
+        context: CellContext,
+        payload: dict[str, Any],
+        kind: str,
+    ) -> ActionResult:
+        """Write a registration into the registry the report reads."""
+        directory = self._registration_directory()
+        name = registration_name(context.target, kind)
+        try:
+            path, written = write_registration(directory, payload, name=name)
+        except FileExistsError as exc:
+            return ActionResult({"error": str(exc)}, status_code=409)
+        return ActionResult({
+            "path": str(path),
+            "written": written,
+            "registration": payload,
+        })
+
+    def _registration_directory(self) -> Path:
+        """Where the dashboard writes the registrations it produces."""
+        if self.config.registration_dir is not None:
+            return self.config.registration_dir
+        from computronium.experiment.surface.report import PREREGISTRATION_ROOT
+
+        return PREREGISTRATION_ROOT
+
+    def _measured_effect(self, context: CellContext) -> float:
+        """The effect the cell showed, in the metric's own units."""
+        values = [
+            float(record.payload[context.metric])
+            for record in context.records
+            if isinstance(record.payload.get(context.metric), int | float)
+        ]
+        if not values:
+            return 0.0
+        return sum(values) / len(values)
+
+    def _per_seed_seconds(self, context: CellContext) -> float:
+        """What one measurement costs, measured where it can be measured."""
+        own = cell_evidence(context.records, context.metric).walltime_s
+        if own > 0.0:
+            return own
+        return cell_evidence(context.run_records, context.metric).walltime_s
+
+    def _write_spec(self, spec: RunSpec) -> Path:
+        """Write the declaration a queued campaign runs from."""
+        directory = self._scratch_dir()
+        path = directory / f"{spec.profile}-{uuid.uuid4().hex[:8]}.json"
+        path.write_text(json.dumps(spec.to_dict(), indent=2), encoding="utf-8")
+        return path
+
+    def _scratch_dir(self) -> Path:
+        """The dashboard's scratch directory for the declarations it launches."""
+        if self._work_dir is None:
+            self._work_dir = Path(tempfile.mkdtemp(prefix="computronium-dashboard-"))
+        return self._work_dir
 
     @contextlib.contextmanager
     def _readable_store(self) -> Generator[RecordStore, None, None]:
@@ -582,6 +936,9 @@ class WebDashboard:
                 await self._update_task
             except asyncio.CancelledError:
                 pass
+        if self._work_dir is not None:
+            shutil.rmtree(self._work_dir, ignore_errors=True)
+            self._work_dir = None
         logger.info("Dashboard stopped")
 
     def _on_pipeline_event(self, event: PipelineEvent) -> None:

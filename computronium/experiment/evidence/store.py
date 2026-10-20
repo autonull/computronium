@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 # moment. The loser waits a little and tries again rather than failing.
 _SCHEMA_INIT_ATTEMPTS = 5
 _SCHEMA_INIT_BACKOFF_S = 0.1
+_CONNECT_ATTEMPTS = 5
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -147,9 +148,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         self._artifact_store: ArtifactStore | None = None
 
     def __enter__(self) -> Self:
-        self._conn = duckdb.connect(
-            str(self._config.path), read_only=self._config.read_only
-        )
+        self._conn = self._connect()
         if not self._initialized and not self._config.read_only:
             if not self._schema_present():
                 try:
@@ -168,6 +167,38 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         )
         self._assert_identity_recomputable()
         return self
+
+    def _connect(self) -> duckdb.DuckDBPyConnection:
+        """Open the connection, waiting out a reader that holds the file.
+
+        DuckDB refuses a connection whose configuration differs from the one
+        the file already has in this process: a read-only reader and a
+        read-write writer cannot share the file, and the second one to ask is
+        turned away. A reader that holds it for a moment — the dashboard
+        polling the store while a campaign starts — must not stop the writer
+        from running, so the writer waits for the reader to let go.
+        """
+        delay = 0.2
+        for attempt in range(_CONNECT_ATTEMPTS):
+            try:
+                return duckdb.connect(
+                    str(self._config.path),
+                    read_only=self._config.read_only,
+                )
+            except duckdb.ConnectionException as exc:
+                if (
+                    "different configuration" not in str(exc)
+                    or attempt == _CONNECT_ATTEMPTS - 1
+                ):
+                    raise
+                logger.debug(
+                    "Store %s is held by a reader in another mode; waiting",
+                    self._config.path,
+                )
+                time.sleep(delay)
+                delay *= 2
+        msg = "the store could not be opened"
+        raise StoreError(msg)
 
     def _assert_identity_recomputable(self) -> None:
         """Refuse a store that cannot reproduce a record's ``measurement_key``.
@@ -453,6 +484,28 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 ],
             )
         return run_id
+
+    def update_run_spec(self, run_id: str, spec: RunSpec) -> None:
+        """Record the declaration a continuing run now runs under.
+
+        A run that is continued under a larger seed plan has a different
+        declaration, and the store is where a reader finds it: the persisted
+        spec is the run's, not the launch's.
+
+        Raises:
+            StoreError: The connection is closed or the run is unknown.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        with self._write_lock:
+            updated = self._conn.execute(
+                "UPDATE runs SET spec = ?, spec_version = ? WHERE run_id = ? "
+                "RETURNING run_id",
+                [json.dumps(spec.to_dict()), spec.version, run_id],
+            ).fetchall()
+            if not updated:
+                msg = f"run {run_id} is not in the store"
+                raise StoreError(msg)
 
     def set_replay_hash(self, run_id: str, replay_hash: str) -> None:
         """Record the replay hash a run computed when it finished measuring."""

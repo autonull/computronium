@@ -280,16 +280,24 @@ export class CellDrawer implements Component {
         "></div>
       </div>
 
-      <!-- Actions (visual only for v1) -->
+      <!-- Actions -->
       <div style="
         display: flex;
+        flex-direction: column;
         gap: 8px;
         padding-top: 16px;
         border-top: 1px solid var(--border);
       ">
-        <button class="drawer-btn" style="flex: 1;" disabled>Queue Rest</button>
-        <button class="drawer-btn" style="flex: 1;" disabled>Preregister</button>
-        <button class="drawer-btn" style="flex: 1;" disabled>Adopt as Quest</button>
+        <div id="drawer-action-note" style="font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="drawer-btn" data-action="replicate" style="flex: 1;">Queue Rest</button>
+          <button class="drawer-btn" data-action="preregister" style="flex: 1;">Preregister</button>
+          <button class="drawer-btn" data-action="quest" style="flex: 1;">Adopt as Quest</button>
+        </div>
+        <input id="drawer-threshold" class="drawer-input" type="number" step="0.001"
+          placeholder="material effect (auto)" />
+        <div id="drawer-status" style="font-size: 11px; color: var(--text-secondary); line-height: 1.5;"></div>
       </div>
     `;
 
@@ -311,8 +319,145 @@ export class CellDrawer implements Component {
         color: var(--text-primary);
         border-color: var(--border-bright);
       }
+      .drawer-btn:not(:disabled) {
+        cursor: pointer;
+        color: var(--text-primary);
+      }
+      .drawer-btn:disabled {
+        opacity: 0.45;
+      }
+      .drawer-input {
+        padding: 8px 10px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text-primary);
+        font-size: 11px;
+        font-family: 'JetBrains Mono', monospace;
+      }
     `;
     this.content.appendChild(style);
+
+    this.wireActions(data);
+  }
+
+  /** What the three verbs do to this cell, and which of them apply. */
+  private actionStates(data: CellData): Record<string, boolean> {
+    const measured = data.status === "measured";
+    const seeds = data.metrics?.n_seeds ?? 0;
+    const required = data.requiredSeeds ?? 0;
+    const missing = required > 0 ? Math.max(0, required - seeds) : 0;
+
+    return {
+      replicate: missing > 0 || !measured,
+      preregister: measured,
+      quest: !measured,
+    };
+  }
+
+  private wireActions(data: CellData): void {
+    const content = this.content;
+    if (!content) return;
+
+    const states = this.actionStates(data);
+    const buttons = content.querySelectorAll<HTMLButtonElement>(
+      ".drawer-btn[data-action]",
+    );
+
+    buttons.forEach((button) => {
+      const action = button.dataset.action ?? "";
+      const enabled = states[action] === true;
+      button.disabled = !enabled;
+      button.addEventListener("click", () => {
+        void this.runAction(action, data);
+      });
+    });
+
+    const replicate = content.querySelector<HTMLButtonElement>(
+      '.drawer-btn[data-action="replicate"]',
+    );
+    if (replicate) {
+      replicate.textContent = data.status === "measured" ? "Queue Rest" : "Queue";
+    }
+
+    const note = content.querySelector("#drawer-action-note");
+    if (note) note.textContent = this.actionNote(data);
+  }
+
+  private actionNote(data: CellData): string {
+    if (!data.runId) {
+      return "This cell belongs to no run yet, so there is nothing to queue or register.";
+    }
+    if (data.status === "measured") {
+      const seeds = data.metrics?.n_seeds ?? 0;
+      const required = data.requiredSeeds ?? 0;
+      return `Queue Rest measures the ${Math.max(0, required - seeds)} seeds this cell still owes. Preregister writes down the protocol a confirming run must meet.`;
+    }
+    return "Queue measures this cell. Adopt as Quest writes the question down before it is measured.";
+  }
+
+  private setStatus(message: string, isError = false): void {
+    const status = this.content?.querySelector("#drawer-status");
+    if (!status) return;
+    status.textContent = message;
+    (status as HTMLElement).style.color = isError
+      ? PALETTE.rejected
+      : PALETTE.text_secondary;
+  }
+
+  private async runAction(
+    action: string,
+    data: CellData,
+  ): Promise<void> {
+    if (!data.runId) {
+      this.setStatus("This cell belongs to no run yet.", true);
+      return;
+    }
+
+    const buttons = Array.from(
+      this.content?.querySelectorAll<HTMLButtonElement>(".drawer-btn") ?? [],
+    );
+    buttons.forEach((button) => {
+      button.disabled = true;
+    });
+    this.setStatus("Working…");
+
+    const thresholdInput = this.content?.querySelector<HTMLInputElement>(
+      "#drawer-threshold",
+    );
+    const threshold = thresholdInput?.value ? Number(thresholdInput.value) : null;
+    const body: Record<string, unknown> = { coordinate: data.coordinate };
+    if (threshold !== null && Number.isFinite(threshold)) {
+      body.threshold = threshold;
+    }
+
+    try {
+      const response = await fetch(`/api/cells/${data.runId}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        this.setStatus(payload?.error ?? "The action failed.", true);
+        return;
+      }
+      this.setStatus(this.actionSummary(action, payload));
+    } catch (error) {
+      this.setStatus(`The action failed: ${String(error)}`, true);
+    } finally {
+      buttons.forEach((button) => {
+        button.disabled = false;
+      });
+    }
+  }
+
+  private actionSummary(action: string, payload: any): string {
+    if (action === "replicate") {
+      return `Queued campaign ${payload.campaign_id}: ${payload.measurements} measurements in a plan of ${payload.plan}.`;
+    }
+    const written = payload.written ? "Registered" : "Already registered";
+    return `${written} ${payload.path} — commit it; the run that follows it can be confirmatory.`;
   }
 
   // Mini 3D sparkline (the measured training curve)

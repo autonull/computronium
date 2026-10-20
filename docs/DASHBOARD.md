@@ -111,10 +111,31 @@ Rich detail for a selected measured cell. HTML overlay (not WebGL) for crisp tex
 `Escape` closes the drawer; the mission-control panel and the plotter step
 aside while it is open.
 
-**Actions** (v1 visual only, disabled):
-- `[queue rest]` — request more seeds for this cell
-- `[preregister]` — promote to confirmatory protocol
-- `[adopt as quest]` — mark for focused follow-up
+**Actions** — the drawer can act on the cell it shows:
+
+| Button | What it does | When it applies |
+|--------|--------------|-----------------|
+| `[Queue Rest]` | Queues the measurements the cell still owes: the run's seed plan grows, and the pipeline measures only the seeds the store does not hold | a measured cell (a legal one is labelled `[Queue]` and measures the cell) |
+| `[Preregister]` | Writes a registration for the confirmation: the threshold is the effect the cell showed | a measured cell |
+| `[Adopt as Quest]` | Writes a registration for the question: the threshold is the material effect the gate asks for, in the run's own units | a cell with no measurement |
+
+The threshold field overrides the derived one. The buttons post to
+`/api/cells/{run_id}/{replicate,preregister,quest}` and the drawer's status
+line says what happened — the campaign that was queued, or the file that was
+written.
+
+**Where the registrations go.** `configs/preregistrations/<run>_<kind>_<cell>.json`,
+the same directory the report reads, in the shape
+`computronium.validation.preregistration.ThresholdRegistration` defines. The
+file also names the cell it is about, so it is readable without the dashboard
+that wrote it. Commit it: it is a governance artifact, and the repository is
+where registrations live.
+
+**What a registration can and cannot confirm.** A threshold written *after* a
+run began was written with that run's data in hand, so it cannot confirm that
+run. The mode chip and the report both compare the registration's timestamp
+with the run's start: the run that produced the observation stays
+`EXPLORATORY`, and the run that follows the registration can be confirmatory.
 
 ---
 
@@ -243,6 +264,13 @@ PipelineRunner ──► event bus ─────────────┤
                                           ▼
     User clicks cell ──► CellDrawer.show(cellData)
     User opens Plotter ──► Plotter.update(records)
+    User presses a verb ──► CellDrawer.runAction()
+                              │
+                              ├─ replicate ──► CampaignQueue.enqueue()
+                              │                  └─ CampaignRun(run_id=…):
+                              │                     the run continues, so the
+                              │                     seeds join its evidence
+                              └─ preregister / quest ──► configs/preregistrations/
 ```
 
 **Critical — the store is read-only, and that has a consequence.** DuckDB
@@ -254,9 +282,18 @@ campaign). A campaign in another terminal therefore holds the file, and the
 dashboard shows no records until it lets go. Run the campaign in the
 dashboard's process, or wait for the run to finish.
 
+**A queued replication needs the queue.** The dashboard attaches the process's
+campaign queue, so `comp dashboard` can queue work; a dashboard built without
+one answers `409` and says so, rather than pretending the work was queued.
+
 REST endpoints: `/api/status`, `/api/queue`, `/api/resources`,
 `/api/campaigns`, `/api/campaigns/{id}`, `/api/campaigns/{id}/metrics`,
 `/api/runs` (the store's runs and their record counts), `/api/metrics/{id}`.
+
+Write endpoints (the drawer's actions): `/api/cells/{run_id}/replicate`,
+`/api/cells/{run_id}/preregister`, `/api/cells/{run_id}/quest`. Each takes
+`{"coordinate": {...}}` and answers with what it did, or with an `error` and a
+status that says why not.
 
 ---
 

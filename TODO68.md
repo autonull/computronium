@@ -786,3 +786,90 @@ whatever the run was; a cell with five seeds called itself PASSED.
   violin plots in three.js. uPlot with an explicitly stated range is what
   ships.
 - **The drawer's actions and the "adopt as quest" flow** are still v2.
+
+---
+
+## Session Progress — The Drawer Can Act (2026-10-20)
+
+The dashboard could read a cell and say what it knew. It could not do
+anything about it: the drawer's three buttons were disabled, and every
+"still open" list above named write capability first. This session made the
+verbs real — and, in making them real, found the rule that keeps a
+registration from lying about a run.
+
+### The three verbs
+
+| Verb | What it does | Where it writes |
+|------|--------------|-----------------|
+| **Queue Rest** | Queues the measurements the cell still owes: the run's seed plan grows to the missing seeds and the pipeline measures only the identities the store does not hold | the campaign queue; the run continues, so the seeds join its evidence |
+| **Preregister** | Registers the protocol a confirming run must meet: the threshold is the effect the cell showed | `configs/preregistrations/` |
+| **Adopt as Quest** | Registers the question an unmeasured cell answers: the threshold is the material effect the gate asks for, in the run's own units | `configs/preregistrations/` |
+
+### The decisions worth keeping
+
+- **A replication continues its run.** `CampaignRun` gained a `run_id`: a
+  campaign that names one writes into that run instead of starting a new
+  one. The seeds a cell owes then join the evidence the run already holds,
+  and the gate — which counts a group's seeds inside one run — sees them.
+  Two runs would have split the evidence and left the claim under-powered.
+- **The seed plan grows; it does not shift.** The plan keeps the seeds the
+  run already measured and grows past them, and the pipeline skips the
+  identities the store holds, seed by seed. A replication therefore measures
+  the seeds the cell still owes and nothing else — the store's own
+  freshness rule does the bookkeeping.
+- **The budget is measured.** The deadline is a hard stop, so a replication
+  gets the measured cost of a measurement times the measurements it owes,
+  with headroom for a slower machine — not the source run's budget, which
+  was sized for the whole run.
+- **A registration is the system's own type.** The file is a
+  `computronium.validation.preregistration.ThresholdRegistration` — the
+  contract in `docs/preregistration_template.md` — plus the coordinate, the
+  run and the moment it was written, so a file on disk is readable without
+  the dashboard that wrote it.
+- **A threshold written after a run began cannot confirm that run.** It was
+  written with that run's data in hand. `preregistered_metrics()` now takes
+  the moment a run started and counts only the registrations written before
+  it: the run that produced the observation stays `EXPLORATORY`, and the
+  run that follows the registration can be confirmatory. Without this rule
+  a single click in the dashboard would have turned every run in the
+  repository green.
+
+### Defects found on the way
+
+| # | Defect | Cause | Fix |
+|---|--------|-------|-----|
+| 39 | The drawer's buttons could not be addressed | they carried no `data-action` | the action name is on the button |
+| 40 | A registration written today made every run confirmatory | `preregistered_metrics()` counted a metric globally, with no regard for when the registration was written | it is bounded by the run's start |
+| 41 | A campaign could not continue a run | `create_run` always minted a new id | `CampaignRun.run_id` |
+| 42 | The store could not record a changed declaration | there was no way to rewrite a run's spec | `RecordStore.update_run_spec` |
+| 43 | The drawer knew three of a cell's six axes | the map built the coordinate from the three axes on screen | the map fills the axes the run holds fixed, and a measured cell's coordinate is the record's own |
+| 44 | A writer could be turned away by a reader | DuckDB refuses a second connection whose configuration differs from the file's; the dashboard polls the store read-only every two seconds | the store waits the reader out |
+| 45 | The claim read like a file name | the cell's slug was spliced into the sentence | the cell is described axis by axis |
+
+### Files
+
+| File | Change |
+|------|--------|
+| `computronium/experiment/execution/dashboard/actions.py` | **New** — the three verbs: the cell, its evidence, the replication's declaration, the registration |
+| `computronium/experiment/execution/dashboard/web.py` | the three endpoints; the chip reads the run's start |
+| `computronium/experiment/execution/campaign.py` | `CampaignRun.run_id`; a campaign that names a run continues it |
+| `computronium/experiment/execution/campaign_queue.py` | the campaign YAML carries the run |
+| `computronium/experiment/evidence/store.py` | `update_run_spec`; a writer waits a reader out |
+| `computronium/experiment/surface/report.py` | `preregistered_metrics(before)`; `PREREGISTRATION_ROOT` |
+| `dashboard/src/cell-data.ts` | the cell carries its run |
+| `dashboard/src/discovery-map.ts` | the cell's whole coordinate; the run id |
+| `dashboard/src/cell-drawer.ts` | the three buttons, the threshold field, the status line |
+| `tests/unit/experiment/test_dashboard_actions.py` | **New** — the verbs, the endpoints, the run's continuity, the confirmation rule |
+| `scripts/probes/probe_dashboard_actions.py` | **New** — the buttons, pressed in a browser |
+
+### Still open
+
+- **The fog of war is still dormant.** The grid's axes come from the
+  records, so every cell it shows has a measurement — the legal-but-
+  unmeasured cells that would carry a quest are not on the grid. The quest
+  verb works (the endpoint, the tests and the probe reach it), but a
+  researcher cannot yet *see* a gap in the picture. Bringing the declared
+  legal space into the grid is the next piece of work.
+- **Cross-process live monitoring** — as above: DuckDB's single-writer lock.
+- **Custom 3D charts** — the plan's v2 Pareto scatter, ablation bars and
+  violin plots in three.js.

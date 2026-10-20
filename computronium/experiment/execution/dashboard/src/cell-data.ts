@@ -42,6 +42,8 @@ export interface CellData {
   pareto?: boolean;
   requiredSeeds?: number;
   price?: number;
+  /** The run the cell's evidence belongs to. */
+  runId?: string;
 }
 
 export function isAxisName(value: string): value is AxisName {

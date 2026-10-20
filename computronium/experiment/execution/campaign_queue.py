@@ -249,6 +249,7 @@ class CampaignQueue:
                         "depends_on": r.depends_on,
                         "device": r.device,
                         "store": r.store,
+                        "run_id": r.run_id,
                     }
                     for r in entry.spec.runs
                 ],

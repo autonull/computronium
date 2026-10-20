@@ -458,7 +458,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             objectives=spec.objectives if spec else (),
             claim_count=len(claims),
             required_seeds=GateThresholds().required_seeds_per_group,
-            preregistered=self._claims_preregistered(claims),
+            preregistered=self._claims_preregistered(claims, run_id),
         )
 
     def _spec(self, run_id: str) -> RunSpec | None:
@@ -466,11 +466,21 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         info = self._store.query_run(run_id)
         return info.spec if info is not None else None
 
-    def _claims_preregistered(self, claims: tuple[Claim, ...]) -> bool | None:
-        """Whether every claimed metric has a pre-registered threshold on disk."""
+    def _claims_preregistered(
+        self,
+        claims: tuple[Claim, ...],
+        run_id: str,
+    ) -> bool | None:
+        """Whether every claimed metric has a pre-registered threshold on disk.
+
+        Only a threshold written before the run began counts: one written
+        afterwards was written with the run's own data in hand.
+        """
         if not claims:
             return None
-        return all(claim.metric in preregistered_metrics() for claim in claims)
+        info = self._store.query_run(run_id)
+        before = info.started_at if info is not None else None
+        return all(claim.metric in preregistered_metrics(before) for claim in claims)
 
     def _min_seeds(self, run_id: str) -> int:
         """The seed floor every claim-side derivation agrees on."""
@@ -875,6 +885,12 @@ _STRUCTURAL_AXES: Final = (
     "credit",
     "update",
 )
+
+# Where the pre-registration registry lives: the repository's own directory,
+# so a registration written by the dashboard is the one the report reads.
+PREREGISTRATION_ROOT: Final = (
+    Path(__file__).resolve().parents[3] / "configs" / "preregistrations"
+)
 _ACCURACY_METRICS: Final = frozenset({"val_acc", "train_acc", "test_acc", "accuracy"})
 _ABLATION_METRICS: Final = (
     "val_acc",
@@ -885,18 +901,21 @@ _ABLATION_METRICS: Final = (
 )
 
 
-@functools.lru_cache(maxsize=1)
-def preregistered_metrics() -> frozenset[str]:
+@functools.lru_cache(maxsize=8)
+def preregistered_metrics(before: datetime | None = None) -> frozenset[str]:
     """Metric names carrying a pre-registered threshold in ``configs/``.
 
     A claim whose metric is absent is exploratory: the report says so beside
-    the claim rather than implying a confirmatory result. The registry is
-    read once per process: the dashboard asks for it on every poll.
+    the claim rather than implying a confirmatory result.
+
+    ``before`` is the moment a run began. A threshold written after a run
+    began cannot confirm that run — it was written with the run's own data in
+    hand — so only the registrations written earlier are counted. The
+    registry is read once per moment: the dashboard asks for it on every poll.
     """
     import json
-    from pathlib import Path
 
-    root = Path(__file__).resolve().parents[3] / "configs" / "preregistrations"
+    root = PREREGISTRATION_ROOT
     metrics: set[str] = set()
     for path in root.glob("*.json"):
         try:
@@ -904,9 +923,30 @@ def preregistered_metrics() -> frozenset[str]:
         except OSError, ValueError:
             continue
         metric = payload.get("metric")
-        if isinstance(metric, str):
-            metrics.add(metric)
+        if not isinstance(metric, str):
+            continue
+        if before is not None and registered_at(payload) >= before:
+            continue
+        metrics.add(metric)
     return frozenset(metrics)
+
+
+def registered_at(payload: Mapping[str, Any]) -> datetime:
+    """When a registration was written.
+
+    A registration that names the moment it was written is dated by it; one
+    written by hand carries a date, which is read as the start of that day. A
+    registration with neither is read as written before any run, which is what
+    it was written under.
+    """
+    for key in ("registered_at", "created"):
+        stamp = payload.get(key)
+        if isinstance(stamp, str):
+            try:
+                return datetime.fromisoformat(stamp)
+            except ValueError:
+                continue
+    return datetime.min
 
 
 def chance_level(task_id: str | None, metric: str) -> float | None:

@@ -96,6 +96,7 @@ interface CellAggregate {
   params: number[];
   curves: CurvePoint[][];
   pareto: boolean;
+  coordinate: CellData["coordinate"];
 }
 
 export class DiscoveryMap implements Component {
@@ -131,6 +132,8 @@ export class DiscoveryMap implements Component {
   private axisLabelMeshes: THREE.Object3D[] = [];
   private chance = 0.1;
   private requiredSeeds = 0;
+  /** The run the grid's evidence comes from. */
+  private runId: string | undefined = undefined;
   private lastMetrics: any = null;
 
   constructor() {
@@ -360,28 +363,47 @@ export class DiscoveryMap implements Component {
       this.zValues.forEach((zVal, zIdx) => {
         this.xValues.forEach((xVal, xIdx) => {
           const key = this.cellKey(xVal, yVal, zVal);
-          const coordinate: CellData["coordinate"] = {
-            credit: "",
-            geometry: "",
-            dynamics: "",
-            substrate: "",
-            plasticity: "",
-            update: "",
-          };
-          coordinate[this.axes.x] = xVal;
-          coordinate[this.axes.y] = yVal;
-          coordinate[this.axes.z] = zVal;
           const cellData: CellData = {
-            coordinate,
+            coordinate: this.coordinateFor(xVal, yVal, zVal),
             status: "legal",
             chance: this.chance,
             requiredSeeds: this.requiredSeeds,
+            runId: this.runId,
           };
           this.cellDataMap.set(key, cellData);
           this.createCell(key, cellData, xIdx, yIdx, zIdx);
         });
       });
     });
+  }
+
+  /** The cell's whole coordinate: the axes on screen, and the ones held fixed.
+
+      An axis the run never varied has one value, and that value belongs to
+      every cell of the grid: a cell that names only three of the six axes
+      cannot be measured, queued or registered. */
+  private coordinateFor(
+    xVal: string,
+    yVal: string,
+    zVal: string,
+  ): CellData["coordinate"] {
+    const coordinate: CellData["coordinate"] = {
+      credit: "",
+      geometry: "",
+      dynamics: "",
+      substrate: "",
+      plasticity: "",
+      update: "",
+    };
+    coordinate[this.axes.x] = xVal;
+    coordinate[this.axes.y] = yVal;
+    coordinate[this.axes.z] = zVal;
+    AXIS_NAMES.forEach((axis) => {
+      if (coordinate[axis]) return;
+      const values = this.axisValues[axis];
+      if (values.length === 1) coordinate[axis] = values[0];
+    });
+    return coordinate;
   }
 
   private cellKey(x: string, y: string, z: string): string {
@@ -632,6 +654,7 @@ export class DiscoveryMap implements Component {
     if (!metricsData?.records?.length) return;
 
     this.lastMetrics = metricsData;
+    if (typeof data?.campaign_id === "string") this.runId = data.campaign_id;
 
     if (typeof metricsData.chance === "number") this.chance = metricsData.chance;
     if (typeof metricsData.required_seeds === "number") {
@@ -652,6 +675,7 @@ export class DiscoveryMap implements Component {
       const cellData = this.cellDataMap.get(key);
       if (!cellData) return;
       cellData.status = "measured";
+      cellData.coordinate = { ...aggregate.coordinate };
       cellData.metrics = {
         val_acc: mean(aggregate.acc),
         val_acc_std: stddev(aggregate.acc),
@@ -663,6 +687,7 @@ export class DiscoveryMap implements Component {
       cellData.pareto = aggregate.pareto;
       cellData.chance = this.chance;
       cellData.requiredSeeds = this.requiredSeeds;
+      cellData.runId = this.runId;
       this.updateCellVisual(key, cellData, aggregate.pareto);
     });
   }
@@ -681,7 +706,14 @@ export class DiscoveryMap implements Component {
       );
       let aggregate = aggregates.get(key);
       if (!aggregate) {
-        aggregate = { acc: [], walltime: [], params: [], curves: [], pareto: false };
+        aggregate = {
+          acc: [],
+          walltime: [],
+          params: [],
+          curves: [],
+          pareto: false,
+          coordinate: { ...coord },
+        };
         aggregates.set(key, aggregate);
       }
       const payload = record.payload ?? {};
