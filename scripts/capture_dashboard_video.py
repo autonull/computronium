@@ -6,8 +6,9 @@ events as they happen, the caption narrates them, and the map lights up with
 the evidence when the run lands its records.
 
 The film is a ``.webm`` and it is **not committed** — it is large, and it is
-a picture of one run rather than a claim about the system. It is written
-outside the repository's tracked paths, so ``git status`` stays clean.
+a picture of one run rather than a claim about the system. It is written to
+``docs/recordings/``, which ``*.webm`` ignores, so ``git status`` stays
+clean.
 
 The frames come from the browser's own screencast (CDP) and are encoded by
 ``ffmpeg``. Playwright's own recorder is not used: it needs a particular
@@ -25,7 +26,6 @@ import json
 import logging
 import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - ffmpeg is called with a fixed command
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -46,32 +46,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Where the film goes: outside the repository, so nothing of it is tracked.
-DEFAULT_OUTPUT = (
-    Path(tempfile.gettempdir()) / "computronium-dashboard" / "dashboard-session.webm"
-)
+# Where the film goes: inside the repository, where it can be found, and
+# ignored by `*.webm`, so `git status` stays clean.
+DEFAULT_OUTPUT = REPO_ROOT / "docs" / "recordings" / "dashboard-session.webm"
 
 # The gap between two photographs of the session.
 FRAME_INTERVAL = 0.25
 
 
 def capture_frames(
-    page, seconds: float, interval: float = FRAME_INTERVAL
+    page,
+    port: int,
+    max_seconds: float,
+    hold_seconds: float,
+    interval: float = FRAME_INTERVAL,
 ) -> tuple[list[bytes], float]:
-    """Photograph the page as the session goes on.
+    """Photograph the page until the run has landed its evidence.
 
     The browser's own screencast is not used: in headless Chromium it only
     fires when the compositor is woken, which a WebGL scene does not do
     often enough to make a film. Photographs are slower and honest.
+
+    The film ends when the run's evidence has landed and the picture has
+    settled — not when a timer says so, because the machine's speed is not
+    the session's length.
 
     Returns the frames and how long they took, so the film can be played at
     the speed the session happened.
     """
     frames: list[bytes] = []
     started = time.time()
-    deadline = started + seconds
+    deadline = started + max_seconds
+    landed_at: float | None = None
     while time.time() < deadline:
         frames.append(page.screenshot())
+        if landed_at is None:
+            if latest_run(port):
+                landed_at = time.time()
+        elif time.time() - landed_at >= hold_seconds:
+            break
         time.sleep(interval)
     return frames, time.time() - started
 
@@ -86,7 +99,7 @@ def encode(frames: list[bytes], output: Path, elapsed: float) -> Path:
         raise RuntimeError(msg)
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    fps = max(1, round(len(frames) / max(elapsed, 1.0)))
+    fps = len(frames) / max(elapsed, 1.0)
     command = [
         "ffmpeg",
         "-hide_banner",
@@ -96,7 +109,7 @@ def encode(frames: list[bytes], output: Path, elapsed: float) -> Path:
         "-f",
         "image2pipe",
         "-framerate",
-        str(fps),
+        f"{fps:.3f}",
         "-i",
         "-",
         "-c:v",
@@ -111,7 +124,7 @@ def encode(frames: list[bytes], output: Path, elapsed: float) -> Path:
         "yuv420p",
         str(output),
     ]
-    logger.info("Encoding %d frames at %d fps", len(frames), fps)
+    logger.info("Encoding %d frames at %.2f fps", len(frames), fps)
     process = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - the command is fixed
         command,
         input=b"".join(frames),
@@ -127,7 +140,8 @@ def encode(frames: list[bytes], output: Path, elapsed: float) -> Path:
 def record(
     port: int,
     output: Path,
-    seconds: float,
+    max_seconds: float,
+    hold_seconds: float,
     ready: threading.Event,
 ) -> Path:
     """Film the dashboard; return the film's path.
@@ -147,8 +161,8 @@ def record(
         page.goto(f"http://localhost:{port}/", wait_until="load")
         page.wait_for_selector("#dashboard-canvas", state="visible", timeout=30000)
         ready.set()
-        logger.info("Filming the dashboard for %.0f seconds", seconds)
-        frames, elapsed = capture_frames(page, seconds)
+        logger.info("Filming the dashboard")
+        frames, elapsed = capture_frames(page, port, max_seconds, hold_seconds)
         context.close()
         browser.close()
 
@@ -172,10 +186,16 @@ def main() -> int:
         help="Where the film is written. It is not committed.",
     )
     parser.add_argument(
-        "--seconds",
+        "--max-seconds",
         type=float,
-        default=60.0,
-        help="How long the film runs. The campaign takes about 40 seconds.",
+        default=300.0,
+        help="How long the film may run. It ends when the run's evidence lands.",
+    )
+    parser.add_argument(
+        "--hold-seconds",
+        type=float,
+        default=15.0,
+        help="How long the film stays on the finished run before it ends.",
     )
     args = parser.parse_args()
 
@@ -195,7 +215,15 @@ def main() -> int:
 
     def run_film() -> None:
         try:
-            film.append(record(args.port, args.output, args.seconds, filming))
+            film.append(
+                record(
+                    args.port,
+                    args.output,
+                    args.max_seconds,
+                    args.hold_seconds,
+                    filming,
+                )
+            )
         except BaseException as exc:  # ruff: ignore[blind-except] - reported to the main thread
             logger.exception("The filming failed")
             film_error.append(exc)

@@ -183,9 +183,14 @@ def _run_sentence(run: Mapping[str, Any], metrics: Mapping[str, Any]) -> str:
 
 def _evidence_sentence(metrics: Mapping[str, Any]) -> str:
     """What the evidence says, in words."""
-    best = best_cell(metrics.get("records") or [])
+    records = metrics.get("records") or []
+    if not records:
+        # The run's own sentence already says that nothing was measured.
+        # Saying it twice is how a voice-over starts to sound like a form.
+        return ""
+    best = best_cell(records)
     if best is None:
-        return "Nothing has been measured yet."
+        return "One cell is ahead of the others."
     arm, mean, _spread, _seeds = best
     if not arm:
         return "One cell is ahead of the others."

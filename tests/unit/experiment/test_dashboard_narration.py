@@ -8,6 +8,7 @@ wording, which is expected to move as the phrasing is tuned.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -266,3 +267,51 @@ class TestTheEndpoint:
         assert "lines" in body
         assert "script" in body
         assert json.dumps(body)
+
+
+class TestARunThatHasNotMeasuredYet:
+    """The dashboard shows the run it is watching, before the evidence.
+
+    A dashboard that shows nothing until the work is done has forgotten the
+    run it is watching: the run's declaration is enough to draw its space,
+    and the absence of evidence is the truth about it.
+    """
+
+    def _empty_run(self, tmp_path: Path) -> tuple[Path, str]:
+        """A store holding a run that has measured nothing yet."""
+        from computronium.experiment.evidence.store import RecordStore, StoreConfig
+        from computronium.experiment.schema.run_spec import RunSpec
+
+        path = tmp_path / "empty.duckdb"
+        spec = RunSpec(
+            profile="demo",
+            task="digits",
+            objectives=("validation_accuracy",),
+            fidelity="L1",
+            n_seeds=2,
+            epochs=1,
+        )
+        with RecordStore(StoreConfig(path=path)) as store:
+            return path, store.create_run(spec=spec)
+
+    def test_the_run_still_names_itself(self, tmp_path: Path) -> None:
+        path, run_id = self._empty_run(tmp_path)
+        dashboard = WebDashboard(DashboardConfig(store_path=str(path)))
+
+        metrics = asyncio.run(dashboard._get_campaign_metrics_detailed(run_id))
+
+        assert metrics["records"] == []
+        assert metrics["run"]["run_id"] == run_id
+        assert metrics["run"]["profile"] == "demo"
+        assert metrics["run"]["mode"] == "EXPLORATORY"
+        assert metrics["resources"]["records"] == 0
+
+    def test_the_narration_says_it_has_measured_nothing(self, tmp_path: Path) -> None:
+        path, run_id = self._empty_run(tmp_path)
+        dashboard = WebDashboard(DashboardConfig(store_path=str(path)))
+
+        metrics = asyncio.run(dashboard._get_campaign_metrics_detailed(run_id))
+        sentences = state_sentences(metrics, None)
+
+        assert "nothing yet" in sentences[0]
+        assert all(sentence.endswith(".") for sentence in sentences)

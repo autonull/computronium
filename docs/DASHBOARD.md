@@ -607,7 +607,7 @@ text views are photographed in.
 ## The Recording (a live session)
 
 ```bash
-# Films a live session to a .webm, outside the repository
+# Films a live session to docs/recordings/dashboard-session.webm
 uv run python scripts/capture_dashboard_video.py
 ```
 
@@ -615,6 +615,15 @@ The film is a real session: the campaign runs, the live rail carries the
 events as they happen, the caption narrates them, and the map lights up with
 the evidence when the run lands its records.
 
+The space is on screen from the start — the run's declaration is enough to
+draw it — so the first half of the film is the fog of war with nothing
+measured in it yet, and the second half is the same space with the evidence
+standing in it.
+
+The film ends when the run's evidence has landed and the picture has
+settled, not when a timer says so: the machine's speed is not the session's
+length.
+
 The film is **not committed**. It is large, and it is a picture of one run
-rather than a claim about the system, so it is written outside the
-repository's tracked paths and `git status` stays clean.
+rather than a claim about the system, so it is written to
+`docs/recordings/`, which `*.webm` ignores, and `git status` stays clean.

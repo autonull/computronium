@@ -975,7 +975,11 @@ export class DiscoveryMap implements Component {
 
   private onCampaignMetrics = (data: any): void => {
     const metricsData = data?.data;
-    if (!metricsData?.records?.length) return;
+    // A run that has started but not yet measured still names itself: its
+    // declaration is the space the grid draws, and the empty space is the
+    // truth about it. Waiting for the first record would show a blank
+    // canvas for the whole of the run.
+    if (!metricsData?.run) return;
 
     const runId = typeof data?.campaign_id === "string" ? data.campaign_id : null;
     if (!runId) return;

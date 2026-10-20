@@ -546,16 +546,18 @@ class WebDashboard:
                 store = view.store
                 generator = ReportGenerator(store)
                 records = list(generator._store.query_records(run_id=campaign_id))
+                run = store.query_run(campaign_id)
+                claim_metrics = generator.claim_metrics(campaign_id)
 
                 if not records:
-                    return {
-                        "records": [],
-                        "pareto": [],
-                        "ablation_groups": [],
-                        "message": "No records found for this campaign",
-                    }
-
-                run = store.query_run(campaign_id)
+                    # A run that has measured nothing yet is still the run the
+                    # dashboard is watching: its declaration is the space the
+                    # map draws, and the absence of evidence is what the
+                    # narration reports. An empty dashboard is a dashboard
+                    # that has forgotten the run it is watching.
+                    return self._empty_run_metrics(
+                        run, campaign_id, claim_metrics, view
+                    )
 
                 # Compute Pareto frontier over registered objectives
                 pareto_points, _ = analysis_compute_pareto_frontier(
@@ -566,10 +568,6 @@ class WebDashboard:
 
                 # Get structured ablation groups
                 ablation_groups = generator.get_ablation_groups(campaign_id)
-
-                # The metrics the run's claims are about decide whether it
-                # is confirmatory or exploratory.
-                claim_metrics = generator.claim_metrics(campaign_id)
 
                 # Chance line and power requirement come from the task and the
                 # gate thresholds, never from a hand-written constant.
@@ -625,6 +623,56 @@ class WebDashboard:
         except Exception as e:
             logger.exception("Error fetching detailed campaign metrics")
             return {"error": str(e)}
+
+    def _empty_run_metrics(
+        self,
+        run: Any,
+        run_id: str,
+        claim_metrics: tuple[str, ...],
+        view: Any,
+    ) -> dict[str, Any]:
+        """What the dashboard knows about a run that has measured nothing yet.
+
+        The run's declaration is enough to draw its space and to say what it
+        is: the profile, the task, the mode, the cells it declared. The
+        numbers are zero because nothing has been measured — and zero is the
+        honest answer, not a gap to be filled with a guess.
+        """
+        from computronium.experiment.execution.statistical_promotion import (
+            GateThresholds,
+        )
+        from computronium.experiment.surface.report import chance_level
+
+        spec = run.spec if run else None
+        task = spec.task_names[0] if spec and spec.task_names else None
+        return {
+            "records": [],
+            "pareto": [],
+            "ablation_groups": [],
+            "chance": chance_level(task, "validation_accuracy"),
+            "required_seeds": GateThresholds().required_seeds_per_group,
+            "resources": {
+                "device": "—",
+                "memory_mb": 0.0,
+                "walltime_s": 0.0,
+                "records": 0,
+                "seeds_per_arm": 0,
+            },
+            "store": {
+                "source": view.source,
+                "published_at": (
+                    view.published_at.isoformat() if view.published_at else None
+                ),
+            },
+            "run": run_status(
+                spec,
+                run_id,
+                claim_metrics,
+                run.started_at if run else None,
+                frozenset(),
+                run.status if run else None,
+            ),
+        }
 
     def _cell_context(self, run_id: str, body: CellAction) -> CellContext:
         """Everything an action needs to know about one cell.
@@ -1233,11 +1281,14 @@ class WebDashboard:
                     if run.status == "running" or record_counts[run.run_id]
                 ]
 
-            # The run the dashboard is about is the one that has evidence: the
-            # last run in the store that measured something. Its numbers are
-            # what the narration says.
-            measured = [run.run_id for run in runs if record_counts[run.run_id]]
-            newest_with_records = measured[-1] if measured else None
+            # The run the dashboard is about is the one that started last, and
+            # the browser picks the same one: the picture and the narration
+            # must be about the same run.
+            newest = max(
+                (run for run in runs if run.run_id in run_ids),
+                key=lambda run: run.started_at,
+                default=None,
+            )
 
             # A run writing from another process shows up here as records
             # landing in the store — the only progress a cross-process
@@ -1246,18 +1297,19 @@ class WebDashboard:
 
             for run_id in run_ids:
                 metrics = await self._get_campaign_metrics_detailed(run_id)
-                if metrics.get("records"):
-                    await self._broadcast_update({
-                        "type": "campaign_metrics",
-                        "campaign_id": run_id,
-                        "data": metrics,
-                        "timestamp": datetime.now().isoformat(),
-                    })
-                    # The run the dashboard is about is the one that has
-                    # evidence: the last run in the store that measured
-                    # something. Its numbers are what the narration says.
-                    if run_id == newest_with_records:
-                        await self._refresh_narration(metrics)
+                if not metrics.get("run"):
+                    continue
+                # A run that has started but not yet measured is still worth
+                # sending: its declaration is the space the map draws, and
+                # the empty space is the truth about it.
+                await self._broadcast_update({
+                    "type": "campaign_metrics",
+                    "campaign_id": run_id,
+                    "data": metrics,
+                    "timestamp": datetime.now().isoformat(),
+                })
+                if newest is not None and run_id == newest.run_id:
+                    await self._refresh_narration(metrics)
         except Exception:
             logger.debug("Store unavailable for broadcast", exc_info=True)
 

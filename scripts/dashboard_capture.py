@@ -112,11 +112,19 @@ def _run_status(port: int, run_id: str) -> str:
 
 
 def latest_run(port: int) -> str:
-    """The run the dashboard is about: the newest one with records."""
-    with urllib.request.urlopen(
-        f"http://localhost:{port}/api/runs", timeout=5
-    ) as response:
-        payload = json.loads(response.read())
+    """The run the dashboard is about: the newest one with records.
+
+    A dashboard that is busy reading the store may not answer in time; a
+    reader that is watching for a run to appear must not die when it does.
+    """
+    try:
+        with urllib.request.urlopen(
+            f"http://localhost:{port}/api/runs", timeout=20
+        ) as response:
+            payload = json.loads(response.read())
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        logger.debug("Runs not readable yet: %s", exc)
+        return ""
     measured = [
         str(run["run_id"])
         for run in payload.get("runs", [])
