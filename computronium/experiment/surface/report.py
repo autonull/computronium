@@ -671,6 +671,83 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             if names
         }
 
+    def get_ablation_groups(self, run_id: str) -> list[dict[str, Any]]:
+        """Get structured ablation data for the dashboard.
+
+        Returns contrast groups for each ablation axis, with metrics per arm.
+        Only includes groups where the other five axes are held fixed.
+        """
+        from computronium.experiment.surface.report import (
+            _ABLATION_AXES,
+            _ABLATION_METRICS,
+            _STRUCTURAL_AXES,
+            contrast_groups,
+            chance_level,
+        )
+        import statistics
+
+        records = list(self._store.query_records(run_id=run_id))
+        if not records:
+            return []
+
+        groups_result = []
+        for axis in _ABLATION_AXES:
+            groups = contrast_groups(records, axis)
+            for index, group in enumerate(groups, start=1):
+                # Build fixed axes description
+                fixed = ", ".join(
+                    f"{name}={getattr(next(iter(group.values()))[0], name)}"
+                    for name in _STRUCTURAL_AXES
+                    if name != axis
+                )
+                task_id = next(iter(group.values()))[0].schedule.task_id
+
+                axis_groups = []
+                for metric in _ABLATION_METRICS:
+                    present = {
+                        value: arm
+                        for value, arm in group.items()
+                        if any(metric in record.payload for record in arm)
+                    }
+                    if not present:
+                        continue
+
+                    metric_data = {"metric": metric, "arms": []}
+                    chance = chance_level(task_id, metric)
+                    for axis_value, arm in sorted(present.items()):
+                        values = [
+                            float(record.payload[metric])
+                            for record in arm
+                            if isinstance(record.payload.get(metric), (int, float))
+                            and not isinstance(record.payload.get(metric), bool)
+                        ]
+                        if not values:
+                            continue
+                        mean = statistics.mean(values)
+                        std = statistics.stdev(values) if len(values) > 1 else 0.0
+                        at_chance = chance is not None and mean <= chance
+                        metric_data["arms"].append({
+                            "value": axis_value,
+                            "mean": mean,
+                            "std": std,
+                            "count": len(values),
+                            "min": min(values),
+                            "max": max(values),
+                            "at_chance": at_chance,
+                        })
+                    if metric_data["arms"]:
+                        axis_groups.append(metric_data)
+
+                if axis_groups:
+                    groups_result.append({
+                        "axis": axis,
+                        "group_index": index,
+                        "fixed_axes": fixed,
+                        "metrics": axis_groups,
+                    })
+
+        return groups_result
+
 
 def _section(title: str) -> list[str]:
     """A report section heading."""

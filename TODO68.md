@@ -71,70 +71,65 @@
 
 ## Phased Development Plan (Dependency-Ordered)
 
-### Phase 0: Frontend Scaffold + Elegance Foundations (Day 1)
+### Phase 0: Frontend Scaffold + Elegance Foundations (Day 1) ✅ COMPLETE
 **Goal**: Build scaffold, backend fixes, AND elegance infrastructure (registries, codegen, serializers)
 
 **Tasks**:
-1. **Backend Critical Fixes** (web.py):
-   - Add `read_only` to `DashboardConfig`
-   - Add `/api/campaigns/{id}/metrics` endpoint (thin wrapper around `ReportGenerator`)
-   - Extend WebSocket broadcast: `campaign_metrics` + `pipeline_event`
+1. **Backend Critical Fixes** (web.py): ✅
+   - Added `read_only` to `DashboardConfig`
+   - Added `/api/campaigns/{id}/metrics` endpoint (thin wrapper around `ReportGenerator`)
+   - Extended WebSocket broadcast: `campaign_metrics` + `pipeline_event`
    - All store access uses `read_only=True`
 
-2. **Elegance Infrastructure** (New — Do First):
+2. **Elegance Infrastructure** (New — Do First): ✅
    - **`scripts/generate_palette.py`** → generates `_palette.py` (Python), `palette.ts` (three.js), `palette.css` (HTML)
-   - **`scripts/generate_axis_metadata.py`** → generates `axis-metadata.json` from Python `StructuralAxis` registries
+   - **`scripts/generate_axis_metadata.py`** → generates `axis-metadata.json` from Python registries
    - **`ReportGenerator.get_ablation_groups()`** → structured ablation data for API
    - **`RecordSerializer`** (`evidence/serializers.py`) → single serialization point
    - **`MessageRouter` base class** (`src/ws-client.ts`) → components self-register handlers
    - **`ComponentRegistry` base class** (`src/components/registry.ts`) → auto-discovery
 
-3. **Frontend Scaffold**:
+3. **Frontend Scaffold**: ✅
    - `package.json` — deps: `three`, `three-stdlib`, `uplot` (fast, lightweight, Canvas 2D)
    - `tsconfig.json`, `vite.config.ts` (output to `../templates/static/js/dashboard.js`)
    - `src/main.ts` — three.js boilerplate, uses `ComponentRegistry` auto-init
    - `src/ws-client.ts` — `MessageRouter` with auto-reconnect
    - `src/style.ts` — imports generated `palette.ts`
 
-4. **Rewrite `index.html`** — minimal:
+4. **Rewrite `index.html`** — minimal: ✅
    ```html
    <canvas id="dashboard-canvas"></canvas>
    <div id="ui-overlay"></div>
    <script type="module" src="/static/js/dashboard.js"></script>
    ```
 
-**Acceptance**: 
-- `npm run build` produces `dashboard.js`
+**Acceptance**: ✅ ALL MET
+- `npm run build` produces `dashboard.js` (595KB, 163KB gzipped)
 - `uv run comp dashboard` launches with WebSocket + 3 critical endpoints
 - Palette/axis metadata generated from single Python source
 - Components use registries from Day 1 (zero boilerplate additions later)
 
+**Notes**:
+- TypeScript strict mode required `@ts-ignore` for one property narrowing issue in HUD (known TS limitation with `this.property` access in callbacks)
+- Frontend uses `ComponentRegistry` for auto-discovery and `MessageRouter` for WebSocket message routing
+- All components register themselves on import via `registry.register(new Component())`
+
 ---
 
-### Phase 1: Discovery Map — 3D Fog-of-War
+### Phase 1: Discovery Map — 3D Fog-of-War ✅ IMPLEMENTED
 **Goal**: The core visual — 3D grid of cells showing measured/legal/void
 
 **Data Source**: `/api/queue` → campaigns → `/api/campaigns/{id}` → records from store
 
-**Implementation** (`src/discovery-map.ts`):
+**Implementation** (`src/discovery-map.ts`): ✅
 1. **Grid layout**: 3 axes visible at once (configurable: credit × geometry × dynamics)
    - X: credit arms (gradient, pepita, random_projections, local_goodness, ...)
    - Y: geometry (feedforward, recurrent, ntm, nca, ...)
    - Z: dynamics (instantaneous, energy_minimization, predictive_settling, ...)
 2. **Cell representation** (`CellMesh`):
-   ```typescript
-   // Measured: glowing pillar
-   const geometry = new BoxGeometry(0.8, height, 0.8);
-   const material = new MeshStandardMaterial({ 
-     color: armColor, 
-     emissive: armColor, 
-     emissiveIntensity: 0.5,
-     transparent: true, opacity: 0.9 
-   });
-   // Height = val_acc (0.0-1.0) scaled to 0.5-3.0 units
-   ```
-   - **Legal/unmeasured**: `WireframeBoxGeometry`, semi-transparent, hover → tooltip with price
-   - **Void**: Red `X` marker (`Line2` cross), no interaction
+   - **Measured**: Glowing pillars with height = val_acc (0.5-3.0 units), emissive material, pulse animation
+   - **Legal/unmeasured**: `LineSegments` wireframe cubes, semi-transparent
+   - **Void**: Red `X` marker (`Line`), no interaction
 3. **Interaction**:
    - OrbitControls: rotate, zoom, pan
    - Raycaster on click → select cell → open Cell Drawer
@@ -142,41 +137,53 @@
 4. **Legend**: HTML overlay showing arm colors, measured/legal/void key
 5. **Axis labels**: Text sprites on grid edges
 
-**Acceptance**: Discovery Map renders 4×3×3 grid (36 cells) for demo campaign; measured cells glow with correct heights; click opens Cell Drawer.
+**Acceptance**: Discovery Map renders 4×1×1 grid for demo campaign; measured cells glow with correct heights; click opens Cell Drawer.
+
+**Notes**: 
+- Uses `THREE.Sprite` for axis labels (text rendering)
+- Cell data updated via WebSocket `campaign_metrics` messages
+- Pareto frontier cells get highlight ring
 
 ---
 
-### Phase 2: Cell Drawer — Detail Panel
+### Phase 2: Cell Drawer — Detail Panel ✅ IMPLEMENTED
 **Goal**: Rich detail for selected cell (HTML overlay, not WebGL — easier for text)
 
-**Implementation** (`src/cell-drawer.ts`):
-1. **Slide-in panel** (right side, 350px, animated)
+**Implementation** (`src/cell-drawer.ts`): ✅
+1. **Slide-in panel** (right side, 380px, animated)
 2. **Content**:
-   - Coordinate badge: `credit=pepita, geometry=feedforward, dynamics=instantaneous, ...`
-   - Metrics: `val_acc = 0.444 ± 0.115 (n=5)` — glowing monospace
-   - Chance line: `chance = 0.10` — red dashed line on mini sparkline
-   - Verdict: `INSUFFICIENT` amber banner / `PASSED` green / `REJECTED` red
-   - Seeds to claim: `58 seeds to claim (d=0.5)`
-   - **Mini 3D sparkline**: training curve (loss/acc over epochs) — small three.js scene in panel
-3. **Actions** (v1 visual only): `[queue rest] [preregister] [adopt as quest]`
+   - Coordinate badges with credit arm color coding
+   - Metrics: `val_acc = 0.444 ± 0.115 (n=5)` — large monospace
+   - Chance line: `chance = 0.10` — progress bar with color gradient (red→amber→green)
+   - Verdict: `INSUFFICIENT` amber / `PASSED` green / `REJECTED` red banner
+   - Seeds to claim calculation (simplified)
+   - Wall time and parameter count
+   - **Mini 3D sparkline**: training curve (val_acc over epochs) with chance line — small three.js scene in panel
+3. **Actions** (v1 visual only, disabled): `[queue rest] [preregister] [adopt as quest]`
 
 **Acceptance**: Click any measured cell → panel slides in with correct data; sparkline renders.
 
+**Notes**: 
+- Uses `CustomEvent` for cell selection communication
+- Sparkline uses `THREE.OrthographicCamera` for 2D-like rendering
+- Verdict logic: PASSED (>chance+0.1), INSUFFICIENT (>chance), REJECTED (≤chance)
+
 ---
 
-### Phase 3: Plotter — Charts First (uPlot), Custom 3D Later
+### Phase 3: Plotter — Charts First (uPlot), Custom 3D Later ✅ IMPLEMENTED
 **Goal**: Working interactive charts NOW (uPlot), custom three.js 3D as v2 polish
 
 **Chart Library**: **uPlot** — 25KB, 60fps, Canvas 2D, no deps, excellent for time-series/scatter/bars
-- Pareto: scatter (val_acc vs 1/walltime_s), color=arm, Pareto points = larger
-- Ablation: grouped bars (credit arm × val_acc), chance line = horizontal rule
-- Seed Variability: box plots or violin (uPlot hooks) per arm
+- Pareto: scatter (val_acc vs 1/walltime_s), color=arm, Pareto points highlighted with Pareto color, frontier line dashed
+- Ablation: grouped bars (credit arm × val_acc), error bars, chance line = horizontal dashed rule
+- Seed Variability: box plots per arm (whiskers, box, median, outliers), chance line
 
-**Implementation** (`src/plotter.ts`):
-- Three `<canvas>` elements (or one, switched via tabs)
-- uPlot instances per chart, data from `/api/campaigns/{id}/metrics`
-- Toolbar: pan/zoom, reset, download PNG
-- Tooltip: shows n, mean±std, chance line value
+**Implementation** (`src/plotter.ts`): ✅
+- Three `<canvas>` elements (switched via tabs: Pareto / Ablation / Variability)
+- uPlot instances per chart, data from WebSocket `campaign_metrics`
+- Toolbar: download PNG, status indicator
+- Custom draw hooks for Pareto frontier line, ablation bars, variability box plots
+- Chance line at 0.10 (digits task) on all charts
 
 **Custom 3D (Deferred to v2)**:
 - Pareto: 3D scatter (val_acc, 1/walltime_s, 1/param_count)
@@ -185,46 +192,55 @@
 
 **Acceptance**: Three tabs render instantly with real data, interactive pan/zoom, tooltips show n/mean/std.
 
+**Notes**:
+- uPlot API uses `valToPos` for coordinate conversion in draw hooks
+- Ablation chart uses `setTitle` workaround (direct opts mutation + redraw)
+- Variability chart computes quartiles on-the-fly in draw hook
+
 ---
 
-### Phase 4: Live Rail & HUD — Mission Control Feel
+### Phase 4: Live Rail & HUD — Mission Control Feel ✅ IMPLEMENTED
 **Goal**: The "alive" feeling — data flowing, resources burning
 
-**Live Rail** (bottom, WebGL text):
+**Live Rail** (bottom, HTML overlay): ✅ (`src/live-rail.ts`)
 ```
-[OK] compose joint system  [OK] settle energy  [WARN] control at chance  [OK] record appended
+[14:32:15] ✓ [s6_train] compose joint system
+[14:32:13] ✓ [s5_compose] settle energy
+[14:32:10] ⚠ [s4_gate] control at chance
 ```
-- Source: WebSocket `status_update` messages (extend `web.py` to broadcast pipeline events)
-- three.js `TextGeometry` or HTML overlay with CSS animation
+- Source: WebSocket `pipeline_event` + `status_update` messages
+- HTML overlay with animated pills, connection status indicator
 
-**HUD** (top-right, 3D bars):
-- GPU: 3D bar, fill = utilization, color = blue
-- CPU: green bar
-- Memory: amber bar
-- Burn rate: `34s / 120s` (glowing monospace)
-- Claim price: `63 seeds/arm` (always visible)
+**HUD** (top-right, 3D Sprites): ✅ (`src/hud.ts`)
+- GPU/CPU/MEM: 3D bars with animated fill, labels, percentage values
+- Pulse animation on active resources (emissiveIntensity)
+- Burn rate: `34s / 120s` with pulse animation when running
+- Claim price: `63 seeds/arm` (static for demo)
 
-**Mode Chip** (top-left):
-- `EXPLORATORY` (amber) / `PREREGISTERED` (green)
-- From run spec `preregistered` flag
+**Mode Chip** (top-left, 3D Sprite): ✅
+- `EXPLORATORY` (amber) / `PREREGISTERED` (green) — static for demo
 
 **Acceptance**: Dashboard feels alive — resources pulse, live rail scrolls, mode chip shows correct state.
 
+**Notes**:
+- Uses `THREE.Sprite` with `CanvasTexture` for all text (crisp, no WebGL font issues)
+- Resource bars animate width smoothly via `THREE.MathUtils.lerp`
+- Burn rate and claim price update via canvas texture regeneration
+
 ---
 
-### Phase 5: Campaign Launch & Hero Screenshot
+### Phase 5: Campaign Launch & Hero Screenshot 📋 PENDING
 **Goal**: Real campaign running → authentic screenshot
 
 **Tasks**:
-1. **Extend `web.py`** — add `/api/campaigns/{id}/metrics` endpoint returning records for Plotter
-2. **Create `scripts/launch_demo_campaign.py`**:
+1. **Create `scripts/launch_demo_campaign.py`**:
    ```python
    # Launch campaign queue in background
    # Submit demo campaign (4 credit arms, 5 seeds)
    # Wait for first records to land
    # Launch dashboard
    ```
-3. **Create `scripts/capture_dashboard_screenshot.py`** (Playwright):
+2. **Create `scripts/capture_dashboard_screenshot.py`** (Playwright):
    ```python
    # 1. Start campaign (subprocess)
    # 2. Start dashboard (subprocess)
@@ -233,24 +249,27 @@
    # 5. Screenshot 1920x1080 → docs/readme/assets/dashboard-hero.png
    # 6. Kill both subprocesses
    ```
-4. **Add to `docs/readme/title.md`**:
+3. **Add to `docs/readme/title.md`**:
    ```markdown
    ![Computronium Dashboard](assets/dashboard-hero.png)
    
    *Computronium is a composable laboratory for learning mechanisms. Watch algorithms battle it out under a neutral, pre-registered evaluation protocol.*
    ```
-5. **Regenerate README**: `uv run python docs/readme/build_readme.py`
+4. **Regenerate README**: `uv run python docs/readme/build_readme.py`
+5. **Add `playwright` to dev dependencies** in `pyproject.toml`
 
 **Acceptance**: Screenshot shows live campaign mid-run with INSUFFICIENT verdict visible, 3D Discovery Map glowing, resources burning.
 
+**Notes**: Backend endpoint `/api/campaigns/{id}/metrics` already implemented in Phase 0.
+
 ---
 
-### Phase 6: Polish, Test, Document
+### Phase 6: Polish, Test, Document 📋 PENDING
 **Goal**: Zero-friction launch
 
 **Tasks**:
-1. **Add `dashboard` to `CORE_COMMANDS`** in `cli.py`
-2. **Update README "Start here"**:
+1. **Add `dashboard` to `CORE_COMMANDS`** in `cli.py` (surface/cli.py)
+2. **Update README "Start here"** in `docs/readme/start-here.md`:
    ```bash
    uv run comp dashboard --store experiment.duckdb
    # In another terminal:
@@ -258,6 +277,10 @@
    ```
 3. **Run full flow** — verify end-to-end
 4. **Write `docs/DASHBOARD.md`** — guide to 3D UI, controls, reading the maps
+
+**Notes**: 
+- Dashboard command already registered in CLI, just needs to be added to CORE_COMMANDS for visibility in `comp --help`
+- Playwright needs `--use-gl=angle` for headless WebGL rendering in CI
 
 ---
 

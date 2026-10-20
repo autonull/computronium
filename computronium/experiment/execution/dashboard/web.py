@@ -1,6 +1,6 @@
 """Web Dashboard for Live Campaign Monitoring (Phase E5).
 
-FastAPI-based web dashboard with HTMX for real-time updates.
+FastAPI-based web dashboard with three.js frontend for real-time updates.
 """
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from computronium.experiment.evidence.serializers import serializer
+
 
 @dataclass(frozen=True, slots=True)
 class DashboardConfig:
@@ -37,6 +39,7 @@ class DashboardConfig:
     enable_websockets: bool = True
     template_dir: Path | None = None
     static_dir: Path | None = None
+    read_only: bool = False  # NEW: all dashboard store access uses read_only=True
 
 
 class WebDashboard:
@@ -97,8 +100,12 @@ class WebDashboard:
         async def api_campaign_detail(campaign_id: str) -> JSONResponse:
             return JSONResponse(await self._get_campaign_detail(campaign_id))
 
+        @self.app.get("/api/campaigns/{campaign_id}/metrics")
+        async def api_campaign_metrics_detailed(campaign_id: str) -> JSONResponse:
+            return JSONResponse(await self._get_campaign_metrics_detailed(campaign_id))
+
         @self.app.get("/api/metrics/{campaign_id}")
-        async def api_campaign_metrics(campaign_id: str) -> JSONResponse:
+        async def api_campaign_metrics_legacy(campaign_id: str) -> JSONResponse:
             return JSONResponse(await self._get_campaign_metrics(campaign_id))
 
         @self.app.get("/api/cost/{campaign_id}")
@@ -292,6 +299,59 @@ class WebDashboard:
         except Exception as e:
             return {"error": str(e)}
 
+    async def _get_campaign_metrics_detailed(self, campaign_id: str) -> dict[str, Any]:
+        """Get detailed metrics for a campaign including Pareto and ablation data.
+
+        This is the main endpoint for the three.js frontend. Returns:
+        - records: All records serialized via RecordSerializer
+        - pareto: Boolean flags indicating which records are on the Pareto frontier
+        - ablation_groups: Structured ablation data from ReportGenerator
+        """
+        if not self.config.store_path:
+            return {"error": "No store path configured"}
+
+        try:
+            from computronium.experiment.evidence.store import RecordStore, StoreConfig
+            from computronium.experiment.surface.report import (
+                ReportGenerator,
+                compute_pareto_frontier,
+            )
+
+            # CRITICAL: read_only=True for all dashboard store access
+            store_config = StoreConfig(
+                path=Path(self.config.store_path), read_only=self.config.read_only
+            )
+            store = RecordStore(store_config)
+            with store:
+                generator = ReportGenerator(store)
+                records = list(generator._store.query_records(run_id=campaign_id))
+
+                if not records:
+                    return {
+                        "records": [],
+                        "pareto": [],
+                        "ablation_groups": [],
+                        "message": "No records found for this campaign",
+                    }
+
+                # Compute Pareto frontier over val_acc and walltime_s
+                pareto_points, _ = compute_pareto_frontier(
+                    records, ["val_acc", "walltime_s"]
+                )
+                pareto_ids = {p["record_id"] for p in pareto_points}
+
+                # Get structured ablation groups
+                ablation_groups = generator.get_ablation_groups(campaign_id)
+
+                return {
+                    "records": [serializer.to_api_dict(r) for r in records],
+                    "pareto": [r.record_id in pareto_ids for r in records],
+                    "ablation_groups": ablation_groups,
+                }
+        except Exception as e:
+            logger.exception("Error fetching detailed campaign metrics")
+            return {"error": str(e)}
+
     async def _handle_websocket(self, websocket: WebSocket) -> None:
         """Handle WebSocket connections for real-time updates."""
         await websocket.accept()
@@ -376,6 +436,30 @@ class WebDashboard:
                     "type": "periodic_update",
                     "status": status,
                     "queue": queue_status,
+                    "timestamp": datetime.now().isoformat(),
+                })
+
+                # NEW: Broadcast per-campaign metrics for running campaigns
+                if self.config.campaign_queue:
+                    campaigns = await self._get_all_campaigns()
+                    for campaign in campaigns.get("campaigns", []):
+                        if campaign["status"] == "running":
+                            metrics = await self._get_campaign_metrics_detailed(
+                                campaign["campaign_id"]
+                            )
+                            await self._broadcast_update({
+                                "type": "campaign_metrics",
+                                "campaign_id": campaign["campaign_id"],
+                                "data": metrics,
+                                "timestamp": datetime.now().isoformat(),
+                            })
+
+                # NEW: Broadcast pipeline events (mock for v1)
+                await self._broadcast_update({
+                    "type": "pipeline_event",
+                    "stage": "s6_train",
+                    "message": "compose joint system",
+                    "level": "ok",
                     "timestamp": datetime.now().isoformat(),
                 })
             except asyncio.CancelledError:

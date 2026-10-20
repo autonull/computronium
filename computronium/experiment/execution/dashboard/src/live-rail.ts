@@ -1,0 +1,177 @@
+/** Live Rail — Scrolling Pipeline Event Log (TODO68 Phase 4). */
+
+import { registry } from "./components/registry.js";
+import { router } from "./ws-client.js";
+import { PALETTE } from "./palette.js";
+import type { Component } from "./components/registry.js";
+
+interface PipelineEvent {
+  stage: string;
+  message: string;
+  level: "ok" | "warn" | "error";
+  timestamp: string;
+}
+
+export class LiveRail implements Component {
+  name = "LiveRail";
+
+  private container: HTMLElement | null = null;
+  private logContainer: HTMLElement | null = null;
+  private events: PipelineEvent[] = [];
+  private maxEvents = 50;
+
+  async init(): Promise<void> {
+    this.createUI();
+    router.register("pipeline_event", this.onPipelineEvent.bind(this));
+    router.register("status_update", this.onStatusUpdate.bind(this));
+    console.log("[LiveRail] Initialized");
+  }
+
+  async destroy(): Promise<void> {
+    router.unregister("pipeline_event", this.onPipelineEvent.bind(this));
+    router.unregister("status_update", this.onStatusUpdate.bind(this));
+    this.container?.remove();
+  }
+
+  private createUI(): void {
+    const overlay = document.getElementById("ui-overlay");
+    if (!overlay) return;
+
+    this.container = document.createElement("div");
+    this.container.id = "live-rail";
+    this.container.style.cssText = `
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 120px;
+      background: linear-gradient(to top, var(--bg), transparent);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      pointer-events: none;
+    `;
+
+    this.container.innerHTML = `
+      <div style="
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-secondary);
+      ">
+        <span style="font-weight: 600; color: var(--text-primary);">LIVE RAIL</span>
+        <span id="rail-connection" style="
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: 12px;
+          background: var(--error)22;
+          border: 1px solid var(--error)88;
+          color: var(--error);
+        ">
+          <span class="dot" style="width: 6px; height: 6px; border-radius: 50%; background: var(--error);"></span>
+          Disconnected
+        </span>
+        <div style="flex: 1;"></div>
+        <span id="rail-count">0 events</span>
+      </div>
+      <div id="rail-log" style="
+        flex: 1;
+        overflow-x: auto;
+        overflow-y: hidden;
+        display: flex;
+        gap: 24px;
+        padding: 8px 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        white-space: nowrap;
+      "></div>
+    `;
+
+    overlay.appendChild(this.container);
+    this.logContainer = this.container.querySelector("#rail-log")!;
+  }
+
+  private onPipelineEvent(data: PipelineEvent): void {
+    this.events.unshift(data);
+    if (this.events.length > this.maxEvents) this.events.pop();
+    this.render();
+  }
+
+  private onStatusUpdate(data: any): void {
+    const connEl = this.container?.querySelector(
+      "#rail-connection",
+    ) as HTMLElement | null;
+    if (!connEl) return;
+
+    const dot = connEl.querySelector(".dot") as HTMLElement | null;
+    if (!dot) return;
+    const text = connEl.childNodes[1] as Text;
+
+    if (data.data?.running_campaigns > 0) {
+      dot.style.background = PALETTE.ok;
+      connEl.style.background = PALETTE.ok + "22";
+      connEl.style.borderColor = PALETTE.ok + "88";
+      connEl.style.color = PALETTE.ok;
+      text.textContent = "Connected";
+    } else {
+      dot.style.background = PALETTE.warn;
+      connEl.style.background = PALETTE.warn + "22";
+      connEl.style.borderColor = PALETTE.warn + "88";
+      connEl.style.color = PALETTE.warn;
+      text.textContent = "Idle";
+    }
+  }
+
+  private render(): void {
+    if (!this.logContainer) return;
+
+    this.logContainer.innerHTML = this.events
+      .map((event) => {
+        const time = new Date(event.timestamp).toLocaleTimeString();
+        const levelColors: Record<string, string> = {
+          ok: PALETTE.ok,
+          warn: PALETTE.warn,
+          error: PALETTE.error,
+        };
+        const color = levelColors[event.level] || PALETTE.text_secondary;
+        const icon =
+          event.level === "ok" ? "✓" : event.level === "warn" ? "⚠" : "✗";
+
+        return `
+          <span style="
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            color: var(--text-primary);
+          ">
+            <span style="color: var(--text-secondary);">${time}</span>
+            <span style="color: ${color};">${icon}</span>
+            <span style="color: var(--text-muted);">[${event.stage}]</span>
+            <span>${event.message}</span>
+          </span>
+        `;
+      })
+      .join("");
+
+    const countEl = this.container?.querySelector(
+      "#rail-count",
+    ) as HTMLElement | null;
+    if (countEl) countEl.textContent = `${this.events.length} events`;
+
+    // Auto-scroll to latest (left side)
+    this.logContainer.scrollLeft = 0;
+  }
+}
+
+registry.register(new LiveRail());

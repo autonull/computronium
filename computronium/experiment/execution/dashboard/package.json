@@ -1,0 +1,20 @@
+{
+  "name": "computronium-dashboard",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.168.0",
+    "three-stdlib": "^2.32.0",
+    "uplot": "^1.6.32"
+  },
+  "devDependencies": {
+    "@types/three": "^0.168.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
+  }
+}
