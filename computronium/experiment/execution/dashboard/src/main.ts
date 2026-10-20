@@ -133,6 +133,24 @@ wsClient.waitForConnection(15000).then((connected) => {
 // Components self-register with the registry on import; the registry
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
+// Keyboard shortcuts: the charts, the panels, and the drawer.
+const TAB_KEYS: Record<string, string> = {
+  "1": "pareto",
+  "2": "ablation",
+  "3": "variability",
+};
+window.addEventListener("keydown", (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const tab = TAB_KEYS[event.key];
+  if (tab) {
+    plotter.showTab(tab);
+    return;
+  }
+  const key = event.key.toLowerCase();
+  if (key === "h") hud.toggle();
+  if (key === "l") liveRail.toggle();
+});
+
 // Three.js scene setup (shared by DiscoveryMap and HUD)
 const canvas = document.getElementById("dashboard-canvas") as HTMLCanvasElement;
 const profile = detectRenderProfile();
@@ -160,15 +178,15 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   200,
 );
-camera.position.set(3.5, 4.8, 9.5);
-camera.lookAt(0, 1.1, 0);
+camera.position.set(3.3, 4.4, 8.8);
+camera.lookAt(0, 1.0, 0.1);
 
 // Publish the shared scene so components bind to the live scene, not copies
 setSceneContext({ scene, camera, renderer });
 
 // Orbit controls
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.1, 0);
+controls.target.set(0, 1.0, 0.1);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.enablePan = true;

@@ -33,11 +33,43 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.campaign_queue import (
         CampaignQueue,
     )
+    from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
 
 # Pareto objectives: maximize task accuracy, minimize wall cost.
 PARETO_OBJECTIVES = ("validation_accuracy", "walltime_total")
+
+
+def run_status(
+    spec: RunSpec | None,
+    run_id: str,
+    claim_metrics: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """What the run declares, and whether its claim is preregistered.
+
+    A metric carrying a threshold in ``configs/preregistrations/`` is a
+    confirmatory one; every other claim is exploratory. The dashboard reports
+    which, rather than asserting a status the run never declared.
+    """
+    from computronium.experiment.surface.report import preregistered_metrics
+
+    registered = preregistered_metrics()
+    mode = (
+        "PREREGISTERED"
+        if claim_metrics and all(metric in registered for metric in claim_metrics)
+        else "EXPLORATORY"
+    )
+
+    return {
+        "run_id": run_id,
+        "profile": spec.profile if spec else None,
+        "tasks": list(spec.task_names) if spec else [],
+        "fidelity": spec.fidelity if spec else None,
+        "objectives": list(spec.objectives) if spec else [],
+        "claim_metrics": list(claim_metrics),
+        "mode": mode,
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,6 +408,8 @@ class WebDashboard:
                         "message": "No records found for this campaign",
                     }
 
+                run = store.query_run(campaign_id)
+
                 # Compute Pareto frontier over registered objectives
                 pareto_points, _ = analysis_compute_pareto_frontier(
                     records, list(PARETO_OBJECTIVES)
@@ -385,6 +419,10 @@ class WebDashboard:
 
                 # Get structured ablation groups
                 ablation_groups = generator.get_ablation_groups(campaign_id)
+
+                # The metrics the run's claims are about decide whether it
+                # is confirmatory or exploratory.
+                claim_metrics = generator.claim_metrics(campaign_id)
 
                 # Chance line and power requirement come from the task and the
                 # gate thresholds, never from a hand-written constant.
@@ -422,6 +460,9 @@ class WebDashboard:
                     "chance": chance,
                     "required_seeds": GateThresholds().required_seeds_per_group,
                     "resources": resources,
+                    "run": run_status(
+                        run.spec if run else None, campaign_id, claim_metrics
+                    ),
                 }
         except Exception as e:
             logger.exception("Error fetching detailed campaign metrics")

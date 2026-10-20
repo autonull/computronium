@@ -7,6 +7,11 @@ import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
 import type { Component } from "./components/registry.js";
 
+/** The chart is what the panel leaves once the title has taken its line. */
+function chartHeight(panel: HTMLElement): number {
+  return Math.max(120, panel.clientHeight - 30);
+}
+
 interface RecordData {
   record_id: string;
   coordinate: {
@@ -47,6 +52,7 @@ export class Plotter implements Component {
   private container: HTMLElement | null = null;
   private tabsContainer: HTMLElement | null = null;
   private contentContainer: HTMLElement | null = null;
+  private tooltip: HTMLElement | null = null;
   private paretoPlot: uPlot | null = null;
   private ablationPlot: uPlot | null = null;
   private variabilityPlot: uPlot | null = null;
@@ -55,6 +61,15 @@ export class Plotter implements Component {
   private ablationGroups: AblationGroup[] = [];
   private paretoFlags: boolean[] = [];
   private chance = 0.1;
+  /** Data index → record index: a record without a wall time is still plotted
+      as a gap, so the two indices are not the same. */
+  private paretoRecordIndices: number[] = [];
+  private paretoXData: number[] = [];
+  private paretoYData: number[] = [];
+  /** The category labels the current chart's x axis names. */
+  private categoryLabels: string[] = [];
+  /** The axes the ablation chart holds fixed. */
+  private ablationFixedAxes = "";
 
   constructor() {
     // Register WebSocket handlers IMMEDIATELY in constructor
@@ -82,10 +97,10 @@ export class Plotter implements Component {
     this.container.id = "plotter";
     this.container.style.cssText = `
       position: fixed;
-      bottom: 20px;
+      bottom: 140px;
       right: 20px;
       width: 520px;
-      height: 380px;
+      height: 430px;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -93,6 +108,7 @@ export class Plotter implements Component {
       flex-direction: column;
       z-index: 150;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     `;
 
     this.container.innerHTML = `
@@ -120,7 +136,11 @@ export class Plotter implements Component {
         font-size: 11px;
         color: var(--text-secondary);
       ">
-        <span id="plotter-status">No data</span>
+        <span id="plotter-status" style="
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        ">No data</span>
         <div style="flex: 1;"></div>
         <button id="plotter-download" style="
           padding: 4px 10px;
@@ -138,6 +158,25 @@ export class Plotter implements Component {
     this.tabsContainer = this.container.querySelector("#plotter-tabs")!;
     this.contentContainer = this.container.querySelector("#plotter-content")!;
 
+    this.tooltip = document.createElement("div");
+    this.tooltip.id = "plotter-tooltip";
+    this.tooltip.style.cssText = `
+      position: absolute;
+      display: none;
+      pointer-events: none;
+      padding: 6px 10px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-bright);
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      z-index: 10;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    `;
+    this.container.appendChild(this.tooltip);
+
     // Tab switching
     this.tabsContainer.querySelectorAll(".plotter-tab").forEach((btn) => {
       btn.addEventListener("click", () =>
@@ -152,6 +191,12 @@ export class Plotter implements Component {
 
     // Render the initially active tab
     this.switchTab(this.currentTab);
+  }
+
+  /** Show one of the charts: "pareto", "ablation" or "variability". */
+  showTab(tab: string): void {
+    if (tab === this.currentTab) return;
+    this.switchTab(tab);
   }
 
   private switchTab(tab: string): void {
@@ -197,10 +242,16 @@ export class Plotter implements Component {
   };
 
   private updateStatus(): void {
-    const statusEl = this.container?.querySelector("#plotter-status");
-    if (statusEl) {
-      statusEl.textContent = `${this.records.length} records | ${this.paretoFlags.filter((f) => f).length} Pareto`;
-    }
+    const statusEl = this.container?.querySelector<HTMLElement>("#plotter-status");
+    if (!statusEl) return;
+    const counts = `${this.records.length} records | ${this.paretoFlags.filter((f) => f).length} Pareto`;
+    // The ablation chart is only about the arms that share every other
+    // axis; saying which ones is what makes its bars comparable.
+    const fixed = this.ablationFixedAxes
+      ? ` | fixed: ${this.ablationFixedAxes}`
+      : "";
+    statusEl.textContent = counts + fixed;
+    statusEl.title = statusEl.textContent;
   }
 
   private updatePlots(): void {
@@ -219,11 +270,18 @@ export class Plotter implements Component {
 
     const opts: uPlot.Options = {
       width: panel.clientWidth,
-      height: panel.clientHeight,
-      title: "Pareto Frontier: val_acc vs 1/walltime_s",
+      height: chartHeight(panel),
+      title: "Pareto Frontier: validation accuracy vs speed",
       axes: [
-        { grid: { stroke: PALETTE.border } },
-        { grid: { stroke: PALETTE.border }, side: 1 },
+        {
+          label: "1 / walltime_s   (faster →)",
+          grid: { stroke: PALETTE.border },
+        },
+        {
+          label: "accuracy",
+          grid: { stroke: PALETTE.border },
+          side: 1,
+        },
       ],
       scales: {
         x: { time: false },
@@ -237,14 +295,15 @@ export class Plotter implements Component {
           width: 0,
           points: {
             show: true,
-            size: 6,
+            size: 8,
             stroke: "white",
             width: 1,
             fill: (u: uPlot, i: number) => {
-              return this.paretoFlags[i]
-                ? PALETTE.pareto
-                : ARM_COLORS[this.records[i]?.coordinate?.credit] ||
-                    PALETTE.gradient;
+              const recordIndex = this.paretoRecordIndices[i];
+              const record =
+                recordIndex === undefined ? undefined : this.records[recordIndex];
+              if (!record) return PALETTE.gradient;
+              return ARM_COLORS[record.coordinate?.credit] || PALETTE.gradient;
             },
           },
         },
@@ -257,9 +316,9 @@ export class Plotter implements Component {
             // The Pareto frontier: the cells that are not beaten on both axes.
             if (this.paretoFlags.some((f) => f)) {
               const paretoPoints: [number, number][] = [];
-              this.records.forEach((r, i) => {
+              this.records.forEach((r, recordIdx) => {
                 if (
-                  this.paretoFlags[i] &&
+                  this.paretoFlags[recordIdx] &&
                   r.payload.walltime_s &&
                   r.payload.val_acc
                 ) {
@@ -287,6 +346,18 @@ export class Plotter implements Component {
                 ctx.stroke();
                 ctx.setLineDash([]);
               }
+
+              // A ring marks the frontier's points without taking their arm's
+              // colour away from them.
+              paretoPoints.forEach((p) => {
+                const pxCanvas = u.valToPos(p[0], "x");
+                const pyCanvas = u.valToPos(p[1], "y");
+                ctx.beginPath();
+                ctx.arc(pxCanvas, pyCanvas, 7, 0, Math.PI * 2);
+                ctx.strokeStyle = PALETTE.pareto;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+              });
             }
 
             // Chance line: what every point is measured against.
@@ -301,6 +372,11 @@ export class Plotter implements Component {
             ctx.setLineDash([]);
           },
         ],
+        setCursor: [
+          (u: uPlot) => {
+            this.showScatterTooltip(u);
+          },
+        ],
       },
       cursor: {
         show: true,
@@ -312,15 +388,23 @@ export class Plotter implements Component {
     this.paretoPlot = new uPlot(opts, [[], []], panel);
   }
 
+  /** The record behind a plotted point: a gap holds no record. */
+  private recordAt(dataIndex: number): RecordData | undefined {
+    const recordIndex = this.paretoRecordIndices[dataIndex];
+    return recordIndex === undefined ? undefined : this.records[recordIndex];
+  }
+
   private updateParetoPlot(): void {
     if (!this.paretoPlot || this.records.length === 0) return;
 
     const xData: number[] = [];
     const yData: number[] = [];
+    this.paretoRecordIndices = [];
 
-    this.records.forEach((r) => {
+    this.records.forEach((r, recordIndex) => {
       const wt = r.payload.walltime_s;
       const acc = r.payload.val_acc;
+      this.paretoRecordIndices.push(recordIndex);
       if (wt && acc) {
         xData.push(1 / wt);
         yData.push(acc);
@@ -331,6 +415,8 @@ export class Plotter implements Component {
     });
 
     this.paretoPlot.setData([xData, yData]);
+    this.paretoXData = xData;
+    this.paretoYData = yData;
 
     const xs = xData.filter(Number.isFinite);
     const ys = yData.filter(Number.isFinite);
@@ -373,21 +459,28 @@ export class Plotter implements Component {
 
     const opts: uPlot.Options = {
       width: panel.clientWidth,
-      height: panel.clientHeight,
-      title: "Ablation: Credit Arm vs val_acc",
+      height: chartHeight(panel),
+      title: "Ablation: credit arm → validation accuracy",
       axes: [
-        { grid: { stroke: PALETTE.border } },
-        { grid: { stroke: PALETTE.border }, side: 1 },
+        {
+          label: "credit arm",
+          splits: () => this.categoryIndices(),
+          values: (_u, splits) =>
+            splits.map((i) => this.categoryLabels[i] ?? String(i)),
+          grid: { stroke: PALETTE.border },
+        },
+        {
+          label: "accuracy",
+          grid: { stroke: PALETTE.border },
+          side: 1,
+        },
       ],
       scales: { x: { time: false }, y: { time: false } },
       series: [
         {},
-        {
-          label: "val_acc",
-          fill: PALETTE.gradient,
-          stroke: PALETTE.gradient,
-          width: 0,
-        },
+        // The draw hook draws the bars; uPlot must not draw a series over
+        // them.
+        { label: "val_acc", width: 0, points: { show: false } },
       ],
       hooks: {
         draw: [
@@ -443,6 +536,11 @@ export class Plotter implements Component {
             ctx.setLineDash([]);
           },
         ],
+        setCursor: [
+          (u: uPlot) => {
+            this.showCategoryTooltip(u, "ablation");
+          },
+        ],
       },
       cursor: { show: true, drag: { setScale: true } },
     };
@@ -461,9 +559,14 @@ export class Plotter implements Component {
 
     const xData = metricData.arms.map((_, i) => i);
     const yData = metricData.arms.map((a) => a.mean);
+    this.categoryLabels = metricData.arms.map((arm) => arm.value);
+    this.ablationFixedAxes = group.fixed_axes
+      .split(",")
+      .map((entry) => entry.split("=").pop() ?? entry)
+      .join(", ");
 
     this.ablationPlot.setData([xData, yData]);
-    this.fitScale(this.ablationPlot, "x", 0, Math.max(xData.length - 1, 1));
+    this.fitScale(this.ablationPlot, "x", -0.5, Math.max(xData.length - 0.5, 0.5));
 
     const values = metricData.arms.flatMap((arm) => [
       arm.mean - arm.std,
@@ -477,10 +580,14 @@ export class Plotter implements Component {
         Math.max(...values),
       );
     }
-    // uPlot doesn't have setTitle, update title via options
-    (this.ablationPlot as any).opts.title =
-      `Ablation: ${group.axis} vs val_acc (fixed: ${group.fixed_axes})`;
-    this.ablationPlot.redraw();
+    // uPlot has no setTitle: the title is a div it made.
+    const title = this.ablationPlot.root.querySelector(".u-title");
+    if (title) {
+      title.textContent = `Ablation: ${group.axis} vs val_acc`;
+    }
+    // uPlot's redraw() re-sets the x scale from the scale's own (empty)
+    // range, which throws away the range this chart states. setScale has
+    // already scheduled the redraw.
   }
 
   // ─── Variability Plot (box plots per arm) ───
@@ -492,21 +599,28 @@ export class Plotter implements Component {
 
     const opts: uPlot.Options = {
       width: panel.clientWidth,
-      height: panel.clientHeight,
-      title: "Seed Variability: val_acc per Credit Arm",
+      height: chartHeight(panel),
+      title: "Seed variability: validation accuracy per arm",
       axes: [
-        { grid: { stroke: PALETTE.border } },
-        { grid: { stroke: PALETTE.border }, side: 1 },
+        {
+          label: "credit arm",
+          splits: () => this.categoryIndices(),
+          values: (_u, splits) =>
+            splits.map((i) => this.categoryLabels[i] ?? String(i)),
+          grid: { stroke: PALETTE.border },
+        },
+        {
+          label: "accuracy",
+          grid: { stroke: PALETTE.border },
+          side: 1,
+        },
       ],
       scales: { x: { time: false }, y: { time: false } },
       series: [
         {},
-        {
-          label: "val_acc",
-          fill: PALETTE.gradient,
-          stroke: PALETTE.gradient,
-          width: 0,
-        },
+        // The draw hook draws the bars; uPlot must not draw a series over
+        // them.
+        { label: "val_acc", width: 0, points: { show: false } },
       ],
       hooks: {
         draw: [
@@ -597,6 +711,11 @@ export class Plotter implements Component {
             ctx.setLineDash([]);
           },
         ],
+        setCursor: [
+          (u: uPlot) => {
+            this.showCategoryTooltip(u, "variability");
+          },
+        ],
       },
       cursor: { show: true, drag: { setScale: true } },
     };
@@ -614,12 +733,13 @@ export class Plotter implements Component {
     ).sort();
     const xData = arms.map((_, i) => i);
     const yData = arms.map(() => 0);
+    this.categoryLabels = arms;
     this.variabilityPlot.setData([xData, yData]);
     this.fitScale(
       this.variabilityPlot,
       "x",
-      0,
-      Math.max(arms.length - 1, 1),
+      -0.5,
+      Math.max(arms.length - 0.5, 0.5),
     );
 
     const values = this.records
@@ -635,6 +755,124 @@ export class Plotter implements Component {
     }
   }
 
+  /** The category positions the x axis splits on. */
+  private categoryIndices(): number[] {
+    return this.categoryLabels.map((_, i) => i);
+  }
+
+  /** The tooltip follows the cursor and says what the point is. */
+  private showTooltip(plot: uPlot, content: string): void {
+    if (!this.tooltip || !this.container) return;
+    const cursor = plot.cursor;
+    if (!cursor || cursor.left == null || cursor.top == null) {
+      this.hideTooltip();
+      return;
+    }
+    const canvasRect = plot.ctx.canvas.getBoundingClientRect();
+    const containerRect = this.container.getBoundingClientRect();
+    this.tooltip.innerHTML = content;
+    this.tooltip.style.display = "block";
+    this.tooltip.style.left = `${canvasRect.left - containerRect.left + plot.bbox.left + cursor.left + 14}px`;
+    this.tooltip.style.top = `${canvasRect.top - containerRect.top + plot.bbox.top + cursor.top + 14}px`;
+  }
+
+  private hideTooltip(): void {
+    if (this.tooltip) this.tooltip.style.display = "none";
+  }
+
+  /** The scatter's tooltip names the record behind the point. */
+  private showScatterTooltip(plot: uPlot): void {
+    const cursor = plot.cursor;
+    if (!cursor || cursor.left == null || cursor.top == null) {
+      this.hideTooltip();
+      return;
+    }
+
+    let bestIndex = -1;
+    let bestDistance = Infinity;
+    this.paretoXData.forEach((x, i) => {
+      const y = this.paretoYData[i];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      const px = plot.valToPos(x, "x");
+      const py = plot.valToPos(y, "y");
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return;
+      const distance = (px - cursor.left!) ** 2 + (py - cursor.top!) ** 2;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = i;
+      }
+    });
+
+    if (bestIndex < 0 || bestDistance > 400) {
+      this.hideTooltip();
+      return;
+    }
+
+    const record = this.recordAt(bestIndex);
+    if (!record) {
+      this.hideTooltip();
+      return;
+    }
+    const recordIndex = this.paretoRecordIndices[bestIndex];
+    const arm = record.coordinate?.credit ?? "?";
+    const acc = record.payload.val_acc ?? 0;
+    const walltime = record.payload.walltime_s ?? 0;
+    const seed = record.schedule?.seed ?? "?";
+    const pareto = this.paretoFlags[recordIndex] ? " · PARETO" : "";
+    this.showTooltip(
+      plot,
+      `${arm} · val_acc ${acc.toFixed(3)} · ${walltime.toFixed(1)}s · seed ${seed}${pareto}`,
+    );
+  }
+
+  /** The banded charts' tooltip names the arm and its spread. */
+  private showCategoryTooltip(plot: uPlot, kind: "ablation" | "variability"): void {
+    const cursor = plot.cursor;
+    if (!cursor || cursor.left == null || cursor.top == null) {
+      this.hideTooltip();
+      return;
+    }
+
+    const index = Math.round(plot.posToVal(cursor.left, "x"));
+    if (index < 0 || index >= this.categoryLabels.length) {
+      this.hideTooltip();
+      return;
+    }
+    const arm = this.categoryLabels[index];
+
+    if (kind === "ablation") {
+      const group = this.ablationGroups.find((g) => g.axis === "credit");
+      const metric = group?.metrics.find((m) => m.metric === "val_acc");
+      const stats = metric?.arms[index];
+      if (!stats) {
+        this.hideTooltip();
+        return;
+      }
+      this.showTooltip(
+        plot,
+        `${arm} · ${stats.mean.toFixed(3)} ± ${stats.std.toFixed(3)} (n=${stats.count})${stats.at_chance ? " · at chance" : ""}`,
+      );
+      return;
+    }
+
+    const values = this.records
+      .filter((r) => r.coordinate.credit === arm)
+      .map((r) => r.payload.val_acc)
+      .filter((v): v is number => typeof v === "number")
+      .sort((a, b) => a - b);
+    if (values.length === 0) {
+      this.hideTooltip();
+      return;
+    }
+    const median = values[Math.floor(values.length * 0.5)];
+    const q1 = values[Math.floor(values.length * 0.25)];
+    const q3 = values[Math.floor(values.length * 0.75)];
+    this.showTooltip(
+      plot,
+      `${arm} · median ${median.toFixed(3)} · IQR ${(q3 - q1).toFixed(3)} · n=${values.length}`,
+    );
+  }
+
   private downloadCurrent(): void {
     const plotMap: Record<string, uPlot | null> = {
       pareto: this.paretoPlot,
@@ -646,8 +884,44 @@ export class Plotter implements Component {
 
     const link = document.createElement("a");
     link.download = `computronium-${this.currentTab}-${Date.now()}.png`;
-    link.href = plot.ctx.canvas.toDataURL("image/png");
+    link.href = this.exportImage(plot);
     link.click();
+  }
+
+  /** The chart with its axes, not just the plot area.
+
+    uPlot draws the axes on their own canvases; the plot area alone is a
+    rectangle of points with no labels on it.
+  */
+  private exportImage(plot: uPlot): string {
+    const canvases = Array.from(
+      plot.root.querySelectorAll("canvas"),
+    ) as HTMLCanvasElement[];
+    const rootRect = plot.root.getBoundingClientRect();
+
+    const width = Math.max(...canvases.map((c) => c.width), 1);
+    const height = Math.max(...canvases.map((c) => c.height), 1);
+    const output = document.createElement("canvas");
+    output.width = width;
+    output.height = height;
+    const ctx = output.getContext("2d");
+    if (!ctx) return plot.ctx.canvas.toDataURL("image/png");
+
+    ctx.fillStyle = PALETTE.bg;
+    ctx.fillRect(0, 0, width, height);
+    canvases.forEach((canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const ratio = canvas.width / rect.width;
+      ctx.drawImage(
+        canvas,
+        (rect.left - rootRect.left) * ratio,
+        (rect.top - rootRect.top) * ratio,
+        canvas.width,
+        canvas.height,
+      );
+    });
+    return output.toDataURL("image/png");
   }
 }
 

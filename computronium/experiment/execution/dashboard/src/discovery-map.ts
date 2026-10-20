@@ -60,6 +60,30 @@ function meanCurve(curves: CurvePoint[][]): CurvePoint[] {
     .map(([epoch, values]) => ({ epoch, val_acc: mean(values) }));
 }
 
+/** Break a label into lines that fit the gap between two cells.
+
+    A long name written on one line is wider than the space it has, and the
+    labels then read as a smear; breaking it at its underscores keeps every
+    word whole.
+*/
+function wrapLabel(text: string, maxChars = 10): string[] {
+  if (text.length <= maxChars) return [text];
+
+  const lines: string[] = [];
+  let current = "";
+  for (const part of text.split("_")) {
+    const candidate = current ? `${current}_${part}` : part;
+    if (candidate.length > maxChars && current) {
+      lines.push(current);
+      current = part;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 interface GridAxes {
   x: AxisName;
   y: AxisName;
@@ -83,6 +107,8 @@ export class DiscoveryMap implements Component {
   private cells: Map<string, THREE.Mesh | THREE.LineSegments | THREE.Line> =
     new Map();
   cellDataMap: Map<string, CellData> = new Map();
+  /** The height each cell's pillar currently stands at. */
+  private cellHeights: Map<string, number> = new Map();
   private axes: GridAxes = { x: "credit", y: "geometry", z: "dynamics" };
   private axisValues: Record<AxisName, string[]> = {
     credit: [],
@@ -366,57 +392,81 @@ export class DiscoveryMap implements Component {
     this.axisLabelMeshes.forEach((mesh) => this.scene.remove(mesh));
     this.axisLabelMeshes = [];
 
-    const labelMaterial = new THREE.SpriteMaterial({
+    const valueMaterial = new THREE.SpriteMaterial({
       color: 0x8b98a8,
       sizeAttenuation: true,
     });
+    const nameMaterial = new THREE.SpriteMaterial({
+      color: 0xc9d4e0,
+      sizeAttenuation: true,
+    });
 
-    // X-axis labels (the values they name), on the ground under the cells
+    const gridWidth = (this.xValues.length - 1) * this.spacing;
+    const gridDepth = (this.zValues.length - 1) * this.spacing;
+    // The labels stand clear in front of the cells: from the camera's angle a
+    // label on the grid's own plane is painted across the pillars.
+    const labelZ = gridDepth / 2 + 1.4;
+
+    // The values the row names, under the cells.
     this.xValues.forEach((val, idx) => {
       const x = (idx - (this.xValues.length - 1) / 2) * this.spacing;
-      const sprite = this.createTextSprite(val, 0.3, labelMaterial);
-      sprite.position.set(x, -0.06, 0.72);
+      const sprite = this.createTextSprite(
+        val,
+        0.3,
+        valueMaterial,
+        this.spacing * 0.95,
+      );
+      sprite.position.set(x, 0, labelZ);
       this.scene.add(sprite);
       this.axisLabelMeshes.push(sprite);
     });
 
-    // Y-axis label, above the cells
-    const ySprite = this.createTextSprite(this.axes.y, 0.28, labelMaterial);
-    ySprite.position.set(0, 3.5, 0);
-    this.scene.add(ySprite);
-    this.axisLabelMeshes.push(ySprite);
+    // The axis the row runs along, at the row's end.
+    const xSprite = this.createTextSprite(this.axes.x, 0.3, nameMaterial);
+    xSprite.position.set(gridWidth / 2 + 1.15, 0, labelZ);
+    this.scene.add(xSprite);
+    this.axisLabelMeshes.push(xSprite);
 
-    // Z-axis label, past the end of the row
-    const zSprite = this.createTextSprite(this.axes.z, 0.28, labelMaterial);
-    zSprite.position.set(
-      ((this.xValues.length - 1) / 2) * this.spacing + 1.7,
-      -0.06,
-      0.72,
-    );
+    // The axis that comes at the camera, on its own line in front.
+    const zSprite = this.createTextSprite(this.axes.z, 0.3, nameMaterial);
+    zSprite.position.set(0, 0, labelZ + 1.1);
     this.scene.add(zSprite);
     this.axisLabelMeshes.push(zSprite);
+
+    // The axis the rows stack along, beside the rows it stacks.
+    const ySprite = this.createTextSprite(this.axes.y, 0.3, nameMaterial);
+    ySprite.position.set(-(gridWidth / 2) - 1.5, 1.3, 0);
+    this.scene.add(ySprite);
+    this.axisLabelMeshes.push(ySprite);
   }
 
+  /** A label that fits the space it has: wrapped, and never wider than the gap. */
   private createTextSprite(
     text: string,
     worldHeight: number,
     material: THREE.SpriteMaterial,
+    maxWidth?: number,
   ): THREE.Sprite {
+    const lines = wrapLabel(text);
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d")!;
     const fontSize = 64;
+    const lineHeight = 72;
 
     context.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
-    const textWidth = Math.ceil(context.measureText(text).width) + 16;
-    canvas.width = Math.max(64, textWidth);
-    canvas.height = 96;
+    const textWidth =
+      Math.max(...lines.map((line) => context.measureText(line).width)) + 16;
+    canvas.width = Math.max(64, Math.ceil(textWidth));
+    canvas.height = lines.length * lineHeight + 16;
 
     // Resizing the canvas resets the context, so the font is set after.
     context.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
-    context.fillStyle = "#8b98a8";
+    context.fillStyle = "#ffffff";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(text, canvas.width / 2, canvas.height / 2);
+    lines.forEach((line, i) => {
+      context.fillText(line, canvas.width / 2, lineHeight * i + lineHeight / 2 + 8);
+    });
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
@@ -427,7 +477,11 @@ export class DiscoveryMap implements Component {
 
     const sprite = new THREE.Sprite(spriteMaterial);
     const aspect = canvas.width / canvas.height;
-    sprite.scale.set(worldHeight * aspect, worldHeight, 1);
+    let height = worldHeight * lines.length;
+    if (maxWidth !== undefined) {
+      height = Math.min(height, maxWidth / aspect);
+    }
+    sprite.scale.set(height * aspect, height, 1);
     return sprite;
   }
 
@@ -459,13 +513,13 @@ export class DiscoveryMap implements Component {
     }
 
     mesh.position.set(x, y, z);
-    mesh.userData = { cellKey: key };
+    mesh.userData = { ...mesh.userData, cellKey: key };
     this.scene.add(mesh);
     this.cells.set(key, mesh);
   }
 
   private createMeasuredCell(data: CellData): THREE.Mesh {
-    const height = THREE.MathUtils.lerp(0.4, 3.4, data.metrics?.val_acc ?? 0);
+    const height = this.pillarHeight(data);
     const color = ARM_COLORS[data.coordinate.credit] || PALETTE.gradient;
 
     const geometry = new THREE.BoxGeometry(
@@ -566,6 +620,7 @@ export class DiscoveryMap implements Component {
     });
     this.cells.clear();
     this.cellDataMap.clear();
+    this.cellHeights.clear();
   }
 
   private onQueueUpdate = (_data: unknown): void => {
@@ -702,6 +757,11 @@ export class DiscoveryMap implements Component {
     });
   }
 
+  /** A pillar's height: the cell's accuracy, measured. */
+  private pillarHeight(data: CellData): number {
+    return THREE.MathUtils.lerp(0.4, 3.4, data.metrics?.val_acc ?? 0);
+  }
+
   private updateCellVisual(
     key: string,
     data: CellData,
@@ -724,6 +784,15 @@ export class DiscoveryMap implements Component {
 
     const newMesh = this.createMeasuredCell(data);
     newMesh.position.copy(position);
+    // The rebuilt mesh must still know which cell it is: the click finds the
+    // cell by this key.
+    newMesh.userData.cellKey = key;
+
+    // The pillar grows into its measured height instead of appearing at it.
+    const target = this.pillarHeight(data);
+    const previous = this.cellHeights.get(key) ?? 0;
+    this.cellHeights.set(key, target);
+    newMesh.scale.y = target > 0 ? Math.min(1, Math.max(previous / target, 0.001)) : 1;
 
     if (isPareto) {
       // Add Pareto highlight ring
@@ -759,7 +828,8 @@ export class DiscoveryMap implements Component {
   }
 
   update(delta: number): void {
-    // Animate glow pulse for measured cells
+    // Pillars ease into the height they were measured at.
+    const ease = 1 - Math.exp(-delta * 8);
     this.cells.forEach((mesh, key) => {
       const data = this.cellDataMap.get(key);
       if (
@@ -767,6 +837,9 @@ export class DiscoveryMap implements Component {
         mesh instanceof THREE.Mesh &&
         mesh.material instanceof THREE.MeshStandardMaterial
       ) {
+        if (mesh.scale.y < 1) {
+          mesh.scale.y = Math.min(1, mesh.scale.y + (1 - mesh.scale.y) * ease);
+        }
         const glow = mesh.userData.glow;
         if (glow) {
           glow.material.opacity = 0.1 + 0.1 * Math.sin(Date.now() * 0.003);

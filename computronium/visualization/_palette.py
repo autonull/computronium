@@ -53,7 +53,7 @@ LARS = "#ff7b72"
 MEASURED = "#d4a843"
 LEGAL_UNMEASURED = "#58a6ff"
 VOID = "#f85149"
-PARETO = "#a371f7"
+PARETO = "#e8ecf0"
 CHANCE_LINE = "#f85149"
 GPU = "#58a6ff"
 CPU = "#3fb950"
@@ -144,7 +144,7 @@ PALETTE: dict[str, str] = {
     "measured": "#d4a843",
     "legal_unmeasured": "#58a6ff",
     "void": "#f85149",
-    "pareto": "#a371f7",
+    "pareto": "#e8ecf0",
     "chance_line": "#f85149",
     "gpu": "#58a6ff",
     "cpu": "#3fb950",

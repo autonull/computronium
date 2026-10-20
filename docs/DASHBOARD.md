@@ -77,6 +77,14 @@ registry; the legend states how many of the known primitives were observed.
 - **Click** a measured cell → opens Cell Drawer
 - **Hover** highlights cell (emissive pulse)
 
+**Axis labels:** sprites on the grid's edges — the values the row names, and
+each axis's name at the end of its axis. A long value is wrapped at its
+underscores so it fits the gap between two cells instead of painting over its
+neighbours.
+
+**Pillars grow** into the height they were measured at; they do not appear at
+it.
+
 **Legend** (top-left of map): Shows credit arm color coding and cell type key.
 
 ---
@@ -89,12 +97,19 @@ Rich detail for a selected measured cell. HTML overlay (not WebGL) for crisp tex
 - **Coordinate badges**: substrate/geometry/dynamics/plasticity/credit/update with credit arm color
 - **Primary metric**: `val_acc = 0.444 ± 0.115 (n=5)` — large monospace
 - **Chance line**: Progress bar with gradient (red→amber→green) showing distance from chance (0.10 for digits)
-- **Verdict banner**: `PASSED` (green, >chance+0.1) / `INSUFFICIENT` (amber, >chance) / `REJECTED` (red, ≤chance)
-- **Seeds to claim**: Simplified calculation (63 seeds for d=0.5 effect)
+- **Verdict banner**: `REJECTED` (red, at or below chance) / `INSUFFICIENT`
+  (amber) / `PASSED` (green). A cell with fewer seeds than the gate asks for
+  is `INSUFFICIENT` however good its mean looks: 5 seeds cannot carry a
+  claim that 63 seeds are needed for.
+- **Seeds to claim**: the seeds still missing for a claim
+  (`GateThresholds().required_seeds_per_group` minus the seeds measured)
 - **Wall time & param count**
 - **Mini 3D sparkline**: the cell's **recorded** training curve
   (`payload.convergence_curve`, averaged over the cell's seeds) with the
   chance line. A cell that recorded no curve says so instead of drawing one.
+
+`Escape` closes the drawer; the mission-control panel and the plotter step
+aside while it is open.
 
 **Actions** (v1 visual only, disabled):
 - `[queue rest]` — request more seeds for this cell
@@ -113,7 +128,15 @@ Interactive Canvas 2D charts (uPlot, 25KB, 60fps). Data updates via WebSocket `c
 | **Ablation** | Grouped bars | Credit arm × val_acc with error bars. Horizontal dashed chance line at 0.10. |
 | **Variability** | Box/violin plots | Per credit arm: whiskers, box (IQR), median, outliers. Chance line. |
 
-**Toolbar** (per chart): Download PNG, connection status indicator.
+**Axis labels**: every chart says what its axes are (`1 / walltime_s
+(faster →)`, `credit arm`, `accuracy`); the ablation and variability charts
+name the arms on the x axis rather than numbering them.
+
+**Tooltips**: hovering a point or a bar says what it is — the arm, the value,
+the spread and the seed count.
+
+**Toolbar** (per chart): Download PNG (the whole chart, axes included),
+record and Pareto counts, and the axes the ablation chart holds fixed.
 
 ---
 
@@ -160,9 +183,14 @@ Every number is measured or derived from a registry — none is a placeholder.
 
 ### 6. Mode Chip (Top-Left)
 
-HTML overlay chip showing campaign mode:
-- `EXPLORATORY` (amber) — default
-- `PREREGISTERED` (green) — after preregistration
+HTML overlay chip showing the run's registration status, read from the run
+rather than asserted:
+- `EXPLORATORY` (amber) — the run's claim has no pre-registered threshold
+- `PREREGISTERED` (green) — every metric the run claims has one, in
+  `configs/preregistrations/`
+- `NO RUN` (grey) — nothing has reported yet
+
+The chip's second line names the run (`demo · digits · L1`).
 
 ---
 
@@ -175,7 +203,7 @@ HTML overlay chip showing campaign mode:
 | `3` | Switch to Variability tab |
 | `H` | Toggle HUD visibility |
 | `L` | Toggle Live Rail visibility |
-| `?` | Show help overlay |
+| `Escape` | Close the Cell Drawer |
 
 ---
 
@@ -187,8 +215,11 @@ The dashboard consumes these message types (via `MessageRouter` auto-registratio
 |------|---------|-----------|
 | `status_update` | `{gpu, cpu, memory, ...}` | Mission Control, Live Rail |
 | `queue_update` | `{queued, running, completed, resource_usage}` | Discovery Map, Live Rail |
-| `campaign_metrics` | `{campaign_id, data: {records, pareto, ablation_groups, chance, required_seeds, resources}}` | Discovery Map, Cell Drawer, Plotter, Mission Control |
+| `campaign_metrics` | `{campaign_id, data: {records, pareto, ablation_groups, chance, required_seeds, resources, run}}` | Discovery Map, Cell Drawer, Plotter, Mission Control |
 | `pipeline_event` | `{stage, message, level, run_id, timestamp}` | Live Rail |
+
+`run` names the run the metrics are about — its profile, tasks, fidelity,
+objectives, claim metrics and registration status.
 
 ---
 

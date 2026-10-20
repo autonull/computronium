@@ -105,6 +105,13 @@ export class LiveRail implements Component {
     this.logContainer = this.container.querySelector("#rail-log")!;
   }
 
+  /** Hide or show the rail. */
+  toggle(): void {
+    if (!this.container) return;
+    this.container.style.display =
+      this.container.style.display === "none" ? "" : "none";
+  }
+
   private onPipelineEvent = (data: PipelineEvent): void => {
     this.events.unshift(data);
     if (this.events.length > this.maxEvents) this.events.pop();

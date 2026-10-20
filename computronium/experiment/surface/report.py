@@ -6,6 +6,7 @@ for R73 round-trip.
 
 from __future__ import annotations
 
+import functools
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -884,11 +885,13 @@ _ABLATION_METRICS: Final = (
 )
 
 
+@functools.lru_cache(maxsize=1)
 def preregistered_metrics() -> frozenset[str]:
     """Metric names carrying a pre-registered threshold in ``configs/``.
 
     A claim whose metric is absent is exploratory: the report says so beside
-    the claim rather than implying a confirmatory result.
+    the claim rather than implying a confirmatory result. The registry is
+    read once per process: the dashboard asks for it on every poll.
     """
     import json
     from pathlib import Path

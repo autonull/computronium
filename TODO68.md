@@ -690,3 +690,99 @@ three fakes — and the three defects that had been hiding them.
   violin plots in three.js. uPlot with an explicitly stated range is what
   ships.
 - **The drawer's actions and the "adopt as quest" flow** are still v2.
+
+---
+
+## Session Progress — The Dashboard You Can Actually Use (2026-10-20)
+
+The two sessions before this made the dashboard *show* its data. This one
+made it *work*: the picture looked finished, and the parts a person touches
+were either dead or lying. A click on a pillar did nothing; the ablation
+chart was an empty frame; the mode chip was a constant that said EXPLORATORY
+whatever the run was; a cell with five seeds called itself PASSED.
+
+### What was broken
+
+| # | Defect | Cause | Fix |
+|---|--------|-------|-----|
+| 24 | **Clicking a pillar never opened the cell drawer** | `createCell` wrote `mesh.userData = {cellKey}`, and the rebuild in `updateCellVisual` replaced the mesh *without* the key — so the raycast hit the pillar and could not name the cell | every mesh the map builds carries its key |
+| 25 | The ablation and variability charts were empty frames | `redraw()` re-sets the x scale from the scale's own (empty) range, throwing away the range the chart had just stated | uPlot's `redraw` is not called after `setScale`; the title is a div and does not need it |
+| 26 | A blue area was painted over the ablation bars | the series still had a fill, while the draw hook draws the bars itself | the series draws nothing |
+| 27 | The Pareto chart coloured points with the wrong arms | the plotted data skips records without a wall time, so a data index is not a record index | the chart keeps the mapping between them |
+| 28 | The ablation chart numbered its arms 0..3 | the axis had no categories | the axis names the arms (uPlot's `splits`/`values`) |
+| 29 | The mode chip was a constant | `hud.ts` wrote "EXPLORATORY" into the DOM | the chip reads the run's status from the API |
+| 30 | The drawer called a 5-seed cell PASSED | the verdict compared the mean with the chance level and ignored the seed count | a cell with fewer seeds than the gate asks for is INSUFFICIENT |
+| 31 | The axis labels painted over the pillars | the labels sat on the grid's own plane | they stand clear in front of the cells; long names wrap at their underscores |
+| 32 | The plotter covered the live rail | both were anchored to the bottom of the window | the plotter sits above the rail |
+| 33 | The chart's x-axis label was cut off | uPlot's title takes a line the chart did not account for | the chart is what the panel leaves of it |
+| 34 | "Download PNG" saved points with no axes | the plot area's canvas was exported alone | the whole chart is composed |
+| 35 | The keyboard shortcuts the docs promised did nothing | they were never written | `1`/`2`/`3`, `H`, `L` and `Escape` work |
+| 36 | `opts.title = …` threw on every ablation update | uPlot has no `opts` to mutate | the title is the div uPlot made |
+| 37 | The cell's "glow" never pulsed | `createCell` replaced the whole `userData` object, dropping the glow's reference | the map adds to the user's data instead of replacing it |
+| 38 | A frontier point and the `local_goodness` arm were the same purple | the palette's highlight was one of the arm colours | the highlight is white, and the frontier's points are ringed rather than recoloured |
+
+### Design decisions worth keeping
+
+- **The drawer's verdict is the run's verdict.** A cell is `PASSED` only when
+  its mean clears the effect size *and* it has the seeds the gate asks for.
+  The demo's cells have 5 of 63 seeds, so they say `INSUFFICIENT` — the same
+  word the run's own report uses.
+- **The chip is a reading, not a label.** `EXPLORATORY` /
+  `PREREGISTERED` is derived from the run's claim metrics against
+  `configs/preregistrations/`, the same rule the report uses. The chip's
+  second line names the run it is about.
+- **A chart states its own range, and nothing re-sets it behind its back.**
+  uPlot's `redraw()` is `setScale('x', scales.x.min, scales.x.max)`: calling
+  it after stating a range throws the range away. The chart states the range
+  once, and the draw hook draws into it.
+- **Labels stand clear of the geometry they name.** A label on the grid's own
+  plane is painted across the pillars from the camera's angle; the labels
+  stand in front of the cells, and a name too long for its gap wraps at its
+  underscores rather than over its neighbour.
+- **A highlight must not be a colour that means something else.** The Pareto
+  highlight was the same purple as the `local_goodness` arm, so a frontier
+  point and an arm were the same colour on the same chart. The highlight is
+  white now — the one colour no arm wears — and the frontier's points are
+  ringed rather than recoloured, so a point keeps its arm's colour.
+- **The interaction is a probe, not an inspection.** The picture can look
+  right while the thing behind it is dead, so the probes drive the page the
+  way a person would — move the mouse, click the pillar, hover the point —
+  and read what the DOM says happened.
+
+### Deviations from the plan
+
+| Plan said | Now | Why |
+|-----------|-----|-----|
+| Phase 3: "tooltips show n/mean/std" | the tooltips exist, and the ablation and variability charts say n, mean and spread | the acceptance criterion was never met; the charts now meet it |
+| Phase 2: "PASSED (>chance+0.1), INSUFFICIENT (>chance)" | the seed count decides too | five seeds cannot carry a claim that sixty-three seeds are needed for; the rule is the report's own |
+| The mode chip is "static for demo" | it is derived from the run | a constant that says EXPLORATORY is a label, not a measurement |
+| The keyboard shortcuts are in `docs/DASHBOARD.md` | they are in the code now | the documentation described a dashboard nobody had used |
+| The plotter's toolbar shows the record count | it also shows the axes the ablation holds fixed | a bar chart without its fixed axes is not comparable to anything |
+
+### Files
+
+| File | Change |
+|------|--------|
+| `computronium/experiment/execution/dashboard/web.py` | **New** `run_status()` — the run's declaration and its registration status, in the metrics payload |
+| `computronium/experiment/surface/report.py` | the pre-registered metrics are read once per process |
+| `dashboard/src/discovery-map.ts` | the cell key survives the rebuild; the labels stand clear and wrap; the pillars grow into their height |
+| `dashboard/src/plotter.ts` | the tooltips, the axis labels, the named categories, the index mapping, the PNG that includes the axes |
+| `dashboard/src/cell-drawer.ts` | `Escape` closes it; the verdict follows the seed count; the panels step aside |
+| `dashboard/src/hud.ts` | the mode chip is read, not written; `toggle()` |
+| `dashboard/src/live-rail.ts` | `toggle()` |
+| `dashboard/src/main.ts` | the keyboard shortcuts; the camera frames the grid |
+| `scripts/generate_palette.py` | the Pareto highlight is white — no arm wears it |
+| `tests/unit/experiment/test_dashboard_run_status.py` | **New** — the mode's rule, and the payload that carries it |
+| `scripts/probes/probe_dashboard_{look,interaction}.py` | **New** — the picture without a campaign, and the interaction that a picture cannot show |
+
+### Still open
+
+- **Write capability** — the drawer's buttons stay disabled (v2, as planned).
+- **Cross-process live monitoring** — DuckDB's single-writer lock still means
+  a dashboard in another process sees nothing until the writer lets go. The
+  event bus cannot cross a process boundary; the store-derived progress is
+  the honest substitute.
+- **Custom 3D charts** — the plan's v2 Pareto scatter, ablation bars and
+  violin plots in three.js. uPlot with an explicitly stated range is what
+  ships.
+- **The drawer's actions and the "adopt as quest" flow** are still v2.

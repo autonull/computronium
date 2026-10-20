@@ -72,7 +72,7 @@ PALETTE_SOURCE: dict[str, str] = {
     "measured": "#d4a843",  # glowing pillars
     "legal_unmeasured": "#58a6ff",  # wireframe cubes
     "void": "#f85149",  # red X markers
-    "pareto": "#a371f7",  # Pareto frontier highlight
+    "pareto": "#e8ecf0",  # Pareto frontier highlight (white: no arm is white)
     "chance_line": "#f85149",  # chance level line
     "gpu": "#58a6ff",
     "cpu": "#3fb950",

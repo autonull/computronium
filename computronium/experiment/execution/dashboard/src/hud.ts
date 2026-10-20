@@ -27,6 +27,15 @@ interface CampaignResources {
   seeds_per_arm?: number;
 }
 
+interface RunStatus {
+  run_id?: string;
+  profile?: string;
+  tasks?: string[];
+  fidelity?: string;
+  objectives?: string[];
+  mode?: string;
+}
+
 interface MeterRow {
   key: string;
   label: string;
@@ -92,6 +101,7 @@ export class HUD implements Component {
       font-size: 11px;
       z-index: 150;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     `;
 
     this.panel.innerHTML = `
@@ -127,7 +137,7 @@ export class HUD implements Component {
     this.addMeter(meters, "walltime", "WALLTIME", PALETTE.cpu);
     this.addMeter(meters, "gpu", "GPU", PALETTE.gpu);
     this.addMeter(meters, "cpu", "CPU", PALETTE.cpu);
-    this.addMeter(meters, "records", "RECORDS", PALETTE.pareto);
+    this.addMeter(meters, "records", "RECORDS", PALETTE.promoted);
 
     this.claimValue = this.panel.querySelector("#hud-claim");
     this.connectionPill = this.panel.querySelector("#hud-connection");
@@ -170,16 +180,56 @@ export class HUD implements Component {
       left: 20px;
       padding: 6px 14px;
       border-radius: 16px;
-      background: ${PALETTE.insufficient}22;
-      border: 1px solid ${PALETTE.insufficient}88;
-      color: ${PALETTE.insufficient};
+      background: ${PALETTE.text_muted}22;
+      border: 1px solid ${PALETTE.text_muted}88;
+      color: ${PALETTE.text_muted};
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.1em;
       z-index: 150;
+      line-height: 1.5;
     `;
-    this.modeChip.textContent = "EXPLORATORY";
+    this.modeChip.innerHTML = `
+      <div class="mode-label">NO RUN</div>
+      <div class="mode-detail" style="
+        font-weight: 400;
+        letter-spacing: 0.02em;
+        font-size: 10px;
+        opacity: 0.8;
+      "></div>
+    `;
     overlay.appendChild(this.modeChip);
+  }
+
+  /** The chip reports the run's own registration status, measured. */
+  private updateModeChip(run: RunStatus | undefined): void {
+    if (!this.modeChip) return;
+
+    const mode = run?.mode ?? "NO RUN";
+    const color =
+      mode === "PREREGISTERED"
+        ? PALETTE.passed
+        : mode === "EXPLORATORY"
+          ? PALETTE.insufficient
+          : PALETTE.text_muted;
+
+    this.modeChip.style.background = `${color}22`;
+    this.modeChip.style.borderColor = `${color}88`;
+    this.modeChip.style.color = color;
+
+    const label = this.modeChip.querySelector(".mode-label");
+    if (label) label.textContent = mode;
+
+    const detail = this.modeChip.querySelector(".mode-detail");
+    if (detail) {
+      detail.textContent = [run?.profile, (run?.tasks ?? []).join(", "), run?.fidelity]
+        .filter(Boolean)
+        .join(" · ");
+    }
+
+    this.modeChip.title = run
+      ? `run ${run.run_id ?? "?"} · objectives: ${(run.objectives ?? []).join(", ") || "none"}`
+      : "No run has reported yet";
   }
 
   private setMeter(key: string, value: string, fraction: number): void {
@@ -208,6 +258,7 @@ export class HUD implements Component {
       this.requiredSeeds = metrics.required_seeds;
     }
     this.measuredSeeds = this.resources.seeds_per_arm ?? metrics.records?.length ?? 0;
+    this.updateModeChip(metrics.run as RunStatus | undefined);
     this.updateResourceRows();
     this.updateClaim();
   };
@@ -275,6 +326,12 @@ export class HUD implements Component {
     this.connectionPill.style.borderColor = `${color}88`;
     this.connectionPill.style.color = color;
     label.textContent = this.connected ? "live" : "offline";
+  }
+
+  /** Hide or show the panel. */
+  toggle(): void {
+    if (!this.panel) return;
+    this.panel.style.display = this.panel.style.display === "none" ? "" : "none";
   }
 
   update(delta: number): void {

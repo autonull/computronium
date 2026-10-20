@@ -53,7 +53,7 @@ export const LARS = "#ff7b72";
 export const MEASURED = "#d4a843";
 export const LEGAL_UNMEASURED = "#58a6ff";
 export const VOID = "#f85149";
-export const PARETO = "#a371f7";
+export const PARETO = "#e8ecf0";
 export const CHANCE_LINE = "#f85149";
 export const GPU = "#58a6ff";
 export const CPU = "#3fb950";
@@ -144,7 +144,7 @@ export const PALETTE: Record<string, string> = {
   "measured": "#d4a843",
   "legal_unmeasured": "#58a6ff",
   "void": "#f85149",
-  "pareto": "#a371f7",
+  "pareto": "#e8ecf0",
   "chance_line": "#f85149",
   "gpu": "#58a6ff",
   "cpu": "#3fb950",

@@ -30,6 +30,7 @@ export class CellDrawer implements Component {
       "cell-selected",
       this.onCellSelected as EventListener,
     );
+    window.removeEventListener("keydown", this.onKeyDown);
   }
 
   private createPanel(): void {
@@ -93,6 +94,21 @@ export class CellDrawer implements Component {
       "cell-selected",
       this.onCellSelected as EventListener,
     );
+    window.addEventListener("keydown", this.onKeyDown);
+  }
+
+  private onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === "Escape" && this.currentData) {
+      this.hide();
+    }
+  };
+
+  /** The drawer covers the right-hand panels; they step aside for it. */
+  private shiftPanels(open: boolean): void {
+    const right = open ? 400 : 20;
+    ["hud", "plotter"].forEach((id) => {
+      document.getElementById(id)?.style.setProperty("right", `${right}px`);
+    });
   }
 
   private onCellSelected = (event: CustomEvent): void => {
@@ -103,11 +119,13 @@ export class CellDrawer implements Component {
     this.currentData = data;
     this.renderContent(data);
     this.panel!.style.transform = "translateX(0)";
+    this.shiftPanels(true);
     this.startSparkline(data);
   }
 
   hide(): void {
     this.panel!.style.transform = "translateX(100%)";
+    this.shiftPanels(false);
     this.stopSparkline();
     this.currentData = null;
   }
@@ -122,19 +140,24 @@ export class CellDrawer implements Component {
     const chance = data.chance ?? 0.1;
     const requiredSeeds = data.requiredSeeds ?? 0;
 
-    // Verdict logic
+    // Verdict: what the cell's own evidence supports. A cell with fewer
+    // seeds than the gate asks for cannot support a claim, however good its
+    // mean looks — the run's verdict is INSUFFICIENT, and so is the cell's.
     let verdict = "UNKNOWN";
     let verdictColor = PALETTE.text_secondary;
     if (status === "measured") {
-      if (valAcc > chance + 0.1) {
-        verdict = "PASSED";
-        verdictColor = PALETTE.passed;
-      } else if (valAcc > chance) {
-        verdict = "INSUFFICIENT";
-        verdictColor = PALETTE.insufficient;
-      } else {
+      if (valAcc <= chance) {
         verdict = "REJECTED";
         verdictColor = PALETTE.rejected;
+      } else if (requiredSeeds > 0 && nSeeds < requiredSeeds) {
+        verdict = "INSUFFICIENT";
+        verdictColor = PALETTE.insufficient;
+      } else if (valAcc > chance + 0.1) {
+        verdict = "PASSED";
+        verdictColor = PALETTE.passed;
+      } else {
+        verdict = "INSUFFICIENT";
+        verdictColor = PALETTE.insufficient;
       }
     }
 
