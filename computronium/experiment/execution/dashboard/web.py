@@ -604,6 +604,7 @@ class WebDashboard:
                     "ablation_groups": ablation_groups,
                     "chance": chance,
                     "required_seeds": GateThresholds().required_seeds_per_group,
+                    "gate": GateThresholds().to_dict(),
                     "resources": resources,
                     "store": {
                         "source": view.source,
@@ -651,6 +652,7 @@ class WebDashboard:
             "ablation_groups": [],
             "chance": chance_level(task, "validation_accuracy"),
             "required_seeds": GateThresholds().required_seeds_per_group,
+            "gate": GateThresholds().to_dict(),
             "resources": {
                 "device": "—",
                 "memory_mb": 0.0,

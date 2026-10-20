@@ -57,7 +57,7 @@ Open <http://localhost:8080> in a browser.
 ## The Stage (the main view area)
 
 The canvas is a **stage**, and a view is what stands on it. The discovery map
-is one view; the stage can show five.
+is one view; the stage can show nine.
 
 | Key | View | The picture | What a reader would say |
 |-----|------|-------------|------------------------|
@@ -66,6 +66,10 @@ is one view; the stage can show five.
 | `3` | **Frontier** | every measured record as a point in accuracy, speed and parameters; the front the run computed is drawn through them; the chance level is the floor | "nothing beat these cells on all three counts at once" |
 | `4` | **Evidence matrix** | the space flat: one axis against another, every column a number, the refusals in the void colour | "the credit arm mattered, and here is where" |
 | `5` | **Convergence** | accuracy against epoch, one curve per arm, the chance level under them | "the arms separate in the second epoch, not the first" |
+| `6` | **Small multiples** | one panel per cell: every seed's own curve, on one accuracy scale | "this cell is steady and that one is a toss of the coin" |
+| `7` | **The spread** | one violin per arm, across its seeds; the seeds a claim still needs written under it | "this arm is wide, and that is why the claim is not made" |
+| `8` | **The claim's cost** | the seeds each cell measured against the seeds a claim needs, with the gap | "the claim is 236 seeds short over four cells" |
+| `9` | **The uncertainty** | each cell's mean and the margin the gate asks for, against the chance level | "which cells are separable from chance, and which are not yet" |
 
 `V` cycles the views; the number keys pick one. The **View** selector in the
 legend names the view where it is chosen, and the legend's title is the view's
@@ -80,13 +84,21 @@ space are chosen once, in `src/run-selection.ts` and the legend.
 **A view that is not active leaves nothing of itself on the stage.** Each view
 puts its objects in the shared scene (`src/components/context.ts`) and takes
 them off again when it is replaced: the map clears its grid, the terrain and
-the frontier free their meshes, and the two flat views share one canvas that
-is hidden when neither is on.
+the frontier free their meshes, and the flat views share one canvas that
+is hidden when none of them is on.
 
-**The flat views do not need three.js.** The matrix and the convergence are
-drawn on a 2D canvas over the stage (`src/stage/canvas2d.ts`), in the part of
-the window the panels leave free. What they share with the 3D views is the
+**The flat views do not need three.js.** The matrix, the convergence, the
+small multiples, the spread, the claim's cost and the uncertainty are drawn
+on a 2D canvas over the stage (`src/stage/canvas2d.ts`), in the part of the
+window the panels leave free. What they share with the 3D views is the
 switcher, the data and the tour shot.
+
+**The rules a claim is measured against travel with the run.** The margin the
+statistical gate asks for, the seeds a claim needs and the confidence level
+are the gate's, and the gate is on the server: the metrics payload carries
+them under `gate` (`GateThresholds().to_dict()`), and the browser draws what
+it is given. A view that measured the run against a margin of its own would
+be measuring a different run from the one the report describes.
 
 ---
 
@@ -370,7 +382,7 @@ knowing the interface.
 
 | Key | Action |
 |-----|--------|
-| `1`–`5` | Pick a view of the stage: space, terrain, frontier, matrix, convergence |
+| `1`–`9` | Pick a view of the stage: space, terrain, frontier, matrix, convergence, small multiples, spread, the claim's cost, the uncertainty |
 | `V` | Cycle the views |
 | `P` | Switch to Pareto tab |
 | `A` | Switch to Ablation tab |
@@ -390,7 +402,7 @@ The dashboard consumes these message types (via `MessageRouter` auto-registratio
 |------|---------|-----------|
 | `status_update` | `{gpu, cpu, memory, ...}` | Mission Control, Live Rail |
 | `queue_update` | `{queued, running, completed, resource_usage}` | Discovery Map, Live Rail |
-| `campaign_metrics` | `{campaign_id, data: {records, pareto, ablation_groups, chance, required_seeds, resources, run}}` | Discovery Map, Cell Drawer, Plotter, Mission Control |
+| `campaign_metrics` | `{campaign_id, data: {records, pareto, ablation_groups, chance, required_seeds, gate, resources, run}}` | Discovery Map, Cell Drawer, Plotter, Mission Control |
 | `pipeline_event` | `{stage, message, level, run_id, timestamp, sentence}` | Live Rail, Caption |
 | `narration` | `{state: [sentence, ...], timestamp}` | Caption |
 
@@ -619,12 +631,12 @@ The screenshot is embedded in `docs/readme/title.md` and appears on the README f
 ## The Tour (every view of the system)
 
 ```bash
-# Sixteen views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+# Twenty-one views, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
 uv run python scripts/capture_dashboard_tour.py
 ```
 
 One store, one dashboard, one browser: the tour takes the whole system in
-sixteen pictures, and the pictures are of *different things*, not of the same
+twenty-one pictures, and the pictures are of *different things*, not of the same
 scene from different angles.
 
 | Shot | What it shows |
@@ -635,6 +647,10 @@ scene from different angles.
 | `dashboard-frontier.png` | the frontier: accuracy, speed and parameters |
 | `dashboard-matrix.png` | the evidence matrix: the space, flat |
 | `dashboard-convergence.png` | the convergence: accuracy against epoch |
+| `dashboard-multiples.png` | the small multiples: every seed of every cell |
+| `dashboard-spread.png` | the spread: one violin per arm |
+| `dashboard-claim-cost.png` | the claim's cost: the seeds a claim still needs |
+| `dashboard-uncertainty.png` | the uncertainty: each cell's margin |
 | `dashboard-cell.png` | the leading cell's drawer: its accuracy, its curve, its verdict, the seeds it still owes |
 | `dashboard-void.png` | a cell the system refuses, in a slice of the space cut a different way, and the rule that refuses it |
 | `dashboard-pareto.png` | the Pareto chart |
@@ -645,6 +661,7 @@ scene from different angles.
 | `report-run.png` | the run's report, in the browser |
 | `console-dashboard.png` | the console dashboard: the same picture, in a terminal |
 | `report-text.png` | the run's report, in a terminal |
+| `figure-seed-violins.png` | the seed violins: the spread, as a figure |
 
 The capture waits for the dashboard's **state** — a measured cell, a drawn
 chart, a caption with words in it — and never for a fixed pause, so a slow
@@ -658,6 +675,14 @@ the browser decodes each pair of the stage's shots and reports the share of
 the pixels that differ, and a pair that is too alike fails the tour. The map
 was the same picture in every frame once; the check is what stopped it from
 being the same picture again.
+
+**A figure is a third kind of frame.** A page in the browser and a terminal
+window cover the dashboard and the report; a *figure* — a PNG the system drew
+somewhere else — is the same evidence in another hand. The tour photographs
+it with its caption and its provenance under it, so the reader knows what
+made it. The seed violins are one: `computronium.experiment.analysis.
+seed_variability`, the analysis that measures the spread the dashboard's
+spread view draws.
 
 `scripts/dashboard_capture.py` holds the machinery the tour, the hero shot
 and the recording share: the server on a thread, the campaign in this

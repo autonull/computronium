@@ -18,7 +18,11 @@ import {
   type SpaceCell,
   type SpacePayload,
 } from "../cell-data.js";
-import { runSelection, type RunMetrics } from "../run-selection.js";
+import {
+  runSelection,
+  type GateThresholds,
+  type RunMetrics,
+} from "../run-selection.js";
 
 /** The three axes the stage shows, and the three it holds. */
 export interface AxisSelection {
@@ -35,6 +39,8 @@ export interface CellAggregate {
   curves: CurvePoint[][];
   pareto: boolean;
   coordinate: CellCoordinate;
+  /** The seeds the run measured at this cell. */
+  seeds: number;
 }
 
 /** What changed, so a view knows how much of itself to redraw. */
@@ -112,9 +118,11 @@ export function aggregateRecords(
         curves: [],
         pareto: false,
         coordinate: { ...coord },
+        seeds: 0,
       };
       aggregates.set(key, aggregate);
     }
+    aggregate.seeds += 1;
     const payload = record.payload ?? {};
     if (typeof payload.val_acc === "number") aggregate.acc.push(payload.val_acc);
     if (typeof payload.walltime_s === "number") {
@@ -137,6 +145,42 @@ export function aggregateRecords(
   });
 
   return aggregates;
+}
+
+/** The cells the run measured, in the order a reader reads them. */
+export function measuredCells(
+  aggregates: Map<string, CellAggregate>,
+  axes: AxisSelection,
+): CellAggregate[] {
+  const cells = Array.from(aggregates.values());
+  const varying = varyingAxes(cells, axes);
+  return cells.sort((left, right) =>
+    cellLabel(left, axes, varying).localeCompare(
+      cellLabel(right, axes, varying),
+    ),
+  );
+}
+
+/** The axes the cells differ along: the ones a reader has to be told. */
+export function varyingAxes(
+  cells: CellAggregate[],
+  axes: AxisSelection,
+): AxisName[] {
+  const names: AxisName[] = [axes.x, axes.y, axes.z];
+  return names.filter((name) => {
+    const values = new Set(cells.map((cell) => cell.coordinate[name]));
+    return values.size > 1;
+  });
+}
+
+/** The name of a cell: the values of the axes the cells differ along. */
+export function cellLabel(
+  cell: CellAggregate,
+  axes: AxisSelection,
+  varying: AxisName[],
+): string {
+  const names = varying.length > 0 ? varying : [axes.x, axes.y, axes.z];
+  return names.map((name) => cell.coordinate[name] ?? "").join(" · ");
 }
 
 /** Which values each axis takes, learned from the records themselves. */
@@ -180,6 +224,8 @@ class StageState {
   values: Record<AxisName, string[]> = measuredValues([]);
   chance = 0.1;
   requiredSeeds = 0;
+  /** The gate's thresholds: the rules a claim is measured against. */
+  gate: GateThresholds | null = null;
   /** What the space was last asked for, so it is only asked again when it changes. */
   private spaceRequest = "";
   private listeners: ((change: StageChange) => void)[] = [];
@@ -208,6 +254,12 @@ class StageState {
       if (typeof metrics.chance === "number") this.chance = metrics.chance;
       if (typeof metrics.required_seeds === "number") {
         this.requiredSeeds = metrics.required_seeds;
+      }
+      if (metrics.gate) {
+        this.gate = metrics.gate;
+        if (typeof metrics.gate.required_seeds_per_group === "number") {
+          this.requiredSeeds = metrics.gate.required_seeds_per_group;
+        }
       }
       this.values = measuredValues(metrics.records ?? []);
     }

@@ -8,11 +8,15 @@
 
 import { registry } from "../components/registry.js";
 import { discoveryMap } from "../discovery-map.js";
+import { ClaimCostView } from "./claim-cost.js";
 import { ConvergenceView } from "./convergence.js";
 import { FrontierView } from "./frontier.js";
 import { MatrixView } from "./matrix.js";
+import { SmallMultiplesView } from "./small-multiples.js";
+import { SpreadView } from "./spread.js";
 import { stageState, type StageChange } from "./state.js";
 import { TerrainView } from "./terrain.js";
+import { UncertaintyView } from "./uncertainty.js";
 import type { StageView } from "./views.js";
 import type { Component } from "../components/registry.js";
 
@@ -56,6 +60,10 @@ export class ViewSwitcher implements Component {
       new FrontierView(),
       new MatrixView(),
       new ConvergenceView(),
+      new SmallMultiplesView(),
+      new SpreadView(),
+      new ClaimCostView(),
+      new UncertaintyView(),
     ];
   }
 
@@ -167,7 +175,7 @@ export class ViewSwitcher implements Component {
     this.captionElement = caption;
 
     const keys = document.createElement("div");
-    keys.textContent = "V cycles · 1–5 pick";
+    keys.textContent = `V cycles · 1–${this.views.length} pick`;
     keys.style.cssText = "font-size: 10px; color: var(--text-muted); margin-top: 6px;";
     section.appendChild(keys);
 

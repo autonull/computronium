@@ -14,6 +14,7 @@ through.)
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 import logging
@@ -273,16 +274,69 @@ def shoot_terminal(page: Page, title: str, body: str, path: Path) -> None:
     page.screenshot(path=str(path))
 
 
+# A figure with its caption and its provenance, as a page the browser can
+# photograph. The system has pictures that are not the dashboard: the
+# gallery's figures, the report's plots, the analyses' outputs. They are
+# pictures of the same evidence, and they are worth the docs as much as the
+# dashboard is.
+FIGURE_HTML = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; background: #0a0e14; color: #e8ecf0;
+         font: 16px 'DejaVu Sans Mono', 'Noto Sans Mono', monospace;
+         display: flex; align-items: center; justify-content: center; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center;
+           gap: 16px; max-width: 1500px; }
+  img { max-width: 1400px; max-height: 830px; }
+  figcaption { color: #8b98a8; font-size: 16px; text-align: center; }
+  .provenance { color: #5a6a7a; font-size: 12px; text-align: center; }
+</style></head><body>
+  <figure>
+    <img src="$image">
+    <figcaption>$caption</figcaption>
+    <div class="provenance">$provenance</div>
+  </figure>
+</body></html>"""
+
+
+def figure_page(image: str, caption: str, provenance: str) -> str:
+    """A figure with its caption and its provenance, as a page."""
+    return Template(FIGURE_HTML).substitute(
+        image=image,
+        caption=html.escape(caption),
+        provenance=html.escape(provenance),
+    )
+
+
+def shoot_figure(
+    page: Page,
+    image_path: Path,
+    caption: str,
+    provenance: str,
+    path: Path,
+) -> None:
+    """Show a figure with its caption and provenance, and take the picture."""
+    encoded = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    page.set_content(
+        figure_page(f"data:image/png;base64,{encoded}", caption, provenance),
+        wait_until="load",
+    )
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(path))
+
+
 __all__ = [
     "CHROMIUM_ARGS",
     "REPO_ROOT",
     "VIEWPORT",
     "clear_store",
+    "figure_page",
     "latest_run",
     "launch_browser",
     "mirror_shot",
     "open_dashboard",
     "run_demo_campaign",
+    "shoot_figure",
     "shoot_terminal",
     "start_dashboard",
     "terminal_page",

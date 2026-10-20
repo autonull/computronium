@@ -39,6 +39,7 @@ from dashboard_capture import (
     mirror_shot,
     open_dashboard,
     run_demo_campaign,
+    shoot_figure,
     shoot_terminal,
     start_dashboard,
     wait_for_http,
@@ -98,6 +99,10 @@ TOUR: tuple[Shot, ...] = (
     Shot("dashboard-frontier.png", "the frontier: accuracy, speed and parameters"),
     Shot("dashboard-matrix.png", "the evidence matrix: the space, flat"),
     Shot("dashboard-convergence.png", "the convergence: accuracy against epoch"),
+    Shot("dashboard-multiples.png", "the small multiples: every seed of every cell"),
+    Shot("dashboard-spread.png", "the spread: one violin per arm"),
+    Shot("dashboard-claim-cost.png", "the claim's cost: the seeds a claim still needs"),
+    Shot("dashboard-uncertainty.png", "the uncertainty: each cell's margin"),
     Shot("dashboard-cell.png", "a measured cell's drawer"),
     Shot("dashboard-void.png", "a void cell, and the rule that refuses it"),
     Shot("dashboard-pareto.png", "the Pareto chart"),
@@ -111,6 +116,7 @@ TOUR: tuple[Shot, ...] = (
         "the console dashboard: the same picture, in a terminal",
     ),
     Shot("report-text.png", "the run's report, in a terminal"),
+    Shot("figure-seed-violins.png", "the seed violins: the spread, as a figure"),
 )
 
 # The main view area, one shot per view. The space's shot is the map's: the
@@ -121,6 +127,10 @@ VIEW_SHOTS: tuple[tuple[str, str], ...] = (
     ("frontier", "dashboard-frontier.png"),
     ("matrix", "dashboard-matrix.png"),
     ("convergence", "dashboard-convergence.png"),
+    ("multiples", "dashboard-multiples.png"),
+    ("spread", "dashboard-spread.png"),
+    ("cost", "dashboard-claim-cost.png"),
+    ("uncertainty", "dashboard-uncertainty.png"),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels
@@ -680,13 +690,15 @@ def narration_script(port: int) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Frame:
-    """One picture that is not the 3D dashboard: a report, a terminal, a script."""
+    """One picture that is not the 3D dashboard: a report, a terminal, a figure."""
 
     name: str
     what: str
     kind: str
     payload: str
     title: str = ""
+    caption: str = ""
+    provenance: str = ""
 
 
 def capture_frame(
@@ -695,19 +707,53 @@ def capture_frame(
     output_dir: Path,
     mirror_dir: Path,
 ) -> Outcome:
-    """One picture of the run: in the browser, or in a terminal."""
+    """One picture of the run: in the browser, in a terminal, or as a figure."""
     shot = next(s for s in TOUR if s.name == frame.name)
     path = output_dir / shot.name
     if frame.kind == "browser":
         page.goto(frame.payload, wait_until="load")
         page.wait_for_timeout(1500)
         page.screenshot(path=str(path))
+    elif frame.kind == "figure":
+        shoot_figure(
+            page,
+            Path(frame.payload),
+            frame.caption or frame.what,
+            frame.provenance,
+            path,
+        )
     else:
         shoot_terminal(page, frame.title or frame.what, frame.payload, path)
     check_shot(path)
     mirror_shot(path, mirror_dir / shot.name)
     logger.info("Shot %s: %s", shot.name, frame.what)
     return Outcome(shot=shot, detail=frame.what)
+
+
+def seed_violins(store_path: Path, run_id: str) -> Path:
+    """The run's seed violins, as the analysis draws them.
+
+    The spread the narration calls "the claim cannot be made yet", drawn by
+    the analysis that measures it: a figure of the same evidence the canvas
+    shows, in the analysis' own hand.
+    """
+    from computronium.experiment.analysis import (
+        SeedVariabilityAnalyzer,
+        plot_violin_plots,
+    )
+    from computronium.experiment.evidence.mirror import readable_store
+
+    scratch = Path(tempfile.mkdtemp(prefix="computronium-tour-"))
+    figure = scratch / "seed_violins.png"
+    with readable_store(store_path) as view:
+        analyzer = SeedVariabilityAnalyzer(view.store, run_id)
+        result = analyzer.analyze(metric="val_acc", group_by_axis="credit")
+    plot_violin_plots(
+        result,
+        figure,
+        title="Seed variability: val_acc, by credit arm",
+    )
+    return figure
 
 
 def capture_report(
@@ -748,6 +794,21 @@ def capture_report(
             "terminal",
             text_report(store_path, run_id),
             f"computronium — report {run_id[:8]}",
+        ),
+        Frame(
+            "figure-seed-violins.png",
+            "the seed violins: the spread, as a figure",
+            "figure",
+            str(seed_violins(store_path, run_id)),
+            caption=(
+                "The spread of the run's seeds, by arm: the analysis that measures "
+                "what the dashboard's spread view draws."
+            ),
+            provenance=(
+                "computronium.experiment.analysis.seed_variability — "
+                "SeedVariabilityAnalyzer.analyze(metric='val_acc', "
+                "group_by_axis='credit')"
+            ),
         ),
     )
     outcomes: list[Outcome] = []

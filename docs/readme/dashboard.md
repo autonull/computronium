@@ -3,9 +3,10 @@
 The live dashboard is a three.js application that watches a campaign and shows
 what it is doing: the space it is searching, the cells it has measured, the
 cells the system refuses, and the charts the evidence draws. Its canvas is a
-stage: the same run can be seen as a space, a terrain, a frontier, a matrix or
-a family of curves. It says what it is doing in words, at the bottom of the
-screen, so a reader who sees only the picture can follow it.
+stage: the same run can be seen as a space, a terrain, a frontier, a matrix, a
+family of curves, or as the spread and the cost of its own evidence. It says
+what it is doing in words, at the bottom of the screen, so a reader who sees
+only the picture can follow it.
 
 ```bash
 uv run comp dashboard --store experiment.duckdb   # the dashboard
@@ -28,12 +29,27 @@ drawn four ways — a heightfield, a frontier, a table and a family of curves:
 |---|---|---|---|
 | ![The terrain](docs/readme/assets/dashboard-terrain.png) | ![The frontier](docs/readme/assets/dashboard-frontier.png) | ![The evidence matrix](docs/readme/assets/dashboard-matrix.png) | ![The convergence](docs/readme/assets/dashboard-convergence.png) |
 
+And the run's evidence, four ways again — every seed of every cell, the
+spread of the arms, what the claim still costs in seeds, and the margin
+around each mean:
+
+| The small multiples | The spread | The claim's cost | The uncertainty |
+|---|---|---|---|
+| ![The small multiples](docs/readme/assets/dashboard-multiples.png) | ![The spread](docs/readme/assets/dashboard-spread.png) | ![The claim's cost](docs/readme/assets/dashboard-claim-cost.png) | ![The uncertainty](docs/readme/assets/dashboard-uncertainty.png) |
+
 The same run, told three other ways — as a report in the browser, as the
 console dashboard in a terminal, and as the dashboard's own account of itself:
 
 | The report | The console dashboard | The narration |
 |---|---|---|
 | ![The report](docs/readme/assets/report-run.png) | ![The console dashboard](docs/readme/assets/console-dashboard.png) | ![The narration](docs/readme/assets/narration-script.png) |
+
+And the same evidence, drawn by the analysis that measures it rather than by
+the canvas:
+
+| The seed violins |
+|---|
+| ![The seed violins](docs/readme/assets/figure-seed-violins.png) |
 
 The narration is written once, on the server, and read by two: the browser
 renders it as captions, and `GET /api/narration` hands the same sentences to

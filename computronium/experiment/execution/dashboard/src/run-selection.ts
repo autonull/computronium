@@ -23,9 +23,30 @@ export interface RunMetrics {
   ablation_groups?: any[];
   chance?: number;
   required_seeds?: number;
+  /** The gate's own thresholds: the rules a claim is measured against. */
+  gate?: GateThresholds;
   resources?: Record<string, number | string | undefined>;
   store?: { source?: string; published_at?: string };
   run?: RunSummary;
+}
+
+/** The statistical gate's thresholds, as the server holds them.
+
+    The browser never invents a margin or a seed count: the rules a claim is
+    measured against belong to the gate, and the gate is on the server.
+*/
+export interface GateThresholds {
+  superiority_margin: number;
+  superiority_margin_sigma: number;
+  ci_width_threshold: number;
+  train_val_gap_threshold: number;
+  rho_band: number[];
+  min_seeds_for_stats: number;
+  power_target: number;
+  alpha: number;
+  effect_size_target: number;
+  required_seeds_per_group: number;
+  use_confirmation_seeds_for_l2: boolean;
 }
 
 export type RunListener = (runId: string | null, metrics: RunMetrics | null) => void;

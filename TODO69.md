@@ -28,7 +28,7 @@ picture in every shot — a grid of coloured cubes — and every picture the tou
 took of it looked the same.
 
 The canvas is now a **stage**, and a view is what stands on it. There are
-five, and the tour has a shot of each:
+nine, and the tour has a shot of each:
 
 | # | View | The picture | The shot |
 |---|------|-------------|----------|
@@ -37,6 +37,10 @@ five, and the tour has a shot of each:
 | 3 | **The frontier** | every measured record as a point in (accuracy, speed, parameters), the Pareto front drawn through them, the chance plane as a floor | `dashboard-frontier.png` |
 | 4 | **The evidence matrix** | the space *flat*: one axis against another, each cell a number, the refusals in the void colour | `dashboard-matrix.png` |
 | 5 | **The convergence** | accuracy against epoch, one curve per arm, the chance line under them | `dashboard-convergence.png` |
+| 6 | **The small multiples** | one panel per cell: every seed's own curve, on one accuracy scale | `dashboard-multiples.png` |
+| 7 | **The spread** | one violin per arm, across its seeds; the seeds a claim still needs under it | `dashboard-spread.png` |
+| 8 | **The claim's cost** | the seeds each cell measured against the seeds a claim needs, with the gap | `dashboard-claim-cost.png` |
+| 9 | **The uncertainty** | each cell's mean and the margin the gate asks for, against the chance level | `dashboard-uncertainty.png` |
 
 **The switcher that makes them a choice**: `V` cycles the views, the number
 keys pick one (like the plotter's tabs — which moved to `P`, `A` and `S` so
@@ -46,9 +50,9 @@ the caption under the selector says what a reader would say after looking at
 it.
 
 **The acceptance, in pictures, is now mechanical**: the tour photographs the
-five views and then measures them — the browser decodes each pair of shots
+nine views and then measures them — the browser decodes each pair of shots
 and reports the share of the pixels that differ. A pair that is too alike
-fails the tour. The measured differences run from 3.6 % to 27.8 %; the floor
+fails the tour. The measured differences run from 2.5 % to 28.1 %; the floor
 is 2 %.
 
 The full catalogue — twenty-odd views, 3D and 2D, from the evidence to the
@@ -66,9 +70,9 @@ seed violins, the `comp` reports) are in the table after it.
 | The event bus | `computronium/experiment/execution/events.py` | complete: stage and measurement events, process-wide |
 | The narration | `computronium/experiment/execution/dashboard/narration.py` | complete: the sentences, the account, the state |
 | The caption | `dashboard/src/caption.ts` | complete: the sentences, rendered |
-| **The stage** | `dashboard/src/stage/` | complete: the shared state, five views, the switcher |
+| **The stage** | `dashboard/src/stage/` | complete: the shared state, nine views, the switcher |
 | The hero capture | `scripts/capture_dashboard_screenshot.py` | one image, one view |
-| The tour | `scripts/capture_dashboard_tour.py` | sixteen views, six kinds of picture, and a check that they differ |
+| The tour | `scripts/capture_dashboard_tour.py` | twenty-one views, nine kinds of picture on the stage, and a check that they differ |
 | The recording | `scripts/capture_dashboard_video.py` | a `.webm` of a live session, uncommitted |
 | The live rail | `dashboard/src/live-rail.ts` | terse pills: `[s6_train] train cells` — a log, not a story |
 | The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal, and a frame of it as text |
@@ -80,9 +84,9 @@ seed violins, the `comp` reports) are in the table after it.
 |-----|--------|-----------|
 | No narration | the screen shows numbers and a log; it does not *say* what is happening, so a narrator reading the screen has to reconstruct the story from the panels | `narration.py`: the sentences, written once |
 | No closed captions | a recording of the dashboard has no subtitles; the viewer reads a 3D scene in silence | `caption.ts`: the server's sentences, rendered |
-| One screenshot | the hero is the dashboard's overview; nothing shows the drawer, the charts, the void cells, the space, the report | the tour: sixteen views |
+| One screenshot | the hero is the dashboard's overview; nothing shows the drawer, the charts, the void cells, the space, the report | the tour: twenty-one views |
 | No recording | "show me it working" needs a terminal in front of the reader | the recording: a live session, with captions |
-| One picture in the content area | every shot of the canvas was the same field of cubes, so the tour's variety was the furniture in front of the scene | the stage: five views, a switcher, and a shot of each |
+| One picture in the content area | every shot of the canvas was the same field of cubes, so the tour's variety was the furniture in front of the scene | the stage: nine views, a switcher, and a shot of each |
 
 ---
 
@@ -112,13 +116,18 @@ seed violins, the `comp` reports) are in the table after it.
 ┌───────────────────────────────────────────────────────────────────────────┐
 │  Browser: stage/state.ts — the run's evidence, once                        │
 │    the run · the axes · the declared space · the records per cell          │
+│    the gate's rules · the chance level                                     │
 │         │                                                                 │
 │         ├──► the space (the discovery map)   ──► the 3D scene              │
 │         ├──► the terrain                      ──► the 3D scene              │
 │         ├──► the frontier                     ──► the 3D scene              │
 │         ├──► the evidence matrix              ──► the 2D canvas            │
-│         └──► the convergence                  ──► the 2D canvas            │
-│    stage/switcher.ts — V cycles · 1–5 pick · the selector in the legend   │
+│         ├──► the convergence                  ──► the 2D canvas            │
+│         ├──► the small multiples              ──► the 2D canvas            │
+│         ├──► the spread                       ──► the 2D canvas            │
+│         ├──► the claim's cost                 ──► the 2D canvas            │
+│         └──► the uncertainty                  ──► the 2D canvas            │
+│    stage/switcher.ts — V cycles · 1–9 pick · the selector in the legend   │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,8 +137,8 @@ seed violins, the `comp` reports) are in the table after it.
 
 Phases 0–5 are done: the server speaks, the browser shows it, the tour and
 the recording show both, and the canvas can show more than one thing. What is
-left of the stage is the catalogue in Phase 5 — the other flat views, the run
-as a process, and the family that needs the trained system.
+left of the stage is the catalogue in Phase 5 — the run as a process, the
+attribution, and the family that needs the trained system.
 
 ### Phase 0: The narration (server) — the server half is done
 
@@ -208,13 +217,14 @@ the run is still running; the state is the story once it has finished.
 **Goal**: more than one picture of the system.
 
 `scripts/capture_dashboard_tour.py` — one store, one dashboard, one browser,
-sixteen views:
+twenty-one views:
 
 | Shot | What it shows |
 |------|---------------|
 | `dashboard-hero.png` | the overview (the existing shot, regenerated) |
 | `dashboard-map.png` | the discovery map alone: the fog of war, panels hidden — the **space** view |
-| `dashboard-terrain.png`, `-frontier.png`, `-matrix.png`, `-convergence.png` | the stage's other four views, one shot each |
+| `dashboard-terrain.png`, `-frontier.png`, `-matrix.png`, `-convergence.png` | the stage's other views, one shot each |
+| `dashboard-multiples.png`, `-spread.png`, `-claim-cost.png`, `-uncertainty.png` | the stage's flat views of the evidence, one shot each |
 | `dashboard-cell.png` | the leading cell's drawer: metrics, curve, verdict, seeds to claim |
 | `dashboard-void.png` | a void cell, in a slice of the space cut a different way, and the rule that refuses it |
 | `dashboard-pareto.png`, `-ablation.png`, `-variability.png` | the three charts, each on its own, over the map |
@@ -223,14 +233,15 @@ sixteen views:
 | `report-run.png` | the run's report, in the browser |
 | `console-dashboard.png` | the console dashboard: the same picture, in a terminal |
 | `report-text.png` | the run's report, in a terminal |
+| `figure-seed-violins.png` | the seed violins: a figure, with its caption and its provenance |
 
 **Acceptance**: ✅ every shot is 1920×1080, has real data in it, and lands in
 `docs/readme/assets/` (committed) and `docs/screenshots/` (mirrored). ✅ the
 shots are of *different things*: the 3D map, the panels, the charts, a
-browser report, and two terminal views. ✅ a shot that cannot be taken is
-reported, not silently skipped. ✅ **the stage's five views are measured
-against one another**: the browser decodes each pair and reports the share of
-the pixels that differ, and a pair below 2 % fails the tour.
+browser report, two terminal views and a figure. ✅ a shot that cannot be
+taken is reported, not silently skipped. ✅ **the stage's nine views are
+measured against one another**: the browser decodes each pair and reports the
+share of the pixels that differ, and a pair below 2 % fails the tour.
 
 **The tour's rule**: it waits for the dashboard's *state* — a measured cell,
 a drawn chart, a caption with words in it, a view that has drawn — and never
@@ -267,6 +278,8 @@ run for a few seconds before it stops.
   carries its sentence, and the frame and the account say the same thing.
 - `tests/unit/experiment/test_console_dashboard.py` — the console
   dashboard's frame as text.
+- `tests/unit/experiment/test_dashboard_gate.py` — the run carries the
+  gate's own thresholds, and the payload carries none of its own.
 - `docs/DASHBOARD.md` — the caption, the narration endpoint, the tour.
 - `docs/readme/dashboard.md` — a "the dashboard, in pictures" section, in
   the README.
@@ -284,7 +297,7 @@ or nothing at all. A reader who wanted to *see* the evidence had to read a
 table.
 
 **The shape of the change**: the canvas is a *stage*, and a view is what
-stands on it. The discovery map is one view; it is now one of five. The
+stands on it. The discovery map is one view; it is now one of nine. The
 scene is shared (`components/context.ts` gives every component the same
 scene, camera and renderer), and the map already knew how to clear what it
 built (`clearGrid`) — so a view is a component with the same shape as the
@@ -303,14 +316,18 @@ A view needs four things, and the map has all four:
 
 | Module | What it holds |
 |--------|---------------|
-| `state.ts` | the state every view shares: the run, the axes, the declared space, the records folded per cell, the chance level — and the space fetch, so it is asked for once |
+| `state.ts` | the state every view shares: the run, the axes, the declared space, the records folded per cell, the chance level, the gate's rules — and the space fetch, so it is asked for once |
 | `views.ts` | the `StageView` shape: `enter`, `exit`, `refresh`, `ready` |
 | `switcher.ts` | the choice: `V` cycles, the number keys pick, the **View** selector in the legend, and the legend's title and marks follow the view |
 | `terrain.ts` | the space as a heightfield |
 | `frontier.ts` | the records as points in accuracy, speed and parameters, with the front and the chance floor |
 | `matrix.ts` | the space flat, every column a number |
 | `convergence.ts` | accuracy against epoch, one curve per arm |
-| `canvas2d.ts`, `plot2d.ts` | the flat stage: one canvas over the 3D scene, and the frame, ticks and labels the flat views share |
+| `small-multiples.ts` | one panel per cell, every seed's own curve |
+| `spread.ts` | one violin per arm, across its seeds |
+| `claim-cost.ts` | the seeds each cell measured against the seeds a claim needs |
+| `uncertainty.ts` | each cell's mean and the gate's margin, against the chance level |
+| `canvas2d.ts`, `plot2d.ts` | the flat stage: one canvas over the 3D scene, and the frame, ticks and labels the flat views share (a numeric frame, a frame of categories, a frame of rows) |
 | `framing.ts`, `sprites.ts`, `scene.ts`, `ramp.ts` | the camera, the labels, the disposal, and the colour ramp — shared by the stage's views |
 
 **The views, in the order they were built.** Each is a *different kind
@@ -334,12 +351,12 @@ to pass: **what can a reader say after looking at it?**
 |------|---------------------------|-------------------|--------------------|
 | **The evidence matrix** ✅ | one axis against another, each cell a number, the refusals in the void colour | the space payload, the records | "the credit arm mattered, and here is where" |
 | **The convergence** ✅ | accuracy against epoch, one curve per arm, the chance line under them | the per-cell curves (the map's aggregates already carry them) | "the arms separate in the second epoch, not the first" |
-| **The small multiples** ⬜ | one panel per cell — every seed's curve, side by side | the per-cell curves | "this cell is steady and that one is not" |
-| **The spread** ⬜ | one violin per arm across the seeds, and the seeds a claim still needs as a mark | the records' seeds | "this arm is wide, and that is why the claim is not made" |
-| **The claim's cost** ⬜ | seeds measured against seeds needed, per cell, with the gap | the records' seeds, `required_seeds` | "the claim is 58 seeds short on four cells" |
+| **The small multiples** ✅ | one panel per cell — every seed's curve, side by side | the per-cell curves | "this cell is steady and that one is a toss of the coin" |
+| **The spread** ✅ | one violin per arm across the seeds, and the seeds a claim still needs under it | the records' seeds | "this arm is wide, and that is why the claim is not made" |
+| **The claim's cost** ✅ | seeds measured against seeds needed, per cell, with the gap | the records' seeds, `required_seeds` | "the claim is 232 seeds short over four cells" |
 | **The pairwise contrast** ⬜ | arm against arm: which beat which, by how much, and whether the test was even run | the records, the report's contrast design | "pepita beat random_projections, and here is the margin" |
 | **The attribution** ⬜ | the objective attributed to the axis values — which axis moved it, and by how much | the attribution analysis over the records (`computronium/experiment/analysis/axis_attribution.py`: `analyze_axis_importance`, `compute_shap_attribution`, `compute_ice_curves`) | "the credit rule mattered most, and here is how much" |
-| **The uncertainty** ⬜ | each cell's interval against the threshold a claim would need | the records' spread, `required_seeds`, `alpha` | "even the best cell is not separable yet" |
+| **The uncertainty** ✅ | each cell's interval against the threshold a claim would need — the gate's own margin, against the chance level | the records' spread, the gate's thresholds (`gate`) | "which cells are separable from chance, and which are not yet" |
 
 #### The run, as a process (not as evidence)
 
@@ -388,24 +405,27 @@ from.
 
 ### Where to start next
 
-1. **The small multiples** and **the spread** — the flat views are cheap
-   now: the canvas, the frame and the ticks are shared, and both need only
-   the records the stage already holds.
-2. **The claim's cost** and **the uncertainty** — the same, with the
-   `required_seeds` the state already carries.
-3. **The attribution** — the analysis exists
-   (`computronium/experiment/analysis/axis_attribution.py`); the view is the
-   work.
-4. **The dynamics views** — the ones that need a cell re-instantiated, and
+The four flat views of the evidence are built. What is left of the catalogue:
+
+1. **The pairwise contrast** and **the attribution** — the attribution
+   analysis exists (`computronium/experiment/analysis/axis_attribution.py`);
+   the view is the work. The contrast needs the report's contrast design.
+2. **The run as a process** — the timeline, the pipeline flow and the ledger:
+   the events are already in the live rail, with timestamps.
+3. **The dynamics views** — the ones that need a cell re-instantiated, and
    the ones worth the most.
+4. **The layers and the multi-run space** — the 3D views that are not the
+   space and the terrain.
 
 **Acceptance**: ✅ the canvas can show the space, the terrain, the frontier,
-the matrix and the convergence, and the tour has a shot of each. ✅ the five
-shots are *visibly different pictures* — measured, not asserted: 3.6 % to
-27.8 % of the pixels differ, and the tour fails below 2 %. ✅ a reader can
-answer "what did the run find?" from any one of them. ✅ a view that is not
-active leaves nothing of itself on the stage. ✅ the view is a choice — a key,
-a number, and a selector that names it where it is chosen.
+the matrix, the convergence, the small multiples, the spread, the claim's
+cost and the uncertainty, and the tour has a shot of each. ✅ the nine shots
+are *visibly different pictures* — measured, not asserted: 2.5 % to 28.1 % of
+the pixels differ, and the tour fails below 2 %. ✅ a reader can answer "what
+did the run find?" from any one of them. ✅ a view that is not active leaves
+nothing of itself on the stage. ✅ the view is a choice — a key, a number, and
+a selector that names it where it is chosen. ✅ the tour can photograph a
+*figure* — a PNG with its caption and its provenance under it.
 
 
 ---
@@ -436,9 +456,11 @@ command or the module that produces it; none of it is speculative.
 `browser` (a URL) and `terminal` (text in a window). A third kind,
 **`figure`** (a PNG rendered in a page, with its caption and its provenance
 under it), is all the gallery, the report's plots and the analysis figures
-need. The terminal kind already covers every `comp …` command that prints a
-report, so the coverage report, the catalogue, the defect registry and the
-method cards are one `Frame` each.
+need — and it is built: `dashboard_capture.shoot_figure` and the tour's
+`Frame(kind="figure")` photograph the seed violins of the run. The terminal
+kind already covers every `comp …` command that prints a report, so the
+coverage report, the catalogue, the defect registry and the method cards are
+one `Frame` each.
 
 ---
 
@@ -467,10 +489,10 @@ method cards are one `Frame` each.
 - [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report and the terminal views
 - [x] A short recording of a live session exists, with the captions on screen, and is not committed
 - [x] `docs/DASHBOARD.md` and the README show the tour
-- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix and the convergence at least
+- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost and the uncertainty
 - [x] The view is a choice — a key and a selector — and the inactive view leaves nothing of itself on the stage
 - [x] The tour has a shot of every main view, and the shots are visibly different pictures of one another — *measured*, not asserted
-- [ ] The tour can photograph a *figure* (a PNG with its caption and provenance), not only a page and a terminal
+- [x] The tour can photograph a *figure* (a PNG with its caption and provenance), not only a page and a terminal
 
 ---
 
@@ -482,20 +504,23 @@ method cards are one `Frame` each.
 | `web.py` — the frames, the endpoint, the state refresh | ✅ done |
 | `pipeline.py` — the producer names the cell and the seed | ✅ done |
 | `caption.ts` — the browser renders the sentences | ✅ done |
-| the tour — sixteen views in one browser session | ✅ done |
+| the tour — twenty-one views in one browser session | ✅ done |
 | the recording — a `.webm` of a live session, uncommitted | ✅ done |
 | the docs — the caption, the endpoint, the tour, the stage | ✅ done |
 | the dashboard shows a run before it has measured | ✅ done (the space is on screen from the first second) |
-| the main view area — the stage, the views, the switcher | ✅ done: five views, a key, a selector, a shot of each |
-| the flat views — the matrix, the convergence | ✅ done (the canvas, the frame and the ticks are shared) |
-| the other views — the layers, the spread, the attribution, the timeline, the dynamics | ⬜ the catalogue in Phase 5 |
-| the figures — the gallery, the report's plots, the analyses | ⬜ the "surfaces outside the canvas" table |
+| the main view area — the stage, the views, the switcher | ✅ done: nine views, a key, a selector, a shot of each |
+| the flat views — the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty | ✅ done (the canvas, the frame and the ticks are shared) |
+| the gate's rules travel with the run | ✅ done (`gate` in the metrics payload; the browser invents no margin) |
+| the figures — the seed violins | ✅ done (the tour's third frame kind: a PNG, its caption, its provenance) |
+| the other views — the layers, the contrast, the attribution, the timeline, the dynamics | ⬜ the catalogue in Phase 5 |
+| the other figures — the gallery, the report's plots | ⬜ the "surfaces outside the canvas" table |
 | the mirror's publish can fail and lag | ⬜ a known flake, diagnosed above |
+| the README was stale against `docs/readme/` | ✅ fixed here (the build lock was failing at the commit before) |
 
 The server speaks, the browser shows it, the pictures show both, and the
 canvas can show more than one thing. What is left of the stage is the
-catalogue: the other flat views, the run as a process, and the family that
-needs the trained system.
+catalogue: the run as a process, the attribution, and the family that needs
+the trained system.
 
 ---
 
@@ -608,7 +633,7 @@ which is where the reader's attention is.
 **"Visibly different" is a measurement, not a promise.** The tour now
 decodes each pair of the stage's shots in the browser and reports the share
 of the pixels that differ; below 2 % the tour fails. The measured spread is
-3.6 % to 27.8 % — the smallest pair is the frontier and the convergence,
+2.5 % to 28.1 % — the smallest pair is the frontier and the uncertainty,
 which are both dark pictures with few marks, and they are still above the
 floor.
 
@@ -617,3 +642,73 @@ The matrix and the convergence are drawn on one 2D canvas over the stage,
 with the frame, the ticks and the labels shared. What they share with the
 3D views — the switcher, the data, the tour shot — is what makes them part
 of the same instrument rather than three more panels.
+
+---
+
+## This batch (the second flat views, and the figure)
+
+**What was built.** Four more views of the evidence, all flat, all on the
+shared 2D canvas, and a tour shot of each:
+
+| View | The file | The picture |
+|------|----------|-------------|
+| The small multiples | `src/stage/small-multiples.ts` | one panel per cell, every seed's own curve, one accuracy scale for all of them |
+| The spread | `src/stage/spread.ts` | one violin per arm (a Gaussian kernel, Silverman's bandwidth), the seeds as the points it is made of, the mean as a line, and the seeds a claim still needs written under it |
+| The claim's cost | `src/stage/claim-cost.ts` | per cell, the seeds measured against the seeds a claim needs, with the gap between them |
+| The uncertainty | `src/stage/uncertainty.ts` | per cell, the mean and the margin the gate asks for, against the chance level, and the threshold each cell has to clear |
+
+And the tour's third frame kind: **`figure`** — a PNG rendered in a page
+with its caption and its provenance under it (`dashboard_capture.shoot_figure`).
+The seed violins of the run are the first figure photographed
+(`figure-seed-violins.png`): the same spread, drawn by the analysis that
+measures it.
+
+**The rules came from the server, not from the browser.** The uncertainty view
+needs a margin, and the claim's cost needs a seed count; both belong to the
+statistical gate. The metrics payload now carries them — `gate` is
+`GateThresholds().to_dict()` — and the browser draws what it is given. A
+view that measured the run against a margin of its own would be measuring a
+different run from the one the report describes.
+
+**What the work taught.**
+
+**A violin's shape reaches past its data, and the frame has to hold it.** The
+first spread drew the kernel's tails above the plot's top edge, so the widest
+arm poked out of its own frame. The frame is now sized by what the violin
+draws — the extent of the kernel, not the extent of the values — and the
+drawing is clipped to the frame as well.
+
+**A row label is as long as it is, and the space beside the plot is not.**
+`random_projections` did not fit in the frame's fixed left margin, and the
+legend cut off what was left of it. The row frame now measures its labels
+and gives them the room they need.
+
+**The tour's picture check caught what the eye did not.** The spread and the
+claim's cost were drawn to look alike from the outside, and the measurement
+of the pairs (2.5 % to 28.1 %) is what says which pictures are too close. It
+is a check on the *view*, not only on the tour.
+
+**The README was stale, and the lock said so.** `docs/readme/dashboard.md`
+had been edited without rebuilding `README.md`, and
+`tests/property/test_readme_build_lock.py` had been failing at the commit
+before this one. A doc lock that nobody runs is a lock that does not exist;
+the fix is in this commit, and the lesson is in the plan: **rebuild the
+README in the same commit that edits the snippet.**
+
+---
+
+## Where the next session starts
+
+1. **The attribution** and **the pairwise contrast** — the attribution
+   analysis exists; the views are the work.
+2. **The run as a process** — the timeline, the pipeline flow, the ledger:
+   the events are in the live rail already, with timestamps.
+3. **The dynamics views** — the ones that need the trained system, and the
+   ones worth the most.
+4. **The remaining figures** — the gallery, the report's own plots: the
+   `figure` frame kind is there, and each is one `Frame` away.
+
+**The number keys have room for one more view and no more** (nine views, the
+keys `1`–`9`). The tenth view needs a different way in — `V` and the legend
+selector still reach it, but a key for it would have to come from somewhere
+else.

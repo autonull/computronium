@@ -6,10 +6,31 @@
 */
 
 import { PALETTE } from "../palette.js";
+import { wrapLabel } from "./sprites.js";
 import type { Area } from "./canvas2d.js";
 
 /** The margins a frame leaves for its labels. */
 const MARGIN = { top: 64, right: 36, bottom: 62, left: 78 };
+
+/** The title of a picture, and the line under it that says what it is. */
+export function drawTitle(
+  ctx: CanvasRenderingContext2D,
+  area: Area,
+  title: string,
+  subtitle?: string,
+): void {
+  ctx.fillStyle = PALETTE.text_primary;
+  ctx.font = "600 22px 'JetBrains Mono', monospace";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(title, area.x, area.y + 14);
+
+  if (subtitle) {
+    ctx.fillStyle = PALETTE.text_secondary;
+    ctx.font = "13px 'JetBrains Mono', monospace";
+    ctx.fillText(subtitle, area.x, area.y + 40);
+  }
+}
 
 /** The rectangle the data is drawn in, inside the area the panels leave. */
 export interface PlotFrame {
@@ -98,17 +119,7 @@ export function drawFrame(
     yMax: options.yMax,
   };
 
-  ctx.fillStyle = PALETTE.text_primary;
-  ctx.font = "600 22px 'JetBrains Mono', monospace";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText(options.title, area.x, area.y + 14);
-
-  if (options.subtitle) {
-    ctx.fillStyle = PALETTE.text_secondary;
-    ctx.font = "13px 'JetBrains Mono', monospace";
-    ctx.fillText(options.subtitle, area.x, area.y + 40);
-  }
+  drawTitle(ctx, area, options.title, options.subtitle);
 
   const xTicks = options.xTicks ?? niceTicks(options.xMin, options.xMax, 6);
   const yTicks = options.yTicks ?? niceTicks(options.yMin, options.yMax, 5);
@@ -171,4 +182,204 @@ export function drawNote(
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillText(text, area.x, area.y + area.height + 40);
+}
+
+/** A frame whose x is a set of categories rather than a number. */
+export interface CategoryFrame {
+  rect: Area;
+  yMin: number;
+  yMax: number;
+  categories: string[];
+  /** The width of one category's band. */
+  bandWidth: number;
+  /** The middle of a category's band. */
+  band(index: number): number;
+}
+
+/** The frame of a picture whose x is a set of categories.
+
+    A violin's arm, a cell's seeds: both are named things rather than
+    numbers, so the frame gives each one a band of its own.
+*/
+export function drawCategoryFrame(
+  ctx: CanvasRenderingContext2D,
+  area: Area,
+  options: {
+    yMin: number;
+    yMax: number;
+    categories: string[];
+    title: string;
+    subtitle?: string;
+    yLabel: string;
+    yTicks?: number[];
+  },
+): CategoryFrame {
+  const rect: Area = {
+    x: area.x + MARGIN.left,
+    y: area.y + MARGIN.top,
+    width: Math.max(40, area.width - MARGIN.left - MARGIN.right),
+    height: Math.max(40, area.height - MARGIN.top - MARGIN.bottom),
+  };
+  const bandWidth = rect.width / Math.max(1, options.categories.length);
+  const frame: CategoryFrame = {
+    rect,
+    yMin: options.yMin,
+    yMax: options.yMax,
+    categories: options.categories,
+    bandWidth,
+    band: (index: number) => rect.x + bandWidth * (index + 0.5),
+  };
+  const scale: PlotFrame = {
+    rect,
+    xMin: 0,
+    xMax: 1,
+    yMin: options.yMin,
+    yMax: options.yMax,
+  };
+
+  drawTitle(ctx, area, options.title, options.subtitle);
+
+  ctx.strokeStyle = PALETTE.border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1);
+
+  ctx.font = "12px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PALETTE.text_secondary;
+  const yTicks = options.yTicks ?? niceTicks(options.yMin, options.yMax, 5);
+  yTicks.forEach((tick) => {
+    const y = scaleY(tick, scale);
+    if (y < rect.y - 1 || y > rect.y + rect.height + 1) return;
+    ctx.strokeStyle = PALETTE.border;
+    ctx.beginPath();
+    ctx.moveTo(rect.x, y);
+    ctx.lineTo(rect.x + rect.width, y);
+    ctx.stroke();
+    ctx.textAlign = "right";
+    ctx.fillText(formatTick(tick), rect.x - 10, y + 4);
+  });
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  options.categories.forEach((category, index) => {
+    wrapLabel(category, 14).forEach((line, lineIndex) => {
+      ctx.fillText(
+        line,
+        frame.band(index),
+        rect.y + rect.height + 12 + lineIndex * 16,
+      );
+    });
+  });
+
+  ctx.fillStyle = PALETTE.text_secondary;
+  ctx.font = "13px 'JetBrains Mono', monospace";
+  ctx.save();
+  ctx.translate(rect.x - 56, rect.y + rect.height / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(options.yLabel, 0, 0);
+  ctx.restore();
+
+  return frame;
+}
+
+/** A frame whose y is a set of categories rather than a number. */
+export interface RowFrame {
+  rect: Area;
+  xMin: number;
+  xMax: number;
+  rows: string[];
+  /** The height of one row. */
+  rowHeight: number;
+  /** The middle of a row. */
+  rowY(index: number): number;
+}
+
+/** The frame of a picture whose y is a set of categories.
+
+    A cell's seeds, a cell's interval: both are named things, so the frame
+    gives each one a row of its own.
+*/
+export function drawRowFrame(
+  ctx: CanvasRenderingContext2D,
+  area: Area,
+  options: {
+    xMin: number;
+    xMax: number;
+    rows: string[];
+    title: string;
+    subtitle?: string;
+    xLabel: string;
+    xTicks?: number[];
+  },
+): RowFrame {
+  // The rows are named, and a name is as long as it is: the frame gives the
+  // labels the room they need rather than letting them run under the panels.
+  ctx.font = "12px 'JetBrains Mono', monospace";
+  const labelWidth = options.rows.reduce(
+    (widest, row) => Math.max(widest, ctx.measureText(row).width),
+    0,
+  );
+  const left = Math.min(
+    area.width * 0.45,
+    Math.max(MARGIN.left, labelWidth + 24),
+  );
+  const rect: Area = {
+    x: area.x + left,
+    y: area.y + MARGIN.top,
+    width: Math.max(40, area.width - left - MARGIN.right),
+    height: Math.max(40, area.height - MARGIN.top - MARGIN.bottom),
+  };
+  const rowHeight = rect.height / Math.max(1, options.rows.length);
+  const frame: RowFrame = {
+    rect,
+    xMin: options.xMin,
+    xMax: options.xMax,
+    rows: options.rows,
+    rowHeight,
+    rowY: (index: number) => rect.y + rowHeight * (index + 0.5),
+  };
+  const scale: PlotFrame = {
+    rect,
+    xMin: options.xMin,
+    xMax: options.xMax,
+    yMin: 0,
+    yMax: 1,
+  };
+
+  drawTitle(ctx, area, options.title, options.subtitle);
+
+  ctx.strokeStyle = PALETTE.border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1);
+
+  ctx.font = "12px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PALETTE.text_secondary;
+  const xTicks = options.xTicks ?? niceTicks(options.xMin, options.xMax, 6);
+  xTicks.forEach((tick) => {
+    const x = scaleX(tick, scale);
+    if (x < rect.x - 1 || x > rect.x + rect.width + 1) return;
+    ctx.strokeStyle = PALETTE.border;
+    ctx.beginPath();
+    ctx.moveTo(x, rect.y);
+    ctx.lineTo(x, rect.y + rect.height);
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(formatTick(tick), x, rect.y + rect.height + 20);
+  });
+
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  options.rows.forEach((row, index) => {
+    ctx.fillText(row, rect.x - 12, frame.rowY(index));
+  });
+
+  ctx.fillStyle = PALETTE.text_secondary;
+  ctx.font = "13px 'JetBrains Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(options.xLabel, rect.x + rect.width / 2, rect.y + rect.height + 46);
+
+  return frame;
 }
