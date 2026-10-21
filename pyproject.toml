@@ -317,6 +317,10 @@ ignore = [
     "undefined-export",
     "non-empty-init-module",  # non-empty-init-module — lazy loading pattern by design
 ]
+"computronium/harness/__init__.py" = [
+    "undefined-export",
+    "non-empty-init-module",  # non-empty-init-module — lazy loading pattern by design
+]
 "computronium/experiment/**/__init__.py" = [
     "undefined-export",
     "non-empty-init-module",  # non-empty-init-module — lazy loading pattern by design

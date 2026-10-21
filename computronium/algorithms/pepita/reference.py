@@ -3,65 +3,24 @@
 Composes PEPITA training step with error-modulated forward passes.
 """
 
-from dataclasses import dataclass
 from typing import Any
 
-import torch
-
-from computronium.core.system_trainer import compose_system
+from computronium.harness import (
+    make_reference_system,
+    reference_config,
+    run_reference_step,
+)
 from computronium.ontology.credit import PepitaCredit
-from computronium.ontology.dynamics import InstantaneousDynamics, StateDynamicsConfig
-from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
-from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
-from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
 
-@dataclass(frozen=True, slots=True)
-class _SystemConfig:
-    input_dim: int = 4
-    output_dim: int = 4
-    hidden_dims: tuple[int, ...] = ()
-    lr: float = 1e-3
-    device: str = "cpu"
-
-
-def _make_pepita_system(config: _SystemConfig) -> Any:
-    """Create a PEPITA system for testing."""
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device=config.device))
-    geometry = FeedforwardGeometry(
-        GeometryConfig.feedforward(
-            input_dim=config.input_dim,
-            output_dim=config.output_dim,
-            hidden_dims=config.hidden_dims,
-        )
-    )
-    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    credit = PepitaCredit()
-    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=config.lr))
-
-    return compose_system(
-        substrate=substrate,
-        geometry=geometry,
-        dynamics=dynamics,
-        credit=credit,
-        update=update,
+def _build_pepita(case: Any) -> Any:
+    """Create the system the reference step runs on."""
+    return make_reference_system(
+        reference_config(case),
+        PepitaCredit(),
     )
 
 
 def step(case: Any) -> Any:
     """Execute one reference training step using the opaque case object."""
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
-        system_config = _SystemConfig(
-            input_dim=case.state.shape[1],
-            output_dim=case.config.get("output_dim", case.state.shape[1]),
-            lr=case.config.get("lr", 1e-3),
-            device=case.state.device,
-        )
-        system = _make_pepita_system(system_config)
-        result = system.train_step(case.state, case.target)
-    finally:
-        torch.set_rng_state(rng_state)
-
-    return result
+    return run_reference_step(case, build=_build_pepita)

@@ -4,6 +4,10 @@ Uses Triton-accelerated DFAKernelBackend when available.
 Provides uniform `step(case)` interface.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch
 
 from computronium.acceleration.backends import kernel_available
@@ -17,8 +21,10 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     linear_views,
 )
-from computronium.algorithms.dfa.cases import Case
 from computronium.algorithms.dfa.reference import _make_dfa_system, _SystemConfig
+
+if TYPE_CHECKING:
+    from computronium.algorithms.dfa.cases import Case
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -52,7 +58,7 @@ def step(case: Case) -> dict[str, float]:
             output_dim=case.config.get("output_dim", case.state.shape[1]),
             lr=case.config.get("lr", 1e-3),
             feedback_scale=case.config.get("feedback_scale", 0.01),
-            device=case.state.device,
+            device=str(case.state.device),
         )
         system = _make_dfa_system(system_config)
 

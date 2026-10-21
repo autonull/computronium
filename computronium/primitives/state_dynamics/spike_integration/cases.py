@@ -4,21 +4,12 @@ These cases are intentionally small. They are used for parity tests,
 smoke tests, and microbenchmarks. They are not scientific benchmarks.
 """
 
-from dataclasses import dataclass
-from typing import Any
-
 import torch
 
+from computronium.harness import DynamicsCase, make_dynamics_case
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 
-
-@dataclass(frozen=True, slots=True)
-class Case:
-    state: torch.Tensor
-    prediction: torch.Tensor
-    multiplier: torch.Tensor
-    config: dict[str, Any]
-    geometry: FeedforwardGeometry
+Case = DynamicsCase
 
 
 def make_case(
@@ -26,36 +17,18 @@ def make_case(
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
     seed: int = 0,
-) -> Case:
-    generator = torch.Generator(device=device).manual_seed(seed)
-
-    # Input batch of 2, feature dim 4
-    state = torch.randn(2, 4, device=device, dtype=dtype, generator=generator)
-    prediction = torch.randn(2, 4, device=device, dtype=dtype, generator=generator)
-    multiplier = torch.randn(2, 4, device=device, dtype=dtype, generator=generator)
-
-    # Create a fixed geometry for deterministic testing
-    # Save/restore RNG state to ensure deterministic geometry creation
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
-        geometry = FeedforwardGeometry(
+) -> DynamicsCase:
+    """Build the deterministic case this dynamics' steps consume."""
+    return make_dynamics_case(
+        geometry_factory=lambda: FeedforwardGeometry(
             GeometryConfig.feedforward(input_dim=4, output_dim=4, hidden_dims=())
-        )
-    finally:
-        torch.set_rng_state(rng_state)
-
-    config = {
-        "steps": 3,
-        "step_size": 0.1,
-        "target": None,
-        "seed": seed,
-    }
-
-    return Case(
-        state=state,
-        prediction=prediction,
-        multiplier=multiplier,
-        config=config,
-        geometry=geometry,
+        ),
+        config={
+            "steps": 3,
+            "step_size": 0.1,
+            "target": None,
+        },
+        device=device,
+        dtype=dtype,
+        seed=seed,
     )

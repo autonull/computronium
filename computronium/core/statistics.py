@@ -1,22 +1,76 @@
-"""Core statistics utilities for kernel packages.
+"""Core statistics utilities shared by the kernel, validation, and evidence pillars.
 
-Pure, dependency-minimal statistics functions that the experiment kernel
-(surface/cli) can use without importing from the validation pillar.
+Single source of truth for the inference statistics the experiment kernel
+needs without reaching into the validation pillar. Every function is pure and
+NumPy-only at import time: scipy enters only inside the functions that need
+it, so the module stays importable wherever the kernel runs.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+
 import numpy as np
-from scipy.stats import nct, t
+
+__all__ = [
+    "Statistic",
+    "bootstrap_percentile_ci",
+    "cliffs_delta",
+    "cohens_d",
+    "cohens_dz",
+    "permutation_test_p",
+    "power_for_two_sample",
+    "required_sample_size",
+]
+
+Statistic = Callable[[np.ndarray], float]
 
 
-def cohens_d(
-    group_a: np.ndarray | list[float], group_b: np.ndarray | list[float]
-) -> float:
+def bootstrap_percentile_ci(
+    data: Sequence[float],
+    stat: Statistic = np.mean,
+    *,
+    n_boot: int = 10_000,
+    alpha: float = 0.05,
+    seed: int | None = None,
+) -> tuple[float, float]:
+    """Bootstrap percentile confidence interval for ``stat``.
+
+    Resamples ``data`` with replacement ``n_boot`` times and reports the
+    ``alpha/2`` and ``1 - alpha/2`` quantiles of the bootstrap distribution.
+
+    Args:
+        data: Observed sample.
+        stat: Statistic to bootstrap (default mean).
+        n_boot: Number of resamples.
+        alpha: Two-sided error rate (0.05 -> 95% CI).
+        seed: Optional RNG seed for reproducibility.
+
+    Returns:
+        ``(lower, upper)`` bootstrap percentile interval bounds.
+
+    Raises:
+        ValueError: When the sample is empty.
+    """
+    arr = np.asarray(data, dtype=float)
+    if arr.size == 0:
+        raise ValueError("cannot bootstrap an empty sample")
+    rng = np.random.default_rng(seed)
+    boot = np.empty(n_boot, dtype=float)
+    for i in range(n_boot):
+        resample = arr[rng.integers(0, arr.size, size=arr.size)]
+        boot[i] = stat(resample)
+    lo = np.quantile(boot, alpha / 2)
+    hi = np.quantile(boot, 1 - alpha / 2)
+    return float(lo), float(hi)
+
+
+def cohens_d(group_a: Sequence[float], group_b: Sequence[float]) -> float:
     """Cohen's d (pooled standard deviation) between two samples.
 
     Positive values mean ``group_a`` is larger on average. Uses the pooled
-    SD with the usual Bessel correction (n - 1) per group.
+    SD with the usual Bessel correction (n - 1) per group, matching scipy
+    conventions for the two-sample t-test.
 
     Args:
         group_a: First sample.
@@ -41,9 +95,32 @@ def cohens_d(
     return mean_diff / float(np.sqrt(pooled))
 
 
-def cliffs_delta(
-    group_a: np.ndarray | list[float], group_b: np.ndarray | list[float]
-) -> float:
+def cohens_dz(diffs: Sequence[float]) -> float:
+    """One-sample Cohen's dz for paired differences.
+
+    ``dz = mean(diffs) / std(diffs, ddof=1)`` — the effect size matched to
+    paired/sign-flip tests, unlike the pooled two-sample :func:`cohens_d`.
+
+    Args:
+        diffs: Per-pair differences (treatment minus control).
+
+    Returns:
+        Cohen's dz effect size.
+
+    Raises:
+        ValueError: When fewer than 2 differences are given or all are
+            identical (dz undefined).
+    """
+    d = np.asarray(diffs, dtype=float)
+    if d.size < 2:
+        raise ValueError("Cohen's dz requires at least 2 differences")
+    sd = np.std(d, ddof=1)
+    if sd == 0:
+        raise ValueError("Cohen's dz undefined: differences have zero variance")
+    return float(np.mean(d)) / float(sd)
+
+
+def cliffs_delta(group_a: Sequence[float], group_b: Sequence[float]) -> float:
     """Cliff's delta (dominance measure) between two samples.
 
     ``δ = P(a > b) - P(a < b)``, bounded in ``[-1, 1]``. Non-parametric, so it
@@ -68,6 +145,52 @@ def cliffs_delta(
     return float((wins - losses) / (a.size * b.size))
 
 
+def permutation_test_p(
+    group_a: Sequence[float],
+    group_b: Sequence[float],
+    *,
+    n_perm: int = 10_000,
+    seed: int = 0,
+) -> float:
+    """Two-sample permutation p-value for the difference in means.
+
+    Repeatedly relabels the pooled observations and recomputes ``|Δmean|``,
+    returning the fraction of permutations whose absolute difference is at
+    least as extreme as the observed one.
+
+    Args:
+        group_a: First sample.
+        group_b: Second sample.
+        n_perm: Number of relabel permutations (``0`` ⇒ exhaustive via a
+            Fisher-Yates shuffle of every resolvable index).
+        seed: RNG seed for permutation reproducibility.
+
+    Returns:
+        Two-sided permutation p-value in ``[0, 1]``.
+
+    Raises:
+        ValueError: If either sample has fewer than one observation.
+    """
+    a = np.asarray(group_a, dtype=float)
+    b = np.asarray(group_b, dtype=float)
+    if a.size < 1 or b.size < 1:
+        raise ValueError("permutation_test_p requires >=1 observation per group")
+    observed = abs(a.mean() - b.mean())
+    pooled = np.concatenate([a, b])
+    rng = np.random.default_rng(seed)
+    n_a = a.size
+    ge = 0
+    for _ in range(max(n_perm, 1)):
+        perm = rng.permutation(pooled.size)
+        delta = abs(pooled[perm[:n_a]].mean() - pooled[perm[n_a:]].mean())
+        if delta >= observed:
+            ge += 1
+    # Add-one smoothing so a small sample can never report ``0.0`` (which would
+    # over-claim certainty): the lowest credible p under ``n_perm`` draws is
+    # ``1 / (n_perm + 1)``.
+    return (ge + 1) / (max(n_perm, 1) + 1)
+
+
 def power_for_two_sample(
     d: float,
     n_per_group: int,
@@ -87,6 +210,8 @@ def power_for_two_sample(
     Returns:
         Power (probability of rejecting the null) in ``[0, 1]``.
     """
+    from scipy.stats import nct, t
+
     if n_per_group < 2:
         raise ValueError("power requires at least 2 observations per group")
     df = 2 * n_per_group - 2
@@ -139,6 +264,3 @@ def required_sample_size(
     z_power = norm.ppf(power)
     n = 2 * (z_alpha + z_power) ** 2 / (effect_size**2)
     return max(math.ceil(n), min_samples)
-
-
-__all__ = ["cliffs_delta", "cohens_d", "power_for_two_sample", "required_sample_size"]

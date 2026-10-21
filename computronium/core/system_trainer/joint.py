@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
+from computronium.core.joint.context import build_system_context
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
 from computronium.core.plasticity import (
     NullPlasticity as _NullPlasticity,
@@ -258,59 +259,13 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
 
         def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""
-            from computronium.core.joint.transition import PlasticityConfig
-            from computronium.state import StateRegistry, StateVariable, SystemContext
-
-            # Build registry from all components
-            registry = StateRegistry()
-
-            # Register persistent parameters (theta)
-            for name, param in self.geometry.params.items():
-                registry.register(
-                    StateVariable(
-                        name=name,
-                        persistent=True,
-                        fast_plastic=False,
-                        consolidatable=False,
-                    )
-                )
-
-            # Register plastic variables if any
-            plastic_config = getattr(self.plasticity, "config", None)
-            if plastic_config is not None:
-                plastic_state_dims = getattr(plastic_config, "plastic_state_dims", None)
-                if plastic_state_dims:
-                    for name, dim in plastic_state_dims.items():
-                        registry.register(
-                            StateVariable(
-                                name=name,
-                                persistent=False,
-                                fast_plastic=True,
-                                consolidatable=True,
-                            )
-                        )
-
-            # Build configs from components
-            substrate_config = self.substrate.config
-            geometry_config = self.geometry.config
-            dynamics_config = self.dynamics.config
-            credit_config = self.credit.config
-            update_config = self.update.config
-            plasticity_config = getattr(
-                self.plasticity, "config", PlasticityConfig.null()
-            )
-
-            return SystemContext(
-                theta=self.geometry.params,
+            return build_system_context(
                 geometry=self.geometry,
                 substrate=self.substrate,
-                substrate_config=substrate_config,
-                geometry_config=geometry_config,
-                dynamics_config=dynamics_config,
-                credit_config=credit_config,
-                update_config=update_config,
-                plasticity_config=plasticity_config,
-                registry=registry,
+                dynamics=self.dynamics,
+                credit=self.credit,
+                update=self.update,
+                plasticity=self.plasticity,
             )
 
         @property

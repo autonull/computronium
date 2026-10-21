@@ -6,9 +6,8 @@ Composes FF training step with layer-local goodness objectives.
 from dataclasses import dataclass
 from typing import Any
 
-import torch
-
 from computronium.core.system_trainer import compose_system
+from computronium.harness import run_reference_step
 from computronium.ontology.credit import CreditAssignmentConfig, LocalGoodnessCredit
 from computronium.ontology.dynamics import InstantaneousDynamics, StateDynamicsConfig
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
@@ -50,22 +49,19 @@ def _make_ff_system(config: _SystemConfig) -> Any:
     )
 
 
+def _build_ff(case: Any) -> Any:
+    """Create the system the reference step runs on."""
+    config = _SystemConfig(
+        input_dim=case.state.shape[1],
+        output_dim=case.config.get("output_dim", case.state.shape[1]),
+        layer_lr=case.config.get("layer_lr", 0.03),
+        classifier_lr=case.config.get("classifier_lr", 0.01),
+        threshold=case.config.get("threshold", 2.0),
+        device=str(case.state.device),
+    )
+    return _make_ff_system(config)
+
+
 def step(case: Any) -> Any:
     """Execute one reference training step using the opaque case object."""
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
-        system_config = _SystemConfig(
-            input_dim=case.state.shape[1],
-            output_dim=case.config.get("output_dim", case.state.shape[1]),
-            layer_lr=case.config.get("layer_lr", 0.03),
-            classifier_lr=case.config.get("classifier_lr", 0.01),
-            threshold=case.config.get("threshold", 2.0),
-            device=case.state.device,
-        )
-        system = _make_ff_system(system_config)
-        result = system.train_step(case.state, case.target)
-    finally:
-        torch.set_rng_state(rng_state)
-
-    return result
+    return run_reference_step(case, build=_build_ff)

@@ -5,20 +5,38 @@ nightly gate need: bootstrap confidence intervals (percentile + bias-corrected
 and accelerated BCa), two-sample effect sizes (Cohen's d, Cliff's δ),
 Benjamini-Hochberg FDR control, and a two-sample power estimate.
 
-Every function is pure and NumPy-only so the module stays trivially testable
-and runs anywhere (including the overnight smoke rail). Hypothesis-based
-property tests and golden values live in ``tests/unit/validation/``.
+The shared primitives — bootstrap percentile intervals, paired and unpaired
+effect sizes, permutation tests, and power — live in
+``computronium.core.statistics`` and are re-exported here so the validation
+pillar and the kernel cannot drift apart. Every function is pure and
+NumPy-only so the module stays trivially testable and runs anywhere
+(including the overnight smoke rail). Hypothesis-based property tests and
+golden values live in ``tests/unit/validation/``.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
 from fractions import Fraction
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+from computronium.core.statistics import (
+    Statistic,
+    bootstrap_percentile_ci,
+    cliffs_delta,
+    cohens_d,
+    cohens_dz,
+    permutation_test_p,
+    power_for_two_sample,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 __all__ = [
+    "Statistic",
     "benjamini_hochberg",
     "bootstrap_bca_ci",
     "bootstrap_ci",
@@ -31,51 +49,6 @@ __all__ = [
     "power_for_two_sample",
     "spearman_rho",
 ]
-
-# Re-export canonical power_for_two_sample from core.statistics
-from computronium.core.statistics import power_for_two_sample as _power_for_two_sample
-
-power_for_two_sample = _power_for_two_sample
-
-Statistic = Callable[[np.ndarray], float]
-
-
-def bootstrap_percentile_ci(
-    data: Sequence[float],
-    stat: Statistic = np.mean,
-    *,
-    n_boot: int = 10_000,
-    alpha: float = 0.05,
-    seed: int | None = None,
-) -> tuple[float, float]:
-    """Bootstrap percentile confidence interval for ``stat``.
-
-    Resamples ``data`` with replacement ``n_boot`` times and reports the
-    ``alpha/2`` and ``1 - alpha/2`` quantiles of the bootstrap distribution.
-
-    Args:
-        data: Observed sample.
-        stat: Statistic to bootstrap (default mean).
-        n_boot: Number of resamples.
-        alpha: Two-sided error rate (0.05 -> 95% CI).
-        seed: Optional RNG seed for reproducibility.
-
-    Returns:
-        ``(lower, upper)`` bootstrap percentile interval bounds.
-    """
-    arr = np.asarray(data, dtype=float)
-    if arr.size == 0:
-        raise ValueError(  # descriptive message is the public API
-            "cannot bootstrap an empty sample"
-        )
-    rng = np.random.default_rng(seed)
-    boot = np.empty(n_boot, dtype=float)
-    for i in range(n_boot):
-        resample = arr[rng.integers(0, arr.size, size=arr.size)]
-        boot[i] = stat(resample)
-    lo = np.quantile(boot, alpha / 2)
-    hi = np.quantile(boot, 1 - alpha / 2)
-    return float(lo), float(hi)
 
 
 def bootstrap_bca_ci(  # ruff: ignore[too-many-locals]
@@ -186,94 +159,6 @@ def bootstrap_ci(
     )
 
 
-def cohens_d(group_a: Sequence[float], group_b: Sequence[float]) -> float:
-    """Cohen's d (pooled standard deviation) between two samples.
-
-    Positive values mean ``group_a`` is larger on average. Uses the pooled
-    SD with the usual Bessel correction (n - 1) per group, matching scipy
-    conventions for the two-sample t-test.
-
-    Args:
-        group_a: First sample.
-        group_b: Second sample.
-
-    Returns:
-        Cohen's d effect size.
-
-    Raises:
-        ValueError: When either group is empty or has zero variance.
-    """
-    a = np.asarray(group_a, dtype=float)
-    b = np.asarray(group_b, dtype=float)
-    if a.size < 2 or b.size < 2:
-        raise ValueError(  # descriptive message is the public API
-            "Cohen's d requires at least 2 observations per group"
-        )
-    var_a = np.var(a, ddof=1)
-    var_b = np.var(b, ddof=1)
-    pooled = (var_a + var_b) / 2
-    if pooled == 0:
-        raise ValueError(  # descriptive message is the public API
-            "Cohen's d undefined: both samples have zero variance"
-        )
-    mean_diff = float(np.mean(a) - np.mean(b))
-    return mean_diff / float(np.sqrt(pooled))
-
-
-def cohens_dz(diffs: Sequence[float]) -> float:
-    """One-sample Cohen's dz for paired differences.
-
-    ``dz = mean(diffs) / std(diffs, ddof=1)`` — the effect size matched to
-    paired/sign-flip tests, unlike the pooled two-sample :func:`cohens_d`.
-
-    Args:
-        diffs: Per-pair differences (treatment minus control).
-
-    Returns:
-        Cohen's dz effect size.
-
-    Raises:
-        ValueError: When fewer than 2 differences are given or all are
-            identical (dz undefined).
-    """
-    d = np.asarray(diffs, dtype=float)
-    if d.size < 2:
-        raise ValueError(  # descriptive message is the public API
-            "Cohen's dz requires at least 2 differences"
-        )
-    sd = np.std(d, ddof=1)
-    if sd == 0:
-        raise ValueError("Cohen's dz undefined: differences have zero variance")
-    return float(np.mean(d)) / float(sd)
-
-
-def cliffs_delta(group_a: Sequence[float], group_b: Sequence[float]) -> float:
-    """Cliff's delta (dominance measure) between two samples.
-
-    ``δ = P(a > b) - P(a < b)``, bounded in ``[-1, 1]``. Non-parametric, so it
-    is robust to outliers and skewed distributions where Cohen's d is fragile.
-
-    Args:
-        group_a: First sample.
-        group_b: Second sample.
-
-    Returns:
-        Cliff's delta in ``[-1, 1]``.
-
-    Raises:
-        ValueError: When either group is empty.
-    """
-    a = np.asarray(group_a, dtype=float)
-    b = np.asarray(group_b, dtype=float)
-    if a.size == 0 or b.size == 0:
-        raise ValueError(  # descriptive message is the public API
-            "Cliff's delta requires two non-empty samples"
-        )
-    wins = sum(1 for x in a for y in b if x > y)
-    losses = sum(1 for x in a for y in b if x < y)
-    return float((wins - losses) / (a.size * b.size))
-
-
 def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
     """Apply Benjamini-Hochberg FDR control to a list of p-values.
 
@@ -306,59 +191,6 @@ def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
     q = np.empty_like(adjusted)
     q[order] = np.minimum(adjusted, 1.0)
     return q.tolist()
-
-
-# Canonical power_for_two_sample is re-exported from computronium.core.statistics
-# (defined at module bottom to avoid circular imports)
-
-
-def permutation_test_p(
-    group_a: Sequence[float],
-    group_b: Sequence[float],
-    *,
-    n_perm: int = 10_000,
-    seed: int = 0,
-) -> float:
-    """Two-sample permutation p-value for the difference in means.
-
-    Repeatedly relabels the pooled observations and recomputes ``|Δmean|`,
-    returning the fraction of permutations whose absolute difference is at
-    least as extreme as the observed one. This is the parity report's
-    ``bootstrap_p`` field (Plan 8 §C2): distribution-free and robust to small
-    cell sizes, with the one-sided/two-sided compromise already baked in via
-    the absolute value.
-
-    Args:
-        group_a: First sample.
-        group_b: Second sample.
-        n_perm: Number of relabel permutations (``0`` ⇒ exhaustive via a
-            Fisher-Yates shuffle of every resolvable index).
-        seed: RNG seed for permutation reproducibility.
-
-    Returns:
-        Two-sided permutation p-value in ``[0, 1]``.
-
-    Raises:
-        ValueError: If either sample has fewer than one observation.
-    """
-    a = np.asarray(group_a, dtype=float)
-    b = np.asarray(group_b, dtype=float)
-    if a.size < 1 or b.size < 1:
-        raise ValueError("permutation_test_p requires >=1 observation per group")
-    observed = abs(a.mean() - b.mean())
-    pooled = np.concatenate([a, b])
-    rng = np.random.default_rng(seed)
-    n_a = a.size
-    ge = 0
-    for _ in range(max(n_perm, 1)):
-        perm = rng.permutation(pooled.size)
-        delta = abs(pooled[perm[:n_a]].mean() - pooled[perm[n_a:]].mean())
-        if delta >= observed:
-            ge += 1
-    # Add-one smoothing so a small sample can never report ``0.0`` (which would
-    # over-claim certainty): the lowest credible p under ``n_perm`` draws is
-    # ``1 / (n_perm + 1)``.
-    return (ge + 1) / (max(n_perm, 1) + 1)
 
 
 def fisher_exact_p_one_sided(

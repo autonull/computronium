@@ -4,22 +4,14 @@ Delegates to computronium.ontology.geometry.NcaGeometry. This wrapper provides
 the uniform `forward(case)` interface for parity/microbench.
 """
 
-from typing import Any
+from __future__ import annotations
 
-import torch
+from typing import TYPE_CHECKING, Any
 
-from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
+from computronium.harness import geometry_forward
 
-
-def _case_to_input(case: Any) -> torch.Tensor:
-    """Extract input tensor from case."""
-    return case.state
-
-
-def _case_to_substrate(case: Any) -> DigitalSubstrate:
-    """Create substrate from case config."""
-    device = case.state.device
-    return DigitalSubstrate(SubstrateConfig.digital(device=device))
+if TYPE_CHECKING:
+    import torch
 
 
 def forward(case: Any) -> torch.Tensor:
@@ -32,25 +24,7 @@ def forward(case: Any) -> torch.Tensor:
     Returns:
         Updated state grid tensor of shape (batch, channels, H, W).
     """
-    # Use pre-created geometry from case for determinism
-    geometry = case.geometry
-
-    # Get input
-    x = _case_to_input(case)
-
-    # Get substrate
-    substrate = _case_to_substrate(case)
-
-    # Run forward with deterministic RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
-        # NCA forward is a single CA step
-        output = geometry(x, substrate)
-    finally:
-        torch.set_rng_state(rng_state)
-
-    return output
+    return geometry_forward(case)
 
 
 # Alias for the central registry test which expects `step`

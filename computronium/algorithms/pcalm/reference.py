@@ -6,9 +6,8 @@ Composes PC-ALM primitives into a full training step.
 from dataclasses import dataclass
 from typing import Any
 
-import torch
-
 from computronium.core.system_trainer import compose_joint_system
+from computronium.harness import run_reference_step
 from computronium.ontology.credit import CreditAssignmentConfig, PCALMCredit
 from computronium.ontology.dynamics import PCALMDynamics, StateDynamicsConfig
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
@@ -66,6 +65,23 @@ def _make_pc_alm_system(config: _SystemConfig) -> Any:
     )
 
 
+def _build_pc_alm(case: Any) -> Any:
+    """Create the system the reference step runs on."""
+    config = _SystemConfig(
+        input_dim=case.state.shape[1],
+        output_dim=case.config.get("output_dim", case.state.shape[1]),
+        step_size=case.config.get("step_size", 0.1),
+        rho=case.config.get("rho", 1.0),
+        beta=case.config.get("beta", 0.5),
+        prospective_leak=case.config.get("prospective_leak", 0.0),
+        max_steps=case.config.get("steps", 3),
+        convergence_threshold=case.config.get("tol", 1e-4),
+        lr=case.config.get("lr", 1e-3),
+        device=str(case.state.device),
+    )
+    return _make_pc_alm_system(config)
+
+
 def step(case: Any) -> Any:
     """Execute one reference training step using the opaque case object.
 
@@ -73,29 +89,4 @@ def step(case: Any) -> Any:
     tensors, parameters, and configuration needed for a small deterministic
     execution.
     """
-    # Run training step with deterministic RNG state
-    # Save RNG state BEFORE system creation (which may use RNG for init)
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
-        # Create system
-        system_config = _SystemConfig(
-            input_dim=case.state.shape[1],
-            output_dim=case.config.get("output_dim", case.state.shape[1]),
-            step_size=case.config.get("step_size", 0.1),
-            rho=case.config.get("rho", 1.0),
-            beta=case.config.get("beta", 0.5),
-            prospective_leak=case.config.get("prospective_leak", 0.0),
-            max_steps=case.config.get("steps", 3),
-            convergence_threshold=case.config.get("tol", 1e-4),
-            lr=case.config.get("lr", 1e-3),
-            device=case.state.device,
-        )
-        system = _make_pc_alm_system(system_config)
-
-        # Run training step
-        result = system.train_step(case.state, case.target)
-    finally:
-        torch.set_rng_state(rng_state)
-
-    return result
+    return run_reference_step(case, build=_build_pc_alm)

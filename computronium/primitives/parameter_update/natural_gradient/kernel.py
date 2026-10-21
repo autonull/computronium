@@ -9,6 +9,7 @@ from typing import Any
 import torch
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import update_geometry, update_pseudo_grads
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 from computronium.ontology.update import (
     NaturalGradientUpdate,
@@ -40,8 +41,8 @@ def step(case: Any) -> dict[str, torch.Tensor]:
     )
     update = NaturalGradientUpdate(config)
 
-    geometry = _case_to_geometry(case)
-    pseudo_grad_list = _make_pseudo_grads(case, geometry)
+    geometry = update_geometry(case)
+    pseudo_grad_list = update_pseudo_grads(case, geometry)
     params = dict(geometry.params)
     updated = update.step(params, pseudo_grad_list, geometry)
 

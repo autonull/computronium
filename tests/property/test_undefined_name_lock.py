@@ -34,25 +34,26 @@ Two locks:
   method that does not exist, and therefore a block that had never run and
   never could. There are exactly two shapes, and no third:
 
-  * **14 table-driven lazy shims** -- every one resolves its names from a table
+  * **13 table-driven lazy shims** -- every one resolves its names from a table
     declared in the same file, so the population *is* statically derivable:
 
-    - ``_LAZY`` (4): ``computronium/__init__.py``, ``cli``, ``core``,
-      ``execution``. The root ``__all__``/``_LAZY`` wiring lock covers these.
+    - ``_LAZY`` (3): ``computronium/__init__.py``, ``cli``, ``core``.
+      The root ``__all__``/``_LAZY`` wiring lock covers these.
     - ``_PRIMITIVES`` (3): ``primitives``, ``primitives/geometry``,
       ``primitives/substrate``.
     - ``_ALGORITHMS`` (1): ``algorithms``.
-    - ``_symbol_to_module`` (5): the experiment kernel packages -- ``experiment``
-      and its ``schema``, ``evidence``, ``execution``, ``surface`` subpackages.
-      Each maps every re-exported symbol to the submodule that defines it, so
-      the package import stays off the ``torch``/``ontology`` path until a name
-      is actually touched.
+    - ``_symbol_to_module`` (6): the experiment kernel packages -- ``experiment``
+      and its ``schema``, ``evidence``, ``execution``, ``surface`` subpackages
+      -- and the ``harness`` package, whose case builders must stay off the
+      system-composition path. Each maps every re-exported symbol to the
+      submodule that defines it, so the package import stays off the
+      ``torch``/``ontology`` path until a name is actually touched.
 
-    The last seven have no lock of their own, so they are named here.
-  * **2 hand-written single-name modules**, each resolving exactly one name:
-    ``computronium/knowledge/__init__.py`` and ``computronium/knowledge/kb.py``
-    both resolve ``DEFAULT_KB`` and nothing else, so that constructing the
-    ``KnowledgeBase`` (and its SQLite file) stays off the import path.
+    The last eight have no lock of their own, so they are named here.
+  * **No hand-written single-name modules remain.** The two that once resolved
+    ``DEFAULT_KB`` and nothing else are gone, and
+    :func:`test_hand_written_getattr_modules_resolve_exactly_one_name` keeps
+    them gone.
 
   :func:`test_getattr_population_is_enumerated` keeps that list true, so a new
   ``__getattr__`` cannot join the exclusion silently.
@@ -304,6 +305,7 @@ GETATTR_SHIMS: dict[str, str] = {
     "computronium/experiment/evidence/__init__.py": "_symbol_to_module",
     "computronium/experiment/execution/__init__.py": "_symbol_to_module",
     "computronium/experiment/surface/__init__.py": "_symbol_to_module",
+    "computronium/harness/__init__.py": "_symbol_to_module",
 }
 
 

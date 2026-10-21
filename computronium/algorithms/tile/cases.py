@@ -4,20 +4,12 @@ These cases are intentionally small. They are used for parity tests,
 smoke tests, and microbenchmarks. They are not scientific benchmarks.
 """
 
-from dataclasses import dataclass
-from typing import Any
-
 import torch
 
+from computronium.harness import AlgorithmCase, make_algorithm_case
 from computronium.ontology.geometry import GeometryConfig, TileGeometry
 
-
-@dataclass(frozen=True, slots=True)
-class Case:
-    state: torch.Tensor
-    target: torch.Tensor | None
-    config: dict[str, Any]
-    geometry: TileGeometry
+Case = AlgorithmCase
 
 
 def make_case(
@@ -25,17 +17,10 @@ def make_case(
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
     seed: int = 0,
-) -> Case:
-    generator = torch.Generator(device=device).manual_seed(seed)
+) -> AlgorithmCase:
+    """Build the deterministic case this algorithm's steps consume."""
 
-    # Input batch of 2, feature dim 4
-    state = torch.randn(2, 4, device=device, dtype=dtype, generator=generator)
-    target = torch.randint(0, 4, (2,), device=device, generator=generator)
-
-    # Create a fixed geometry for deterministic testing
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    def _geometry() -> TileGeometry:
         tile_cfg = GeometryConfig(
             input_dim=4,
             output_dim=4,
@@ -48,25 +33,20 @@ def make_case(
             neurons_per_tile=4,
             tiles_per_layer=2,
         )
-        geometry = TileGeometry(
+        return TileGeometry(
             tile_cfg,
             neurons_per_tile=4,
             tiles_per_layer=2,
         )
-    finally:
-        torch.set_rng_state(rng_state)
 
-    config = {
-        "lr": 1e-3,
-        "neurons_per_tile": 4,
-        "tiles_per_layer": 2,
-        "output_dim": 4,
-        "seed": seed,
-    }
-
-    return Case(
-        state=state,
-        target=target,
-        config=config,
-        geometry=geometry,
+    return make_algorithm_case(
+        geometry_factory=_geometry,
+        config={
+            "lr": 1e-3,
+            "neurons_per_tile": 4,
+            "tiles_per_layer": 2,
+        },
+        device=device,
+        dtype=dtype,
+        seed=seed,
     )
