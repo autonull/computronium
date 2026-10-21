@@ -10,13 +10,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import subprocess  # ruff: ignore[suspicious-subprocess-import] -- controlled git/uv calls
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from computronium.experiment.environment.snapshots import EnvironmentSnapshot
 
+from computronium.core.utils.git import git_sha
 from computronium.experiment.environment.snapshots import (
     EnvironmentCapture,
     EnvironmentSnapshot,
@@ -82,30 +82,13 @@ class ProvenanceBuilder:
         env_snapshot: EnvironmentSnapshot | None = None,
     ) -> None:
         self.run_id = run_id
-        self.code_git_sha = self._get_git_sha()
+        self.code_git_sha = git_sha() or "unknown"
         self.config_sha256 = config_sha256
         self.seed_list = seed_list
         self.task_versions = task_versions or {}
         self.env_snapshot = env_snapshot or EnvironmentCapture().capture()
         self._env_fingerprint: str | None = None
         self._hardware_hash: str | None = None
-
-    @staticmethod
-    def _get_git_sha() -> str:
-        """Get current git commit SHA."""
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception as e:
-            logger.debug("Failed to get git SHA: %s", e)
-        return "unknown"
 
     @property
     def env_fingerprint(self) -> str:

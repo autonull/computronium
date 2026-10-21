@@ -8,30 +8,12 @@ import argparse
 import importlib
 import json
 import pathlib
-import subprocess  # needed for git SHA detection  # noqa: S404
 import time
 from typing import Any
 
 import torch
 
-# ruff: file-ignore[suspicious-subprocess-import,start-process-with-partial-path] (subprocess import/run with fixed args is intentional for git SHA detection)
-
-
-def _get_git_sha() -> str | None:
-    """Get current git SHA if available."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except Exception:
-        return None
-    return None
+from computronium.core.utils.git import git_sha as current_git_sha
 
 
 def _get_peak_memory(device: str) -> float:
@@ -138,7 +120,7 @@ def run_microbench(
     _run_warmup(step_func, case, warmup)
 
     results = []
-    git_sha = _get_git_sha()
+    git_sha = current_git_sha(timeout=2)
 
     for iter_idx in range(iterations):
         elapsed, peak_mem_mb = _run_iteration(step_func, case, device, steps)
@@ -414,7 +396,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    tag = args.tag or _get_git_sha()
+    tag = args.tag or current_git_sha(timeout=2)
 
     if args.all:
         results = _run_all_benchmarks(args, tag)

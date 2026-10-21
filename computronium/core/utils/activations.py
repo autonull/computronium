@@ -11,6 +11,7 @@ power-iteration code that had drifted out of sync between
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 import numpy as np
@@ -24,6 +25,7 @@ logger = get_logger()
 
 __all__ = [
     "ActivationName",
+    "apply_activation_derivative",
     "approx_spectral_norm",
     "cross_entropy",
     "get_activation",
@@ -71,6 +73,40 @@ def get_activation(
         else:
             cls = default
     return cls()
+
+
+def apply_activation_derivative(
+    grad_h: torch.Tensor,
+    pre_activation: torch.Tensor,
+    activation: nn.Module,
+) -> torch.Tensor:
+    """Multiply ``grad_h`` by f'(x), the derivative at the **pre**-activation.
+
+    ``pre_activation`` must be the layer's input to the activation module, not
+    its output: every branch below is a function of x, and the SiLU and GELU
+    branches have no closed form in terms of f(x).
+
+    Args:
+        grad_h: The gradient flowing into the activation.
+        pre_activation: The activation module's input.
+        activation: The activation module.
+
+    Returns:
+        The gradient scaled by the activation's derivative.
+    """
+    x = pre_activation
+    if isinstance(activation, nn.SiLU):
+        sig = torch.sigmoid(x)
+        return grad_h * sig * (1 + x * (1 - sig))
+    if isinstance(activation, nn.ReLU):
+        return grad_h * (x > 0).to(grad_h.dtype)
+    if isinstance(activation, nn.Tanh):
+        return grad_h * (1 - torch.tanh(x) ** 2)
+    if isinstance(activation, nn.GELU):
+        cdf = 0.5 * (1 + torch.erf(x / math.sqrt(2)))
+        pdf = torch.exp(-(x**2) / 2) / math.sqrt(2 * math.pi)
+        return grad_h * (cdf + x * pdf)
+    return grad_h * (x > 0).to(grad_h.dtype)
 
 
 def approx_spectral_norm(weight: torch.Tensor, n_iter: int = 10) -> float:

@@ -7,6 +7,7 @@ graph API) with triton acceleration. Provides uniform `forward(case)` interface.
 from typing import Any
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import geometry_forward
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -22,29 +23,7 @@ def forward(case: Any) -> Any:
 
         return reference_forward(case)
 
-    # Use accelerated implementation
-    import torch
-
-    from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
-
-    # Use pre-created geometry from case for determinism
-    geometry = case.geometry
-
-    # Get input
-    x = case.state
-
-    # Get substrate
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device=x.device))
-
-    # Run with deterministic RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
-        output = geometry(x, substrate)
-    finally:
-        torch.set_rng_state(rng_state)
-
-    return output
+    return geometry_forward(case)
 
 
 # Alias for the central registry test which expects `step`

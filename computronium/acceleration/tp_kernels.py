@@ -19,6 +19,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.utils.activations import get_activation
 
 if TYPE_CHECKING:
     from computronium.ontology import System
@@ -84,7 +85,9 @@ class TPKernelBackend:
 
         extra = config.extra
         self._lr = extra.get("lr", 1e-3)
-        self._activation = _get_activation(extra.get("activation", "tanh"))
+        self._activation = get_activation(
+            extra.get("activation", "tanh"), default=torch.nn.Tanh
+        )
         self._beta = extra.get("beta", 0.1)
         self._max_steps = extra.get("max_steps", 10)
         self._step_size = extra.get("step_size", 0.1)
@@ -511,16 +514,6 @@ class TPKernelBackend:
         }
 
 
-def _get_activation(name: str) -> torch.nn.Module:
-    activations = {
-        "relu": torch.nn.ReLU(),
-        "silu": torch.nn.SiLU(),
-        "tanh": torch.nn.Tanh(),
-        "gelu": torch.nn.GELU(),
-    }
-    return activations.get(name.lower(), torch.nn.Tanh())
-
-
 # Register backend for all HardwareTargets
 
 
@@ -528,7 +521,7 @@ __all__ = ["TPKernelBackend"]
 
 
 # Triton kernels for fused TP operations
-try:  # ruff: ignore[too-many-statements]
+try:  # ruff: ignore[too-many-statements, too-many-statements-in-try-clause]
     import math
 
     import triton

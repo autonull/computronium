@@ -77,19 +77,6 @@ class RLTileNetConfig(RLDeploymentConfig):
 # =============================================================================
 
 
-def _credit_assignment_type(algorithm: str) -> str:
-    """Map algorithm to credit assignment type."""
-    mapping = {
-        "ep": "equilibrium",
-        "pc": "equilibrium",
-        "fa": "target",
-        "tp": "target",
-        "hebbian": "hebbian",
-        "snn": "spiking",
-    }
-    return mapping.get(algorithm, "equilibrium")
-
-
 class RLTileNet(BioModel):
     """TileNet for Reinforcement Learning.
 

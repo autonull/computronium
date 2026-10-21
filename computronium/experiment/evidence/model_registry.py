@@ -13,7 +13,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import subprocess  # ruff: ignore[suspicious-subprocess-import] -- used for controlled CLI subprocess calls (git)
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
 
     from computronium.experiment.schema.record import Record
 
+from computronium.core.utils.git import git_sha as get_git_sha
 from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
 
 logger = logging.getLogger(__name__)
@@ -413,23 +413,6 @@ class ModelRegistry:
             stage=stage,
             description=description,
         )
-
-
-def get_git_sha() -> str | None:
-    """Get the current git commit SHA."""
-    try:
-        import shutil
-
-        git_path = shutil.which("git")
-        if not git_path:
-            return None
-        return subprocess.check_output(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-            [git_path, "rev-parse", "HEAD"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-    except Exception:
-        return None
 
 
 __all__ = [

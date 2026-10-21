@@ -15,13 +15,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import subprocess  # ruff: ignore[suspicious-subprocess-import] -- controlled git call
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from computronium.core.utils.git import git_sha
 from computronium.experiment.environment.snapshots import EnvironmentCapture
 from computronium.experiment.registry.provenance import compute_config_sha256
 from computronium.experiment.schema.axis import Domain  # ruff: ignore[typing-only-first-party-import] -- used at runtime for Domain(members=...)
@@ -361,7 +361,7 @@ class BaselineRegistry:
             seed=seed_context.master_seed,
             device="auto",
             sweep_steps=sweep_steps,
-            code_sha=self._get_git_sha(),
+            code_sha=git_sha() or "unknown",
             dataset=task,
             dataset_version="1.0",
         )
@@ -489,7 +489,7 @@ class BaselineRegistry:
                         },
                         run_id=run_id,
                         config_sha256=compute_config_sha256(spec.to_dict()),
-                        git_sha=self._get_git_sha(),
+                        git_sha=git_sha() or "unknown",
                     )
 
                     # Store in cache
@@ -649,24 +649,8 @@ class BaselineRegistry:
             },
             run_id=best.run_id,
             config_sha256=compute_config_sha256({"source": "store", "task": task}),
-            git_sha=self._get_git_sha(),
+            git_sha=git_sha() or "unknown",
         )
-
-    def _get_git_sha(self) -> str:
-        """Get current git commit SHA."""
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception as e:
-            logger.debug("Failed to get git SHA: %s", e)
-        return "unknown"
 
 
 class BaselineGate:

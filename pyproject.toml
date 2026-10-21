@@ -385,6 +385,16 @@ ignore = [
 "computronium/experiment/surface/conformance.py" = ["suspicious-subprocess-import", "subprocess-without-shell-equals-true", "start-process-with-partial-path", "if-else-block-instead-of-if-exp", "unused-variable"]
 "computronium/experiment/surface/operations.py" = []
 "computronium/experiment/surface/report.py" = ["unused-noqa"]
+# The surface CLI's command modules, split out of the one cli.py. The
+# complexity findings are marked inline on the handler that carries them;
+# too-many-nested-blocks is reported on the nested block rather than on the
+# function, so it cannot be marked inline and is exempted here.
+"computronium/experiment/surface/_cli/*.py" = [
+    "too-many-nested-blocks",
+]
+"computronium/experiment/surface/_cli/_commands.py" = [
+    "hardcoded-sql-expression",  # hardcoded-sql-expression — the Dockerfile template is not a query
+]
 "computronium/cli/joint_validate.py" = [
     "too-many-statements-in-try-clause",  # _validate_coordinate is a single validation function with many branches
 ]

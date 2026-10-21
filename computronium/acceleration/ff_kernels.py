@@ -22,6 +22,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.utils.activations import get_activation
 
 if TYPE_CHECKING:
     from computronium.ontology import System
@@ -62,7 +63,7 @@ class FFKernelBackend:
         self._num_layers = extra.get("num_layers", 3)
         self._input_dim = extra.get("input_dim", 784)
         self._output_dim = extra.get("output_dim", 10)
-        self._activation = _get_activation(extra.get("activation", "relu"))
+        self._activation = get_activation(extra.get("activation", "relu"))
 
     def set_model_ref(
         self,
@@ -338,7 +339,7 @@ class PEPITAKernelBackend:
 
         extra = config.extra
         self._scale = extra.get("feedback_matrix_scale", 1.0)
-        self._activation = _get_activation(extra.get("activation", "relu"))
+        self._activation = get_activation(extra.get("activation", "relu"))
         self._output_dim = int(extra.get("output_dim", 10))
 
         # Create fixed random feedback matrix
@@ -579,21 +580,11 @@ class PEPITAKernelBackend:
         return None
 
 
-def _get_activation(name: str) -> torch.nn.Module:
-    activations = {
-        "relu": torch.nn.ReLU(),
-        "silu": torch.nn.SiLU(),
-        "tanh": torch.nn.Tanh(),
-        "gelu": torch.nn.GELU(),
-    }
-    return activations.get(name.lower(), torch.nn.ReLU())
-
-
 # Register backends for all HardwareTargets
 
 
 # Triton kernels for fused FF/PEPITA operations
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements, too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
 

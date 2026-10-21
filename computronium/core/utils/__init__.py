@@ -12,6 +12,7 @@ from computronium.core.utils.activations import (
     to_numpy,
 )
 from computronium.core.utils.device import get_device, get_optimal_backend
+from computronium.core.utils.git import git_sha
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.core.utils.reproducibility import (
     EnvironmentInfo,
@@ -36,6 +37,8 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # device
     "get_device",
     "get_optimal_backend",
+    # git
+    "git_sha",
     # logging
     "get_logger",
     # optimizer factory (REFACTOR.md §2.3)

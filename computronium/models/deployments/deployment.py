@@ -564,20 +564,6 @@ def create_graph_model(
 # =============================================================================
 
 
-def _credit_assignment_type(algorithm: str) -> str:
-    """Map algorithm to credit assignment type."""
-    mapping = {
-        "ep": "equilibrium",
-        "pc": "equilibrium",
-        "fa": "target",
-        "tp": "target",
-        "hebbian": "hebbian",
-        "snn": "spiking",
-        "gnn": "equilibrium",
-    }
-    return mapping.get(algorithm, "equilibrium")
-
-
 def register_deployment_variants(
     base_name: str,
     domain: str,

@@ -70,19 +70,6 @@ class ConvTileNetConfig(ConvDeploymentConfig):
 # =============================================================================
 
 
-def _credit_assignment_type(algorithm: str) -> str:
-    """Map algorithm to credit assignment type."""
-    mapping = {
-        "ep": "equilibrium",
-        "pc": "equilibrium",
-        "fa": "target",
-        "tp": "target",
-        "hebbian": "hebbian",
-        "snn": "spiking",
-    }
-    return mapping.get(algorithm, "equilibrium")
-
-
 class ConvTileNet(BioModel):
     """Convolutional TileNet for vision tasks.
 

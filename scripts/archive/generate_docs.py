@@ -21,23 +21,6 @@ from computronium.acceleration.registry import all_specs
 TEMPLATE_DIR = pathlib.Path(__file__).parent / "templates" / "docs"
 
 
-def _get_git_sha() -> str | None:
-    """Get current git SHA if available."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except Exception:
-        return None
-    return None
-
-
 def _render_spec(spec, env: Environment) -> str:
     """Render a single spec to Markdown."""
     template = env.get_template("implementation.md.j2")

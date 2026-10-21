@@ -26,6 +26,10 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.utils.activations import (
+    apply_activation_derivative,
+    get_activation,
+)
 
 if TYPE_CHECKING:
     from computronium.ontology import System
@@ -66,7 +70,7 @@ class FAKernelBackend:
         extra = config.extra
         self._num_layers = extra.get("num_layers", 3)
         self._dropout_prob = extra.get("dropout_prob", 0.0)
-        self._activation = _get_activation(extra.get("activation", "relu"))
+        self._activation = get_activation(extra.get("activation", "relu"))
 
         # Initialize feedback weights (fixed random)
         hidden_dim = extra.get("hidden_dim", 256)
@@ -218,7 +222,7 @@ class FAKernelBackend:
                 # B = feedback_weights[i+1] is shaped [D_{i+1}, D_i].
                 grad_h = propagated_error @ B_eff
 
-                grad_h = _apply_activation_derivative(
+                grad_h = apply_activation_derivative(
                     grad_h, self._pre_activation(i), self._activation
                 )
             else:
@@ -330,7 +334,7 @@ class FAKernelBackend:
         return None
 
 
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements, too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
 
@@ -435,43 +439,6 @@ except ImportError:
 
 
 # Standalone Triton functions for primitive-level FA acceleration
-def _get_activation(name: str) -> torch.nn.Module:
-    """Get activation module by name."""
-    activations = {
-        "relu": torch.nn.ReLU(),
-        "silu": torch.nn.SiLU(),
-        "tanh": torch.nn.Tanh(),
-        "gelu": torch.nn.GELU(),
-    }
-    return activations.get(name.lower(), torch.nn.ReLU())
-
-
-def _apply_activation_derivative(
-    grad_h: Tensor,
-    pre_activation: Tensor,
-    activation: torch.nn.Module,
-) -> Tensor:
-    """Multiply ``grad_h`` by f'(x), the derivative at the **pre**-activation.
-
-    ``pre_activation`` must be the layer's input to the activation module, not
-    its output: every branch below is a function of x, and the SiLU and GELU
-    branches have no closed form in terms of f(x).
-    """
-    x = pre_activation
-    if isinstance(activation, torch.nn.SiLU):
-        sig = torch.sigmoid(x)
-        return grad_h * sig * (1 + x * (1 - sig))
-    if isinstance(activation, torch.nn.ReLU):
-        return grad_h * (x > 0).to(grad_h.dtype)
-    if isinstance(activation, torch.nn.Tanh):
-        return grad_h * (1 - torch.tanh(x) ** 2)
-    if isinstance(activation, torch.nn.GELU):
-        cdf = 0.5 * (1 + torch.erf(x / math.sqrt(2)))
-        pdf = torch.exp(-(x**2) / 2) / math.sqrt(2 * math.pi)
-        return grad_h * (cdf + x * pdf)
-    return grad_h * (x > 0).to(grad_h.dtype)
-
-
 # Triton kernels for fused FA operations
 
 

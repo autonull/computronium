@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import subprocess  # ruff: ignore[suspicious-subprocess-import] -- used for controlled CLI subprocess calls (git)
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import duckdb
+
+from computronium.core.utils.git import git_sha as get_git_sha
 
 logger = logging.getLogger(__name__)
 
@@ -386,23 +387,6 @@ class DatasetRegistry:
             source_url=source_url,
             source_hash=source_hash,
         )
-
-
-def get_git_sha() -> str | None:
-    """Get the current git commit SHA."""
-    try:
-        import shutil
-
-        git_path = shutil.which("git")
-        if not git_path:
-            return None
-        return subprocess.check_output(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-            [git_path, "rev-parse", "HEAD"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-    except Exception:
-        return None
 
 
 def create_dataset_manifest(

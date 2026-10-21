@@ -32,6 +32,22 @@ measured at the TODO65 predecessor and the baseline had already gone stale;
 the TODO66 property run measured 659 with ruff 0.16.10. The direction is
 unchanged: the count may go down, never up, and a further re-baseline must
 still name the rules that moved.
+
+Re-baselined 2026-10-21 from 659 to the measured 549, with ruff unchanged at
+0.16.10. The 110 findings that left are the ones the surface CLI's split
+retired: the single 6,640-line ``experiment/surface/cli.py`` became a facade
+over a twelve-module ``_cli`` subpackage, and the code that moved with it
+stopped being able to hide behind the file's other definitions. What fell:
+C901 -13, PLR0912 -14, PLR0915 -11, PLR1702 -9, PLR0914 -9, PLR0911 -7 (the
+per-function complexity of the moved handlers), F841 -5 and RUF059 -4 (the
+bindings the moved code never read), PLR6201 -4, PLW1510 -4 and S603 -4, RUF105
+-4 and PLW0717 -5 (the acceleration kernels' ``# noqa`` markers, now spelled
+the way the repo spells them), TRY300 -3, S110 -2, S607 -2, TRY400 -2, F402
+-1, F541 -1, PLW3301 -1, S104 -1, S404 -1, S608 -1, SIM108 -1. The same pass
+also removed the five dead ``_credit_assignment_type`` copies in
+``models/deployments`` — one of which had already drifted from the other four
+— and the six copies of the git SHA and of the activation lookup, so those
+families cannot drift again.
 """
 
 from __future__ import annotations
@@ -40,7 +56,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 659
+BASELINE = 549
 RUFF_VERSION = "0.16.10"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")
