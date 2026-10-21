@@ -3,45 +3,24 @@
 Composes Spiking SNN training step with SpikeIntegrationDynamics and TemporalTraceCredit.
 """
 
-from dataclasses import dataclass
 from typing import Any
 
-from computronium.core.system_trainer import compose_system
-from computronium.harness import run_reference_step
+from computronium.harness import (
+    make_reference_system,
+    reference_config,
+    run_reference_step,
+)
 from computronium.ontology.credit import CreditAssignmentConfig, TemporalTraceCredit
 from computronium.ontology.dynamics import SpikeIntegrationDynamics, StateDynamicsConfig
-from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
-from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
-from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
 
-@dataclass(frozen=True, slots=True)
-class _SystemConfig:
-    input_dim: int = 4
-    output_dim: int = 4
-    hidden_dims: tuple[int, ...] = ()
-    lr: float = 1e-3
-    max_steps: int = 30
-    beta: float = 0.1
-    threshold: float = 0.5
-    device: str = "cpu"
-
-
-def _make_spiking_snn_system(config: _SystemConfig) -> Any:
-    """Create a Spiking SNN system for testing."""
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device=config.device))
-    geometry = FeedforwardGeometry(
-        GeometryConfig.feedforward(
-            input_dim=config.input_dim,
-            output_dim=config.output_dim,
-            hidden_dims=config.hidden_dims,
-        )
-    )
+def build_system(case: Any) -> Any:
+    """Create the system the reference step runs on."""
     dynamics = SpikeIntegrationDynamics(
         StateDynamicsConfig.spike_integration(
-            max_steps=config.max_steps,
-            beta=config.beta,
-            threshold=config.threshold,
+            max_steps=case.config.get("max_steps", 30),
+            beta=case.config.get("beta", 0.1),
+            threshold=case.config.get("threshold", 0.5),
         )
     )
     credit = TemporalTraceCredit(
@@ -50,31 +29,13 @@ def _make_spiking_snn_system(config: _SystemConfig) -> Any:
             tau_post=0.9,
         )
     )
-    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=config.lr))
-
-    return compose_system(
-        substrate=substrate,
-        geometry=geometry,
+    return make_reference_system(
+        reference_config(case),
+        credit,
         dynamics=dynamics,
-        credit=credit,
-        update=update,
     )
-
-
-def _build_spiking_snn(case: Any) -> Any:
-    """Create the system the reference step runs on."""
-    config = _SystemConfig(
-        input_dim=case.state.shape[1],
-        output_dim=case.config.get("output_dim", case.state.shape[1]),
-        lr=case.config.get("lr", 1e-3),
-        max_steps=case.config.get("max_steps", 30),
-        beta=case.config.get("beta", 0.1),
-        threshold=case.config.get("threshold", 0.5),
-        device=str(case.state.device),
-    )
-    return _make_spiking_snn_system(config)
 
 
 def step(case: Any) -> Any:
     """Execute one reference training step using the opaque case object."""
-    return run_reference_step(case, build=_build_spiking_snn)
+    return run_reference_step(case, build=build_system)

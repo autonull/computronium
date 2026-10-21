@@ -4,9 +4,13 @@ Delegates to computronium.core.plasticity.rule_state.RuleStatePlasticity with tr
 Provides uniform `step(case)` interface.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import seeded_rng
+
+if TYPE_CHECKING:
+    import torch
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -23,15 +27,12 @@ def step(case: Any) -> Any:
         return reference_step(case)
 
     # Use accelerated implementation
-    import torch
 
     from computronium.core.plasticity.rule_state import RuleStatePlasticity
     from computronium.state import CompositeState
 
     # Set seed BEFORE creating plasticity to ensure deterministic initialization
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         plasticity = RuleStatePlasticity(
             num_operators=case.config.get("num_operators", 4),
             operator_dim=case.config.get("operator_dim", 8),
@@ -60,6 +61,4 @@ def step(case: Any) -> Any:
         context = _MockContext(device=case.state.device)
 
         new_psi = plasticity.step(psi, z, context)  # type: ignore[arg-type]
-    finally:
-        torch.set_rng_state(rng_state)
     return new_psi

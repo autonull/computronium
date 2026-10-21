@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from ._geometry import geometry_forward
     from ._reference import (
         ReferenceSystemConfig,
+        make_joint_reference_system,
         make_reference_system,
         reference_config,
         run_reference_step,
@@ -44,6 +45,7 @@ _symbol_to_module: dict[str, str] = {
     "case_generator": "_case",
     "make_algorithm_case": "_case",
     "make_dynamics_case": "_case",
+    "make_joint_reference_system": "_reference",
     "make_update_case": "_case",
     "seeded_rng": "_case",
     "geometry_forward": "_geometry",
@@ -64,6 +66,7 @@ __all__ = [
     "geometry_forward",
     "make_algorithm_case",
     "make_dynamics_case",
+    "make_joint_reference_system",
     "make_reference_system",
     "make_update_case",
     "reference_config",

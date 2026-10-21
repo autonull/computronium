@@ -2,7 +2,6 @@
 
 from computronium.acceleration.spec import (
     ImplementationSpec,
-    ParityTolerance,
 )
 
 SPEC = ImplementationSpec(
@@ -16,11 +15,6 @@ SPEC = ImplementationSpec(
     kernel_entrypoint=("computronium.primitives.credit_assignment.pepita.kernel.step"),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
-    parity=ParityTolerance(
-        max_abs_diff=1e-4,
-        max_rel_diff=1e-3,
-        min_cosine=0.999,
-    ),
     status="kernel_unverified",
     summary="Published PEPITA (Dellaferrera & Kreiman 2022): input-modulated second forward pass, exact autograd gradient.",
     equations="""

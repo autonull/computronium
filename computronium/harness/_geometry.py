@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import torch
+from ._case import seeded_rng
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -29,10 +29,6 @@ def geometry_forward(case: Any) -> Tensor:
     from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
 
     substrate = DigitalSubstrate(SubstrateConfig.digital(device=str(case.state.device)))
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         output = case.geometry(case.state, substrate)
-    finally:
-        torch.set_rng_state(rng_state)
     return output

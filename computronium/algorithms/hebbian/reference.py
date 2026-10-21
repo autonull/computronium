@@ -13,7 +13,7 @@ from computronium.harness import (
 from computronium.ontology.credit import CreditAssignmentConfig, LocalGoodnessCredit
 
 
-def _build_hebbian(case: Any) -> Any:
+def build_system(case: Any) -> Any:
     """Create the system the reference step runs on."""
     return make_reference_system(
         reference_config(case),
@@ -23,4 +23,4 @@ def _build_hebbian(case: Any) -> Any:
 
 def step(case: Any) -> Any:
     """Execute one reference training step using the opaque case object."""
-    return run_reference_step(case, build=_build_hebbian)
+    return run_reference_step(case, build=build_system)

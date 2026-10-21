@@ -4,10 +4,9 @@ Delegates to computronium.ontology.credit.ThermodynamicContrast (the source of t
 This wrapper provides the uniform `step(case)` interface for parity/microbench.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import torch
-
+from computronium.harness import seeded_rng
 from computronium.ontology.credit import (
     CreditAssignmentConfig,
     Phase,
@@ -15,6 +14,9 @@ from computronium.ontology.credit import (
 )
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 from computronium.ontology.system import SystemState
+
+if TYPE_CHECKING:
+    import torch
 
 
 def _case_to_states(case: Any) -> dict[Phase, SystemState]:
@@ -79,11 +81,7 @@ def step(case: Any) -> list[torch.Tensor]:
     geometry = _case_to_geometry(case)
 
     # Compute pseudo-gradients with deterministic RNG
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         grads = credit.compute_pseudo_gradient(states, None, geometry)
-    finally:
-        torch.set_rng_state(rng_state)
 
     return grads

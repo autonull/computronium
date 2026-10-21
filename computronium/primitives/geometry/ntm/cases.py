@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import GeometryConfig, NtmGeometry
 
 
@@ -46,9 +47,7 @@ def make_case(
     state = torch.nn.functional.one_hot(token_ids, num_classes=input_dim).to(dtype)
 
     # Create a fixed NTM geometry for deterministic testing
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         geometry = NtmGeometry(
             GeometryConfig.ntm(
                 input_dim=input_dim,
@@ -59,8 +58,6 @@ def make_case(
                 beta_init=10.0,
             )
         )
-    finally:
-        torch.set_rng_state(rng_state)
 
     config = {
         "input_dim": input_dim,

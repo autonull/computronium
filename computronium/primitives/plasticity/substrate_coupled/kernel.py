@@ -4,9 +4,13 @@ Delegates to computronium.core.plasticity.substrate_coupled.SubstrateCoupledPlas
 Provides uniform `step(case)` interface.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import seeded_rng
+
+if TYPE_CHECKING:
+    import torch
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -23,7 +27,6 @@ def step(case: Any) -> Any:
         return reference_step(case)
 
     # Use accelerated implementation (falls back to reference for now)
-    import torch
 
     from computronium.core.plasticity.substrate_coupled import (
         SubstrateCoupledPlasticity,
@@ -52,11 +55,7 @@ def step(case: Any) -> Any:
     context = _MockContext(device=case.pre_activity.device)  # type: ignore[arg-type]
 
     # Run with deterministic RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         new_psi = plasticity.step(psi, z, context)  # type: ignore[arg-type]
-    finally:
-        torch.set_rng_state(rng_state)
 
     return new_psi

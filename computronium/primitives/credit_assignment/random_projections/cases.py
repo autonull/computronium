@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 
 
@@ -74,16 +75,12 @@ def make_case(
 
     # Create a fixed geometry for deterministic testing
     # Save/restore RNG state to ensure deterministic geometry creation
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
                 input_dim=width, output_dim=width, hidden_dims=(width,)
             )
         ).to(device)
-    finally:
-        torch.set_rng_state(rng_state)
 
     config = {
         "feedback_scale": 0.1,

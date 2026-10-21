@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 
 
@@ -34,9 +35,7 @@ def make_case(
     batch, width = 2 * scale, 4 * scale
 
     # Create geometry with deterministic weights
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
                 input_dim=width,
@@ -44,8 +43,6 @@ def make_case(
                 hidden_dims=(width, width),
             )
         )
-    finally:
-        torch.set_rng_state(rng_state)
 
     # Extract weights for reference (only Linear layers)
     weights = [

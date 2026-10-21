@@ -3,37 +3,32 @@
 Composes PC-ALM primitives into a full training step.
 """
 
-from dataclasses import dataclass
 from typing import Any
 
-from computronium.core.system_trainer import compose_joint_system
-from computronium.harness import run_reference_step
+from computronium.harness import (
+    make_joint_reference_system,
+    reference_config,
+    run_reference_step,
+)
 from computronium.ontology.credit import CreditAssignmentConfig, PCALMCredit
 from computronium.ontology.dynamics import PCALMDynamics, StateDynamicsConfig
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 from computronium.ontology.plasticity import NullPlasticity
-from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
-from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
 
-@dataclass(frozen=True, slots=True)
-class _SystemConfig:
-    input_dim: int = 4
-    output_dim: int = 4
-    hidden_dims: tuple[int, ...] = ()
-    step_size: float = 0.1
-    rho: float = 1.0
-    beta: float = 0.5
-    prospective_leak: float = 0.0
-    max_steps: int = 3
-    convergence_threshold: float = 1e-4
-    lr: float = 1e-3
-    device: str = "cpu"
-
-
-def _make_pc_alm_system(config: _SystemConfig) -> Any:
-    """Create a PC-ALM system for testing."""
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device=config.device))
+def build_system(case: Any) -> Any:
+    """Create the system the reference step runs on."""
+    config = reference_config(case)
+    dynamics = PCALMDynamics(
+        StateDynamicsConfig.pc_alm(
+            max_steps=case.config.get("steps", 3),
+            step_size=case.config.get("step_size", 0.1),
+            rho=case.config.get("rho", 1.0),
+            beta=case.config.get("beta", 0.5),
+            prospective_leak=case.config.get("prospective_leak", 0.0),
+            convergence_threshold=case.config.get("tol", 1e-4),
+        )
+    )
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
             input_dim=config.input_dim,
@@ -41,45 +36,13 @@ def _make_pc_alm_system(config: _SystemConfig) -> Any:
             hidden_dims=config.hidden_dims,
         )
     ).to(config.device)
-    dynamics = PCALMDynamics(
-        StateDynamicsConfig.pc_alm(
-            max_steps=config.max_steps,
-            step_size=config.step_size,
-            rho=config.rho,
-            beta=config.beta,
-            prospective_leak=config.prospective_leak,
-            convergence_threshold=config.convergence_threshold,
-        )
-    )
-    plasticity = NullPlasticity()
-    credit = PCALMCredit(CreditAssignmentConfig.pc_alm())
-    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=config.lr))
-
-    return compose_joint_system(
-        substrate=substrate,
+    return make_joint_reference_system(
+        config,
+        PCALMCredit(CreditAssignmentConfig.pc_alm()),
+        NullPlasticity(),
         geometry=geometry,
         dynamics=dynamics,
-        plasticity=plasticity,
-        credit=credit,
-        update=update,
     )
-
-
-def _build_pc_alm(case: Any) -> Any:
-    """Create the system the reference step runs on."""
-    config = _SystemConfig(
-        input_dim=case.state.shape[1],
-        output_dim=case.config.get("output_dim", case.state.shape[1]),
-        step_size=case.config.get("step_size", 0.1),
-        rho=case.config.get("rho", 1.0),
-        beta=case.config.get("beta", 0.5),
-        prospective_leak=case.config.get("prospective_leak", 0.0),
-        max_steps=case.config.get("steps", 3),
-        convergence_threshold=case.config.get("tol", 1e-4),
-        lr=case.config.get("lr", 1e-3),
-        device=str(case.state.device),
-    )
-    return _make_pc_alm_system(config)
 
 
 def step(case: Any) -> Any:
@@ -89,4 +52,4 @@ def step(case: Any) -> Any:
     tensors, parameters, and configuration needed for a small deterministic
     execution.
     """
-    return run_reference_step(case, build=_build_pc_alm)
+    return run_reference_step(case, build=build_system)

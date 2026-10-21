@@ -1,12 +1,10 @@
-"""Public factory for PC-ALM systems.
+"""Public factory for PC-ALM systems."""
 
-Wraps computronium.core.system_trainer.compose_joint_system, attaching the selected backend.
-"""
+from __future__ import annotations
 
 from typing import Any
 
-from computronium.acceleration.dispatch import finish_with_backend
-from computronium.acceleration.registry import get
+from computronium.acceleration.dispatch import make_factory
 from computronium.core.system_trainer import compose_joint_system
 from computronium.ontology.credit import CreditAssignmentConfig, PCALMCredit
 from computronium.ontology.dynamics import PCALMDynamics, StateDynamicsConfig
@@ -16,24 +14,14 @@ from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
 from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
 
-def create_pc_alm_mlp(
+def _build_pc_alm(
     input_dim: int,
     hidden_dims: tuple[int, ...],
     output_dim: int,
     *,
     lr: float = 1e-3,
     device: str = "cpu",
-    backend: str = "auto",
 ) -> Any:
-    """
-    Create a PC-ALM MLP system.
-
-    The backend argument selects the implementation backend where supported:
-
-        auto: use kernel if verified and available, otherwise reference
-        reference: force reference implementation
-        kernel: force accelerated kernel
-    """
     substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
@@ -52,16 +40,18 @@ def create_pc_alm_mlp(
     plasticity = NullPlasticity()
     credit = PCALMCredit(CreditAssignmentConfig.pc_alm())
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
-
-    return finish_with_backend(
-        compose_joint_system(
-            substrate=substrate,
-            geometry=geometry,
-            dynamics=dynamics,
-            plasticity=plasticity,
-            credit=credit,
-            update=update,
-        ),
-        get("algorithm.pcalm"),
-        backend,
+    return compose_joint_system(
+        substrate=substrate,
+        geometry=geometry,
+        dynamics=dynamics,
+        plasticity=plasticity,
+        credit=credit,
+        update=update,
     )
+
+
+create_pc_alm_mlp = make_factory(
+    _build_pc_alm,
+    "algorithm.pcalm",
+    extra_params=(),
+)

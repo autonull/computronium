@@ -7,6 +7,7 @@ and _compiled_pcalm_settle. Provides uniform `step(case)` interface.
 from typing import Any
 
 from computronium.acceleration.availability import triton_rung_available
+from computronium.harness import seeded_rng
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -62,10 +63,6 @@ def step(case: Any) -> Any:
 
     # Run settle with deterministic RNG state
     # Save RNG state AFTER geometry/substrate creation (which may use RNG for init)
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         result = dynamics.settle(state, geometry, substrate, target)
-    finally:
-        torch.set_rng_state(rng_state)
     return result

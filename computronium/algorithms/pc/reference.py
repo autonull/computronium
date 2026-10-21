@@ -3,35 +3,24 @@
 Composes PC training step with predictive settling dynamics.
 """
 
-from dataclasses import dataclass
 from typing import Any
 
-from computronium.core.system_trainer import compose_system
-from computronium.harness import run_reference_step
+from computronium.harness import (
+    make_reference_system,
+    reference_config,
+    run_reference_step,
+)
 from computronium.ontology.credit import CreditAssignmentConfig, LocalGoodnessCredit
 from computronium.ontology.dynamics import (
     PredictiveSettlingDynamics,
     StateDynamicsConfig,
 )
 from computronium.ontology.geometry import GeometryConfig, RecurrentGeometry
-from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
-from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
 
-@dataclass(frozen=True, slots=True)
-class _SystemConfig:
-    input_dim: int = 4
-    output_dim: int = 4
-    hidden_dims: tuple[int, ...] = ()
-    lr: float = 1e-3
-    beta: float = 0.5
-    settle_steps: int = 30
-    device: str = "cpu"
-
-
-def _make_pc_system(config: _SystemConfig) -> Any:
-    """Create a PC system for testing."""
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device=config.device))
+def build_system(case: Any) -> Any:
+    """Create the system the reference step runs on."""
+    config = reference_config(case)
     geometry = RecurrentGeometry(
         GeometryConfig.recurrent(
             input_dim=config.input_dim,
@@ -42,35 +31,18 @@ def _make_pc_system(config: _SystemConfig) -> Any:
     )
     dynamics = PredictiveSettlingDynamics(
         StateDynamicsConfig.predictive_settling(
-            max_steps=config.settle_steps,
-            beta=config.beta,
+            max_steps=case.config.get("steps", 30),
+            beta=case.config.get("beta", 0.5),
         )
     )
-    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
-    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=config.lr))
-
-    return compose_system(
-        substrate=substrate,
+    return make_reference_system(
+        config,
+        LocalGoodnessCredit(CreditAssignmentConfig.local_goodness()),
         geometry=geometry,
         dynamics=dynamics,
-        credit=credit,
-        update=update,
     )
-
-
-def _build_pc(case: Any) -> Any:
-    """Create the system the reference step runs on."""
-    config = _SystemConfig(
-        input_dim=case.state.shape[1],
-        output_dim=case.config.get("output_dim", case.state.shape[1]),
-        lr=case.config.get("lr", 1e-3),
-        beta=case.config.get("beta", 0.5),
-        settle_steps=case.config.get("steps", 30),
-        device=str(case.state.device),
-    )
-    return _make_pc_system(config)
 
 
 def step(case: Any) -> Any:
     """Execute one reference training step using the opaque case object."""
-    return run_reference_step(case, build=_build_pc)
+    return run_reference_step(case, build=build_system)

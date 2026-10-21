@@ -8,6 +8,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.dynamics import SpikeIntegrationDynamics, StateDynamicsConfig
 from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
 from computronium.state import CompositeState
@@ -52,10 +53,6 @@ def step(case: Any) -> Any:
 
     # Run settle with deterministic RNG state
     # Save RNG state AFTER geometry/substrate creation (which may use RNG for init)
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         result = dynamics.settle(state, geometry, substrate, target)
-    finally:
-        torch.set_rng_state(rng_state)
     return result

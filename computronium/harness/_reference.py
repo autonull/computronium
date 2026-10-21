@@ -13,21 +13,25 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-import torch
-
 from computronium.core.system_trainer import compose_system
 from computronium.ontology.dynamics import InstantaneousDynamics, StateDynamicsConfig
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
 from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
+from ._case import seeded_rng
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from computronium.ontology.credit import CreditAssignment
+    from computronium.ontology.dynamics import StateDynamics
+    from computronium.ontology.geometry import Geometry
+    from computronium.ontology.plasticity import PlasticityPrimitive
 
 __all__ = [
     "ReferenceSystemConfig",
+    "make_joint_reference_system",
     "make_reference_system",
     "reference_config",
     "run_reference_step",
@@ -53,33 +57,86 @@ class ReferenceSystemConfig:
     device: str = "cpu"
 
 
+def _standard_parts(
+    config: ReferenceSystemConfig,
+    credit: CreditAssignment,
+    geometry: Geometry | None,
+    dynamics: StateDynamics | None,
+) -> tuple[Any, Geometry, StateDynamics, CreditAssignment, Any]:
+    """The five axes every reference system shares, with the two defaults filled in.
+
+    The substrate and the Euclidean update are the same everywhere; the geometry
+    and the dynamics are the same unless the algorithm brings its own.
+    """
+    substrate = DigitalSubstrate(SubstrateConfig.digital(device=config.device))
+    if geometry is None:
+        geometry = FeedforwardGeometry(
+            GeometryConfig.feedforward(
+                input_dim=config.input_dim,
+                output_dim=config.output_dim,
+                hidden_dims=config.hidden_dims,
+            )
+        )
+    if dynamics is None:
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=config.lr))
+    return substrate, geometry, dynamics, credit, update
+
+
 def make_reference_system(
     config: ReferenceSystemConfig,
     credit: CreditAssignment,
+    *,
+    geometry: Geometry | None = None,
+    dynamics: StateDynamics | None = None,
 ) -> Any:
     """Compose the system a reference step runs on.
 
     Args:
         config: The shape of the system.
         credit: The credit rule the algorithm is built on.
+        geometry: The geometry, or ``None`` for the standard feedforward one.
+        dynamics: The dynamics, or ``None`` for the standard instantaneous ones.
 
     Returns:
         The composed system.
     """
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device=config.device))
-    geometry = FeedforwardGeometry(
-        GeometryConfig.feedforward(
-            input_dim=config.input_dim,
-            output_dim=config.output_dim,
-            hidden_dims=config.hidden_dims,
-        )
+    return compose_system(*_standard_parts(config, credit, geometry, dynamics))
+
+
+def make_joint_reference_system(
+    config: ReferenceSystemConfig,
+    credit: CreditAssignment,
+    plasticity: PlasticityPrimitive,
+    *,
+    geometry: Geometry | None = None,
+    dynamics: StateDynamics | None = None,
+) -> Any:
+    """Compose the joint system a reference step runs on.
+
+    The joint composition is the five-axis one with the plasticity primitive
+    added, which is what the fast-weight, PC-ALM, and routing algorithms need.
+
+    Args:
+        config: The shape of the system.
+        credit: The credit rule the algorithm is built on.
+        plasticity: The plasticity primitive the algorithm is built on.
+        geometry: The geometry, or ``None`` for the standard feedforward one.
+        dynamics: The dynamics, or ``None`` for the standard instantaneous ones.
+
+    Returns:
+        The composed joint system.
+    """
+    from computronium.core.system_trainer import compose_joint_system
+
+    substrate, geometry, dynamics, credit, update = _standard_parts(
+        config, credit, geometry, dynamics
     )
-    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=config.lr))
-    return compose_system(
+    return compose_joint_system(
         substrate=substrate,
         geometry=geometry,
         dynamics=dynamics,
+        plasticity=plasticity,
         credit=credit,
         update=update,
     )
@@ -123,11 +180,7 @@ def run_reference_step(
     Returns:
         Whatever the system's ``train_step`` returns.
     """
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         system = build(case)
         result = system.train_step(case.state, case.target)
-    finally:
-        torch.set_rng_state(rng_state)
     return result

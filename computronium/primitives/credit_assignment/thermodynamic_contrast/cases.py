@@ -10,6 +10,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 
 
@@ -81,9 +82,7 @@ def make_case(
     nudged_acts = _make_activations(prediction, weight_shapes, seed + 1)
 
     # Create a fixed geometry for deterministic testing
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         layers = []
         for i, (out_dim, in_dim) in enumerate(weight_shapes):
             layer = nn.Linear(in_dim, out_dim, bias=False)
@@ -94,8 +93,6 @@ def make_case(
             GeometryConfig.feedforward(input_dim=4, output_dim=4, hidden_dims=(4,)),
             layers=layers,
         )
-    finally:
-        torch.set_rng_state(rng_state)
 
     config = {
         "beta": 0.5,

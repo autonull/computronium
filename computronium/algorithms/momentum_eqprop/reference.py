@@ -13,7 +13,7 @@ from computronium.harness import (
 from computronium.ontology.credit import BackpropCredit, CreditAssignmentConfig
 
 
-def _build_momentum_eqprop(case: Any) -> Any:
+def build_system(case: Any) -> Any:
     """Create the system the reference step runs on."""
     return make_reference_system(
         reference_config(case),
@@ -28,4 +28,4 @@ def step(case: Any) -> Any:
     tensors, parameters, and configuration needed for a small deterministic
     execution.
     """
-    return run_reference_step(case, build=_build_momentum_eqprop)
+    return run_reference_step(case, build=build_system)

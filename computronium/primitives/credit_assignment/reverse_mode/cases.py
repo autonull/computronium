@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 
 
@@ -31,14 +32,10 @@ def make_case(
 
     # Create geometry with proper weights
     # Save/restore RNG state to ensure deterministic geometry creation
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(input_dim=4, output_dim=4, hidden_dims=(4,))
         )
-    finally:
-        torch.set_rng_state(rng_state)
 
     # Run forward pass to get activations with proper gradient connections
     state = torch.randn(
@@ -51,9 +48,7 @@ def make_case(
         activations.append(x)
 
     # Nudged activations - also run forward with requires_grad
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed + 1000)
-    try:
+    with seeded_rng(seed + 1000):
         state_n = torch.randn(
             2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True
         )
@@ -62,8 +57,6 @@ def make_case(
         for layer in geometry._layers:
             x_n = layer(x_n)
             nudged_activations.append(x_n)
-    finally:
-        torch.set_rng_state(rng_state)
 
     config = {
         "beta": 0.5,

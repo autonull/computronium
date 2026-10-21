@@ -4,13 +4,15 @@ Delegates to computronium.ontology.plasticity.NullPlasticity with triton acceler
 Provides uniform `step(case)` interface.
 """
 
-from typing import Any
-
-import torch
+from typing import TYPE_CHECKING, Any
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import seeded_rng
 from computronium.ontology.plasticity import NullPlasticity
 from computronium.state import CompositeState
+
+if TYPE_CHECKING:
+    import torch
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -48,11 +50,7 @@ def step(case: Any) -> dict[str, torch.Tensor]:
 
     context = _MockContext(device=case.state.device)
 
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         new_psi = plasticity.step(psi, z, context)  # type: ignore[arg-type]
-    finally:
-        torch.set_rng_state(rng_state)
 
     return new_psi

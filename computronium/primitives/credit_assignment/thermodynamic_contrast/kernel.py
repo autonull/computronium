@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import torch
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import seeded_rng
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -26,7 +27,6 @@ def step(case: Any) -> list[torch.Tensor]:
         return reference_step(case)
 
     # Use accelerated implementation (fallback to reference for now)
-    import torch
 
     from computronium.ontology.credit import (
         CreditAssignmentConfig,
@@ -76,11 +76,7 @@ def step(case: Any) -> list[torch.Tensor]:
         layers=layers,
     )
 
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         grads = credit.compute_pseudo_gradient(states, None, geometry)
-    finally:
-        torch.set_rng_state(rng_state)
 
     return grads

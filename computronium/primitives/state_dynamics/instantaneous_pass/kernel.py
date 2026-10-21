@@ -7,6 +7,7 @@ Provides uniform `step(case)` interface.
 from typing import Any
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import seeded_rng
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -53,11 +54,7 @@ def step(case: Any) -> Any:
         target = torch.as_tensor(target, device=case.state.device)
 
     # Run with deterministic RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         dynamics = InstantaneousDynamics(config)
         result = dynamics.settle(state, geometry, substrate, target)
-    finally:
-        torch.set_rng_state(rng_state)
     return result

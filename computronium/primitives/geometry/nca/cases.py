@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import GeometryConfig, NcaGeometry
 
 
@@ -42,9 +43,7 @@ def make_case(
     )
 
     # Create a fixed NCA geometry for deterministic testing
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         geometry = NcaGeometry(
             GeometryConfig.nca(
                 channels=channels,
@@ -56,8 +55,6 @@ def make_case(
                 init_scale=0.1,
             )
         )
-    finally:
-        torch.set_rng_state(rng_state)
 
     config = {
         "channels": channels,

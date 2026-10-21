@@ -2,7 +2,6 @@
 
 from computronium.acceleration.spec import (
     ImplementationSpec,
-    ParityTolerance,
 )
 
 SPEC = ImplementationSpec(
@@ -18,11 +17,6 @@ SPEC = ImplementationSpec(
     ),
     kernel_technology="torch_compile",
     supported_backends=("reference", "kernel"),
-    parity=ParityTolerance(
-        max_abs_diff=1e-4,
-        max_rel_diff=1e-3,
-        min_cosine=0.999,
-    ),
     status="kernel_verified",
     summary="Predictive coding settling dynamics (PCN).",
     equations="""

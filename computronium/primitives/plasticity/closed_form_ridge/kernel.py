@@ -7,6 +7,7 @@ with triton acceleration. Provides uniform `step(case)` interface.
 from typing import Any
 
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import seeded_rng
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -23,7 +24,6 @@ def step(case: Any) -> Any:
         return reference_step(case)
 
     # Use accelerated implementation
-    import torch
 
     from computronium.core.plasticity.closed_form import (
         ClosedFormRidgeConfig,
@@ -48,11 +48,7 @@ def step(case: Any) -> Any:
     )
 
     # Run with deterministic RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         new_psi = plasticity.step(psi, z, None)  # type: ignore[arg-type]
-    finally:
-        torch.set_rng_state(rng_state)
 
     return new_psi

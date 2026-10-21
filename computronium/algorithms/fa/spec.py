@@ -2,7 +2,6 @@
 
 from computronium.acceleration.spec import (
     ImplementationSpec,
-    ParityTolerance,
 )
 
 SPEC = ImplementationSpec(
@@ -13,11 +12,6 @@ SPEC = ImplementationSpec(
     kernel_entrypoint="computronium.algorithms.fa.kernel.step",
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
-    parity=ParityTolerance(
-        max_abs_diff=1e-4,
-        max_rel_diff=1e-3,
-        min_cosine=0.999,
-    ),
     status="kernel_verified",
     uses_primitives=(
         "primitive.state_dynamics.instantaneous_pass",

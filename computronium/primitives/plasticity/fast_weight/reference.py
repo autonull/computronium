@@ -4,12 +4,14 @@ Delegates to computronium.core.plasticity.fast_weights.FastWeightPlasticity (the
 This wrapper provides the uniform `step(case)` interface for parity/microbench.
 """
 
-from typing import Any
-
-import torch
+from typing import TYPE_CHECKING, Any
 
 from computronium.core.plasticity.fast_weights import FastWeightPlasticity
+from computronium.harness import seeded_rng
 from computronium.state import CompositeState
+
+if TYPE_CHECKING:
+    import torch
 
 
 class _MockContext:
@@ -68,11 +70,7 @@ def step(case: Any) -> dict[str, torch.Tensor]:
     context = _case_to_context(case)
 
     # Run step with deterministic RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         new_psi = plasticity.step(psi, z, context)  # type: ignore[arg-type]
-    finally:
-        torch.set_rng_state(rng_state)
 
     return new_psi

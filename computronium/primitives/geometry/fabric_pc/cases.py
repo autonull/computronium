@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import GeometryConfig, GraphGeometry
 
 
@@ -38,9 +39,7 @@ def make_case(
     # Create a fixed graph geometry for deterministic testing
     # Simple chain graph: 0->1->2->3->4
     edge_index = [[0, 1, 2, 3], [1, 2, 3, 4]]  # 4 edges connecting 5 nodes
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         geometry = GraphGeometry(
             GeometryConfig.graph(
                 input_dim=input_dim,
@@ -50,8 +49,6 @@ def make_case(
                 init_scale=0.1,
             )
         )
-    finally:
-        torch.set_rng_state(rng_state)
 
     config = {
         "input_dim": input_dim,

@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from computronium.harness import seeded_rng
 from computronium.ontology.geometry import GeometryConfig, TileGeometry
 
 
@@ -39,9 +40,7 @@ def make_case(
 
     # Create a fixed geometry for deterministic testing
     # Save/restore RNG state to ensure deterministic geometry creation
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         geometry = TileGeometry(
             GeometryConfig.tile_mesh(
                 input_dim=input_dim,
@@ -52,8 +51,6 @@ def make_case(
                 init_scale=0.1,
             )
         ).to(device)
-    finally:
-        torch.set_rng_state(rng_state)
 
     config = {
         "input_dim": input_dim,

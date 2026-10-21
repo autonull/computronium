@@ -2,7 +2,6 @@
 
 from computronium.acceleration.spec import (
     ImplementationSpec,
-    ParityTolerance,
 )
 
 SPEC = ImplementationSpec(
@@ -14,11 +13,6 @@ SPEC = ImplementationSpec(
     kernel_entrypoint=("computronium.primitives.plasticity.null.kernel.step"),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
-    parity=ParityTolerance(
-        max_abs_diff=1e-4,
-        max_rel_diff=1e-3,
-        min_cosine=0.999,
-    ),
     status="reference_only",
     summary="Null plasticity (zero-extension): plastic state unchanged, makes 5-D systems valid 6-D coordinates.",
     equations="""

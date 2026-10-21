@@ -2,7 +2,6 @@
 
 from computronium.acceleration.spec import (
     ImplementationSpec,
-    ParityTolerance,
 )
 
 SPEC = ImplementationSpec(
@@ -13,11 +12,6 @@ SPEC = ImplementationSpec(
     kernel_entrypoint="computronium.algorithms.finite_nudge_ep.kernel.step",
     kernel_technology="torch_compile",
     supported_backends=("reference", "kernel"),
-    parity=ParityTolerance(
-        max_abs_diff=1e-4,
-        max_rel_diff=1e-3,
-        min_cosine=0.999,
-    ),
     status="reference_only",
     uses_primitives=(
         "primitive.state_dynamics.energy_minimization",

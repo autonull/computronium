@@ -21,7 +21,8 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     linear_views,
 )
-from computronium.algorithms.dfa.reference import _make_dfa_system, _SystemConfig
+from computronium.algorithms.dfa.reference import build_system
+from computronium.harness import seeded_rng
 
 if TYPE_CHECKING:
     from computronium.algorithms.dfa.cases import Case
@@ -49,18 +50,8 @@ def step(case: Case) -> dict[str, float]:
 
     # Use the same approach as reference: create system with seed
     # to match RNG state progression exactly
-    rng_state = torch.get_rng_state()
-    seed = case.config.get("seed", 0)
-    torch.manual_seed(seed)
-    try:
-        system_config = _SystemConfig(
-            input_dim=case.state.shape[1],
-            output_dim=case.config.get("output_dim", case.state.shape[1]),
-            lr=case.config.get("lr", 1e-3),
-            feedback_scale=case.config.get("feedback_scale", 0.01),
-            device=str(case.state.device),
-        )
-        system = _make_dfa_system(system_config)
+    with seeded_rng(case.config.get("seed", 0)):
+        system = build_system(case)
 
         # Now use the kernel backend with this system's geometry
         device_str = str(case.state.device)
@@ -97,7 +88,5 @@ def step(case: Case) -> dict[str, float]:
             )
 
         result = backend.train_step(case.state, target)
-    finally:
-        torch.set_rng_state(rng_state)
 
     return result

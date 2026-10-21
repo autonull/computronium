@@ -17,6 +17,7 @@ from computronium.acceleration.fa_kernels import (
     fa_batched_outer_triton,
     fa_feedback_projection_triton,
 )
+from computronium.harness import seeded_rng
 from computronium.ontology.credit import _apply_credit_norm
 
 KERNEL_TECHNOLOGY = "triton"
@@ -67,14 +68,10 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
     loss = torch.nn.functional.mse_loss(nudged_output, target)
 
     # Preserve RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(seed)
-    try:
+    with seeded_rng(seed):
         output_error = torch.autograd.grad(loss, nudged_output, retain_graph=False)[
             0
         ].detach()
-    finally:
-        torch.set_rng_state(rng_state)
 
     # Run Triton-accelerated FA backward pass (without activation derivative)
     num_layers = len(feedback_weights)

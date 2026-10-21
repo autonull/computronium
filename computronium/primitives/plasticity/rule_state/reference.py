@@ -4,14 +4,16 @@ Delegates to computronium.core.plasticity.rule_state.RuleStatePlasticity (the so
 This wrapper provides the uniform `step(case)` interface for parity/microbench.
 """
 
-from typing import Any
-
-import torch
+from typing import TYPE_CHECKING, Any
 
 from computronium.core.plasticity.rule_state import (
     RuleStatePlasticity,
 )
+from computronium.harness import seeded_rng
 from computronium.state import CompositeState
+
+if TYPE_CHECKING:
+    import torch
 
 
 def _case_to_composite_state(case: Any) -> CompositeState:
@@ -46,9 +48,7 @@ def step(case: Any) -> dict[str, torch.Tensor]:
         Updated plastic state dict.
     """
     # Set seed BEFORE creating plasticity to ensure deterministic initialization
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         plasticity = RuleStatePlasticity(
             num_operators=case.config.get("num_operators", 4),
             operator_dim=case.config.get("operator_dim", 8),
@@ -64,7 +64,5 @@ def step(case: Any) -> dict[str, torch.Tensor]:
         context = _MockContext(device=case.state.device)
 
         new_psi = plasticity.step(psi, z, context)  # type: ignore[arg-type]
-    finally:
-        torch.set_rng_state(rng_state)
 
     return new_psi

@@ -26,9 +26,13 @@ there, so the ``backend`` argument a caller passes reaches the system instead of
 being computed and dropped.
 """
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+from computronium.acceleration.registry import get
 from computronium.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -46,6 +50,7 @@ __all__ = [
     "RungResolution",
     "SelectedRung",
     "finish_with_backend",
+    "make_factory",
     "resolve_available_rung",
     "resolve_rung",
     "select_backend",
@@ -405,3 +410,50 @@ def finish_with_backend(
     kernel = backend_cls.__name__
     logger.info(t"attached {kernel}", extra={"kernel": kernel, **context})
     return system
+
+
+def make_factory(
+    preset_builder: Callable[..., System],
+    spec_id: str,
+    *,
+    extra_params: tuple[str, ...] = (),
+) -> Callable[..., System]:
+    """Create a public factory that wraps a preset builder with backend dispatch.
+
+    Args:
+        preset_builder: A function like `create_fa_mlp` that builds the base system.
+        spec_id: The registry key for the algorithm's ImplementationSpec
+            (e.g. "algorithm.fa").
+        extra_params: Additional parameter names the preset builder accepts beyond
+            the standard (input_dim, hidden_dims, output_dim, lr, device).
+            The factory will accept these as keyword-only arguments and pass them
+            through to the preset builder.
+
+    Returns:
+        A factory function with signature:
+            (input_dim, hidden_dims, output_dim, *, lr, device, backend, **extra) -> System
+    """
+    def factory(
+        input_dim: int,
+        hidden_dims: tuple[int, ...],
+        output_dim: int,
+        *,
+        lr: float = 1e-3,
+        device: str = "cpu",
+        backend: str = "auto",
+        **extra: Any,
+    ) -> System:
+        system = preset_builder(
+            input_dim=input_dim,
+            hidden_dims=hidden_dims,
+            output_dim=output_dim,
+            lr=lr,
+            device=device,
+            **extra,
+        )
+        return finish_with_backend(system, get(spec_id), backend)
+
+    # Copy only the docstring from the preset builder
+    if preset_builder.__doc__:
+        factory.__doc__ = preset_builder.__doc__
+    return factory

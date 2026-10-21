@@ -4,9 +4,8 @@ Delegates to computronium.ontology.geometry.SpatialLattice3DGeometry with triton
 Provides uniform `forward(case)` interface.
 """
 
-import torch
-
 from computronium.acceleration.backends import kernel_available
+from computronium.harness import seeded_rng
 from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
 
 KERNEL_TECHNOLOGY = "triton"
@@ -34,12 +33,8 @@ def forward(case):
     substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
 
     # Run forward with deterministic RNG state
-    rng_state = torch.get_rng_state()
-    torch.manual_seed(case.config.get("seed", 0))
-    try:
+    with seeded_rng(case.config.get("seed", 0)):
         output = geometry(x, substrate)
-    finally:
-        torch.set_rng_state(rng_state)
 
     return output
 
