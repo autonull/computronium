@@ -1,15 +1,18 @@
-"""Ontology utilities package."""
+"""Ontology utilities package.
 
-from computronium.ontology.utils.config import ConfigFactory
-from computronium.ontology.utils.params import (
+Re-exports from the consolidated _utils module.
+"""
+
+from computronium.ontology._utils import (
+    ConfigFactory,
     _learnable_weight_names,
+    apply_norm,
     apply_pseudo_gradients,
 )
-from computronium.ontology.utils.norm import apply_norm
 
 __all__ = [
     "ConfigFactory",
     "_learnable_weight_names",
-    "apply_pseudo_gradients",
     "apply_norm",
+    "apply_pseudo_gradients",
 ]

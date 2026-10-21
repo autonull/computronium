@@ -11,14 +11,18 @@ substrate and update layers should copy when they are migrated.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, TypeVar
+
+from computronium.ontology._registry import ImplementationRegistry
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from computronium.ontology.dynamics._dynamics import StateDynamics
 
-DYNAMICS_REGISTRY: dict[str, type[StateDynamics]] = {}
+T = TypeVar("T", bound="StateDynamics")
+
+# Use string-based registry to avoid circular import
+_DYNAMICS_REGISTRY = ImplementationRegistry("dynamics")
+_DYNAMICS_REGISTRY.add_discovery_package("computronium.ontology.dynamics")
 
 
 def dynamics_backend[T: StateDynamics](
@@ -31,13 +35,43 @@ def dynamics_backend[T: StateDynamics](
             Must match that factory's ``dynamics_type`` — the wiring lock
             proves the pairing in both directions.
     """
+    return _DYNAMICS_REGISTRY.register(*dynamics_types)
 
-    def register(cls: type[T]) -> type[T]:
-        for dynamics_type in dynamics_types:
-            DYNAMICS_REGISTRY[dynamics_type] = cls  # type: ignore[assignment]
-        return cls
 
-    return register
+# Backwards compatibility: the old dict interface
+class _DynamicsRegistryView:
+    """Read-only view of the registry for backwards compatibility."""
 
+    def __getitem__(self, key: str) -> type[StateDynamics]:
+        return _DYNAMICS_REGISTRY.get(key)
+
+    def __contains__(self, key: str) -> bool:
+        try:
+            _DYNAMICS_REGISTRY.get(key)
+            return True
+        except KeyError:
+            return False
+
+    def __iter__(self):
+        return iter(_DYNAMICS_REGISTRY.aliases())
+
+    def get(self, key: str, default=None):
+        try:
+            return _DYNAMICS_REGISTRY.get(key)
+        except KeyError:
+            return default
+
+    def keys(self):
+        return _DYNAMICS_REGISTRY.aliases()
+
+    def values(self):
+        return [_DYNAMICS_REGISTRY.get(k) for k in self.keys()]
+
+    def items(self):
+        return [(k, _DYNAMICS_REGISTRY.get(k)) for k in self.keys()]
+
+
+# Export the view for backwards compatibility with code using DYNAMICS_REGISTRY[key]
+DYNAMICS_REGISTRY = _DynamicsRegistryView()  # type: ignore[assignment]
 
 __all__ = ["DYNAMICS_REGISTRY", "dynamics_backend"]

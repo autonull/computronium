@@ -22,7 +22,14 @@ from computronium.ontology.credit._base import (
     StatefulCredit as StatefulCredit,
 )
 from computronium.ontology.dynamics._state import state_dual_vars, state_energy
-from computronium.ontology.utils import _learnable_weight_names, apply_norm
+from computronium.ontology._utils import (
+    _acts_list,
+    _block_transition_acts,
+    _learnable_weight_names,
+    _propagate_targets,
+    _weight_acts,
+    apply_norm,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -629,84 +636,6 @@ class _SurrogateUndefined:
         )
 
 
-def _acts_list(activations: list[Tensor] | Tensor | None) -> list[Tensor]:
-    """Normalize activations to a list of layer tensors."""
-    if activations is None:
-        return []
-    if isinstance(activations, list):
-        return activations
-    return [activations]
-
-
-def _block_transition_acts(
-    acts: list[Tensor], geometry: Geometry
-) -> TileBlockGeometry | None:
-    """The geometry when it declares a block transition table and the settled
-    acts align with it (tile meshes, R11.1.4); else None.
-
-    Returning the narrowed geometry rather than a bool is what lets the block
-    paths call ``assemble_blocks`` / ``scatter_block_grads`` under the type
-    checker instead of behind a repeated ``getattr``.
-    """
-    from computronium.ontology.geometry import is_tile_block_geometry
-
-    if is_tile_block_geometry(geometry) and len(acts) == geometry.block_act_count:
-        return geometry
-    return None
-
-
-def _propagate_targets(
-    acts: list[Tensor],
-    y: Tensor,
-    weight_names: list[str],
-    geometry: Geometry,
-) -> list[Tensor | None]:
-    """Transpose-feedback target propagation: t_L = one-hot(y), t_l = t_{l+1} @ W_{l+1}."""
-    out_dim = acts[-1].shape[-1]
-    targets: list[Tensor | None] = [None] * len(acts)
-    targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float()
-    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):  # ruff: ignore[ambiguous-variable-name]
-        nxt = targets[l + 1]
-        if nxt is None:
-            break
-        w = geometry.params[weight_names[l]]
-        if nxt.shape[-1] != w.shape[0]:
-            # Ragged weight (e.g. tile meshes): the transition contract
-            # does not hold — stop propagating rather than crash.
-            break
-        targets[l] = nxt @ w
-    return targets
-
-
-def _weight_acts(
-    weight_names: list[str], acts: list[Tensor], geometry: Geometry
-) -> list[tuple[Tensor, Tensor] | None]:
-    """(pre, post) activation pair each learnable weight consumes.
-
-    Positional over act transitions: weight i maps acts[i] -> acts[i+1].
-    Surplus weights (recurrent self-connections) consume the last hidden
-    layer as both pre and post — the correlate the settle kernel itself
-    feeds them. Weights whose shape does not match their act-pair widths
-    (tile/ragged meshes) map to None — credits emit zeros for them.
-    """
-    n_trans = len(acts) - 1
-    pairs: list[tuple[Tensor, Tensor] | None] = []
-    for i, name in enumerate(weight_names):
-        w = geometry.params[name]
-        if i < n_trans:
-            pre, post = acts[i], acts[i + 1]
-        elif n_trans >= 1:
-            pre = post = acts[n_trans - 1]
-        else:
-            pairs.append(None)
-            continue
-        if w.shape[0] == post.shape[-1] and w.shape[1] == pre.shape[-1]:
-            pairs.append((pre, post))
-        else:
-            pairs.append(None)
-    return pairs
-
-
 # ============================================================
 # Default/Reference CreditAssignment Implementations
 # ============================================================
@@ -922,9 +851,7 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
         block_grads: list[Tensor] = []
         for i in range(len(acts) - 2, -1, -1):
             block_grads.append(err.T @ acts[i] / batch)
-            err = apply_norm(
-                [err @ blocks[i]], self.config.credit_norm, [acts[i]]
-            )[0]
+            err = apply_norm([err @ blocks[i]], self.config.credit_norm, [acts[i]])[0]
         block_grads.reverse()
         return geometry.scatter_block_grads(block_grads)
 

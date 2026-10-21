@@ -646,7 +646,10 @@ def actual_parameter_displacement(
     }
 
 
-_UPDATE_BACKENDS: dict[str, type[ParameterUpdate]] = {}
+from computronium.ontology._registry import ImplementationRegistry
+
+_UPDATE_REGISTRY = ImplementationRegistry[ParameterUpdate]("update")
+_UPDATE_REGISTRY.add_discovery_package("computronium.ontology.update")
 
 
 def update_backend[T: ParameterUpdate](
@@ -663,13 +666,7 @@ def update_backend[T: ParameterUpdate](
     unrepresentable, and the pairing with ``ParameterUpdateConfig``'s
     factories is proved by ``tests/property/test_registry_completeness_lock.py``.
     """
-
-    def register(cls: type[T]) -> type[T]:
-        for update_type in update_types:
-            _UPDATE_BACKENDS[update_type] = cls  # type: ignore[assignment]
-        return cls
-
-    return register
+    return _UPDATE_REGISTRY.register(*update_types)
 
 
 @update_backend("euclidean")
@@ -1579,10 +1576,44 @@ def update_from_config(config: ParameterUpdateConfig) -> ParameterUpdate:
     ``System.from_spec``; unknown values raise (no silent Euclidean
     fallback: a typo'd update_type must not masquerade as SGD).
     """
-    cls = _UPDATE_BACKENDS.get(config.update_type.lower())
-    if cls is None:
-        raise ValueError(f"Unknown update_type: {config.update_type!r}")
-    # The registry stores concrete implementations behind the
-    # runtime-checkable Protocol; their common constructor shape is (config).
-    factory = cast("Callable[[ParameterUpdateConfig], ParameterUpdate]", cls)
-    return factory(config)
+    return _UPDATE_REGISTRY.build(config.update_type.lower(), config)
+
+
+# Backwards compatibility: the old dict interface
+class _UpdateRegistryView:
+    """Read-only view of the registry for backwards compatibility."""
+
+    def __getitem__(self, key: str) -> type[ParameterUpdate]:
+        return _UPDATE_REGISTRY.get(key)
+
+    def __contains__(self, key: str) -> bool:
+        try:
+            _UPDATE_REGISTRY.get(key)
+            return True
+        except KeyError:
+            return False
+
+    def __iter__(self):
+        return iter(_UPDATE_REGISTRY.aliases())
+
+    def __len__(self):
+        return len(_UPDATE_REGISTRY.aliases())
+
+    def get(self, key: str, default=None):
+        try:
+            return _UPDATE_REGISTRY.get(key)
+        except KeyError:
+            return default
+
+    def keys(self):
+        return _UPDATE_REGISTRY.aliases()
+
+    def values(self):
+        return [_UPDATE_REGISTRY.get(k) for k in self.keys()]
+
+    def items(self):
+        return [(k, _UPDATE_REGISTRY.get(k)) for k in self.keys()]
+
+
+# Export the view for backwards compatibility with tests using _UPDATE_BACKENDS
+_UPDATE_BACKENDS = _UpdateRegistryView()  # type: ignore[assignment]

@@ -14,7 +14,10 @@ from computronium.ontology.dynamics._dynamics import (
     StateDynamics,
     StateDynamicsConfig,
 )
-from computronium.ontology.dynamics._registry import DYNAMICS_REGISTRY
+from computronium.ontology.dynamics._registry import (
+    DYNAMICS_REGISTRY,
+    _DYNAMICS_REGISTRY,
+)
 from computronium.ontology.dynamics._state import (
     SettableState,
     is_composite_state,
@@ -30,13 +33,7 @@ if TYPE_CHECKING:
 
 def dynamics_from_config(config: StateDynamicsConfig) -> StateDynamics:  # ruff: ignore[non-empty-init-module]
     """Instantiate the registered StateDynamics for a config's ``dynamics_type``."""
-    cls = DYNAMICS_REGISTRY.get(config.dynamics_type.lower())
-    if cls is None:
-        raise ValueError(f"Unknown dynamics_type: {config.dynamics_type!r}")
-    # The registry stores concrete implementations behind the runtime-checkable
-    # Protocol; their common constructor shape is (config).
-    factory = cast("Callable[[StateDynamicsConfig], StateDynamics]", cls)
-    return factory(config)
+    return _DYNAMICS_REGISTRY.build(config.dynamics_type.lower(), config)
 
 
 __all__ = [

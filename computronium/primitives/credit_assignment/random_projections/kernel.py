@@ -18,7 +18,7 @@ from computronium.acceleration.fa_kernels import (
     fa_feedback_projection_triton,
 )
 from computronium.harness import seeded_rng
-from computronium.ontology.utils import apply_norm
+from computronium.ontology._utils import apply_norm
 
 KERNEL_TECHNOLOGY = "triton"
 

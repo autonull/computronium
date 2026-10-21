@@ -213,7 +213,7 @@ class LearnedFeedbackMixin:
         step = step_group.get("counter") if isinstance(step_group, dict) else None
         if not isinstance(step, Tensor):
             msg = "learned-feedback credit state is missing the step counter"
-            raise TypeError(msg)
+            raise RuntimeError(msg)
         self._feedback_step = int(step.item())
         for key, tensor in state.get("learned_feedback", {}).items():
             name, shape_s, device, dtype = key.split("|", 3)
@@ -226,7 +226,7 @@ class LearnedFeedbackMixin:
                     f"state {tuple(tensor.shape)} vs cache {tuple(cached.shape)} "
                     "(system-scoped state cannot be re-targeted)"
                 )
-                raise TypeError(msg)
+                raise RuntimeError(msg)
             self._learned[t_key] = tensor.detach().clone()
 
     # Public protocol methods — delegate to internal implementation

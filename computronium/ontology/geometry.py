@@ -18,6 +18,7 @@ import torch
 from torch import Tensor, nn
 
 from computronium.core.tile.topology import TileGraph
+from computronium.ontology._registry import ImplementationRegistry
 from computronium.ontology._tile_blocks import (
     TileBlockView,
     assemble_transition_blocks,
@@ -822,20 +823,8 @@ def is_tile_block_geometry(geometry: object) -> TypeIs[TileBlockGeometry]:
 # Backend registry (derived — TODO34 §5.4)
 # ============================================================
 
-
-@dataclass(frozen=True, slots=True)
-class GeometryBackend:
-    """One registered implementation: the class, and how to build it."""
-
-    cls: type[Geometry]
-    build: Callable[[GeometryConfig], Geometry]
-
-
-_GEOMETRY_BACKENDS: dict[str, GeometryBackend] = {}
-
-
-def _plain_ctor[G: Geometry](cls: type[G]) -> Callable[[GeometryConfig], G]:
-    return cls
+_GEOMETRY_REGISTRY = ImplementationRegistry[Geometry]("geometry")
+_GEOMETRY_REGISTRY.add_discovery_package("computronium.ontology.geometry")
 
 
 def geometry_backend[G: Geometry](
@@ -860,17 +849,7 @@ def geometry_backend[G: Geometry](
         topology_types: the aliases this class answers to.
         ctor: construction from a config, when ``cls(config)`` is not it.
     """
-
-    def register(cls: type[G]) -> type[G]:
-        backend = GeometryBackend(
-            cls=cls,
-            build=ctor if ctor is not None else _plain_ctor(cls),
-        )
-        for topology_type in topology_types:
-            _GEOMETRY_BACKENDS[topology_type] = backend
-        return cls
-
-    return register
+    return _GEOMETRY_REGISTRY.register(*topology_types, build=ctor)
 
 
 # ============================================================
@@ -3751,7 +3730,4 @@ class NtmGeometry(nn.Module):
 
 def geometry_from_config(config: GeometryConfig) -> Geometry:
     """Instantiate the geometry implementation named by ``config.topology_type``."""
-    backend = _GEOMETRY_BACKENDS.get(config.topology_type.lower())
-    if backend is None:
-        raise ValueError(f"Unknown topology_type: {config.topology_type!r}")
-    return backend.build(config)
+    return _GEOMETRY_REGISTRY.build(config.topology_type.lower(), config)
