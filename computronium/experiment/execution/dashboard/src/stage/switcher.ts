@@ -17,6 +17,10 @@ import {
   BasinView,
   LandscapeView,
   SpectrumView,
+  TrainedBasinView,
+  TrainedLandscapeView,
+  TrainedSpectrumView,
+  TrainedTrajectoryView,
   TrajectoryView,
 } from "./dynamics.js";
 import { EffectView } from "./effect.js";
@@ -93,6 +97,10 @@ export class ViewSwitcher implements Component {
       new SpectrumView(),
       new BasinView(),
       new LandscapeView(),
+      new TrainedTrajectoryView(),
+      new TrainedSpectrumView(),
+      new TrainedBasinView(),
+      new TrainedLandscapeView(),
       new MultiRunView(),
     ];
   }

@@ -366,6 +366,52 @@ class WebDashboard:
                 logger.exception("Error measuring the cell's dynamics")
                 return JSONResponse({"error": str(e)}, status_code=409)
 
+        @self.app.get("/api/runs/{run_id}/dynamics/trained")
+        async def api_run_trained_dynamics(run_id: str) -> JSONResponse:
+            """The run's cell, trained first, then its dynamics measured (TODO69).
+
+            A trained cell settles where an untrained one does not. The
+            training is expensive, so the result is cached.
+            """
+            return JSONResponse(await self._trained_dynamics_payload(run_id))
+
+        @self.app.get("/api/cells/dynamics/trained")
+        async def api_cell_trained_dynamics(
+            substrate: str,
+            geometry: str,
+            dynamics: str,
+            plasticity: str,
+            credit: str,
+            update: str,
+            task: str = "digits",
+            epochs: int = 10,
+        ) -> JSONResponse:
+            """One cell's dynamics after training, measured (TODO69).
+
+            The cell is trained for the given epochs, then its relaxation is
+            measured. This is the picture a trained cell shows.
+            """
+            from computronium.experiment.execution.dashboard.dynamics import (
+                _train_and_measure_cell,
+            )
+
+            values = {
+                "substrate": substrate,
+                "geometry": geometry,
+                "dynamics": dynamics,
+                "plasticity": plasticity,
+                "credit": credit,
+                "update": update,
+            }
+            try:
+                measured = await asyncio.to_thread(
+                    _train_and_measure_cell, values, task, epochs=epochs
+                )
+                return JSONResponse(measured)
+            except Exception as e:
+                logger.exception("Error measuring the trained cell's dynamics")
+                return JSONResponse({"error": str(e)}, status_code=409)
+
         @self.app.get("/api/resources")
         async def api_resources() -> JSONResponse:
             return JSONResponse(await self._get_resource_usage())
@@ -1578,6 +1624,37 @@ class WebDashboard:
 
         with self._readable_store() as store:
             return run_dynamics(store, run_id)
+
+    async def _trained_dynamics_payload(self, run_id: str) -> dict[str, Any]:
+        """The run's cell, trained first, then its dynamics measured.
+
+        The measurement is expensive — the cell is composed, trained, and its
+        relaxation measured — so it is cached: the answer does not change
+        while the run does.
+        """
+        if not self.config.store_path:
+            return {"error": "no store path configured"}
+        cache_key = f"{run_id}_trained"
+        cached = self._dynamics_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        try:
+            payload = await asyncio.to_thread(self._measure_trained_dynamics, run_id)
+        except Exception as e:
+            logger.exception("Error measuring the trained cell's dynamics")
+            return {"error": str(e)}
+        if payload.get("cell") is not None:
+            self._dynamics_cache[cache_key] = payload
+        return payload
+
+    def _measure_trained_dynamics(self, run_id: str) -> dict[str, Any]:
+        """The trained measurement, with the store opened where it is used."""
+        from computronium.experiment.execution.dashboard.dynamics import (
+            run_trained_dynamics,
+        )
+
+        with self._readable_store() as store:
+            return run_trained_dynamics(store, run_id)
 
     async def _spaces_payload(self, body: SpaceRequest) -> dict[str, Any]:
         """The runs' evidence in one space.

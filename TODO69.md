@@ -582,6 +582,8 @@ kind photographs the report's charts.
 - [x] The cell's own dynamics are on the server: `GET /api/runs/{id}/dynamics` and `GET /api/cells/dynamics`
 - [x] The main view area can show the cell's own dynamics: the trajectory, the spectrum, the basin and the landscape
 - [x] Several runs' evidence is in one space, on the server and on the stage: `POST /api/spaces` and the multi-run view
+- [x] The trained cell's dynamics are on the server: `GET /api/runs/{id}/dynamics/trained` and `GET /api/cells/dynamics/trained`
+- [x] The main view area can show the trained cell's dynamics: the trained trajectory, the trained spectrum, the trained basin and the trained landscape (keys `g`, `i`, `k`, `o`)
 
 ---
 
@@ -609,7 +611,7 @@ kind photographs the report's charts.
 | `flow.py` — the run's cells through the stages | ✅ done (the events' counts, the gate's refusals, the shape in a sentence) |
 | `attribution.py` — what the run can attribute | ✅ done (the axes, the spread, and the design's limits in words) |
 | the other views — the dynamics | ✅ done (the trajectory, the spectrum, the basin, the landscape: the cell's own relaxation, measured on the server) |
-| the trained cell | ⬜ the dynamics views measure an untrained cell, and say so; a trained one is the next thing to try |
+| the trained cell | 🔄 in progress: server endpoints added (`/api/runs/{id}/dynamics/trained`, `/api/cells/dynamics/trained`), frontend views added (`TrainedTrajectoryView`, `TrainedSpectrumView`, `TrainedBasinView`, `TrainedLandscapeView` with keys `g`, `i`, `k`, `o`), stage state added (`trainedDynamics` with `syncTrainedDynamics()`); tour capture and end-to-end verification pending |
 | the multi-run space | ✅ done (the store's runs, each in its own window on the space; the tour's store holds two) |
 | the comparison between two runs | ⬜ `comp diff` wants two runs over the *same* cells: the tour's two measured different ones |
 | the mirror's publish can fail and lag | ✅ done: the copy is made table by table, in the order the foreign keys allow (the probe measured the old copy failing 1 publish in 3) |
@@ -617,9 +619,9 @@ kind photographs the report's charts.
 | the README was stale against `docs/readme/` | ✅ fixed here (the build lock was failing at the commit before) |
 
 The server speaks, the browser shows it, the pictures show both, and the
-canvas can show more than one thing. What is left of the stage is the
-*trained* cell: the dynamics family measures a cell that was never trained,
-and the pictures say so.
+canvas can show more than one thing. The *trained* cell is in progress:
+the server endpoints, frontend views, and stage state are implemented;
+tour capture and end-to-end verification remain.
 
 ---
 
@@ -1178,22 +1180,16 @@ copy protect nobody.
 
 ## Where the next session starts
 
-1. **The trained cell** — the dynamics family measures a cell that was never
+1. **The trained cell** ✅ **IN PROGRESS** — the dynamics family measures a cell that was never
    trained, and says so in the payload. The next thing to try is a cell
    whose weights were trained first:
-   - the training loop is `evaluate_cell`
-     (`computronium/experiment/kernel/evaluate.py`), which composes the cell
-     and trains it; it does not hand the trained system back, so the server
-     has to compose and train the cell itself, or the trainer has to give
-     the system up;
-   - the cell the picture shows must be the cell that was trained: the
-     server repairs a run's cell into one that has a state (the dynamics
-     swapped for one that relaxes, the geometry for a recurrent one), and
-     the trained cell has to be the *repaired* one, with the payload naming
-     every axis it swapped;
-   - the training is not cheap: the demo trains twenty cells in 33 s, so a
-     trained cell is a few seconds of the endpoint's time, and the cache has
-     to keep it.
+   - ✅ the training loop uses `SystemTrainer` (`computronium/core/system_trainer/trainer.py`), which composes the cell and trains it; the server composes and trains the cell itself;
+   - ✅ the cell the picture shows is the cell that was trained: the server repairs a run's cell into one that has a state (the dynamics swapped for one that relaxes, the geometry for a recurrent one), and the trained cell is the *repaired* one, with the payload naming every axis it swapped;
+   - ✅ the training is cached: the result is kept in `_dynamics_cache` with a `_trained` suffix key.
+   - ✅ Server endpoints added: `GET /api/runs/{run_id}/dynamics/trained` and `GET /api/cells/dynamics/trained`
+   - ✅ Frontend views added: `TrainedTrajectoryView`, `TrainedSpectrumView`, `TrainedBasinView`, `TrainedLandscapeView` (keys `g`, `i`, `k`, `o`)
+   - ✅ Stage state added: `trainedDynamics` field with `syncTrainedDynamics()` method
+   - **Next**: verify the tour captures the new views and the training works end-to-end
 2. **The comparison between two runs** — `comp diff` wants two runs over the
    *same* cells. A third campaign that re-measured the demo's own cells
    with different seeds would give the diff something to say, and the

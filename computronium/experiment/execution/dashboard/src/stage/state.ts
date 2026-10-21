@@ -490,6 +490,8 @@ class StageState {
   dynamics: CellDynamics | null = null;
   /** Several runs' evidence in one space, read from the server. */
   multirun: MultiRunSpace | null = null;
+  /** The cell's own dynamics after training, measured on the server. */
+  trainedDynamics: CellDynamics | null = null;
   /** What the space was last asked for, so it is only asked again when it changes. */
   private spaceRequest = "";
   /** What the account was last asked for: the run, and how much it measured. */
@@ -502,6 +504,10 @@ class StageState {
   private dynamicsRun = "";
   /** Whether the dynamics are being asked for right now. */
   private dynamicsAsking = false;
+  /** The run the trained dynamics were measured for. */
+  private trainedDynamicsRun = "";
+  /** Whether the trained dynamics are being asked for right now. */
+  private trainedDynamicsAsking = false;
   /** The axes the runs' space was last asked for. */
   private multirunRequest = "";
   /** Whether the runs' space is being asked for right now. */
@@ -554,6 +560,7 @@ class StageState {
     void this.syncAttribution();
     void this.syncTimeline();
     void this.syncDynamics();
+    void this.syncTrainedDynamics();
   }
 
   /** The axes the reader picked: another slice of the same space. */
@@ -752,6 +759,39 @@ class StageState {
       console.warn("[StageState] The dynamics could not be read", error);
     } finally {
       this.dynamicsAsking = false;
+    }
+  }
+
+  /** The cell's own dynamics after training, measured on the server.
+
+    The measurement is expensive — the cell is composed, trained, and its
+    relaxation measured — so it is asked for once per run, and the server
+    keeps it.
+  */
+  async syncTrainedDynamics(): Promise<void> {
+    if (!this.runId) {
+      this.trainedDynamics = null;
+      this.trainedDynamicsRun = "";
+      return;
+    }
+    if (this.trainedDynamicsRun === this.runId || this.trainedDynamicsAsking) return;
+    this.trainedDynamicsAsking = true;
+    try {
+      const response = await fetch(
+        `/api/runs/${encodeURIComponent(this.runId)}/dynamics/trained`,
+      );
+      if (!response.ok) {
+        console.warn("[StageState] The trained dynamics were refused", response.status);
+        return;
+      }
+      const payload = (await response.json()) as CellDynamics;
+      this.trainedDynamics = payload;
+      if (payload.cell) this.trainedDynamicsRun = this.runId;
+      this.notify("evidence");
+    } catch (error) {
+      console.warn("[StageState] The trained dynamics could not be read", error);
+    } finally {
+      this.trainedDynamicsAsking = false;
     }
   }
 

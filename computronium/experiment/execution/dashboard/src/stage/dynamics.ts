@@ -429,3 +429,398 @@ export class LandscapeView extends DynamicsView {
     this.drawn = true;
   }
 }
+
+/** The trained cell's own dynamics (TODO69 Phase 5: the trained cell).
+
+    The four views below mirror the untrained dynamics views, but they show
+    a cell that has been trained first. The server trains the cell, then
+    measures its relaxation. A trained cell settles where an untrained one
+    does not.
+*/
+
+function trainedDynamics(): CellDynamics | null {
+  const payload = stageState.trainedDynamics;
+  if (!payload || !payload.stateful) return null;
+  return payload;
+}
+
+function trainedCellName(payload: CellDynamics): string {
+  const coordinate = payload.cell?.coordinate ?? {};
+  return [
+    coordinate.geometry,
+    coordinate.dynamics,
+    coordinate.credit,
+  ]
+    .filter((part) => typeof part === "string" && part.length > 0)
+    .join(" · ");
+}
+
+function trainedNote(payload: CellDynamics): string {
+  const parts: string[] = [];
+  const cell = trainedCellName(payload);
+  if (cell) parts.push(cell);
+  if (payload.cell?.measured_by_run === false) {
+    parts.push("a cell of the space, not one the run measured");
+  }
+  if (payload.trained === true) parts.push("the weights were trained first");
+  return parts.join(" · ");
+}
+
+abstract class TrainedDynamicsView implements StageView {
+  abstract id: string;
+  abstract name: string;
+  abstract caption: string;
+  key?: string;
+
+  protected visible = false;
+  protected drawn = false;
+
+  enter(): void {
+    this.visible = true;
+    stageCanvas.show();
+    this.draw();
+  }
+
+  exit(): void {
+    this.visible = false;
+    stageCanvas.hide();
+    this.drawn = false;
+  }
+
+  refresh(): void {
+    if (!this.visible) return;
+    this.draw();
+  }
+
+  ready(): boolean {
+    return this.drawn;
+  }
+
+  protected abstract draw(): void;
+}
+
+/** The trained cell's trajectory — the state's own path through the state space. */
+export class TrainedTrajectoryView extends TrainedDynamicsView {
+  id = "trained-trajectory";
+  name = "The trained trajectory";
+  caption =
+    "Where the trained cell's state went, step by step: the path it took through the space it moves in.";
+  key = "g";
+
+  protected draw(): void {
+    const payload = trainedDynamics();
+    const trajectory = payload?.trajectory;
+    if (!payload || !trajectory || trajectory.path.length < 2) {
+      this.drawn = false;
+      return;
+    }
+
+    const ctx = stageCanvas.begin();
+    const area = stageCanvas.area();
+    const path = trajectory.path;
+    const xs = path.map((point) => point[0]);
+    const ys = path.map((point) => point[1]);
+    const pad = 0.08;
+    const xMin = Math.min(...xs);
+    const xMax = Math.max(...xs);
+    const yMin = Math.min(...ys);
+    const yMax = Math.max(...ys);
+    const xSpan = (xMax - xMin) || 1;
+    const ySpan = (yMax - yMin) || 1;
+
+    const frame = drawFrame(ctx, area, {
+      xMin: xMin - xSpan * pad,
+      xMax: xMax + xSpan * pad,
+      yMin: yMin - ySpan * pad,
+      yMax: yMax + ySpan * pad,
+      xLabel: trajectory.axes[0] ?? "the direction the state moved",
+      yLabel: trajectory.axes[1] ?? "the direction across it",
+      title: "The trained trajectory",
+      subtitle: trainedNote(payload),
+    });
+
+    for (let index = 1; index < path.length; index += 1) {
+      const t = index / (path.length - 1);
+      ctx.strokeStyle = rampColor(t);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(scaleX(path[index - 1][0], frame), scaleY(path[index - 1][1], frame));
+      ctx.lineTo(scaleX(path[index][0], frame), scaleY(path[index][1], frame));
+      ctx.stroke();
+    }
+
+    const mark = (point: number[], color: string, label: string) => {
+      const x = scaleX(point[0], frame);
+      const y = scaleY(point[1], frame);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = "12px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x + 10, y);
+    };
+    mark(path[0], PALETTE.text_primary, "where it started");
+    mark(path[path.length - 1], PALETTE.warn, "where it stopped");
+
+    const errors = trajectory.error ?? [];
+    if (errors.length > 1) {
+      const lowest = Math.min(...errors);
+      const highest = Math.max(...errors);
+      const band = frame.rect.height * 0.16;
+      const base = frame.rect.y + frame.rect.height - band * 0.5;
+      const toY = (value: number): number =>
+        base -
+        ((value - lowest) / ((highest - lowest) || 1)) * band * 0.5;
+      ctx.strokeStyle = PALETTE.thermodynamic_contrast;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      errors.forEach((value, index) => {
+        const x =
+          frame.rect.x +
+          (index / (errors.length - 1)) * frame.rect.width;
+        if (index === 0) ctx.moveTo(x, toY(value));
+        else ctx.lineTo(x, toY(value));
+      });
+      ctx.stroke();
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = PALETTE.thermodynamic_contrast;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("the prediction error", frame.rect.x + frame.rect.width, base - band * 0.6);
+    }
+
+    drawNote(ctx, area, payload.verdict ?? "");
+    this.drawn = true;
+  }
+}
+
+/** The trained cell's spectrum — the Lyapunov exponents after training. */
+export class TrainedSpectrumView extends TrainedDynamicsView {
+  id = "trained-spectrum";
+  name = "The trained spectrum";
+  caption =
+    "How fast a nudge grows along each direction after training: the exponents that say whether this dynamics settles.";
+  key = "i";
+
+  protected draw(): void {
+    const payload = trainedDynamics();
+    const spectrum = payload?.spectrum;
+    if (!payload || !spectrum || spectrum.length === 0) {
+      this.drawn = false;
+      return;
+    }
+
+    const ctx = stageCanvas.begin();
+    const area = stageCanvas.area();
+    const largest = Math.max(...spectrum.map((value) => Math.abs(value)), 1e-6);
+    const top = largest * 1.25;
+
+    const frame = drawFrame(ctx, area, {
+      xMin: 0,
+      xMax: spectrum.length,
+      yMin: -top,
+      yMax: top,
+      xLabel: "direction",
+      yLabel: "growth per step",
+      title: "The trained spectrum",
+      subtitle: trainedNote(payload),
+      xTicks: niceTicks(0, spectrum.length, 6).filter(
+        (tick) => Number.isInteger(tick),
+      ),
+    });
+
+    const zero = scaleY(0, frame);
+    ctx.strokeStyle = PALETTE.text_muted;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(frame.rect.x, zero);
+    ctx.lineTo(frame.rect.x + frame.rect.width, zero);
+    ctx.stroke();
+
+    const band = frame.rect.width / spectrum.length;
+    spectrum.forEach((value, index) => {
+      const centre = frame.rect.x + band * (index + 0.5);
+      const width = Math.min(46, band * 0.5);
+      const y = scaleY(value, frame);
+      const growing = value > 0;
+      ctx.fillStyle = growing ? PALETTE.warn : PALETTE.ok;
+      ctx.fillRect(centre - width / 2, Math.min(y, zero), width, Math.abs(y - zero));
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = growing ? PALETTE.warn : PALETTE.ok;
+      ctx.textAlign = "center";
+      ctx.textBaseline = growing ? "bottom" : "top";
+      ctx.fillText(
+        formatTick(value),
+        centre,
+        growing ? y - 5 : y + 5,
+      );
+    });
+
+    drawNote(ctx, area, payload.verdict ?? "");
+    this.drawn = true;
+  }
+}
+
+/** The trained cell's basin — how much of the neighbourhood comes back after training. */
+export class TrainedBasinView extends TrainedDynamicsView {
+  id = "trained-basin";
+  name = "The trained basin";
+  caption =
+    "The states near the trained cell's own: how many come back, and how far the ones that do not stray.";
+  key = "k";
+
+  protected draw(): void {
+    const payload = trainedDynamics();
+    const basin = payload?.basin;
+    if (!payload || !basin || basin.paths.length === 0) {
+      this.drawn = false;
+      return;
+    }
+
+    const ctx = stageCanvas.begin();
+    const area = stageCanvas.area();
+    const paths = basin.paths;
+    const farthest = Math.max(
+      ...paths.flatMap((path) => path.distances),
+      1e-6,
+    );
+
+    const frame = drawFrame(ctx, area, {
+      xMin: 0,
+      xMax: paths[0].distances.length,
+      yMin: 0,
+      yMax: farthest * 1.1,
+      xLabel: "steps after the nudge",
+      yLabel: "distance from the attractor",
+      title: "The trained basin",
+      subtitle: trainedNote(payload),
+    });
+
+    const radii = basin.radii;
+    paths.forEach((path) => {
+      const index = radii.indexOf(path.radius);
+      const t = radii.length > 1 ? index / (radii.length - 1) : 0.5;
+      ctx.strokeStyle = path.returned ? PALETTE.ok : rampColor(t);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      path.distances.forEach((distance, step) => {
+        const x = scaleX(step, frame);
+        const y = scaleY(distance, frame);
+        if (step === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+
+    ctx.font = "12px 'JetBrains Mono', monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    basin.stability.forEach((share, index) => {
+      const x = frame.rect.x + (frame.rect.width / radii.length) * (index + 0.5);
+      ctx.fillStyle = share > 0 ? PALETTE.ok : PALETTE.warn;
+      ctx.fillText(`${Math.round(share * 100)}% back`, x, frame.rect.y + 12);
+      ctx.fillStyle = PALETTE.text_secondary;
+      ctx.fillText(`nudge ${radii[index]}`, x, frame.rect.y + 28);
+    });
+
+    drawNote(ctx, area, payload.verdict ?? "");
+    this.drawn = true;
+  }
+}
+
+/** The trained cell's landscape — the cell's own energy over the slice its trajectory crosses, after training. */
+export class TrainedLandscapeView extends TrainedDynamicsView {
+  id = "trained-landscape";
+  name = "The trained landscape";
+  caption =
+    "The trained cell's own energy over the ground its trajectory crossed, and the path it took across it.";
+  key = "o";
+
+  protected draw(): void {
+    const payload = trainedDynamics();
+    const landscape = payload?.landscape;
+    const trajectory = payload?.trajectory;
+    if (!payload || !landscape || landscape.grid.length === 0) {
+      this.drawn = false;
+      return;
+    }
+
+    const ctx = stageCanvas.begin();
+    const area = stageCanvas.area();
+    const grid = landscape.grid;
+    const flat = grid.flat();
+    const lowest = Math.min(...flat);
+    const highest = Math.max(...flat);
+
+    const frame = drawFrame(ctx, area, {
+      xMin: landscape.x[0],
+      xMax: landscape.x[landscape.x.length - 1],
+      yMin: landscape.y[0],
+      yMax: landscape.y[landscape.y.length - 1],
+      xLabel: "along the trajectory",
+      yLabel: "across it",
+      title: "The trained landscape",
+      subtitle: trainedNote(payload),
+    });
+
+    const cellWidth = frame.rect.width / (landscape.x.length - 1 || 1);
+    const cellHeight = frame.rect.height / (landscape.y.length - 1 || 1);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(frame.rect.x, frame.rect.y, frame.rect.width, frame.rect.height);
+    ctx.clip();
+    grid.forEach((row, i) => {
+      row.forEach((value, j) => {
+        const t = (value - lowest) / ((highest - lowest) || 1);
+        ctx.fillStyle = rampColor(1 - t);
+        const x = frame.rect.x + cellWidth * i;
+        const y = frame.rect.y + frame.rect.height - cellHeight * (j + 1);
+        ctx.fillRect(x, y, cellWidth + 1, cellHeight + 1);
+      });
+    });
+    ctx.restore();
+
+    if (trajectory && trajectory.path.length > 1) {
+      ctx.strokeStyle = PALETTE.text_primary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      trajectory.path.forEach((point, index) => {
+        const x = scaleX(point[0], frame);
+        const y = scaleY(point[1], frame);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    let bestX = 0;
+    let bestY = 0;
+    let bestValue = Number.POSITIVE_INFINITY;
+    grid.forEach((row, i) =>
+      row.forEach((value, j) => {
+        if (value < bestValue) {
+          bestValue = value;
+          bestX = i;
+          bestY = j;
+        }
+      }),
+    );
+    const bx = scaleX(landscape.x[bestX], frame);
+    const by = scaleY(landscape.y[bestY], frame);
+    ctx.strokeStyle = PALETTE.ok;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(bx, by, 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.font = "12px 'JetBrains Mono', monospace";
+    ctx.fillStyle = PALETTE.ok;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("the lowest ground", bx + 11, by - 6);
+
+    drawNote(ctx, area, payload.verdict ?? "");
+    this.drawn = true;
+  }
+}

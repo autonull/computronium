@@ -134,6 +134,18 @@ TOUR: tuple[Shot, ...] = (
         "dashboard-landscape.png", "the landscape: the cell's own energy over its path"
     ),
     Shot(
+        "dashboard-trained-trajectory.png", "the trained trajectory: where the trained cell's state went"
+    ),
+    Shot(
+        "dashboard-trained-spectrum.png", "the trained spectrum: the exponents of the trained cell's own map"
+    ),
+    Shot(
+        "dashboard-trained-basin.png", "the trained basin: how much of the neighbourhood comes back after training"
+    ),
+    Shot(
+        "dashboard-trained-landscape.png", "the trained landscape: the trained cell's own energy over its path"
+    ),
+    Shot(
         "dashboard-multirun.png",
         "the multi-run space: several runs' evidence in one space",
     ),
@@ -200,6 +212,10 @@ VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
     ("spectrum", "dashboard-spectrum.png", "m"),
     ("basin", "dashboard-basin.png", "b"),
     ("landscape", "dashboard-landscape.png", "n"),
+    ("trained-trajectory", "dashboard-trained-trajectory.png", "g"),
+    ("trained-spectrum", "dashboard-trained-spectrum.png", "i"),
+    ("trained-basin", "dashboard-trained-basin.png", "k"),
+    ("trained-landscape", "dashboard-trained-landscape.png", "o"),
     ("multirun", "dashboard-multirun.png", "u"),
 )
 

@@ -517,6 +517,173 @@ def measure_cell(
     return measured
 
 
+def _train_and_measure_cell(
+    values: dict[str, str],
+    task_id: str,
+    *,
+    budget: int = 10_000,
+    device: str = "cpu",
+    epochs: int = 10,
+) -> dict[str, Any]:
+    """Train a cell, then measure its dynamics.
+
+    Args:
+        values: The coordinate, axis by axis.
+        task_id: The task the cell is trained and measured on.
+        budget: The parameter ceiling the cell is composed under.
+        device: Where the cell is composed and trained.
+        epochs: Number of training epochs.
+
+    Returns:
+        The payload the browser draws: the cell, the measurements, and the
+        plain reason when the cell has no dynamics to show.
+    """
+    from computronium.domains.factory import create_task
+    from computronium.experiment.analysis.transition import build_transition
+    from computronium.experiment.kernel.evaluate import (
+        SystemTrainer,
+        SystemTrainerConfig,
+        _resolve_device,
+        task_shape,
+    )
+
+    started = time.perf_counter()
+    task = create_task(task_id, device=device, quick_mode=True, num_workers=0)
+    task.setup()
+    shape = task_shape(task_id, device)
+    cell = _composes(values, shape, budget)
+    if cell is None:
+        return {
+            "cell": {"coordinate": values},
+            "stateful": False,
+            "reason": "The system refuses this cell: it does not compose.",
+            "verdict": "This cell does not compose, so it has no dynamics to show.",
+        }
+    system = cell.system.to(device)
+
+    from computronium.domains.base import TaskSplit
+
+    sample_x, _ = next(iter(task.get_dataloader(TaskSplit.TRAIN)))
+    flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
+    transition = build_transition(system, flat)
+    if not transition.stateful:
+        return {
+            "cell": {"coordinate": values},
+            "stateful": False,
+            "reason": transition.reason,
+            "verdict": "This cell has no state that moves, so it has no dynamics to show.",
+        }
+
+    # Train the cell
+    resolved_device = _resolve_device(device)
+    config = SystemTrainerConfig(
+        max_epochs=epochs,
+        device=resolved_device,
+        seed=42,
+        limit_train_batches=None,
+        limit_val_batches=None,
+        track_flops=False,
+        track_memory=False,
+        deterministic=False,
+        precision="fp32",
+        checkpoint_every_n=0,
+    )
+    trainer = SystemTrainer(
+        system=system,
+        config=config,
+        train_data=task.get_dataloader(TaskSplit.TRAIN),
+        val_data=task.get_dataloader(TaskSplit.VAL),
+    )
+    trainer.fit()
+    # The system is now trained; measure its dynamics
+    measured = _measure(system, transition)
+    trainer.close()
+    measured.update({
+        "cell": {
+            "coordinate": values,
+            "params": int(cell.param_count),
+        },
+        "stateful": True,
+        "reason": transition.reason,
+        "trained": True,
+        "task": task_id,
+        "epochs": epochs,
+        "elapsed_s": round(time.perf_counter() - started, 2),
+    })
+    return measured
+
+
+def run_trained_dynamics(
+    store: Any,
+    run_id: str,
+    *,
+    budget: int = 10_000,
+    device: str = "cpu",
+    epochs: int = 10,
+) -> dict[str, Any]:
+    """The run's cell, trained first, then its dynamics measured.
+
+    The run's first measured cell is the starting point. When that cell has
+    no state that moves, the nearest cell that does is trained and measured
+    instead, and the payload names the axes that were swapped.
+
+    The training is expensive, so the result is cached by the caller.
+    """
+    records = list(store.query_records(run_id=run_id))
+    if not records:
+        return {
+            "run_id": run_id,
+            "stateful": False,
+            "reason": "This run measured nothing, so it has no cell to show.",
+            "verdict": "This run measured nothing, so it has no dynamics to show.",
+        }
+    record = records[0]
+    values = _coordinate_of(record)
+    task_id = record.schedule.task_id or "digits"
+
+    from computronium.domains.factory import create_task
+    from computronium.experiment.kernel.evaluate import task_shape
+
+    task = create_task(task_id, device=device, quick_mode=True, num_workers=0)
+    task.setup()
+    shape = task_shape(task_id, device)
+
+    refused: list[str] = []
+    still: list[str] = []
+    for candidate, repairs in candidate_cells(values):
+        cell = _composes(candidate, shape, budget)
+        if cell is None:
+            refused.append(f"{candidate['geometry']}/{candidate['dynamics']}")
+            continue
+        payload = _train_and_measure_cell(candidate, task_id, budget=budget, device=device, epochs=epochs)
+        if not payload.get("stateful"):
+            # The cell composes but has no state that moves: the next
+            # candidate is the one worth measuring.
+            still.append(f"{candidate['geometry']}/{candidate['dynamics']}")
+            continue
+        payload["run_id"] = run_id
+        payload["cell"] = {
+            **(payload.get("cell") or {}),
+            "coordinate": candidate,
+            "repairs": repairs,
+            "measured_by_run": not repairs,
+            "run_cell": values,
+        }
+        if refused:
+            payload["refused"] = refused
+        if still:
+            payload["without_state"] = still
+        return payload
+
+    return {
+        "run_id": run_id,
+        "stateful": False,
+        "reason": "No cell of this run's space has a state that moves.",
+        "verdict": "No cell of this run's space has a state that moves.",
+        "refused": refused,
+    }
+
+
 def run_dynamics(
     store: Any,
     run_id: str,
@@ -592,4 +759,5 @@ __all__ = [
     "candidate_cells",
     "measure_cell",
     "run_dynamics",
+    "run_trained_dynamics",
 ]
