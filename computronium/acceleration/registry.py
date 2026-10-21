@@ -12,6 +12,58 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from computronium.acceleration.spec import ImplementationSpec
 
+
+def register_module(
+    module_name: str,
+    docstring: str,
+    *,
+    has_factory: bool = False,
+    factory_name: str | None = None,
+    kernel_fn: str = "step",
+    reference_fn: str = "step",
+) -> dict[str, object]:
+    """Register a primitive/algorithm module and return its exports.
+
+    This replaces the boilerplate in each module's __init__.py with a single call.
+
+    Args:
+        module_name: The module's __name__ (e.g., "computronium.algorithms.fa").
+        docstring: The module's docstring.
+        has_factory: Whether the module has a factory.py with a create_* function.
+        factory_name: The name of the factory function to export (e.g., "create_fa_mlp").
+            Required if has_factory is True.
+        kernel_fn: The function name to import from kernel module (default: "step").
+        reference_fn: The function name to import from reference module (default: "step").
+
+    Returns:
+        Dict of exports to update the module's globals with.
+    """
+    # Import submodules
+    cases_mod = importlib.import_module(".cases", module_name)
+    kernel_mod = importlib.import_module(".kernel", module_name)
+    reference_mod = importlib.import_module(".reference", module_name)
+    spec_mod = importlib.import_module(".spec", module_name)
+
+    # Register the spec
+    register(spec_mod.SPEC)
+
+    # Build exports
+    exports: dict[str, object] = {
+        "SPEC": spec_mod.SPEC,
+        "kernel_step": getattr(kernel_mod, kernel_fn),
+        "make_case": cases_mod.make_case,
+        "reference_step": getattr(reference_mod, reference_fn),
+    }
+
+    if has_factory:
+        if factory_name is None:
+            raise ValueError("factory_name required when has_factory=True")
+        factory_mod = importlib.import_module(".factory", module_name)
+        exports[factory_name] = getattr(factory_mod, factory_name)
+
+    return exports
+
+
 _REGISTRY: dict[str, ImplementationSpec] = {}
 _DISCOVERED: bool = False
 

@@ -1,3 +1,6 @@
+# ruff: file-ignore[unsorted-imports]
+# ruff: file-ignore[implicit-namespace-package]
+# ruff: file-ignore[non-empty-init-module]
 """
 Local Goodness Credit Assignment primitive.
 
@@ -13,18 +16,12 @@ Accelerated kernel:
     computronium.primitives.credit_assignment.local_goodness.kernel
 """
 
-from computronium.acceleration.registry import register
+from computronium.acceleration.registry import register_module
 
-from .cases import make_case
-from .kernel import step as kernel_step
-from .reference import step as reference_step
-from .spec import SPEC
-
-register(SPEC)  # ruff: ignore[non-empty-init-module]
-
-__all__ = [
-    "SPEC",
-    "kernel_step",
-    "make_case",
-    "reference_step",
-]
+globals().update(
+    register_module(
+        __name__,
+        __doc__,
+        has_factory=False,
+    )
+)
