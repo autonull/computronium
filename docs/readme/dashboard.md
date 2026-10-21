@@ -67,6 +67,13 @@ its own energy looks like over the ground it crossed:
 |---|---|---|---|
 | ![The trajectory](docs/readme/assets/dashboard-trajectory.png) | ![The spectrum](docs/readme/assets/dashboard-spectrum.png) | ![The basin](docs/readme/assets/dashboard-basin.png) | ![The landscape](docs/readme/assets/dashboard-landscape.png) |
 
+And two runs in one space — each run's cells in the run's own colour, so the
+reader can see where the second one went and the first one did not:
+
+| The multi-run space |
+|---|
+| ![The multi-run space](docs/readme/assets/dashboard-multirun.png) |
+
 The same run, told three other ways — as a report in the browser, as the
 console dashboard in a terminal, and as the dashboard's own account of itself:
 

@@ -57,7 +57,7 @@ Open <http://localhost:8080> in a browser.
 ## The Stage (the main view area)
 
 The canvas is a **stage**, and a view is what stands on it. The discovery map
-is one view; the stage can show nineteen.
+is one view; the stage can show twenty.
 
 | Key | View | The picture | What a reader would say |
 |-----|------|-------------|------------------------|
@@ -80,15 +80,17 @@ is one view; the stage can show nineteen.
 | `M` | **The spectrum** | the Lyapunov exponents of the cell's own map, one bar per direction, against the zero line | "one direction grows, so this dynamics does not settle" |
 | `B` | **The basin** | the states near the cell's own: how far each stray went, and how many came back | "nothing comes back: the basin is empty" |
 | `N` | **The landscape** | the cell's own energy over the ground its trajectory crossed, with the path drawn over it | "the low ground is not where the path went" |
+| `U` | **The multi-run space** | several runs' evidence in one space: the ground is the cells the system allows in any of the runs' windows, and each run's cells stand in that run's own colour | "the second run went where the first one did not" |
 
 `V` cycles the views; the number keys pick the first nine, and a view that
 does not fit in the numbers has a letter of its own (`src/keys.ts` holds the
 keys the panels and the charts already own, so a view cannot steal one). The
 letter is the view's own first free letter: `T` the timeline, `L` the ledger,
 `D` the contrast, `F` the flow, `E` the effect, `Y` the layers, `J` the
-trajectory, `M` the spectrum, `B` the basin and `N` the landscape. The **View**
-selector in the legend names the view where it is chosen, and the legend's
-title is the view's name, so the picture says what it is.
+trajectory, `M` the spectrum, `B` the basin, `N` the landscape and `U` the
+multi-run space. The **View** selector in the legend names the view where it
+is chosen, and the legend's title is the view's name, so the picture says
+what it is.
 
 **The views share one picture of the run.** `src/stage/state.ts` holds the run
 the dashboard shows, the axes the reader picked, the space the backend declares
@@ -571,6 +573,16 @@ interval.
 The mirror is a copy, not a second truth: the store remains the record of
 account, and a reader that can open it always prefers it.
 
+**The copy is made table by table, in the order the foreign keys allow.**
+DuckDB's own `COPY FROM DATABASE` copies the tables in an order of its own
+choosing, and when the records are copied before the runs they point at, the
+foreign key refuses the copy: the mirror keeps the picture it had, and a
+reader in another process sees a run one append behind. The copy here is one
+transaction, and it carries the rows, the columns, the types, the sequences
+and the indexes; it does not carry the constraints, because DuckDB cannot
+make a foreign key that points into another database, and the constraints of
+a copy protect nobody.
+
 **A queued replication needs the queue.** The dashboard attaches the process's
 campaign queue, so `comp dashboard` can queue work; a dashboard built without
 one answers `409` and says so, rather than pretending the work was queued.
@@ -588,6 +600,14 @@ The map's own endpoint: `POST /api/cells/{run_id}/space` with
 `{"axes": ["credit", "geometry", "dynamics"]}`. It answers with the slice —
 the values each free axis takes, the value each held axis is fixed at, the
 run's declaration per axis, and every cell with the system's verdict on it.
+
+The runs' endpoint: `POST /api/spaces` with the same body. It answers with
+every run in the store that measured something, each in its own window on
+the same declared space, with the cells it measured in it and the cells the
+system refuses; the union of the windows is the picture, and the cells are
+coloured by the run that measured them. The slices are read once and kept:
+the system's own void rules are evaluated for every cell of a slice, and a
+slice holds hundreds of cells.
 
 ---
 
@@ -740,12 +760,12 @@ The screenshot is embedded in `docs/readme/title.md` and appears on the README f
 ## The Tour (every view of the system)
 
 ```bash
-# Thirty-eight pictures, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+# Forty-three pictures, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
 uv run python scripts/capture_dashboard_tour.py
 ```
 
 One store, one dashboard, one browser: the tour takes the whole system in
-thirty-eight pictures, and the pictures are of *different things*, not of the same
+forty-three pictures, and the pictures are of *different things*, not of the same
 scene from different angles.
 
 | Shot | What it shows |
@@ -766,6 +786,11 @@ scene from different angles.
 | `dashboard-flow.png` | the flow: the run's cells, stage by stage, and what the gate refused |
 | `dashboard-effect.png` | the effect: which axis moved the objective, and which the run held fixed |
 | `dashboard-layers.png` | the layers: the space cut into sheets, and the one sheet the run entered |
+| `dashboard-trajectory.png` | the trajectory: the cell's own state, drawn through the space it moves in |
+| `dashboard-spectrum.png` | the spectrum: the Lyapunov exponents of the cell's own map |
+| `dashboard-basin.png` | the basin: how much of the neighbourhood comes back |
+| `dashboard-landscape.png` | the landscape: the cell's own energy over the ground its path crossed |
+| `dashboard-multirun.png` | the multi-run space: several runs' evidence in one space, coloured by run |
 | `dashboard-cell.png` | the leading cell's drawer: its accuracy, its curve, its verdict, the seeds it still owes |
 | `dashboard-void.png` | a cell the system refuses, in a slice of the space cut a different way, and the rule that refuses it |
 | `dashboard-pareto.png` | the Pareto chart |
@@ -801,7 +826,7 @@ the browser decodes each pair of the stage's shots and reports the share of
 the pixels that differ, and a pair that is too alike fails the tour. The map
 was the same picture in every frame once; the check is what stopped it from
 being the same picture again. The floor is 2 %; the measured spread over the
-fifteen views is 2.4 % to 30.5 %.
+twenty views is 2.2 % to 36.0 %.
 
 **A figure is a third kind of frame, and a plot is a fourth.** A page in the
 browser and a terminal window cover the dashboard and the report; a *figure* —

@@ -24,6 +24,7 @@ from computronium.experiment.schema.harvest import AXIS_KIND_ORDER
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from computronium.experiment.legality.engine import VoidRule
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 
@@ -151,12 +152,20 @@ def held_axes(
     return values, sources
 
 
-def void_reason(coordinate: Mapping[str, str], task: str | None = None) -> str | None:
+def void_reason(
+    coordinate: Mapping[str, str],
+    task: str | None = None,
+    rules: Sequence[VoidRule] | None = None,
+) -> str | None:
     """Why the system refuses this cell, or ``None`` when it does not.
 
     The rules are the system's own — the ones the gate applies to a proposal
     and the search space applies before it offers a cell — so a cell marked
     legal here is a cell the run can actually measure.
+
+    The rules are read once and handed in when the caller has many cells to
+    judge: reading them for every cell of a slice costs more than judging
+    them does, and they do not change between cells.
     """
     from computronium.experiment.legality.dsl import CoordinateContext, evaluate
     from computronium.experiment.legality.engine import void_rules
@@ -167,7 +176,7 @@ def void_reason(coordinate: Mapping[str, str], task: str | None = None) -> str |
         return "the coordinate does not name every axis"
 
     ctx = CoordinateContext(Coordinate(**selection, params={}), task=task)
-    for rule in void_rules():
+    for rule in void_rules() if rules is None else rules:
         if not evaluate(rule.predicate, ctx):
             return f"{rule.name}: {rule.description}"
     return None
@@ -211,6 +220,12 @@ def declared_space(
     }
     available = {axis.value: len(axis_values(axis)) for axis in AXIS_KIND_ORDER}
 
+    # The rules are read once: a slice holds hundreds of cells, and reading
+    # the rules for each of them costs more than judging them does.
+    from computronium.experiment.legality.engine import void_rules as system_rules
+
+    rules = system_rules()
+
     cells: list[SpaceCell] = []
     for x in values[free[0].value]:
         for y in values[free[1].value]:
@@ -219,7 +234,7 @@ def declared_space(
                 selection[free[0].value] = x
                 selection[free[1].value] = y
                 selection[free[2].value] = z
-                reason = void_reason(selection, task)
+                reason = void_reason(selection, task, rules)
                 in_declaration = all(
                     selection.get(axis.value, "") in declared[axis.value]
                     for axis in AXIS_KIND_ORDER

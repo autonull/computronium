@@ -304,6 +304,9 @@ ignore = [
     "typing-only-first-party-import", # demos are scripts: runtime imports keep the dependency explicit
     "typing-only-standard-library-import",
 ]
+"scripts/probes/shoot_one_view.py" = [
+    "hardcoded-temp-file",    # hardcoded-temp-file — the probe writes to a known path under /tmp/opencode
+]
 "computronium/__init__.py" = [
     "star-arg-unpacking-after-keyword-arg",  # invalid-all-format — undefined-export — __all__ names resolve through the _LAZY import map
 ]
@@ -354,6 +357,9 @@ ignore = [
 "computronium/experiment/evidence/store.py" = [
     "unused-noqa",
     "hardcoded-sql-expression",    # hardcoded-sql-expression — parameterized queries by design
+]
+"computronium/experiment/evidence/mirror.py" = [
+    "hardcoded-sql-expression",    # hardcoded-sql-expression — the identifiers are the catalog's own
 ]
 "computronium/experiment/execution/search_space.py" = [
     "unused-noqa", "module-import-not-at-top-of-file", "typing-only-first-party-import", "typing-only-third-party-import", "typing-only-standard-library-import",

@@ -42,6 +42,10 @@ from computronium.experiment.execution.dashboard.actions import (
     run_spread,
     write_registration,
 )
+from computronium.experiment.execution.dashboard.multirun import (
+    SpaceReader,
+    multirun_payload,
+)
 from computronium.experiment.execution.dashboard.narration import (
     Narration,
     state_sentences,
@@ -54,7 +58,7 @@ from computronium.experiment.execution.events import (
 from computronium.experiment.schema.axis import StructuralAxis
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Sequence
 
     from computronium.experiment.evidence.mirror import StoreView
     from computronium.experiment.evidence.store import RecordStore
@@ -93,6 +97,29 @@ class SpaceRequest(BaseModel):
         min_length=3,
         max_length=3,
     )
+
+
+def resolve_axes(names: Sequence[str]) -> list[StructuralAxis]:
+    """The three axes a picture shows.
+
+    Args:
+        names: The axes the reader asked for.
+
+    Returns:
+        The axes, in the order they were asked for.
+
+    Raises:
+        ValueError: The request does not name three different axes.
+    """
+    axes: list[StructuralAxis] = []
+    for name in names:
+        try:
+            axes.append(StructuralAxis(name))
+        except ValueError as exc:
+            raise ValueError(f"unknown axis: {name}") from exc
+    if len(set(axes)) != len(axes):
+        raise ValueError("the grid shows three different axes")
+    return axes
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +240,7 @@ class WebDashboard:
         self._event_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._narration = Narration()
         self._dynamics_cache: dict[str, dict[str, Any]] = {}
+        self._space_reader = SpaceReader()
         self._work_dir: Path | None = None
         self._setup_routes()
         self._setup_templates()
@@ -421,6 +449,15 @@ class WebDashboard:
         ) -> JSONResponse:
             result = await self._cell_space(run_id, body)
             return JSONResponse(result.payload, status_code=result.status_code)
+
+        @self.app.post("/api/spaces")
+        async def api_spaces(body: SpaceRequest) -> JSONResponse:
+            """Several runs' evidence in one space (TODO69).
+
+            The runs of the store, each in its own window on the same
+            declared space, with the cells each of them measured.
+            """
+            return JSONResponse(await self._spaces_payload(body))
 
     async def _get_status(self) -> dict[str, Any]:
         """Get overall dashboard status."""
@@ -819,19 +856,11 @@ class WebDashboard:
         coordinate the system can judge.
         """
         from computronium.experiment.execution.dashboard.space import declared_space
-        from computronium.experiment.schema.axis import StructuralAxis
 
-        axes: list[StructuralAxis] = []
-        for name in body.axes:
-            try:
-                axes.append(StructuralAxis(name))
-            except ValueError:
-                return ActionResult({"error": f"unknown axis: {name}"}, status_code=409)
-        if len(set(axes)) != len(axes):
-            return ActionResult(
-                {"error": "the grid shows three different axes"},
-                status_code=409,
-            )
+        try:
+            axes = resolve_axes(body.axes)
+        except ValueError as exc:
+            return ActionResult({"error": str(exc)}, status_code=409)
 
         if not self.config.store_path:
             return ActionResult({"error": "no store path configured"}, status_code=409)
@@ -1549,6 +1578,30 @@ class WebDashboard:
 
         with self._readable_store() as store:
             return run_dynamics(store, run_id)
+
+    async def _spaces_payload(self, body: SpaceRequest) -> dict[str, Any]:
+        """The runs' evidence in one space.
+
+        Reading a slice of the space is expensive — the system's own void
+        rules are evaluated for every cell of it — so the work is done off
+        the event loop, and what was read is kept.
+        """
+        try:
+            axes = resolve_axes(body.axes)
+        except ValueError as exc:
+            return {"error": str(exc)}
+        if not self.config.store_path:
+            return {"error": "no store path configured"}
+        try:
+            return await asyncio.to_thread(self._read_spaces, axes)
+        except Exception as e:
+            logger.exception("Error reading the runs' space")
+            return {"error": str(e)}
+
+    def _read_spaces(self, axes: list[StructuralAxis]) -> dict[str, Any]:
+        """The runs' evidence, with the store opened where it is used."""
+        with self._readable_store() as store:
+            return multirun_payload(self._space_reader, store, axes)
 
     def _announce_store_progress(self, record_counts: dict[str, int]) -> None:
         """Report records that landed in the store since the last poll.

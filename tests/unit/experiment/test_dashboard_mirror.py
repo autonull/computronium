@@ -108,6 +108,28 @@ class TestTheMirror:
         with RecordStore(StoreConfig(path=target, read_only=True)) as mirror:
             assert len(list(mirror.query_records())) == 3
 
+    def test_the_mirror_holds_the_record_that_was_just_appended(
+        self, store_path: Path
+    ) -> None:
+        """A mirror that lags is a picture that lies about the run.
+
+        The publish happens after every append, and the copy DuckDB makes on
+        its own can fail: it copies the tables in an order of its own
+        choosing, and the foreign key between the records and the runs
+        refuses a copy that puts the records first. A failed publish leaves
+        the mirror holding the picture before the last append.
+        """
+        target = mirror_path(store_path)
+
+        with RecordStore(
+            StoreConfig(path=store_path, mirror_path=target, mirror_interval=0.0)
+        ) as store:
+            run_id = store.create_run(spec=demo_spec())
+            for seed in range(3):
+                store.append(demo_record(run_id, 0.4 + 0.01 * seed, seed))
+                with RecordStore(StoreConfig(path=target, read_only=True)) as mirror:
+                    assert mirror.count_records() == seed + 1
+
     def test_a_store_that_publishes_nothing_writes_no_mirror(
         self, store_path: Path
     ) -> None:

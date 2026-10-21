@@ -88,6 +88,18 @@ def publish_mirror(conn: duckdb.DuckDBPyConnection, path: Path) -> None:
     is written beside the target and moved into place, so a reader never opens
     a half-written mirror.
 
+    The tables are copied one by one, in the order their foreign keys allow.
+    DuckDB's own ``COPY FROM DATABASE`` copies them in an order of its own
+    choosing, and when the records are copied before the runs they point at,
+    the foreign key between them refuses the copy: the mirror keeps the
+    picture it had, and a reader in another process sees a run one append
+    behind — a mirror that lags is a picture that lies about the run.
+
+    The copy carries the rows, the columns, the types, the sequences and the
+    indexes. It does not carry the constraints: DuckDB cannot make a foreign
+    key that points into another database, and the constraints of a copy
+    protect nobody.
+
     Args:
         conn: The writer's connection.
         path: Where the mirror is published.
@@ -99,7 +111,6 @@ def publish_mirror(conn: duckdb.DuckDBPyConnection, path: Path) -> None:
     if row is None:
         msg = "the database did not name itself"
         raise RuntimeError(msg)
-    source = str(row[0])
     path.parent.mkdir(parents=True, exist_ok=True)
     staged = path.with_name(f"{path.name}.staged-{os.getpid()}")
     for stale in (staged, Path(f"{staged}.wal")):
@@ -107,13 +118,83 @@ def publish_mirror(conn: duckdb.DuckDBPyConnection, path: Path) -> None:
 
     conn.execute(f"ATTACH '{_quoted(str(staged))}' AS mirror (READ_WRITE)")
     try:
-        conn.execute(f'COPY FROM DATABASE "{_quoted(source)}" TO mirror')
+        _copy_database(conn)
     finally:
         conn.execute("DETACH mirror")
 
     staged.replace(path)
     for stale in (Path(f"{staged}.wal"), Path(f"{path}.wal")):
         stale.unlink(missing_ok=True)
+
+
+def _copy_database(conn: duckdb.DuckDBPyConnection) -> None:
+    """Copy the source's tables, sequences and indexes into the mirror.
+
+    The copy is one transaction, so the mirror holds a single picture of the
+    store rather than a table at a time.
+    """
+    conn.execute("BEGIN TRANSACTION")
+    try:
+        for table in _source_tables(conn):
+            conn.execute(f"CREATE TABLE mirror.{table} AS SELECT * FROM main.{table}")
+        for name, start, last, increment, minimum, cycle in conn.execute(
+            "SELECT sequence_name, start_value, last_value, increment_by, min_value, cycle "
+            "FROM duckdb_sequences() "
+            "WHERE database_name = current_database() AND schema_name = 'main'"
+        ).fetchall():
+            # The copy's sequence continues where the source's left off.
+            first = max(int(last or start or 0), int(minimum))
+            conn.execute(
+                f"CREATE SEQUENCE mirror.{name} START {first} "
+                f"INCREMENT BY {increment} MINVALUE {minimum}"
+                f"{' CYCLE' if cycle else ''}"
+            )
+        for name, table, sql in conn.execute(
+            "SELECT index_name, table_name, sql FROM duckdb_indexes() "
+            "WHERE database_name = current_database() AND schema_name = 'main'"
+        ).fetchall():
+            columns = str(sql)[str(sql).index("(") :]
+            conn.execute(f"CREATE INDEX {name} ON mirror.{table}{columns}")
+    except Exception:
+        with contextlib.suppress(Exception):
+            conn.execute("ROLLBACK")
+        raise
+    conn.execute("COMMIT")
+
+
+def _source_tables(conn: duckdb.DuckDBPyConnection) -> list[str]:
+    """The source's tables, parents before the tables that point at them.
+
+    The copy is made table by table, and a table that points at another one
+    is copied after it: a row that points at a row that is not there yet is a
+    row the reader cannot follow.
+    """
+    tables = [
+        str(row[0])
+        for row in conn.execute(
+            "SELECT table_name FROM duckdb_tables() "
+            "WHERE database_name = current_database() AND schema_name = 'main'"
+        ).fetchall()
+    ]
+    parents: dict[str, set[str]] = {}
+    for table, parent in conn.execute(
+        "SELECT table_name, referenced_table FROM duckdb_constraints() "
+        "WHERE constraint_type = 'FOREIGN KEY' "
+        "AND database_name = current_database() AND schema_name = 'main'"
+    ).fetchall():
+        parents.setdefault(str(table), set()).add(str(parent))
+
+    ordered: list[str] = []
+    remaining = set(tables)
+    while remaining:
+        ready = sorted(
+            name for name in remaining if not parents.get(name, set()) & remaining
+        )
+        if not ready:
+            ready = sorted(remaining)
+        ordered.extend(ready)
+        remaining -= set(ready)
+    return ordered
 
 
 def _quoted(name: str) -> str:

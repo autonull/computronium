@@ -247,6 +247,42 @@ export interface CellDynamics {
   widest_basin?: number;
 }
 
+/** What one run measured at one cell of the space, folded over its seeds. */
+export interface MultiRunCell {
+  accuracy: number;
+  seeds: number;
+  arm: string;
+}
+
+/** One run's own window on the space, and what it measured in it. */
+export interface MultiRunSlice {
+  run_id: string;
+  profile: string | null;
+  status: string | null;
+  started_at: string | null;
+  records: number;
+  values: Record<string, string[]>;
+  held: Record<string, string>;
+  declared: Record<string, string[]>;
+  /** The cells the system refuses, by the name the axes give them. */
+  refused: string[];
+  measured: Record<string, MultiRunCell>;
+}
+
+/** Several runs' evidence in one space. */
+export interface MultiRunSpace {
+  axes: string[];
+  values: Record<string, string[]>;
+  runs: MultiRunSlice[];
+  counts: {
+    runs: number;
+    measured: number;
+    shared: number;
+    cells: number;
+  };
+  summary: string;
+}
+
 /** What the run measured at one cell, folded over its seeds. */
 export interface CellAggregate {
   acc: number[];
@@ -452,6 +488,8 @@ class StageState {
   attribution: RunAttribution | null = null;
   /** The cell's own dynamics, measured on the server. */
   dynamics: CellDynamics | null = null;
+  /** Several runs' evidence in one space, read from the server. */
+  multirun: MultiRunSpace | null = null;
   /** What the space was last asked for, so it is only asked again when it changes. */
   private spaceRequest = "";
   /** What the account was last asked for: the run, and how much it measured. */
@@ -464,6 +502,10 @@ class StageState {
   private dynamicsRun = "";
   /** Whether the dynamics are being asked for right now. */
   private dynamicsAsking = false;
+  /** The axes the runs' space was last asked for. */
+  private multirunRequest = "";
+  /** Whether the runs' space is being asked for right now. */
+  private multirunAsking = false;
   /** The run the timeline belongs to, and whether it is out of date. */
   private timelineRun = "";
   private timelineStale = true;
@@ -721,6 +763,37 @@ class StageState {
       this.timelineTimer = null;
       void this.syncTimeline();
     }, 300);
+  }
+
+  /** Several runs' evidence in one space.
+
+    The space belongs to the store rather than to the run on screen, so it is
+    asked for when a view wants it and kept for the axes it was asked for.
+  */
+  async syncMultirun(force = false): Promise<void> {
+    const request = [this.axes.x, this.axes.y, this.axes.z].join("|");
+    if (!force && (request === this.multirunRequest || this.multirunAsking)) return;
+    this.multirunAsking = true;
+    try {
+      const response = await fetch("/api/spaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          axes: [this.axes.x, this.axes.y, this.axes.z],
+        }),
+      });
+      if (!response.ok) {
+        console.warn("[StageState] The runs' space was refused", response.status);
+        return;
+      }
+      this.multirun = (await response.json()) as MultiRunSpace;
+      this.multirunRequest = request;
+      this.notify("evidence");
+    } catch (error) {
+      console.warn("[StageState] The runs' space could not be read", error);
+    } finally {
+      this.multirunAsking = false;
+    }
   }
 }
 

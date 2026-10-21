@@ -25,6 +25,7 @@ import { FrontierView } from "./frontier.js";
 import { LayersView } from "./layers.js";
 import { LedgerView } from "./ledger.js";
 import { MatrixView } from "./matrix.js";
+import { MultiRunView } from "./multirun.js";
 import { SmallMultiplesView } from "./small-multiples.js";
 import { SpreadView } from "./spread.js";
 import { stageState, type StageChange } from "./state.js";
@@ -92,6 +93,7 @@ export class ViewSwitcher implements Component {
       new SpectrumView(),
       new BasinView(),
       new LandscapeView(),
+      new MultiRunView(),
     ];
   }
 

@@ -53,6 +53,10 @@ logger = logging.getLogger("dashboard_capture")
 # A run in one of these states is still going.
 _RUNNING = frozenset({"running", "pending", "queued"})
 
+# The credit rules the second campaign measures: the demo campaign measures
+# four others, so the two runs' cells do not overlap.
+SECOND_CREDIT = ("homeostatic", "temporal_trace")
+
 
 def wait_for_http(port: int, timeout: float = 60.0) -> bool:
     """Wait for the dashboard HTTP server to answer."""
@@ -209,6 +213,38 @@ def run_demo_campaign(store_path: Path) -> int:
     )
 
     spec = spec_from_profile(RUN_PROFILES["demo"])
+    return execute_spec(spec, store_path=str(store_path))
+
+
+def run_second_campaign(store_path: Path) -> int:
+    """Run a second campaign in this process; return its exit code.
+
+    The multi-run space needs two runs in one store, and the second one has
+    to reach cells the first did not: the picture claims that the runs went
+    different places, and two runs over the same cells would not say that.
+    So the second campaign measures two credit rules the demo does not, with
+    the same five axes fixed, and the two runs' cells sit apart in the same
+    space.
+    """
+    import dataclasses
+
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.surface.cli import (
+        RUN_PROFILES,
+        execute_spec,
+        spec_from_profile,
+    )
+
+    profile = RUN_PROFILES["demo"]
+    axes = tuple(
+        selection.model_copy(update={"primitives": SECOND_CREDIT})
+        if selection.axis is StructuralAxis.CREDIT
+        else selection
+        for selection in profile.axes
+    )
+    spec = spec_from_profile(
+        dataclasses.replace(profile, name="demo-second", axes=axes)
+    )
     return execute_spec(spec, store_path=str(store_path))
 
 
@@ -421,6 +457,7 @@ def shoot_plot(
 __all__ = [
     "CHROMIUM_ARGS",
     "REPO_ROOT",
+    "SECOND_CREDIT",
     "VIEWPORT",
     "clear_store",
     "figure_page",
@@ -430,6 +467,7 @@ __all__ = [
     "open_dashboard",
     "plot_page",
     "run_demo_campaign",
+    "run_second_campaign",
     "shoot_figure",
     "shoot_plot",
     "shoot_terminal",

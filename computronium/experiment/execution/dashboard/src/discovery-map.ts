@@ -294,7 +294,7 @@ export class DiscoveryMap implements Component {
           <span>Void (the system refuses it)</span>
         </div>
       </div>
-      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+      <div id="legend-arms-block" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
         <div style="font-weight: 600; margin-bottom: 8px;">Arms</div>
         <div id="legend-arms" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
       </div>

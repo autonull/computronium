@@ -28,7 +28,7 @@ picture in every shot — a grid of coloured cubes — and every picture the tou
 took of it looked the same.
 
 The canvas is now a **stage**, and a view is what stands on it. There are
-nineteen, and the tour has a shot of each:
+twenty, and the tour has a shot of each:
 
 | # | View | The picture | The shot |
 |---|------|-------------|----------|
@@ -51,21 +51,22 @@ nineteen, and the tour has a shot of each:
 | 17 | **The spectrum** | the Lyapunov exponents of the cell's own map, one bar per direction, against the zero line | `dashboard-spectrum.png` |
 | 18 | **The basin** | the states near the cell's own: how far each stray went, and how many came back | `dashboard-basin.png` |
 | 19 | **The landscape** | the cell's own energy over the ground its trajectory crossed, with the path drawn over it | `dashboard-landscape.png` |
+| 20 | **The multi-run space** | several runs' evidence in one space: the ground is the cells the system allows in any of the runs' windows, and each run's cells stand in that run's own colour | `dashboard-multirun.png` |
 
 **The switcher that makes them a choice**: `V` cycles the views, the number
 keys pick the first nine (like the plotter's tabs — which moved to `P`, `A`
 and `S` so the numbers could belong to the stage), and the ten that do not
 fit in the numbers have a **letter** of their own — `T` the timeline, `L` the
 ledger, `D` the contrast, `F` the flow, `E` the effect, `Y` the layers, `J`
-the trajectory, `M` the spectrum, `B` the basin, `N` the landscape. A
-**View** selector in the legend names the view where it is chosen. The
-legend's title is the view's name, and the caption under the selector says
-what a reader would say after looking at it.
+the trajectory, `M` the spectrum, `B` the basin, `N` the landscape and `U`
+the multi-run space. A **View** selector in the legend names the view where
+it is chosen. The legend's title is the view's name, and the caption under
+the selector says what a reader would say after looking at it.
 
 **The acceptance, in pictures, is now mechanical**: the tour photographs the
-fifteen views and then measures them — the browser decodes each pair of
+twenty views and then measures them — the browser decodes each pair of
 shots and reports the share of the pixels that differ. A pair that is too
-alike fails the tour. The measured differences run from 2.4 % to 30.5 %; the
+alike fails the tour. The measured differences run from 2.2 % to 36.0 %; the
 floor is 2 %.
 
 The full catalogue — twenty-odd views, 3D and 2D, from the evidence to the
@@ -83,16 +84,17 @@ seed violins, the `comp` reports) are in the table after it.
 | The event bus | `computronium/experiment/execution/events.py` | complete: stage and measurement events, process-wide |
 | The narration | `computronium/experiment/execution/dashboard/narration.py` | complete: the sentences, the account, the state |
 | The caption | `dashboard/src/caption.ts` | complete: the sentences, rendered |
-| **The stage** | `dashboard/src/stage/` | complete: the shared state, fifteen views, the switcher |
+| **The stage** | `dashboard/src/stage/` | complete: the shared state, twenty views, the switcher |
 | **The run's account** | `computronium/experiment/execution/dashboard/ledger.py` | complete: the ledger, the contrast, the rules they are measured by |
 | **The run's arms** | `computronium/experiment/execution/dashboard/arms.py` | complete: the statistics of an arm, read once for the ledger and the effect |
 | **The run's flow** | `computronium/experiment/execution/dashboard/flow.py` | complete: the stages, the counts, the refusals, the shape in a sentence |
 | **The run's effect** | `computronium/experiment/execution/dashboard/attribution.py` | complete: the axes, the spread, and what the design cannot say |
+| **The runs' space** | `computronium/experiment/execution/dashboard/multirun.py` | complete: every run's window on the space, the cells each measured, what they met in |
 | **The cell's own dynamics** | `computronium/experiment/execution/dashboard/dynamics.py` | complete: the trajectory, the spectrum, the basin, the landscape |
 | **The system's own transition** | `computronium/experiment/analysis/transition.py` | complete: the relaxation the cell's own settle performs, one step at a time |
 | The keys | `dashboard/src/keys.ts` | complete: the panels, the charts and the stage's views, in one list |
 | The hero capture | `scripts/capture_dashboard_screenshot.py` | one image, one view |
-| The tour | `scripts/capture_dashboard_tour.py` | forty-two pictures: nineteen views on the stage, the gallery, the report's own plots, and the `comp` reports |
+| The tour | `scripts/capture_dashboard_tour.py` | forty-three pictures: twenty views on the stage, the gallery, the report's own plots, and the `comp` reports |
 | The recording | `scripts/capture_dashboard_video.py` | a `.webm` of a live session, uncommitted |
 | The live rail | `dashboard/src/live-rail.ts` | terse pills: `[s6_train] train cells` — a log, not a story |
 | The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal, and a frame of it as text |
@@ -106,11 +108,13 @@ seed violins, the `comp` reports) are in the table after it.
 | No closed captions | a recording of the dashboard has no subtitles; the viewer reads a 3D scene in silence | `caption.ts`: the server's sentences, rendered |
 | One screenshot | the hero is the dashboard's overview; nothing shows the drawer, the charts, the void cells, the space, the report | the tour: twenty-six views |
 | No recording | "show me it working" needs a terminal in front of the reader | the recording: a live session, with captions |
-| One picture in the content area | every shot of the canvas was the same field of cubes, so the tour's variety was the furniture in front of the scene | the stage: fourteen views, a switcher, and a shot of each |
+| One picture in the content area | every shot of the canvas was the same field of cubes, so the tour's variety was the furniture in front of the scene | the stage: twenty views, a switcher, and a shot of each |
 | The run was only its evidence | a reader saw what the run measured and nothing of what it *decided*, what it *cannot say*, or how long it took | the ledger, the contrast and the timeline |
 | The run was only its records | a reader saw what the run measured and nothing of how the cells got there, or of what the run's design can and cannot be credited for | the flow and the effect |
 | The run was only its evidence | a reader saw what the run measured and nothing of the *system* it measured: where its state goes, whether it settles, how wide the set of states that come back to it is | the trajectory, the spectrum, the basin and the landscape |
 | The transition the stability analysis measured was the identity | the forward pass was computed and thrown away, and the settle was handed the state it already had, so the map was the identity and the spectrum was a row of zeros | the system's own relaxation, in one place, read by the command and the dashboard |
+| One run at a time | a store holds several runs, and the dashboard could only show one of them, so "where did the other run go?" had no answer | the multi-run space: every run's window on the space, in one picture |
+| The mirror's publish could fail | DuckDB copied the tables in an order of its own choosing, and the foreign key between the records and the runs refused the copy: the mirror kept the picture before the last append, and a reader in another process saw a run one record behind | the copy, table by table, in the order the keys allow |
 
 ---
 
@@ -160,7 +164,8 @@ seed violins, the `comp` reports) are in the table after it.
 │         ├──► the trajectory                   ──► the 2D canvas            │
 │         ├──► the spectrum                     ──► the 2D canvas            │
 │         ├──► the basin                        ──► the 2D canvas            │
-│         └──► the landscape                    ──► the 2D canvas            │
+│         ├──► the landscape                    ──► the 2D canvas            │
+│         └──► the multi-run space              ──► the 3D scene              │
 │    stage/switcher.ts — V cycles · 1–9 and T L D F E pick · the selector     │
 └───────────────────────────────────────────────────────────────────────────┘
 
@@ -180,6 +185,11 @@ seed violins, the `comp` reports) are in the table after it.
 │  attribution.py  (TODO69) — what the run can attribute                     │
 │    the axes · the spread of their arms · what the design cannot say       │
 │    GET /api/runs/{id}/attribution                                          │
+├───────────────────────────────────────────────────────────────────────────┤
+│  multirun.py  (TODO69) — several runs in one space                         │
+│    every run's window on the space · the cells each measured               │
+│    the cells they met in · the sentence that says what they did            │
+│    POST /api/spaces                                                       │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -190,8 +200,7 @@ seed violins, the `comp` reports) are in the table after it.
 Phases 0–5 are done: the server speaks, the browser shows it, the tour and
 the recording show both, and the canvas can show more than one thing. The
 surfaces outside the canvas are in the tour too. What is left of the stage is
-the catalogue in Phase 5 — the multi-run space, and the family that needs a
-cell with a state.
+the family that needs a *trained* cell.
 
 ### Phase 0: The narration (server) — the server half is done
 
@@ -396,7 +405,7 @@ to pass: **what can a reader say after looking at it?**
 | **The terrain** ✅ | the same space as a *heightfield*: accuracy as height over the two free axes, the gaps flat ground, the refusals craters in it | the space payload, the records | "the arms that were measured stand up, and the region the system refuses is a hole in the ground" |
 | **The frontier** ✅ | every measured record as a point in (accuracy, speed, parameters); the front the run computed drawn through them; the chance plane as a floor | the records, the `pareto` flags, `chance` | "nothing beat these cells on all three counts at once" |
 | **The layers** ✅ | the space cut into sheets: one sheet per value of the third axis, the cells the run measured standing up off their own sheet, the rest of the space the ground they were not in | the space payload, the records | "the run filled one sheet of eight, and four cells of it" |
-| **The multi-run space** ⬜ | several runs' evidence in one space, coloured by run | the store's runs, the space per run | "the second run went where the first one did not" |
+| **The multi-run space** ✅ | several runs' evidence in one space: the ground is the cells the system allows in any of the runs' windows, and each run's cells stand in that run's own colour; the values a run measured are named under its cells | the store's runs, the space per run (`POST /api/spaces`) | "the second run went where the first one did not" |
 | **The trained cell** ⬜ | the same four pictures, of a cell whose weights were trained first | the trainer, on the server | "a trained cell settles where an untrained one does not" |
 
 #### The evidence, seen other ways (2D)
@@ -461,27 +470,29 @@ from.
 ### Where to start next
 
 The four flat views of the evidence are built, and the run now has a timeline,
-a ledger, a contrast, a flow and an effect. The layers are built too, and so
-are the surfaces outside the canvas. What is left of the catalogue:
+a ledger, a contrast, a flow and an effect. The layers are built too, the
+dynamics family is built, and so are the surfaces outside the canvas. What is
+left of the catalogue:
 
-1. **The dynamics views** — the ones that need a cell re-instantiated, and
-   the ones worth the most: the settling trajectory, the basin, the energy
-   landscape, the spectrum. The machinery is in `computronium.stability` and
-   in `computronium/experiment/analysis/energy_landscape.py`; what is
-   missing is a server that re-composes a cell from a record and a view
-   that draws the answer. **The probe says what has to be true first** — the
-   demo's cells have no state to settle, and the transition the stability
-   analysis builds is the identity for them: see the batch at the end of
-   this plan.
-2. **The multi-run space** — several runs' evidence in one space, coloured
-   by run. It needs two runs in one store.
-3. **The remaining surfaces** — the defect registry, the comparison between
-   two runs, and the panels on their own.
+1. **The trained cell** — the dynamics views measure an *untrained* cell, and
+   the payload says so. A trained cell settles where an untrained one does
+   not, and that is the answer the family exists for. The machinery is
+   `evaluate_cell` (`computronium/experiment/kernel/evaluate.py`), which owns
+   the training loop; what is missing is a server that trains a cell, keeps
+   it, and measures *that* cell's relaxation — and the store's answer to
+   "which cell" has to be the same cell the picture shows.
+2. **The comparison between two runs** — `comp diff` now has two runs to
+   compare in the tour's store, but they measured *different* cells, so the
+   comparison is between cells and not between runs. It wants two runs over
+   the same cells, and then it says something about the runs.
+3. **The remaining surfaces** — the defect registry (empty for a run with no
+   defects: a picture of nothing) and the panels on their own.
 
 **Acceptance**: ✅ the canvas can show the space, the terrain, the frontier,
 the matrix, the convergence, the small multiples, the spread, the claim's
 cost, the uncertainty, the timeline, the ledger, the contrast, the flow, the
-effect and the layers, and the tour has a shot of each. ✅ the shots are
+effect, the layers, the trajectory, the spectrum, the basin, the landscape and
+the multi-run space, and the tour has a shot of each. ✅ the shots are
 *visibly different pictures* — measured, not asserted, and the tour fails
 below 2 %. ✅ a reader can answer "what did the run find?" from any one of
 them. ✅ a view that is not active leaves nothing of itself on the stage. ✅
@@ -513,7 +524,7 @@ the twelve are now in the tour** — the ones marked ✅ were photographed by
 | **The catalogue** ✅ | the store queried by axis — every run and record, filtered | `comp catalog` | the evidence, browsable | ✅ |
 | **The defect registry** | the constraints, clustered, and which are revoked | `comp defect` | the rules that refuse cells, in the system's own ledger | ⬜ the registry is empty for a run with no defects: a picture of nothing |
 | **The method cards** ✅ | a card per primitive: what it is, what it costs, what it was measured at | `comp method-card` | the ontology, pictured | ✅ |
-| **The comparison** | two runs, differenced, with effect sizes | `comp diff` | what changed between two claims | ⬜ needs two runs in the store |
+| **The comparison** | two runs, differenced, with effect sizes | `comp diff` | what changed between two claims | ⬜ the store has two runs now, but they measured different cells: the diff compares cells, not runs, and wants two runs over the same cells |
 | **The power analysis** ✅ | the seeds a design needs, before it runs | `comp power-analysis` | the design, not the result | ✅ |
 | **The panels alone** | the live rail by itself, the HUD by itself, the legend and the axis picker by themselves | the dashboard's own DOM | each panel, as its own picture | ⬜ |
 | **The map in more slices** | the same run's space, cut three ways, side by side | the legend's axis picker (`#legend-axis-picker`) | the space is not one picture: it is six axes | ⬜ one slice is cut today (the void view) |
@@ -558,7 +569,7 @@ kind photographs the report's charts.
 - [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report and the terminal views
 - [x] A short recording of a live session exists, with the captions on screen, and is not committed
 - [x] `docs/DASHBOARD.md` and the README show the tour
-- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty, the timeline, the ledger, the contrast, the flow, the effect and the layers
+- [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty, the timeline, the ledger, the contrast, the flow, the effect, the layers, the trajectory, the spectrum, the basin, the landscape and the multi-run space
 - [x] The view is a choice — a key and a selector — and the inactive view leaves nothing of itself on the stage
 - [x] The tour has a shot of every main view, and the shots are visibly different pictures of one another — *measured*, not asserted
 - [x] The tour can photograph a *figure* (a PNG with its caption and provenance), not only a page and a terminal
@@ -570,6 +581,7 @@ kind photographs the report's charts.
 - [x] The transition the stability analysis measures is the system's own relaxation, and not the identity
 - [x] The cell's own dynamics are on the server: `GET /api/runs/{id}/dynamics` and `GET /api/cells/dynamics`
 - [x] The main view area can show the cell's own dynamics: the trajectory, the spectrum, the basin and the landscape
+- [x] Several runs' evidence is in one space, on the server and on the stage: `POST /api/spaces` and the multi-run view
 
 ---
 
@@ -581,11 +593,11 @@ kind photographs the report's charts.
 | `web.py` — the frames, the endpoint, the state refresh | ✅ done |
 | `pipeline.py` — the producer names the cell and the seed | ✅ done |
 | `caption.ts` — the browser renders the sentences | ✅ done |
-| the tour — forty-two pictures in one browser session | ✅ done (nineteen views on the stage, the gallery, the report's plots, the `comp` reports) |
+| the tour — forty-three pictures in one browser session | ✅ done (twenty views on the stage, the gallery, the report's plots, the `comp` reports) |
 | the recording — a `.webm` of a live session, uncommitted | ✅ done |
 | the docs — the caption, the endpoint, the tour, the stage | ✅ done |
 | the dashboard shows a run before it has measured | ✅ done (the space is on screen from the first second) |
-| the main view area — the stage, the views, the switcher | ✅ done: nineteen views, a key, a selector, a shot of each |
+| the main view area — the stage, the views, the switcher | ✅ done: twenty views, a key, a selector, a shot of each |
 | the flat views — the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty | ✅ done (the canvas, the frame and the ticks are shared) |
 | the dynamics views — the trajectory, the spectrum, the basin, the landscape | ✅ done (one payload, four readings of one measurement) |
 | the gate's rules travel with the run | ✅ done (`gate` in the metrics payload; the browser invents no margin) |
@@ -598,15 +610,16 @@ kind photographs the report's charts.
 | `attribution.py` — what the run can attribute | ✅ done (the axes, the spread, and the design's limits in words) |
 | the other views — the dynamics | ✅ done (the trajectory, the spectrum, the basin, the landscape: the cell's own relaxation, measured on the server) |
 | the trained cell | ⬜ the dynamics views measure an untrained cell, and say so; a trained one is the next thing to try |
-| the multi-run space | ⬜ needs two runs in one store |
-| the mirror's publish can fail and lag | ⬜ a known flake, diagnosed above |
-| the property suite fails 23 tests at HEAD | ⬜ pre-existing and unrelated: the gallery's `env_sha256` (19), `PROOF.md`'s banned phrases, the priors registry — verified by stashing this batch and re-running |
+| the multi-run space | ✅ done (the store's runs, each in its own window on the space; the tour's store holds two) |
+| the comparison between two runs | ⬜ `comp diff` wants two runs over the *same* cells: the tour's two measured different ones |
+| the mirror's publish can fail and lag | ✅ done: the copy is made table by table, in the order the foreign keys allow (the probe measured the old copy failing 1 publish in 3) |
+| the property suite fails 23 tests at HEAD | ⬜ pre-existing and unrelated: the gallery's `env_sha256` (21), `PROOF.md`'s banned phrases, the priors registry — the same 23 fail with this batch, and the lint ratchet passes |
 | the README was stale against `docs/readme/` | ✅ fixed here (the build lock was failing at the commit before) |
 
 The server speaks, the browser shows it, the pictures show both, and the
 canvas can show more than one thing. What is left of the stage is the
-dynamics family, and the probe below says what has to be true before it can
-be drawn: the demo's own cells have no state to settle.
+*trained* cell: the dynamics family measures a cell that was never trained,
+and the pictures say so.
 
 ---
 
@@ -1077,41 +1090,123 @@ about a trained one. The next thing to try is the trained cell.
 
 ---
 
+## This batch (the multi-run space)
+
+**What was built.** The stage's twentieth view, and the server half it draws:
+several runs' evidence in one space, coloured by the run that measured it.
+
+| Piece | The file | What it is |
+|-------|----------|-----------|
+| The runs' space | `dashboard/multirun.py` | every run in the store that measured something, each in its own window on the same declared space, with the cells it measured and the cells the system refuses |
+| The endpoint | `web.py` | `POST /api/spaces` — the runs' evidence in one space, read off the event loop and kept |
+| The view | `src/stage/multirun.ts` | the union of the runs' windows as the ground, and each run's cells standing on it in the run's own colour |
+| The second campaign | `scripts/dashboard_capture.py` | a campaign over two credit rules the demo does not measure, so the two runs' cells do not overlap |
+
+The tour's store now holds two runs: the demo campaign (four credit rules,
+five seeds, twenty records) and a second campaign over two other credit
+rules (ten records). The second campaign runs *first*, so the newest run —
+the one the dashboard shows, and the one every other view draws — is still
+the demo's, and every shot the tour took before is the shot it took before.
+
+**The rules came from the server, as always.** The space of each run is the
+same `declared_space` the map reads, so the multi-run view and the map cannot
+disagree about which cells the system allows; the cells a run measured are
+folded from its records the same way the browser folds the current run's; and
+the sentence under the legend — *"two runs measured six cells between them,
+and met in none: each went where the other did not"* — is the server's.
+
+**The work taught.**
+
+**A space is not a run, and a cell of one run is not a cell of another.**
+Each run holds three of the six axes at one value, so a cell of one run's
+window is a different cell from the same three values in another run's
+window. The picture draws the *union* of the windows and says so: the ground
+is the cells the system allows in at least one of them, and each run's cells
+stand in their own window. A comparison that ignored this would draw two
+runs' cells as if they were the same cells.
+
+**Reading the space was thirty-six times slower than judging it.** The
+dashboard asks for a run's slice of the space — hundreds of cells, each one
+judged by the system's own void rules — and the rules were *rebuilt* for
+every cell: `void_rules()` reads the registry, and the registry's rules are
+filtered by `references_params`, which walks the expression tree through a
+runtime-checkable `Protocol` (an `isinstance` that costs a
+`getattr_static` per node). The slice took 2.8 s; the rules are read once
+now, and the same slice takes 0.078 s. Every picture of the space got
+thirty-six times cheaper, and the map's own endpoint with it.
+
+**A second run has to reach somewhere the first one did not.** Two runs over
+the same cells would draw the same picture twice, and the view's claim —
+"each went where the other did not" — would be false. The second campaign
+measures two credit rules the demo does not (`homeostatic` and
+`temporal_trace`), with the same five axes fixed, so the two runs' cells sit
+apart in the same space. The probe
+(`scripts/probes/todo69_multirun_probe.py`) measured the cost of both
+campaigns first: the demo takes 33 s and the second one 4 s.
+
+**A label is a claim about what the reader is looking for.** The first
+picture named every value on the row — nine credit rules, each a word or two
+— and they overlapped into a smear. The view now names only the values a
+run measured: those are the ones the reader is here for, and the rest of the
+axis is the ground they are standing on.
+
+**A view that inherits the camera inherits the previous view's picture.** The
+multi-run view framed the camera on the reader's current angle, so the tour's
+shot depended on which view came before it. The view now asks for the angle
+it wants, like the terrain and the layers do, and its picture is the same
+picture wherever it was reached from.
+
+**The diff between two runs is not a diff between two claims.** `comp diff`
+compares the records of two runs, and the tour's two runs measured
+*different* cells: the comparison is between the cells, not between the runs.
+It wants two runs over the same cells, and it is left for a store that has
+them.
+
+**A mirror that lags is a picture that lies about the run.** The plan had
+diagnosed the mirror's flake as DuckDB copying the tables in an order that
+violates the foreign key, and that is what happens — but the fix is not to
+wait for a better order. The copy is now made table by table, in the order
+the keys allow, in one transaction, and the probe
+(`scripts/probes/todo69_mirror_probe.py`) measures the difference: the old
+copy failed 4 publishes in 12, the new one failed none, and the mirror holds
+the same columns, the same types, the same sequences and the same indexes.
+The constraints are the one thing the copy does not carry: DuckDB cannot make
+a foreign key that points into another database, and the constraints of a
+copy protect nobody.
+
+---
+
 ## Where the next session starts
 
-1. **The dynamics views** — the ones worth the most, and the ones the probe
-   says are not ready yet. Two things have to be true first:
-   - **the transition must be the system's own.** The transition that
-     `comp stability-analysis` builds is the identity for the demo's cells
-     (the forward pass is computed and discarded), so the picture it would
-     draw is of nothing. A dashboard-side transition has to feed the
-     forward pass into the settle, and it has to be the *same* transition
-     the command uses — one function, in one place, read by both. Whether
-     that changes the command's own numbers is a question for whoever
-     changes it: the numbers are currently the exponents of an identity.
-   - **the cell must have a state.** The demo's measured cells are
-     feedforward with instantaneous dynamics, so they have nothing to settle.
-     The declared space holds cells that do (`recurrent` geometry with
-     `error_predictive_coding` or `predictive_settling`), and the view can
-     measure one of those — but then the picture is of a *cell of the space*,
-     not of a cell the run measured, and the payload must say so.
-   - The machinery is in `computronium.stability`
-     (`measure_settling_time`, `estimate_basin_stability_multistart`,
-     `estimate_lyapunov_spectrum`) and in
-     `computronium/experiment/analysis/energy_landscape.py`; what is missing
-     is the server that composes the cell and the view that draws the
-     answer. The endpoint has to be asked for a *cell*, not a run.
-2. **The multi-run space** — several runs' evidence in one space, coloured
-   by run. It needs two runs in one store, and the tour's campaign writes
-   one: a second campaign (or a second profile) in the same store is the
-   smallest change that makes the view show anything.
+1. **The trained cell** — the dynamics family measures a cell that was never
+   trained, and says so in the payload. The next thing to try is a cell
+   whose weights were trained first:
+   - the training loop is `evaluate_cell`
+     (`computronium/experiment/kernel/evaluate.py`), which composes the cell
+     and trains it; it does not hand the trained system back, so the server
+     has to compose and train the cell itself, or the trainer has to give
+     the system up;
+   - the cell the picture shows must be the cell that was trained: the
+     server repairs a run's cell into one that has a state (the dynamics
+     swapped for one that relaxes, the geometry for a recurrent one), and
+     the trained cell has to be the *repaired* one, with the payload naming
+     every axis it swapped;
+   - the training is not cheap: the demo trains twenty cells in 33 s, so a
+     trained cell is a few seconds of the endpoint's time, and the cache has
+     to keep it.
+2. **The comparison between two runs** — `comp diff` wants two runs over the
+   *same* cells. A third campaign that re-measured the demo's own cells
+   with different seeds would give the diff something to say, and the
+   multi-run view would then draw the two runs *meeting* in every cell —
+   which is the other half of its picture, and the one that says whether the
+   runs agree.
 3. **The remaining surfaces** — the defect registry (empty for a run with no
-   defects: a picture of nothing, so it wants a run that has some), the
-   comparison between two runs, and the panels on their own.
+   defects: a picture of nothing, so it wants a run that has some) and the
+   panels on their own.
 
-**The number keys are full** (fifteen views, the keys `1`–`9` and `T`, `L`,
-`D`, `F`, `E`, `Y`). The next view needs a letter of its own, and the letter
-has to be one the panels and the charts do not hold — `src/keys.ts` is the
-list that says which, and `buildKeys` refuses a view that claims one. The
-free letters are `B`, `G`, `I`, `J`, `K`, `M`, `N`, `O`, `Q`, `U`, `W`, `X`
-and `Z`.
+**The number keys are full** (twenty views, the keys `1`–`9` and `T`, `L`,
+`D`, `F`, `E`, `Y`, `J`, `M`, `B`, `N`, `U`). The next view needs a letter
+of its own, and the letter has to be one the panels and the charts do not
+hold — `src/keys.ts` is the list that says which, and `buildKeys` refuses a
+view that claims one. The free letters are `G`, `I`, `K`, `O`, `Q`, `W`,
+`X` and `Z`.

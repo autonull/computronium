@@ -41,6 +41,7 @@ from dashboard_capture import (
     mirror_shot,
     open_dashboard,
     run_demo_campaign,
+    run_second_campaign,
     shoot_figure,
     shoot_plot,
     shoot_terminal,
@@ -132,6 +133,10 @@ TOUR: tuple[Shot, ...] = (
     Shot(
         "dashboard-landscape.png", "the landscape: the cell's own energy over its path"
     ),
+    Shot(
+        "dashboard-multirun.png",
+        "the multi-run space: several runs' evidence in one space",
+    ),
     Shot("figure-gallery-swap-credit.png", "the gallery: the credit swap"),
     Shot("figure-gallery-epc-settle.png", "the gallery: the fast settle"),
     Shot("figure-gallery-coverage.png", "the gallery: the coverage of the axes"),
@@ -195,6 +200,7 @@ VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
     ("spectrum", "dashboard-spectrum.png", "m"),
     ("basin", "dashboard-basin.png", "b"),
     ("landscape", "dashboard-landscape.png", "n"),
+    ("multirun", "dashboard-multirun.png", "u"),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels
@@ -1164,6 +1170,8 @@ def main() -> int:
     capture_thread = threading.Thread(target=run_capture, daemon=True)
     capture_thread.start()
 
+    logger.info("Running the second campaign in-process...")
+    second_code = run_second_campaign(store_path)
     logger.info("Running the demo campaign in-process...")
     exit_code = run_demo_campaign(store_path)
     campaign_done.set()
@@ -1190,6 +1198,7 @@ def main() -> int:
             "shots": len(outcomes),
             "failed": failed,
             "campaign_exit": exit_code,
+            "second_campaign_exit": second_code,
         })
     )
     return 1 if failed else 0
