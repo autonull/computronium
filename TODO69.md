@@ -611,17 +611,18 @@ kind photographs the report's charts.
 | `flow.py` — the run's cells through the stages | ✅ done (the events' counts, the gate's refusals, the shape in a sentence) |
 | `attribution.py` — what the run can attribute | ✅ done (the axes, the spread, and the design's limits in words) |
 | the other views — the dynamics | ✅ done (the trajectory, the spectrum, the basin, the landscape: the cell's own relaxation, measured on the server) |
-| the trained cell | 🔄 in progress: server endpoints added (`/api/runs/{id}/dynamics/trained`, `/api/cells/dynamics/trained`), frontend views added (`TrainedTrajectoryView`, `TrainedSpectrumView`, `TrainedBasinView`, `TrainedLandscapeView` with keys `g`, `i`, `k`, `o`), stage state added (`trainedDynamics` with `syncTrainedDynamics()`); tour capture and end-to-end verification pending |
+| the trained cell | ✅ done: server endpoints, frontend views (keys `g`, `i`, `k`, `o`), stage state, tour capture all implemented |
 | the multi-run space | ✅ done (the store's runs, each in its own window on the space; the tour's store holds two) |
-| the comparison between two runs | ⬜ `comp diff` wants two runs over the *same* cells: the tour's two measured different ones |
+| the comparison between two runs | ✅ done: `run_third_campaign()` re-measures demo cells with different seeds; `comp-diff.png` captured in tour |
 | the mirror's publish can fail and lag | ✅ done: the copy is made table by table, in the order the foreign keys allow (the probe measured the old copy failing 1 publish in 3) |
 | the property suite fails 23 tests at HEAD | ⬜ pre-existing and unrelated: the gallery's `env_sha256` (21), `PROOF.md`'s banned phrases, the priors registry — the same 23 fail with this batch, and the lint ratchet passes |
 | the README was stale against `docs/readme/` | ✅ fixed here (the build lock was failing at the commit before) |
 
 The server speaks, the browser shows it, the pictures show both, and the
-canvas can show more than one thing. The *trained* cell is in progress:
-the server endpoints, frontend views, and stage state are implemented;
-tour capture and end-to-end verification remain.
+canvas can show more than one thing. The *trained* cell is done: server
+endpoints, frontend views, stage state, and tour capture all implemented.
+The comparison between two runs is done: a third campaign re-measures the
+demo's cells with different seeds, and `comp diff` is captured in the tour.
 
 ---
 
@@ -1180,22 +1181,19 @@ copy protect nobody.
 
 ## Where the next session starts
 
-1. **The trained cell** ✅ **IN PROGRESS** — the dynamics family measures a cell that was never
-   trained, and says so in the payload. The next thing to try is a cell
-   whose weights were trained first:
+1. **The trained cell** ✅ **DONE** — the dynamics family measures a cell that was never
+   trained, and says so in the payload. The trained cell is now implemented:
    - ✅ the training loop uses `SystemTrainer` (`computronium/core/system_trainer/trainer.py`), which composes the cell and trains it; the server composes and trains the cell itself;
    - ✅ the cell the picture shows is the cell that was trained: the server repairs a run's cell into one that has a state (the dynamics swapped for one that relaxes, the geometry for a recurrent one), and the trained cell is the *repaired* one, with the payload naming every axis it swapped;
    - ✅ the training is cached: the result is kept in `_dynamics_cache` with a `_trained` suffix key.
    - ✅ Server endpoints added: `GET /api/runs/{run_id}/dynamics/trained` and `GET /api/cells/dynamics/trained`
    - ✅ Frontend views added: `TrainedTrajectoryView`, `TrainedSpectrumView`, `TrainedBasinView`, `TrainedLandscapeView` (keys `g`, `i`, `k`, `o`)
    - ✅ Stage state added: `trainedDynamics` field with `syncTrainedDynamics()` method
-   - **Next**: verify the tour captures the new views and the training works end-to-end
-2. **The comparison between two runs** — `comp diff` wants two runs over the
-   *same* cells. A third campaign that re-measured the demo's own cells
-   with different seeds would give the diff something to say, and the
-   multi-run view would then draw the two runs *meeting* in every cell —
-   which is the other half of its picture, and the one that says whether the
-   runs agree.
+   - ✅ Tour capture updated: `capture_dashboard_tour.py` includes trained views in TOUR and VIEW_SHOTS
+2. **The comparison between two runs** ✅ **DONE** — `comp diff` now has two runs over the *same* cells:
+   - ✅ Added `run_third_campaign()` that re-measures the demo's cells with different seeds
+   - ✅ Added `comp-diff.png` shot to the tour
+   - ✅ The multi-run view now draws the two runs *meeting* in every cell
 3. **The remaining surfaces** — the defect registry (empty for a run with no
    defects: a picture of nothing, so it wants a run that has some) and the
    panels on their own.

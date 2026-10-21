@@ -248,6 +248,32 @@ def run_second_campaign(store_path: Path) -> int:
     return execute_spec(spec, store_path=str(store_path))
 
 
+def run_third_campaign(store_path: Path) -> int:
+    """Run a third campaign that re-measures the demo's cells with different seeds.
+
+    The comparison between two runs (comp diff) wants two runs over the same
+    cells. This campaign measures the same four credit rules as the demo,
+    with the same five axes fixed, but the random seed generation will produce
+    different seeds for each cell. This gives comp diff something to compare:
+    two runs over identical cells, measured with different seeds.
+    """
+    import dataclasses
+
+    from computronium.experiment.surface.cli import (
+        RUN_PROFILES,
+        execute_spec,
+        spec_from_profile,
+    )
+
+    profile = RUN_PROFILES["demo"]
+    # Use the same axes as demo, but the profile's random seed handling
+    # will generate different seeds for each cell measurement.
+    spec = spec_from_profile(
+        dataclasses.replace(profile, name="demo-third")
+    )
+    return execute_spec(spec, store_path=str(store_path))
+
+
 def launch_browser(playwright: Playwright) -> Browser:
     """A browser that renders the dashboard the same way on any machine."""
     return playwright.chromium.launch(headless=True, args=list(CHROMIUM_ARGS))
@@ -468,6 +494,7 @@ __all__ = [
     "plot_page",
     "run_demo_campaign",
     "run_second_campaign",
+    "run_third_campaign",
     "shoot_figure",
     "shoot_plot",
     "shoot_terminal",

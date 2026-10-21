@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 
 from dashboard_capture import (
     REPO_ROOT,
+    VIEWPORT,
     clear_store,
     latest_run,
     launch_browser,
@@ -42,6 +43,7 @@ from dashboard_capture import (
     open_dashboard,
     run_demo_campaign,
     run_second_campaign,
+    run_third_campaign,
     shoot_figure,
     shoot_plot,
     shoot_terminal,
@@ -50,6 +52,8 @@ from dashboard_capture import (
     wait_for_records,
     wait_for_run_to_finish,
 )
+
+from computronium.experiment.surface import cli as surface
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -149,6 +153,7 @@ TOUR: tuple[Shot, ...] = (
         "dashboard-multirun.png",
         "the multi-run space: several runs' evidence in one space",
     ),
+    Shot("comp-diff.png", "the comparison: two runs over the same cells, differenced"),
     Shot("figure-gallery-swap-credit.png", "the gallery: the credit swap"),
     Shot("figure-gallery-epc-settle.png", "the gallery: the fast settle"),
     Shot("figure-gallery-coverage.png", "the gallery: the coverage of the axes"),
@@ -1082,6 +1087,25 @@ def capture_report(
     return outcomes
 
 
+def capture_comp_diff(
+    page: Page,
+    args: Any,
+    store_path: Path,
+    outcomes: list[Outcome],
+) -> None:
+    """Capture the comp diff terminal output as a shot."""
+    wait_for_records(args.port, args.min_records, timeout=RECORDS_TIMEOUT)
+    store = str(store_path)
+    output = command_output(surface.main, ["diff", "--store", store])
+    shot = next(s for s in TOUR if s.name == "comp-diff.png")
+    path = args.output / shot.name
+    shoot_terminal(page, "comp diff", output, path)
+    check_shot(path, min_bytes=3_000)
+    mirror_shot(path, args.mirror / shot.name)
+    logger.info("Shot %s: %s", shot.name, shot.what)
+    outcomes.append(Outcome(shot=shot, detail=shot.what))
+
+
 def capture(
     port: int,
     store_path: Path,
@@ -1186,11 +1210,26 @@ def main() -> int:
     capture_thread = threading.Thread(target=run_capture, daemon=True)
     capture_thread.start()
 
+    capture_thread.start()
+
     logger.info("Running the second campaign in-process...")
     second_code = run_second_campaign(store_path)
     logger.info("Running the demo campaign in-process...")
     exit_code = run_demo_campaign(store_path)
+    logger.info("Running the third campaign (re-measure demo cells) in-process...")
+    run_third_campaign(store_path)
     campaign_done.set()
+
+    # Capture the comp diff between the demo run and the third run (same cells, different seeds)
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = launch_browser(playwright)
+        page = browser.new_page(viewport=VIEWPORT)
+        try:
+            capture_comp_diff(page, args, store_path, outcomes)
+        finally:
+            browser.close()
 
     capture_thread.join(timeout=600)
     if capture_error:
