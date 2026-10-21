@@ -14,6 +14,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 import torch
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+from computronium.acceleration.availability import triton_stack_available
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
@@ -156,7 +162,7 @@ class KernelProfiler:
                 min_time_ms=float(np.min(times)),
                 max_time_ms=float(np.max(times)),
             )
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             return BackendBenchmark(
                 backend=backend,
                 operation=operation.__name__,
@@ -171,9 +177,7 @@ class KernelProfiler:
 
     def _prepare_inputs(self, shape: tuple[int, ...], backend: BackendType):
         """Prepare inputs for benchmarking based on backend."""
-        if backend in {BackendType.CUPY}:
-            import cupy as cp
-
+        if backend in {BackendType.CUPY} and cp is not None:
             return [cp.random.randn(*shape).astype(cp.float32) for _ in range(2)]
         else:
             return [
@@ -248,7 +252,7 @@ class AutoDispatcher:
 
         try:
             return method(*args, **kwargs)
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             if self.profile_mode:
                 warnings.warn(f"Backend {hardware} failed: {e}, falling back")
             return self._fallback_dispatch(algorithm, operation, *args, **kwargs)
@@ -273,7 +277,7 @@ class AutoDispatcher:
                 if method is not None:
                     try:
                         return method(*args, **kwargs)
-                    except Exception:  # ruff: ignore[try-except-continue] - try next backend
+                    except (RuntimeError, ValueError, TypeError):  # ruff: ignore[try-except-continue] - try next backend
                         continue
         raise RuntimeError(f"No available backend for {algorithm}.{operation}")
 
@@ -355,13 +359,11 @@ def enable_tf32(enable: bool = True) -> None:
 
 def check_cupy_available() -> tuple[bool, str]:
     """Check if CuPy is available with proper CUDA configuration."""
-    try:
-        import cupy as cp
-
-        _ = cp.zeros(10)
-    except ImportError:
+    if cp is None:
         return False, "CuPy not installed. Install with: pip install cupy-cuda12x"
-    except Exception as e:
+    try:
+        _ = cp.zeros(10)
+    except (RuntimeError, ValueError, TypeError) as e:
         return False, f"CuPy installed but CUDA failed: {e}"
     else:
         return True, "CuPy available with CUDA"
@@ -398,7 +400,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         HAS_CUPY = True
     else:
         cp = None
-except ImportError, Exception:
+except (ImportError, RuntimeError, ValueError, TypeError):
     cp = None
     HAS_CUPY = False
 
@@ -442,13 +444,11 @@ class CupyChecker:
     @staticmethod
     def check_availability() -> tuple[bool, str]:
         """Check if CuPy is available with proper CUDA configuration."""
-        try:
-            import cupy as cp
-
-            _ = cp.zeros(10)
-        except ImportError:
+        if cp is None:
             return False, "CuPy not installed. Install with: pip install cupy-cuda12x"
-        except Exception as e:  # broad: optional-backend availability probe
+        try:
+            _ = cp.zeros(10)
+        except (RuntimeError, ValueError, TypeError) as e:
             return False, f"CuPy installed but CUDA failed: {e}"
         else:
             return True, "CuPy available with CUDA"
@@ -471,8 +471,6 @@ def kernel_available(technology: str) -> bool:
         Whether the technology can run here.
     """
     if technology == "triton":
-        from computronium.acceleration.availability import triton_stack_available
-
         return triton_stack_available()
 
     if technology == "cuda":

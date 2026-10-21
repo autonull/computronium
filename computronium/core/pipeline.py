@@ -13,6 +13,7 @@ If a system has a ``_kernel_backend`` attached, the kernel backend's
 from __future__ import annotations
 
 from contextlib import nullcontext
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, TypeIs
 
 import torch
@@ -207,7 +208,222 @@ def _global_norm_clip(grads: list[Tensor], max_norm: float = 1.0) -> list[Tensor
     return grads
 
 
-def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
+@dataclass(frozen=True, slots=True)
+class _PhaseContext:
+    """Context for running credit phases."""
+
+    credit: CreditAssignment
+    dynamics: StateDynamics
+    geometry: Geometry
+    substrate: Substrate
+    initial_activations: list[Tensor] | Tensor | None
+    x: Tensor
+    y: Tensor
+    plasticity: object | None
+    psi: dict[str, Tensor] | None
+    context: object | None
+
+
+@dataclass(frozen=True, slots=True)
+class _TrainStepContext:
+    """Context for run_train_step_tensor."""
+
+    substrate: Substrate
+    geometry: Geometry
+    dynamics: StateDynamics
+    credit: CreditAssignment
+    update: ParameterUpdate
+    x: Tensor
+    y: Tensor
+    plasticity: object | None
+    psi: dict[str, Tensor] | None
+    context: object | None
+
+
+def _run_phases(ctx: _PhaseContext) -> dict[Phase, SettableState]:
+    """Run all credit phases and return phase-keyed settled states."""
+    states: dict[Phase, SettableState] = {}
+    grad_ctx = nullcontext() if ctx.credit.requires_autograd else torch.no_grad()
+    with grad_ctx:
+        for phase in ctx.credit.phases:
+            state = SystemState(x=ctx.x, y=ctx.y)
+            state.activations = ctx.initial_activations
+            target = ctx.y if phase is Phase.NUDGED else None
+            settled = ctx.dynamics.settle(
+                state, ctx.geometry, ctx.substrate, target=target
+            )
+
+            # P-axis: ψ steps ONCE per episode. Default phase is the credit's
+            # first phase (target-free settled activity); a primitive may
+            # declare ``psi_phase = "nudged"`` to step on the NUDGED settle
+            # instead — the z state then also carries the target (D22's
+            # missing-supervised-term: no ψ law can consume a loss term it
+            # never sees). Modulation applies to every phase after the step.
+            if ctx.psi is not None and _is_plasticity(ctx.plasticity):
+                psi = _step_psi(
+                    ctx.plasticity,
+                    ctx.psi,
+                    settled,
+                    ctx.x,
+                    ctx.y,
+                    phase,
+                    ctx.credit,
+                    ctx.context,
+                )
+                modulate = getattr(ctx.plasticity, "modulate", None)
+                if modulate is not None:
+                    # Get activation layout from geometry for proper feature matching
+                    layout = ctx.geometry.activation_layout(batch_size=ctx.x.shape[0])
+                    set_state_field(
+                        settled,
+                        "activations",
+                        modulate(settled.activations, psi, layout),
+                    )
+
+            if phase is Phase.NUDGED:
+                loss_tensor, _ = _task_loss_tensor(settled, ctx.y)
+                set_state_field(settled, "loss", loss_tensor)
+            set_state_field(
+                settled, "energy", ctx.dynamics.compute_energy(settled, ctx.geometry)
+            )
+            states[phase] = settled
+    return states
+
+
+def _prepare_output_state(
+    states: dict[Phase, SettableState],
+    initial_activations: list[Tensor] | Tensor | None,
+    x: Tensor,
+    y: Tensor,
+    dynamics: StateDynamics,
+    geometry: Geometry,
+) -> tuple[SettableState, Tensor, Tensor]:
+    """Prepare output state and compute loss/energy tensors."""
+    output = states.get(Phase.NUDGED, states.get(Phase.FREE))
+    if output is None:
+        # No declared phases: activity comes from the bare forward pass.
+        output = SystemState(x=x, y=y)
+        output.activations = initial_activations
+    loss = output.loss
+    if loss is None:
+        loss, _ = _task_loss_tensor(output, y)
+        set_state_field(output, "loss", loss)
+    elif not isinstance(loss, Tensor):
+        loss = torch.as_tensor(loss)
+    energy = state_energy(output)
+    if energy is None:
+        energy = dynamics.compute_energy(output, geometry)
+        set_state_field(output, "energy", energy)
+    if not isinstance(energy, Tensor):
+        energy = torch.as_tensor(energy)
+    return output, loss, energy
+
+
+def _compute_pseudo_grads(
+    credit: CreditAssignment,
+    states: dict[Phase, SettableState],
+    loss: Tensor,
+    geometry: Geometry,
+) -> tuple[list[Tensor], dict[str, Tensor] | None]:
+    """Compute pseudo-gradients and bias gradients."""
+    pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
+    bias_grads = (
+        credit.compute_bias_pseudo_gradients(states, loss, geometry)
+        if _is_bias_gradient_source(credit)
+        else None
+    )
+    return pseudo_grads, bias_grads
+
+
+def _apply_update(
+    geometry: Geometry,
+    update: ParameterUpdate,
+    pseudo_grads: list[Tensor],
+    bias_grads: dict[str, Tensor] | None,
+) -> None:
+    """Apply parameter update with optional gradient clipping."""
+    # Safety net: global-norm clip pseudo-gradients before update.
+    # Only apply for update types that lack internal clipping (config flag).
+    if not getattr(update.config, "handles_own_clipping", False):
+        clip_val = getattr(update.config, "grad_clip", 0.5)
+        pseudo_grads = _global_norm_clip(pseudo_grads, clip_val)
+
+    geometry.update_params(
+        update.step(geometry.params, pseudo_grads, geometry, bias_grads)
+    )
+
+
+def _compute_free_metrics(
+    substrate: Substrate,
+    geometry: Geometry,
+    dynamics: StateDynamics,
+    x: Tensor,
+    y: Tensor,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Compute post-update free metrics (target-free)."""
+    with torch.no_grad():
+        free_state = SystemState(x=x, y=y)
+        free_state.activations = forward_pass(substrate, geometry, x)
+        free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
+        free_loss, _ = _task_loss_tensor(free_settled, y)
+        free_energy = dynamics.compute_energy(free_settled, geometry)
+        free_accuracy = (free_settled.metrics or {}).get(
+            "accuracy", torch.tensor(0.0)
+        )
+        if not isinstance(free_accuracy, Tensor):
+            free_accuracy = torch.as_tensor(free_accuracy)
+    return free_loss, free_energy, free_accuracy
+
+
+def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
+    """Internal implementation of run_train_step_tensor using context object."""
+    initial_activations = forward_pass(ctx.substrate, ctx.geometry, ctx.x)
+    phase_ctx = _PhaseContext(
+        credit=ctx.credit,
+        dynamics=ctx.dynamics,
+        geometry=ctx.geometry,
+        substrate=ctx.substrate,
+        initial_activations=initial_activations,
+        x=ctx.x,
+        y=ctx.y,
+        plasticity=ctx.plasticity,
+        psi=ctx.psi,
+        context=ctx.context,
+    )
+    states = _run_phases(phase_ctx)
+
+    output, loss, energy = _prepare_output_state(
+        states, initial_activations, ctx.x, ctx.y, ctx.dynamics, ctx.geometry
+    )
+
+    pseudo_grads, bias_grads = _compute_pseudo_grads(ctx.credit, states, loss, ctx.geometry)
+    _apply_update(ctx.geometry, ctx.update, pseudo_grads, bias_grads)
+
+    # Post-update, target-free forward+settle for honest learning metrics.
+    free_loss, free_energy, free_accuracy = _compute_free_metrics(
+        ctx.substrate, ctx.geometry, ctx.dynamics, ctx.x, ctx.y
+    )
+
+    metrics: dict[str, Tensor] = {
+        "loss": loss,
+        "energy": energy,
+        "nudged_fit_accuracy": torch.as_tensor(
+            (output.metrics or {}).get("accuracy", 0.0)
+        ),
+        "free_loss": free_loss,
+        "free_energy": free_energy,
+        "free_accuracy": torch.as_tensor(free_accuracy),
+    }
+    metrics.update({
+        k: v
+        for k, v in (output.metrics or {}).items()
+        if isinstance(v, Tensor)
+        and k not in {"accuracy", "free_accuracy", "nudged_fit_accuracy"}
+    })  # type: ignore[arg-type]
+    return metrics
+
+
+def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments]
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,
@@ -225,111 +441,22 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
     This variant returns tensor metrics (no .item() calls) to enable torch.compile.
     Use run_train_step() for the float-returning public API.
     """
-    grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
-    with grad_ctx:
-        states: dict[Phase, SettableState] = {}
-        initial_activations = forward_pass(substrate, geometry, x)
-
-        for phase in credit.phases:
-            state = SystemState(x=x, y=y)
-            state.activations = initial_activations
-            target = y if phase is Phase.NUDGED else None
-            settled = dynamics.settle(state, geometry, substrate, target=target)
-
-            # P-axis: ψ steps ONCE per episode. Default phase is the credit's
-            # first phase (target-free settled activity); a primitive may
-            # declare ``psi_phase = "nudged"`` to step on the NUDGED settle
-            # instead — the z state then also carries the target (D22's
-            # missing-supervised-term: no ψ law can consume a loss term it
-            # never sees). Modulation applies to every phase after the step.
-            if psi is not None and _is_plasticity(plasticity):
-                psi = _step_psi(plasticity, psi, settled, x, y, phase, credit, context)
-                modulate = getattr(plasticity, "modulate", None)
-                if modulate is not None:
-                    # Get activation layout from geometry for proper feature matching
-                    layout = geometry.activation_layout(batch_size=x.shape[0])
-                    set_state_field(
-                        settled,
-                        "activations",
-                        modulate(settled.activations, psi, layout),
-                    )
-
-            if phase is Phase.NUDGED:
-                loss_tensor, _ = _task_loss_tensor(settled, y)
-                set_state_field(settled, "loss", loss_tensor)
-            set_state_field(
-                settled, "energy", dynamics.compute_energy(settled, geometry)
-            )
-            states[phase] = settled
-
-        output = states.get(Phase.NUDGED, states.get(Phase.FREE))
-        if output is None:
-            # No declared phases: activity comes from the bare forward pass.
-            output = SystemState(x=x, y=y)
-            output.activations = initial_activations
-        loss = output.loss
-        if loss is None:
-            loss, _ = _task_loss_tensor(output, y)
-            set_state_field(output, "loss", loss)
-        elif not isinstance(loss, Tensor):
-            loss = torch.as_tensor(loss)
-        energy = state_energy(output)
-        if energy is None:
-            energy = dynamics.compute_energy(output, geometry)
-            set_state_field(output, "energy", energy)
-        if not isinstance(energy, Tensor):
-            energy = torch.as_tensor(energy)
-
-        pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
-        bias_grads = (
-            credit.compute_bias_pseudo_gradients(states, loss, geometry)
-            if _is_bias_gradient_source(credit)
-            else None
-        )
-
-        # Safety net: global-norm clip pseudo-gradients before update.
-        # Only apply for update types that lack internal clipping (config flag).
-        if not getattr(update.config, "handles_own_clipping", False):
-            clip_val = getattr(update.config, "grad_clip", 0.5)
-            pseudo_grads = _global_norm_clip(pseudo_grads, clip_val)
-
-        geometry.update_params(
-            update.step(geometry.params, pseudo_grads, geometry, bias_grads)
-        )
-
-        # Post-update, target-free forward+settle for honest learning metrics.
-        # This is the "free" readout: what the model actually predicts without
-        # supervision leakage. Legacy "accuracy" = nudged-settle fit (may be leaked).
-        with torch.no_grad():
-            free_state = SystemState(x=x, y=y)
-            free_state.activations = forward_pass(substrate, geometry, x)
-            free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
-            free_loss, _ = _task_loss_tensor(free_settled, y)
-            free_energy = dynamics.compute_energy(free_settled, geometry)
-            free_accuracy = (free_settled.metrics or {}).get(
-                "accuracy", torch.tensor(0.0)
-            )
-
-        metrics: dict[str, Tensor] = {
-            "loss": loss,
-            "energy": energy,
-            "nudged_fit_accuracy": torch.as_tensor(
-                (output.metrics or {}).get("accuracy", 0.0)
-            ),
-            "free_loss": free_loss,
-            "free_energy": free_energy,
-            "free_accuracy": torch.as_tensor(free_accuracy),
-        }
-        metrics.update({
-            k: v
-            for k, v in (output.metrics or {}).items()
-            if isinstance(v, Tensor)
-            and k not in {"accuracy", "free_accuracy", "nudged_fit_accuracy"}
-        })  # type: ignore[arg-type]
-        return metrics
+    ctx = _TrainStepContext(
+        substrate=substrate,
+        geometry=geometry,
+        dynamics=dynamics,
+        credit=credit,
+        update=update,
+        x=x,
+        y=y,
+        plasticity=plasticity,
+        psi=psi,
+        context=context,
+    )
+    return _run_train_step_tensor_impl(ctx)
 
 
-def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
+def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments]
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,
@@ -361,18 +488,19 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         diagnostics only) plus ``free_loss``/``free_energy``/``free_accuracy``
         (post-update target-free settle — the only claim-grade metrics, imp-20/imp-46).
     """
-    tensor_metrics = run_train_step_tensor(
-        substrate,
-        geometry,
-        dynamics,
-        credit,
-        update,
-        x,
-        y,
+    ctx = _TrainStepContext(
+        substrate=substrate,
+        geometry=geometry,
+        dynamics=dynamics,
+        credit=credit,
+        update=update,
+        x=x,
+        y=y,
         plasticity=plasticity,
         psi=psi,
         context=context,
     )
+    tensor_metrics = _run_train_step_tensor_impl(ctx)
     return {k: _to_float(v) for k, v in tensor_metrics.items()}
 
 

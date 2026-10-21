@@ -164,8 +164,9 @@ if _detected_cuda_path:
     if bin_path.exists() and str(bin_path) not in os.environ.get("PATH", ""):
         os.environ["PATH"] = str(bin_path) + os.pathsep + os.environ.get("PATH", "")
 
-# Try to import CuPy for GPU
-try:  # noqa: PLR0915
+
+def _verify_cupy() -> tuple:
+    """Verify CuPy is functional and return (cp, HAS_CUPY)."""
     import cupy as cp
 
     # Guard against mock/stub cupy (e.g. from test conftest mocking)
@@ -175,23 +176,26 @@ try:  # noqa: PLR0915
         or not hasattr(cp, "cuda")
         or not cp.cuda.is_available()
     ):
-        cp = None
-        HAS_CUPY = False
-    else:
-        # Verify it actually works (catches CUDA_PATH errors)
-        try:
-            with cp.cuda.Device(0):
-                _ = cp.array([1.0])
-                _ = cp.random.rand(1)
-            HAS_CUPY = True
-        except Exception:  # broad: optional-backend availability probe
-            cp = None
-            HAS_CUPY = False
+        return None, False
 
+    # Verify it actually works (catches CUDA_PATH errors)
+    try:
+        with cp.cuda.Device(0):
+            _ = cp.array([1.0])
+            _ = cp.random.rand(1)
+    except (RuntimeError, ValueError, TypeError):  # optional-backend availability probe
+        return None, False
+    else:
+        return cp, True
+
+
+# Try to import CuPy for GPU
+try:
+    cp, HAS_CUPY = _verify_cupy()
 except ImportError:
     cp = None
     HAS_CUPY = False
-except Exception:  # broad: optional-backend availability probe
+except (RuntimeError, ValueError, TypeError):  # optional-backend availability probe
     cp = None
     HAS_CUPY = False
 
@@ -220,7 +224,7 @@ def to_numpy(arr: object) -> np.ndarray:
                 "cupy"
             ):
                 return cp.asnumpy(arr)
-        except ValueError, TypeError, RuntimeError:
+        except (ValueError, TypeError, RuntimeError):
             logger.warning("Failed to convert CuPy array to NumPy, falling back")
     return arr
 
