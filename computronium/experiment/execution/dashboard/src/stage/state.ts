@@ -196,6 +196,57 @@ export interface RunAttribution {
 }
 
 
+/** One cell's own dynamics, measured on the server. */
+export interface CellDynamics {
+  run_id?: string;
+  /** Whether the cell has a state that moves at all. */
+  stateful: boolean;
+  /** Why it does or does not. */
+  reason?: string;
+  /** What the measurements say together, in the server's words. */
+  verdict?: string;
+  /** Whether the weights were trained before the measurement. */
+  trained?: boolean;
+  task?: string;
+  cell?: {
+    coordinate: Record<string, string>;
+    params?: number;
+    /** The axes the server swapped to find a cell with a state. */
+    repairs?: string[];
+    /** Whether the run itself measured this cell. */
+    measured_by_run?: boolean;
+    run_cell?: Record<string, string>;
+  };
+  trajectory?: {
+    steps: number;
+    path: number[][];
+    norm: number[];
+    error: number[];
+    span: number;
+    axes: string[];
+  };
+  spectrum?: number[];
+  basin?: {
+    radii: number[];
+    stability: number[];
+    paths: {
+      radius: number;
+      sample: number;
+      distances: number[];
+      returned: boolean;
+    }[];
+  };
+  landscape?: {
+    grid: number[][];
+    x: number[];
+    y: number[];
+    span: number;
+  };
+  settles?: boolean;
+  largest_exponent?: number;
+  widest_basin?: number;
+}
+
 /** What the run measured at one cell, folded over its seeds. */
 export interface CellAggregate {
   acc: number[];
@@ -399,6 +450,8 @@ class StageState {
   flow: RunFlow | null = null;
   /** What the run can attribute, and what its design cannot say. */
   attribution: RunAttribution | null = null;
+  /** The cell's own dynamics, measured on the server. */
+  dynamics: CellDynamics | null = null;
   /** What the space was last asked for, so it is only asked again when it changes. */
   private spaceRequest = "";
   /** What the account was last asked for: the run, and how much it measured. */
@@ -407,6 +460,10 @@ class StageState {
   private attributionRequest = "";
   /** What the flow was last asked for: the run, and how many events it has. */
   private flowRequest = "";
+  /** The run the dynamics were measured for. */
+  private dynamicsRun = "";
+  /** Whether the dynamics are being asked for right now. */
+  private dynamicsAsking = false;
   /** The run the timeline belongs to, and whether it is out of date. */
   private timelineRun = "";
   private timelineStale = true;
@@ -454,6 +511,7 @@ class StageState {
     void this.syncAccount();
     void this.syncAttribution();
     void this.syncTimeline();
+    void this.syncDynamics();
   }
 
   /** The axes the reader picked: another slice of the same space. */
@@ -617,6 +675,41 @@ class StageState {
       this.notify("evidence");
     } catch (error) {
       console.warn("[StageState] The attribution could not be read", error);
+    }
+  }
+
+  /** The cell's own dynamics, measured on the server.
+
+    The measurement is expensive — the cell is composed and its own
+    relaxation is measured over hundreds of steps — so it is asked for
+    once per run, and the server keeps it.
+  */
+  async syncDynamics(): Promise<void> {
+    if (!this.runId) {
+      this.dynamics = null;
+      this.dynamicsRun = "";
+      return;
+    }
+    if (this.dynamicsRun === this.runId || this.dynamicsAsking) return;
+    this.dynamicsAsking = true;
+    try {
+      const response = await fetch(
+        `/api/runs/${encodeURIComponent(this.runId)}/dynamics`,
+      );
+      if (!response.ok) {
+        console.warn("[StageState] The dynamics were refused", response.status);
+        return;
+      }
+      const payload = (await response.json()) as CellDynamics;
+      this.dynamics = payload;
+      // A run that has measured nothing yet has no cell to show, and the
+      // answer comes when it has: the question is asked again.
+      if (payload.cell) this.dynamicsRun = this.runId;
+      this.notify("evidence");
+    } catch (error) {
+      console.warn("[StageState] The dynamics could not be read", error);
+    } finally {
+      this.dynamicsAsking = false;
     }
   }
 

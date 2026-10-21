@@ -59,6 +59,14 @@ thin that slab was:
 |---|
 | ![The layers](docs/readme/assets/dashboard-layers.png) |
 
+And the system itself, rather than its bookkeeping — where a cell's own state
+went, whether it settles, how much of the neighbourhood comes back, and what
+its own energy looks like over the ground it crossed:
+
+| The trajectory | The spectrum | The basin | The landscape |
+|---|---|---|---|
+| ![The trajectory](docs/readme/assets/dashboard-trajectory.png) | ![The spectrum](docs/readme/assets/dashboard-spectrum.png) | ![The basin](docs/readme/assets/dashboard-basin.png) | ![The landscape](docs/readme/assets/dashboard-landscape.png) |
+
 The same run, told three other ways — as a report in the browser, as the
 console dashboard in a terminal, and as the dashboard's own account of itself:
 

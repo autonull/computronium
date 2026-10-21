@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 """The demo cell's dynamics, measured (TODO69 Phase 5, the dynamics family).
 
-Question: can the dashboard show the *dynamics* of a cell the demo run
-measured — the settling trajectory, the Lyapunov spectrum, the energy
-landscape — from the record alone, and in how long?
+Question: can the dashboard show the *dynamics* of a cell — the settling
+trajectory, the Lyapunov spectrum, the energy landscape — from the record
+alone, and in how long?
 
-The demo campaign's cells are feedforward with instantaneous dynamics, so
-the first thing to know is whether the composed system's transition is
-anything but a constant. This probe composes the demo's leading cell from
-the demo profile's own coordinate, builds the transition the stability
-analysis builds, and measures what the dashboard would draw.
+The first answer was no, and the reason is the point of this probe: the
+transition the stability analysis built was the identity. The forward pass
+was computed and thrown away, and the settle was handed the activity the
+state already had, so a feedforward cell's "dynamics" was the identity map
+and its spectrum was a row of zeros. The transition is now the system's own
+relaxation, one step at a time
+(``computronium.experiment.analysis.transition``), and this probe measures
+what it gives.
+
+The demo campaign's own cells are feedforward with instantaneous dynamics, so
+they have no state to relax: the dashboard measures the nearest cell of the
+space that has one, and says which axes it swapped. This probe measures that
+cell directly.
 
 Regime: CPU, digits task, quick mode, the demo profile's coordinate
 (digital / feedforward / instantaneous / null / gradient / adam,
-geometry.hidden_dim=32), param budget 10_000. Untrained weights: the
-record does not carry the trained cell, and this probe asks first whether
-the *architecture's* transition is worth drawing at all.
+geometry.hidden_dim=32) for the "no state" case, and digital / recurrent /
+energy_minimization / null / gradient / adam for the cell that has one.
+Untrained weights: the record does not carry the trained cell, and the
+store does not carry it either — the dashboard's payload says so.
 
 Run:
     uv run python scripts/probes/todo69_dynamics_probe.py
@@ -25,134 +34,88 @@ from __future__ import annotations
 
 import time
 
-import torch
+# The demo's own cell: feedforward with an instantaneous pass.
+DEMO_COORDINATE = {
+    "substrate": "digital",
+    "geometry": "feedforward",
+    "dynamics": "instantaneous",
+    "plasticity": "null",
+    "credit": "gradient",
+    "update": "adam",
+}
+
+# The nearest cell of the space with a state that moves.
+STATEFUL_COORDINATE = {
+    "substrate": "digital",
+    "geometry": "recurrent",
+    "dynamics": "energy_minimization",
+    "plasticity": "null",
+    "credit": "gradient",
+    "update": "adam",
+}
 
 
-def build_transition(system, device: str):
-    """The transition the stability analysis builds (computronium surface CLI)."""
-    from stability.state import CompositeState
-
-    from computronium.core.pipeline import forward_pass
-    from computronium.ontology import SystemState
-
-    def transition_fn(state, context):
-        with torch.no_grad():
-            forward_pass(system.substrate, system.geometry, state.activity["x"])
-            settled = system.dynamics.settle(
-                SystemState(x=state.activity["x"], y=None),
-                system.geometry,
-                system.substrate,
-                target=None,
-            )
-            activity = settled.activations
-            if isinstance(activity, list):
-                activity = activity[0] if activity else state.activity["x"]
-            elif activity is None:
-                activity = state.activity["x"]
-            return CompositeState(activity={"x": activity}, plastic={}, substrate={})
-
-    return transition_fn
-
-
-def main() -> int:
-    from computronium.domains.factory import create_task
+def compose(coordinate: dict[str, str], shape, device: str):
+    """The cell, composed under the demo's parameter budget."""
     from computronium.experiment.kernel.compose import compose_cell_system
-    from computronium.experiment.kernel.evaluate import task_shape
     from computronium.experiment.schema.coordinate import Coordinate
 
-    device = "cpu"
-    coordinate = Coordinate(
-        substrate="digital",
-        geometry="feedforward",
-        dynamics="instantaneous",
-        plasticity="null",
-        credit="gradient",
-        update="adam",
-        params={"geometry.hidden_dim": 32},
-    )
-
-    started = time.perf_counter()
-    task = create_task("digits", device=device, quick_mode=True, num_workers=0)
-    task.setup()
-    print(f"task setup: {time.perf_counter() - started:.2f}s")
-
-    started = time.perf_counter()
-    shape = task_shape("digits", device)
     cell = compose_cell_system(
-        coordinate=coordinate,
+        coordinate=Coordinate(**coordinate, params={}),
         geometry={},
         input_shape=shape.input_shape,
         output_dim=shape.output_dim,
         param_budget=10_000,
     )
-    system = cell.system.to(device)
-    print(f"compose: {time.perf_counter() - started:.2f}s")
-    print(f"params: {cell.param_count}")
+    return cell, cell.system.to(device)
 
+
+def main() -> int:
+    from computronium.domains.factory import create_task
+    from computronium.experiment.analysis.transition import build_transition
+    from computronium.experiment.kernel.evaluate import task_shape
+
+    device = "cpu"
+    task = create_task("digits", device=device, quick_mode=True, num_workers=0)
+    task.setup()
+    shape = task_shape("digits", device)
     sample_x, _ = next(iter(task.get_dataloader("train")))
     flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
-    from stability.state import CompositeState
 
-    init_state = CompositeState(activity={"x": flat}, plastic={}, substrate={})
-    transition_fn = build_transition(system, device)
-
-    # 1. The trajectory: the norms of the state over the steps.
-    from computronium.stability import measure_settling_time
-
-    started = time.perf_counter()
-    steps, norms = measure_settling_time(transition_fn, init_state, None, max_steps=40)
-    print(f"settling: {time.perf_counter() - started:.2f}s steps={steps}")
-    print(f"  norms[:8]={[round(n, 5) for n in norms[:8]]}")
-    print(f"  norms[-4:]={[round(n, 5) for n in norms[-4:]]}")
-    print(f"  distinct norms: {len({round(n, 8) for n in norms})}")
-
-    # 2. The Lyapunov spectrum of the transition.
     from computronium.stability import estimate_lyapunov_spectrum
 
-    started = time.perf_counter()
-    try:
-        spectrum = estimate_lyapunov_spectrum(
-            transition_fn, init_state, None, num_vectors=3, num_steps=20
-        )
-        print(f"lyapunov: {time.perf_counter() - started:.2f}s")
-        print(f"  spectrum={[round(value, 5) for value in spectrum]}")
-    except Exception as exc:  # ruff: ignore[blind-except] - a probe reports
-        print(f"lyapunov failed: {exc}")
+    for name, coordinate in (
+        ("the demo's own cell", DEMO_COORDINATE),
+        ("the nearest cell with a state", STATEFUL_COORDINATE),
+    ):
+        started = time.perf_counter()
+        _cell, system = compose(coordinate, shape, device)
+        transition = build_transition(system, flat)
+        print(f"\n{name}: {coordinate['geometry']} · {coordinate['dynamics']}")
+        print(f"  composed in {time.perf_counter() - started:.2f}s")
+        print(f"  stateful: {transition.stateful}")
+        print(f"  {transition.reason}")
+        if not transition.stateful:
+            continue
 
-    # 3. The energy landscape over the state's PCA slice.
-    started = time.perf_counter()
-    try:
-        energies, attractors = landscape(transition_fn, init_state)
-        print(f"landscape: {time.perf_counter() - started:.2f}s")
-        print(
-            f"  energy min={energies.min():.5f} max={energies.max():.5f} "
-            f"span={energies.max() - energies.min():.5f}"
+        state = transition.initial
+        norms = []
+        started = time.perf_counter()
+        for _ in range(40):
+            state = transition.step(state, None)
+            norms.append(float(state.activity["x"].norm(dim=-1).mean()))
+        print(f"  40 relaxation steps in {time.perf_counter() - started:.2f}s")
+        print(f"  the state's size: {norms[0]:.4f} -> {norms[-1]:.4f}")
+        print(f"  distinct sizes: {len({round(n, 8) for n in norms})}")
+
+        started = time.perf_counter()
+        spectrum = estimate_lyapunov_spectrum(
+            transition.step, transition.initial, None, num_vectors=6, num_steps=20
         )
-        print(f"  attractors: {attractors[:4]}")
-    except Exception as exc:  # ruff: ignore[blind-except] - a probe reports
-        print(f"landscape failed: {exc}")
+        print(f"  spectrum in {time.perf_counter() - started:.2f}s")
+        print(f"  {[round(value, 5) for value in spectrum]}")
 
     return 0
-
-
-def landscape(transition_fn, init_state):
-    """The energy over the state's PCA slice, as the analysis computes it."""
-    import numpy as np
-
-    from computronium.experiment.analysis import (
-        EnergyLandscapeConfig,
-        compute_energy_landscape_2d,
-    )
-
-    result = compute_energy_landscape_2d(
-        transition_fn,
-        None,
-        init_state,
-        config=EnergyLandscapeConfig(grid_resolution=12),
-        num_trajectories=4,
-        trajectory_length=10,
-    )
-    return np.asarray(result.energy_values), result.attractor_points
 
 
 if __name__ == "__main__":

@@ -13,6 +13,12 @@ import { CYCLE_KEY, RESERVED_KEYS } from "../keys.js";
 import { ClaimCostView } from "./claim-cost.js";
 import { ContrastView } from "./contrast.js";
 import { ConvergenceView } from "./convergence.js";
+import {
+  BasinView,
+  LandscapeView,
+  SpectrumView,
+  TrajectoryView,
+} from "./dynamics.js";
 import { EffectView } from "./effect.js";
 import { FlowView } from "./flow.js";
 import { FrontierView } from "./frontier.js";
@@ -82,6 +88,10 @@ export class ViewSwitcher implements Component {
       new FlowView(),
       new EffectView(),
       new LayersView(),
+      new TrajectoryView(),
+      new SpectrumView(),
+      new BasinView(),
+      new LandscapeView(),
     ];
   }
 

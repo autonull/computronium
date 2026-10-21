@@ -5014,51 +5014,6 @@ def _load_record_for_analysis(
     return all_records[-1], run_id
 
 
-def _build_transition_fn(system, device: str):
-    """Build the transition function for stability analysis."""
-    import torch
-    from stability.state import CompositeState
-
-    from computronium.core.pipeline import forward_pass
-    from computronium.ontology import SystemState
-
-    def transition_fn(state, context):
-        with torch.no_grad():
-            # Forward pass through substrate + geometry
-            new_activations = forward_pass(
-                system.substrate, system.geometry, state.activity["x"]
-            )
-            # Settle the dynamics
-            settled_state = system.dynamics.settle(
-                SystemState(x=state.activity["x"], y=None),
-                system.geometry,
-                system.substrate,
-                target=None,
-            )
-            # Get settled activity (handle list or tensor)
-            settled_act = settled_state.activations
-            if isinstance(settled_act, list):
-                settled_act = settled_act[0] if settled_act else state.activity["x"]
-            elif settled_act is None:
-                settled_act = state.activity["x"]
-            # Build new CompositeState with settled activity
-            return CompositeState(
-                activity={"x": settled_act},
-                plastic={},
-                substrate={},
-            )
-
-    return transition_fn
-
-
-def _create_init_state(sample_x, device: str):
-    """Create initial CompositeState for stability analysis."""
-    from stability.state import CompositeState
-
-    flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
-    return CompositeState(activity={"x": flat}, plastic={}, substrate={})
-
-
 def _run_lyapunov_analysis(transition_fn, init_state, args):
     """Run Lyapunov spectrum analysis."""
     from computronium.stability import estimate_lyapunov_spectrum
@@ -5236,6 +5191,7 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
 
         # Recompose the cell system
         from computronium.domains.factory import create_task
+        from computronium.experiment.analysis.transition import build_transition
         from computronium.experiment.kernel.compose import compose_cell_system
         from computronium.experiment.schema.coordinate import Coordinate
 
@@ -5275,8 +5231,9 @@ def _cmd_stability_analysis(args: argparse.Namespace) -> int:
         sample_x, _ = next(iter(task.get_dataloader("train")))  # type: ignore[attr-defined]
 
         # Build transition function and initial state
-        transition_fn = _build_transition_fn(system, device)
-        init_state = _create_init_state(sample_x, device)
+        transition = build_transition(system, sample_x)
+        transition_fn = transition.step
+        init_state = transition.initial
 
         results = {"record_id": record.record_id, "coordinate": coordinate.cell_key()}
 
@@ -5346,6 +5303,7 @@ def _cmd_energy_landscape(args: argparse.Namespace) -> int:
 
         # Recompose the cell system
         from computronium.domains.factory import create_task
+        from computronium.experiment.analysis.transition import build_transition
         from computronium.experiment.kernel.compose import compose_cell_system
         from computronium.experiment.schema.coordinate import Coordinate
 
@@ -5381,8 +5339,9 @@ def _cmd_energy_landscape(args: argparse.Namespace) -> int:
 
         sample_x, _ = next(iter(task.get_dataloader("train")))  # type: ignore[attr-defined]
 
-        transition_fn = _build_transition_fn(system, device)
-        init_state = _create_init_state(sample_x, device)
+        transition = build_transition(system, sample_x)
+        transition_fn = transition.step
+        init_state = transition.initial
 
         from computronium.experiment.analysis import EnergyLandscapeConfig
 
@@ -5459,6 +5418,7 @@ def _cmd_nonnormality(args: argparse.Namespace) -> int:
             return 1
 
         from computronium.domains.factory import create_task
+        from computronium.experiment.analysis.transition import build_transition
         from computronium.experiment.kernel.compose import compose_cell_system
         from computronium.experiment.schema.coordinate import Coordinate
 
@@ -5494,8 +5454,9 @@ def _cmd_nonnormality(args: argparse.Namespace) -> int:
 
         sample_x, _ = next(iter(task.get_dataloader("train")))  # type: ignore[attr-defined]
 
-        transition_fn = _build_transition_fn(system, device)
-        init_state = _create_init_state(sample_x, device)
+        transition = build_transition(system, sample_x)
+        transition_fn = transition.step
+        init_state = transition.initial
 
         from computronium.experiment.analysis import (
             NonnormalityConfig,

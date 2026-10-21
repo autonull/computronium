@@ -212,6 +212,7 @@ class WebDashboard:
         self._reported_runs: set[str] = set()
         self._event_history: deque[dict[str, Any]] = deque(maxlen=200)
         self._narration = Narration()
+        self._dynamics_cache: dict[str, dict[str, Any]] = {}
         self._work_dir: Path | None = None
         self._setup_routes()
         self._setup_templates()
@@ -291,6 +292,51 @@ class WebDashboard:
             speak about, and says so.
             """
             return JSONResponse(await self._attribution_payload(run_id))
+
+        @self.app.get("/api/runs/{run_id}/dynamics")
+        async def api_run_dynamics(run_id: str) -> JSONResponse:
+            """The cell's own dynamics, measured (TODO69).
+
+            Where the state goes, whether it settles, how much of the
+            neighbourhood comes back, and what its energy looks like over
+            the slice its own trajectory crosses.
+            """
+            return JSONResponse(await self._dynamics_payload(run_id))
+
+        @self.app.get("/api/cells/dynamics")
+        async def api_cell_dynamics(
+            substrate: str,
+            geometry: str,
+            dynamics: str,
+            plasticity: str,
+            credit: str,
+            update: str,
+            task: str = "digits",
+        ) -> JSONResponse:
+            """One cell's own dynamics, measured (TODO69).
+
+            The endpoint is asked for a *cell*, not a run: the run's own
+            cells are usually feedforward with an instantaneous pass, and
+            such a cell has no state that moves.
+            """
+            from computronium.experiment.execution.dashboard.dynamics import (
+                measure_cell,
+            )
+
+            values = {
+                "substrate": substrate,
+                "geometry": geometry,
+                "dynamics": dynamics,
+                "plasticity": plasticity,
+                "credit": credit,
+                "update": update,
+            }
+            try:
+                measured = await asyncio.to_thread(measure_cell, values, task)
+                return JSONResponse(measured)
+            except Exception as e:
+                logger.exception("Error measuring the cell's dynamics")
+                return JSONResponse({"error": str(e)}, status_code=409)
 
         @self.app.get("/api/resources")
         async def api_resources() -> JSONResponse:
@@ -1469,6 +1515,40 @@ class WebDashboard:
         except Exception as e:
             logger.exception("Error reading the run's attribution")
             return {"error": str(e)}
+
+    async def _dynamics_payload(self, run_id: str) -> dict[str, Any]:
+        """The run's own cell, and the dynamics it does or does not have.
+
+        The measurement is expensive — the cell is composed, and its own
+        relaxation is measured over hundreds of steps — so it is kept: the
+        answer does not change while the run does.
+        """
+        if not self.config.store_path:
+            return {"error": "no store path configured"}
+        cached = self._dynamics_cache.get(run_id)
+        if cached is not None:
+            return cached
+        try:
+            payload = await asyncio.to_thread(self._measure_dynamics, run_id)
+        except Exception as e:
+            logger.exception("Error measuring the cell's dynamics")
+            return {"error": str(e)}
+        # A run that has measured nothing yet is not an answer: it is a run
+        # that has not started, and the answer comes when it has.
+        if payload.get("cell") is not None:
+            self._dynamics_cache[run_id] = payload
+        return payload
+
+    def _measure_dynamics(self, run_id: str) -> dict[str, Any]:
+        """The measurement, with the store opened where it is used.
+
+        DuckDB's connection belongs to the thread that opened it, so the
+        store is opened inside the work rather than handed to it.
+        """
+        from computronium.experiment.execution.dashboard.dynamics import run_dynamics
+
+        with self._readable_store() as store:
+            return run_dynamics(store, run_id)
 
     def _announce_store_progress(self, record_counts: dict[str, int]) -> None:
         """Report records that landed in the store since the last poll.

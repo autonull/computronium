@@ -57,7 +57,7 @@ Open <http://localhost:8080> in a browser.
 ## The Stage (the main view area)
 
 The canvas is a **stage**, and a view is what stands on it. The discovery map
-is one view; the stage can show fifteen.
+is one view; the stage can show nineteen.
 
 | Key | View | The picture | What a reader would say |
 |-----|------|-------------|------------------------|
@@ -76,15 +76,19 @@ is one view; the stage can show fifteen.
 | `F` | **The flow** | the run's cells stage by stage: one column per stage, the cells it carried and the records it wrote; what the gate refused, in the void colour | "four cells went through the pipeline, the gate refused none, and twenty records were written" |
 | `E` | **The effect** | one column per axis: a band for an axis whose arms differ, a mark for an axis that was held fixed | "one axis varied and five were held fixed, so this run can speak about credit alone" |
 | `Y` | **The layers** | the space cut into sheets, one per value of the third axis: the cells the run measured stand up off their own sheet, the rest of the space is the ground they were not in | "the run filled one sheet of eight, and four cells of it" |
+| `J` | **The trajectory** | a cell's own state, drawn through the space it moves in, coloured by time, with the error its relaxation was driving down | "the state walked this way, and the error fell as it went" |
+| `M` | **The spectrum** | the Lyapunov exponents of the cell's own map, one bar per direction, against the zero line | "one direction grows, so this dynamics does not settle" |
+| `B` | **The basin** | the states near the cell's own: how far each stray went, and how many came back | "nothing comes back: the basin is empty" |
+| `N` | **The landscape** | the cell's own energy over the ground its trajectory crossed, with the path drawn over it | "the low ground is not where the path went" |
 
 `V` cycles the views; the number keys pick the first nine, and a view that
 does not fit in the numbers has a letter of its own (`src/keys.ts` holds the
 keys the panels and the charts already own, so a view cannot steal one). The
 letter is the view's own first free letter: `T` the timeline, `L` the ledger,
-`D` the contrast, `F` the flow, `E` the effect, and `Y` the layers — the
-*layers* are the only one whose initials are spoken for. The **View** selector
-in the legend names the view where it is chosen, and the legend's title is the
-view's name, so the picture says what it is.
+`D` the contrast, `F` the flow, `E` the effect, `Y` the layers, `J` the
+trajectory, `M` the spectrum, `B` the basin and `N` the landscape. The **View**
+selector in the legend names the view where it is chosen, and the legend's
+title is the view's name, so the picture says what it is.
 
 **The views share one picture of the run.** `src/stage/state.ts` holds the run
 the dashboard shows, the axes the reader picked, the space the backend declares
@@ -100,10 +104,10 @@ is hidden when none of them is on.
 
 **The flat views do not need three.js.** The matrix, the convergence, the
 small multiples, the spread, the claim's cost, the uncertainty, the timeline,
-the ledger, the contrast, the flow and the effect are drawn on a 2D canvas
-over the stage (`src/stage/canvas2d.ts`), in the part of the window the panels
-leave free. What they share with the 3D views is the switcher, the data and
-the tour shot.
+the ledger, the contrast, the flow, the effect and the four dynamics views are
+drawn on a 2D canvas over the stage (`src/stage/canvas2d.ts`), in the part of
+the window the panels leave free. What they share with the 3D views is the
+switcher, the data and the tour shot.
 
 **The rules a claim is measured against travel with the run.** The margin the
 statistical gate asks for, the seeds a claim needs and the confidence level
@@ -121,6 +125,23 @@ paired test's verdict with the coverage that decided it). The rules — the
 seed floor, the shared-cell floor, the significance test itself — are the
 report's and the gate's, and they are on the server
 (`src/stage/ledger.py` is a thin reader of them).
+
+**The dynamics views are about the system, not the bookkeeping.** Every other
+view draws what the run measured; these four draw the cell being measured.
+The map they step is the cell's *own* relaxation — the settle the cell's own
+dynamics performs, one step at a time, over the cell's own activity
+(`computronium/experiment/analysis/transition.py`) — and the same function is
+read by `comp stability-analysis`, so the picture and the command cannot
+disagree. The first version of that transition computed the forward pass and
+threw it away, and the settle was handed the state it already had: the map
+was the identity, and the spectrum was a row of zeros.
+
+**A cell with no state says so.** The run's own cells are usually feedforward
+with an instantaneous pass, and a cell like that has nothing to settle. The
+server looks for the nearest cell of the space that does have a state — the
+dynamics swapped for one that relaxes, the geometry for a recurrent one — and
+the payload names the axes it swapped, so a picture of a cell the run never
+measured is never mistaken for one it did.
 
 **The timeline is the run this dashboard watched.** The events are
 process-local, so `GET /api/events?run_id=` is the history of the run the
@@ -440,6 +461,8 @@ curl -s "localhost:8080/api/events?run_id=<run_id>" | python -m json.tool
 | `GET /api/runs/{run_id}/flow` | the run as a process: `stages` — one per stage, with the count it handled (the cells it carried, the records it wrote) and what the gate refused; `cells`, `refused`, `measured`, `records`, and the run's shape in one sentence |
 | `GET /api/runs/{run_id}/attribution` | every axis, whether it varied, the spread of its arms, the arms themselves with the gate's standing on them; the axes that varied and those that were held fixed; and whether the run is big enough to attribute anything at all |
 | `GET /api/events?run_id=` | the run's stages, as they happened: `stages` (one per stage, with its first and last word and its reach), `events` (every event, with its sentence), and the run's span in seconds |
+| `GET /api/runs/{run_id}/dynamics` | the cell's own dynamics, measured: the cell it measured and the axes it swapped to find one with a state, the `trajectory` (the path, the state's size and the error its relaxation was driving down), the `spectrum` (the Lyapunov exponents), the `basin` (the share that comes back at each radius, and the strays' paths), the `landscape` (the cell's own energy over the slice), and the `verdict` in one sentence |
+| `GET /api/cells/dynamics?substrate=&geometry=&dynamics=&plasticity=&credit=&update=` | one cell's own dynamics, measured — the endpoint is asked for a *cell*, not a run |
 
 All four are what the stage's ledger, contrast, timeline, flow and effect
 draw, so an agent can read the same pictures as text. The events are

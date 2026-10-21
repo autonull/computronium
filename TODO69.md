@@ -28,7 +28,7 @@ picture in every shot — a grid of coloured cubes — and every picture the tou
 took of it looked the same.
 
 The canvas is now a **stage**, and a view is what stands on it. There are
-fifteen, and the tour has a shot of each:
+nineteen, and the tour has a shot of each:
 
 | # | View | The picture | The shot |
 |---|------|-------------|----------|
@@ -47,12 +47,17 @@ fifteen, and the tour has a shot of each:
 | 13 | **The flow** | the run's cells stage by stage: one column per stage, what it carried and what it wrote, and what the gate refused | `dashboard-flow.png` |
 | 14 | **The effect** | one column per axis: a band for an axis whose arms differ, a mark for an axis that was held fixed | `dashboard-effect.png` |
 | 15 | **The layers** | the space cut into sheets: one sheet per value of the third axis, the cells the run measured standing up off their own | `dashboard-layers.png` |
+| 16 | **The trajectory** | a cell's own state, drawn through the space it moves in, coloured by time, with the error its relaxation was driving down | `dashboard-trajectory.png` |
+| 17 | **The spectrum** | the Lyapunov exponents of the cell's own map, one bar per direction, against the zero line | `dashboard-spectrum.png` |
+| 18 | **The basin** | the states near the cell's own: how far each stray went, and how many came back | `dashboard-basin.png` |
+| 19 | **The landscape** | the cell's own energy over the ground its trajectory crossed, with the path drawn over it | `dashboard-landscape.png` |
 
 **The switcher that makes them a choice**: `V` cycles the views, the number
 keys pick the first nine (like the plotter's tabs — which moved to `P`, `A`
-and `S` so the numbers could belong to the stage), and the six that do not
+and `S` so the numbers could belong to the stage), and the ten that do not
 fit in the numbers have a **letter** of their own — `T` the timeline, `L` the
-ledger, `D` the contrast, `F` the flow, `E` the effect, `Y` the layers. A
+ledger, `D` the contrast, `F` the flow, `E` the effect, `Y` the layers, `J`
+the trajectory, `M` the spectrum, `B` the basin, `N` the landscape. A
 **View** selector in the legend names the view where it is chosen. The
 legend's title is the view's name, and the caption under the selector says
 what a reader would say after looking at it.
@@ -83,9 +88,11 @@ seed violins, the `comp` reports) are in the table after it.
 | **The run's arms** | `computronium/experiment/execution/dashboard/arms.py` | complete: the statistics of an arm, read once for the ledger and the effect |
 | **The run's flow** | `computronium/experiment/execution/dashboard/flow.py` | complete: the stages, the counts, the refusals, the shape in a sentence |
 | **The run's effect** | `computronium/experiment/execution/dashboard/attribution.py` | complete: the axes, the spread, and what the design cannot say |
+| **The cell's own dynamics** | `computronium/experiment/execution/dashboard/dynamics.py` | complete: the trajectory, the spectrum, the basin, the landscape |
+| **The system's own transition** | `computronium/experiment/analysis/transition.py` | complete: the relaxation the cell's own settle performs, one step at a time |
 | The keys | `dashboard/src/keys.ts` | complete: the panels, the charts and the stage's views, in one list |
 | The hero capture | `scripts/capture_dashboard_screenshot.py` | one image, one view |
-| The tour | `scripts/capture_dashboard_tour.py` | thirty-eight pictures: fifteen views on the stage, the gallery, the report's own plots, and the `comp` reports |
+| The tour | `scripts/capture_dashboard_tour.py` | forty-two pictures: nineteen views on the stage, the gallery, the report's own plots, and the `comp` reports |
 | The recording | `scripts/capture_dashboard_video.py` | a `.webm` of a live session, uncommitted |
 | The live rail | `dashboard/src/live-rail.ts` | terse pills: `[s6_train] train cells` — a log, not a story |
 | The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal, and a frame of it as text |
@@ -102,6 +109,8 @@ seed violins, the `comp` reports) are in the table after it.
 | One picture in the content area | every shot of the canvas was the same field of cubes, so the tour's variety was the furniture in front of the scene | the stage: fourteen views, a switcher, and a shot of each |
 | The run was only its evidence | a reader saw what the run measured and nothing of what it *decided*, what it *cannot say*, or how long it took | the ledger, the contrast and the timeline |
 | The run was only its records | a reader saw what the run measured and nothing of how the cells got there, or of what the run's design can and cannot be credited for | the flow and the effect |
+| The run was only its evidence | a reader saw what the run measured and nothing of the *system* it measured: where its state goes, whether it settles, how wide the set of states that come back to it is | the trajectory, the spectrum, the basin and the landscape |
+| The transition the stability analysis measured was the identity | the forward pass was computed and thrown away, and the settle was handed the state it already had, so the map was the identity and the spectrum was a row of zeros | the system's own relaxation, in one place, read by the command and the dashboard |
 
 ---
 
@@ -147,7 +156,11 @@ seed violins, the `comp` reports) are in the table after it.
 │         ├──► the ledger                       ──► the 2D canvas            │
 │         ├──► the contrast                     ──► the 2D canvas            │
 │         ├──► the flow                         ──► the 2D canvas            │
-│         └──► the effect                       ──► the 2D canvas            │
+│         ├──► the effect                       ──► the 2D canvas            │
+│         ├──► the trajectory                   ──► the 2D canvas            │
+│         ├──► the spectrum                     ──► the 2D canvas            │
+│         ├──► the basin                        ──► the 2D canvas            │
+│         └──► the landscape                    ──► the 2D canvas            │
 │    stage/switcher.ts — V cycles · 1–9 and T L D F E pick · the selector     │
 └───────────────────────────────────────────────────────────────────────────┘
 
@@ -384,6 +397,7 @@ to pass: **what can a reader say after looking at it?**
 | **The frontier** ✅ | every measured record as a point in (accuracy, speed, parameters); the front the run computed drawn through them; the chance plane as a floor | the records, the `pareto` flags, `chance` | "nothing beat these cells on all three counts at once" |
 | **The layers** ✅ | the space cut into sheets: one sheet per value of the third axis, the cells the run measured standing up off their own sheet, the rest of the space the ground they were not in | the space payload, the records | "the run filled one sheet of eight, and four cells of it" |
 | **The multi-run space** ⬜ | several runs' evidence in one space, coloured by run | the store's runs, the space per run | "the second run went where the first one did not" |
+| **The trained cell** ⬜ | the same four pictures, of a cell whose weights were trained first | the trainer, on the server | "a trained cell settles where an untrained one does not" |
 
 #### The evidence, seen other ways (2D)
 
@@ -414,10 +428,10 @@ work and the most worth having.
 
 | View | What the main area shows | The data it needs | A reader would say |
 |------|---------------------------|-------------------|-------------------|
-| **The settling trajectory** ⬜ | a cell's state, drawn through the state space from where it started to where it stopped, coloured by time | the trained system (`comp stability-analysis`: settling trajectories) | "this cell does not settle where you think it does" |
-| **The basin** ⬜ | every initial state that settles to the same fixed point — the set of states the system is really in | the trained system (basin stability) | "the basin is a sliver, and the run is inside it" |
-| **The energy landscape** ⬜ | the system's energy as a surface, with the trajectory over it | the trained system (`computronium/experiment/analysis/energy_landscape.py`: `plot_energy_landscape`) | "the state it settled into is a local minimum, and this one is not" |
-| **The spectrum** ⬜ | the Lyapunov exponents — is the system stable, and in which directions | the trained system (Lyapunov spectra) | "this dynamics is stable, that one is not" |
+| **The settling trajectory** ✅ | a cell's state, drawn through the state space from where it started to where it stopped, coloured by time | the cell's own relaxation, stepped on the server (`GET /api/runs/{id}/dynamics`) | "this cell does not settle where you think it does" |
+| **The basin** ✅ | every initial state that settles to the same fixed point — the set of states the system is really in | the same measurement: the share that comes back at each radius, and the strays' paths | "the basin is a sliver, and the run is inside it" |
+| **The energy landscape** ✅ | the cell's own energy over the ground its trajectory crossed, with the trajectory over it | the same measurement: the cell's own `compute_energy` over a slice of its own state space | "the state it settled into is a local minimum, and this one is not" |
+| **The spectrum** ✅ | the Lyapunov exponents — is the system stable, and in which directions | the same measurement: the stability package's spectrum of the cell's own map | "this dynamics is stable, that one is not" |
 
 **The last family is the one that changes what the dashboard is.** Every
 view above is about the *bookkeeping* of a run — what was measured, what was
@@ -530,6 +544,9 @@ kind photographs the report's charts.
 | A view needs the trained system, so it cannot be built from the store | the dynamics views are last, and they are the ones that need a cell to be re-instantiated; the evidence views need nothing the dashboard does not already have |
 | A surface with nothing to say is a picture of nothing | the defect registry holds no constraints for a run with no defects, and the report's coverage heatmaps are one cell wide for a run that varied one axis; neither is in the tour, and a surface is photographed only when it says something |
 | The next session builds one view and stops | the batch is four views *and* a tour shot of each: a switcher with one view on it is a demo, not a dashboard |
+| A cell with no state has no dynamics to show | the transition says so, and the server looks for the nearest cell of the space that has one — and the payload names every axis it swapped |
+| A cached measurement is an answer to yesterday's question | the cache holds a measurement of a *cell*; a run that has measured nothing yet is asked again |
+| A spectrum that samples eight directions out of hundreds says less than it seems | the verdict needs the basin as well: a state whose neighbourhood never comes back has not settled, whatever the sampled directions do |
 
 ---
 
@@ -550,6 +567,9 @@ kind photographs the report's charts.
 - [x] The run's account of itself is on the server: `GET /api/runs/{id}/account` and `GET /api/events`
 - [x] The run's process is on the server: `GET /api/runs/{id}/flow`
 - [x] The run's attribution is on the server: `GET /api/runs/{id}/attribution`
+- [x] The transition the stability analysis measures is the system's own relaxation, and not the identity
+- [x] The cell's own dynamics are on the server: `GET /api/runs/{id}/dynamics` and `GET /api/cells/dynamics`
+- [x] The main view area can show the cell's own dynamics: the trajectory, the spectrum, the basin and the landscape
 
 ---
 
@@ -561,12 +581,13 @@ kind photographs the report's charts.
 | `web.py` — the frames, the endpoint, the state refresh | ✅ done |
 | `pipeline.py` — the producer names the cell and the seed | ✅ done |
 | `caption.ts` — the browser renders the sentences | ✅ done |
-| the tour — thirty-eight pictures in one browser session | ✅ done (fifteen views on the stage, the gallery, the report's plots, the `comp` reports) |
+| the tour — forty-two pictures in one browser session | ✅ done (nineteen views on the stage, the gallery, the report's plots, the `comp` reports) |
 | the recording — a `.webm` of a live session, uncommitted | ✅ done |
 | the docs — the caption, the endpoint, the tour, the stage | ✅ done |
 | the dashboard shows a run before it has measured | ✅ done (the space is on screen from the first second) |
-| the main view area — the stage, the views, the switcher | ✅ done: fifteen views, a key, a selector, a shot of each |
+| the main view area — the stage, the views, the switcher | ✅ done: nineteen views, a key, a selector, a shot of each |
 | the flat views — the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty | ✅ done (the canvas, the frame and the ticks are shared) |
+| the dynamics views — the trajectory, the spectrum, the basin, the landscape | ✅ done (one payload, four readings of one measurement) |
 | the gate's rules travel with the run | ✅ done (`gate` in the metrics payload; the browser invents no margin) |
 | the figures — the seed violins | ✅ done (the tour's third frame kind: a PNG, its caption, its provenance) |
 | the surfaces outside the canvas — the gallery, the report's plots, the `comp` reports | ✅ done (eleven more frames: four gallery figures, two report plots, five commands) |
@@ -575,7 +596,8 @@ kind photographs the report's charts.
 | `arms.py` — the statistics of an arm | ✅ done (read once for the ledger and the effect) |
 | `flow.py` — the run's cells through the stages | ✅ done (the events' counts, the gate's refusals, the shape in a sentence) |
 | `attribution.py` — what the run can attribute | ✅ done (the axes, the spread, and the design's limits in words) |
-| the other views — the dynamics | ⬜ the catalogue in Phase 5; the probe says what has to be true first |
+| the other views — the dynamics | ✅ done (the trajectory, the spectrum, the basin, the landscape: the cell's own relaxation, measured on the server) |
+| the trained cell | ⬜ the dynamics views measure an untrained cell, and say so; a trained one is the next thing to try |
 | the multi-run space | ⬜ needs two runs in one store |
 | the mirror's publish can fail and lag | ⬜ a known flake, diagnosed above |
 | the property suite fails 23 tests at HEAD | ⬜ pre-existing and unrelated: the gallery's `env_sha256` (19), `PROOF.md`'s banned phrases, the priors registry — verified by stashing this batch and re-running |
@@ -988,6 +1010,70 @@ The layers view is the only picture of the *shape* of the run's reach: the
 demo measured one value of the dynamics axis out of the eight the space
 declares, and four cells of it. The terrain says the same thing as a surface
 and the map says it as a field of cubes; the sheets say it as a stack.
+
+---
+
+## This batch (the cell's own dynamics)
+
+**What was built.** The last family of the stage: four views of the *system*
+being measured rather than the bookkeeping around it, and the server half
+that measures them.
+
+| Piece | The file | What it is |
+|-------|----------|------------|
+| The system's own transition | `computronium/experiment/analysis/transition.py` | the map: one step of the relaxation the cell's own settle performs, over the cell's own activity |
+| The shared relaxation | `computronium/ontology/dynamics/_relaxation.py` | the prediction relaxation, in one place: the settle loops over it and the stability analysis measures it |
+| The cell's own dynamics | `computronium/experiment/execution/dashboard/dynamics.py` | the trajectory, the spectrum, the basin and the landscape, and the sentence that says what they mean together |
+| The endpoints | `web.py` | `GET /api/runs/{id}/dynamics` and `GET /api/cells/dynamics` |
+| The views | `src/stage/dynamics.ts` | the trajectory (`J`), the spectrum (`M`), the basin (`B`), the landscape (`N`) |
+
+**The transition was the identity, and the plan had already said so.** The
+probe found it: `_build_transition_fn` computed the forward pass and threw it
+away, then handed the settle the activity the state already had, so the map
+was the identity and the spectrum was a row of zeros. The transition is now
+the relaxation the cell's own settle performs, one step at a time, over the
+cell's own activity — the hidden layers and the readout, with the input
+clamped as the settle clamps it. The same function is read by
+`comp stability-analysis`, so the picture and the command cannot disagree.
+
+**A cell has to have a state, and the run's cells do not.** The demo's cells
+are feedforward with an instantaneous pass: a cell like that has nothing to
+settle, and the transition says so rather than measuring the identity. The
+server therefore looks for the *nearest* cell of the space that does have a
+state — the dynamics swapped for one that relaxes, the geometry for a
+recurrent one, the credit for one that dynamics accepts — and the payload
+names every axis it swapped, so a picture of a cell the run never measured
+is never mistaken for one it did.
+
+**What the work taught.**
+
+**The relaxation is the system's own, and it is not the same relaxation for
+every dynamics.** An energy-based cell relaxes toward its Hopfield energy
+and a predictive one toward its prediction error; the transition has to be
+*that* cell's, or it measures a system that does not exist. The prediction
+relaxation was pulled out of the settle that looped over it
+(`ontology/dynamics/_relaxation.py`) so that the settle and the analysis
+step the same function.
+
+**A cached answer is only an answer if the question had something to
+answer.** The dashboard cached the first measurement of a run — taken before
+the run had measured anything — and served "this run measured nothing" for
+the rest of the run's life. The cache now holds a measurement of a *cell*,
+and a run without a cell is asked again.
+
+**The browser asks again, and only once at a time.** The dynamics are
+measured on the server and are expensive to measure, so the browser asked on
+every poll and piled up six requests before the first had answered. It asks
+again only when the run has a cell to show, and it holds one request at a
+time.
+
+**What the work did not settle.** The pictures are of an *untrained* cell,
+and the payload says so: the store does not carry the trained cell, so the
+server would have to train one before it measures. An untrained recurrent
+cell's relaxation drifts rather than settling, and the pictures say that —
+the state does not settle, one direction grows, and nothing comes back —
+which is a true answer about an untrained architecture, and not yet an answer
+about a trained one. The next thing to try is the trained cell.
 
 ---
 

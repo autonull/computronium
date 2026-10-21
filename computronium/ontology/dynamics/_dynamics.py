@@ -25,6 +25,7 @@ from computronium.ontology._settle_kernel import (
     extract_layered_params,
 )
 from computronium.ontology.dynamics._registry import dynamics_backend
+from computronium.ontology.dynamics._relaxation import prediction_relaxation
 from computronium.ontology.dynamics._settle_driver import (
     SettleIterate,
     checkpointed,
@@ -1749,36 +1750,19 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
         def _step(step: int) -> None:
             acts_ = iterate.value
-            new_acts = [acts_[0]]  # Input layer is clamped
+            new_acts, errors = prediction_relaxation(
+                acts_,
+                layered.weights,
+                layered.recurrent_weight,
+                op,  # type: ignore[arg-type]
+                effective_step_size,
+            )
             step_energy = 0.0
-
-            for i, (weight, _bias) in enumerate(
-                zip(layered.weights, layered.biases, strict=True)
-            ):
-                # acts[i+1] is current state of layer i+1; weight maps from
-                # layer i to layer i+1. Top-down prediction uses the weight
-                # transpose (no bias in top-down).
-                h_upper = acts_[i + 1]
-                prediction = op(h_upper, weight.T)  # type: ignore[operator]
-                error = acts_[i] - prediction
-                h_upper_new = h_upper + effective_step_size * op(error, weight)  # type: ignore[operator]
-                new_acts.append(h_upper_new)
-
-                if (
-                    self.config.track_free_energy_per_iter
-                    and layer_free_energy is not None
-                ):
+            if self.config.track_free_energy_per_iter and layer_free_energy is not None:
+                for error in errors:
                     fe = error.pow(2).sum().item()
                     layer_free_energy.append(fe)
                     step_energy += fe
-
-            # Recurrent connection on the last hidden layer (RecurrentGeometry)
-            if layered.recurrent_weight is not None and len(new_acts) >= 3:
-                hidden_idx = len(new_acts) - 2
-                h_hidden = new_acts[hidden_idx]
-                new_acts[hidden_idx] = h_hidden + effective_step_size * op(
-                    h_hidden, layered.recurrent_weight
-                )  # type: ignore[operator]
 
             if on_step is not None:
                 on_step(step, step_energy)

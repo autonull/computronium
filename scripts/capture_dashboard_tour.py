@@ -126,6 +126,12 @@ TOUR: tuple[Shot, ...] = (
     Shot("dashboard-flow.png", "the flow: the run's cells, stage by stage"),
     Shot("dashboard-effect.png", "the effect: which axis moved the objective"),
     Shot("dashboard-layers.png", "the layers: the space cut into sheets"),
+    Shot("dashboard-trajectory.png", "the trajectory: where the cell's state went"),
+    Shot("dashboard-spectrum.png", "the spectrum: the exponents of the cell's own map"),
+    Shot("dashboard-basin.png", "the basin: how much of the neighbourhood comes back"),
+    Shot(
+        "dashboard-landscape.png", "the landscape: the cell's own energy over its path"
+    ),
     Shot("figure-gallery-swap-credit.png", "the gallery: the credit swap"),
     Shot("figure-gallery-epc-settle.png", "the gallery: the fast settle"),
     Shot("figure-gallery-coverage.png", "the gallery: the coverage of the axes"),
@@ -185,6 +191,10 @@ VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
     ("flow", "dashboard-flow.png", "f"),
     ("effect", "dashboard-effect.png", "e"),
     ("layers", "dashboard-layers.png", "y"),
+    ("trajectory", "dashboard-trajectory.png", "j"),
+    ("spectrum", "dashboard-spectrum.png", "m"),
+    ("basin", "dashboard-basin.png", "b"),
+    ("landscape", "dashboard-landscape.png", "n"),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels
