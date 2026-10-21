@@ -94,7 +94,7 @@ seed violins, the `comp` reports) are in the table after it.
 | **The system's own transition** | `computronium/experiment/analysis/transition.py` | complete: the relaxation the cell's own settle performs, one step at a time |
 | The keys | `dashboard/src/keys.ts` | complete: the panels, the charts and the stage's views, in one list |
 | The hero capture | `scripts/capture_dashboard_screenshot.py` | one image, one view |
-| The tour | `scripts/capture_dashboard_tour.py` | forty-three pictures: twenty views on the stage, the gallery, the report's own plots, and the `comp` reports |
+| The tour | `scripts/capture_dashboard_tour.py` | forty-nine pictures: twenty views on the stage, the gallery, the report's own plots, the `comp` reports, the defect registry, and the panels on their own |
 | The recording | `scripts/capture_dashboard_video.py` | a `.webm` of a live session, uncommitted |
 | The live rail | `dashboard/src/live-rail.ts` | terse pills: `[s6_train] train cells` — a log, not a story |
 | The console dashboard | `computronium/experiment/execution/dashboard/console.py` | the same picture in a terminal, and a frame of it as text |
@@ -566,7 +566,7 @@ kind photographs the report's charts.
 - [x] Every event the dashboard forwards becomes a sentence that names a run, a cell, a number or a rule
 - [x] `GET /api/narration` returns the current sentence, the recent lines and the whole story
 - [x] The dashboard shows the narration as a closed-caption overlay
-- [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report and the terminal views
+- [x] The tour captures the overview, the map, a measured cell, a void cell, the three charts, the caption, the narration, the report, the terminal views, the panels on their own (live rail, HUD, legend, axis picker), and the defect registry
 - [x] A short recording of a live session exists, with the captions on screen, and is not committed
 - [x] `docs/DASHBOARD.md` and the README show the tour
 - [x] The main view area can show more than one picture of the run: the space, the terrain, the frontier, the matrix, the convergence, the small multiples, the spread, the claim's cost, the uncertainty, the timeline, the ledger, the contrast, the flow, the effect, the layers, the trajectory, the spectrum, the basin, the landscape and the multi-run space
@@ -574,7 +574,7 @@ kind photographs the report's charts.
 - [x] The tour has a shot of every main view, and the shots are visibly different pictures of one another — *measured*, not asserted
 - [x] The tour can photograph a *figure* (a PNG with its caption and provenance), not only a page and a terminal
 - [x] The tour can photograph a *plot* the report drew, on a page of its own
-- [x] The tour photographs the surfaces outside the canvas: the gallery's figures, the report's plots, the coverage report, the objectives the system has not measured, the catalogue, the method cards and the power analysis
+- [x] The tour photographs the surfaces outside the canvas: the gallery's figures, the report's plots, the coverage report, the objectives the system has not measured, the catalogue, the method cards, the power analysis, and the defect registry
 - [x] The run's account of itself is on the server: `GET /api/runs/{id}/account` and `GET /api/events`
 - [x] The run's process is on the server: `GET /api/runs/{id}/flow`
 - [x] The run's attribution is on the server: `GET /api/runs/{id}/attribution`
@@ -1194,9 +1194,10 @@ copy protect nobody.
    - ✅ Added `run_third_campaign()` that re-measures the demo's cells with different seeds
    - ✅ Added `comp-diff.png` shot to the tour
    - ✅ The multi-run view now draws the two runs *meeting* in every cell
-3. **The remaining surfaces** — the defect registry (empty for a run with no
-   defects: a picture of nothing, so it wants a run that has some) and the
-   panels on their own.
+3. **The remaining surfaces** ✅ **DONE** — the defect registry and the panels on their own:
+   - ✅ Defect registry captured: `defect-registry.png` (comp defect list) and `defect-clusters.png` (comp defect cluster)
+   - ✅ Panels on their own captured: `panel-live-rail.png`, `panel-hud.png`, `panel-legend.png`, `panel-axis-picker.png`
+   - ✅ Added to TOUR and captured in `capture_dashboard_tour.py`
 
 **The number keys are full** (twenty views, the keys `1`–`9` and `T`, `L`,
 `D`, `F`, `E`, `Y`, `J`, `M`, `B`, `N`, `U`). The next view needs a letter

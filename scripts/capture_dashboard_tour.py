@@ -138,22 +138,34 @@ TOUR: tuple[Shot, ...] = (
         "dashboard-landscape.png", "the landscape: the cell's own energy over its path"
     ),
     Shot(
-        "dashboard-trained-trajectory.png", "the trained trajectory: where the trained cell's state went"
+        "dashboard-trained-trajectory.png",
+        "the trained trajectory: where the trained cell's state went",
     ),
     Shot(
-        "dashboard-trained-spectrum.png", "the trained spectrum: the exponents of the trained cell's own map"
+        "dashboard-trained-spectrum.png",
+        "the trained spectrum: the exponents of the trained cell's own map",
     ),
     Shot(
-        "dashboard-trained-basin.png", "the trained basin: how much of the neighbourhood comes back after training"
+        "dashboard-trained-basin.png",
+        "the trained basin: how much of the neighbourhood comes back after training",
     ),
     Shot(
-        "dashboard-trained-landscape.png", "the trained landscape: the trained cell's own energy over its path"
+        "dashboard-trained-landscape.png",
+        "the trained landscape: the trained cell's own energy over its path",
     ),
     Shot(
         "dashboard-multirun.png",
         "the multi-run space: several runs' evidence in one space",
     ),
     Shot("comp-diff.png", "the comparison: two runs over the same cells, differenced"),
+    Shot(
+        "defect-registry.png", "the defect registry: the constraints the system learned"
+    ),
+    Shot("defect-clusters.png", "the defect clusters: failure patterns, grouped"),
+    Shot("panel-live-rail.png", "the live rail: the pipeline's event log"),
+    Shot("panel-hud.png", "the HUD: the run's vital signs"),
+    Shot("panel-legend.png", "the legend: the map's marks and axes"),
+    Shot("panel-axis-picker.png", "the axis picker: the slice of the space"),
     Shot("figure-gallery-swap-credit.png", "the gallery: the credit swap"),
     Shot("figure-gallery-epc-settle.png", "the gallery: the fast settle"),
     Shot("figure-gallery-coverage.png", "the gallery: the coverage of the axes"),
@@ -638,6 +650,7 @@ class Tour:
         self.measured_cell()
         self.charts()
         self.caption()
+        self.panels()
         # The void view is last: it cuts the space a different way, and the
         # grid does not go back to the run's own slice afterwards.
         self.void_cell()
@@ -754,6 +767,64 @@ class Tour:
         wait_for_caption(self.page, self.timeout_ms)
         self.page.wait_for_timeout(800)
         self.shoot("dashboard-caption.png")
+
+    def panels(self) -> None:
+        """The panels on their own: live rail, HUD, legend, axis picker."""
+        # Live rail
+        set_panels(self.page, False)
+        set_panels(self.page, True, ("live-rail",))
+        self.page.wait_for_timeout(800)
+        self.shoot("panel-live-rail.png")
+
+        # HUD
+        set_panels(self.page, False)
+        set_panels(self.page, True, ("hud",))
+        self.page.wait_for_timeout(800)
+        self.shoot("panel-hud.png")
+
+        # Legend (map's legend panel) - isolate the discovery-legend element
+        set_panels(self.page, False)
+        self.page.evaluate(
+            """() => {
+                const legend = document.getElementById('discovery-legend');
+                if (legend) legend.style.display = 'block';
+                const canvas = document.getElementById('dashboard-canvas');
+                if (canvas) canvas.style.display = 'none';
+            }"""
+        )
+        self.page.wait_for_timeout(800)
+        self.shoot("panel-legend.png")
+
+        # Axis picker - isolate the legend-axis-picker element
+        self.page.evaluate(
+            """() => {
+                const legend = document.getElementById('discovery-legend');
+                if (legend) legend.style.display = 'none';
+                const axisPicker = document.getElementById('legend-axis-picker');
+                if (axisPicker) {
+                    const wrapper = document.createElement('div');
+                    wrapper.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 24px; z-index: 1000;';
+                    wrapper.appendChild(axisPicker.cloneNode(true));
+                    document.body.appendChild(wrapper);
+                    axisPicker.dataset._tourWrapper = 'true';
+                }
+            }"""
+        )
+        self.page.wait_for_timeout(800)
+        self.shoot("panel-axis-picker.png")
+
+        # Restore
+        self.page.evaluate(
+            """() => {
+                const legend = document.getElementById('discovery-legend');
+                if (legend) legend.style.display = '';
+                const canvas = document.getElementById('dashboard-canvas');
+                if (canvas) canvas.style.display = '';
+                const wrapper = document.querySelector('[data-_tour-wrapper]');
+                if (wrapper) wrapper.remove();
+            }"""
+        )
+        set_panels(self.page, True)
 
     def shoot(self, name: str) -> None:
         """Take a shot, and report it if it cannot be taken."""
@@ -898,6 +969,7 @@ def surface_frames(store_path: Path) -> list[Frame]:
     from computronium.experiment.surface import cli as surface
 
     store = str(store_path)
+    state_dir = str(store_path.parent / "defect_state")
     commands: tuple[tuple[str, str, str, Any, list[str]], ...] = (
         (
             "coverage-report.png",
@@ -941,6 +1013,20 @@ def surface_frames(store_path: Path) -> list[Frame]:
                 "--format",
                 "text",
             ],
+        ),
+        (
+            "defect-registry.png",
+            "the defect registry: the constraints the system learned from failures",
+            "comp defect list",
+            surface.main,
+            ["defect", "list", "--store", store, "--state-dir", state_dir],
+        ),
+        (
+            "defect-clusters.png",
+            "the defect clusters: failure patterns, grouped",
+            "comp defect cluster",
+            surface.main,
+            ["defect", "cluster", "--store", store, "--format", "text"],
         ),
     )
     frames: list[Frame] = []
