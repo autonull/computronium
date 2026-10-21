@@ -345,9 +345,11 @@ ignore = [
 "computronium/acceleration/microbench.py" = ["unused-noqa"]
 "computronium/acceleration/backends.py" = ["unused-noqa"]
 "computronium/ontology/system.py" = ["collapsible-if"] # collapsible-if — validation clarity over brevity
-"computronium/ontology/credit.py" = [
-    "unused-method-argument", # unused-method-argument — protocol surface uniformity
-    "non-augmented-assignment", "redefined-loop-name",
+"computronium/ontology/credit/__init__.py" = [
+    "unused-method-argument",
+    "non-augmented-assignment",
+    "redefined-loop-name",
+    "non-empty-init-module",  # implementation module, not a thin re-export wrapper
 ]
 "computronium/ontology/geometry.py" = ["unused-method-argument"]
 "computronium/ontology/substrate/_substrate.py" = ["unused-method-argument"]

@@ -12,6 +12,15 @@ import torch
 from torch import Tensor, nn
 
 from computronium.core.identity_card import AlgorithmIdentityCard
+from computronium.ontology.credit._base import (
+    FeedbackMatrixMixin,
+    InertZerosMixin,
+    LearnedFeedbackMixin,
+    TileFeedbackMixin,
+)
+from computronium.ontology.credit._base import (
+    StatefulCredit as StatefulCredit,
+)
 from computronium.ontology.dynamics._state import state_dual_vars, state_energy
 from computronium.ontology.utils import _learnable_weight_names
 
@@ -869,7 +878,7 @@ class ThermodynamicContrast:
 ThermodynamicContrastCredit = ThermodynamicContrast
 
 
-class RandomProjectionsCredit:
+class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZerosMixin):
     """Fixed random feedback pathways (FA/DFA) with an autograd readout.
 
     Top error δ_L = ∂L/∂a_L via autograd on the task loss (no weight
@@ -908,57 +917,6 @@ class RandomProjectionsCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.random_projections()
         self._feedback_weights: dict[str, Tensor] = {}
-
-    def _inert_zeros(self, geometry: Geometry, weight_names: list[str]) -> list[Tensor]:
-        """All-zeros pseudo-gradient — raise so dry-run gate catches no-op runs.
-
-        The layered FA contract returns zeros when the settle graph is
-        detached or feedback shapes break the act-width chain. Raising here
-        makes the failure visible to the campaign's dry-run gate instead of
-        silently training a no-op (TODO16 §0.3; TODO39 P0.1).
-        """
-        raise RuntimeError(
-            f"{type(self).__name__}: layered FA contract would return "
-            f"all-zero pseudo-gradient for {len(weight_names)} weights "
-            "(detached settle graph or feedback/act width mismatch). "
-            "This coordinate cannot train — rejected at dry-run."
-        )
-
-    def _init_feedback_weights(
-        self, geometry: Geometry, device: torch.device | None = None
-    ) -> None:
-        """Initialize fixed random feedback matrices for each learnable weight.
-
-        Feedback matrices are initialized once and kept constant throughout training.
-        This implements the FA/DFA assumption of fixed feedback pathways.
-        """
-        if self._feedback_weights:
-            return  # Already initialized
-        for name in _learnable_weight_names(geometry.params):
-            param = geometry.params[name]
-            # Initialize with small random values — always on the weight's
-            # device (an init during a CPU-batch probe must not strand
-            # feedback matrices off the training device).
-            fb = torch.randn_like(param) * self.config.feedback_scale
-            if device is not None:
-                fb = fb.to(device)
-            self._feedback_weights[name] = fb
-
-    def _sync_feedback_device(self, geometry: Geometry) -> None:
-        """Re-home cached feedback matrices onto the weights' device.
-
-        The cell is composed (and dry-run probed) on CPU before the
-        trainer moves geometry to the accelerator; matrices initialized
-        in that phase must follow the weights, not stay stranded.
-        """
-        params = geometry.params
-        weight_names = _learnable_weight_names(params)
-        if not weight_names or not self._feedback_weights:
-            return
-        target = params[weight_names[0]].device
-        for name, fb in self._feedback_weights.items():
-            if fb.device != target:
-                self._feedback_weights[name] = fb.to(target)
 
     def compute_pseudo_gradient(
         self,
@@ -1003,7 +961,7 @@ class RandomProjectionsCredit:
         batch: int,
     ) -> list[Tensor]:
         """Tile-mesh error walk over assembled feedback blocks."""
-        blocks = geometry.assemble_blocks(self._feedback_weights)
+        blocks = self._assemble_tile_feedback(geometry)
         err = _apply_credit_norm([delta_out], self.config.credit_norm)[0]
         block_grads: list[Tensor] = []
         for i in range(len(acts) - 2, -1, -1):
@@ -1070,7 +1028,7 @@ class RandomProjectionsCredit:
         )
 
 
-class LocalGoodnessCredit:
+class LocalGoodnessCredit(LearnedFeedbackMixin):
     """Layer-local contrastive credit — two realized algorithms.
 
     ``local_objective="ff"`` (Forward-Forward, Hinton 2022): layer-local
