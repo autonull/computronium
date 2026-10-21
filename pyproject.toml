@@ -351,7 +351,10 @@ ignore = [
 ]
 "computronium/ontology/geometry.py" = ["unused-method-argument"]
 "computronium/ontology/substrate/_substrate.py" = ["unused-method-argument"]
-"computronium/ontology/update.py" = ["unused-method-argument"]
+"computronium/ontology/update/__init__.py" = [
+    "unused-method-argument",
+    "non-empty-init-module",  # implementation module, not a thin re-export wrapper
+]
 "computronium/state/transitions.py" = ["unused-method-argument"]
 "computronium/domains/trainer.py" = [
     "too-many-arguments", # too-many-arguments — trainer config is necessarily wide

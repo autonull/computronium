@@ -13,6 +13,14 @@ import torch
 from torch import Tensor
 
 from computronium.core.identity_card import AlgorithmIdentityCard
+from computronium.ontology.update._base import (
+    AdamStateMixin,
+    BufferManager,
+    ClippingMixin,
+    LionStateMixin,
+    StatefulUpdate,
+    StateSnapshotMixin,
+)
 from computronium.ontology.utils import _learnable_weight_names, apply_pseudo_gradients
 
 if TYPE_CHECKING:
@@ -600,28 +608,6 @@ class ParameterUpdate(Protocol):
         ...
 
 
-class StatefulUpdate(Protocol):
-    """A ``ParameterUpdate`` that can be replayed without consuming state.
-
-    ``actual_parameter_displacement`` snapshots, replays and restores, so a
-    rule that cannot round-trip its optimizer buffers is not replayable — the
-    requirement is in the type because a caller that registers a rule for a
-    credit's within-batch recompute view gets a crash otherwise.
-    """
-
-    def step(
-        self,
-        params: dict[str, Tensor],
-        pseudo_grads: list[Tensor],
-        geometry: Geometry | None,
-        bias_grads: dict[str, Tensor] | None = None,
-    ) -> dict[str, Tensor]: ...
-
-    def get_state(self) -> dict[str, dict[str, Tensor]]: ...
-
-    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None: ...
-
-
 def actual_parameter_displacement(
     update: StatefulUpdate,
     params: dict[str, Tensor],
@@ -660,26 +646,6 @@ def actual_parameter_displacement(
     }
 
 
-# ============================================================
-# Default/Reference ParameterUpdate Implementations
-# ============================================================
-
-
-def _fresh_buffer(
-    store: dict[str, Tensor], name: str, param: Tensor, buf: Tensor | None
-) -> Tensor:
-    """Cache-hit validity check: re-init when shape OR device diverged.
-
-    A system composed (or probed) on CPU before the trainer moves the
-    geometry strands cached momentum buffers off the weights' device —
-    same lazy-init poisoning class as credit feedback matrices. Momentum
-    state is zero-warm-started, so re-init on device change is lossless.
-    """
-    if buf is None or buf.shape != param.shape or buf.device != param.device:
-        return torch.zeros_like(param)
-    return buf
-
-
 _UPDATE_BACKENDS: dict[str, type[ParameterUpdate]] = {}
 
 
@@ -707,7 +673,7 @@ def update_backend[T: ParameterUpdate](
 
 
 @update_backend("euclidean")
-class EuclideanUpdate:
+class EuclideanUpdate(BufferManager, ClippingMixin, StateSnapshotMixin):
     """Standard Euclidean update: plain SGD (optionally with momentum).
 
     Not Adam — the per-coordinate second-moment family is
@@ -740,21 +706,6 @@ class EuclideanUpdate:
         self.config = config or ParameterUpdateConfig.euclidean()
         self._momentum_buffers: dict[str, Tensor] = {}
 
-    def _clip(self, grads: list[Tensor]) -> list[Tensor]:
-        """Global-norm clip (clip_grad_norm_ semantics): keeps relative
-        per-parameter magnitudes intact so updates shrink naturally near
-        equilibrium. Per-tensor rescaling would erase that signal and turn
-        every step into a fixed-norm jump."""
-        clip = self.config.grad_clip
-        if clip is None or clip <= 0 or not grads:
-            return grads
-        stacked_norms = torch.stack([g.norm() for g in grads])
-        total_norm = torch.linalg.vector_norm(stacked_norms)
-        if total_norm > clip:
-            scale = clip / (total_norm + 1e-8)
-            grads = [g * scale for g in grads]
-        return grads
-
     def step(
         self,
         params: dict[str, Tensor],
@@ -764,43 +715,31 @@ class EuclideanUpdate:
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             if self.config.momentum > 0:
-                buf = self._momentum_buffers.get(name)
-                if buf is not None and buf.shape != param.shape:
-                    msg = (
-                        f"Momentum buffer for {name!r} has shape "
-                        f"{tuple(buf.shape)} but parameter has "
-                        f"{tuple(param.shape)} — the update instance is "
-                        "being reused across different geometries; create "
-                        "one update per system (optimizer state is "
-                        "system-scoped)"
-                    )
-                    raise RuntimeError(msg)
-                buf = _fresh_buffer(self._momentum_buffers, name, param, buf)
+                buf = self._get_buffer(
+                    self._momentum_buffers, name, param, "Momentum buffer"
+                )
                 buf.mul_(self.config.momentum).add_(grad)
                 self._momentum_buffers[name] = buf
                 return param - self.config.step_size * buf
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(
-            params, self._clip(list(pseudo_grads)), apply, bias_grads
+            params,
+            self._clip(list(pseudo_grads), self.config.grad_clip),
+            apply,
+            bias_grads,
         )
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         """Snapshot protocol: named groups of state tensors (clones)."""
-        return {
-            "momentum": {
-                k: v.detach().clone() for k, v in self._momentum_buffers.items()
-            }
-        }
+        return self._snapshot_momentum()
 
     def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
-        self._momentum_buffers = {
-            k: v.clone() for k, v in state.get("momentum", {}).items()
-        }
+        self._restore_momentum(state)
 
 
 @update_backend("unit_rms")
-class UnitRMSUpdate:
+class UnitRMSUpdate(BufferManager, StateSnapshotMixin):
     """Unit-RMS momentum: the magnitude-only ladder rung (TODO12 A1).
 
     The EMA momentum buffer is normalized to unit RMS per tensor —
@@ -832,21 +771,6 @@ class UnitRMSUpdate:
         self.config = config or ParameterUpdateConfig.unit_rms()
         self._momentum_buffers: dict[str, Tensor] = {}
 
-    def _buffer(self, name: str, param: Tensor) -> Tensor:
-        buf = self._momentum_buffers.get(name)
-        if buf is not None and buf.shape != param.shape:
-            msg = (
-                f"Momentum buffer for {name!r} has shape "
-                f"{tuple(buf.shape)} but parameter has "
-                f"{tuple(param.shape)} — the update instance is "
-                "being reused across different geometries; create "
-                "one update per system (optimizer state is "
-                "system-scoped)"
-            )
-            raise RuntimeError(msg)
-        buf = _fresh_buffer(self._momentum_buffers, name, param, buf)
-        return buf
-
     def step(
         self,
         params: dict[str, Tensor],
@@ -855,7 +779,9 @@ class UnitRMSUpdate:
         bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
-            buf = self._buffer(name, param)
+            buf = self._get_buffer(
+                self._momentum_buffers, name, param, "Momentum buffer"
+            )
             buf.mul_(self.config.momentum).add_(grad)
             self._momentum_buffers[name] = buf
             if self.config.momentum <= 0:
@@ -866,20 +792,14 @@ class UnitRMSUpdate:
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
-        return {
-            "momentum": {
-                k: v.detach().clone() for k, v in self._momentum_buffers.items()
-            }
-        }
+        return self._snapshot_momentum()
 
     def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
-        self._momentum_buffers = {
-            k: v.clone() for k, v in state.get("momentum", {}).items()
-        }
+        self._restore_momentum(state)
 
 
 @update_backend("local_adam")
-class LocalAdamUpdate:
+class LocalAdamUpdate(BufferManager, AdamStateMixin):
     """Per-tensor scalar-second-moment Adam (LAMB-style; RESEARCH4 A1 rung).
 
     ``u = m̂ / sqrt(mean(v̂))`` — the denominator is ONE scalar per
@@ -909,22 +829,6 @@ class LocalAdamUpdate:
         self._v: dict[str, Tensor] = {}
         self._t = 0
 
-    def _state(self, name: str, param: Tensor, store: dict[str, Tensor]) -> Tensor:
-        buf = store.get(name)
-        if buf is not None and buf.shape != param.shape:
-            msg = (
-                f"LocalAdam state for {name!r} has shape "
-                f"{tuple(buf.shape)} but parameter has "
-                f"{tuple(param.shape)} — the update instance is "
-                "being reused across different geometries; create "
-                "one update per system (optimizer state is "
-                "system-scoped)"
-            )
-            raise RuntimeError(msg)
-        buf = _fresh_buffer(store, name, param, buf)
-        store[name] = buf
-        return buf
-
     def step(
         self,
         params: dict[str, Tensor],
@@ -939,8 +843,8 @@ class LocalAdamUpdate:
         bias2 = 1 - beta2**self._t
 
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
-            m = self._state(name, param, self._m)
-            v = self._state(name, param, self._v)
+            m = self._get_buffer(self._m, name, param, "LocalAdam state")
+            v = self._get_buffer(self._v, name, param, "LocalAdam state")
             m.mul_(beta1).add_(grad, alpha=1 - beta1)
             v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
             m_hat = m / bias1
@@ -951,24 +855,14 @@ class LocalAdamUpdate:
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
-        def group(store: dict[str, Tensor]) -> dict[str, Tensor]:
-            return {k: v.detach().clone() for k, v in store.items()}
-
-        return {
-            "m": group(self._m),
-            "v": group(self._v),
-            "counters": {"t": torch.tensor(self._t)},
-        }
+        return self._snapshot_adam()
 
     def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
-        self._m = {k: v.clone() for k, v in state.get("m", {}).items()}
-        self._v = {k: v.clone() for k, v in state.get("v", {}).items()}
-        t = state.get("counters", {}).get("t")
-        self._t = int(t.item()) if t is not None else 0
+        self._restore_adam(state)
 
 
 @update_backend("adam")
-class AdamUpdate:
+class AdamUpdate(BufferManager, ClippingMixin, AdamStateMixin):
     """Adam (Kingma & Ba 2015) on pseudo-gradients.
 
     Per-coordinate first/second-moment estimates with bias correction.
@@ -1011,31 +905,6 @@ class AdamUpdate:
         self._v: dict[str, Tensor] = {}
         self._t = 0
 
-    def _clip(self, grads: list[Tensor]) -> list[Tensor]:
-        clip = self.config.grad_clip
-        if clip is None or clip <= 0 or not grads:
-            return grads
-        stacked_norms = torch.stack([g.norm() for g in grads])
-        total_norm = torch.linalg.vector_norm(stacked_norms)
-        if total_norm > clip:
-            scale = clip / (total_norm + 1e-8)
-            grads = [g * scale for g in grads]
-        return grads
-
-    def _state(self, name: str, param: Tensor, store: dict[str, Tensor]) -> Tensor:
-        buf = store.get(name)
-        if buf is not None and buf.shape != param.shape:
-            msg = (
-                f"Adam state for {name!r} has shape {tuple(buf.shape)} but "
-                f"parameter has {tuple(param.shape)} — the update instance "
-                "is being reused across different geometries; create one "
-                "update per system (optimizer state is system-scoped)"
-            )
-            raise RuntimeError(msg)
-        buf = _fresh_buffer(store, name, param, buf)
-        store[name] = buf
-        return buf
-
     def step(
         self,
         params: dict[str, Tensor],
@@ -1043,7 +912,7 @@ class AdamUpdate:
         geometry: Geometry,
         bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
-        grads = self._clip(list(pseudo_grads))
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
         self._t += 1
         beta1 = self.config.momentum
         beta2 = self.config.beta2
@@ -1051,8 +920,8 @@ class AdamUpdate:
         bias2 = 1 - beta2**self._t
 
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
-            m = self._state(name, param, self._m)
-            v = self._state(name, param, self._v)
+            m = self._get_buffer(self._m, name, param, "Adam state")
+            v = self._get_buffer(self._v, name, param, "Adam state")
             m.mul_(beta1).add_(grad, alpha=1 - beta1)
             v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
             m_hat = m / bias1
@@ -1063,20 +932,10 @@ class AdamUpdate:
         return apply_pseudo_gradients(params, grads, apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
-        def group(store: dict[str, Tensor]) -> dict[str, Tensor]:
-            return {k: v.detach().clone() for k, v in store.items()}
-
-        return {
-            "m": group(self._m),
-            "v": group(self._v),
-            "counters": {"t": torch.tensor(self._t)},
-        }
+        return self._snapshot_adam()
 
     def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
-        self._m = {k: v.clone() for k, v in state.get("m", {}).items()}
-        self._v = {k: v.clone() for k, v in state.get("v", {}).items()}
-        t = state.get("counters", {}).get("t")
-        self._t = int(t.item()) if t is not None else 0
+        self._restore_adam(state)
 
 
 @update_backend("ortho_adam")
@@ -1138,7 +997,7 @@ class OrthoAdamUpdate(AdamUpdate):
         geometry: Geometry,
         bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
-        grads = self._clip(list(pseudo_grads))
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
         self._t += 1
         beta1 = self.config.momentum
         beta2 = self.config.beta2
@@ -1151,8 +1010,8 @@ class OrthoAdamUpdate(AdamUpdate):
                 # Non-finite gradient: poisoning the m/v moments would be
                 # permanent (NaNs propagate through the EMA) — skip.
                 return param
-            m = self._state(name, param, self._m)
-            v = self._state(name, param, self._v)
+            m = self._get_buffer(self._m, name, param, "OrthoAdam state")
+            v = self._get_buffer(self._v, name, param, "OrthoAdam state")
             m.mul_(beta1).add_(grad, alpha=1 - beta1)
             v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
             m_hat = m / bias1
@@ -1181,7 +1040,7 @@ class OrthoAdamUpdate(AdamUpdate):
 
 
 @update_backend("lion")
-class LionUpdate(AdamUpdate):
+class LionUpdate(BufferManager, ClippingMixin, LionStateMixin):
     """Lion (Chen et al. 2023): sign of the momentum interpolant.
 
     ``update = sign(β1·m + (1−β1)·g)`` then ``m ← β2·m + (1−β2)·g`` —
@@ -1210,6 +1069,11 @@ class LionUpdate(AdamUpdate):
         ),
     )
 
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.lion()
+        self._m: dict[str, Tensor] = {}
+        self._t = 0
+
     def step(
         self,
         params: dict[str, Tensor],
@@ -1217,7 +1081,7 @@ class LionUpdate(AdamUpdate):
         geometry: Geometry,
         bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
-        grads = self._clip(list(pseudo_grads))
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
         self._t += 1
         beta1 = self.config.momentum
         beta2 = self.config.beta2
@@ -1227,7 +1091,7 @@ class LionUpdate(AdamUpdate):
                 # Non-finite gradient: poisoning the m buffer would be
                 # permanent (NaNs propagate through the EMA) — skip.
                 return param
-            m = self._state(name, param, self._m)
+            m = self._get_buffer(self._m, name, param, "Lion state")
             interp = m.mul(beta1).add(grad, alpha=1 - beta1)
             m.mul_(beta2).add_(grad, alpha=1 - beta2)
             return param - self.config.step_size * torch.sign(interp)
@@ -1235,19 +1099,14 @@ class LionUpdate(AdamUpdate):
         return apply_pseudo_gradients(params, grads, apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
-        return {
-            "m": {k: v.detach().clone() for k, v in self._m.items()},
-            "counters": {"t": torch.tensor(self._t)},
-        }
+        return self._snapshot_lion()
 
     def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
-        self._m = {k: v.clone() for k, v in state.get("m", {}).items()}
-        t = state.get("counters", {}).get("t")
-        self._t = int(t.item()) if t is not None else 0
+        self._restore_lion(state)
 
 
 @update_backend("riemannian_orthogonal", "muon")
-class RiemannianOrthogonalUpdate:
+class RiemannianOrthogonalUpdate(BufferManager, StateSnapshotMixin):
     """Muon-style orthogonal update: orthogonalize the momentum buffer.
 
     The orthogonalizer is Newton–Schulz iteration (Muon's actual recipe,
@@ -1315,8 +1174,9 @@ class RiemannianOrthogonalUpdate:
             # gradient: orthogonalization amplifies the noise floor, so the
             # EMA buffer must accumulate signal across batches first.
             if self.config.momentum > 0:
-                buf = self._momentum_buffers.get(name)
-                buf = _fresh_buffer(self._momentum_buffers, name, param, buf)
+                buf = self._get_buffer(
+                    self._momentum_buffers, name, param, "Momentum buffer"
+                )
                 buf.mul_(self.config.momentum).add_(grad)
                 self._momentum_buffers[name] = buf
                 grad = buf
@@ -1339,16 +1199,10 @@ class RiemannianOrthogonalUpdate:
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
-        return {
-            "momentum": {
-                k: v.detach().clone() for k, v in self._momentum_buffers.items()
-            }
-        }
+        return self._snapshot_momentum()
 
     def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
-        self._momentum_buffers = {
-            k: v.clone() for k, v in state.get("momentum", {}).items()
-        }
+        self._restore_momentum(state)
 
 
 @update_backend("spectral_constrained", "spectral")
@@ -1393,6 +1247,12 @@ class SpectralConstrainedUpdate:
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {}
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        pass
+
 
 @update_backend("mean_norm")
 class MeanNormUpdate:
@@ -1430,6 +1290,12 @@ class MeanNormUpdate:
             return param - self.config.step_size * grad / (grad.abs().mean() + 1e-8)
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {}
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        pass
 
 
 @update_backend("natural_gradient")
@@ -1603,6 +1469,20 @@ class ElasticConsolidationUpdate:
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "old_params": {k: v.clone() for k, v in self._old_params.items()},
+            "fisher": {k: v.clone() for k, v in self._fisher.items()},
+            "baseline": {k: v.clone() for k, v in self._baseline.items()},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._old_params = {
+            k: v.clone() for k, v in state.get("old_params", {}).items()
+        }
+        self._fisher = {k: v.clone() for k, v in state.get("fisher", {}).items()}
+        self._baseline = {k: v.clone() for k, v in state.get("baseline", {}).items()}
 
 
 @update_backend("role_split")
