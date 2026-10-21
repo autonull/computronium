@@ -6,7 +6,7 @@ and "none" is bit-exact passthrough.
 
 import torch
 
-from computronium.ontology.credit import _apply_credit_norm
+from computronium.ontology.utils import apply_norm as _apply_credit_norm
 
 
 def _grads() -> list[torch.Tensor]:

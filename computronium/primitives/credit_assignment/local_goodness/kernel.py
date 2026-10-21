@@ -19,7 +19,7 @@ from computronium.acceleration.fa_kernels import (
     fa_batched_outer_triton,
     fa_feedback_projection_triton,
 )
-from computronium.ontology.credit import _apply_credit_norm
+from computronium.ontology.utils import apply_norm
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -138,7 +138,7 @@ def _lemma_backward_triton(  # ruff: ignore[too-many-locals]
             err = e1 @ B
 
         # Apply credit norm
-        err = _apply_credit_norm(
+        err = apply_norm(
             [err], credit_norm, [ref] if ref is not None else None
         )[0]
 

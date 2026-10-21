@@ -22,7 +22,7 @@ from computronium.ontology.credit._base import (
     StatefulCredit as StatefulCredit,
 )
 from computronium.ontology.dynamics._state import state_dual_vars, state_energy
-from computronium.ontology.utils import _learnable_weight_names
+from computronium.ontology.utils import _learnable_weight_names, apply_norm
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -56,50 +56,6 @@ def tf_blocks(geometry: TransformerGeometry) -> list[TransformerBlock]:
 
 
 CreditNormMode = Literal["none", "relative", "rms", "beta_adaptive", "spectral"]
-
-
-def _apply_credit_norm(
-    grads: list[Tensor],
-    mode: CreditNormMode,
-    error_refs: list[Tensor] | None = None,
-) -> list[Tensor]:
-    """Per-layer credit-signal normalization (TODO12 A4).
-
-    ``grads`` are the per-layer credit tensors at formation; zeros stay
-    zeros (a zero norm leaves the layer untouched — no fabricated signal).
-    """
-    if mode == "none":
-        return grads
-    out: list[Tensor] = []
-    for i, g in enumerate(grads):
-        if not torch.isfinite(g).all():
-            # Diverged credit: SVD/RMS on inf/NaN would crash or poison
-            # downstream sweeps — pass the layer through untouched (the
-            # run is already lost; the crash only destroys the evidence;
-            # the RiemannianOrthogonalUpdate diverged-step precedent).
-            out.append(g)
-            continue
-        if mode == "spectral":
-            if g.ndim < 2:
-                out.append(g)
-                continue
-            radius = torch.linalg.matrix_norm(g, ord=2)
-            out.append(g / (radius + 1e-8) if radius > 0 else g)
-        elif mode == "rms":
-            rms = g.square().mean().sqrt()
-            out.append(g / (rms + 1e-8) if rms > 0 else g)
-        else:  # "relative" | "beta_adaptive"
-            ref = (
-                error_refs[i]
-                if error_refs is not None and i < len(error_refs)
-                else None
-            )
-            if ref is None:
-                out.append(g)
-                continue
-            mag = ref.norm() if mode == "relative" else ref.square().mean().sqrt()
-            out.append(g / (mag + 1e-8) if mag > 0 else g)
-    return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -836,7 +792,7 @@ class ThermodynamicContrast:
                 for i in range(len(free_acts) - 1)
             ]
             return block_geometry.scatter_block_grads(
-                _apply_credit_norm(block_grads, self.config.credit_norm, eps)
+                apply_norm(block_grads, self.config.credit_norm, eps)
             )
 
         weight_names = _learnable_weight_names(geometry.params)
@@ -858,7 +814,7 @@ class ThermodynamicContrast:
                 / free_acts[i].shape[0]
             )
             grads.append(contrast.T)
-        return _apply_credit_norm(grads, self.config.credit_norm, eps)
+        return apply_norm(grads, self.config.credit_norm, eps)
 
     def surrogate_objective(
         self,
@@ -962,11 +918,11 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
     ) -> list[Tensor]:
         """Tile-mesh error walk over assembled feedback blocks."""
         blocks = self._assemble_tile_feedback(geometry)
-        err = _apply_credit_norm([delta_out], self.config.credit_norm)[0]
+        err = apply_norm([delta_out], self.config.credit_norm)[0]
         block_grads: list[Tensor] = []
         for i in range(len(acts) - 2, -1, -1):
             block_grads.append(err.T @ acts[i] / batch)
-            err = _apply_credit_norm(
+            err = apply_norm(
                 [err @ blocks[i]], self.config.credit_norm, [acts[i]]
             )[0]
         block_grads.reverse()
@@ -996,11 +952,11 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
         # err_at[L] = ∂L/∂a_L; err_at[k] = err_at[k+1] @ B_k.
         # During the sweep, err is err_at[i + 1] on entering iteration i.
         grads: list[Tensor] = []
-        err = _apply_credit_norm([delta_out], self.config.credit_norm)[0]
+        err = apply_norm([delta_out], self.config.credit_norm)[0]
         hidden_err = err
         for i in range(n_trans - 1, -1, -1):
             grads.append(err.T @ acts[i] / batch)
-            err = _apply_credit_norm(
+            err = apply_norm(
                 [err @ self._feedback_weights[weight_names[i]]],
                 self.config.credit_norm,
                 [acts[i]],
@@ -1170,39 +1126,6 @@ class LocalGoodnessCredit(LearnedFeedbackMixin):
                 cur.dtype
             )
 
-    def get_state(self) -> dict[str, dict[str, Tensor]]:
-        """Snapshot protocol (A1 precedent): learned-B matrices + step counter."""
-        if not self._learned:
-            return {}
-        return {
-            "learned_feedback": {
-                f"{name}|{shape[0]}x{shape[1]}|{device}|{dtype}": t.detach().clone()
-                for (name, shape, device, dtype), t in self._learned.items()
-            },
-            "step": {"counter": torch.tensor(self._feedback_step)},
-        }
-
-    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
-        step_group = state.get("step", {})
-        step = step_group.get("counter") if isinstance(step_group, dict) else None
-        if not isinstance(step, Tensor):
-            msg = "learned-feedback credit state is missing the step counter"
-            raise RuntimeError(msg)  # ruff: ignore[type-check-without-type-error]
-        self._feedback_step = int(step.item())
-        for key, tensor in state.get("learned_feedback", {}).items():
-            name, shape_s, device, dtype = key.split("|", 3)
-            rows, cols = (int(s) for s in shape_s.split("x"))
-            t_key = (name, (rows, cols), device, dtype)
-            cached = self._learned.get(t_key)
-            if cached is not None and cached.shape != tensor.shape:
-                msg = (
-                    f"learned-feedback state shape mismatch for {name!r}: "
-                    f"state {tuple(tensor.shape)} vs cache {tuple(cached.shape)} "
-                    "(system-scoped state cannot be re-targeted)"
-                )
-                raise RuntimeError(msg)
-            self._learned[t_key] = tensor.detach().clone()
-
     @staticmethod
     def _pepita_covariate_stream(
         free_state: SettableState, nudged_acts: list[Tensor]
@@ -1232,7 +1155,7 @@ class LocalGoodnessCredit(LearnedFeedbackMixin):
             b = self._learned_projection(name, width, out_dim, str(e1.device), e1.dtype)
         else:
             b = self._inverse_projection(name, width, out_dim, str(e1.device), e1.dtype)
-        return _apply_credit_norm(
+        return apply_norm(
             [e1 @ b], self.config.credit_norm, [ref] if ref is not None else None
         )[0]
 
@@ -2539,7 +2462,7 @@ class PCALMCredit(_SurrogateUndefined):
             else:
                 grads.append(torch.zeros_like(geometry.params[name]))
 
-        return _apply_credit_norm(grads, self.config.credit_norm)
+        return apply_norm(grads, self.config.credit_norm)
 
 
 class LemmaCredit(LocalGoodnessCredit):

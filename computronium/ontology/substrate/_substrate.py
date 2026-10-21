@@ -10,6 +10,20 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 import torch
 from torch import Tensor
 
+from computronium.ontology.substrate.energy import (
+    estimate_analog_energy,
+    estimate_complex_energy,
+    estimate_digital_energy,
+    estimate_memristive_energy,
+    estimate_neuromorphic_energy,
+    estimate_optical_energy,
+    estimate_quantized_energy,
+    estimate_quantum_energy,
+    estimate_sparse_energy,
+    estimate_ternary_energy,
+    extract_layer_shapes,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -403,28 +417,8 @@ class DigitalSubstrate:
 
         Uses typical MAC energy: ~1 pJ/MAC for FP32 on modern GPUs.
         """
-        # FLOPs for matrix multiply: 2 * M * N * K (multiply-add = 2 ops)
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        flops_per_forward = 2 * batch * in_features * out_features
-        flops_per_update = flops_per_forward  # Backward pass similar cost
-        total_flops = (flops_per_forward + flops_per_update) * num_layers
-
-        # Energy per FLOP: ~1 pJ for FP32 MAC on GPU (varies by hardware)
-        energy_per_flop = 1e-12  # 1 pJ
-        total_energy = total_flops * energy_per_flop
-
-        return {
-            "forward_energy_per_batch": flops_per_forward * energy_per_flop,
-            "update_energy_per_batch": flops_per_update * energy_per_flop,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_digital_energy(shapes)._asdict()
 
 
 class AnalogSubstrate:
@@ -473,30 +467,8 @@ class AnalogSubstrate:
         Analog MAC: ~0.1 pJ/MAC (10x more efficient than digital)
         Plus ADC/DAC overhead.
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        macs_per_forward = batch * in_features * out_features
-        macs_per_update = macs_per_forward
-
-        # Analog MAC energy: ~0.1 pJ, ADC/DAC overhead ~1 pJ per output
-        energy_per_mac = 1e-13  # 0.1 pJ
-        adc_dac_energy = out_features * batch * 1e-12  # 1 pJ per output element
-
-        forward_energy = macs_per_forward * energy_per_mac + adc_dac_energy
-        update_energy = macs_per_update * energy_per_mac + adc_dac_energy
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_analog_energy(shapes)._asdict()
 
 
 class MemristiveSubstrate:
@@ -575,33 +547,8 @@ class MemristiveSubstrate:
         Memristive MAC: ~1 fJ/MAC (1000x more efficient than digital)
         Includes IR drop and conductance programming energy.
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        macs_per_forward = batch * in_features * out_features
-        macs_per_update = macs_per_forward
-
-        # Memristive MAC energy: ~1 fJ (0.001 pJ)
-        # Programming energy: ~10 fJ per device
-        energy_per_mac = 1e-15  # 1 fJ
-        programming_energy_per_device = 1e-14  # 10 fJ
-        num_devices = 2 * in_features * out_features  # Differential pair
-        programming_energy = num_devices * programming_energy_per_device
-
-        forward_energy = macs_per_forward * energy_per_mac
-        update_energy = macs_per_update * energy_per_mac + programming_energy
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_memristive_energy(shapes)._asdict()
 
 
 class NeuromorphicSubstrate:
@@ -654,33 +601,9 @@ class NeuromorphicSubstrate:
         Neuromorphic MAC: ~0.01 pJ/MAC (event-driven, sparse)
         Spike processing energy proportional to spike rate.
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        # Effective MACs reduced by sparsity
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
         sparsity = self.config.sparsity if self.config.sparsity else 0.5
-        effective_macs_per_forward = batch * in_features * out_features * (1 - sparsity)
-        effective_macs_per_update = effective_macs_per_forward
-
-        # Neuromorphic energy: ~0.01 pJ per synaptic event
-        energy_per_event = 1e-14  # 0.01 pJ
-        # Neuron update overhead
-        neuron_energy = out_features * batch * 1e-13  # 0.1 pJ per neuron
-
-        forward_energy = effective_macs_per_forward * energy_per_event + neuron_energy
-        update_energy = effective_macs_per_update * energy_per_event + neuron_energy
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        return estimate_neuromorphic_energy(shapes, sparsity=sparsity)._asdict()
 
 
 class OpticalSubstrate:
@@ -731,32 +654,8 @@ class OpticalSubstrate:
         Phase shifter tuning energy: ~10 fJ per phase shifter
         Laser power overhead.
         """
-        in_features = input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        # Optical interference is passive (~0 energy for MAC)
-        # Phase shifter tuning: ~10 fJ per phase shifter
-        # Laser power: ~1 mW continuous
-        laser_power = 1e-3  # 1 mW
-        time_per_step = 1e-9  # 1 ns per step
-        laser_energy = laser_power * time_per_step
-
-        phase_shifter_energy = in_features * out_features * 1e-14  # 10 fJ per shifter
-
-        forward_energy = laser_energy
-        update_energy = laser_energy + phase_shifter_energy
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_optical_energy(shapes)._asdict()
 
 
 class QuantumSubstrate:
@@ -806,38 +705,8 @@ class QuantumSubstrate:
         Qubit control/readout: ~1 pJ per qubit
         Error correction overhead: 10-100x
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        # Quantum circuit depth proportional to matrix size
-        num_qubits = max(in_features, out_features)
-        circuit_depth = int(num_qubits * 2)  # Approximate
-
-        # Gate energy: ~1 aJ per gate (superconducting transmon)
-        num_gates = circuit_depth * num_qubits
-        gate_energy = num_gates * 1e-18  # 1 aJ per gate
-
-        # Qubit control/readout: ~1 pJ per qubit per shot
-        shots = batch
-        control_energy = num_qubits * shots * 1e-12
-
-        # Error correction overhead: 10x
-        ec_overhead = 10
-
-        forward_energy = (gate_energy + control_energy) * ec_overhead
-        update_energy = forward_energy  # Similar for variational update
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_quantum_energy(shapes)._asdict()
 
 
 class ComplexSubstrate:
@@ -903,28 +772,8 @@ class ComplexSubstrate:
         Complex MAC: 4x real MACs (2 multiplies + 2 adds per complex multiply)
         Emulated on digital hardware: 4x digital energy.
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        # Complex MAC = 4 real MACs
-        real_macs_per_forward = 4 * batch * in_features * out_features
-        real_macs_per_update = real_macs_per_forward
-        total_real_macs = (real_macs_per_forward + real_macs_per_update) * num_layers
-
-        # Energy per real FLOP: ~1 pJ
-        energy_per_flop = 1e-12
-        total_energy = total_real_macs * energy_per_flop
-
-        return {
-            "forward_energy_per_batch": real_macs_per_forward * energy_per_flop,
-            "update_energy_per_batch": real_macs_per_update * energy_per_flop,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_complex_energy(shapes)._asdict()
 
 
 class SparseSubstrate:
@@ -974,36 +823,9 @@ class SparseSubstrate:
         Sparsity reduces MACs proportionally.
         Overhead for sparse indexing.
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
         sparsity = self.config.sparsity if self.config.sparsity else 0.9
-        effective_macs_per_forward = batch * in_features * out_features * (1 - sparsity)
-        effective_macs_per_update = effective_macs_per_forward
-
-        # Sparse MAC: ~0.5 pJ (indexing overhead)
-        # Indexing overhead: ~10% of dense
-        energy_per_mac = 5e-13  # 0.5 pJ
-        indexing_overhead = 0.1
-
-        forward_energy = (
-            effective_macs_per_forward * energy_per_mac * (1 + indexing_overhead)
-        )
-        update_energy = (
-            effective_macs_per_update * energy_per_mac * (1 + indexing_overhead)
-        )
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        return estimate_sparse_energy(shapes, sparsity=sparsity)._asdict()
 
 
 class TernarySubstrate:
@@ -1058,29 +880,8 @@ class TernarySubstrate:
         Ternary MAC: addition/subtraction only (no multiplication)
         ~0.1 pJ per ternary MAC (10x more efficient than digital FP32)
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        macs_per_forward = batch * in_features * out_features
-        macs_per_update = macs_per_forward
-
-        # Ternary MAC: addition only, ~0.1 pJ
-        energy_per_mac = 1e-13  # 0.1 pJ
-
-        forward_energy = macs_per_forward * energy_per_mac
-        update_energy = macs_per_update * energy_per_mac
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_ternary_energy(shapes)._asdict()
 
 
 def substrate_from_config(config: SubstrateConfig) -> Substrate:  # ruff: ignore[too-many-return-statements]
@@ -1177,29 +978,8 @@ class QuantizedSubstrate(DigitalSubstrate):
 
         INT8 MAC: ~0.2 pJ (5x more efficient than FP32)
         """
-        batch, in_features = input_shape[0], input_shape[-1]
-        out_features, in_features_w = weight_shape[0], weight_shape[1]
-        if in_features != in_features_w:
-            raise ValueError(
-                f"Input feature mismatch: {in_features} != {in_features_w}"
-            )
-
-        macs_per_forward = batch * in_features * out_features
-        macs_per_update = macs_per_forward
-
-        # INT8 MAC energy: ~0.2 pJ
-        energy_per_mac = 2e-13  # 0.2 pJ
-
-        forward_energy = macs_per_forward * energy_per_mac
-        update_energy = macs_per_update * energy_per_mac
-        total_energy = (forward_energy + update_energy) * num_layers
-
-        return {
-            "forward_energy_per_batch": forward_energy,
-            "update_energy_per_batch": update_energy,
-            "total_energy_per_step": total_energy,
-            "energy_per_sample": total_energy / batch_size,
-        }
+        shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
+        return estimate_quantized_energy(shapes)._asdict()
 
 
 __all__ = [

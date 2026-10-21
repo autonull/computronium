@@ -58,7 +58,7 @@ from computronium import (
     create_task,
 )
 from computronium.ontology._settle_kernel import extract_layered_params
-from computronium.ontology.credit import _apply_credit_norm
+from computronium.ontology.utils import apply_norm
 
 WIDTH = 128
 DEPTH = 20
@@ -107,7 +107,7 @@ def _run_arm(norm: str, optimizer: str, train_data) -> dict:
         dynamics.settle(SystemState(x=x), geometry, substrate, y)
         eps = [e.detach() for e in dynamics._last_errors]
         if norm != "none":
-            eps = _apply_credit_norm(eps, norm)
+            eps = apply_norm(eps, norm)
         else:
             eps = [e.clone() for e in eps]
 

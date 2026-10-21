@@ -18,7 +18,7 @@ from computronium.acceleration.fa_kernels import (
     fa_feedback_projection_triton,
 )
 from computronium.harness import seeded_rng
-from computronium.ontology.credit import _apply_credit_norm
+from computronium.ontology.utils import apply_norm
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -84,7 +84,7 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
 
     # Apply credit norm to output error (RandomProjectionsCredit uses "none" by default)
     credit_norm = "none"
-    err = _apply_credit_norm([output_error], credit_norm)[0]
+    err = apply_norm([output_error], credit_norm)[0]
 
     weight_grads = []
 
@@ -108,7 +108,7 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
                 err = err @ B  # ruff: ignore[non-augmented-assignment] — explicit rebind; `@=` reads as in-place mutation
 
             # Apply credit norm only (no activation derivative)
-            err = _apply_credit_norm([err], credit_norm, [h_prev])[0]
+            err = apply_norm([err], credit_norm, [h_prev])[0]
 
     weight_grads.reverse()
     return weight_grads

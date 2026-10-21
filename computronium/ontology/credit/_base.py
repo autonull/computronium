@@ -229,6 +229,15 @@ class LearnedFeedbackMixin:
                 raise TypeError(msg)
             self._learned[t_key] = tensor.detach().clone()
 
+    # Public protocol methods — delegate to internal implementation
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        """Snapshot protocol: learned-B matrices + step counter."""
+        return self._snapshot_learned_feedback()
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        """Restore learned feedback state from snapshot."""
+        self._restore_learned_feedback(state)
+
 
 # Re-export for backward compatibility
 __all__ = [
