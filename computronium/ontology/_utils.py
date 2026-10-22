@@ -213,11 +213,11 @@ def _clip_grads(grads: list[Tensor], clip: float | None) -> list[Tensor]:
     if clip is None or clip <= 0 or not grads:
         return grads
     clipped = []
-    for g in grads:
-        gn = g.norm()
+    for grad in grads:
+        gn = grad.norm()
         if gn > clip:
-            g = g * (clip / (gn + 1e-8))
-        clipped.append(g)
+            grad = grad * (clip / (gn + 1e-8))
+        clipped.append(grad)
     return clipped
 
 

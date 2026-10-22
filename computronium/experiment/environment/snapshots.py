@@ -203,7 +203,7 @@ class EnvironmentCapture:
                         "capability": f"{torch.cuda.get_device_capability(i)[0]}.{torch.cuda.get_device_capability(i)[1]}",
                     })
                 cuda_version = torch.version.cuda
-        except Exception:
+        except Exception:  # ruff: ignore[try-except-pass]
             pass
 
         try:
@@ -215,7 +215,7 @@ class EnvironmentCapture:
             )
             if result.returncode == 0:
                 nvidia_driver_version = result.stdout.strip().split("\n")[0]
-        except Exception:
+        except Exception:  # ruff: ignore[try-except-pass]
             pass
 
         import psutil
@@ -311,7 +311,7 @@ class EnvironmentCapture:
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-        except Exception:
+        except Exception:  # ruff: ignore[try-except-pass]
             pass
         return None
 
@@ -386,8 +386,8 @@ class ContainerManager:
 
         # Extract base image
         base_image = None
-        for line in dockerfile_content.split("\n"):
-            line = line.strip()
+        for raw_line in dockerfile_content.split("\n"):
+            line = raw_line.strip()
             if line.startswith("FROM "):
                 base_image = line[5:].split()[0]
                 break
@@ -396,7 +396,7 @@ class ContainerManager:
         logger.info(f"Building Docker image: {full_name}")
 
         try:
-            image, logs = self._client.images.build(  # type: ignore[union-attr]
+            image, _ = self._client.images.build(  # type: ignore[union-attr]
                 path=str(dockerfile_path.parent),
                 dockerfile=dockerfile_path.name,
                 tag=full_name,
@@ -429,10 +429,11 @@ class ContainerManager:
                 for chunk in image.save(named=True):
                     f.write(chunk)
             logger.info(f"Saved Docker image to {output_path}")
-            return output_path
         except Exception as e:
             logger.exception(f"Failed to save Docker image: {e}")
             raise
+        else:
+            return output_path
 
     def load_image(self, input_path: Path) -> str | None:
         """Load Docker image from tar archive."""
@@ -442,11 +443,12 @@ class ContainerManager:
         try:
             with input_path.open("rb") as f:
                 images = self._client.images.load(f)  # type: ignore[union-attr]
+        except Exception as e:  # ruff: ignore[try-consider-else]
+            logger.exception(f"Failed to load Docker image: {e}")
+            return None
+        else:
             if images:
                 return images[0].id
-            return None
-        except Exception as e:
-            logger.exception(f"Failed to load Docker image: {e}")
             return None
 
 

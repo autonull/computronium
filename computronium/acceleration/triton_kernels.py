@@ -33,7 +33,7 @@ class TritonEqPropOps:
     @classmethod
     def _init_triton(cls):
         if cls._triton_kernel is None and TRITON_IMPORTED:
-            try:  # noqa: PLR0915
+            try:  # ruff: ignore[too-many-statements]
                 import triton
                 import triton.language as tl
                 from triton.language.extra import libdevice
@@ -366,7 +366,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     @classmethod
     def _init_muon(cls):
         if cls._muon_gram_kernel is None and TRITON_IMPORTED:
-            try:  # noqa: PLR0915
+            try:  # ruff: ignore[too-many-statements]
                 import triton
                 import triton.language as tl
 
@@ -522,7 +522,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
         a, b, c = 3.4445, -4.7750, 2.0315
 
         if TRITON_IMPORTED and out.is_cuda and M >= 16 and N >= 16:
-            try:  # noqa: PLR0915
+            try:  # ruff: ignore[too-many-statements]
                 import triton
 
                 cls._init_muon()
@@ -620,7 +620,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     @classmethod
     def _init_fisher(cls):
         if cls._fisher_kernel is None and TRITON_IMPORTED:
-            try:  # noqa: PLR0915
+            try:  # ruff: ignore[too-many-statements]
                 import triton
                 import triton.language as tl
 
@@ -680,7 +680,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     @classmethod
     def _init_ep_settle(cls):
         if cls._ep_settle_kernel is None and TRITON_IMPORTED:
-            try:  # noqa: PLR0915
+            try:  # ruff: ignore[too-many-statements]
                 import triton
                 import triton.language as tl
                 from triton.language.extra import libdevice

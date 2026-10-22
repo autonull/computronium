@@ -252,7 +252,7 @@ class MediationAnalyzer:
             try:
                 result = self.analyze(independent, mediator, dependent)
                 results.append(result)
-            except Exception:
+            except Exception:  # ruff: ignore[try-except-continue]
                 continue
 
         return results

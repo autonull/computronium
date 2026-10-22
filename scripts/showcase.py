@@ -199,7 +199,6 @@ async def run_showcase(
         )
 
     # Build component sets from registries (no historical cache)
-    components = _discover_components()
     component_sets = _build_component_sets()
     component_set = component_sets[BudgetStrategy(strategy.lower())]
 
@@ -1167,8 +1166,6 @@ def _print_final_summary(
 ):
     """Print final summary to console."""
     duration_hours = (report_data.end_time - report_data.start_time) / 3600
-    budget_s = report_data.total_budget_hours * 3600
-    elapsed_s = report_data.end_time - report_data.start_time
 
     print("\n" + "=" * 70)
     print("SHOWCASE CAMPAIGN COMPLETE")
@@ -1490,8 +1487,6 @@ def _print_final_summary(
 ):
     """Print final summary to console."""
     duration_hours = (report_data.end_time - report_data.start_time) / 3600
-    budget_s = report_data.total_budget_hours * 3600
-    elapsed_s = report_data.end_time - report_data.start_time
 
     print("\n" + "=" * 70)
     print("SHOWCASE CAMPAIGN COMPLETE")

@@ -54,11 +54,11 @@ def _ensure_ceec_available() -> bool:
         from ceec.store import CEECStore  # ruff: ignore[unused-import]
 
         import ceec  # ruff: ignore[unused-import]
-
-        return True
     except ImportError:
         logger.warning("CEEC package not available; ceec_link will not be populated")
         return False
+    else:
+        return True
 
 
 def _record_to_scope(record: Record) -> dict[str, Any]:

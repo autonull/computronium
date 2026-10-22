@@ -678,7 +678,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             carrying every one of its objectives is absent, not empty.
         """
         spec = self._spec(run_id)
-        declared = dict(spec.axis_objectives) if spec else {}
+        declared = {**spec.axis_objectives} if spec else {}
         if not declared:
             return {}
         eligible = self.claim_eligible_records(run_id)
@@ -2069,7 +2069,7 @@ def generate_html_report(
                         y=[r["val_acc"] for r in valid_records],
                         mode="markers",
                         name="Acc vs Params",
-                        marker=dict(size=8, opacity=0.6, color="lightgreen"),
+                        marker={"size": 8, "opacity": 0.6, "color": "lightgreen"},
                         text=[
                             f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}"
                             for r in valid_records
@@ -2094,8 +2094,12 @@ def generate_html_report(
                             y=pareto_y,
                             mode="markers+lines",
                             name="Acc-Params Frontier",
-                            marker=dict(size=12, color="darkgreen", symbol="diamond"),
-                            line=dict(color="darkgreen", dash="dot"),
+                            marker={
+                                "size": 12,
+                                "color": "darkgreen",
+                                "symbol": "diamond",
+                            },
+                            line={"color": "darkgreen", "dash": "dot"},
                             showlegend=False,
                         ),
                         row=1,
@@ -2119,7 +2123,7 @@ def generate_html_report(
                     y=[r["spectral_radius"] for r in valid_records],
                     mode="markers",
                     name="Stability vs Plasticity",
-                    marker=dict(size=8, opacity=0.6, color="orange"),
+                    marker={"size": 8, "opacity": 0.6, "color": "orange"},
                     text=[
                         f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}/{r['plasticity']}"
                         for r in valid_records
@@ -2150,8 +2154,8 @@ def generate_html_report(
                     y=train_loss,
                     mode="lines+markers",
                     name=f"{cell_key[:8]} train",
-                    line=dict(width=1),
-                    marker=dict(size=4),
+                    line={"width": 1},
+                    marker={"size": 4},
                     opacity=0.7,
                     showlegend=False,
                     legendgroup=cell_key,
@@ -2165,8 +2169,8 @@ def generate_html_report(
                     y=val_loss,
                     mode="lines+markers",
                     name=f"{cell_key[:8]} val",
-                    line=dict(width=1, dash="dot"),
-                    marker=dict(size=4),
+                    line={"width": 1, "dash": "dot"},
+                    marker={"size": 4},
                     opacity=0.7,
                     showlegend=False,
                     legendgroup=cell_key,
@@ -2200,8 +2204,8 @@ def generate_html_report(
                     y=train_acc,
                     mode="lines+markers",
                     name=f"{cell_key[:8]} train",
-                    line=dict(width=1),
-                    marker=dict(size=4),
+                    line={"width": 1},
+                    marker={"size": 4},
                     opacity=0.7,
                     showlegend=False,
                     legendgroup=f"{cell_key}_acc",
@@ -2215,8 +2219,8 @@ def generate_html_report(
                     y=val_acc,
                     mode="lines+markers",
                     name=f"{cell_key[:8]} val",
-                    line=dict(width=1, dash="dot"),
-                    marker=dict(size=4),
+                    line={"width": 1, "dash": "dot"},
+                    marker={"size": 4},
                     opacity=0.7,
                     showlegend=False,
                     legendgroup=f"{cell_key}_acc",
@@ -2293,7 +2297,7 @@ def generate_html_report(
                 text=heatmap_text,
                 texttemplate="%{text}",
                 colorscale="Viridis",
-                colorbar=dict(title="Val Acc"),
+                colorbar={"title": "Val Acc"},
                 showscale=True,
                 hoverongaps=False,
             ),
@@ -2320,7 +2324,7 @@ def generate_html_report(
                     y=[r[obj_y] for r in sub_data],
                     mode="markers",
                     name=f"Substrate: {substrate}",
-                    marker=dict(size=8),
+                    marker={"size": 8},
                     text=[
                         f"{r['dynamics']}/{r['credit']}/{r['update']}" for r in sub_data
                     ],
@@ -2347,13 +2351,13 @@ def generate_html_report(
                 y=[r["max_singular_value"] for r in stability_records],
                 mode="markers",
                 name="Stability",
-                marker=dict(
-                    size=10,
-                    color=[r.get("val_acc", 0) for r in stability_records],
-                    colorscale="RdYlGn",
-                    showscale=True,
-                    colorbar=dict(title="Val Acc"),
-                ),
+                marker={
+                    "size": 10,
+                    "color": [r.get("val_acc", 0) for r in stability_records],
+                    "colorscale": "RdYlGn",
+                    "showscale": True,
+                    "colorbar": {"title": "Val Acc"},
+                },
                 text=[
                     f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}<br>ρ={r['spectral_radius']:.4f}<br>σ_max={r['max_singular_value']:.4f}"
                     for r in stability_records
@@ -2375,7 +2379,7 @@ def generate_html_report(
                 y=[0, max_val],
                 mode="lines",
                 name="σ_max = ρ(J)",
-                line=dict(color="gray", dash="dash", width=1),
+                line={"color": "gray", "dash": "dash", "width": 1},
                 showlegend=False,
             ),
             row=3,
@@ -2389,8 +2393,14 @@ def generate_html_report(
         title=f"Run Report: {run_id} (Status: {summary.status})",
         height=1400,
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
-        margin=dict(t=100, b=50, l=50, r=50),
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.01,
+            "xanchor": "right",
+            "x": 1,
+        },
+        margin={"t": 100, "b": 50, "l": 50, "r": 50},
     )
 
     # Generate ablation tables HTML

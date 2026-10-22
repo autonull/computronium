@@ -51,11 +51,11 @@ def compute_gradient_statistics(
     layer_grads: dict[str, list[Tensor]] = {}
 
     # Collect gradients over several batches
-    for i, (x, y) in enumerate(dataloader):
+    for i, (x_batch, y_batch) in enumerate(dataloader):
         if i >= config.sample_batches:
             break
 
-        x, y = x.to(device), y.to(device)
+        x_batch, y_batch = x_batch.to(device), y_batch.to(device)
         model.zero_grad()
 
         output = model(x)

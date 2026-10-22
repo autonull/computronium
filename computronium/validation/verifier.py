@@ -187,11 +187,12 @@ class Verifier:
             _name, method = self.tracks[tid]
             try:
                 result = method(self)
-                return tid, result, None
             except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 import traceback
 
                 return tid, None, f"Failed: {e}\n{traceback.format_exc()}"
+            else:
+                return tid, result, None
 
         if parallel and len(track_ids) > 1:
             import concurrent.futures

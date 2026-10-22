@@ -49,18 +49,21 @@ class _DynamicsRegistryView:
     def __contains__(self, key: str) -> bool:
         try:
             _DYNAMICS_REGISTRY.get(key)
-            return True
         except KeyError:
             return False
+        else:
+            return True
 
     def __iter__(self):
         return iter(_DYNAMICS_REGISTRY.aliases())
 
     def get(self, key: str, default=None):
         try:
-            return _DYNAMICS_REGISTRY.get(key)
+            result = _DYNAMICS_REGISTRY.get(key)
         except KeyError:
             return default
+        else:
+            return result
 
     def keys(self):
         return _DYNAMICS_REGISTRY.aliases()

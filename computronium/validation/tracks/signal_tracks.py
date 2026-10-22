@@ -55,7 +55,7 @@ class SignalPropagationTrack(ValidationTrack):
         # Test with moderate depths first to avoid excessive computation
         depths = [10, 50, 100]
 
-        try:  # noqa: PLR0915
+        try:  # ruff: ignore[too-many-statements]
             # Run experiment with PyTorch backend
             results_pytorch = run_signal_propagation_experiment(
                 depths=depths, perturbation_strength=0.1, backend="pytorch"

@@ -1589,9 +1589,10 @@ class _UpdateRegistryView:
     def __contains__(self, key: str) -> bool:
         try:
             _UPDATE_REGISTRY.get(key)
-            return True
         except KeyError:
             return False
+        else:
+            return True
 
     def __iter__(self):
         return iter(_UPDATE_REGISTRY.aliases())
@@ -1601,9 +1602,11 @@ class _UpdateRegistryView:
 
     def get(self, key: str, default=None):
         try:
-            return _UPDATE_REGISTRY.get(key)
+            result = _UPDATE_REGISTRY.get(key)
         except KeyError:
             return default
+        else:
+            return result
 
     def keys(self):
         return _UPDATE_REGISTRY.aliases()

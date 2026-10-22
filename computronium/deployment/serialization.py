@@ -725,7 +725,7 @@ class InferenceServer:
         if not self.tensorrt_config.enabled:
             return
 
-        try:  # noqa: PLR0915
+        try:  # ruff: ignore[too-many-statements]
             import torch_tensorrt  # type: ignore  # ruff: ignore[blanket-type-ignore]
 
             self.model.eval()
@@ -812,7 +812,7 @@ class InferenceServer:
 
         start_time = time.perf_counter()
 
-        try:  # noqa: PLR0915
+        try:  # ruff: ignore[too-many-statements]
             # Stack inputs
             batch_data = []
             for req in requests:

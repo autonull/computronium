@@ -309,7 +309,7 @@ class ExperimentSpec(BaseModel):
             )
             if result.returncode == 0:
                 code_sha = result.stdout.strip()
-        except Exception:
+        except Exception:  # ruff: ignore[try-except-pass]
             pass
 
         return RunSpec(

@@ -506,7 +506,7 @@ def _generate_seed_stability(
                 y=grouped["std"],
                 mode="markers",
                 name="Coordinates",
-                marker=dict(size=8, opacity=0.7),
+                marker={"size": 8, "opacity": 0.7},
                 text=[
                     f"{row['geometry']}/{row['dynamics']}/{row['credit']}/{row['update']}"
                     for _, row in grouped.iterrows()
@@ -583,10 +583,10 @@ def generate_html_report(
 
     # Determine metric names from actual data
     accuracy_metrics = [
-        c for c in df.columns if c in ("validation_accuracy", "val_acc", "val_accuracy")
+        c for c in df.columns if c in {"validation_accuracy", "val_acc", "val_accuracy"}
     ]
     walltime_metrics = [
-        c for c in df.columns if c in ("walltime_total", "walltime_s", "walltime")
+        c for c in df.columns if c in {"walltime_total", "walltime_s", "walltime"}
     ]
     acc_metric = accuracy_metrics[0] if accuracy_metrics else "val_acc"
     wt_metric = walltime_metrics[0] if walltime_metrics else "walltime_s"

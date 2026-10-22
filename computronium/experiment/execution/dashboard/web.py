@@ -583,10 +583,11 @@ class WebDashboard:
                     }
                     for run in store.query_runs()
                 ]
-            return {"runs": runs}
         except Exception as e:
             logger.debug("Store unavailable for run listing: %s", e)
             return {"error": str(e), "runs": []}
+        else:
+            return {"runs": runs}
 
     async def _get_campaign_detail(self, campaign_id: str) -> dict[str, Any]:
         """Get detailed status for a specific campaign."""

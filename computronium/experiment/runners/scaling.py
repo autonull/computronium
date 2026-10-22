@@ -220,20 +220,6 @@ class ScalingRunner:
         # Generate parameter grid
         param_grid = self._generate_parameter_grid()
 
-        # Build base coordinate
-        if self.spec.base_config is None:
-            base_coord = Coordinate(
-                substrate="digital",
-                geometry="feedforward",
-                dynamics="instantaneous",
-                plasticity="null",
-                credit="gradient",
-                update="euclidean",
-                params={},
-            )
-        else:
-            base_coord = self.spec.base_config
-
         results = []
 
         # Open store once for the entire scaling run

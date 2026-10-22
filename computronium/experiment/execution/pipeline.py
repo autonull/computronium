@@ -1245,7 +1245,7 @@ class PipelineRunner:
             check_composable=False,  # Skip composability for speed at allocation time
         ):
             # Only consider cells at explore fidelity for promotion
-            if sched.fidelity in ("L0", "L1"):
+            if sched.fidelity in {"L0", "L1"}:
                 # Create a new schedule at the next fidelity
                 next_fidelity = "L1" if sched.fidelity == "L0" else "L2"
                 from computronium.experiment.schema.coordinate import Schedule

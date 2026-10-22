@@ -214,7 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             executor = get_reusable_executor()
             executor.shutdown(wait=True)
-        except Exception:
+        except Exception:  # ruff: ignore[try-except-pass]
             pass
 
 

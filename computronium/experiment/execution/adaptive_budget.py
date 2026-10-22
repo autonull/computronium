@@ -629,7 +629,7 @@ def plan_from_args(
 ) -> BudgetPlan:
     """Convenience function to create a plan from CLI args."""
     strat = BudgetStrategy(strategy.lower())
-    dev = DeviceClass.GPU if device in ("auto", "cuda") else DeviceClass.CPU
+    dev = DeviceClass.GPU if device in {"auto", "cuda"} else DeviceClass.CPU
     if device == "auto":
         import torch
 
