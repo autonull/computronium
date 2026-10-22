@@ -116,13 +116,14 @@ export class Caption implements Component {
       width: 820px;
       max-width: calc(100vw - 80px);
       padding: 12px 20px;
-      background: rgba(10, 14, 20, 0.82);
+      background: rgba(10, 14, 20, 0.92);
       border: 1px solid var(--border);
       border-radius: 10px;
       text-align: center;
       z-index: 160;
       pointer-events: none;
       box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      backdrop-filter: blur(8px);
     `;
 
     this.container.innerHTML = `
@@ -160,14 +161,14 @@ export class Caption implements Component {
     if (this.spoken) {
       this.headline.textContent = this.spoken.text;
       this.headline.style.color = this.colorOf(this.spoken.level);
-      this.context.textContent = this.state.join(" ");
+      this.context.textContent = this.state.join(" · ");
       return;
     }
 
     if (this.state.length > 0) {
       this.headline.textContent = this.state[0];
       this.headline.style.color = PALETTE.text_primary;
-      this.context.textContent = this.state.slice(1).join(" ");
+      this.context.textContent = this.state.slice(1).join(" · ");
       return;
     }
 
