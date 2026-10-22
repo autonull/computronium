@@ -21,6 +21,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# How long a waiting cell looks at the gate before it looks again. The gate
+# wakes its waiters when the ceiling moves, so this only covers the close of
+# a backend, which happens without the loop's cooperation.
+_GATE_POLL_SECONDS = 0.25
+
 try:
     import torch.distributed as dist
     from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -125,6 +130,28 @@ class ExecutionBackend(Protocol):
         """
         ...
 
+    async def set_max_workers(self, n: int) -> None:
+        """Move the ceiling on cells in flight.
+
+        The ceiling is a cap, not a target: lowering it does not disturb the
+        cells already in flight, and raising it admits cells that were
+        waiting.
+
+        Args:
+            n: The new ceiling.
+        """
+        ...
+
+    @property
+    def max_workers(self) -> int:
+        """The ceiling on cells in flight."""
+        ...
+
+    @property
+    def in_flight(self) -> int:
+        """The cells training right now."""
+        ...
+
     def shutdown(self) -> None:
         """Shutdown the backend and release resources."""
         ...
@@ -140,6 +167,69 @@ class EvaluationTask:
     params: dict[str, Any]
 
 
+class _AdmissionGate:
+    """The ceiling on cells in flight, movable while workers hold it.
+
+    ``asyncio.Semaphore`` cannot be loosened without releasing the permits
+    the workers hold, so a ceiling that moved would have to interrupt the
+    cells in flight. This gate counts what is in flight and compares it to a
+    limit that may move in either direction: lowering the limit leaves the
+    cells alone and stops the next admission, raising it wakes the waiters.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._limit = max(1, int(limit))
+        self._in_flight = 0
+        self._closed = False
+        self._condition = asyncio.Condition()
+
+    @property
+    def limit(self) -> int:
+        """The ceiling as it stands."""
+        return self._limit
+
+    @property
+    def in_flight(self) -> int:
+        """The cells holding a permit right now."""
+        return self._in_flight
+
+    async def acquire(self) -> bool:
+        """Take a permit, or report that the gate is closed.
+
+        Returns:
+            ``True`` when a permit was taken, ``False`` when the gate closed
+            before one was free.
+        """
+        async with self._condition:
+            while not self._closed and self._in_flight >= self._limit:
+                try:
+                    async with asyncio.timeout(_GATE_POLL_SECONDS):
+                        await self._condition.wait()
+                except TimeoutError:
+                    continue
+            if self._closed:
+                return False
+            self._in_flight += 1
+            return True
+
+    async def release(self) -> None:
+        """Give a permit back."""
+        async with self._condition:
+            if self._in_flight > 0:
+                self._in_flight -= 1
+            self._condition.notify_all()
+
+    async def set_limit(self, limit: int) -> None:
+        """Move the ceiling, waking the waiters when it rises."""
+        async with self._condition:
+            self._limit = max(1, int(limit))
+            self._condition.notify_all()
+
+    def close(self) -> None:
+        """Stop admitting new work; the cells in flight finish."""
+        self._closed = True
+
+
 class _ThreadedBackend:
     """Shared backend: one evaluation implementation, off the event loop.
 
@@ -151,8 +241,7 @@ class _ThreadedBackend:
     def __init__(self, *, max_workers: int = 4) -> None:
         self._max_workers = max_workers
         self._shutdown = False
-        self._admission = asyncio.Semaphore(max_workers)
-        self._admission_acquired = 0  # Track acquired permits for cleanup
+        self._admission = _AdmissionGate(max_workers)
 
     def _evaluate(
         self,
@@ -280,8 +369,12 @@ class _ThreadedBackend:
             prov: Provenance,
             params: dict[str, Any],
         ) -> EvaluationResult:
-            await self._admission.acquire()
-            self._admission_acquired += 1
+            if not await self._admission.acquire():
+                return Failure(
+                    failure_event=self._create_failure_event(
+                        coord, sched, prov, "the backend was shut down"
+                    )
+                )
             try:
                 try:
                     records = await self.submit(coord, sched, prov, params, store)
@@ -298,8 +391,7 @@ class _ThreadedBackend:
                         )
                     )
             finally:
-                self._admission.release()
-                self._admission_acquired -= 1
+                await self._admission.release()
             if records:
                 return Success(records=tuple(records))
             return Failure(
@@ -339,10 +431,27 @@ class _ThreadedBackend:
     def shutdown(self) -> None:
         """Release the backend. Evaluation bodies live on the default pool."""
         self._shutdown = True
-        # Release any acquired semaphore permits to avoid leak warnings
-        while self._admission_acquired > 0:
-            self._admission.release()
-            self._admission_acquired -= 1
+        self._admission.close()
+
+    async def set_max_workers(self, n: int) -> None:
+        """Move the ceiling on cells in flight.
+
+        Lowering the ceiling leaves the cells in flight alone: they finish,
+        and the next admission waits for the count to fall under the new
+        limit.
+        """
+        await self._admission.set_limit(n)
+        self._max_workers = self._admission.limit
+
+    @property
+    def max_workers(self) -> int:
+        """The ceiling on cells in flight."""
+        return self._admission.limit
+
+    @property
+    def in_flight(self) -> int:
+        """The cells training right now."""
+        return self._admission.in_flight
 
 
 class LocalBackend(_ThreadedBackend):
@@ -401,6 +510,7 @@ class DDPBackend:
             )
         self.config = config or DDPConfig()
         self._max_workers = max_workers
+        self._admission = _AdmissionGate(max_workers)
         self._shutdown = False
         self._initialized = False
         self._process_group = None
@@ -638,25 +748,39 @@ class DDPBackend:
             prov: Provenance,
             params: dict[str, Any],
         ) -> EvaluationResult:
-            try:
-                records = await self.submit(coord, sched, prov, params, store)
-            except Exception as e:
-                import traceback
-
-                logger.error(
-                    "DDP evaluation failed for %s: %s", coord.cell_key()[:12], e
-                )
-                logger.error("Full traceback: %s", traceback.format_exc())
+            if not await self._admission.acquire():
                 return Failure(
                     failure_event=FailureEvent(
                         cell_key=coord.cell_key(),
                         failure_cause=FailureCause.RUNTIME_ERROR,
-                        error_message=str(e),
+                        error_message="the backend was shut down",
                         coordinate=coord.to_dict(),
                         schedule=sched.to_dict(),
                         provenance=prov.to_dict(),
                     )
                 )
+            try:
+                try:
+                    records = await self.submit(coord, sched, prov, params, store)
+                except Exception as e:
+                    import traceback
+
+                    logger.error(
+                        "DDP evaluation failed for %s: %s", coord.cell_key()[:12], e
+                    )
+                    logger.error("Full traceback: %s", traceback.format_exc())
+                    return Failure(
+                        failure_event=FailureEvent(
+                            cell_key=coord.cell_key(),
+                            failure_cause=FailureCause.RUNTIME_ERROR,
+                            error_message=str(e),
+                            coordinate=coord.to_dict(),
+                            schedule=sched.to_dict(),
+                            provenance=prov.to_dict(),
+                        )
+                    )
+            finally:
+                await self._admission.release()
             if records:
                 return Success(records=tuple(records))
             return Failure(
@@ -681,7 +805,23 @@ class DDPBackend:
     def shutdown(self) -> None:
         """Shutdown the backend and clean up distributed resources."""
         self._shutdown = True
+        self._admission.close()
         self._cleanup_distributed()
+
+    async def set_max_workers(self, n: int) -> None:
+        """Move the ceiling on cells in flight."""
+        await self._admission.set_limit(n)
+        self._max_workers = self._admission.limit
+
+    @property
+    def max_workers(self) -> int:
+        """The ceiling on cells in flight."""
+        return self._admission.limit
+
+    @property
+    def in_flight(self) -> int:
+        """The cells training right now."""
+        return self._admission.in_flight
 
 
 __all__ = [

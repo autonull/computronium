@@ -147,6 +147,7 @@ class FakeBackend:
         self._walltime_s = walltime_s
         self.submitted: list[str] = []
         self._shutdown = False
+        self._max_workers = 1
 
     async def submit(
         self,
@@ -204,6 +205,20 @@ class FakeBackend:
     def shutdown(self) -> None:
         """Release the backend; it holds nothing that needs releasing."""
         self._shutdown = True
+
+    async def set_max_workers(self, n: int) -> None:
+        """Move the ceiling; the fake measures one cell at a time anyway."""
+        self._max_workers = n
+
+    @property
+    def max_workers(self) -> int:
+        """The ceiling the caller last set."""
+        return self._max_workers
+
+    @property
+    def in_flight(self) -> int:
+        """The fake trains nothing, so nothing is ever in flight."""
+        return 0
 
 
 __all__ = ["FakeBackend", "synthetic_record"]

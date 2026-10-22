@@ -10,6 +10,7 @@ import contextlib
 import json
 import logging
 import math
+import os
 import shutil
 import tempfile
 import uuid
@@ -26,6 +27,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 
 from computronium.experiment.evidence.serializers import serializer
+from computronium.experiment.execution.control import ControlPlane, control_plane_path
 from computronium.experiment.execution.dashboard.actions import (
     KIND_CONFIRMATION,
     KIND_QUEST,
@@ -49,6 +51,11 @@ from computronium.experiment.execution.dashboard.multirun import (
 from computronium.experiment.execution.dashboard.narration import (
     Narration,
     state_sentences,
+)
+from computronium.experiment.execution.dashboard.runs import (
+    DEFAULT_STORE,
+    axes_payload,
+    profiles_payload,
 )
 from computronium.experiment.execution.events import (
     PipelineEvent,
@@ -97,6 +104,61 @@ class SpaceRequest(BaseModel):
         min_length=3,
         max_length=3,
     )
+
+
+class ControlCommand(BaseModel):
+    """What the dashboard asks the run to do.
+
+    Every field is optional: a command names only the verb it means. The
+    revision is the one the browser last saw, so a write from a stale page is
+    refused rather than applied.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    paused: bool | None = None
+    step: bool | None = None
+    max_workers: int | None = Field(default=None, gt=0)
+    cancel: bool | None = None
+    revision: int | None = Field(default=None, ge=0)
+
+
+class RunRequest(BaseModel):
+    """The run the reader asked for."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile: str
+    overrides: dict[str, Any] = Field(default_factory=dict)
+    device: str | None = None
+
+
+class _CpuSampler:
+    """The machine's CPU use, sampled without blocking.
+
+    ``psutil``'s non-blocking percentage compares this call with the last
+    one, so the first sample has nothing to compare and reads zero. The
+    sampler keeps the last reading and hands it out again until a second
+    sample exists, so a reader never sees a machine that looks idle because
+    the page had just opened.
+    """
+
+    def __init__(self) -> None:
+        self._last = 0.0
+        self._primed = False
+
+    def read(self) -> float:
+        """The machine's CPU use, as a percentage."""
+        try:
+            import psutil
+        except ImportError:
+            return self._last
+        sample = psutil.cpu_percent(interval=None)
+        if self._primed:
+            self._last = sample
+        else:
+            self._primed = True
+        return self._last
 
 
 def resolve_axes(names: Sequence[str]) -> list[StructuralAxis]:
@@ -242,6 +304,10 @@ class WebDashboard:
         self._dynamics_cache: dict[str, dict[str, Any]] = {}
         self._space_reader = SpaceReader()
         self._work_dir: Path | None = None
+        # The channel to the run: the same document the run reads, derived
+        # from the same store path (TODO70).
+        self._control = ControlPlane(control_plane_path(self.config.store_path))
+        self._cpu = _CpuSampler()
         self._setup_routes()
         self._setup_templates()
 
@@ -504,6 +570,126 @@ class WebDashboard:
             declared space, with the cells each of them measured.
             """
             return JSONResponse(await self._spaces_payload(body))
+
+        @self.app.get("/api/control")
+        async def api_control() -> JSONResponse:
+            """The control plane, the run's counters, and the machine's use.
+
+            The control bar polls this at 2 Hz, so every part of it is cheap:
+            the plane is a small document, the run's counters come from the
+            same document, and the machine's CPU is a non-blocking sample.
+            """
+            return JSONResponse(await self._control_payload())
+
+        @self.app.post("/api/control")
+        async def api_control_command(body: ControlCommand) -> JSONResponse:
+            """Ask the run to do something.
+
+            The command merges into the plane. A browser that offers a stale
+            revision is refused rather than applied: two pages driving one
+            run must not overwrite each other.
+            """
+            result = await self._apply_control(body)
+            return JSONResponse(result.payload, status_code=result.status_code)
+
+        @self.app.get("/api/profiles")
+        def api_profiles() -> JSONResponse:
+            """The run profiles, as data: what the new-run form offers."""
+            return JSONResponse(profiles_payload())
+
+        @self.app.get("/api/axes")
+        def api_axes() -> JSONResponse:
+            """The six structural axes and the primitives each one offers."""
+            return JSONResponse(axes_payload())
+
+        @self.app.post("/api/runs")
+        async def api_start_run(body: RunRequest) -> JSONResponse:
+            """Start a run from the dashboard.
+
+            Without a campaign queue the answer is the command to type: the
+            dashboard must never appear to have a control it does not have.
+            """
+            result = await self._start_run(body)
+            return JSONResponse(result.payload, status_code=result.status_code)
+
+    async def _control_payload(self) -> dict[str, Any]:
+        """The plane, the run's counters, and the machine's own use.
+
+        The HUD's CPU meter shows the queue's bookkeeping — how many CPUs the
+        queue has handed out. This is the machine: how much of it is busy,
+        measured rather than allocated.
+        """
+        state, status = self._control.read_all()
+        payload: dict[str, Any] = {
+            "control": state.to_dict(),
+            "status": status.to_dict() if status is not None else None,
+            "readable": self._control.last_error is None,
+            "error": self._control.last_error,
+            "machine": {
+                "cpu_percent": self._cpu.read(),
+                "cpu_count": os.cpu_count(),
+            },
+        }
+        if self.config.campaign_queue is not None:
+            payload["queue"] = await self.config.campaign_queue.get_resource_usage()
+        return payload
+
+    async def _apply_control(self, body: ControlCommand) -> ActionResult:
+        """Merge a command into the plane, and answer with the new state."""
+        state, _status = self._control.read_all()
+        if body.revision is not None and body.revision != state.revision:
+            return ActionResult(
+                {
+                    "error": "the control plane has moved on",
+                    "control": state.to_dict(),
+                },
+                status_code=409,
+            )
+        given = body.model_fields_set
+        changes: dict[str, Any] = {}
+        if "paused" in given:
+            changes["paused"] = bool(body.paused)
+        if "step" in given:
+            changes["step"] = bool(body.step)
+        if "max_workers" in given:
+            changes["max_workers"] = body.max_workers
+        if "cancel" in given:
+            changes["cancel"] = bool(body.cancel)
+        if not changes:
+            return ActionResult({"control": state.to_dict()})
+        try:
+            merged = self._control.write(**changes)
+        except (OSError, ValueError) as exc:
+            logger.exception("Could not write the control plane")
+            return ActionResult(
+                {"error": str(exc), "control": state.to_dict()},
+                status_code=409,
+            )
+        return ActionResult({"control": merged.to_dict()})
+
+    async def _start_run(self, body: RunRequest) -> ActionResult:
+        """Start the run the reader asked for."""
+        from computronium.experiment.execution.dashboard.runs import (
+            build_spec,
+            enqueue_run,
+        )
+
+        try:
+            spec = build_spec(body.profile, body.overrides, device=body.device)
+        except (TypeError, ValueError) as exc:
+            return ActionResult({"error": str(exc)}, status_code=409)
+        store_path = self.config.store_path or DEFAULT_STORE
+        answer = await enqueue_run(
+            self.config.campaign_queue,
+            spec,
+            body.overrides,
+            store_path=store_path,
+        )
+        answer["spec"] = spec.model_dump(mode="json")
+        return ActionResult(
+            answer,
+            status_code=200 if answer.get("started") else 409,
+        )
 
     async def _get_status(self) -> dict[str, Any]:
         """Get overall dashboard status."""
@@ -1484,7 +1670,8 @@ class WebDashboard:
         """
         run = metrics.get("run") or {}
         queue = await self._get_queue_status()
-        sentences = state_sentences(metrics, queue)
+        state, _status = self._control.read_all()
+        sentences = state_sentences(metrics, queue, control=state.to_dict())
         self._narration.state(sentences, run_id=run.get("run_id"))
         await self._broadcast_update({
             "type": "narration",
@@ -1504,7 +1691,10 @@ class WebDashboard:
             metrics = await self._get_campaign_metrics_detailed(run_id)
             if metrics.get("records"):
                 queue = await self._get_queue_status()
-                payload["state"] = list(state_sentences(metrics, queue))
+                state, _status = self._control.read_all()
+                payload["state"] = list(
+                    state_sentences(metrics, queue, control=state.to_dict())
+                )
         return payload
 
     def _event_payload(self, run_id: str | None = None) -> dict[str, Any]:

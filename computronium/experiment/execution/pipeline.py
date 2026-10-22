@@ -28,9 +28,14 @@ import logging
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.experiment.execution.backends import Failure, Success
+from computronium.experiment.execution.control import (
+    ControlPlane,
+    RunStatus,
+)
 from computronium.experiment.execution.deadline import (
     CellTiming,
     Deadline,
@@ -141,6 +146,10 @@ class PipelineConfig:
     dtype: str = "float32"
     worker_config: dict[str, Any] = field(default_factory=dict)
     code_sha: str = "unknown"
+    # The control plane this run reads. Derived from the store's path by
+    # ``control_plane_path`` so the dashboard and the run cannot disagree
+    # about where the control channel lives (TODO70).
+    control_plane: Path | None = None
 
     def __post_init__(self) -> None:
         # Convert legacy Budget to Deadline if provided, and carry its
@@ -253,6 +262,8 @@ class PipelineState:
     system_context: SystemContext | None = None
     # Last measured duration per stage, stamped into every record payload
     stage_timings: dict[str, float] = field(default_factory=dict)
+    # The stage the run is in, by its own name: what the dashboard reads.
+    current_stage: str = ""
 
 
 class PipelineRunner:
@@ -331,6 +342,11 @@ class PipelineRunner:
             StageId(n) for n in config.run_spec.stage_names
         ]
         self._shutdown = False
+        self._control = (
+            ControlPlane(config.control_plane) if config.control_plane else None
+        )
+        self._steps_taken = 0
+        self._ceiling: int | None = None
 
         # Install signal handler for graceful shutdown
         if self._state.signal_handler:
@@ -622,6 +638,10 @@ class PipelineRunner:
 
         all_records: list[Record] = []
 
+        # The run holds here if the dashboard asked it to pause before the
+        # first cell: a run that starts paused never starts.
+        await self._await_control(consumes_step=False)
+
         # S1-S2: Run once at start
         await self._run_initial_phases(all_records)
 
@@ -715,6 +735,8 @@ class PipelineRunner:
             if self._should_stop_round_loop(deadline_enforcer, signal_handler):
                 break
 
+            await self._await_control(consumes_step=False)
+
             before = len(all_records)
             try:
                 await self._execute_round(all_records)
@@ -753,6 +775,66 @@ class PipelineRunner:
 
         if pbar_rounds:
             pbar_rounds.close()
+
+    async def _await_control(self, *, consumes_step: bool) -> None:
+        """Hold at a boundary until the plane releases the run.
+
+        A pause is a boundary, not a kill: the cell in flight finishes and is
+        recorded, and the run waits here for the next release. A step releases
+        exactly one batch, so a boundary that is not a batch boundary lets the
+        run proceed to the batch that will consume it.
+
+        Args:
+            consumes_step: Whether this boundary is the one that spends a
+                step.
+        """
+        plane = self._control
+        if plane is None:
+            return
+        while not self._shutdown:
+            state = await plane.wait_for_release(steps_taken=self._steps_taken)
+            if state.cancel:
+                logger.info("The control plane asked the run to stop")
+                self._shutdown = True
+                return
+            await self._apply_ceiling(state.max_workers)
+            if not state.paused:
+                return
+            if consumes_step:
+                self._steps_taken += 1
+                logger.info("Stepping: releasing one batch")
+            return
+
+    async def _apply_ceiling(self, max_workers: int | None) -> None:
+        """Move the backend's ceiling when the plane asks for another.
+
+        The ceiling is a cap, not a target: lowering it leaves the cells in
+        flight alone and stops the next admission.
+        """
+        if max_workers is None or max_workers == self._ceiling:
+            return
+        backend = self._config.backend
+        if backend is None:
+            return
+        await backend.set_max_workers(max_workers)
+        self._ceiling = max_workers
+        logger.info("The control plane set the ceiling to %d cell(s)", max_workers)
+
+    def _publish_status(self) -> None:
+        """Tell the dashboard what the run is doing now."""
+        plane = self._control
+        if plane is None:
+            return
+        backend = self._config.backend
+        plane.write_status(
+            RunStatus(
+                run_id=self._config.run_id,
+                stage=self._state.current_stage,
+                in_flight=backend.in_flight if backend is not None else 0,
+                cells_done=len(self._state.completed_measurement_keys),
+                at=time.time(),
+            )
+        )
 
     def _create_round_progress_bar(self, round_controller: RoundController):
         """Create progress bar for rounds."""
@@ -977,6 +1059,8 @@ class PipelineRunner:
         # Create stage context
         ctx = self._create_stage_context(stage_id, stage_spec)
 
+        self._state.current_stage = stage_id.value
+
         # Run the stage
         stage_impl = impl_class()
         started = time.perf_counter()
@@ -995,6 +1079,7 @@ class PipelineRunner:
         finally:
             self._state.stage_timings[stage_id.value] = time.perf_counter() - started
         self._announce_stage(stage_id, fragment)
+        self._publish_status()
         return fragment
 
     def _announce_stage(self, stage_id: StageId, fragment: Fragment) -> None:
@@ -1386,6 +1471,12 @@ class PipelineRunner:
             logger.warning("No backend configured, skipping batch execution")
             return []
 
+        # The batch boundary: a pause holds here, and a step releases exactly
+        # this batch.
+        await self._await_control(consumes_step=True)
+        if self._shutdown:
+            return []
+
         # Check deadline before starting batch
         deadline_enforcer = self._state.deadline_enforcer
         if deadline_enforcer and not deadline_enforcer.check_before_cell():
@@ -1415,6 +1506,7 @@ class PipelineRunner:
                 cell_timing.end_cell()
 
         stored = self._persist_results(batch_items, results)
+        self._publish_status()
         if stored:
             publish_event(
                 "s8_record",

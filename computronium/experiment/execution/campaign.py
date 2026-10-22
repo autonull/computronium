@@ -21,6 +21,7 @@ from computronium.core.logging import get_logger
 from computronium.experiment.evidence.mirror import mirror_path
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
+from computronium.experiment.execution.control import control_plane_path
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.kernel.evaluate import task_shape
@@ -213,6 +214,10 @@ class CampaignRunner:
                     backend=LocalBackend(max_workers=_CELL_WORKERS),
                     seed=spec.seed,
                     max_rounds=max_rounds,
+                    # The control channel the dashboard drives this run
+                    # through: the same path the dashboard derives from the
+                    # same store (TODO70).
+                    control_plane=control_plane_path(self.spec.store),
                 ),
                 store,
             )

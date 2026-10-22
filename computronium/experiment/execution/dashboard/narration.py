@@ -223,9 +223,26 @@ def _queue_sentence(queue: Mapping[str, Any] | None) -> str:
     return "The queue is idle."
 
 
+def control_sentence(control: Mapping[str, Any] | None) -> str:
+    """What the run has been asked to do, in words.
+
+    The verbs are the *shape* of the run's state — paused, stopped — and
+    nothing more: the ceiling and the counts are on the panels, and a
+    sentence that recites them is worse than useless.
+    """
+    if not control:
+        return ""
+    if control.get("cancel"):
+        return "The run has been stopped."
+    if control.get("paused"):
+        return "The run is paused."
+    return ""
+
+
 def state_sentences(
     metrics: Mapping[str, Any],
     queue: Mapping[str, Any] | None = None,
+    control: Mapping[str, Any] | None = None,
 ) -> tuple[str, ...]:
     """What the system is doing right now, in two sentences.
 
@@ -242,6 +259,7 @@ def state_sentences(
         _evidence_sentence(metrics),
         _claim_sentence(metrics),
         _queue_sentence(queue),
+        control_sentence(control),
     ]
     return (_run_sentence(run, metrics), " ".join(part for part in parts if part))
 
@@ -317,6 +335,7 @@ __all__ = [
     "Line",
     "Narration",
     "best_cell",
+    "control_sentence",
     "event_sentence",
     "measured_cells",
     "state_sentences",
