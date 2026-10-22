@@ -13,6 +13,7 @@ import { liveRail } from "./live-rail.js";
 import { caption } from "./caption.js";
 import { hud } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
+import { helpOverlay } from "./help-overlay.js";
 import { PALETTE } from "./palette.js";
 import { CONTROL_KEYS, TAB_KEYS } from "./keys.js";
 import { panels } from "./panels.js";
@@ -302,6 +303,7 @@ requestAnimationFrame(animate);
   liveRail,
   caption,
   hud,
+  helpOverlay,
   viewSwitcher,
   controlBar,
   controlPanel,

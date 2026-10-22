@@ -308,20 +308,23 @@ export class CellDrawer implements Component {
       <div style="
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         padding-top: 16px;
         border-top: 1px solid var(--border);
       ">
-        <div id="drawer-action-note" style="font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
+        <div id="drawer-action-note" style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; min-height: 36px;">
         </div>
         <div style="display: flex; gap: 8px;">
-          <button class="drawer-btn" data-action="replicate" style="flex: 1;">Queue Rest</button>
+          <button class="drawer-btn drawer-btn-primary" data-action="replicate" style="flex: 1;">Queue Rest</button>
           <button class="drawer-btn" data-action="preregister" style="flex: 1;">Preregister</button>
           <button class="drawer-btn" data-action="quest" style="flex: 1;">Adopt as Quest</button>
         </div>
-        <input id="drawer-threshold" class="drawer-input" type="number" step="0.001"
-          placeholder="material effect (auto)" />
-        <div id="drawer-status" style="font-size: 11px; color: var(--text-secondary); line-height: 1.5;"></div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input id="drawer-threshold" class="drawer-input" type="number" step="0.001"
+            placeholder="material effect (auto)" style="flex: 1;" />
+          <span id="drawer-threshold-hint" style="font-size: 10px; color: var(--text-muted); white-space: nowrap;">auto = measured − chance</span>
+        </div>
+        <div id="drawer-status" style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; min-height: 18px;"></div>
       </div>
     `;
 
@@ -329,26 +332,42 @@ export class CellDrawer implements Component {
     const style = document.createElement("style");
     style.textContent = `
       .drawer-btn {
-        padding: 10px;
+        padding: 10px 12px;
         background: var(--bg-tertiary);
         border: 1px solid var(--border);
         border-radius: 6px;
         color: var(--text-secondary);
         font-size: 11px;
+        font-weight: 500;
         cursor: not-allowed;
-        transition: all 0.15s;
+        transition: all var(--motion-fast) var(--ease-out);
+        white-space: nowrap;
       }
       .drawer-btn:not(:disabled):hover {
         background: var(--border);
         color: var(--text-primary);
         border-color: var(--border-bright);
+        transform: translateY(-1px);
+      }
+      .drawer-btn:not(:disabled):active {
+        transform: translateY(0) scale(0.98);
       }
       .drawer-btn:not(:disabled) {
         cursor: pointer;
         color: var(--text-primary);
       }
       .drawer-btn:disabled {
-        opacity: 0.45;
+        opacity: 0.4;
+      }
+      .drawer-btn-primary:not(:disabled) {
+        background: var(--gradient)22;
+        border-color: var(--gradient)66;
+        color: var(--gradient);
+      }
+      .drawer-btn-primary:not(:disabled):hover {
+        background: var(--gradient)33;
+        border-color: var(--gradient);
+        color: var(--gradient);
       }
       .drawer-input {
         padding: 8px 10px;
@@ -358,6 +377,12 @@ export class CellDrawer implements Component {
         color: var(--text-primary);
         font-size: 11px;
         font-family: 'JetBrains Mono', monospace;
+        transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+      }
+      .drawer-input:focus-visible {
+        outline: none;
+        border-color: var(--gradient);
+        box-shadow: 0 0 0 2px var(--gradient)33;
       }
     `;
     this.content.appendChild(style);
@@ -415,24 +440,23 @@ export class CellDrawer implements Component {
 
   private actionNote(data: CellData): string {
     if (!data.runId) {
-      return "This cell belongs to no run yet, so there is nothing to queue or register.";
+      return "This cell belongs to no run yet — nothing to queue or register.";
     }
     if (data.status === "void") {
-      return `The system refuses this cell, so nothing can be measured here.${
-        data.voidReason ? ` ${data.voidReason}.` : ""
-      }`;
+      return `The system refuses this cell.${data.voidReason ? ` ${data.voidReason}` : ""}`;
     }
     if (data.status === "measured") {
       const seeds = data.metrics?.n_seeds ?? 0;
       const required = data.requiredSeeds ?? 0;
-      return `Queue Rest measures the ${Math.max(0, required - seeds)} seeds this cell still owes. Preregister writes down the protocol a confirming run must meet.`;
+      const missing = Math.max(0, required - seeds);
+      if (missing > 0) {
+        return `Queue Rest adds ${missing} more seeds to reach the claim threshold (${required} needed). Preregister locks in this cell's protocol for a confirmatory run.`;
+      }
+      return `This cell has enough seeds for a claim. Preregister locks in the protocol for a confirmatory run.`;
     }
-    const outside =
-      data.inDeclaration === false
-        ? " It lies outside this run's declaration, so the run did not set out to measure it."
-        : "";
+    const outside = data.inDeclaration === false ? " (outside this run's declaration)" : "";
     const seeds = data.requiredSeeds ?? 0;
-    return `The system would measure this cell and nobody has. Queue measures it (${seeds} seeds). Adopt as Quest writes the question down first and then queues the run that would answer it — a new run, because a threshold written now cannot confirm a run that has already begun.${outside}`;
+    return `Queue measures this cell (${seeds} seeds). Adopt as Quest writes the question first, then queues a new confirming run.${outside}`;
   }
 
   private setStatus(message: string, isError = false): void {

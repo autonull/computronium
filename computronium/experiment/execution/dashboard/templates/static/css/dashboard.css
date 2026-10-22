@@ -4,6 +4,12 @@
   font-family: ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas,
     monospace;
   color-scheme: dark;
+  /* Motion duration baseline — overridden by reduced-motion media query */
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 350ms;
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -47,6 +53,124 @@ body {
   display: none !important;
 }
 
+/* Focus visible — keyboard navigation affordance */
+:focus-visible {
+  outline: 2px solid var(--gradient);
+  outline-offset: 2px;
+}
+
+/* Reduced motion — respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-normal: 0ms;
+    --motion-slow: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Subtle entrance animations for panels */
+@keyframes panel-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes panel-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.panel-entering {
+  animation: panel-slide-in var(--motion-normal) var(--ease-out);
+}
+
+.panel-entering-right {
+  animation: panel-slide-in-right var(--motion-normal) var(--ease-out);
+}
+
+.panel-fading-in {
+  animation: panel-fade-in var(--motion-fast) var(--ease-out);
+}
+
+.panel-sliding-up {
+  animation: panel-slide-up var(--motion-normal) var(--ease-out);
+}
+
+/* Button micro-interactions */
+button:not(:disabled) {
+  transition: background-color var(--motion-fast) var(--ease-out),
+              border-color var(--motion-fast) var(--ease-out),
+              color var(--motion-fast) var(--ease-out),
+              transform var(--motion-fast) var(--ease-out),
+              box-shadow var(--motion-fast) var(--ease-out);
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Input focus states */
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--gradient);
+  outline-offset: 2px;
+  border-color: var(--gradient);
+}
+
+/* Tooltip-like hover for interactive elements */
+.interactive:hover {
+  cursor: pointer;
+}
+
+/* Scrollbar refinement */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -59,8 +183,83 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 4px;
+  border: 2px solid var(--bg-secondary);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-bright);
+}
+
+/* Selection styling */
+::selection {
+  background: var(--gradient);
+  color: var(--bg);
+}
+
+/* Loading spinner utility */
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gradient);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Status indicator dot */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.status-dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.status-dot.error { background: var(--error); box-shadow: 0 0 8px var(--error); }
+.status-dot.idle { background: var(--text-muted); }
+
+/* Empty state styling */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  opacity: 0.3;
+  margin-bottom: 16px;
+}
+
+.empty-state-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.empty-state-message {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1400px) {
+  :root {
+    --chart-column-width: 440px;
+  }
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --chart-column-width: 100%;
+    --hud-width: 100%;
+  }
 }

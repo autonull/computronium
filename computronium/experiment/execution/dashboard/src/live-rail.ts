@@ -24,6 +24,7 @@ export class LiveRail implements Component {
 
   private container: HTMLElement | null = null;
   private logContainer: HTMLElement | null = null;
+  private scrollHint: HTMLElement | null = null;
   private events: PipelineEvent[] = [];
   private maxEvents = 50;
 
@@ -98,19 +99,33 @@ export class LiveRail implements Component {
           <span class="rail-label">Disconnected</span>
         </span>
         <div style="flex: 1;"></div>
-        <span id="rail-queue" style="color: var(--text-secondary);">0 running · 0 queued</span>
-        <span id="rail-count">0 events</span>
+        <span id="rail-queue" style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">0 running · 0 queued</span>
+        <span id="rail-count" style="color: var(--text-muted);">0 events</span>
       </div>
       <div id="rail-log" style="
         flex: 1;
         overflow-x: auto;
         overflow-y: hidden;
         display: flex;
-        gap: 24px;
+        gap: 16px;
         padding: 8px 16px;
         font-family: 'JetBrains Mono', monospace;
         font-size: 11px;
         white-space: nowrap;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      "></div>
+      <!-- Scroll hint -->
+      <div id="rail-scroll-hint" style="
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 60px;
+        height: 100%;
+        pointer-events: none;
+        background: linear-gradient(to left, var(--bg), transparent);
+        opacity: 0;
+        transition: opacity var(--motion-fast);
       "></div>
     `;
 
@@ -119,6 +134,16 @@ export class LiveRail implements Component {
       .querySelector<HTMLElement>("#rail-header")!
       .appendChild(closeButton(() => panels.toggle("live-rail")));
     this.logContainer = this.container.querySelector("#rail-log")!;
+    this.scrollHint = this.container.querySelector("#rail-scroll-hint") as HTMLElement;
+
+    // Show scroll hint when content overflows
+    this.logContainer.addEventListener("scroll", () => {
+      if (this.scrollHint) {
+        const atStart = this.logContainer!.scrollLeft === 0;
+        const canScroll = this.logContainer!.scrollWidth > this.logContainer!.clientWidth;
+        this.scrollHint.style.opacity = atStart && canScroll ? "1" : "0";
+      }
+    });
   }
 
   private onPipelineEvent = (data: PipelineEvent): void => {
@@ -162,7 +187,7 @@ export class LiveRail implements Component {
     if (!this.logContainer) return;
 
     this.logContainer.innerHTML = this.events
-      .map((event) => {
+      .map((event, index) => {
         const time = new Date(event.timestamp).toLocaleTimeString();
         const levelColors: Record<string, string> = {
           ok: PALETTE.ok,
@@ -170,23 +195,29 @@ export class LiveRail implements Component {
           error: PALETTE.error,
         };
         const color = levelColors[event.level] || PALETTE.text_secondary;
-        const icon =
-          event.level === "ok" ? "✓" : event.level === "warn" ? "⚠" : "✗";
+        const icons: Record<string, string> = {
+          ok: "✓",
+          warn: "⚠",
+          error: "✗",
+        };
+        const isLatest = index === 0;
 
         return `
           <span style="
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 16px;
+            gap: 8px;
+            padding: 6px 14px;
+            background: ${isLatest ? "var(--bg-primary)" : "var(--bg-secondary)"};
+            border: 1px solid ${isLatest ? "var(--border-bright)" : "var(--border)"};
+            border-radius: 18px;
             color: var(--text-primary);
+            font-weight: ${isLatest ? "500" : "400"};
+            box-shadow: ${isLatest ? "0 2px 8px rgba(0,0,0,0.3)" : "none"};
           ">
-            <span style="color: var(--text-secondary);">${time}</span>
-            <span style="color: ${color};">${icon}</span>
-            <span style="color: var(--text-muted);">[${event.stage}]</span>
+            <span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">${time}</span>
+            <span style="color: ${color}; font-size: 12px;">${icons[event.level] ?? "•"}</span>
+            <span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;">${event.stage}</span>
             <span>${event.message}</span>
           </span>
         `;
@@ -200,6 +231,12 @@ export class LiveRail implements Component {
 
     // Auto-scroll to latest (left side)
     this.logContainer.scrollLeft = 0;
+
+    // Update scroll hint
+    if (this.scrollHint) {
+      const canScroll = this.logContainer!.scrollWidth > this.logContainer!.clientWidth;
+      this.scrollHint.style.opacity = canScroll ? "1" : "0";
+    }
   }
 }
 

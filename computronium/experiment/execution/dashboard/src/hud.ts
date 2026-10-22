@@ -140,13 +140,20 @@ export class HUD implements Component {
         </span>
       </div>
       <div id="hud-meters" style="display: flex; flex-direction: column; gap: 9px;"></div>
-      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline;">
-        <span style="color: var(--text-secondary);">PICTURE</span>
-        <span id="hud-source" style="font-weight: 600; color: ${PALETTE.text_secondary};">—</span>
-      </div>
-      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline;">
-        <span style="color: var(--text-secondary);">SEEDS TO CLAIM</span>
-        <span id="hud-claim" style="font-weight: 700; color: ${PALETTE.insufficient};">—</span>
+      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+          <span style="color: var(--text-secondary);">PICTURE</span>
+          <span id="hud-source" style="font-weight: 600; color: ${PALETTE.text_secondary};">—</span>
+        </div>
+        <div id="hud-claim-row" style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span style="color: var(--text-secondary);">SEEDS TO CLAIM</span>
+            <span id="hud-claim" style="font-weight: 700; color: ${PALETTE.insufficient};">—</span>
+          </div>
+          <div style="height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;">
+            <div id="hud-claim-fill" style="height: 100%; width: 0%; background: var(--insufficient); border-radius: 2px; transition: width var(--motion-normal) var(--ease-out), background-color var(--motion-fast);"></div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -370,12 +377,20 @@ export class HUD implements Component {
 
   private updateClaim(): void {
     if (!this.claimValue) return;
+    const fill = this.panel?.querySelector("#hud-claim-fill") as HTMLElement;
     if (this.requiredSeeds <= 0) {
       this.claimValue.textContent = "—";
+      if (fill) fill.style.width = "0%";
       return;
     }
     const missing = Math.max(0, this.requiredSeeds - this.measuredSeeds);
-    this.claimValue.textContent = `${missing} more (${this.requiredSeeds} needed)`;
+    const progress = this.requiredSeeds > 0 ? this.measuredSeeds / this.requiredSeeds : 0;
+    this.claimValue.textContent = missing > 0 ? `${missing} more (${this.requiredSeeds} needed)` : `Ready (${this.requiredSeeds} met)`;
+    this.claimValue.style.color = missing > 0 ? PALETTE.insufficient : PALETTE.passed;
+    if (fill) {
+      fill.style.width = `${Math.min(100, progress * 100)}%`;
+      fill.style.background = missing > 0 ? "var(--insufficient)" : "var(--passed)";
+    }
   }
 
   private updateConnection(): void {

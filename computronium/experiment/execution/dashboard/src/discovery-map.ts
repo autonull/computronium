@@ -162,6 +162,35 @@ export class DiscoveryMap implements Component {
   /** The legend follows the stage: the arms the run measured, the axes it
       shows, and the tally of what it declared. */
   private updateLegend(): void {
+    const space = stageState.space;
+    const hasSpace = !!space;
+    const arms = stageState.values.credit;
+    const hasArms = arms.length > 0;
+
+    // Toggle empty state
+    const emptyState = this.legendElement?.querySelector("#legend-empty-state") as HTMLElement;
+    const view = this.legendElement?.querySelector("#legend-view") as HTMLElement;
+    const armsBlock = this.legendElement?.querySelector("#legend-arms-block") as HTMLElement;
+    const axesBlock = this.legendElement?.querySelector("#legend-axes-block") as HTMLElement;
+
+    if (emptyState) emptyState.style.display = hasSpace ? "none" : "flex";
+    if (view) view.style.display = hasSpace ? "block" : "none";
+    if (armsBlock) armsBlock.style.display = hasArms ? "block" : "none";
+    if (axesBlock) axesBlock.style.display = hasSpace ? "block" : "none";
+
+    // Update cell count in title
+    const countEl = this.legendElement?.querySelector("#legend-cell-count") as HTMLElement;
+    if (countEl && space) {
+      const counts = {
+        measured: Array.from(stageState.aggregates.keys()).filter((key) =>
+          stageState.spaceCells.has(key),
+        ).length,
+        legal: space.counts.legal,
+        void: space.counts.void,
+      };
+      countEl.textContent = `${counts.measured + counts.legal + counts.void} cells`;
+    }
+
     this.refreshAxisOptions();
     this.updateLegendArms();
     this.updateLegendAxes();
@@ -208,13 +237,15 @@ export class DiscoveryMap implements Component {
       pointer-events: none;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
+      border-radius: 8px;
+      padding: 10px 12px;
       font-size: 11px;
       line-height: 1.5;
       z-index: 300;
       display: none;
-      max-width: 340px;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
     `;
     overlay.appendChild(this.readoutElement);
   }
@@ -223,30 +254,86 @@ export class DiscoveryMap implements Component {
     const element = this.readoutElement;
     if (!element) return;
 
-    const coordinate = document.createElement("div");
-    coordinate.style.color = "var(--text-secondary)";
-    coordinate.textContent = Object.entries(cell.coordinate)
+    element.innerHTML = "";
+
+    // Coordinate chips
+    const coordRow = document.createElement("div");
+    coordRow.style.cssText = "display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;";
+    Object.entries(cell.coordinate)
       .filter(([, value]) => value)
-      .map(([axis, value]) => `${axis}=${value}`)
-      .join("  ");
-    element.replaceChildren(coordinate);
+      .forEach(([axis, value]) => {
+        const isCredit = axis === "credit";
+        const color = isCredit ? (ARM_COLORS[value] || PALETTE.gradient) : "var(--text-secondary)";
+        const chip = document.createElement("span");
+        chip.style.cssText = `
+          padding: 2px 8px;
+          background: ${isCredit ? color + "22" : "var(--bg-tertiary)"};
+          border: 1px solid ${isCredit ? color + "88" : "var(--border)"};
+          border-radius: 10px;
+          font-size: 10px;
+          color: ${color};
+          font-weight: ${isCredit ? "600" : "400"};
+        `;
+        chip.textContent = `${axis}=${value}`;
+        coordRow.appendChild(chip);
+      });
+    element.appendChild(coordRow);
 
-    const status = document.createElement("div");
-    status.style.marginTop = "4px";
-    status.style.fontWeight = "600";
-    status.style.color =
-      cell.status === "void"
-        ? PALETTE.void
-        : cell.status === "measured"
-          ? PALETTE.measured
-          : PALETTE.legal_unmeasured;
-    status.textContent = STATUS_LABELS[cell.status];
-    element.appendChild(status);
+    // Status with icon
+    const statusRow = document.createElement("div");
+    statusRow.style.cssText = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;";
+    const statusColors: Record<CellData["status"], string> = {
+      measured: PALETTE.measured,
+      legal: PALETTE.legal_unmeasured,
+      void: PALETTE.void,
+    };
+    const statusIcons: Record<CellData["status"], string> = {
+      measured: "●",
+      legal: "○",
+      void: "✕",
+    };
+    const icon = document.createElement("span");
+    icon.style.cssText = `font-size: 14px; color: ${statusColors[cell.status]};`;
+    icon.textContent = statusIcons[cell.status];
+    statusRow.appendChild(icon);
 
+    const statusText = document.createElement("span");
+    statusText.style.cssText = `font-weight: 600; color: ${statusColors[cell.status]}; font-size: 12px;`;
+    statusText.textContent = STATUS_LABELS[cell.status];
+    statusRow.appendChild(statusText);
+    element.appendChild(statusRow);
+
+    // Measured cell: show key metrics inline
+    if (cell.status === "measured" && cell.metrics) {
+      const m = cell.metrics;
+      const metricsRow = document.createElement("div");
+      metricsRow.style.cssText = "display: flex; gap: 16px; font-size: 11px; color: var(--text-secondary);";
+      const acc = m.val_acc ?? 0;
+      const std = m.val_acc_std ?? 0;
+      const seeds = m.n_seeds ?? 0;
+      const wt = m.walltime_s;
+      metricsRow.innerHTML = `
+        <span>acc <strong style="color: var(--text-primary);">${acc.toFixed(3)}</strong> ± ${std.toFixed(3)}</span>
+        <span>n=<strong style="color: var(--text-primary);">${seeds}</strong></span>
+        <span>${wt !== undefined ? `${wt.toFixed(1)}s` : ""}</span>
+        ${cell.pareto ? `<span style="color: var(--pareto);">● PARETO</span>` : ""}
+      `;
+      element.appendChild(metricsRow);
+    }
+
+    // Legal cell: show actionable hint
+    if (cell.status === "legal") {
+      const hint = document.createElement("div");
+      hint.style.cssText = "margin-top: 6px; padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px; font-size: 10px; color: var(--text-muted);";
+      const seeds = cell.requiredSeeds ?? 0;
+      hint.textContent = `Click to queue ${seeds} seeds →`;
+      element.appendChild(hint);
+    }
+
+    // Void cell: show reason
     if (cell.voidReason) {
       const reason = document.createElement("div");
-      reason.style.marginTop = "4px";
-      reason.style.color = "var(--text-secondary)";
+      reason.style.cssText = "margin-top: 6px; padding: 6px 8px; background: var(--void)11; border: 1px solid var(--void)44; border-radius: 4px; font-size: 10px; color: var(--void);";
       reason.textContent = cell.voidReason;
       element.appendChild(reason);
     }
@@ -278,52 +365,62 @@ export class DiscoveryMap implements Component {
       left: 20px;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 16px;
       font-size: 12px;
       z-index: 100;
-      min-width: 220px;
-      max-width: 340px;
+      min-width: 240px;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      backdrop-filter: blur(8px);
     `;
 
     this.legendElement.innerHTML = `
-      <div id="legend-title" style="font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">Discovery Map</div>
-      <div id="legend-view"></div>
-      <div id="legend-marks" style="display: flex; flex-direction: column; gap: 8px;">
+      <div id="legend-title" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <span style="font-weight: 600; color: var(--text-primary);">Discovery Map</span>
+        <span id="legend-cell-count" style="font-size: 11px; color: var(--text-muted);"></span>
+      </div>
+      <div id="legend-empty-state" class="empty-state" style="display: none;">
+        <div class="empty-state-icon">▦</div>
+        <div class="empty-state-title">No run selected</div>
+        <div class="empty-state-message">Pick a run from the dropdown below to see its declared space</div>
+      </div>
+      <div id="legend-view" style="display: none;"></div>
+      <div id="legend-marks" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
         <div class="legend-item" style="display: flex; align-items: center; gap: 8px;">
-          <div style="width: 16px; height: 16px; background: var(--measured); border-radius: 3px; box-shadow: 0 0 8px var(--measured);"></div>
-          <span>Measured (glowing pillar)</span>
+          <div style="width: 14px; height: 14px; background: var(--measured); border-radius: 3px; box-shadow: 0 0 10px var(--measured);"></div>
+          <span style="font-size: 11px;">Measured — glowing pillar</span>
         </div>
         <div class="legend-item" style="display: flex; align-items: center; gap: 8px;">
-          <div style="width: 16px; height: 16px; background: transparent; border: 2px solid var(--legal-unmeasured); border-radius: 3px;"></div>
-          <span>Legal / unmeasured — a gap</span>
+          <div style="width: 14px; height: 14px; background: transparent; border: 2px solid var(--legal-unmeasured); border-radius: 3px;"></div>
+          <span style="font-size: 11px;">Legal gap — click to queue</span>
         </div>
         <div class="legend-item" style="display: flex; align-items: center; gap: 8px;">
-          <svg width="16" height="16" viewBox="0 0 16 16"><line x1="3" y1="3" x2="13" y2="13" stroke="var(--void)" stroke-width="2"/><line x1="13" y1="3" x2="3" y2="13" stroke="var(--void)" stroke-width="2"/></svg>
-          <span>Void (the system refuses it)</span>
+          <svg width="14" height="14" viewBox="0 0 14 14"><line x1="2" y1="2" x2="12" y2="12" stroke="var(--void)" stroke-width="2"/><line x1="12" y1="2" x2="2" y2="12" stroke="var(--void)" stroke-width="2"/></svg>
+          <span style="font-size: 11px;">Void — system refuses</span>
         </div>
       </div>
-      <div id="legend-arms-block" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-        <div style="font-weight: 600; margin-bottom: 8px;">Arms</div>
-        <div id="legend-arms" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+      <div id="legend-arms-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: none;">
+        <div style="font-weight: 600; margin-bottom: 6px; font-size: 11px;">Credit Arms</div>
+        <div id="legend-arms" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
       </div>
-      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-        <div style="font-weight: 600; margin-bottom: 8px;">Run</div>
+      <div id="legend-run-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+        <div style="font-weight: 600; margin-bottom: 6px; font-size: 11px;">Run</div>
         <select id="legend-run-picker" style="
           width: 100%;
           background: var(--bg-tertiary);
           color: var(--text-primary);
           border: 1px solid var(--border);
-          border-radius: 4px;
+          border-radius: 6px;
           font-size: 11px;
-          padding: 2px 4px;
+          padding: 6px 10px;
         "></select>
-        <div id="legend-run" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;"></div>
+        <div id="legend-run" style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; min-height: 16px;"></div>
       </div>
-      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-        <div style="font-weight: 600; margin-bottom: 8px;">Axes</div>
-        <div id="legend-axis-picker" style="display: flex; flex-direction: column; gap: 6px;"></div>
-        <div id="legend-axes" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;"></div>
+      <div id="legend-axes-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: none;">
+        <div style="font-weight: 600; margin-bottom: 6px; font-size: 11px;">Axes (click to change)</div>
+        <div id="legend-axis-picker" style="display: flex; flex-direction: column; gap: 5px;"></div>
+        <div id="legend-axes" style="font-size: 10px; color: var(--text-muted); margin-top: 6px;"></div>
       </div>
     `;
 
@@ -1109,17 +1206,28 @@ export class DiscoveryMap implements Component {
     const mesh = this.cells.get(key);
     if (!mesh) return;
 
+    const canvas = this.renderer?.domElement;
+    if (canvas) {
+      canvas.style.cursor = highlight && this.isCellActionable(key) ? "pointer" : "grab";
+    }
+
     if (
       mesh instanceof THREE.Mesh &&
       mesh.material instanceof THREE.MeshStandardMaterial
     ) {
       if (highlight) {
         mesh.userData.originalEmissive = mesh.material.emissiveIntensity;
+        mesh.userData.originalScale = mesh.scale.y;
         mesh.material.emissiveIntensity =
           (mesh.userData.originalEmissive || 0.5) + 0.5;
+        // Subtle scale pop
+        mesh.scale.y = Math.min(1.05, mesh.scale.y * 1.08);
       } else {
         if (mesh.userData.originalEmissive !== undefined) {
           mesh.material.emissiveIntensity = mesh.userData.originalEmissive;
+        }
+        if (mesh.userData.originalScale !== undefined) {
+          mesh.scale.y = mesh.userData.originalScale;
         }
       }
       return;
@@ -1133,10 +1241,19 @@ export class DiscoveryMap implements Component {
       if (highlight) {
         mesh.userData.originalOpacity = mesh.material.opacity;
         mesh.material.opacity = 0.95;
+        mesh.material.linewidth = 2;
       } else if (mesh.userData.originalOpacity !== undefined) {
         mesh.material.opacity = mesh.userData.originalOpacity;
+        mesh.material.linewidth = 1;
       }
     }
+  }
+
+  /** Whether a cell can be acted on (queue, preregister, quest). */
+  private isCellActionable(key: string): boolean {
+    const data = this.cellDataMap.get(key);
+    if (!data) return false;
+    return data.status === "legal" || data.status === "measured";
   }
 }
 
