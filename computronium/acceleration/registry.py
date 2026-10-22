@@ -55,6 +55,10 @@ def register_module(
         "reference_step": getattr(reference_mod, reference_fn),
     }
 
+    # Optionally export is_available from kernel module
+    if hasattr(kernel_mod, "is_available"):
+        exports["is_available"] = kernel_mod.is_available
+
     if has_factory:
         if factory_name is None:
             raise ValueError("factory_name required when has_factory=True")

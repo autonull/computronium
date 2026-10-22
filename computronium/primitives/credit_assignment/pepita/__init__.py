@@ -19,7 +19,7 @@ from computronium.acceleration.registry import register_module
 globals().update(
     register_module(
         __name__,
-        __doc__,
+        __doc__ or "",
         has_factory=False,
     )
 )

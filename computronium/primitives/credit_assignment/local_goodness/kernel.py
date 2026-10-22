@@ -14,19 +14,16 @@ from typing import Any
 
 import torch
 
-from computronium.acceleration.availability import triton_rung_available
 from computronium.acceleration.fa_kernels import (
     fa_batched_outer_triton,
     fa_feedback_projection_triton,
 )
 from computronium.ontology._utils import apply_norm
+from computronium.primitives._common import kernel_availability
 
 KERNEL_TECHNOLOGY = "triton"
 
-
-def is_available() -> bool:
-    """Whether this rung can run here: the family's Triton kernels compile."""
-    return triton_rung_available("fa")
+is_available = kernel_availability("fa")
 
 
 def _init_feedback_weights(
