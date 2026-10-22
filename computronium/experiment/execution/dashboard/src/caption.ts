@@ -12,6 +12,12 @@
  */
 
 import { registry } from "./components/registry.js";
+import { PANEL_KEYS } from "./keys.js";
+import {
+  closeButton,
+  panels,
+  registerDisplayPanel,
+} from "./panels.js";
 import { router } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import type { Component } from "./components/registry.js";
@@ -53,6 +59,13 @@ export class Caption implements Component {
   async init(): Promise<void> {
     this.createUI();
     this.render();
+    registerDisplayPanel(
+      "caption",
+      "caption",
+      "▤",
+      () => this.container,
+      PANEL_KEYS.caption,
+    );
   }
 
   async destroy(): Promise<void> {
@@ -60,13 +73,6 @@ export class Caption implements Component {
     router.unregister("pipeline_event", this.onEvent);
     if (this.holdTimer !== null) window.clearTimeout(this.holdTimer);
     this.container?.remove();
-  }
-
-  /** Hide or show the caption. */
-  toggle(): void {
-    if (!this.container) return;
-    this.container.style.display =
-      this.container.style.display === "none" ? "" : "none";
   }
 
   /** Say a sentence, in the server's words, for a few seconds.
@@ -104,7 +110,7 @@ export class Caption implements Component {
     this.container.id = "caption";
     this.container.style.cssText = `
       position: fixed;
-      bottom: 132px;
+      bottom: 200px;
       left: 50%;
       transform: translateX(-50%);
       width: 820px;
@@ -139,6 +145,11 @@ export class Caption implements Component {
     `;
 
     overlay.appendChild(this.container);
+    const close = closeButton(() => panels.toggle("caption"));
+    close.style.position = "absolute";
+    close.style.top = "4px";
+    close.style.right = "8px";
+    this.container.appendChild(close);
     this.headline = this.container.querySelector("#caption-headline");
     this.context = this.container.querySelector("#caption-context");
   }

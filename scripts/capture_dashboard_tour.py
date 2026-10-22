@@ -66,8 +66,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # The panels that sit over the map. The map's own legend is not one of them:
-# it belongs to the picture.
-PANELS = ("hud", "plotter", "live-rail", "caption")
+# it belongs to the picture. The charts are three panels now, and only the
+# Pareto one is open by default.
+PANELS = ("hud", "plotter-pareto", "live-rail", "caption")
 
 # The axes the grid may show, and the order the search for a void slice uses.
 AXES = ("credit", "dynamics", "geometry", "plasticity", "substrate", "update")
@@ -117,6 +118,10 @@ TOUR: tuple[Shot, ...] = (
     Shot("dashboard-ablation.png", "the ablation chart"),
     Shot("dashboard-variability.png", "the variability chart"),
     Shot("dashboard-caption.png", "the caption over the map"),
+    Shot(
+        "dashboard-slices.png",
+        "the slices: the same space, cut three ways, side by side",
+    ),
     Shot("narration-script.png", "the dashboard's account of itself, as text"),
     Shot("report-run.png", "the run's report, in the browser"),
     Shot(
@@ -166,6 +171,13 @@ TOUR: tuple[Shot, ...] = (
     Shot("panel-hud.png", "the HUD: the run's vital signs"),
     Shot("panel-legend.png", "the legend: the map's marks and axes"),
     Shot("panel-axis-picker.png", "the axis picker: the slice of the space"),
+    Shot("panel-rail.png", "the panel rail: which panels are open"),
+    Shot("panel-view-toolbar.png", "the view toolbar: every view, visible at once"),
+    Shot("panel-control-bar.png", "the control bar: the verbs, and the meter"),
+    Shot(
+        "panel-control-panel.png",
+        "the control panel: the new-run form, the run, the queue",
+    ),
     Shot("figure-gallery-swap-credit.png", "the gallery: the credit swap"),
     Shot("figure-gallery-epc-settle.png", "the gallery: the fast settle"),
     Shot("figure-gallery-coverage.png", "the gallery: the coverage of the axes"),
@@ -234,6 +246,7 @@ VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
     ("trained-basin", "dashboard-trained-basin.png", "k"),
     ("trained-landscape", "dashboard-trained-landscape.png", "o"),
     ("multirun", "dashboard-multirun.png", "u"),
+    ("slices", "dashboard-slices.png", ","),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels
@@ -275,12 +288,17 @@ def check_shot(path: Path, min_bytes: int = MIN_SHOT_BYTES) -> None:
 
 
 def set_panels(page: Page, visible: bool, panels: Sequence[str] = PANELS) -> None:
-    """Show or hide the panels that sit over the map."""
+    """Show or hide the panels that sit over the map.
+
+    The panels are hidden by a class, not by clearing their ``display``: the
+    control bar is a row of verbs, and a row of verbs that has become a
+    column is a different control.
+    """
     page.evaluate(
         """(args) => {
             for (const id of args.panels) {
                 const el = document.getElementById(id);
-                if (el) el.style.display = args.visible ? '' : 'none';
+                if (el) el.classList.toggle('panel-hidden', !args.visible);
             }
         }""",
         {"panels": list(panels), "visible": visible},
@@ -363,11 +381,12 @@ def set_axes(page: Page, axes: Sequence[str]) -> None:
         """async (axes) => {
             const dims = ['x', 'y', 'z'];
             for (let i = 0; i < dims.length; i++) {
-                const select = document.querySelector(
-                    `#legend-axis-picker select[data-dimension="${dims[i]}"]`);
-                if (!select) return;
-                select.value = axes[i];
-                select.dispatchEvent(new Event('change'));
+                const row = document.querySelector(
+                    `#legend-axis-picker .axis-row[data-dimension="${dims[i]}"]`);
+                if (!row) return;
+                const button = row.querySelector(`.axis-button[data-axis="${axes[i]}"]`);
+                if (!button) return;
+                button.click();
                 await new Promise((resolve) => setTimeout(resolve, 250));
             }
         }""",
@@ -380,30 +399,61 @@ def show_tab(page: Page, tab: str) -> None:
     page.evaluate("(tab) => { window.__DASHBOARD__.plotter.showTab(tab); }", tab)
 
 
+def reset_charts(page: Page) -> None:
+    """Put the charts back: none enlarged, none showing.
+
+    The charts are three panels now, each on its own. A panel the tour
+    enlarged for a picture would sit over every picture after it.
+    """
+    page.evaluate(
+        """() => {
+            for (const tab of ['pareto', 'ablation', 'variability']) {
+                const panel = document.getElementById('plotter-' + tab);
+                if (!panel) continue;
+                panel.style.position = '';
+                panel.style.width = '';
+                panel.style.height = '';
+                panel.style.right = '';
+                panel.style.bottom = '';
+                panel.style.zIndex = '';
+                panel.classList.add('panel-hidden');
+            }
+        }""",
+    )
+
+
 def enlarge_plotter(page: Page, tab: str) -> None:
     """Give the chart the frame it deserves.
 
-    The plotter is a panel among panels, sized for a working dashboard. A
+    A chart is a panel among panels, sized for a working dashboard. A
     picture of one chart is a different job: the chart is the subject, and
     the map behind it is the context.
     """
     page.evaluate(
         """(tab) => {
             const dbg = window.__DASHBOARD__;
-            const panel = document.getElementById('plotter');
+            const panel = document.getElementById('plotter-' + tab);
             if (!panel) return;
+            panel.style.position = 'fixed';
             panel.style.width = '1180px';
             panel.style.height = '560px';
             panel.style.right = '70px';
             panel.style.bottom = '70px';
+            panel.style.zIndex = '400';
             const plot = dbg.plotter[tab + 'Plot'];
-            const host = document.getElementById('plotter-' + tab);
+            const host = document.getElementById('plotter-' + tab + '-chart');
             if (plot && host) {
                 plot.setSize({ width: host.clientWidth, height: host.clientHeight });
             }
         }""",
         tab,
     )
+
+
+def read_control(port: int) -> dict[str, Any]:
+    """What the control plane says, read the way an agent reads it."""
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/control") as response:
+        return json.loads(response.read())
 
 
 def wait_for_measured(page: Page, timeout_ms: int) -> None:
@@ -651,6 +701,7 @@ class Tour:
         self.charts()
         self.caption()
         self.panels()
+        self.controls()
         # The void view is last: it cuts the space a different way, and the
         # grid does not go back to the run's own slice afterwards.
         self.void_cell()
@@ -753,12 +804,50 @@ class Tour:
         for tab in ("pareto", "ablation", "variability"):
             name = f"dashboard-{tab}.png"
             set_panels(self.page, False, ("hud", "live-rail", "caption"))
-            set_panels(self.page, True, ("plotter",))
+            reset_charts(self.page)
             show_tab(self.page, tab)
             wait_for_chart(self.page, tab, self.timeout_ms)
             enlarge_plotter(self.page, tab)
             self.page.wait_for_timeout(1200)
             self.shoot(name)
+        reset_charts(self.page)
+
+    def controls(self) -> None:
+        """The control bar, the control panel, and a round trip.
+
+        A tour that photographs a control and never exercises it is a picture
+        of a button. The bar is pressed, the plane is read, and the tour
+        fails if the server does not agree.
+        """
+        set_panels(self.page, False)
+        set_panels(self.page, True, ("control-bar",))
+        self.page.wait_for_timeout(1200)
+        self.shoot("panel-control-bar.png")
+
+        set_panels(self.page, True, ("control-panel",))
+        self.page.wait_for_timeout(1500)
+        self.shoot("panel-control-panel.png")
+        set_panels(self.page, False, ("control-panel",))
+
+        # The round trip: pause the run, and read the plane.
+        before = read_control(self.port)["control"]
+        self.page.evaluate("() => window.__DASHBOARD__.controlBar.togglePlay()")
+        self.page.wait_for_timeout(1200)
+        after = read_control(self.port)["control"]
+        if after["paused"] == before["paused"]:
+            self.fail(
+                "panel-control-bar.png",
+                "the control bar pressed a verb and the plane did not move",
+            )
+        # And back again: the run must not be left paused by a photograph.
+        self.page.evaluate("() => window.__DASHBOARD__.controlBar.togglePlay()")
+        self.page.wait_for_timeout(1200)
+        restored = read_control(self.port)["control"]
+        if restored["paused"] != before["paused"]:
+            self.fail(
+                "panel-control-bar.png",
+                "the run was left paused by the tour",
+            )
 
     def caption(self) -> None:
         """The screen, saying what it is doing."""
@@ -787,7 +876,7 @@ class Tour:
         self.page.evaluate(
             """() => {
                 const legend = document.getElementById('discovery-legend');
-                if (legend) legend.style.display = 'block';
+                if (legend) legend.classList.remove('panel-hidden');
                 const canvas = document.getElementById('dashboard-canvas');
                 if (canvas) canvas.style.display = 'none';
             }"""
@@ -799,7 +888,7 @@ class Tour:
         self.page.evaluate(
             """() => {
                 const legend = document.getElementById('discovery-legend');
-                if (legend) legend.style.display = 'none';
+                if (legend) legend.classList.add('panel-hidden');
                 const axisPicker = document.getElementById('legend-axis-picker');
                 if (axisPicker) {
                     const wrapper = document.createElement('div');
@@ -813,11 +902,49 @@ class Tour:
         self.page.wait_for_timeout(800)
         self.shoot("panel-axis-picker.png")
 
+        # The panel rail: the column of buttons that says what is open.
+        set_panels(self.page, False)
+        self.page.evaluate(
+            """() => {
+                const legend = document.getElementById('discovery-legend');
+                if (legend) legend.classList.remove('panel-hidden');
+                const canvas = document.getElementById('dashboard-canvas');
+                if (canvas) canvas.style.display = '';
+                const rail = document.getElementById('panel-rail');
+                if (rail) rail.classList.remove('panel-hidden');
+            }"""
+        )
+        self.page.wait_for_timeout(800)
+        self.shoot("panel-rail.png")
+
+        # The view toolbar: every view, visible at once.
+        self.page.evaluate(
+            """() => {
+                const strip = document.getElementById('view-strip');
+                if (!strip) return;
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 24px; z-index: 1000; width: 760px;';
+                wrapper.appendChild(strip.cloneNode(true));
+                document.body.appendChild(wrapper);
+            }"""
+        )
+        self.page.wait_for_timeout(800)
+        self.shoot("panel-view-toolbar.png")
+        self.page.evaluate(
+            """() => {
+                for (const el of Array.from(document.body.children)) {
+                    if (el.tagName === 'DIV' && el.style.zIndex === '1000') {
+                        el.remove();
+                    }
+                }
+            }"""
+        )
+
         # Restore
         self.page.evaluate(
             """() => {
                 const legend = document.getElementById('discovery-legend');
-                if (legend) legend.style.display = '';
+                if (legend) legend.classList.remove('panel-hidden');
                 const canvas = document.getElementById('dashboard-canvas');
                 if (canvas) canvas.style.display = '';
                 const wrapper = document.querySelector('[data-_tour-wrapper]');
@@ -912,18 +1039,30 @@ def capture_frame(
 
 
 def command_output(main: Any, argv: list[str]) -> str:
-    """A command's own text, as its terminal would show it.
+    """A command's own text, as the terminal would show it.
 
     The command is run in this process, with its output captured, so the
     picture is the command's words and not a paraphrase of them.
+
+    The command configures the root logger for its own sake — with
+    ``force=True``, which throws away the handlers this process had — so the
+    logging is put back afterwards. A tour that lost its logger would fail
+    silently, and a silent tour is worse than no tour.
     """
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    level = root.level
     buffer = io.StringIO()
-    with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-        try:
-            main(argv)
-        except SystemExit as exc:
-            if exc.code not in {0, None}:
-                logger.warning("Command %s exited with %s", argv, exc.code)
+    try:
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            try:
+                main(argv)
+            except SystemExit as exc:
+                if exc.code not in {0, None}:
+                    logger.warning("Command %s exited with %s", argv, exc.code)
+    finally:
+        root.handlers[:] = handlers
+        root.setLevel(level)
     return buffer.getvalue()
 
 
@@ -1294,8 +1433,6 @@ def main() -> int:
             capture_error.append(exc)
 
     capture_thread = threading.Thread(target=run_capture, daemon=True)
-    capture_thread.start()
-
     capture_thread.start()
 
     logger.info("Running the second campaign in-process...")

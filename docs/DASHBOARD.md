@@ -327,15 +327,21 @@ about the metric itself, and counts as it always did.
 
 ---
 
-### 3. Plotter (Three Tabs, uPlot)
+### 3. The Charts (Three Panels, uPlot)
 
-Interactive Canvas 2D charts (uPlot, 25KB, 60fps). Data updates via WebSocket `campaign_metrics`.
+Interactive Canvas 2D charts (uPlot, 25KB, 60fps). Data updates via WebSocket
+`campaign_metrics`.
 
-| Tab | Chart | Details |
-|-----|-------|---------|
-| **Pareto** | Scatter: val_acc vs 1/walltime_s | Points colored by credit arm. Pareto frontier points highlighted (purple ring). Dashed frontier line. |
-| **Ablation** | Grouped bars | Credit arm × val_acc with error bars. Horizontal dashed chance line at 0.10. |
-| **Variability** | Box/violin plots | Per credit arm: whiskers, box (IQR), median, outliers. Chance line. |
+The three charts are **three panels, not one tabbed container** (TODO70):
+closing the Pareto chart must leave the ablation chart alone, and each panel
+has its own title, its own `×`, and its own PNG button. They sit in a column
+under the HUD; only the Pareto one is open by default.
+
+| Panel | Chart | Details |
+|-------|-------|---------|
+| **Pareto** (`plotter-pareto`) | Scatter: val_acc vs 1/walltime_s | Points colored by credit arm. Pareto frontier points highlighted (purple ring). Dashed frontier line. |
+| **Ablation** (`plotter-ablation`) | Grouped bars | Credit arm × val_acc with error bars. Horizontal dashed chance line at 0.10. |
+| **Variability** (`plotter-variability`) | Box/violin plots | Per credit arm: whiskers, box (IQR), median, outliers. Chance line. |
 
 **Axis labels**: every chart says what its axes are (`1 / walltime_s
 (faster →)`, `credit arm`, `accuracy`); the ablation and variability charts
@@ -428,6 +434,158 @@ makes can be checked against the picture.
 
 ---
 
+### 8. The Control Bar (bottom-centre)
+
+The verbs, always visible. The bar is the dashboard's throttle: what it
+presses reaches the run itself, not a picture of it.
+
+| Piece | What it is |
+|-------|------------|
+| **Play / Pause** | one button, two states; the state is the *server's* — the button shows what the server says, and the browser never decides |
+| **Step** | enabled only while paused; releases exactly one more batch |
+| **Stop** | asks before it stops a run |
+| **The ceiling** | a slider, `1 … the machine's cores`, with the current value named |
+| **The meter** | the level (cells in flight, over the ceiling), the machine's own CPU, and the trace of the last sixty samples |
+| **The door** | `⚙` opens the control panel |
+
+The bar polls `GET /api/control` at **2 Hz**. The dashboard's own update loop
+is `update_interval = 2.0` seconds — far too slow for an indicator that is
+meant to move.
+
+**The ceiling and the use are two different numbers, and the bar shows both.**
+The slider sets the ceiling (the number of cells in flight at once); the meter
+shows the cells in flight *now*; the CPU bar shows the machine's own load. The
+*trace* is what says "saturating" or "starved": a level alone cannot, because
+a run at four of four cells and a run at four of four cells on a machine with
+four free cores look identical.
+
+A verb the server cannot honour is **disabled, with the reason in its
+tooltip** ("the control plane could not be read").
+
+### 9. The Control Panel (top-left, `Z`)
+
+The options that do not belong on a bar.
+
+| Section | What it holds |
+|---------|---------------|
+| **New run** | the profile picker → what the profile declares → the reader's edits (seeds, epochs, budget, device, fidelity) → **Start**; without a queue, the refusal and the command to type instead |
+| **This run** | the run's declaration as it stands — immutable, and the panel says so — its stage, its walltime, its records, the seeds it still owes |
+| **The queue** | the queue's campaigns with their status; cancel and preempt each; the queue's own ceilings |
+| **Cells** | the three cell verbs — replicate, preregister, quest — reachable without clicking a cell in the 3D scene |
+| **Exports** | the narration script, the run's report, and the records as JSON |
+
+### 10. The Panel Rail (right edge)
+
+A column of mini buttons, one per panel: the HUD, the live rail, the caption,
+the three charts, the legend, the cell drawer, the control bar and the control
+panel. A lit button is a panel that is showing.
+
+The rail is the honest home for "toggleable individually": a reader sees the
+*set*, not a list of keys. Every panel also carries its own `×`, and every
+panel's key still works — the registry (`src/panels.ts`) is the one place that
+knows what is open, and the key handler asks it rather than keeping a second
+list.
+
+### 11. The View Toolbar (in the legend)
+
+Twenty-four views, visible at once. The `<select>` is gone: a dropdown hides
+twenty-four views behind one line of text, and a reader who wants the terrain
+should not have to open a menu to find it.
+
+| Rule | Why |
+|------|-----|
+| The strip scrolls horizontally; it never wraps | a wrapped strip would grow the legend until it pushed the map off the screen |
+| `‹` / `›` step the sequence *and* scroll the strip | the strip is longer than the screen, so stepping must bring the button into view |
+| Each view gets a glyph, grouped by kind | solids for the 3D views, marks for the flat ones, bars for the process, curves for the dynamics — a reader learns the grammar once |
+| The active button is lit; the hovered one names the view and its key | the choice stays visible *where* it is made |
+
+The view's name still appears in the legend's title, so a reader who cannot
+use the toolbar still reads the view's name.
+
+---
+
+## The Control Plane (the channel to the run)
+
+The dashboard's verbs must reach a run that lives in **another process**. The
+event bus cannot carry them — it is process-local by construction
+(`execution/events.py`) — and the store cannot either: the dashboard refuses
+to write it, and the run is the writer.
+
+So the control channel is a **small JSON document beside the store**, and both
+sides derive its path from the store's by one function,
+`control_plane_path(store_path)`
+(`computronium/experiment/execution/control.py`). Neither side knows where it
+lives; neither side can disagree about it.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Pipeline (another process)                                                 │
+│    PipelineRunner.run()                                                      │
+│      ├─ _await_control()  ← reads the plane at every boundary               │
+│      ├─ backend.set_max_workers(n)  ← the ceiling the reader set             │
+│      └─ publishes { in_flight, cells_done, stage }                           │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │  the control plane: one small JSON document
+                               │  beside the store
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  control.py — the plane                                                      │
+│    control: paused · step_budget · max_workers · cancel · revision           │
+│    status:  run_id · stage · in_flight · cells_done · ceiling                 │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │  GET /api/control    POST /api/control
+                               │  POST /api/runs      GET /api/profiles
+                               │  GET /api/axes
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Browser:  control-bar.ts · control-panel.ts · panels.ts · stage/switcher.ts │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### The verbs
+
+| Verb | The plane says | The run does |
+|------|----------------|--------------|
+| **Play** | `paused = false` | releases at the next boundary |
+| **Pause** | `paused = true` | finishes the cell in flight, records it, and holds |
+| **Step** | `step_budget += 1` | releases exactly one more batch, then holds again |
+| **Stop** | `cancel = true` | the pipeline's own `_shutdown`, at the next boundary |
+| **Ceiling** | `max_workers = n` | `backend.set_max_workers(n)`, live |
+| **Budget** | — | immutable; the panel shows the run's declaration and says so |
+
+**A pause is a boundary, not a kill.** The cell in flight is completed and
+stored; a pause that killed the process would lose the cell *and* the run's
+place in the space, and the cell's absence would read as a gap to every reader
+who looks at the map afterwards.
+
+**A step releases one batch, not one round.** The step budget counts batches;
+a round boundary lets the run proceed to the batch that will spend the step.
+
+**A corrupt document is not an error.** The plane reads as "not paused" and
+records why in `last_error`; the dashboard reports `readable: false` rather
+than showing a control it cannot honour. A truncated file must not stop a run.
+
+### The endpoints
+
+| Endpoint | What it answers |
+|----------|-----------------|
+| `GET /api/control` | the plane, the run's counters, the machine's CPU, and the queue's usage — cheap enough to poll at 2 Hz |
+| `POST /api/control` | `{paused?, step?, max_workers?, cancel?, revision?}`; merges into the plane; **refuses a stale revision** (409) |
+| `GET /api/profiles` | the five run profiles as data: name, description, stages, fidelity, task, seeds, epochs, budget, the axes it varies |
+| `GET /api/axes` | the six structural axes and the primitives on each |
+| `POST /api/runs` | `{profile, overrides, device?}` → a `RunSpec` → a `CampaignSpec` → `queue.enqueue` |
+| `GET /api/runs/{id}/records` | the run's records, as JSON — the export a reader takes away |
+| `GET /api/runs/{id}/report` | the run's report, as the terminal shows it |
+
+**Without a campaign queue, `POST /api/runs` refuses in words that name the
+alternative**: `uv run comp run demo --store …`. The dashboard must never
+appear to have a control it does not have.
+
+Every verb the control bar shows has an endpoint a reader — or an agent — can
+call without a browser.
+
+---
+
 ## Narration (the account, without a browser)
 
 ```bash
@@ -484,12 +642,17 @@ process-local: this is the run *this dashboard watched*.
 | `E` | The effect |
 | `Y` | The layers |
 | `V` | Cycle the views |
-| `P` | Switch to Pareto tab |
-| `A` | Switch to Ablation tab |
-| `S` | Switch to Variability tab |
+| `P` | Show the Pareto chart |
+| `A` | Show the ablation chart |
+| `S` | Show the variability chart |
 | `H` | Toggle HUD visibility |
 | `R` | Toggle Live Rail visibility |
 | `C` | Toggle Caption visibility |
+| `Q` | Toggle the legend |
+| `Space` | Play / pause the run |
+| `W` | Step the run once |
+| `X` | Stop the run |
+| `Z` | The control panel |
 | `Escape` | Close the Cell Drawer |
 
 The stage's views are the main view area, so they hold the first claim on a
@@ -498,6 +661,13 @@ that wants a letter takes one no panel, chart or view holds — the first free
 letter in its own name is the default, which is why the layers are `Y` and
 not `L`. The keys everything else owns live in `src/keys.ts`, and a view that
 claims one of them is refused.
+
+**The letters ran out at exactly the moment a new surface wanted one.**
+TODO69 left four free; TODO70's controls took all four, and took the spacebar
+for play/pause besides. The next view takes a **punctuation key** from the
+list in `src/keys.ts` (`,` `.` `/` `;` `'`), and that list says which.
+`tests/property/test_dashboard_keys_lock.py` holds the claim that no key is
+claimed twice and that the free-key list is the one the plan says.
 
 ---
 
@@ -760,12 +930,12 @@ The screenshot is embedded in `docs/readme/title.md` and appears on the README f
 ## The Tour (every view of the system)
 
 ```bash
-# Forty-three pictures, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
+# Forty-eight pictures, 1920×1080 each, in docs/readme/assets/ and docs/screenshots/
 uv run python scripts/capture_dashboard_tour.py
 ```
 
 One store, one dashboard, one browser: the tour takes the whole system in
-forty-three pictures, and the pictures are of *different things*, not of the same
+forty-eight pictures, and the pictures are of *different things*, not of the same
 scene from different angles.
 
 | Shot | What it shows |
@@ -797,6 +967,11 @@ scene from different angles.
 | `dashboard-ablation.png` | the ablation chart |
 | `dashboard-variability.png` | the variability chart |
 | `dashboard-caption.png` | the caption over the map — the narrated picture |
+| `dashboard-slices.png` | the slices: the space cut three ways, side by side |
+| `panel-rail.png` | the panel rail: which panels are open |
+| `panel-view-toolbar.png` | the view toolbar: every view of the stage, visible at once |
+| `panel-control-bar.png` | the control bar: the verbs, and the meter |
+| `panel-control-panel.png` | the control panel: the new-run form, the run, the queue |
 | `narration-script.png` | the dashboard's account of itself, as text |
 | `report-run.png` | the run's report, in the browser |
 | `console-dashboard.png` | the console dashboard: the same picture, in a terminal |
@@ -813,6 +988,11 @@ scene from different angles.
 | `catalog.png` | `comp catalog search`: the run's records, browsable |
 | `method-cards.png` | `comp method-card list`: the ontology, one card per primitive |
 | `power-analysis.png` | `comp power-analysis`: the seeds a design needs, before it runs |
+
+**The tour exercises the controls.** It presses Play on the control bar,
+reads `GET /api/control`, and *fails* if the server does not agree — and then
+presses it again, so the run is not left paused by a photograph. A tour that
+photographs a control and never exercises it is a picture of a button.
 
 The capture waits for the dashboard's **state** — a measured cell, a drawn
 chart, a caption with words in it — and never for a fixed pause, so a slow

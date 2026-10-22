@@ -1,6 +1,12 @@
 /** HUD — Mission Control Panel (TODO68 Phase 4). */
 
 import { registry } from "./components/registry.js";
+import { PANEL_KEYS } from "./keys.js";
+import {
+  closeButton,
+  panels,
+  registerDisplayPanel,
+} from "./panels.js";
 import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
@@ -73,6 +79,13 @@ export class HUD implements Component {
   async init(): Promise<void> {
     this.createPanel();
     this.createModeChip();
+    registerDisplayPanel(
+      "hud",
+      "mission control",
+      "◱",
+      () => this.panel,
+      PANEL_KEYS.hud,
+    );
     wsClient.onStateChange((state) => {
       this.connected = state === "connected";
       this.updateConnection();
@@ -96,7 +109,7 @@ export class HUD implements Component {
     this.panel.style.cssText = `
       position: fixed;
       top: 20px;
-      right: 20px;
+      right: 44px;
       width: 260px;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
@@ -109,7 +122,7 @@ export class HUD implements Component {
     `;
 
     this.panel.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <div id="hud-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
         <span style="font-weight: 600; color: var(--text-primary); letter-spacing: 0.08em;">MISSION CONTROL</span>
         <div style="flex: 1;"></div>
         <span id="hud-connection" style="
@@ -138,6 +151,9 @@ export class HUD implements Component {
     `;
 
     overlay.appendChild(this.panel);
+
+    const header = this.panel.querySelector<HTMLElement>("#hud-header")!;
+    header.appendChild(closeButton(() => panels.toggle("hud")));
 
     const meters = this.panel.querySelector<HTMLElement>("#hud-meters")!;
     this.addMeter(meters, "device", "DEVICE", PALETTE.gradient);
@@ -372,12 +388,6 @@ export class HUD implements Component {
     this.connectionPill.style.borderColor = `${color}88`;
     this.connectionPill.style.color = color;
     label.textContent = this.connected ? "live" : "offline";
-  }
-
-  /** Hide or show the panel. */
-  toggle(): void {
-    if (!this.panel) return;
-    this.panel.style.display = this.panel.style.display === "none" ? "" : "none";
   }
 
   update(delta: number): void {

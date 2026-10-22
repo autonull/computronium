@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
 import { router, wsClient } from "./ws-client.js";
 import { setSceneContext } from "./components/context.js";
+import { controlBar } from "./control-bar.js";
+import { controlPanel } from "./control-panel.js";
 import { discoveryMap } from "./discovery-map.js";
 import { cellDrawer } from "./cell-drawer.js";
 import { plotter } from "./plotter.js";
@@ -12,7 +14,8 @@ import { caption } from "./caption.js";
 import { hud } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
 import { PALETTE } from "./palette.js";
-import { PANEL_KEYS, TAB_KEYS } from "./keys.js";
+import { CONTROL_KEYS, TAB_KEYS } from "./keys.js";
+import { panels } from "./panels.js";
 import { detectRenderProfile } from "./render-profile.js";
 
 // Global error handler
@@ -136,23 +139,43 @@ wsClient.waitForConnection(15000).then((connected) => {
 // Components self-register with the registry on import; the registry
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
-// Keyboard shortcuts: the charts, the panels, and the drawer.
+// Keyboard shortcuts: the charts, the panels, and the control bar.
 // The number keys belong to the stage's views (V cycles them); the charts
-// are picked by the letters that name them, and the panels by their own.
+// are picked by the letters that name them, the panels by their own, and the
+// control bar by the verbs it holds.
 const TAB_BY_KEY = new Map<string, string>(
   Object.entries(TAB_KEYS).map(([name, key]) => [key, name]),
 );
 window.addEventListener("keydown", (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const target = event.target as HTMLElement | null;
+  if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
+    return;
+  }
   const key = event.key.toLowerCase();
   const tab = TAB_BY_KEY.get(key);
   if (tab) {
     plotter.showTab(tab);
     return;
   }
-  if (key === PANEL_KEYS.hud) hud.toggle();
-  if (key === PANEL_KEYS.rail) liveRail.toggle();
-  if (key === PANEL_KEYS.caption) caption.toggle();
+  if (key === CONTROL_KEYS.play) {
+    controlBar.togglePlay();
+    return;
+  }
+  if (key === CONTROL_KEYS.step) {
+    controlBar.step();
+    return;
+  }
+  if (key === CONTROL_KEYS.stop) {
+    controlBar.stop();
+    return;
+  }
+  if (key === CONTROL_KEYS.panel) {
+    panels.toggle("control-panel");
+    return;
+  }
+  const panel = panels.byKey(key);
+  if (panel) panels.toggle(panel.id);
 });
 
 // Three.js scene setup (shared by DiscoveryMap and HUD)
@@ -280,6 +303,9 @@ requestAnimationFrame(animate);
   caption,
   hud,
   viewSwitcher,
+  controlBar,
+  controlPanel,
+  panels,
   wsClient,
   router,
 };

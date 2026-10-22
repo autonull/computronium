@@ -826,12 +826,16 @@ class PipelineRunner:
         if plane is None:
             return
         backend = self._config.backend
+        ceiling = self._ceiling
+        if ceiling is None and backend is not None:
+            ceiling = backend.max_workers
         plane.write_status(
             RunStatus(
                 run_id=self._config.run_id,
                 stage=self._state.current_stage,
                 in_flight=backend.in_flight if backend is not None else 0,
                 cells_done=len(self._state.completed_measurement_keys),
+                ceiling=ceiling or 0,
                 at=time.time(),
             )
         )

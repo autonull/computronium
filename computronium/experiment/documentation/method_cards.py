@@ -34,8 +34,8 @@ class MethodCard:
 def _get_axis_registries() -> dict[str, dict[str, type]]:
     """Get all axis registries from the ontology."""
     from computronium.ontology.dynamics._registry import DYNAMICS_REGISTRY
-    from computronium.ontology.geometry import _GEOMETRY_BACKENDS
-    from computronium.ontology.update import _UPDATE_BACKENDS
+    from computronium.ontology.geometry import _GEOMETRY_REGISTRY
+    from computronium.ontology.update import _UPDATE_REGISTRY
 
     # For substrate, use the concrete classes directly
     substrate_registry = {
@@ -161,11 +161,11 @@ def _get_axis_registries() -> dict[str, dict[str, type]]:
 
     return {
         "substrate": substrate_registry,
-        "geometry": {k: v.cls for k, v in _GEOMETRY_BACKENDS.items()},
-        "dynamics": DYNAMICS_REGISTRY,
+        "geometry": {k: v.cls for k, v in _GEOMETRY_REGISTRY.all().items()},
+        "dynamics": dict(DYNAMICS_REGISTRY.items()),
         "plasticity": plasticity_registry,
         "credit": credit_registry,
-        "update": dict(_UPDATE_BACKENDS),
+        "update": {k: v.cls for k, v in _UPDATE_REGISTRY.all().items()},
     }
 
 

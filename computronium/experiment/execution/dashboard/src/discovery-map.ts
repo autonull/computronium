@@ -14,6 +14,8 @@
 import * as THREE from "three";
 import { registry } from "./components/registry.js";
 import { getSceneContext } from "./components/context.js";
+import { PANEL_KEYS } from "./keys.js";
+import { registerDisplayPanel } from "./panels.js";
 import { router } from "./ws-client.js";
 import { ARM_COLORS, PALETTE } from "./palette.js";
 import { runSelection } from "./run-selection.js";
@@ -101,6 +103,13 @@ export class DiscoveryMap implements Component {
     this.setupInteraction();
     this.createLegend();
     this.createReadout();
+    registerDisplayPanel(
+      "discovery-legend",
+      "legend",
+      "▦",
+      () => this.legendElement,
+      PANEL_KEYS.legend,
+    );
 
     // The stage's state is the map's state: the space, the records and the
     // axes the reader picked are shared with the other views. The legend
@@ -387,47 +396,41 @@ export class DiscoveryMap implements Component {
     const dimensions: (keyof AxisSelection)[] = ["x", "y", "z"];
     dimensions.forEach((dimension) => {
       const row = document.createElement("div");
-      row.style.cssText =
-        "display: flex; align-items: center; gap: 6px; font-size: 11px;";
+      row.className = "axis-row";
+      row.dataset.dimension = dimension;
+      row.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 3px;
+        font-size: 11px;
+        margin-bottom: 3px;
+      `;
 
       const label = document.createElement("span");
       label.textContent = dimension.toUpperCase();
       label.style.cssText = "color: var(--text-secondary); width: 12px;";
 
-      const select = document.createElement("select");
-      select.dataset.dimension = dimension;
-      select.style.cssText = `
-        flex: 1;
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 11px;
-        padding: 2px 4px;
-      `;
-      select.addEventListener("change", () => {
-        stageState.setAxes({
-          ...stageState.axes,
-          [dimension]: select.value as AxisName,
-        });
-      });
-
       row.appendChild(label);
-      row.appendChild(select);
       container.appendChild(row);
     });
 
     this.refreshAxisOptions();
   }
 
-  private refreshAxisOptions(): void {
-    const selects = this.legendElement?.querySelectorAll(
-      "#legend-axis-picker select",
-    );
-    if (!selects) return;
+  /** The axis picker's buttons: one per axis, for each of the three cuts.
 
-    selects.forEach((select) => {
-      const dimension = (select as HTMLSelectElement).dataset
+    A dropdown hid the six axes behind one line of text; a row of buttons
+    shows them, and the ones another cut already holds are dimmed.
+  */
+  private refreshAxisOptions(): void {
+    const rows = this.legendElement?.querySelectorAll(
+      "#legend-axis-picker .axis-row",
+    );
+    if (!rows) return;
+
+    rows.forEach((row) => {
+      const dimension = (row as HTMLElement).dataset
         .dimension as keyof AxisSelection;
       const taken = new Set<AxisName>(
         (["x", "y", "z"] as (keyof AxisSelection)[])
@@ -435,14 +438,37 @@ export class DiscoveryMap implements Component {
           .map((other) => stageState.axes[other]),
       );
 
-      select.innerHTML = "";
+      row.innerHTML = "";
+      const label = document.createElement("span");
+      label.textContent = dimension.toUpperCase();
+      label.style.cssText = "color: var(--text-secondary); width: 12px;";
+      row.appendChild(label);
+
       AXIS_NAMES.forEach((axis) => {
-        const option = document.createElement("option");
-        option.value = axis;
-        option.textContent = AXIS_META[axis]?.display_name ?? axis;
-        option.disabled = taken.has(axis);
-        option.selected = stageState.axes[dimension] === axis;
-        select.appendChild(option);
+        const active = stageState.axes[dimension] === axis;
+        const button = document.createElement("button");
+        button.className = "axis-button";
+        button.dataset.axis = axis;
+        button.textContent = AXIS_META[axis]?.display_name ?? axis;
+        button.disabled = taken.has(axis);
+        button.style.cssText = `
+          flex: 0 0 auto;
+          padding: 1px 5px;
+          background: ${active ? "var(--bg-primary)" : "var(--bg-tertiary)"};
+          border: 1px solid ${active ? "var(--border-bright)" : "var(--border)"};
+          border-radius: 4px;
+          color: ${active ? "var(--text-primary)" : "var(--text-secondary)"};
+          font-size: 10px;
+          cursor: pointer;
+          opacity: ${taken.has(axis) ? 0.4 : 1};
+        `;
+        button.addEventListener("click", () => {
+          stageState.setAxes({
+            ...stageState.axes,
+            [dimension]: axis,
+          });
+        });
+        row.appendChild(button);
       });
     });
   }

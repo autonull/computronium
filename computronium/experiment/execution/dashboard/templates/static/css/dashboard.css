@@ -40,6 +40,13 @@ body {
   pointer-events: auto;
 }
 
+/* A hidden panel keeps its own display: the control bar is a row of verbs and
+   the live rail is a row of events, and neither may be flattened into a
+   stack by the act of hiding it. */
+.panel-hidden {
+  display: none !important;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

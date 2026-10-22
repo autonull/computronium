@@ -825,6 +825,19 @@ uv run comp run demo --store experiment.duckdb     # a campaign to watch
 |---|---|---|
 | ![A void cell](docs/readme/assets/dashboard-void.png) | ![The Pareto chart](docs/readme/assets/dashboard-pareto.png) | ![The caption](docs/readme/assets/dashboard-caption.png) |
 
+And the dashboard is an instrument, not a picture: the verbs at the bottom of
+the screen reach the run itself, through a control plane the run in another
+process reads. The rail down the right edge says which panels are open, and
+the legend's toolbar holds every view of the stage at once:
+
+| The control bar | The control panel | The panel rail | The view toolbar |
+|---|---|---|---|
+| ![The control bar](docs/readme/assets/panel-control-bar.png) | ![The control panel](docs/readme/assets/panel-control-panel.png) | ![The panel rail](docs/readme/assets/panel-rail.png) | ![The view toolbar](docs/readme/assets/panel-view-toolbar.png) |
+
+Play and pause the run, step it one batch at a time, move the ceiling on the
+cells in flight at once, and start a run from nothing — all of it from the
+browser, and all of it reaching the run rather than a picture of it.
+
 The canvas is a stage, and the view is a choice: `V` cycles the views, the
 number keys pick one — and a view that does not fit in the numbers has a
 letter of its own — and the legend names the view that is on. The same run,

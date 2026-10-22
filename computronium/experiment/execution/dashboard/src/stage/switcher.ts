@@ -3,12 +3,13 @@
     The canvas is a stage, and a view is what stands on it. The switcher is
     what turns "a picture" into "a canvas that can show more than one thing":
     a key that cycles the views, the number keys that pick one, a letter for
-    the views that do not fit in the numbers, and a selector in the legend,
-    so the choice is visible where it is made.
+    the views that do not fit in the numbers, and a toolbar in the legend, so
+    the choice is visible where it is made.
 */
 
 import { registry } from "../components/registry.js";
 import { discoveryMap } from "../discovery-map.js";
+import { viewGlyph } from "../icons.js";
 import { CYCLE_KEY, RESERVED_KEYS } from "../keys.js";
 import { ClaimCostView } from "./claim-cost.js";
 import { ContrastView } from "./contrast.js";
@@ -30,6 +31,7 @@ import { LayersView } from "./layers.js";
 import { LedgerView } from "./ledger.js";
 import { MatrixView } from "./matrix.js";
 import { MultiRunView } from "./multirun.js";
+import { SlicesView } from "./slices.js";
 import { SmallMultiplesView } from "./small-multiples.js";
 import { SpreadView } from "./spread.js";
 import { stageState, type StageChange } from "./state.js";
@@ -68,7 +70,8 @@ export class ViewSwitcher implements Component {
 
   private views: StageView[] = [];
   private active: StageView | null = null;
-  private selector: HTMLSelectElement | null = null;
+  private track: HTMLElement | null = null;
+  private viewButtons = new Map<string, HTMLButtonElement>();
   private captionElement: HTMLElement | null = null;
   private section: HTMLElement | null = null;
   /** The key that picks each view: the numbers first, then the letters. */
@@ -102,6 +105,7 @@ export class ViewSwitcher implements Component {
       new TrainedBasinView(),
       new TrainedLandscapeView(),
       new MultiRunView(),
+      new SlicesView(),
     ];
   }
 
@@ -205,18 +209,23 @@ export class ViewSwitcher implements Component {
   private keyHint(): string {
     const digits: string[] = [];
     const letters: string[] = [];
+    const punctuation: string[] = [];
     this.views.forEach((view, index) => {
       if (index < 9) {
         digits.push(String(index + 1));
         return;
       }
-      if (view.key && !RESERVED_KEYS.has(view.key)) {
+      if (!view.key || RESERVED_KEYS.has(view.key)) return;
+      if (/^[a-z]$/.test(view.key)) {
         letters.push(view.key.toUpperCase());
+        return;
       }
+      punctuation.push(view.key);
     });
     const parts = ["V cycles"];
     if (digits.length > 0) parts.push(`${digits[0]}–${digits[digits.length - 1]} pick`);
     if (letters.length > 0) parts.push(`${letters.join(" ")} pick`);
+    if (punctuation.length > 0) parts.push(`${punctuation.join(" ")} pick`);
     return parts.join(" · ");
   }
 
@@ -231,26 +240,40 @@ export class ViewSwitcher implements Component {
     heading.style.cssText = "font-weight: 600; margin-bottom: 8px;";
     section.appendChild(heading);
 
-    const select = document.createElement("select");
-    select.id = "view-picker";
-    select.style.cssText = `
+    // The toolbar: one mini button per view, and a pair that steps through
+    // them. A dropdown hides twenty-four views behind one line of text; a
+    // reader who wants the terrain should not have to open a menu to find
+    // it. The strip scrolls sideways and never wraps: a wrapped strip would
+    // grow the legend until it pushed the map off the screen.
+    const strip = document.createElement("div");
+    strip.id = "view-strip";
+    strip.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 4px;
       width: 100%;
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 11px;
-      padding: 2px 4px;
     `;
-    this.views.forEach((view) => {
-      const option = document.createElement("option");
-      option.value = view.id;
-      option.textContent = this.optionLabel(view);
-      select.appendChild(option);
-    });
-    select.addEventListener("change", () => this.show(select.value));
-    section.appendChild(select);
-    this.selector = select;
+    strip.appendChild(this.stepButton("‹", "the previous view", -1));
+
+    const track = document.createElement("div");
+    track.id = "view-track";
+    track.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      padding-bottom: 2px;
+    `;
+    for (const view of this.views) {
+      track.appendChild(this.viewButton(view));
+    }
+    strip.appendChild(track);
+    strip.appendChild(this.stepButton("›", "the next view", 1));
+    section.appendChild(strip);
+    this.track = track;
 
     const caption = document.createElement("div");
     caption.id = "view-caption";
@@ -265,6 +288,72 @@ export class ViewSwitcher implements Component {
     section.appendChild(keys);
 
     this.section = section;
+  }
+
+  /** One view's button: its glyph, its name on hover, its key. */
+  private viewButton(view: StageView): HTMLButtonElement {
+    const glyph = viewGlyph(view.id);
+    const button = document.createElement("button");
+    button.className = "view-button";
+    button.dataset.view = view.id;
+    button.textContent = glyph.glyph;
+    button.title = this.optionLabel(view);
+    button.style.cssText = `
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 0;
+    `;
+    button.addEventListener("click", () => this.show(view.id));
+    this.viewButtons.set(view.id, button);
+    return button;
+  }
+
+  /** The ‹ and › pair: they step the sequence and scroll the strip. */
+  private stepButton(
+    glyph: string,
+    label: string,
+    direction: number,
+  ): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.className = "view-step";
+    button.textContent = glyph;
+    button.title = label;
+    button.style.cssText = `
+      flex: 0 0 auto;
+      width: 20px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0;
+    `;
+    button.addEventListener("click", () => this.step(direction));
+    return button;
+  }
+
+  /** The next view, or the one before it, and the strip follows. */
+  private step(direction: number): void {
+    if (this.views.length === 0) return;
+    const index = this.views.findIndex((view) => view.id === this.active?.id);
+    const from = index < 0 ? 0 : index;
+    const next = (from + direction + this.views.length) % this.views.length;
+    this.show(this.views[next].id);
   }
 
   /** Put the selector in the legend, once the legend is there. */
@@ -283,9 +372,23 @@ export class ViewSwitcher implements Component {
     this.updateLegend();
   }
 
+  /** Light the active view's button, and bring it into the strip. */
   private updateSelector(): void {
-    if (!this.selector || !this.active) return;
-    this.selector.value = this.active.id;
+    if (!this.active) return;
+    for (const [id, button] of this.viewButtons) {
+      const on = id === this.active.id;
+      button.style.color = on ? "var(--text-primary)" : "var(--text-secondary)";
+      button.style.borderColor = on ? "var(--border-bright)" : "var(--border)";
+      button.style.background = on ? "var(--bg-primary)" : "var(--bg-tertiary)";
+    }
+    this.scrollToActive();
+  }
+
+  /** The strip is longer than the screen, so the lit button follows it. */
+  private scrollToActive(): void {
+    const button = this.active ? this.viewButtons.get(this.active.id) : null;
+    if (!button || !this.track) return;
+    button.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
   /** The legend names the view, and shows the marks only where they mean. */

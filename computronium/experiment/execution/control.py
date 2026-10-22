@@ -120,6 +120,7 @@ class RunStatus:
         stage: The stage the run is in, by its own name.
         in_flight: The cells training right now.
         cells_done: The cells the run has measured.
+        ceiling: The ceiling on cells in flight the run is holding to.
         at: When the run last said so, in epoch seconds.
     """
 
@@ -127,6 +128,7 @@ class RunStatus:
     stage: str = ""
     in_flight: int = 0
     cells_done: int = 0
+    ceiling: int = 0
     at: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -136,6 +138,7 @@ class RunStatus:
             "stage": self.stage,
             "in_flight": self.in_flight,
             "cells_done": self.cells_done,
+            "ceiling": self.ceiling,
             "at": self.at,
         }
 
@@ -147,6 +150,7 @@ class RunStatus:
             stage=str(payload.get("stage", "")),
             in_flight=int(payload.get("in_flight", 0) or 0),
             cells_done=int(payload.get("cells_done", 0) or 0),
+            ceiling=int(payload.get("ceiling", 0) or 0),
             at=float(payload.get("at", 0.0) or 0.0),
         )
 

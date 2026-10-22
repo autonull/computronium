@@ -290,6 +290,14 @@ class WebDashboard:
     """
 
     def __init__(self, config: DashboardConfig | None = None) -> None:
+        # The registries seed themselves on first use, and that seeding is
+        # not re-entrant: two requests arriving together would each try to
+        # seed them, and the second would find them half-built — a profile
+        # whose axes name no primitive. The dashboard seeds them once, here,
+        # before it serves anything.
+        from computronium.experiment.schema.seed_registries import seed_all_registries
+
+        seed_all_registries()
         self.config = config or DashboardConfig()
         self.app = FastAPI(title="Computronium Campaign Dashboard")
         self._connected_websockets: set[WebSocket] = set()
@@ -602,6 +610,23 @@ class WebDashboard:
             """The six structural axes and the primitives each one offers."""
             return JSONResponse(axes_payload())
 
+        @self.app.get("/api/runs/{run_id}/records")
+        async def api_run_records(run_id: str) -> JSONResponse:
+            """The run's records, as JSON.
+
+            The export a reader takes away: the run's own evidence, in the
+            form the store holds it.
+            """
+            return JSONResponse(await self._records_payload(run_id))
+
+        @self.app.get("/api/runs/{run_id}/report")
+        async def api_run_report(run_id: str) -> JSONResponse:
+            """The run's report, as the terminal shows it.
+
+            The dashboard's own account of the run, in the run's own words.
+            """
+            return JSONResponse(await self._report_payload(run_id))
+
         @self.app.post("/api/runs")
         async def api_start_run(body: RunRequest) -> JSONResponse:
             """Start a run from the dashboard.
@@ -611,6 +636,47 @@ class WebDashboard:
             """
             result = await self._start_run(body)
             return JSONResponse(result.payload, status_code=result.status_code)
+
+    async def _records_payload(self, run_id: str) -> dict[str, Any]:
+        """The run's records, as the export carries them."""
+        if not self.config.store_path:
+            return {"error": "no store path configured"}
+        try:
+            with self._readable_store() as store:
+                records = [
+                    {
+                        "record_id": record.record_id,
+                        "coordinate": {
+                            "substrate": record.substrate,
+                            "geometry": record.geometry,
+                            "dynamics": record.dynamics,
+                            "plasticity": record.plasticity,
+                            "credit": record.credit,
+                            "update": record.update,
+                        },
+                        "schedule": record.schedule.to_dict(),
+                        "payload": record.payload,
+                    }
+                    for record in store.query_records(run_id=run_id)
+                ]
+        except Exception as e:
+            logger.exception("Error reading the run's records")
+            return {"error": str(e)}
+        return {"run_id": run_id, "records": records}
+
+    async def _report_payload(self, run_id: str) -> dict[str, Any]:
+        """The run's report, as the terminal shows it."""
+        if not self.config.store_path:
+            return {"error": "no store path configured"}
+        try:
+            from computronium.experiment.surface.report import generate_run_report
+
+            with self._readable_store() as store:
+                report = await asyncio.to_thread(generate_run_report, store, run_id)
+        except Exception as e:
+            logger.exception("Error reading the run's report")
+            return {"error": str(e)}
+        return {"run_id": run_id, "report": report}
 
     async def _control_payload(self) -> dict[str, Any]:
         """The plane, the run's counters, and the machine's own use.
@@ -1900,6 +1966,10 @@ class WebDashboard:
             host=self.config.host,
             port=self.config.port,
             log_level="info",
+            # Uvicorn's own logging config disables every logger it does not
+            # name, and the tour's logger is one of them: a tour that failed
+            # said nothing. The dashboard keeps the logging it was given.
+            log_config=None,
         )
         server = uvicorn.Server(config)
         try:

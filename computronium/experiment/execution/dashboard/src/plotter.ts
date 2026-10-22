@@ -1,8 +1,16 @@
-/** Plotter — uPlot Charts (Pareto, Ablation, Variability) (TODO68 Phase 3). */
+/** Plotter — uPlot Charts (Pareto, Ablation, Variability) (TODO68 Phase 3).
+
+    The three charts are three panels, not one tabbed container (TODO70):
+    closing the Pareto chart must leave the ablation chart alone. They sit in
+    a column under the HUD, each with its own title, its own ×, and its own
+    download button.
+*/
 
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { registry } from "./components/registry.js";
+import { TAB_KEYS } from "./keys.js";
+import { closeButton, panels, registerDisplayPanel, setPanelHidden } from "./panels.js";
 import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
@@ -12,6 +20,50 @@ import type { Component } from "./components/registry.js";
 function chartHeight(panel: HTMLElement): number {
   return Math.max(120, panel.clientHeight - 30);
 }
+
+/** One chart's panel: what it is called, and where it lives on the page. */
+interface ChartSpec {
+  /** The chart's name, as the reader knows it. */
+  id: "pareto" | "ablation" | "variability";
+  /** The panel's dom id: what the reader, and the tour, name it by. */
+  panelId: string;
+  /** The host the plot is drawn into. */
+  hostId: string;
+  /** The panel's title. */
+  title: string;
+  /** The glyph on the rail's button. */
+  glyph: string;
+  /** The key that shows the chart. */
+  key: string;
+}
+
+/** The three charts, in the order they are listed. */
+const CHARTS: ChartSpec[] = [
+  {
+    id: "pareto",
+    panelId: "plotter-pareto",
+    hostId: "plotter-pareto-chart",
+    title: "Pareto frontier",
+    glyph: "◭",
+    key: TAB_KEYS.pareto,
+  },
+  {
+    id: "ablation",
+    panelId: "plotter-ablation",
+    hostId: "plotter-ablation-chart",
+    title: "Ablation",
+    glyph: "▥",
+    key: TAB_KEYS.ablation,
+  },
+  {
+    id: "variability",
+    panelId: "plotter-variability",
+    hostId: "plotter-variability-chart",
+    title: "Variability",
+    glyph: "◇",
+    key: TAB_KEYS.variability,
+  },
+];
 
 interface RecordData {
   record_id: string;
@@ -51,13 +103,11 @@ export class Plotter implements Component {
   name = "Plotter";
 
   private container: HTMLElement | null = null;
-  private tabsContainer: HTMLElement | null = null;
-  private contentContainer: HTMLElement | null = null;
+  private chartPanels = new Map<string, HTMLElement>();
   private tooltip: HTMLElement | null = null;
   private paretoPlot: uPlot | null = null;
   private ablationPlot: uPlot | null = null;
   private variabilityPlot: uPlot | null = null;
-  private currentTab = "pareto";
   private records: RecordData[] = [];
   private ablationGroups: AblationGroup[] = [];
   private paretoFlags: boolean[] = [];
@@ -96,69 +146,26 @@ export class Plotter implements Component {
     if (!overlay) return;
 
     this.container = document.createElement("div");
-    this.container.id = "plotter";
+    this.container.id = "chart-column";
     this.container.style.cssText = `
       position: fixed;
-      bottom: 140px;
-      right: 20px;
+      top: 330px;
+      bottom: 130px;
+      right: 44px;
       width: 520px;
-      height: 430px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
       display: flex;
       flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
       z-index: 150;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
     `;
 
-    this.container.innerHTML = `
-      <div id="plotter-tabs" style="
-        display: flex;
-        border-bottom: 1px solid var(--border);
-        background: var(--bg-tertiary);
-        border-radius: 8px 8px 0 0;
-      ">
-        <button class="plotter-tab active" data-tab="pareto" style="flex: 1;">Pareto</button>
-        <button class="plotter-tab" data-tab="ablation" style="flex: 1;">Ablation</button>
-        <button class="plotter-tab" data-tab="variability" style="flex: 1;">Variability</button>
-      </div>
-      <div id="plotter-content" style="flex: 1; position: relative; overflow: hidden;">
-        <div id="plotter-pareto" style="width: 100%; height: 100%; display: block;"></div>
-        <div id="plotter-ablation" style="width: 100%; height: 100%; display: none;"></div>
-        <div id="plotter-variability" style="width: 100%; height: 100%; display: none;"></div>
-      </div>
-      <div id="plotter-toolbar" style="
-        padding: 8px 12px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        font-size: 11px;
-        color: var(--text-secondary);
-      ">
-        <span id="plotter-status" style="
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        ">No data</span>
-        <div style="flex: 1;"></div>
-        <button id="plotter-download" style="
-          padding: 4px 10px;
-          background: var(--bg-tertiary);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          color: var(--text-primary);
-          font-size: 11px;
-          cursor: pointer;
-        ">Download PNG</button>
-      </div>
-    `;
+    for (const chart of CHARTS) {
+      this.container.appendChild(this.createChartPanel(chart));
+    }
 
     overlay.appendChild(this.container);
-    this.tabsContainer = this.container.querySelector("#plotter-tabs")!;
-    this.contentContainer = this.container.querySelector("#plotter-content")!;
 
     this.tooltip = document.createElement("div");
     this.tooltip.id = "plotter-tooltip";
@@ -179,55 +186,114 @@ export class Plotter implements Component {
     `;
     this.container.appendChild(this.tooltip);
 
-    // Tab switching
-    this.tabsContainer.querySelectorAll(".plotter-tab").forEach((btn) => {
-      btn.addEventListener("click", () =>
-        this.switchTab(btn.getAttribute("data-tab")!),
-      );
-    });
+    // The Pareto chart is the working one; the other two are a reader's
+    // choice, and each is closed on its own.
+    this.setPanelOpen(CHARTS[0].id, true);
+  }
 
-    // Download button
-    this.container
-      .querySelector("#plotter-download")!
-      .addEventListener("click", () => this.downloadCurrent());
+  /** One chart's panel: its title, its ×, its plot and its download. */
+  private createChartPanel(chart: ChartSpec): HTMLElement {
+    const panel = document.createElement("div");
+    panel.id = chart.panelId;
+    panel.className = "chart-panel";
+    panel.style.cssText = `
+      position: relative;
+      flex: 0 0 auto;
+      height: 300px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      pointer-events: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    `;
 
-    // Render the initially active tab
-    this.switchTab(this.currentTab);
+    panel.innerHTML = `
+      <div class="chart-header" style="
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-tertiary);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+      ">
+        <span class="chart-title">${chart.title}</span>
+        <div style="flex: 1;"></div>
+        <button class="chart-download" style="
+          padding: 3px 8px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          color: var(--text-primary);
+          font-size: 11px;
+          cursor: pointer;
+        ">PNG</button>
+      </div>
+      <div id="${chart.hostId}" style="flex: 1; position: relative; overflow: hidden;"></div>
+      <div class="chart-toolbar" style="
+        padding: 6px 12px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 11px;
+        color: var(--text-secondary);
+      ">
+        <span class="chart-status" style="
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        ">No data</span>
+      </div>
+    `;
+    // Every chart but the Pareto one starts closed: the working mode is one
+    // chart, and each of the others is the reader's own choice.
+    setPanelHidden(panel, true);
+
+    const header = panel.querySelector<HTMLElement>(".chart-header")!;
+    header.appendChild(closeButton(() => panels.toggle(chart.panelId)));
+    panel
+      .querySelector<HTMLElement>(".chart-download")!
+      .addEventListener("click", () => this.download(chart.id));
+
+    this.chartPanels.set(chart.id, panel);
+    registerDisplayPanel(
+      chart.panelId,
+      chart.title.toLowerCase(),
+      chart.glyph,
+      () => this.chartPanels.get(chart.id) ?? null,
+      chart.key,
+    );
+    return panel;
   }
 
   /** Show one of the charts: "pareto", "ablation" or "variability". */
   showTab(tab: string): void {
-    if (tab === this.currentTab) return;
-    this.switchTab(tab);
+    const chart = CHARTS.find((candidate) => candidate.id === tab);
+    if (!chart) return;
+    this.setPanelOpen(chart.id, true);
+    this.chartPanels.get(chart.id)?.scrollIntoView({ block: "nearest" });
   }
 
-  private switchTab(tab: string): void {
-    this.currentTab = tab;
+  /** Open or close one chart's panel, and nothing else. */
+  private setPanelOpen(id: string, open: boolean): void {
+    const panel = this.chartPanels.get(id);
+    if (!panel) return;
+    setPanelHidden(panel, !open);
+    if (open) this.initPlot(id);
+  }
 
-    // Update tab buttons
-    this.tabsContainer!.querySelectorAll(".plotter-tab").forEach((btn) => {
-      btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
-    });
-
-    // Show/hide the chart panels
-    const panels = {
-      pareto: "plotter-pareto",
-      ablation: "plotter-ablation",
-      variability: "plotter-variability",
-    };
-
-    Object.entries(panels).forEach(([key, id]) => {
-      const panel = document.getElementById(id);
-      if (panel) panel.style.display = key === tab ? "block" : "none";
-    });
-
-    // Initialize plot if needed
-    if (tab === "pareto" && !this.paretoPlot) this.initParetoPlot();
-    if (tab === "ablation" && !this.ablationPlot) this.initAblationPlot();
-    if (tab === "variability" && !this.variabilityPlot)
+  /** Draw a chart the first time its panel is opened. */
+  private initPlot(id: string): void {
+    if (id === "pareto" && !this.paretoPlot) this.initParetoPlot();
+    if (id === "ablation" && !this.ablationPlot) this.initAblationPlot();
+    if (id === "variability" && !this.variabilityPlot)
       this.initVariabilityPlot();
-
-    // Update plots with current data
     this.updatePlots();
   }
 
@@ -252,30 +318,29 @@ export class Plotter implements Component {
   };
 
   private updateStatus(): void {
-    const statusEl = this.container?.querySelector<HTMLElement>("#plotter-status");
-    if (!statusEl) return;
     const counts = `${this.records.length} records | ${this.paretoFlags.filter((f) => f).length} Pareto`;
     // The ablation chart is only about the arms that share every other
     // axis; saying which ones is what makes its bars comparable.
     const fixed = this.ablationFixedAxes
       ? ` | fixed: ${this.ablationFixedAxes}`
       : "";
-    statusEl.textContent = counts + fixed;
-    statusEl.title = statusEl.textContent;
+    for (const panel of this.chartPanels.values()) {
+      const statusEl = panel.querySelector<HTMLElement>(".chart-status");
+      if (!statusEl) continue;
+      statusEl.textContent = counts + fixed;
+      statusEl.title = statusEl.textContent;
+    }
   }
 
   private updatePlots(): void {
-    if (this.currentTab === "pareto" && this.paretoPlot)
-      this.updateParetoPlot();
-    if (this.currentTab === "ablation" && this.ablationPlot)
-      this.updateAblationPlot();
-    if (this.currentTab === "variability" && this.variabilityPlot)
-      this.updateVariabilityPlot();
+    if (this.paretoPlot) this.updateParetoPlot();
+    if (this.ablationPlot) this.updateAblationPlot();
+    if (this.variabilityPlot) this.updateVariabilityPlot();
   }
 
   // ─── Pareto Plot (scatter: val_acc vs 1/walltime_s) ───
   private initParetoPlot(): void {
-    const panel = document.getElementById("plotter-pareto") as HTMLDivElement;
+    const panel = document.getElementById("plotter-pareto-chart") as HTMLDivElement;
     if (!panel) return;
 
     const opts: uPlot.Options = {
@@ -464,7 +529,7 @@ export class Plotter implements Component {
 
   // ─── Ablation Plot (grouped bars) ───
   private initAblationPlot(): void {
-    const panel = document.getElementById("plotter-ablation") as HTMLDivElement;
+    const panel = document.getElementById("plotter-ablation-chart") as HTMLDivElement;
     if (!panel) return;
 
     const opts: uPlot.Options = {
@@ -603,7 +668,7 @@ export class Plotter implements Component {
   // ─── Variability Plot (box plots per arm) ───
   private initVariabilityPlot(): void {
     const panel = document.getElementById(
-      "plotter-variability",
+      "plotter-variability-chart",
     ) as HTMLDivElement;
     if (!panel) return;
 
@@ -883,17 +948,17 @@ export class Plotter implements Component {
     );
   }
 
-  private downloadCurrent(): void {
+  private download(id: string): void {
     const plotMap: Record<string, uPlot | null> = {
       pareto: this.paretoPlot,
       ablation: this.ablationPlot,
       variability: this.variabilityPlot,
     };
-    const plot = plotMap[this.currentTab];
+    const plot = plotMap[id];
     if (!plot) return;
 
     const link = document.createElement("a");
-    link.download = `computronium-${this.currentTab}-${Date.now()}.png`;
+    link.download = `computronium-${id}-${Date.now()}.png`;
     link.href = this.exportImage(plot);
     link.click();
   }

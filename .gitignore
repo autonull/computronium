@@ -57,6 +57,11 @@ computronium/experiment/execution/dashboard/templates/static/js/*.map
 
 *.duckdb*
 
+# The control plane (TODO70): the document the dashboard writes and the run
+# reads, and the lock that keeps the two of them from losing a write.
+*.control.json
+*.control.json.lock
+
 # Dashboard recordings (TODO69): large, and a picture of one run.
 *.webm
 

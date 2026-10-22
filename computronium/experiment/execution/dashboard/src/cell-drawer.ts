@@ -2,6 +2,7 @@
 
 import * as THREE from "three";
 import { registry } from "./components/registry.js";
+import { registerPanel } from "./panels.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
 import type { CellData } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
@@ -20,6 +21,13 @@ export class CellDrawer implements Component {
   async init(): Promise<void> {
     this.createPanel();
     this.setupEvents();
+    registerPanel(
+      "cell-drawer",
+      "cell drawer",
+      "◧",
+      () => this.hide(),
+      () => this.isOpen(),
+    );
     console.log("[CellDrawer] Initialized");
   }
 
@@ -105,10 +113,16 @@ export class CellDrawer implements Component {
 
   /** The drawer covers the right-hand panels; they step aside for it. */
   private shiftPanels(open: boolean): void {
-    const right = open ? 400 : 20;
-    ["hud", "plotter"].forEach((id) => {
+    const right = open ? 400 : 44;
+    ["hud", "chart-column"].forEach((id) => {
       document.getElementById(id)?.style.setProperty("right", `${right}px`);
     });
+  }
+
+  /** Whether the drawer is showing. */
+  isOpen(): boolean {
+    if (!this.panel) return false;
+    return this.panel.style.transform === "translateX(0)";
   }
 
   private onCellSelected = (event: CustomEvent): void => {

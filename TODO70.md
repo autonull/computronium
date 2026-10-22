@@ -326,7 +326,7 @@ a corrupt plane does not stop a run.
 reader (or an agent) can call without a browser; a request for a run without a
 queue is refused in words that name the alternative.
 
-### Phase 2: The control bar (browser) ⬜
+### Phase 2: The control bar (browser) ✅
 
 **Goal**: the verbs are findable in one glance.
 
@@ -346,7 +346,7 @@ works; a verb that cannot be honoured is **disabled with the reason in its
 tooltip** ("no campaign queue is attached"); nothing in the bar is a control
 the server does not offer.
 
-### Phase 3: The control panel (browser) ⬜
+### Phase 3: The control panel (browser) ✅
 
 **Goal**: the options that do not belong on a bar.
 
@@ -361,21 +361,21 @@ the server does not offer.
 And the exports that make the dashboard the whole instrument: the narration
 script, the run's report, the records as JSON.
 
-### Phase 4: The view toolbar (browser) ⬜
+### Phase 4: The view toolbar (browser) ✅
 
 **Goal**: twenty-four views, visible at once.
 
 `src/stage/switcher.ts` — the `<select>` becomes a strip; `src/icons.ts` — new,
 the glyph set, one per view, grouped by kind; the ‹ / › pair steps and scrolls.
 
-### Phase 5: The panels (browser) ⬜
+### Phase 5: The panels (browser) ✅
 
 **Goal**: every popup is individually toggleable and closeable.
 
 `src/panels.ts` — the registry, the rail, the close buttons; `src/plotter.ts` —
 the one tabbed container becomes three panels.
 
-### Phase 6: The tour, the narration, the docs ⬜
+### Phase 6: The tour, the narration, the docs ✅
 
 - `scripts/capture_dashboard_tour.py` — shots of the control bar, the control
   panel, the view toolbar, the panel rail, the charts closed and open; and a
@@ -392,7 +392,7 @@ the one tabbed container becomes three panels.
 - `tests/property/test_dashboard_keys_lock.py` — no key is claimed twice, and
   the free-key list is the one the plan says.
 
-### Phase 7: Carried from TODO69 — the map in more slices ⬜
+### Phase 7: Carried from TODO69 — the map in more slices ✅
 
 The one surface TODO69 left open (its "surfaces outside the canvas" table,
 last row): *"the same run's space, cut three ways, side by side"*, from the
@@ -466,12 +466,12 @@ one picture but six axes' worth of pictures.
 | The dynamic admission (`backends.py`) | ✅ done — Phase 0 |
 | The run reads the plane (`pipeline.py`) | ✅ done — Phase 0 |
 | The endpoints (`web.py`, `runs.py`) | ✅ done — Phase 1 |
-| The control bar | ⬜ to do — Phase 2 |
-| The control panel | ⬜ to do — Phase 3 |
-| The view toolbar | ⬜ to do — Phase 4 |
-| The panel registry and the rail | ⬜ to do — Phase 5 |
-| The tour, the narration, the docs | ⬜ to do — Phase 6 |
-| The map in more slices (carried from TODO69) | ⬜ to do — Phase 7 |
+| The control bar | ✅ done — Phase 2 |
+| The control panel | ✅ done — Phase 3 |
+| The view toolbar | ✅ done — Phase 4 |
+| The panel registry and the rail | ✅ done — Phase 5 |
+| The tour, the narration, the docs | ✅ done — Phase 6 |
+| The map in more slices (carried from TODO69) | ✅ done — Phase 7 |
 | The property suite's 23 pre-existing failures (the gallery's `env_sha256`, `PROOF.md`'s banned phrases, the priors registry) | ⬜ carried — pre-existing and unrelated to this work; Register C hygiene |
 
 TODO69 is done: the server speaks, the browser shows it, the tour and the
@@ -587,6 +587,95 @@ name the command, the profiles and the axes answer what the form offers.
 test_dashboard_capture.py::test_surface_frames_name_their_command` fails on
 `method_cards.py`'s import of `_GEOMETRY_BACKENDS`. It fails the same way on
 the commit before this work.
+
+### Phases 2–5 — the browser
+
+**What was built.**
+
+- `src/panels.ts` — the **panel registry** and the **panel rail**. Every
+  floating panel registers: the HUD, the live rail, the caption, the three
+  charts, the legend, the cell drawer, the control bar and the control panel.
+  The registry is the one place that answers "what is open"; the rail is that
+  answer drawn as a column of mini buttons down the right edge. Every panel
+  also carries its own `×`.
+- `src/control-bar.ts` — the **control bar**, docked at the bottom centre:
+  play/pause, step, stop, the ceiling slider, the meter (the level, the
+  machine's CPU, and the trace of the last sixty samples) and the door to the
+  control panel. It polls `GET /api/control` at **2 Hz**.
+- `src/control-panel.ts` — the **control panel**: *New run* (the profile
+  picker, what the profile declares, the reader's edits, Start), *This run*
+  (the declaration, immutable, and the panel says so), *The queue* (the
+  campaigns, cancel and preempt, the queue's ceilings), *Cells* (the three
+  cell verbs, reachable without a click in the 3D scene) and *Exports* (the
+  narration script, the report, the records as JSON).
+- `src/icons.ts` — the **glyph set**, one per view, grouped by kind: solids
+  for the 3D views, marks for the flat ones, bars for the process, curves for
+  the dynamics.
+- `src/stage/switcher.ts` — the `<select>` is gone. The strip is a row of
+  mini buttons that scrolls sideways and never wraps, with a `‹` / `›` pair
+  that steps the sequence and scrolls the strip. The view's name is still in
+  the legend's title.
+- `src/plotter.ts` — the one tabbed container became **three panels**. Closing
+  the Pareto chart leaves the ablation chart alone.
+
+**Decisions taken here, and why.**
+
+- **A panel is hidden by a class, not by clearing its `display`.** Clearing
+  the inline `display` flattens a flex panel into a stack: the control bar is
+  a row of verbs, and a row of verbs that has become a column is a different
+  control. `.panel-hidden { display: none !important; }` hides a panel and
+  leaves the display it was built with alone.
+- **The charts sit in a column under the HUD** (`#chart-column`), not in
+  three fixed slots: three 300-pixel panels do not fit beside the HUD on a
+  1080-line screen, and a column that scrolls does.
+- **The ceiling slider's maximum is the machine's cores**, and the value it
+  shows is the ceiling *the run is holding to* — the plane's, or the run's own
+  when the plane does not set one. The run publishes its ceiling on the plane
+  so the bar never has to guess.
+- **The trace carries two lines**: the cells in flight and the machine's own
+  CPU. That is what says "saturating" against "starved" — a level alone
+  cannot, because a run at four of four cells and a run at four of four cells
+  on a machine with four free cores look identical.
+- **The step button is enabled only while paused**, and the play/pause button
+  shows what the *server* says. The browser never decides.
+- **The verb keys are read through the registry**, not through a second list:
+  `panels.byKey(key)` is the only place that knows which panel a key owns.
+
+### Phase 6 — the tour, the narration, the docs
+
+- The tour presses **Play** on the control bar, reads `GET /api/control`, and
+  **fails** if the server does not agree; then it presses it again, so the run
+  is not left paused by a photograph.
+- New shots: the control bar, the control panel, the panel rail, the view
+  toolbar, and the slices.
+- `docs/DASHBOARD.md` gained the control plane, the verbs, the endpoints, the
+  panel registry and the new keys. `docs/readme/dashboard.md` shows the
+  control bar in pictures, and **the README was rebuilt in the same commit**.
+
+### Phase 7 — the map in more slices
+
+- The axis picker's three `<select>`s became three small rows of **buttons**,
+  one per axis, with the ones another cut already holds dimmed.
+- `src/stage/slices.ts` — the **slices** view: the same space cut three ways
+  (x×y, x×z, y×z), side by side, so a reader sees that the space is not one
+  picture. It needs no new data: the space and the records are already on the
+  stage.
+- The slices view is the **first view to take a punctuation key** (`,`), which
+  is what the plan said would happen when the letters ran out.
+
+**Two defects found and fixed on the way (both pre-existing).**
+
+- `scripts/capture_dashboard_tour.py` started its capture thread **twice**,
+  which raised `RuntimeError: threads can only be started once` — the tour had
+  been dying before it took a picture.
+- `computronium/experiment/documentation/method_cards.py` imported
+  `_GEOMETRY_BACKENDS` and `_UPDATE_BACKENDS`, which the registry refactor
+  replaced with `_GEOMETRY_REGISTRY` and `_UPDATE_REGISTRY`. The method-card
+  command raised `ImportError`, and with it the tour's last frames — and
+  `tests/unit/experiment/test_dashboard_capture.py` had been failing on it.
+- Uvicorn's default logging config **disables every logger it does not
+  name**, and the tour's logger was one of them: the tour could fail
+  silently. The dashboard now starts uvicorn with `log_config=None`.
 
 ---
 
