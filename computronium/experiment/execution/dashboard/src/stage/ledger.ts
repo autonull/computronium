@@ -13,7 +13,7 @@ import { ARM_COLORS, PALETTE } from "../palette.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
 import { stageState, type LedgerArm } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** The colour a verdict is written in. */
 const VERDICT_COLORS: Record<string, string> = {
@@ -25,6 +25,7 @@ const VERDICT_COLORS: Record<string, string> = {
 export class LedgerView implements StageView {
   id = "ledger";
   name = "The ledger";
+  group = "process" as ViewGroup;
   caption =
     "Every arm the run measured, its evidence, and the gate's standing on it.";
   key = "l";

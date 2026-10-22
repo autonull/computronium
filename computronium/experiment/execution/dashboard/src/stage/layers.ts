@@ -14,7 +14,7 @@ import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
 import { cellKey, mean, stageState } from "./state.js";
 import { createTextSprite } from "./sprites.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** The distance between two sheets: enough to see them apart. */
 const LAYER_GAP = 1.7;
@@ -46,11 +46,12 @@ interface Sheet {
 export class LayersView implements StageView {
   id = "layers";
   name = "Layers";
+  group = "space" as ViewGroup;
   key = "y";
   caption =
     "The space cut into sheets: the lit ones are the cells the run measured.";
 
-  private group = new THREE.Group();
+  private sceneGroup = new THREE.Group();
   private visible = false;
   private drawn = false;
   private framed = false;
@@ -58,15 +59,15 @@ export class LayersView implements StageView {
   enter(): void {
     this.visible = true;
     const context = getSceneContext();
-    if (context) context.scene.add(this.group);
+    if (context) context.scene.add(this.sceneGroup);
     this.draw(true);
   }
 
   exit(): void {
     this.visible = false;
-    this.group.parent?.remove(this.group);
-    disposeObject(this.group);
-    this.group = new THREE.Group();
+    this.sceneGroup.parent?.remove(this.sceneGroup);
+    disposeObject(this.sceneGroup);
+    this.sceneGroup = new THREE.Group();
     this.drawn = false;
     this.framed = false;
   }
@@ -209,7 +210,7 @@ export class LayersView implements StageView {
     // The sheets the run never entered: a faint ground the lit cells stand
     // out of. They are drawn without depth so they never hide a cell.
     if (structure.length > 0) {
-      this.group.add(
+      this.sceneGroup.add(
         new THREE.Mesh(
           quadGeometry(structure, structureColors),
           new THREE.MeshBasicMaterial({
@@ -225,7 +226,7 @@ export class LayersView implements StageView {
 
     // The cells the run measured: solid, so they read through the sheets.
     if (measured.length > 0) {
-      this.group.add(
+      this.sceneGroup.add(
         new THREE.Mesh(
           quadGeometry(measured, measuredColors),
           new THREE.MeshBasicMaterial({
@@ -271,7 +272,7 @@ export class LayersView implements StageView {
         });
         const pin = new THREE.Mesh(geometry, material);
         pin.position.set(cell.x, sheet.height, cell.y);
-        this.group.add(pin);
+        this.sceneGroup.add(pin);
       });
     });
   }
@@ -307,7 +308,7 @@ export class LayersView implements StageView {
       "position",
       new THREE.Float32BufferAttribute(positions, 3),
     );
-    this.group.add(
+    this.sceneGroup.add(
       new THREE.LineSegments(
         geometry,
         new THREE.LineBasicMaterial({
@@ -337,20 +338,20 @@ export class LayersView implements StageView {
     sheets.forEach((sheet) => {
       const sprite = createTextSprite(sheet.value, 0.26, valueMaterial);
       sprite.position.set(-halfX - 0.85, sheet.height, halfY);
-      this.group.add(sprite);
+      this.sceneGroup.add(sprite);
     });
 
     const zSprite = createTextSprite(axes.z, 0.28, nameMaterial);
     zSprite.position.set(-halfX - 0.85, sheets.length * LAYER_GAP * 0.5, -halfY);
-    this.group.add(zSprite);
+    this.sceneGroup.add(zSprite);
 
     const xSprite = createTextSprite(axes.x, 0.28, nameMaterial);
     xSprite.position.set(halfX + 0.9, -LAYER_GAP, halfY);
-    this.group.add(xSprite);
+    this.sceneGroup.add(xSprite);
 
     const ySprite = createTextSprite(axes.y, 0.28, nameMaterial);
     ySprite.position.set(halfX + 0.9, -LAYER_GAP, -halfY - 0.6);
-    this.group.add(ySprite);
+    this.sceneGroup.add(ySprite);
   }
 
   private frame(sheets: Sheet[], nx: number, ny: number): void {
@@ -372,8 +373,8 @@ export class LayersView implements StageView {
 
   /** Take the old sheets off the stage before the new ones go on. */
   private clear(): void {
-    [...this.group.children].forEach((child) => {
-      this.group.remove(child);
+    [...this.sceneGroup.children].forEach((child) => {
+      this.sceneGroup.remove(child);
       disposeObject(child);
     });
   }

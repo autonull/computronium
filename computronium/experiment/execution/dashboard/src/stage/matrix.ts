@@ -11,7 +11,7 @@ import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
 import { cellKey, mean, stageState } from "./state.js";
 import { wrapLabel } from "./sprites.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 type ColumnStatus = "measured" | "gap" | "void";
 
@@ -24,6 +24,7 @@ interface Column {
 export class MatrixView implements StageView {
   id = "matrix";
   name = "Evidence matrix";
+  group = "analysis" as ViewGroup;
   caption =
     "The space seen from above: one axis against another, every column a number, the refusals in the void colour.";
 

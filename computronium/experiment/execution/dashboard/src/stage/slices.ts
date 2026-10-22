@@ -14,7 +14,7 @@ import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
 import { cellKey, mean, stageState } from "./state.js";
 import { wrapLabel } from "./sprites.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** Which axis plays which part in one cut. */
 type Axis = "x" | "y" | "z";
@@ -45,6 +45,7 @@ interface SliceCell {
 export class SlicesView implements StageView {
   id = "slices";
   name = "The slices";
+  group = "analysis" as ViewGroup;
   /** The letters are gone; the next view takes a punctuation key. */
   key = ",";
   caption =

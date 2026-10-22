@@ -25,7 +25,7 @@ import {
 } from "./plot2d.js";
 import { rampColor } from "./ramp.js";
 import { stageState, type CellDynamics } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** The payload, or nothing: a view with nothing to draw leaves an empty stage. */
 function dynamics(): CellDynamics | null {
@@ -62,6 +62,7 @@ function note(payload: CellDynamics): string {
 abstract class DynamicsView implements StageView {
   abstract id: string;
   abstract name: string;
+  abstract group: ViewGroup;
   abstract caption: string;
   key?: string;
 
@@ -96,6 +97,7 @@ abstract class DynamicsView implements StageView {
 export class TrajectoryView extends DynamicsView {
   id = "trajectory";
   name = "The trajectory";
+  group = "dynamics" as ViewGroup;
   caption =
     "Where the cell's own state went, step by step: the path it took through the space it moves in.";
   key = "j";
@@ -196,6 +198,7 @@ export class TrajectoryView extends DynamicsView {
 export class SpectrumView extends DynamicsView {
   id = "spectrum";
   name = "The spectrum";
+  group = "dynamics" as ViewGroup;
   caption =
     "How fast a nudge grows along each direction: the exponents that say whether this dynamics settles.";
   key = "m";
@@ -265,6 +268,7 @@ export class SpectrumView extends DynamicsView {
 export class BasinView extends DynamicsView {
   id = "basin";
   name = "The basin";
+  group = "dynamics" as ViewGroup;
   caption =
     "The states near the cell's own: how many come back, and how far the ones that do not stray.";
   key = "b";
@@ -334,6 +338,7 @@ export class BasinView extends DynamicsView {
 export class LandscapeView extends DynamicsView {
   id = "landscape";
   name = "The landscape";
+  group = "dynamics" as ViewGroup;
   caption =
     "The cell's own energy over the ground its trajectory crossed, and the path it took across it.";
   key = "n";
@@ -469,6 +474,7 @@ function trainedNote(payload: CellDynamics): string {
 abstract class TrainedDynamicsView implements StageView {
   abstract id: string;
   abstract name: string;
+  abstract group: ViewGroup;
   abstract caption: string;
   key?: string;
 
@@ -503,6 +509,7 @@ abstract class TrainedDynamicsView implements StageView {
 export class TrainedTrajectoryView extends TrainedDynamicsView {
   id = "trained-trajectory";
   name = "The trained trajectory";
+  group = "trained" as ViewGroup;
   caption =
     "Where the trained cell's state went, step by step: the path it took through the space it moves in.";
   key = "g";
@@ -600,6 +607,7 @@ export class TrainedTrajectoryView extends TrainedDynamicsView {
 export class TrainedSpectrumView extends TrainedDynamicsView {
   id = "trained-spectrum";
   name = "The trained spectrum";
+  group = "trained" as ViewGroup;
   caption =
     "How fast a nudge grows along each direction after training: the exponents that say whether this dynamics settles.";
   key = "i";
@@ -667,6 +675,7 @@ export class TrainedSpectrumView extends TrainedDynamicsView {
 export class TrainedBasinView extends TrainedDynamicsView {
   id = "trained-basin";
   name = "The trained basin";
+  group = "trained" as ViewGroup;
   caption =
     "The states near the trained cell's own: how many come back, and how far the ones that do not stray.";
   key = "k";
@@ -734,6 +743,7 @@ export class TrainedBasinView extends TrainedDynamicsView {
 export class TrainedLandscapeView extends TrainedDynamicsView {
   id = "trained-landscape";
   name = "The trained landscape";
+  group = "trained" as ViewGroup;
   caption =
     "The trained cell's own energy over the ground its trajectory crossed, and the path it took across it.";
   key = "o";

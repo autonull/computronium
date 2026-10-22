@@ -38,13 +38,14 @@ import { stageState, type StageChange } from "./state.js";
 import { TerrainView } from "./terrain.js";
 import { TimelineView } from "./timeline.js";
 import { UncertaintyView } from "./uncertainty.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 import type { Component } from "../components/registry.js";
 
 /** The discovery map, as one of the stage's views. */
 class SpaceView implements StageView {
   id = "space";
   name = "Space";
+  group = "space" as ViewGroup;
   caption =
     "The declared space: the gaps as cages, the measured cells as pillars, the refusals as crosses.";
 
@@ -240,11 +241,7 @@ export class ViewSwitcher implements Component {
     heading.style.cssText = "font-weight: 600; margin-bottom: 8px;";
     section.appendChild(heading);
 
-    // The toolbar: one mini button per view, and a pair that steps through
-    // them. A dropdown hides twenty-four views behind one line of text; a
-    // reader who wants the terrain should not have to open a menu to find
-    // it. The strip scrolls sideways and never wraps: a wrapped strip would
-    // grow the legend until it pushed the map off the screen.
+    // The toolbar: views grouped by category with separators
     const strip = document.createElement("div");
     strip.id = "view-strip";
     strip.style.cssText = `
@@ -267,9 +264,53 @@ export class ViewSwitcher implements Component {
       scrollbar-width: thin;
       padding-bottom: 2px;
     `;
+
+    // Group views by category with separators
+    const groups: Array<{ group: string; label: string; views: StageView[] }> = [
+      { group: "space", label: "Space", views: [] },
+      { group: "analysis", label: "Analysis", views: [] },
+      { group: "process", label: "Process", views: [] },
+      { group: "dynamics", label: "Dynamics", views: [] },
+      { group: "trained", label: "Trained", views: [] },
+      { group: "multi", label: "Multi", views: [] },
+    ];
+
     for (const view of this.views) {
-      track.appendChild(this.viewButton(view));
+      const g = groups.find((grp) => grp.group === view.group);
+      if (g) g.views.push(view);
     }
+
+    groups.forEach((g, gi) => {
+      if (g.views.length === 0) return;
+      if (gi > 0) {
+        // Group separator
+        const sep = document.createElement("div");
+        sep.style.cssText = `
+          width: 1px;
+          height: 16px;
+          background: var(--border);
+          margin: 0 4px;
+        `;
+        track.appendChild(sep);
+      }
+      // Group label
+      const label = document.createElement("span");
+      label.textContent = g.label;
+      label.style.cssText = `
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-right: 4px;
+        flex-shrink: 0;
+      `;
+      track.appendChild(label);
+      // View buttons in this group
+      for (const view of g.views) {
+        track.appendChild(this.viewButton(view));
+      }
+    });
+
     strip.appendChild(track);
     strip.appendChild(this.stepButton("›", "the next view", 1));
     section.appendChild(strip);
@@ -293,11 +334,12 @@ export class ViewSwitcher implements Component {
   /** One view's button: its glyph, its name on hover, its key. */
   private viewButton(view: StageView): HTMLButtonElement {
     const glyph = viewGlyph(view.id);
+    const key = this.keyOf.get(view.id);
     const button = document.createElement("button");
     button.className = "view-button";
     button.dataset.view = view.id;
     button.textContent = glyph.glyph;
-    button.title = this.optionLabel(view);
+    button.title = key ? `${key.toUpperCase()} · ${view.name}` : view.name;
     button.style.cssText = `
       flex: 0 0 auto;
       width: 22px;
@@ -312,7 +354,31 @@ export class ViewSwitcher implements Component {
       font-size: 12px;
       cursor: pointer;
       padding: 0;
+      transition: all var(--motion-fast) var(--ease-out);
     `;
+    // Kind-based border color hint
+    const kindColors: Record<string, string> = {
+      solid: "var(--promoted)",
+      mark: "var(--gradient)",
+      bar: "var(--cpu)",
+      curve: "var(--warn)",
+    };
+    button.style.borderColor = kindColors[glyph.kind] + "44";
+
+    button.addEventListener("mouseenter", () => {
+      if (!button.classList.contains("active")) {
+        button.style.background = "var(--bg-primary)";
+        button.style.borderColor = kindColors[glyph.kind] + "88";
+        button.style.color = "var(--text-primary)";
+      }
+    });
+    button.addEventListener("mouseleave", () => {
+      if (!button.classList.contains("active")) {
+        button.style.background = "var(--bg-tertiary)";
+        button.style.borderColor = kindColors[glyph.kind] + "44";
+        button.style.color = "var(--text-secondary)";
+      }
+    });
     button.addEventListener("click", () => this.show(view.id));
     this.viewButtons.set(view.id, button);
     return button;
@@ -377,9 +443,12 @@ export class ViewSwitcher implements Component {
     if (!this.active) return;
     for (const [id, button] of this.viewButtons) {
       const on = id === this.active.id;
-      button.style.color = on ? "var(--text-primary)" : "var(--text-secondary)";
-      button.style.borderColor = on ? "var(--border-bright)" : "var(--border)";
-      button.style.background = on ? "var(--bg-primary)" : "var(--bg-tertiary)";
+      button.classList.toggle("active", on);
+      if (on) {
+        button.style.color = "var(--text-primary)";
+        button.style.borderColor = "var(--border-bright)";
+        button.style.background = "var(--bg-primary)";
+      }
     }
     this.scrollToActive();
   }

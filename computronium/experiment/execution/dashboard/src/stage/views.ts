@@ -1,12 +1,15 @@
 /** What stands on the stage (TODO69 Phase 5).
-
-    A view is a component with four parts: it puts its objects on the shared
-    scene, it takes them off again, it re-reads the run's records, and it
-    frames the camera. The discovery map already had all four, so the shape
-    was copied rather than invented.
-*/
+ *
+ * A view is a component with four parts: it puts its objects on the shared
+ * scene, it takes them off again, it re-reads the run's records, and it
+ * frames the camera. The discovery map already had all four, so the shape
+ * was copied rather than invented.
+ */
 
 import type { StageChange } from "./state.js";
+
+/** Logical group for the view toolbar. */
+export type ViewGroup = "space" | "analysis" | "process" | "dynamics" | "trained" | "multi";
 
 export interface StageView {
   /** The view's name, as the reader sees it. */
@@ -14,6 +17,8 @@ export interface StageView {
   name: string;
   /** What a reader would say after looking at it. */
   caption: string;
+  /** The group this view belongs to (for toolbar organization). */
+  group: ViewGroup;
   /** The key that picks this view, when it has one of its own. */
   key?: string;
   /** Put the view on the stage. */

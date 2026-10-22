@@ -17,7 +17,7 @@ import {
   varyingAxes,
   type CellAggregate,
 } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 interface Interval {
   cell: CellAggregate;
@@ -33,6 +33,7 @@ interface Interval {
 export class UncertaintyView implements StageView {
   id = "uncertainty";
   name = "The uncertainty";
+  group = "analysis" as ViewGroup;
   caption =
     "Each cell's mean and the margin the gate asks for, against the chance level.";
 

@@ -12,11 +12,12 @@ import { PALETTE } from "../palette.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawRowFrame } from "./plot2d.js";
 import { stageState, type StageSpan } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 export class TimelineView implements StageView {
   id = "timeline";
   name = "The timeline";
+  group = "process" as ViewGroup;
   caption =
     "The run's stages, in the order it reached them, and the time each held it.";
   key = "t";

@@ -16,7 +16,7 @@ import {
   varyingAxes,
   type CellAggregate,
 } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 interface Cost {
   cell: CellAggregate;
@@ -29,6 +29,7 @@ interface Cost {
 export class ClaimCostView implements StageView {
   id = "cost";
   name = "The claim's cost";
+  group = "process" as ViewGroup;
   caption =
     "The seeds each cell measured, against the seeds a claim is measured against.";
 

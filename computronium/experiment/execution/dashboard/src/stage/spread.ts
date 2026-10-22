@@ -10,7 +10,7 @@ import { ARM_COLORS, PALETTE } from "../palette.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawCategoryFrame, drawNote } from "./plot2d.js";
 import { stageState } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 interface Arm {
   name: string;
@@ -45,6 +45,7 @@ function bandwidth(values: number[]): number {
 export class SpreadView implements StageView {
   id = "spread";
   name = "The spread";
+  group = "analysis" as ViewGroup;
   caption =
     "One violin per arm, across its seeds: the width is the spread, not the mean.";
 

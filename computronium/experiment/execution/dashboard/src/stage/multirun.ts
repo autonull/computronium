@@ -23,7 +23,7 @@ import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
 import { createTextSprite } from "./sprites.js";
 import { cellKey, stageState, type MultiRunSpace, type StageChange } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** The colours the runs are told apart by. */
 const RUN_COLORS = ["#58a6ff", "#d4a843", "#3fb950", "#f78166"];
@@ -39,11 +39,12 @@ const VIEW_DIRECTION = new THREE.Vector3(0.34, 0.4, 0.85);
 export class MultiRunView implements StageView {
   id = "multirun";
   name = "The multi-run space";
+  group = "multi" as ViewGroup;
   key = "u";
   caption =
     "Several runs' evidence in one space: each run's cells stand in the run's own colour.";
 
-  private group = new THREE.Group();
+  private sceneGroup = new THREE.Group();
   private visible = false;
   private drawn = false;
   private framed = false;
@@ -52,15 +53,15 @@ export class MultiRunView implements StageView {
   enter(): void {
     this.visible = true;
     const context = getSceneContext();
-    if (context) context.scene.add(this.group);
+    if (context) context.scene.add(this.sceneGroup);
     void this.load();
   }
 
   exit(): void {
     this.visible = false;
-    this.group.parent?.remove(this.group);
-    disposeObject(this.group);
-    this.group = new THREE.Group();
+    this.sceneGroup.parent?.remove(this.sceneGroup);
+    disposeObject(this.sceneGroup);
+    this.sceneGroup = new THREE.Group();
     this.drawn = false;
     this.framed = false;
     this.legend?.remove();
@@ -223,8 +224,8 @@ export class MultiRunView implements StageView {
 
   /** Take the old picture off the stage before the new one goes on. */
   private clear(): void {
-    [...this.group.children].forEach((child) => {
-      this.group.remove(child);
+    [...this.sceneGroup.children].forEach((child) => {
+      this.sceneGroup.remove(child);
       disposeObject(child);
     });
   }
@@ -262,7 +263,7 @@ export class MultiRunView implements StageView {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    this.group.add(
+    this.sceneGroup.add(
       new THREE.Mesh(
         geometry,
         new THREE.MeshBasicMaterial({
@@ -305,7 +306,7 @@ export class MultiRunView implements StageView {
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(block.x + offset, block.y, block.z);
-      this.group.add(mesh);
+      this.sceneGroup.add(mesh);
     });
   }
 
@@ -338,7 +339,7 @@ export class MultiRunView implements StageView {
         -0.45,
         halfZ + 1.1,
       );
-      this.group.add(sprite);
+      this.sceneGroup.add(sprite);
     });
 
     const space = stageState.multirun;
@@ -346,15 +347,15 @@ export class MultiRunView implements StageView {
 
     const xSprite = createTextSprite(xAxis, 0.24, nameMaterial);
     xSprite.position.set(halfX + 1.0, -0.4, halfZ + 1.1);
-    this.group.add(xSprite);
+    this.sceneGroup.add(xSprite);
 
     const zSprite = createTextSprite(zAxis, 0.24, nameMaterial);
     zSprite.position.set(0, -0.4, halfZ + 2.0);
-    this.group.add(zSprite);
+    this.sceneGroup.add(zSprite);
 
     const ySprite = createTextSprite(yAxis, 0.24, nameMaterial);
     ySprite.position.set(-halfX - 1.3, (yCount - 1) * SPACING * 0.5, 0);
-    this.group.add(ySprite);
+    this.sceneGroup.add(ySprite);
   }
 
   /** The runs, in the colours the picture tells them apart by. */

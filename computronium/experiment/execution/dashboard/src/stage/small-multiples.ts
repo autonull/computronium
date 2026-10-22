@@ -16,7 +16,7 @@ import {
   varyingAxes,
   type CellAggregate,
 } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 interface Panel {
   cell: CellAggregate;
@@ -28,6 +28,7 @@ interface Panel {
 export class SmallMultiplesView implements StageView {
   id = "multiples";
   name = "Small multiples";
+  group = "analysis" as ViewGroup;
   caption =
     "One panel per cell: every seed's own curve, on the same accuracy scale.";
 

@@ -14,7 +14,7 @@ import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
 import { cellKey, mean, stageState } from "./state.js";
 import { createTextSprite } from "./sprites.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** How tall the best cell stands. */
 const MAX_HEIGHT = 3.4;
@@ -38,10 +38,11 @@ interface Column {
 export class TerrainView implements StageView {
   id = "terrain";
   name = "Terrain";
+  group = "space" as ViewGroup;
   caption =
     "The space as a heightfield: accuracy is the height, the gaps are flat, the refusals are craters.";
 
-  private group = new THREE.Group();
+  private sceneGroup = new THREE.Group();
   private visible = false;
   private drawn = false;
   private framed = false;
@@ -49,15 +50,15 @@ export class TerrainView implements StageView {
   enter(): void {
     this.visible = true;
     const context = getSceneContext();
-    if (context) context.scene.add(this.group);
+    if (context) context.scene.add(this.sceneGroup);
     this.draw(true);
   }
 
   exit(): void {
     this.visible = false;
-    this.group.parent?.remove(this.group);
-    disposeObject(this.group);
-    this.group = new THREE.Group();
+    this.sceneGroup.parent?.remove(this.sceneGroup);
+    disposeObject(this.sceneGroup);
+    this.sceneGroup = new THREE.Group();
     this.drawn = false;
     this.framed = false;
   }
@@ -205,7 +206,7 @@ export class TerrainView implements StageView {
         side: THREE.DoubleSide,
       }),
     );
-    this.group.add(surface);
+    this.sceneGroup.add(surface);
 
     this.addVoidMarkers(columns);
     this.addLabels(xValues, yValues);
@@ -221,8 +222,8 @@ export class TerrainView implements StageView {
 
   /** Take the old surface off the stage before the new one goes on. */
   private clear(): void {
-    [...this.group.children].forEach((child) => {
-      this.group.remove(child);
+    [...this.sceneGroup.children].forEach((child) => {
+      this.sceneGroup.remove(child);
       disposeObject(child);
     });
   }
@@ -255,7 +256,7 @@ export class TerrainView implements StageView {
       "position",
       new THREE.Float32BufferAttribute(positions, 3),
     );
-    this.group.add(
+    this.sceneGroup.add(
       new THREE.LineSegments(
         geometry,
         new THREE.LineBasicMaterial({
@@ -279,11 +280,11 @@ export class TerrainView implements StageView {
 
     const xSprite = createTextSprite(stageState.axes.x, 0.22, nameMaterial);
     xSprite.position.set(halfX + 1.0, -0.2, halfZ + 0.9);
-    this.group.add(xSprite);
+    this.sceneGroup.add(xSprite);
 
     const zSprite = createTextSprite(stageState.axes.y, 0.22, nameMaterial);
     zSprite.position.set(-halfX - 1.0, 0.2, -halfZ);
-    this.group.add(zSprite);
+    this.sceneGroup.add(zSprite);
   }
 
   private frame(

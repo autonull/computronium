@@ -13,7 +13,7 @@ import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
 import { stageState } from "./state.js";
 import { createDotTexture, createRingSprite, createTextSprite } from "./sprites.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** The size of the plot the points are drawn in. */
 const WIDTH = 6.4;
@@ -31,10 +31,11 @@ interface Point {
 export class FrontierView implements StageView {
   id = "frontier";
   name = "Frontier";
+  group = "space" as ViewGroup;
   caption =
     "Every measured cell in accuracy, speed and parameters; the frontier is the line nothing beat.";
 
-  private group = new THREE.Group();
+  private sceneGroup = new THREE.Group();
   private visible = false;
   private drawn = false;
   private framed = false;
@@ -44,15 +45,15 @@ export class FrontierView implements StageView {
   enter(): void {
     this.visible = true;
     const context = getSceneContext();
-    if (context) context.scene.add(this.group);
+    if (context) context.scene.add(this.sceneGroup);
     this.draw(true);
   }
 
   exit(): void {
     this.visible = false;
-    this.group.parent?.remove(this.group);
-    disposeObject(this.group);
-    this.group = new THREE.Group();
+    this.sceneGroup.parent?.remove(this.sceneGroup);
+    disposeObject(this.sceneGroup);
+    this.sceneGroup = new THREE.Group();
     this.drawn = false;
     this.framed = false;
   }
@@ -147,8 +148,8 @@ export class FrontierView implements StageView {
   }
 
   private clear(): void {
-    [...this.group.children].forEach((child) => {
-      this.group.remove(child);
+    [...this.sceneGroup.children].forEach((child) => {
+      this.sceneGroup.remove(child);
       disposeObject(child);
     });
   }
@@ -179,7 +180,7 @@ export class FrontierView implements StageView {
       transparent: true,
       opacity: 0.95,
     });
-    this.group.add(new THREE.Points(geometry, material));
+    this.sceneGroup.add(new THREE.Points(geometry, material));
 
     // The frontier's points are ringed: a ring does not take the arm's
     // colour away from the point it marks.
@@ -188,7 +189,7 @@ export class FrontierView implements StageView {
     front.forEach((point) => {
       const ring = createRingSprite(PALETTE.pareto, 0.26);
       ring.position.set(point.x, point.y, point.z);
-      this.group.add(ring);
+      this.sceneGroup.add(ring);
     });
   }
 
@@ -217,7 +218,7 @@ export class FrontierView implements StageView {
       }),
     );
     line.computeLineDistances();
-    this.group.add(line);
+    this.sceneGroup.add(line);
   }
 
   /** The chance level, as the floor under everything the run measured. */
@@ -240,7 +241,7 @@ export class FrontierView implements StageView {
       }),
     );
     floor.position.y = height;
-    this.group.add(floor);
+    this.sceneGroup.add(floor);
 
     const label = createTextSprite(
       "chance",
@@ -251,7 +252,7 @@ export class FrontierView implements StageView {
       }),
     );
     label.position.set(WIDTH / 2 + 0.3, height, DEPTH / 2 + 0.3);
-    this.group.add(label);
+    this.sceneGroup.add(label);
   }
 
   /** The three measures, named where they are. */
@@ -262,15 +263,15 @@ export class FrontierView implements StageView {
     });
     const speed = createTextSprite("speed 1/s", 0.26, nameMaterial);
     speed.position.set(WIDTH / 2 + 0.6, 0.1, 0);
-    this.group.add(speed);
+    this.sceneGroup.add(speed);
 
     const accuracy = createTextSprite("accuracy", 0.26, nameMaterial);
     accuracy.position.set(0, HEIGHT + 0.4, 0);
-    this.group.add(accuracy);
+    this.sceneGroup.add(accuracy);
 
     const params = createTextSprite("parameters", 0.26, nameMaterial);
     params.position.set(0, 0.1, DEPTH / 2 + 0.7);
-    this.group.add(params);
+    this.sceneGroup.add(params);
   }
 
   private frame(): void {

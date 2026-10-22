@@ -10,11 +10,12 @@ import { ARM_COLORS, PALETTE } from "../palette.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawRowFrame } from "./plot2d.js";
 import { stageState, type ContrastArm, type ContrastPair } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 export class ContrastView implements StageView {
   id = "contrast";
   name = "The contrast";
+  group = "analysis" as ViewGroup;
   caption =
     "The run's arms against one another, and whether the test could be run.";
   key = "d";

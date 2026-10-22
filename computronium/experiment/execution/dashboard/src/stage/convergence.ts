@@ -10,7 +10,7 @@ import { ARM_COLORS, PALETTE } from "../palette.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawFrame, drawNote, scaleX, scaleY } from "./plot2d.js";
 import { stageState } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 interface ArmCurve {
   arm: string;
@@ -20,6 +20,7 @@ interface ArmCurve {
 export class ConvergenceView implements StageView {
   id = "convergence";
   name = "Convergence";
+  group = "process" as ViewGroup;
   caption =
     "Accuracy against epoch, one curve per arm, with the chance level under them.";
 

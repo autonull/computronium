@@ -12,11 +12,12 @@ import { ARM_COLORS, PALETTE } from "../palette.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawCategoryFrame, drawNote } from "./plot2d.js";
 import { stageState, type AttributionArm, type AttributionAxis } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 export class EffectView implements StageView {
   id = "effect";
   name = "The effect";
+  group = "analysis" as ViewGroup;
   caption =
     "Which axis moved the objective, and which the run held fixed: the run's attribution, and its limits.";
   key = "e";

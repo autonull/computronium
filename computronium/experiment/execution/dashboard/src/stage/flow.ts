@@ -15,7 +15,7 @@ import { PALETTE } from "../palette.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
 import { stageState, type FlowStage } from "./state.js";
-import type { StageView } from "./views.js";
+import type { StageView, ViewGroup } from "./views.js";
 
 /** The space between the title and the columns. */
 const TOP = 84;
@@ -26,6 +26,7 @@ const LABEL_ROOM = 92;
 export class FlowView implements StageView {
   id = "flow";
   name = "The flow";
+  group = "process" as ViewGroup;
   caption =
     "The run's cells, stage by stage: what each one handled, and what the gate refused.";
   key = "f";
