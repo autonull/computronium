@@ -173,21 +173,23 @@ export class ControlBar implements Component {
 
     // The button shows what the server says, and the browser never decides.
     if (this.playButton) {
-      this.playButton.textContent = control.paused ? "▶" : "⏸";
-      this.playButton.title = control.paused
+      const isPaused = control.paused;
+      this.playButton.textContent = isPaused ? "▶" : "⏸";
+      this.playButton.classList.toggle("verb-primary", isPaused);
+      this.playButton.classList.toggle("verb-danger", !isPaused);
+      this.playButton.title = isPaused
         ? "Play — release the run"
         : "Pause — hold the run at its next boundary";
-      this.playButton.setAttribute(
-        "aria-label",
-        control.paused ? "play" : "pause",
-      );
+      this.playButton.setAttribute("aria-label", isPaused ? "play" : "pause");
     }
     if (this.stepButton) {
-      // Stepping is only a thing a paused run can do.
-      this.stepButton.disabled = !control.paused || !payload.readable;
-      this.stepButton.title = control.paused
+      const canStep = control.paused && payload.readable;
+      this.stepButton.disabled = !canStep;
+      this.stepButton.title = canStep
         ? "Step — release exactly one more batch"
-        : "Step — the run is not paused";
+        : control.paused
+          ? "Step — control plane not readable"
+          : "Step — the run is not paused";
     }
     if (this.stopButton) {
       this.stopButton.disabled = !payload.readable;
@@ -220,12 +222,21 @@ export class ControlBar implements Component {
     if (this.levelFill) {
       const fraction = ceiling ? Math.min(1, inFlight / ceiling) : 0;
       this.levelFill.style.width = `${fraction * 100}%`;
+      // Color transitions: green when idle, amber when busy, red when saturated
+      if (fraction === 0) this.levelFill.style.background = "var(--promoted)";
+      else if (fraction < 0.5) this.levelFill.style.background = "var(--promoted)";
+      else if (fraction < 0.85) this.levelFill.style.background = "var(--warn)";
+      else this.levelFill.style.background = "var(--error)";
     }
     if (this.levelText) {
       this.levelText.textContent = `${inFlight}${ceiling ? ` / ${ceiling}` : ""}`;
     }
     if (this.cpuFill) {
-      this.cpuFill.style.width = `${Math.min(100, Math.max(0, cpu))}%`;
+      const cpuClamped = Math.min(100, Math.max(0, cpu));
+      this.cpuFill.style.width = `${cpuClamped}%`;
+      if (cpuClamped < 30) this.cpuFill.style.background = "var(--cpu)";
+      else if (cpuClamped < 70) this.cpuFill.style.background = "var(--warn)";
+      else this.cpuFill.style.background = "var(--error)";
     }
     if (this.cpuText) {
       this.cpuText.textContent = `${cpu.toFixed(0)}%`;
@@ -260,9 +271,21 @@ export class ControlBar implements Component {
     const step = width / Math.max(1, TRACE_SAMPLES - 1);
     const offset = width - (this.samples.length - 1) * step;
 
-    // The machine's use: the line that says whether the run is starved.
+    // Subtle grid lines
+    ctx.strokeStyle = "var(--border)";
+    ctx.lineWidth = 0.5;
+    [0.25, 0.5, 0.75].forEach((frac) => {
+      const y = height * frac;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    });
+
+    // CPU trace (machine use) - blue line
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(120, 160, 220, 0.75)";
+    ctx.strokeStyle = "var(--cpu)";
+    ctx.globalAlpha = 0.7;
     ctx.lineWidth = 1;
     this.samples.forEach((sample, index) => {
       const x = offset + index * step;
@@ -271,11 +294,17 @@ export class ControlBar implements Component {
       else ctx.lineTo(x, y);
     });
     ctx.stroke();
+    ctx.globalAlpha = 1;
 
-    // The level: the cells in flight, over the ceiling.
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(120, 230, 180, 0.95)";
+    // Level trace (cells in flight) - green/amber/red gradient based on level
+    const gradient = ctx.createLinearGradient(0, height, 0, 0);
+    gradient.addColorStop(0, "var(--promoted)");
+    gradient.addColorStop(0.5, "var(--warn)");
+    gradient.addColorStop(1, "var(--error)");
+    ctx.strokeStyle = gradient;
     ctx.lineWidth = 1.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     this.samples.forEach((sample, index) => {
       const x = offset + index * step;
       const y = height - Math.min(1, sample.level / ceiling) * height;
@@ -283,6 +312,25 @@ export class ControlBar implements Component {
       else ctx.lineTo(x, y);
     });
     ctx.stroke();
+
+    // Current value indicators (small dots at the right edge)
+    if (this.samples.length > 0) {
+      const latest = this.samples[this.samples.length - 1];
+      const x = width - 2;
+      // CPU dot
+      const cpuY = height - (Math.min(100, latest.cpu) / 100) * height;
+      ctx.fillStyle = "var(--cpu)";
+      ctx.beginPath();
+      ctx.arc(x, cpuY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Level dot
+      const levelY = height - Math.min(1, latest.level / ceiling) * height;
+      const levelFrac = latest.level / ceiling;
+      ctx.fillStyle = levelFrac < 0.5 ? "var(--promoted)" : levelFrac < 0.85 ? "var(--warn)" : "var(--error)";
+      ctx.beginPath();
+      ctx.arc(x - 6, levelY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   /** Say why a command did not land. */
@@ -312,80 +360,154 @@ export class ControlBar implements Component {
       color: var(--text-secondary);
       z-index: 165;
       box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      transition: box-shadow var(--motion-fast), border-color var(--motion-fast);
     `;
 
     this.container.innerHTML = `
-      <button class="verb" style="
-        width: 34px;
-        height: 30px;
-        font-size: 15px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        color: var(--text-primary);
-        cursor: pointer;
-      ">⏸</button>
-      <button class="verb" style="
-        width: 34px;
-        height: 30px;
-        font-size: 15px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        color: var(--text-primary);
-        cursor: pointer;
-      ">⏭</button>
-      <button class="verb" style="
-        width: 34px;
-        height: 30px;
-        font-size: 15px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        color: var(--text-primary);
-        cursor: pointer;
-      ">⏹</button>
-      <div style="width: 1px; height: 26px; background: var(--border);"></div>
-      <div style="display: flex; flex-direction: column; gap: 3px; min-width: 150px;">
-        <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <span>CEILING</span>
-          <span class="ceiling-value" style="color: var(--text-primary); font-weight: 600;">—</span>
+      <style>
+        .control-bar .verb {
+          width: 36px;
+          height: 32px;
+          font-size: 16px;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          color: var(--text-primary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all var(--motion-fast) var(--ease-out);
+        }
+        .control-bar .verb:not(:disabled):hover {
+          background: var(--border);
+          border-color: var(--border-bright);
+          transform: translateY(-1px);
+        }
+        .control-bar .verb:not(:disabled):active {
+          transform: translateY(0) scale(0.95);
+        }
+        .control-bar .verb:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .control-bar .verb-primary:not(:disabled) {
+          background: var(--gradient)22;
+          border-color: var(--gradient)66;
+          color: var(--gradient);
+        }
+        .control-bar .verb-primary:not(:disabled):hover {
+          background: var(--gradient)33;
+          border-color: var(--gradient);
+        }
+        .control-bar .verb-danger:not(:disabled) {
+          background: var(--error)22;
+          border-color: var(--error)66;
+          color: var(--error);
+        }
+        .control-bar .verb-danger:not(:disabled):hover {
+          background: var(--error)33;
+          border-color: var(--error);
+        }
+        .control-bar .separator {
+          width: 1px;
+          height: 24px;
+          background: var(--border);
+        }
+        .control-bar .meter-group {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 150px;
+        }
+        .control-bar .meter-label-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+        }
+        .control-bar .meter-label {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-secondary);
+        }
+        .control-bar .meter-value {
+          color: var(--text-primary);
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+        }
+        .control-bar .meter-bar {
+          height: 6px;
+          background: var(--bg);
+          border-radius: 3px;
+          overflow: hidden;
+        }
+        .control-bar .meter-fill {
+          height: 100%;
+          width: 0%;
+          border-radius: 3px;
+          transition: width var(--motion-normal) var(--ease-out), background-color var(--motion-fast);
+        }
+        .control-bar .ceiling-slider {
+          width: 150px;
+          accent-color: var(--gradient);
+        }
+        .control-bar .trace-canvas {
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          background: var(--bg);
+        }
+        .control-bar .status-text {
+          min-width: 120px;
+          color: var(--text-secondary);
+          font-variant-numeric: tabular-nums;
+        }
+        .control-bar .door-btn {
+          width: 30px;
+          height: 30px;
+          font-size: 15px;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          color: var(--text-primary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all var(--motion-fast) var(--ease-out);
+        }
+        .control-bar .door-btn:hover {
+          background: var(--border);
+          border-color: var(--border-bright);
+        }
+      </style>
+      <button class="verb verb-primary" data-action="play" title="Play — release the run">▶</button>
+      <button class="verb" data-action="step" title="Step — release exactly one more batch" disabled>⏭</button>
+      <button class="verb verb-danger" data-action="stop" title="Stop — end the run at its next boundary">⏹</button>
+      <div class="separator"></div>
+      <div class="meter-group">
+        <div class="meter-label-row">
+          <span class="meter-label">CEILING</span>
+          <span class="meter-value ceiling-value">—</span>
         </div>
-        <input class="ceiling-slider" type="range" min="1" max="8" value="4" style="width: 150px;" />
+        <input class="ceiling-slider" type="range" min="1" max="8" value="4" />
       </div>
-      <div style="display: flex; flex-direction: column; gap: 3px; min-width: 150px;">
-        <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <span>CELLS</span>
-          <span class="level-text" style="color: var(--text-primary); font-weight: 600;">—</span>
+      <div class="meter-group">
+        <div class="meter-label-row">
+          <span class="meter-label">CELLS</span>
+          <span class="meter-value level-text">—</span>
         </div>
-        <div style="height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden;">
-          <div class="level-fill" style="height: 100%; width: 0%; background: var(--promoted); border-radius: 3px; transition: width 0.2s linear;"></div>
+        <div class="meter-bar"><div class="meter-fill level-fill" style="background: var(--promoted);"></div></div>
+        <div class="meter-label-row">
+          <span class="meter-label">CPU</span>
+          <span class="meter-value cpu-text">—</span>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <span>CPU</span>
-          <span class="cpu-text" style="color: var(--text-primary); font-weight: 600;">—</span>
-        </div>
-        <div style="height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden;">
-          <div class="cpu-fill" style="height: 100%; width: 0%; background: var(--cpu); border-radius: 3px; transition: width 0.4s ease;"></div>
-        </div>
+        <div class="meter-bar"><div class="meter-fill cpu-fill" style="background: var(--cpu);"></div></div>
       </div>
-      <canvas class="trace" width="130" height="42" style="
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--bg);
-      "></canvas>
-      <div style="width: 1px; height: 26px; background: var(--border);"></div>
-      <span class="status" style="min-width: 120px; color: var(--text-secondary);">—</span>
-      <button class="door" style="
-        width: 30px;
-        height: 30px;
-        font-size: 15px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        color: var(--text-primary);
-        cursor: pointer;
-      ">⚙</button>
+      <canvas class="trace-canvas" width="130" height="42"></canvas>
+      <div class="separator"></div>
+      <span class="status-text">no run is reporting</span>
+      <button class="door-btn" data-action="panel" title="Open control panel">⚙</button>
     `;
 
     overlay.appendChild(this.container);
@@ -398,9 +520,12 @@ export class ControlBar implements Component {
     this.stepButton.addEventListener("click", () => this.step());
     this.stopButton.addEventListener("click", () => this.stop());
 
-    this.slider = this.container.querySelector<HTMLInputElement>(
-      ".ceiling-slider",
-    );
+    this.slider = this.container.querySelector<HTMLInputElement>(".ceiling-slider");
+    this.slider?.addEventListener("input", (e) => {
+      const target = e.target as HTMLInputElement;
+      const value = Number(target.value);
+      this.ceilingValue!.textContent = String(value);
+    });
     this.slider?.addEventListener("change", () => {
       const value = Number(this.slider?.value ?? 1);
       void this.command({ max_workers: value });
@@ -410,10 +535,10 @@ export class ControlBar implements Component {
     this.levelText = this.container.querySelector(".level-text");
     this.cpuFill = this.container.querySelector(".cpu-fill");
     this.cpuText = this.container.querySelector(".cpu-text");
-    this.trace = this.container.querySelector("canvas.trace");
-    this.statusText = this.container.querySelector(".status");
+    this.trace = this.container.querySelector("canvas.trace-canvas");
+    this.statusText = this.container.querySelector(".status-text");
     this.container
-      .querySelector<HTMLButtonElement>(".door")!
+      .querySelector<HTMLButtonElement>(".door-btn")!
       .addEventListener("click", () => panels.toggle("control-panel"));
 
     const close = closeButton(() => panels.toggle("control-bar"));
