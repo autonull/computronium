@@ -366,7 +366,7 @@ def export_statistical_result_to_ceec(
 
             # Link evidence to experiment via a belief
             if evidence_ids:
-                belief = ceec_store.create_belief(
+                ceec_store.create_belief(
                     statement=f"Promoted cells in run {run_id} demonstrate measurable effects on {task_id}",
                     type_="mechanism",
                     scope=scope,

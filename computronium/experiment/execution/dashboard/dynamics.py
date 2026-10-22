@@ -655,7 +655,9 @@ def run_trained_dynamics(
         if cell is None:
             refused.append(f"{candidate['geometry']}/{candidate['dynamics']}")
             continue
-        payload = _train_and_measure_cell(candidate, task_id, budget=budget, device=device, epochs=epochs)
+        payload = _train_and_measure_cell(
+            candidate, task_id, budget=budget, device=device, epochs=epochs
+        )
         if not payload.get("stateful"):
             # The cell composes but has no state that moves: the next
             # candidate is the one worth measuring.

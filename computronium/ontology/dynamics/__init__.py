@@ -1,7 +1,5 @@
 """Layer 3: StateDynamics — Forward Evolution & Settling."""
 
-from typing import TYPE_CHECKING, cast
-
 from computronium.ontology.dynamics._dynamics import (
     DiffusionDynamics,
     EnergyMinimizationDynamics,
@@ -15,8 +13,8 @@ from computronium.ontology.dynamics._dynamics import (
     StateDynamicsConfig,
 )
 from computronium.ontology.dynamics._registry import (
-    DYNAMICS_REGISTRY,
     _DYNAMICS_REGISTRY,
+    DYNAMICS_REGISTRY,
 )
 from computronium.ontology.dynamics._state import (
     SettableState,
@@ -26,9 +24,6 @@ from computronium.ontology.dynamics._state import (
     state_dual_vars,
     state_energy,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 def dynamics_from_config(config: StateDynamicsConfig) -> StateDynamics:  # ruff: ignore[non-empty-init-module]

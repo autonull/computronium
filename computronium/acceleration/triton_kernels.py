@@ -478,7 +478,6 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                             mask=(offs_k[:, None] < N) & (offs_n[None, :] < N),
                             other=0.0,
                         )
-                        # B = b*A + c*A2
                         b_ik = b * a_ik + c * a2_ik
                         acc += tl.dot(x, b_ik, input_precision="ieee")
                     x = tl.load(

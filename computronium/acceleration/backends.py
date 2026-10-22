@@ -277,7 +277,7 @@ class AutoDispatcher:
                 if method is not None:
                     try:
                         return method(*args, **kwargs)
-                    except (RuntimeError, ValueError, TypeError):  # ruff: ignore[try-except-continue] - try next backend
+                    except RuntimeError, ValueError, TypeError:  # ruff: ignore[try-except-continue] - try next backend
                         continue
         raise RuntimeError(f"No available backend for {algorithm}.{operation}")
 
@@ -400,7 +400,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         HAS_CUPY = True
     else:
         cp = None
-except (ImportError, RuntimeError, ValueError, TypeError):
+except ImportError, RuntimeError, ValueError, TypeError:
     cp = None
     HAS_CUPY = False
 

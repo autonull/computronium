@@ -183,7 +183,7 @@ def _verify_cupy() -> tuple:
         with cp.cuda.Device(0):
             _ = cp.array([1.0])
             _ = cp.random.rand(1)
-    except (RuntimeError, ValueError, TypeError):  # optional-backend availability probe
+    except RuntimeError, ValueError, TypeError:  # optional-backend availability probe
         return None, False
     else:
         return cp, True
@@ -195,7 +195,7 @@ try:
 except ImportError:
     cp = None
     HAS_CUPY = False
-except (RuntimeError, ValueError, TypeError):  # optional-backend availability probe
+except RuntimeError, ValueError, TypeError:  # optional-backend availability probe
     cp = None
     HAS_CUPY = False
 
@@ -224,7 +224,7 @@ def to_numpy(arr: object) -> np.ndarray:
                 "cupy"
             ):
                 return cp.asnumpy(arr)
-        except (ValueError, TypeError, RuntimeError):
+        except ValueError, TypeError, RuntimeError:
             logger.warning("Failed to convert CuPy array to NumPy, falling back")
     return arr
 

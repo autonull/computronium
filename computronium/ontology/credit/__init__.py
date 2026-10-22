@@ -12,6 +12,14 @@ import torch
 from torch import Tensor, nn
 
 from computronium.core.identity_card import AlgorithmIdentityCard
+from computronium.ontology._utils import (
+    _acts_list,
+    _block_transition_acts,
+    _learnable_weight_names,
+    _propagate_targets,
+    _weight_acts,
+    apply_norm,
+)
 from computronium.ontology.credit._base import (
     FeedbackMatrixMixin,
     InertZerosMixin,
@@ -22,14 +30,6 @@ from computronium.ontology.credit._base import (
     StatefulCredit as StatefulCredit,
 )
 from computronium.ontology.dynamics._state import state_dual_vars, state_energy
-from computronium.ontology._utils import (
-    _acts_list,
-    _block_transition_acts,
-    _learnable_weight_names,
-    _propagate_targets,
-    _weight_acts,
-    apply_norm,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

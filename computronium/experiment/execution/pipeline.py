@@ -1232,19 +1232,8 @@ class PipelineRunner:
         from computronium.experiment.kernel.search_space import iter_candidates
 
         candidates = []
-        # Use the first task for shape resolution
-        task = (
-            self._config.run_spec.task_names[0]
-            if self._config.run_spec.task_names
-            else "xor"
-        )
-
         # Generate candidates at explore fidelity (L0/L1) for promotion to exploit fidelity
         spec = self._config.run_spec
-        # Temporarily adjust fidelity for candidate generation
-        explore_fidelity = "L0"
-        original_fidelity = spec.fidelity
-
         # We need to generate candidates without modifying the original spec
         # Create a temporary spec-like object or use iter_candidates directly
         for coord, sched in iter_candidates(
@@ -1348,13 +1337,12 @@ class PipelineRunner:
                         PARAM_BUDGET_TOLERANCE,
                     )
 
-                    if schedule.param_budget > 0:
-                        if geometry_param_count(
-                            config.geometry
-                        ) > schedule.param_budget * (1 + PARAM_BUDGET_TOLERANCE):
-                            raise ValueError(
-                                f"Param budget exceeded: {geometry_param_count(config.geometry)} > {schedule.param_budget}"
-                            )
+                    if schedule.param_budget > 0 and geometry_param_count(
+                        config.geometry
+                    ) > schedule.param_budget * (1 + PARAM_BUDGET_TOLERANCE):
+                        raise ValueError(
+                            f"Param budget exceeded: {geometry_param_count(config.geometry)} > {schedule.param_budget}"
+                        )
                 except (ValueError, TypeError, KeyError) as e:
                     # Reject this cell - add to durable rejected set
                     self._state.rejected_keys.add(key)

@@ -332,7 +332,6 @@ class TPKernelBackend:
                 pseudo_grads.append(torch.zeros_like(self._forward_layers[i].weight))
                 continue
 
-            # delta = post - tgt [batch, out]
             delta = post - tgt
             # pseudo_grad = delta.T @ pre / batch [out, in]
             batch_size = pre.shape[0]

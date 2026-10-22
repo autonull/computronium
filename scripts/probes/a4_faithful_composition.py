@@ -105,11 +105,7 @@ def _run_arm(norm: str, optimizer: str, train_data) -> dict:
     for x, y in train_data:
         dynamics.settle(SystemState(x=x), geometry, substrate, None)
         dynamics.settle(SystemState(x=x), geometry, substrate, y)
-        eps = [e.detach() for e in dynamics._last_errors]
-        if norm != "none":
-            eps = apply_norm(eps, norm)
-        else:
-            eps = [e.clone() for e in eps]
+        eps = apply_norm(eps, norm) if norm != "none" else [e.clone() for e in eps]
 
         with torch.enable_grad():
             _, y_hat = dynamics._build_forward_with_errors(

@@ -419,11 +419,6 @@ class FilesystemExternalStore(ExternalStore):
         return False
 
 
-# S3 and GCS adapters would go here when needed
-# class S3ExternalStore(ExternalStore): ...
-# class GCSExternalStore(ExternalStore): ...
-
-
 __all__ = [
     "Artifact",
     "ArtifactInput",

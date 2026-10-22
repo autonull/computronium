@@ -28,7 +28,6 @@ being computed and dropped.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -36,6 +35,8 @@ from computronium.acceleration.registry import get
 from computronium.core.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.acceleration.spec import (
         Backend,
         ImplementationSpec,
@@ -433,6 +434,7 @@ def make_factory(
         A factory function with signature:
             (input_dim, hidden_dims, output_dim, *, lr, device, backend, **extra) -> System
     """
+
     def factory(
         input_dim: int,
         hidden_dims: tuple[int, ...],

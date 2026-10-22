@@ -360,7 +360,7 @@ class SNNKernelBackend:
 
 
 # Triton kernels for fused SNN operations
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements]
     import triton
     import triton.language as tl
 

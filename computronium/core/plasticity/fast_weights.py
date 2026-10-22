@@ -273,15 +273,18 @@ class FastWeightPlasticity:
 
             # Handle batch dimension mismatch (for cell-mode layers)
             # fast_weights has batch_size B, but cell-mode layers have B*H*W
-            if a.shape[0] != fw.shape[0] and layout is not None:
-                # Check if this layer is cell-mode
-                if i < len(layout.layers) and layout.layers[i].batch_mode == "cell":
-                    # Tile fast_weights across spatial dimension
-                    spatial = layout.spatial_dims
-                    if spatial is not None:
-                        h, w = spatial
-                        # Repeat each batch element H*W times
-                        fw = fw.repeat_interleave(h * w, dim=0)
+            if (
+                a.shape[0] != fw.shape[0]
+                and layout is not None
+                and i < len(layout.layers)
+                and layout.layers[i].batch_mode == "cell"
+            ):
+                # Tile fast_weights across spatial dimension
+                spatial = layout.spatial_dims
+                if spatial is not None:
+                    h, w = spatial
+                    # Repeat each batch element H*W times
+                    fw = fw.repeat_interleave(h * w, dim=0)
 
             modulated.append(a + fw)
 

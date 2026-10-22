@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 # Triton Kernels for Tile Substrate
 # ──────────────────────────────────────────────
 
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements]
     import triton
     import triton.language as tl
 
@@ -1151,7 +1151,7 @@ def tile_prediction(
         # PyTorch fallback
         out = sum(inputs)
         if bias is not None:
-            out = out + bias
+            out += bias
         return out
 
     B, N = inputs[0].shape

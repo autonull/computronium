@@ -1348,10 +1348,8 @@ class WebDashboard:
             self._unsubscribe = None
         if self._update_task:
             self._update_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._update_task
-            except asyncio.CancelledError:
-                pass
         if self._work_dir is not None:
             shutil.rmtree(self._work_dir, ignore_errors=True)
             self._work_dir = None

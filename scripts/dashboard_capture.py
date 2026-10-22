@@ -268,9 +268,7 @@ def run_third_campaign(store_path: Path) -> int:
     profile = RUN_PROFILES["demo"]
     # Use the same axes as demo, but the profile's random seed handling
     # will generate different seeds for each cell measurement.
-    spec = spec_from_profile(
-        dataclasses.replace(profile, name="demo-third")
-    )
+    spec = spec_from_profile(dataclasses.replace(profile, name="demo-third"))
     return execute_spec(spec, store_path=str(store_path))
 
 

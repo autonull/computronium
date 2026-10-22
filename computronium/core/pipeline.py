@@ -367,9 +367,7 @@ def _compute_free_metrics(
         free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
         free_loss, _ = _task_loss_tensor(free_settled, y)
         free_energy = dynamics.compute_energy(free_settled, geometry)
-        free_accuracy = (free_settled.metrics or {}).get(
-            "accuracy", torch.tensor(0.0)
-        )
+        free_accuracy = (free_settled.metrics or {}).get("accuracy", torch.tensor(0.0))
         if not isinstance(free_accuracy, Tensor):
             free_accuracy = torch.as_tensor(free_accuracy)
     return free_loss, free_energy, free_accuracy
@@ -396,7 +394,9 @@ def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
         states, initial_activations, ctx.x, ctx.y, ctx.dynamics, ctx.geometry
     )
 
-    pseudo_grads, bias_grads = _compute_pseudo_grads(ctx.credit, states, loss, ctx.geometry)
+    pseudo_grads, bias_grads = _compute_pseudo_grads(
+        ctx.credit, states, loss, ctx.geometry
+    )
     _apply_update(ctx.geometry, ctx.update, pseudo_grads, bias_grads)
 
     # Post-update, target-free forward+settle for honest learning metrics.

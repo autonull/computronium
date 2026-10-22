@@ -5,6 +5,7 @@ Generates publication-grade HTML/PDF reports from structured Pydantic context mo
 
 from __future__ import annotations
 
+import contextlib
 import json
 import subprocess
 from datetime import datetime
@@ -561,10 +562,8 @@ def generate_report_from_store(
         else:
             raise ValueError(f"Unknown format: {format}")
     finally:
-        try:
+        with contextlib.suppress(Exception):
             store.__exit__(None, None, None)
-        except Exception:
-            pass  # Ignore cleanup errors
 
 
 __all__ = [

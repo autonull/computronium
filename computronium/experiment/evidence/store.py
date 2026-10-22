@@ -1212,8 +1212,6 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             params.append(filter_run_id)
 
         if metric == "cosine":
-            # Cosine similarity = dot(a,b) / (|a|*|b|)
-            # DuckDB: list_dot(a,b) / (list_norm(a) * list_norm(b))
             score_expr = (
                 "list_dot(vi.embedding, ?) / (list_norm(vi.embedding) * list_norm(?))"
             )

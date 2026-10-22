@@ -11,7 +11,8 @@ substrate and update layers should copy when they are migrated.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypeVar
 
 from computronium.ontology._registry import ImplementationRegistry
 

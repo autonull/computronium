@@ -525,22 +525,24 @@ def verify_environment(snapshot_path: Path | str) -> dict[str, Any]:
         })
 
     # Compare uv.lock
-    if expected.python.uv_lock_hash and actual.python.uv_lock_hash:
-        if expected.python.uv_lock_hash != actual.python.uv_lock_hash:
-            mismatches.append({
-                "type": "uv_lock",
-                "expected_hash": expected.python.uv_lock_hash,
-                "actual_hash": actual.python.uv_lock_hash,
-            })
+    if (
+        expected.python.uv_lock_hash
+        and actual.python.uv_lock_hash
+        and expected.python.uv_lock_hash != actual.python.uv_lock_hash
+    ):
+        mismatches.append({
+            "type": "uv_lock",
+            "expected_hash": expected.python.uv_lock_hash,
+            "actual_hash": actual.python.uv_lock_hash,
+        })
 
     # Compare git commit
-    if expected.git and actual.git:
-        if expected.git.commit_sha != actual.git.commit_sha:
-            mismatches.append({
-                "type": "git_commit",
-                "expected": expected.git.commit_sha,
-                "actual": actual.git.commit_sha,
-            })
+    if expected.git and actual.git and expected.git.commit_sha != actual.git.commit_sha:
+        mismatches.append({
+            "type": "git_commit",
+            "expected": expected.git.commit_sha,
+            "actual": actual.git.commit_sha,
+        })
 
     return {
         "matches": len(mismatches) == 0,

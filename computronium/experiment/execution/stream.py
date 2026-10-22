@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 # Candidates examined per page (a page size, never a cap).
 _DEFAULT_PAGE_SIZE = 50_000
 
-# ShapeResolver is Callable[[str], TaskShape]
 type ShapeResolver = Callable[[str], TaskShape]
 
 

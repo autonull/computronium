@@ -357,10 +357,7 @@ async def _run_hypothesis_test(
         min_seeds=min_seeds,
     )
 
-    if hypothesis.comparison_values:
-        values_to_compare = hypothesis.comparison_values
-    else:
-        values_to_compare = list(by_value.keys())[:2]
+    values_to_compare = hypothesis.comparison_values or list(by_value.keys())[:2]
 
     if len(values_to_compare) < 2:
         return None

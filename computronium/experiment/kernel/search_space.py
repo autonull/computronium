@@ -581,24 +581,20 @@ def _max_hidden_dim(
     if param_budget <= 0:
         return 4096  # Unconstrained, use harvested domain max
 
-    # Solve quadratic: hidden_dim^2 * (num_layers - 1) + hidden_dim * (input_dim + output_dim + 1) - param_budget <= 0
     if num_layers <= 1:
-        # Linear: hidden_dim * (input_dim + output_dim + 1) <= param_budget
         denom = input_dim + output_dim + 1
         return max(8, min(4096, param_budget // max(1, denom)))
-    else:
-        # Quadratic: a * x^2 + b * x - c <= 0
-        a = num_layers - 1
-        b = input_dim + output_dim + 1
-        c = param_budget
-        # Positive root: (-b + sqrt(b^2 + 4ac)) / (2a)
-        import math
+    a = num_layers - 1
+    b = input_dim + output_dim + 1
+    c = param_budget
+    # Positive root: (-b + sqrt(b^2 + 4ac)) / (2a)
+    import math
 
-        disc = b * b + 4 * a * c
-        if disc < 0:
-            return 8
-        root = (-b + math.sqrt(disc)) / (2 * a)
-        return max(8, min(4096, int(root)))
+    disc = b * b + 4 * a * c
+    if disc < 0:
+        return 8
+    root = (-b + math.sqrt(disc)) / (2 * a)
+    return max(8, min(4096, int(root)))
 
 
 def _swept(
@@ -703,13 +699,6 @@ def _composable(
     )
     from computronium.experiment.kernel.evaluate import _task
 
-    # Create cache key from structural axes + task + param_budget + relevant hyperparameters
-    # Hyperparameters that affect validity (checked in void constraints):
-    # - hidden_dim (max_hidden_dim)
-    # - num_layers (max_layers)
-    # - max_steps (max_steps)
-    # - beta (gradient_credit_beta_clamp)
-    # - residual (residual_connections)
     validity_params = frozenset(
         (k, v)
         for k, v in coordinate.params.items()
@@ -956,7 +945,6 @@ def iter_candidates(  # ruff: ignore[complex-structure]
 
     seen: set[str] = set()
     scanned = 0
-    yielded = 0
     for coordinate, task in _walk(spec, search_space, shape):
         if deadline is not None and deadline.soft_expired():
             return

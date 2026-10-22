@@ -172,7 +172,6 @@ class Hypothesis:
     predicted_metric: str = ""  # e.g., "val_accuracy"
     predicted_value: float | None = None
     predicted_direction: str = ""  # "increase", "decrease", "no_change"
-    # Confidence (0-1)
     confidence: float = 0.5
     # Tags for categorization
     tags: frozenset[str] = field(default_factory=frozenset)

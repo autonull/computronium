@@ -260,7 +260,6 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
             # (H, W) grayscale
             x = torch.randn(batch_size, 1, *input_shape)
         elif len(input_shape) == 3:
-            # (C, H, W)
             x = torch.randn(batch_size, *input_shape)
         else:
             x = torch.randn(batch_size, *input_shape)

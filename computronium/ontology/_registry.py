@@ -15,11 +15,9 @@ from __future__ import annotations
 import importlib
 import pkgutil
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, TypeVar
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
+from typing import TypeVar
 
 T = TypeVar("T")
 

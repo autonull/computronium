@@ -125,9 +125,11 @@ class WeightEvolutionAnalyzer:
             return
 
         for name, param in self.model.named_parameters():
-            if len(self._initial_weights) < self.config.max_layers:
-                if name not in self._initial_weights:
-                    self._initial_weights[name] = param.detach().clone().cpu()
+            if (
+                len(self._initial_weights) < self.config.max_layers
+                and name not in self._initial_weights
+            ):
+                self._initial_weights[name] = param.detach().clone().cpu()
 
             weight = param.detach().cpu()
             metrics = compute_plasticity_metrics(

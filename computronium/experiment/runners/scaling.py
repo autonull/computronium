@@ -239,9 +239,6 @@ class ScalingRunner:
         # Open store once for the entire scaling run
         with self.store:
             for i, param_values in enumerate(param_grid):
-                # Build coordinate with these parameters
-                coord = self._build_coordinate_with_params(base_coord, param_values)
-
                 # Build RunSpec
                 run_spec = self._build_run_spec(param_values)
                 variant_run_id = f"{self.run_id}_variant_{i}"

@@ -341,8 +341,6 @@ class BudgetPlanner:
 
         # If even 1 round exceeds budget, reduce scope to fit
         if time_per_round > budget_seconds * 0.8:  # Leave 20% margin
-            # Reduce epochs first, then cells_per_round, then seeds
-            # Target: time_per_round <= budget_seconds * 0.8
             max_time_per_round = budget_seconds * 0.8
 
             # Reduce epochs
@@ -417,7 +415,6 @@ class BudgetPlanner:
             estimated_trials = n_rounds * cells_per_round
 
         # Final estimates
-        total_cells = estimated_trials * target_seeds
         estimated_seconds = (
             n_rounds * time_per_round * max_parallel
             + self.estimates.startup_overhead * 5

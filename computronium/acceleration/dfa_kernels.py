@@ -141,7 +141,6 @@ class DFAKernelBackend:
         else:
             target_vec = y.to(device=nudged_output.device, dtype=nudged_output.dtype)
 
-        # Nudge: output + beta * (target - output)
         nudged_output_nudged = nudged_output + beta * (target_vec - nudged_output)
 
         # Replace the last activation with the nudged output for backward pass

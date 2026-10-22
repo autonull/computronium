@@ -7,7 +7,8 @@ modules to eliminate duplication.
 from __future__ import annotations
 
 import zlib
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -15,7 +16,6 @@ from torch import Tensor
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from computronium.ontology.dynamics._state import SettableState
     from computronium.ontology.geometry import Geometry, TileBlockGeometry
 
 
@@ -337,16 +337,16 @@ class ConfigFactory:
 
 
 __all__ = [
+    "ConfigFactory",
+    "_EMANormalizer",
     "_acts_list",
     "_block_transition_acts",
-    "_learnable_weight_names",
-    "_propagate_targets",
-    "_weight_acts",
+    "_clip_grads",
     "_deterministic_generator",
     "_fixed_random_matrix",
-    "_clip_grads",
+    "_learnable_weight_names",
+    "_propagate_targets",
     "_rms_normalize",
     "_spectral_normalize",
-    "_EMANormalizer",
-    "ConfigFactory",
+    "_weight_acts",
 ]

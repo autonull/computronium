@@ -73,7 +73,6 @@ __all__ = [
     "VoidCache",
     "iter_candidates",
     "search_space_from_spec",
-    # Database (DuckDB-backed)
     "RecordStore",
     "StoreConfig",
     "RunInfo",

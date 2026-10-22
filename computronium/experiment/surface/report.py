@@ -1912,7 +1912,6 @@ def generate_html_report(
         Path to the generated HTML file.
     """
     try:
-        import plotly.express as px
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
     except ImportError:
@@ -1956,9 +1955,12 @@ def generate_html_report(
             row[obj] = record.payload.get(obj)
         # Add all available metrics for ablation analysis
         for key, value in record.payload.items():
-            if isinstance(value, int | float) and not isinstance(value, bool):
-                if key not in row:
-                    row[key] = value
+            if (
+                isinstance(value, int | float)
+                and not isinstance(value, bool)
+                and key not in row
+            ):
+                row[key] = value
         plot_data.append(row)
 
     if not plot_data:
@@ -2009,7 +2011,7 @@ def generate_html_report(
             y=y_vals,
             mode="markers",
             name="All Cells",
-            marker=dict(size=8, opacity=0.6, color="lightblue"),
+            marker={"size": 8, "opacity": 0.6, "color": "lightblue"},
             text=[
                 f"{r['cell_key']}<br>{r['dynamics']}/{r['credit']}/{r['update']}"
                 for r in plot_data
@@ -2031,8 +2033,8 @@ def generate_html_report(
                 y=pareto_y,
                 mode="markers+lines",
                 name="Pareto Frontier",
-                marker=dict(size=12, color="red", symbol="diamond"),
-                line=dict(color="red", dash="dot"),
+                marker={"size": 12, "color": "red", "symbol": "diamond"},
+                line={"color": "red", "dash": "dot"},
                 text=[
                     f"{p['cell_key']}<br>{p['coordinate']['dynamics']}/{p['coordinate']['credit']}/{p['coordinate']['update']}"
                     for p in pareto_points
@@ -2537,7 +2539,6 @@ def _generate_latex_report(
     if summary is None:
         raise ValueError(f"Run {run_id} not found")
 
-    eligible = generator.claim_eligible_records(run_id)
     claims = generator.claims(run_id)
     limitations = generator.limitations(run_id)
     pareto = generator.pareto_frontier(run_id)

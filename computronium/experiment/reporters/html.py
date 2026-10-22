@@ -115,7 +115,6 @@ def _generate_pareto_plot(
 ) -> str:
     """Generate a Plotly pareto frontier plot as HTML."""
     try:
-        import plotly.express as px
         import plotly.graph_objects as go
 
         pareto_df = _compute_pareto_frontier(df, x_metric, y_metric)
@@ -129,7 +128,7 @@ def _generate_pareto_plot(
                 y=df[y_metric],
                 mode="markers",
                 name="All cells",
-                marker=dict(size=6, opacity=0.5, color="lightblue"),
+                marker={"size": 6, "opacity": 0.5, "color": "lightblue"},
                 text=df["cell_key"],
                 hovertemplate=(
                     f"Cell: %{{text}}<br>"
@@ -147,8 +146,8 @@ def _generate_pareto_plot(
                     y=pareto_df[y_metric],
                     mode="lines+markers",
                     name="Pareto frontier",
-                    line=dict(color="red", width=2, dash="dash"),
-                    marker=dict(size=10, color="red"),
+                    line={"color": "red", "width": 2, "dash": "dash"},
+                    marker={"size": 10, "color": "red"},
                     text=pareto_df["cell_key"],
                     hovertemplate=(
                         f"Pareto Cell: %{{text}}<br>"
@@ -227,7 +226,7 @@ def _generate_coverage_heatmap(
                 y=y_vals,
                 colorscale="Viridis",
                 name=f"Measured ({metric})",
-                colorbar=dict(title=metric),
+                colorbar={"title": metric},
                 hovertemplate=f"{axis_x}: %{{x}}<br>{axis_y}: %{{y}}<br>{metric}: %{{z:.4f}}<extra></extra>",
             )
         )
@@ -237,16 +236,14 @@ def _generate_coverage_heatmap(
         for i, y_val in enumerate(y_vals):
             for j, x_val in enumerate(x_vals):
                 if void_counts[i, j] > 0:
-                    annotations.append(
-                        dict(
-                            x=x_val,
-                            y=y_val,
-                            text=f"V:{void_counts[i, j]}",
-                            showarrow=False,
-                            font=dict(color="red", size=10),
-                            bgcolor="rgba(255,255,255,0.8)",
-                        )
-                    )
+                    annotations.append({
+                        "x": x_val,
+                        "y": y_val,
+                        "text": f"V:{void_counts[i, j]}",
+                        "showarrow": False,
+                        "font": {"color": "red", "size": 10},
+                        "bgcolor": "rgba(255,255,255,0.8)",
+                    })
 
         fig.update_layout(
             title=f"Axis Coverage: {axis_x} × {axis_y}",
@@ -333,7 +330,7 @@ def _generate_failure_clustering(
                     y=coords[mask, 1],
                     mode="markers",
                     name=label,
-                    marker=dict(size=8, color=colors[i % len(colors)]),
+                    marker={"size": 8, "color": colors[i % len(colors)]},
                     text=[failed.iloc[j]["cell_key"] for j, m in enumerate(mask) if m],
                     hovertemplate="Cell: %{text}<br>Cluster: %{fullData.name}<extra></extra>",
                 )
@@ -380,7 +377,7 @@ def _generate_convergence_curves(
                         y=trajectory,
                         mode="lines",
                         name=r.cell_key[:12],
-                        line=dict(width=1),
+                        line={"width": 1},
                         opacity=0.7,
                     )
                 )
@@ -426,7 +423,7 @@ def _generate_scaling_laws(
                 y=y,
                 mode="markers",
                 name="Cells",
-                marker=dict(size=6, opacity=0.6),
+                marker={"size": 6, "opacity": 0.6},
                 text=measured["cell_key"],
                 hovertemplate="Cell: %{text}<br>Params: %{x}<br>Walltime: %{y:.2f}s<extra></extra>",
             )
@@ -450,7 +447,7 @@ def _generate_scaling_laws(
                     y=y_fit,
                     mode="lines",
                     name=f"Fit: t ∝ p^{b:.2f} (R²={r_value**2:.3f})",
-                    line=dict(color="red", width=2, dash="dash"),
+                    line={"color": "red", "width": 2, "dash": "dash"},
                 )
             )
 
@@ -475,7 +472,6 @@ def _generate_seed_stability(
 ) -> str:
     """Generate seed stability analysis."""
     try:
-        import pandas as pd
         import plotly.graph_objects as go
 
         measured = df[df["gate_verdict"] == "PASS"].dropna(subset=[metric])
@@ -543,10 +539,10 @@ def _generate_summary_stats(records: list[Record]) -> dict[str, Any]:
     axes = ["substrate", "geometry", "dynamics", "plasticity", "credit", "update"]
     axis_coverage = {}
     for axis in axes:
-        measured_vals = set(
+        measured_vals = {
             getattr(r, axis) for r in records if r.status.gate_verdict.value == "PASS"
-        )
-        all_vals = set(getattr(r, axis) for r in records)
+        }
+        all_vals = {getattr(r, axis) for r in records}
         axis_coverage[axis] = {
             "measured": len(measured_vals),
             "total": len(all_vals),
