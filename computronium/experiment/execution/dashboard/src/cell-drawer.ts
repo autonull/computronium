@@ -1,6 +1,5 @@
 /** Cell Drawer — Slide-in Detail Panel (TODO68 Phase 2). */
 
-import * as THREE from "three";
 import { registry } from "./components/registry.js";
 import { registerPanel } from "./panels.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
@@ -12,10 +11,7 @@ export class CellDrawer implements Component {
 
   private panel: HTMLElement | null = null;
   private content: HTMLElement | null = null;
-  private sparklineScene: THREE.Scene | null = null;
-  private sparklineRenderer: THREE.WebGLRenderer | null = null;
-  private sparklineCamera: THREE.OrthographicCamera | null = null;
-  private sparklineAnimationId: number | null = null;
+  private sparklineCanvas: HTMLCanvasElement | null = null;
   private currentData: CellData | null = null;
 
   async init(): Promise<void> {
@@ -528,7 +524,7 @@ export class CellDrawer implements Component {
     return `${registered} Queued campaign ${payload.campaign_id}: ${payload.measurements} measurements in a plan of ${payload.plan}, in a new run.`;
   }
 
-  // Mini 3D sparkline (the measured training curve)
+  /** Lightweight 2D canvas sparkline for the training curve. */
   private startSparkline(data: CellData): void {
     const container = document.getElementById("sparkline-container");
     if (!container) return;
@@ -552,109 +548,94 @@ export class CellDrawer implements Component {
       return;
     }
 
-    // Create mini three.js scene
-    this.sparklineScene = new THREE.Scene();
-    this.sparklineCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
-    this.sparklineCamera.position.z = 2;
+    const canvas = document.createElement("canvas");
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    container.appendChild(canvas);
 
-    this.sparklineRenderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-    });
-    this.sparklineRenderer.setSize(
-      container.clientWidth,
-      container.clientHeight,
-    );
-    this.sparklineRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(this.sparklineRenderer.domElement);
+    const ctx = canvas.getContext("2d")!;
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const width = rect.width;
+    const height = rect.height;
 
     const chance = data.chance ?? 0.1;
-    const values = curve.map((point) => point.val_acc);
+    const values = curve.map((p) => p.val_acc);
     const low = Math.min(chance, ...values);
     const high = Math.max(...values, chance);
     const span = high - low || 1;
-    const toY = (value: number): number =>
-      THREE.MathUtils.lerp(-0.7, 0.7, (value - low) / span);
+    const pad = span * 0.1;
+    const yMin = low - pad;
+    const yMax = high + pad;
 
-    const points = curve.map((point, i) => {
-      const x = THREE.MathUtils.lerp(-0.9, 0.9, i / (curve.length - 1 || 1));
-      return new THREE.Vector3(x, toY(point.val_acc), 0);
-    });
+    const toX = (i: number) => (i / (curve.length - 1 || 1)) * (width - 20) + 10;
+    const toY = (v: number) => height - 10 - ((v - yMin) / (yMax - yMin)) * (height - 20);
 
-    const curveGeometry = new THREE.BufferGeometry().setFromPoints(points);
-    const curveMaterial = new THREE.LineBasicMaterial({
-      color: ARM_COLORS[data.coordinate.credit] || PALETTE.gradient,
-      linewidth: 2,
-    });
-    const sparkline = new THREE.Line(curveGeometry, curveMaterial);
-    this.sparklineScene.add(sparkline);
+    // Background
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#0a0e14";
+    ctx.fillRect(0, 0, width, height);
 
-    // The measured points, so the line reads as measurements
-    const markers = new THREE.Points(
-      new THREE.BufferGeometry().setFromPoints(points),
-      new THREE.PointsMaterial({
-        color: ARM_COLORS[data.coordinate.credit] || PALETTE.gradient,
-        size: 6,
-        sizeAttenuation: false,
-      }),
-    );
-    this.sparklineScene.add(markers);
-
-    // Add chance line
+    // Chance line
     const chanceY = toY(chance);
-    const chanceGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-0.9, chanceY, 0),
-      new THREE.Vector3(0.9, chanceY, 0),
-    ]);
-    const chanceMaterial = new THREE.LineDashedMaterial({
-      color: PALETTE.chance_line,
-      dashSize: 0.05,
-      gapSize: 0.03,
-      linewidth: 1,
-    });
-    const chanceLine = new THREE.Line(chanceGeometry, chanceMaterial);
-    chanceLine.computeLineDistances();
-    this.sparklineScene.add(chanceLine);
+    ctx.strokeStyle = PALETTE.chance_line;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(10, chanceY);
+    ctx.lineTo(width - 10, chanceY);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-    // Add axis lines
-    const axisGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-0.9, -0.7, 0),
-      new THREE.Vector3(0.9, -0.7, 0),
-      new THREE.Vector3(-0.9, -0.7, 0),
-      new THREE.Vector3(-0.9, 0.7, 0),
-    ]);
-    const axisMaterial = new THREE.LineBasicMaterial({
-      color: PALETTE.border,
-      linewidth: 1,
-    });
-    const axes = new THREE.LineSegments(axisGeometry, axisMaterial);
-    this.sparklineScene.add(axes);
+    // Chance label
+    ctx.fillStyle = PALETTE.chance_line;
+    ctx.font = "9px 'JetBrains Mono', monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("chance", 12, chanceY - 4);
 
-    // Animate
-    const animate = () => {
-      if (
-        !this.sparklineRenderer ||
-        !this.sparklineScene ||
-        !this.sparklineCamera
-      )
-        return;
-      this.sparklineRenderer.render(this.sparklineScene, this.sparklineCamera);
-      this.sparklineAnimationId = requestAnimationFrame(animate);
-    };
-    animate();
+    // Curve
+    const color = ARM_COLORS[data.coordinate.credit] || PALETTE.gradient;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    curve.forEach((point, i) => {
+      const x = toX(i);
+      const y = toY(point.val_acc);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Points
+    ctx.fillStyle = color;
+    curve.forEach((point, i) => {
+      const x = toX(i);
+      const y = toY(point.val_acc);
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Y-axis labels (min/max)
+    ctx.fillStyle = PALETTE.text_muted;
+    ctx.font = "9px 'JetBrains Mono', monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(yMax.toFixed(2), 8, 14);
+    ctx.fillText(yMin.toFixed(2), 8, height - 6);
+
+    // Store for cleanup
+    this.sparklineCanvas = canvas;
   }
 
   private stopSparkline(): void {
-    if (this.sparklineAnimationId) {
-      cancelAnimationFrame(this.sparklineAnimationId);
-      this.sparklineAnimationId = null;
+    if (this.sparklineCanvas) {
+      this.sparklineCanvas.remove();
+      this.sparklineCanvas = null;
     }
-    if (this.sparklineRenderer) {
-      this.sparklineRenderer.dispose();
-      this.sparklineRenderer = null;
-    }
-    this.sparklineScene = null;
-    this.sparklineCamera = null;
   }
 }
 

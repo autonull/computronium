@@ -224,6 +224,21 @@ export class Plotter implements Component {
       ">
         <span class="chart-title">${chart.title}</span>
         <div style="flex: 1;"></div>
+        <div class="chart-empty-hint" style="
+          display: none;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          font-size: 10px;
+          color: var(--text-muted);
+        ">
+          <span>No data yet</span>
+          <span style="color: var(--text-secondary);">→</span>
+          <span>Select a run from the legend</span>
+        </div>
         <button class="chart-download" style="
           padding: 3px 8px;
           background: var(--bg-secondary);
@@ -235,6 +250,23 @@ export class Plotter implements Component {
         ">PNG</button>
       </div>
       <div id="${chart.hostId}" style="flex: 1; position: relative; overflow: hidden;"></div>
+      <div class="chart-empty-state" style="
+        display: none;
+        position: absolute;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        padding: 24px;
+        text-align: center;
+        background: var(--bg-secondary);
+        border-radius: 0 0 8px 8px;
+      ">
+        <div class="empty-icon" style="font-size: 48px; opacity: 0.2;">${chart.glyph}</div>
+        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${chart.title}</div>
+        <div style="font-size: 11px; color: var(--text-secondary); max-width: 280px; line-height: 1.5;">${this.getEmptyHint(chart.id)}</div>
+      </div>
       <div class="chart-toolbar" style="
         padding: 6px 12px;
         border-top: 1px solid var(--border);
@@ -270,6 +302,20 @@ export class Plotter implements Component {
       chart.key,
     );
     return panel;
+  }
+
+  /** Context-aware empty state hints. */
+  private getEmptyHint(chartId: string): string {
+    switch (chartId) {
+      case "pareto":
+        return "Shows validation accuracy vs. speed for each measured cell. Pareto frontier cells are not dominated on both axes.";
+      case "ablation":
+        return "Shows how each credit arm performs when other axes are held fixed. Error bars = ±1 std dev. Dashed line = chance level.";
+      case "variability":
+        return "Shows seed-to-seed spread per credit arm. Box = IQR, line = median, whiskers = 1.5×IQR, dots = outliers. Dashed line = chance level.";
+      default:
+        return "Select a run from the legend to populate this chart.";
+    }
   }
 
   /** Show one of the charts: "pareto", "ablation" or "variability". */
@@ -318,21 +364,36 @@ export class Plotter implements Component {
   };
 
   private updateStatus(): void {
+    const hasData = this.records.length > 0;
     const counts = `${this.records.length} records | ${this.paretoFlags.filter((f) => f).length} Pareto`;
-    // The ablation chart is only about the arms that share every other
-    // axis; saying which ones is what makes its bars comparable.
     const fixed = this.ablationFixedAxes
       ? ` | fixed: ${this.ablationFixedAxes}`
       : "";
     for (const panel of this.chartPanels.values()) {
       const statusEl = panel.querySelector<HTMLElement>(".chart-status");
-      if (!statusEl) continue;
-      statusEl.textContent = counts + fixed;
-      statusEl.title = statusEl.textContent;
+      const emptyState = panel.querySelector<HTMLElement>(".chart-empty-state");
+      const emptyHint = panel.querySelector<HTMLElement>(".chart-empty-hint");
+      if (statusEl) {
+        statusEl.textContent = hasData ? counts + fixed : "No run selected";
+        statusEl.title = statusEl.textContent;
+      }
+      if (emptyState) {
+        emptyState.style.display = hasData ? "none" : "flex";
+      }
+      if (emptyHint) {
+        emptyHint.style.display = hasData ? "none" : "flex";
+      }
     }
   }
 
   private updatePlots(): void {
+    const hasData = this.records.length > 0;
+    for (const panel of this.chartPanels.values()) {
+      const emptyState = panel.querySelector<HTMLElement>(".chart-empty-state");
+      const emptyHint = panel.querySelector<HTMLElement>(".chart-empty-hint");
+      if (emptyState) emptyState.style.display = hasData ? "none" : "flex";
+      if (emptyHint) emptyHint.style.display = hasData ? "none" : "flex";
+    }
     if (this.paretoPlot) this.updateParetoPlot();
     if (this.ablationPlot) this.updateAblationPlot();
     if (this.variabilityPlot) this.updateVariabilityPlot();
