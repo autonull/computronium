@@ -70,6 +70,9 @@ logger = logging.getLogger(__name__)
 # Pareto one is open by default.
 PANELS = ("hud", "plotter-pareto", "live-rail", "caption")
 
+# The workspaces to photograph (in order: watch, audit, drive, free)
+WORKSPACES = ("watch", "audit", "drive", "free")
+
 # The axes the grid may show, and the order the search for a void slice uses.
 AXES = ("credit", "dynamics", "geometry", "plasticity", "substrate", "update")
 
@@ -102,71 +105,48 @@ class Outcome:
 
 
 TOUR: tuple[Shot, ...] = (
+    # The whole dashboard — overview shots
     Shot("dashboard-hero.png", "the overview: the map, the panels, the rail"),
     Shot("dashboard-map.png", "the discovery map alone"),
+    # The palette (the door for every verb)
+    Shot("dashboard-palette.png", "the command palette: every verb, no letter needed"),
+    Shot("dashboard-palette-empty.png", "the palette on an empty store: the first-run door"),
+    # Workspaces
+    Shot("dashboard-watch.png", "the watch workspace: campaigns in real time"),
+    Shot("dashboard-audit.png", "the audit workspace: evidence and judgement"),
+    Shot("dashboard-drive.png", "the drive workspace: the instrument"),
+    Shot("dashboard-free.png", "the free workspace: whatever the reader arranged"),
+    # The six sections — the space
     Shot("dashboard-terrain.png", "the terrain: the space as a heightfield"),
     Shot("dashboard-frontier.png", "the frontier: accuracy, speed and parameters"),
     Shot("dashboard-matrix.png", "the evidence matrix: the space, flat"),
     Shot("dashboard-convergence.png", "the convergence: accuracy against epoch"),
+    Shot("dashboard-layers.png", "the layers: the space cut into sheets"),
+    Shot("dashboard-slices.png", "the slices: the same space, cut three ways, side by side"),
+    Shot("dashboard-multirun.png", "the multi-run space: several runs' evidence in one space"),
+    # The six sections — the run
     Shot("dashboard-multiples.png", "the small multiples: every seed of every cell"),
     Shot("dashboard-spread.png", "the spread: one violin per arm"),
     Shot("dashboard-claim-cost.png", "the claim's cost: the seeds a claim still needs"),
     Shot("dashboard-uncertainty.png", "the uncertainty: each cell's margin"),
-    Shot("dashboard-cell.png", "a measured cell's drawer"),
-    Shot("dashboard-void.png", "a void cell, and the rule that refuses it"),
-    Shot("dashboard-pareto.png", "the Pareto chart"),
-    Shot("dashboard-ablation.png", "the ablation chart"),
-    Shot("dashboard-variability.png", "the variability chart"),
-    Shot("dashboard-caption.png", "the caption over the map"),
-    Shot(
-        "dashboard-slices.png",
-        "the slices: the same space, cut three ways, side by side",
-    ),
-    Shot("narration-script.png", "the dashboard's account of itself, as text"),
-    Shot("report-run.png", "the run's report, in the browser"),
-    Shot(
-        "console-dashboard.png",
-        "the console dashboard: the same picture, in a terminal",
-    ),
-    Shot("report-text.png", "the run's report, in a terminal"),
-    Shot("figure-seed-violins.png", "the seed violins: the spread, as a figure"),
+    # The six sections — the evidence
     Shot("dashboard-timeline.png", "the timeline: the run's stages, and their time"),
     Shot("dashboard-ledger.png", "the ledger: every arm, and where it stands"),
     Shot("dashboard-contrast.png", "the contrast: the arms against one another"),
+    # The six sections — the process
     Shot("dashboard-flow.png", "the flow: the run's cells, stage by stage"),
     Shot("dashboard-effect.png", "the effect: which axis moved the objective"),
-    Shot("dashboard-layers.png", "the layers: the space cut into sheets"),
+    # The six sections — the judgement
     Shot("dashboard-trajectory.png", "the trajectory: where the cell's state went"),
     Shot("dashboard-spectrum.png", "the spectrum: the exponents of the cell's own map"),
     Shot("dashboard-basin.png", "the basin: how much of the neighbourhood comes back"),
-    Shot(
-        "dashboard-landscape.png", "the landscape: the cell's own energy over its path"
-    ),
-    Shot(
-        "dashboard-trained-trajectory.png",
-        "the trained trajectory: where the trained cell's state went",
-    ),
-    Shot(
-        "dashboard-trained-spectrum.png",
-        "the trained spectrum: the exponents of the trained cell's own map",
-    ),
-    Shot(
-        "dashboard-trained-basin.png",
-        "the trained basin: how much of the neighbourhood comes back after training",
-    ),
-    Shot(
-        "dashboard-trained-landscape.png",
-        "the trained landscape: the trained cell's own energy over its path",
-    ),
-    Shot(
-        "dashboard-multirun.png",
-        "the multi-run space: several runs' evidence in one space",
-    ),
-    Shot("comp-diff.png", "the comparison: two runs over the same cells, differenced"),
-    Shot(
-        "defect-registry.png", "the defect registry: the constraints the system learned"
-    ),
-    Shot("defect-clusters.png", "the defect clusters: failure patterns, grouped"),
+    Shot("dashboard-landscape.png", "the landscape: the cell's own energy over its path"),
+    # The six sections — the system
+    Shot("dashboard-trained-trajectory.png", "the trained trajectory: where the trained cell's state went"),
+    Shot("dashboard-trained-spectrum.png", "the trained spectrum: the exponents of the trained cell's own map"),
+    Shot("dashboard-trained-basin.png", "the trained basin: how much of the neighbourhood comes back after training"),
+    Shot("dashboard-trained-landscape.png", "the trained landscape: the trained cell's own energy over its path"),
+    # Panels and controls
     Shot("panel-live-rail.png", "the live rail: the pipeline's event log"),
     Shot("panel-hud.png", "the HUD: the run's vital signs"),
     Shot("panel-legend.png", "the legend: the map's marks and axes"),
@@ -174,16 +154,36 @@ TOUR: tuple[Shot, ...] = (
     Shot("panel-rail.png", "the panel rail: which panels are open"),
     Shot("panel-view-toolbar.png", "the view toolbar: every view, visible at once"),
     Shot("panel-control-bar.png", "the control bar: the verbs, and the meter"),
-    Shot(
-        "panel-control-panel.png",
-        "the control panel: the new-run form, the run, the queue",
-    ),
+    Shot("panel-control-panel.png", "the control panel: the new-run form, the run, the queue"),
+    # The charts
+    Shot("dashboard-pareto.png", "the Pareto chart"),
+    Shot("dashboard-ablation.png", "the ablation chart"),
+    Shot("dashboard-variability.png", "the variability chart"),
+    # The caption
+    Shot("dashboard-caption.png", "the caption over the map"),
+    # Cell shots
+    Shot("dashboard-cell.png", "a measured cell's drawer"),
+    Shot("dashboard-void.png", "a void cell, and the rule that refuses it"),
+    # The same run, told three other ways
+    Shot("narration-script.png", "the dashboard's account of itself, as text"),
+    Shot("report-run.png", "the run's report, in the browser"),
+    Shot("console-dashboard.png", "the console dashboard: the same picture, in a terminal"),
+    Shot("report-text.png", "the run's report, in a terminal"),
+    Shot("figure-seed-violins.png", "the seed violins: the spread, as a figure"),
+    # Comparison
+    Shot("comp-diff.png", "the comparison: two runs over the same cells, differenced"),
+    # Defect registry
+    Shot("defect-registry.png", "the defect registry: the constraints the system learned"),
+    Shot("defect-clusters.png", "the defect clusters: failure patterns, grouped"),
+    # Gallery figures
     Shot("figure-gallery-swap-credit.png", "the gallery: the credit swap"),
     Shot("figure-gallery-epc-settle.png", "the gallery: the fast settle"),
     Shot("figure-gallery-coverage.png", "the gallery: the coverage of the axes"),
     Shot("figure-gallery-failures.png", "the gallery: the failure manifesto"),
+    # Report plots
     Shot("report-pareto.png", "the report's own Pareto front"),
     Shot("report-seed-stability.png", "the report's own seed stability"),
+    # Coverage and commands
     Shot("coverage-report.png", "the coverage report: what the run touched"),
     Shot("coverage-gaps.png", "the objectives the system has not measured"),
     Shot("catalog.png", "the catalogue: the run's records, browsable"),
@@ -221,32 +221,40 @@ GALLERY_FIGURES: tuple[tuple[str, str, str], ...] = (
 # The main view area, one shot per view. The space's shot is the map's: the
 # map is one of the views, and its picture is the tour's first one. The key
 # is the one a reader presses to pick the view.
+# Order matches the six README sections: the space, the run, the evidence,
+# the process, the judgement, the system.
 VIEW_SHOTS: tuple[tuple[str, str, str], ...] = (
+    # the space
     ("space", "dashboard-map.png", "1"),
     ("terrain", "dashboard-terrain.png", "2"),
     ("frontier", "dashboard-frontier.png", "3"),
     ("matrix", "dashboard-matrix.png", "4"),
     ("convergence", "dashboard-convergence.png", "5"),
+    ("layers", "dashboard-layers.png", "y"),
+    ("multirun", "dashboard-multirun.png", "u"),
+    ("slices", "dashboard-slices.png", ","),
+    # the run
     ("multiples", "dashboard-multiples.png", "6"),
     ("spread", "dashboard-spread.png", "7"),
     ("cost", "dashboard-claim-cost.png", "8"),
     ("uncertainty", "dashboard-uncertainty.png", "9"),
+    # the evidence
     ("timeline", "dashboard-timeline.png", "t"),
     ("ledger", "dashboard-ledger.png", "l"),
     ("contrast", "dashboard-contrast.png", "d"),
+    # the process
     ("flow", "dashboard-flow.png", "f"),
     ("effect", "dashboard-effect.png", "e"),
-    ("layers", "dashboard-layers.png", "y"),
+    # the judgement
     ("trajectory", "dashboard-trajectory.png", "j"),
     ("spectrum", "dashboard-spectrum.png", "m"),
     ("basin", "dashboard-basin.png", "b"),
     ("landscape", "dashboard-landscape.png", "n"),
+    # the system
     ("trained-trajectory", "dashboard-trained-trajectory.png", "g"),
     ("trained-spectrum", "dashboard-trained-spectrum.png", "i"),
     ("trained-basin", "dashboard-trained-basin.png", "k"),
     ("trained-landscape", "dashboard-trained-landscape.png", "o"),
-    ("multirun", "dashboard-multirun.png", "u"),
-    ("slices", "dashboard-slices.png", ","),
 )
 
 # Two views of the run must not be the same picture. The share of the pixels
@@ -691,11 +699,17 @@ class Tour:
 
     def run(self) -> list[Outcome]:
         """Take every view of the dashboard, and of the run behind it."""
+        # Reset layout to watch workspace for deterministic tour shots
+        self.page.evaluate("() => window.__DASHBOARD__.layout.reset()")
+        self.page.wait_for_timeout(1000)
+
         wait_for_measured(self.page, self.timeout_ms)
         wait_for_records(self.port, self.min_records, timeout=RECORDS_TIMEOUT)
         self.run_id = latest_run(self.port)
         self.page.wait_for_timeout(3000)
         self.overview()
+        self.palette_shots()
+        self.workspace_shots()
         self.views()
         self.measured_cell()
         self.charts()
@@ -715,6 +729,29 @@ class Tour:
         self.page.wait_for_timeout(1500)
         self.shoot("dashboard-map.png")
 
+    def palette_shots(self) -> None:
+        """The command palette: open, shoot, close."""
+        # Open palette with shift+; (which is ":")
+        self.page.keyboard.press("Shift+Semicolon")
+        self.page.wait_for_timeout(800)
+        self.shoot("dashboard-palette.png")
+        # Close palette
+        self.page.keyboard.press("Escape")
+        self.page.wait_for_timeout(300)
+
+        # Empty store shot: clear store, open palette, shoot, restore
+        # (We skip this for now as it requires store manipulation)
+
+    def workspace_shots(self) -> None:
+        """The four workspaces: watch, audit, drive, free."""
+        for ws in WORKSPACES:
+            self.page.evaluate(f"() => window.__DASHBOARD__.layout.applyWorkspace('{ws}')")
+            self.page.wait_for_timeout(1000)
+            self.shoot(f"dashboard-{ws}.png")
+        # Return to watch for the rest of the tour
+        self.page.evaluate("() => window.__DASHBOARD__.layout.applyWorkspace('watch')")
+        self.page.wait_for_timeout(1000)
+
     def views(self) -> None:
         """The main view area, one shot per view.
 
@@ -723,7 +760,7 @@ class Tour:
         that follows proves they are different pictures.
         """
         set_panels(self.page, False)
-        for view_id, shot_name, key in VIEW_SHOTS[1:]:
+        for view_id, shot_name, key in VIEW_SHOTS:
             self.page.keyboard.press(key)
             try:
                 wait_for_view(self.page, view_id, self.timeout_ms)

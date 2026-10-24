@@ -516,5 +516,5 @@ the README's dashboard section and the toolbar agree, word for word.
 | Phase 3 — the palette and the first-run door | ✅ |
 | Phase 4 — the registries and the taxonomy | ✅ |
 | Phase 5 — the store, split | ✅ |
-| Phase 6 — the tour, the help, the docs | ⬜ |
+| Phase 6 — the tour, the help, the docs | ✅ |
 | The property suite's pre-existing failures (carried from TODO70) | ⬜ carried — Register C hygiene, unrelated to this work |

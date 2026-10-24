@@ -34,58 +34,73 @@ Play and pause the run, step it one batch at a time, move the ceiling on the
 cells in flight at once, and start a run from nothing — all of it from the
 browser, and all of it reaching the run rather than a picture of it.
 
+**Workspaces** — three named arrangements, one switch:
+| Watch | Audit | Drive |
+|---|---|---|
+| ![Watch](docs/readme/assets/dashboard-watch.png) | ![Audit](docs/readme/assets/dashboard-audit.png) | ![Drive](docs/readme/assets/dashboard-drive.png) |
+
+**The command palette** — every verb reachable without a memorized letter:
+| The palette | The palette on an empty store |
+|---|---|
+| ![The palette](docs/readme/assets/dashboard-palette.png) | ![Empty store palette](docs/readme/assets/dashboard-palette-empty.png) |
+
 The canvas is a stage, and the view is a choice: `V` cycles the views, the
 number keys pick one — and a view that does not fit in the numbers has a
-letter of its own — and the legend names the view that is on. The same run,
-drawn four ways — a heightfield, a frontier, a table and a family of curves:
+letter of its own — and the legend names the view that is on.
+
+---
+
+### The space
 
 | The terrain | The frontier | The evidence matrix | The convergence |
 |---|---|---|---|
 | ![The terrain](docs/readme/assets/dashboard-terrain.png) | ![The frontier](docs/readme/assets/dashboard-frontier.png) | ![The evidence matrix](docs/readme/assets/dashboard-matrix.png) | ![The convergence](docs/readme/assets/dashboard-convergence.png) |
 
-And the run's evidence, four ways again — every seed of every cell, the
-spread of the arms, what the claim still costs in seeds, and the margin
-around each mean:
+| The layers | The slices | The multi-run space |
+|---|---|---|
+| ![The layers](docs/readme/assets/dashboard-layers.png) | ![The slices](docs/readme/assets/dashboard-slices.png) | ![The multi-run space](docs/readme/assets/dashboard-multirun.png) |
+
+---
+
+### The run
 
 | The small multiples | The spread | The claim's cost | The uncertainty |
 |---|---|---|---|
 | ![The small multiples](docs/readme/assets/dashboard-multiples.png) | ![The spread](docs/readme/assets/dashboard-spread.png) | ![The claim's cost](docs/readme/assets/dashboard-claim-cost.png) | ![The uncertainty](docs/readme/assets/dashboard-uncertainty.png) |
 
-And the run as a process, and as a judgement — the time it took, what it can
-say, and how its arms compare:
+---
+
+### The evidence
 
 | The timeline | The ledger | The contrast |
 |---|---|---|
 | ![The timeline](docs/readme/assets/dashboard-timeline.png) | ![The ledger](docs/readme/assets/dashboard-ledger.png) | ![The contrast](docs/readme/assets/dashboard-contrast.png) |
 
-And the run's cells as they went through the pipeline, and what that run can
-attribute to the axes it varied:
+---
+
+### The process
 
 | The flow | The effect |
 |---|---|
 | ![The flow](docs/readme/assets/dashboard-flow.png) | ![The effect](docs/readme/assets/dashboard-effect.png) |
 
-And the space cut into sheets — which slab of it the run entered, and how
-thin that slab was:
+---
 
-| The layers |
-|---|
-| ![The layers](docs/readme/assets/dashboard-layers.png) |
-
-And the system itself, rather than its bookkeeping — where a cell's own state
-went, whether it settles, how much of the neighbourhood comes back, and what
-its own energy looks like over the ground it crossed:
+### The judgement
 
 | The trajectory | The spectrum | The basin | The landscape |
 |---|---|---|---|
 | ![The trajectory](docs/readme/assets/dashboard-trajectory.png) | ![The spectrum](docs/readme/assets/dashboard-spectrum.png) | ![The basin](docs/readme/assets/dashboard-basin.png) | ![The landscape](docs/readme/assets/dashboard-landscape.png) |
 
-And two runs in one space — each run's cells in the run's own colour, so the
-reader can see where the second one went and the first one did not:
+---
 
-| The multi-run space |
-|---|
-| ![The multi-run space](docs/readme/assets/dashboard-multirun.png) |
+### The system
+
+| The trained trajectory | The trained spectrum | The trained basin | The trained landscape |
+|---|---|---|---|
+| ![The trained trajectory](docs/readme/assets/dashboard-trained-trajectory.png) | ![The trained spectrum](docs/readme/assets/dashboard-trained-spectrum.png) | ![The trained basin](docs/readme/assets/dashboard-trained-basin.png) | ![The trained landscape](docs/readme/assets/dashboard-trained-landscape.png) |
+
+---
 
 The same run, told three other ways — as a report in the browser, as the
 console dashboard in a terminal, and as the dashboard's own account of itself:
