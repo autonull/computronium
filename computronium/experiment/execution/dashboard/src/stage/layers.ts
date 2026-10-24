@@ -12,7 +12,7 @@ import { getSceneContext } from "../components/context.js";
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
-import { cellKey, mean, stageState } from "./state.js";
+import { cellKey, mean, stageState } from "./store.js";
 import { createTextSprite } from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -182,8 +182,7 @@ export class LayersView implements StageView {
           // stand out of.
           color.multiplyScalar(0.3);
         }
-        const target =
-          cell.status === "measured" ? measured : structure;
+        const target = cell.status === "measured" ? measured : structure;
         const targetColors =
           cell.status === "measured" ? measuredColors : structureColors;
         const half = CELL / 2;
@@ -258,9 +257,7 @@ export class LayersView implements StageView {
     sheets.forEach((sheet) => {
       sheet.cells.forEach((cell) => {
         if (cell.status !== "measured") return;
-        const color = new THREE.Color(
-          ARM_COLORS[cell.arm] || PALETTE.gradient,
-        );
+        const color = new THREE.Color(ARM_COLORS[cell.arm] || PALETTE.gradient);
         const geometry = new THREE.BoxGeometry(0.22, PIN_HEIGHT, 0.22);
         geometry.translate(0, PIN_HEIGHT / 2, 0);
         const material = new THREE.MeshStandardMaterial({
@@ -342,7 +339,11 @@ export class LayersView implements StageView {
     });
 
     const zSprite = createTextSprite(axes.z, 0.28, nameMaterial);
-    zSprite.position.set(-halfX - 0.85, sheets.length * LAYER_GAP * 0.5, -halfY);
+    zSprite.position.set(
+      -halfX - 0.85,
+      sheets.length * LAYER_GAP * 0.5,
+      -halfY,
+    );
     this.sceneGroup.add(zSprite);
 
     const xSprite = createTextSprite(axes.x, 0.28, nameMaterial);
@@ -381,7 +382,10 @@ export class LayersView implements StageView {
 }
 
 /** The quads of a sheet, as one geometry. */
-function quadGeometry(positions: number[], colors: number[]): THREE.BufferGeometry {
+function quadGeometry(
+  positions: number[],
+  colors: number[],
+): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute(
     "position",

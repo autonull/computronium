@@ -73,7 +73,9 @@ class CommandPalette {
     // Rebuild entries when layout/workspaces/cell selection changes
     this.unsubscribeLayout = getLayout().onChange(() => this.rebuildEntries());
     this.unsubscribePanels = panels.onChange(() => this.rebuildEntries());
-    this.unsubscribeCellDrawer = cellDrawer.onChange?.(() => this.rebuildEntries());
+    this.unsubscribeCellDrawer = cellDrawer.onChange?.(() =>
+      this.rebuildEntries(),
+    );
 
     // Initial build
     this.rebuildEntries();
@@ -197,7 +199,10 @@ class CommandPalette {
 
     this.input!.addEventListener("input", () => this.filter());
     this.input!.addEventListener("keydown", this.onInputKeyDown);
-    this.container!.querySelector(".palette-backdrop")!.addEventListener("click", () => this.close());
+    this.container!.querySelector(".palette-backdrop")!.addEventListener(
+      "click",
+      () => this.close(),
+    );
   }
 
   /** Rebuild all palette entries from current state. */
@@ -231,7 +236,9 @@ class CommandPalette {
       group: "the next question",
       hint: "⇧R",
       enabled: hasCellSelected,
-      disabledReason: hasCellSelected ? undefined : "No cell selected — click a cell on the map",
+      disabledReason: hasCellSelected
+        ? undefined
+        : "No cell selected — click a cell on the map",
       sortOrder: sortOrder++,
       run: () => {
         this.close();
@@ -246,7 +253,9 @@ class CommandPalette {
       group: "the next question",
       hint: "⇧P",
       enabled: hasCellSelected,
-      disabledReason: hasCellSelected ? undefined : "No cell selected — click a cell on the map",
+      disabledReason: hasCellSelected
+        ? undefined
+        : "No cell selected — click a cell on the map",
       sortOrder: sortOrder++,
       run: () => {
         this.close();
@@ -261,7 +270,9 @@ class CommandPalette {
       group: "the next question",
       hint: "⇧Q",
       enabled: hasCellSelected,
-      disabledReason: hasCellSelected ? undefined : "No cell selected — click a cell on the map",
+      disabledReason: hasCellSelected
+        ? undefined
+        : "No cell selected — click a cell on the map",
       sortOrder: sortOrder++,
       run: () => {
         this.close();
@@ -308,7 +319,9 @@ class CommandPalette {
           if (isReset) {
             getLayout().reset();
           } else {
-            getLayout().applyWorkspace(id as "watch" | "audit" | "drive" | "free");
+            getLayout().applyWorkspace(
+              id as "watch" | "audit" | "drive" | "free",
+            );
           }
         },
       });
@@ -334,7 +347,9 @@ class CommandPalette {
 
     // 4. PANELS
     for (const panel of panels.list()) {
-      const binding = BINDINGS.find((b) => b.id === `panel-${panel.id.replace("panel-", "")}`);
+      const binding = BINDINGS.find(
+        (b) => b.id === `panel-${panel.id.replace("panel-", "")}`,
+      );
       entries.push({
         id: `panel-${panel.id}`,
         label: panel.label,
@@ -356,9 +371,16 @@ class CommandPalette {
           id: binding.id,
           label: binding.label,
           group: binding.group === "Run Control" ? "verbs" : "general",
-          hint: binding.key ? binding.key === " " ? "Space" : binding.key : (binding.chord ?? ""),
+          hint: binding.key
+            ? binding.key === " "
+              ? "Space"
+              : binding.key
+            : (binding.chord ?? ""),
           enabled: binding.when ? this.checkWhen(binding.when) : true,
-          disabledReason: binding.when && !this.checkWhen(binding.when) ? this.whenReason(binding.when) : undefined,
+          disabledReason:
+            binding.when && !this.checkWhen(binding.when)
+              ? this.whenReason(binding.when)
+              : undefined,
           sortOrder: sortOrder++,
           run: () => {
             this.close();
@@ -465,7 +487,9 @@ class CommandPalette {
         color: var(--text-muted);
         font-size: 13px;
       `;
-      empty.textContent = this.input!.value ? "No matches" : "No commands available";
+      empty.textContent = this.input!.value
+        ? "No matches"
+        : "No commands available";
       this.list.appendChild(empty);
       this.updateCount(0);
       return;
@@ -493,7 +517,10 @@ class CommandPalette {
       }
 
       const item = document.createElement("div");
-      item.className = "palette-item" + (entry.enabled ? "" : " palette-item-disabled") + (i === this.selectedIndex ? " palette-item-selected" : "");
+      item.className =
+        "palette-item" +
+        (entry.enabled ? "" : " palette-item-disabled") +
+        (i === this.selectedIndex ? " palette-item-selected" : "");
       item.style.cssText = `
         display: flex;
         align-items: center;
@@ -512,7 +539,9 @@ class CommandPalette {
 
       item.innerHTML = `
         <span class="palette-item-label" style="flex: 1; min-width: 0; font-size: 13px; color: var(--text-primary);">${this.highlightMatch(entry.label)}</span>
-        ${entry.hint ? `<kbd class="palette-item-hint" style="
+        ${
+          entry.hint
+            ? `<kbd class="palette-item-hint" style="
           font-size: 10px;
           padding: 2px 6px;
           background: var(--bg);
@@ -522,12 +551,18 @@ class CommandPalette {
           font-family: 'JetBrains Mono', monospace;
           white-space: nowrap;
           flex-shrink: 0;
-        ">${this.escapeHtml(entry.hint)}</kbd>` : ""}
-        ${entry.disabledReason ? `<span class="palette-item-reason" style="
+        ">${this.escapeHtml(entry.hint)}</kbd>`
+            : ""
+        }
+        ${
+          entry.disabledReason
+            ? `<span class="palette-item-reason" style="
           font-size: 11px;
           color: var(--text-muted);
           flex-shrink: 0;
-        ">${this.escapeHtml(entry.disabledReason)}</span>` : ""}
+        ">${this.escapeHtml(entry.disabledReason)}</span>`
+            : ""
+        }
       `;
 
       if (entry.enabled) {
@@ -596,7 +631,10 @@ class CommandPalette {
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        this.selectedIndex = Math.min(this.selectedIndex + 1, this.filtered.length - 1);
+        this.selectedIndex = Math.min(
+          this.selectedIndex + 1,
+          this.filtered.length - 1,
+        );
         this.render();
         break;
       case "ArrowUp":
@@ -664,7 +702,7 @@ class CommandPalette {
   /** Set up focus trap within palette. */
   private setupFocusTrap(): void {
     const focusableElements = this.container!.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"]), .palette-item:not(.palette-item-disabled)'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"]), .palette-item:not(.palette-item-disabled)',
     );
 
     const firstElement = focusableElements[0];
@@ -687,7 +725,8 @@ class CommandPalette {
     };
 
     this.container!.addEventListener("keydown", handleTab);
-    this.focusTrapCleanup = () => this.container!.removeEventListener("keydown", handleTab);
+    this.focusTrapCleanup = () =>
+      this.container!.removeEventListener("keydown", handleTab);
   }
 
   /** Remove focus trap. */
@@ -701,7 +740,8 @@ class CommandPalette {
     const announcer = document.createElement("div");
     announcer.setAttribute("role", "status");
     announcer.setAttribute("aria-live", "polite");
-    announcer.style.cssText = "position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;";
+    announcer.style.cssText =
+      "position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;";
     announcer.textContent = message;
     document.body.appendChild(announcer);
     setTimeout(() => announcer.remove(), 1000);

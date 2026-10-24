@@ -16,7 +16,7 @@ import {
   stageState,
   varyingAxes,
   type CellAggregate,
-} from "./state.js";
+} from "./store.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 interface Interval {
@@ -116,7 +116,9 @@ export class UncertaintyView implements StageView {
 
     const highest = Math.max(
       chance,
-      ...intervals.map((interval) => Math.max(interval.upper, interval.threshold)),
+      ...intervals.map((interval) =>
+        Math.max(interval.upper, interval.threshold),
+      ),
     );
 
     const frame = drawRowFrame(ctx, area, {
@@ -188,8 +190,8 @@ export class UncertaintyView implements StageView {
     drawNote(
       ctx,
       area,
-      `the bar is ±${sigma}·SE · the tick is the threshold each cell has to clear`
-        + ` · a claim needs ${stageState.requiredSeeds} seeds per cell`,
+      `the bar is ±${sigma}·SE · the tick is the threshold each cell has to clear` +
+        ` · a claim needs ${stageState.requiredSeeds} seeds per cell`,
     );
 
     this.drawn = true;

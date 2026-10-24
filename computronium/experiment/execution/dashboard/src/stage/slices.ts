@@ -12,7 +12,7 @@
 import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
-import { cellKey, mean, stageState } from "./state.js";
+import { cellKey, mean, stageState } from "./store.js";
 import { wrapLabel } from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -191,11 +191,7 @@ export class SlicesView implements StageView {
       ctx.font = "600 13px 'JetBrains Mono', monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(
-        `${axes[cut.across]} × ${axes[cut.down]}`,
-        left,
-        top - 12,
-      );
+      ctx.fillText(`${axes[cut.across]} × ${axes[cut.down]}`, left, top - 12);
       ctx.fillStyle = PALETTE.text_muted;
       ctx.font = "11px 'JetBrains Mono', monospace";
       ctx.fillText(`${axes[cut.held]} collapsed`, left, top - 30);

@@ -10,7 +10,12 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { registry } from "./components/registry.js";
 import { TAB_KEYS } from "./keys.js";
-import { panels, registerDisplayPanel, setPanelHidden, getPanelElement } from "./panels.js";
+import {
+  panels,
+  registerDisplayPanel,
+  setPanelHidden,
+  getPanelElement,
+} from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
@@ -215,7 +220,8 @@ export class Plotter implements Component {
     }
 
     // Tooltip is attached to the first chart panel's body (or overlay)
-    const firstPanel = this.chartPanels.get("pareto") ?? this.chartPanels.values().next().value;
+    const firstPanel =
+      this.chartPanels.get("pareto") ?? this.chartPanels.values().next().value;
     this.tooltip = document.createElement("div");
     this.tooltip.id = "plotter-tooltip";
     this.tooltip.style.cssText = `
@@ -267,7 +273,10 @@ export class Plotter implements Component {
   };
 
   /** The run the reader picked, or the newest one. */
-  private onRunChanged = (_runId: string | null, metrics: RunMetrics | null): void => {
+  private onRunChanged = (
+    _runId: string | null,
+    metrics: RunMetrics | null,
+  ): void => {
     if (!metrics) return;
     this.records = metrics.records ?? [];
     this.paretoFlags = metrics.pareto ?? [];
@@ -315,7 +324,9 @@ export class Plotter implements Component {
 
   // ─── Pareto Plot (scatter: val_acc vs 1/walltime_s) ───
   private initParetoPlot(): void {
-    const panel = document.getElementById("plotter-pareto-chart") as HTMLDivElement;
+    const panel = document.getElementById(
+      "plotter-pareto-chart",
+    ) as HTMLDivElement;
     if (!panel) return;
 
     const opts: uPlot.Options = {
@@ -351,7 +362,9 @@ export class Plotter implements Component {
             fill: (u: uPlot, i: number) => {
               const recordIndex = this.paretoRecordIndices[i];
               const record =
-                recordIndex === undefined ? undefined : this.records[recordIndex];
+                recordIndex === undefined
+                  ? undefined
+                  : this.records[recordIndex];
               if (!record) return PALETTE.gradient;
               return ARM_COLORS[record.coordinate?.credit] || PALETTE.gradient;
             },
@@ -492,7 +505,12 @@ export class Plotter implements Component {
    * data keeps the placeholder's. The range is therefore stated explicitly,
    * after every set of data.
    */
-  private fitScale(plot: uPlot, key: "x" | "y", min: number, max: number): void {
+  private fitScale(
+    plot: uPlot,
+    key: "x" | "y",
+    min: number,
+    max: number,
+  ): void {
     if (!Number.isFinite(min) || !Number.isFinite(max)) return;
     if (min === max) {
       min -= 0.01;
@@ -504,7 +522,9 @@ export class Plotter implements Component {
 
   // ─── Ablation Plot (grouped bars) ───
   private initAblationPlot(): void {
-    const panel = document.getElementById("plotter-ablation-chart") as HTMLDivElement;
+    const panel = document.getElementById(
+      "plotter-ablation-chart",
+    ) as HTMLDivElement;
     if (!panel) return;
 
     const opts: uPlot.Options = {
@@ -616,7 +636,12 @@ export class Plotter implements Component {
       .join(", ");
 
     this.ablationPlot.setData([xData, yData]);
-    this.fitScale(this.ablationPlot, "x", -0.5, Math.max(xData.length - 0.5, 0.5));
+    this.fitScale(
+      this.ablationPlot,
+      "x",
+      -0.5,
+      Math.max(xData.length - 0.5, 0.5),
+    );
 
     const values = metricData.arms.flatMap((arm) => [
       arm.mean - arm.std,
@@ -819,7 +844,8 @@ export class Plotter implements Component {
       return;
     }
     const canvasRect = plot.ctx.canvas.getBoundingClientRect();
-    const panelEl = this.chartPanels.get("pareto") ?? this.chartPanels.values().next().value;
+    const panelEl =
+      this.chartPanels.get("pareto") ?? this.chartPanels.values().next().value;
     const panelRect = panelEl?.getBoundingClientRect();
     if (!panelRect) {
       this.hideTooltip();
@@ -881,7 +907,10 @@ export class Plotter implements Component {
   }
 
   /** The banded charts' tooltip names the arm and its spread. */
-  private showCategoryTooltip(plot: uPlot, kind: "ablation" | "variability"): void {
+  private showCategoryTooltip(
+    plot: uPlot,
+    kind: "ablation" | "variability",
+  ): void {
     const cursor = plot.cursor;
     if (!cursor || cursor.left == null || cursor.top == null) {
       this.hideTooltip();

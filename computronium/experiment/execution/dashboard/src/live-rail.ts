@@ -61,7 +61,9 @@ export class LiveRail implements Component {
     });
 
     this.logContainer = this.container.querySelector("#rail-log")!;
-    this.scrollHint = this.container.querySelector("#rail-scroll-hint") as HTMLElement;
+    this.scrollHint = this.container.querySelector(
+      "#rail-scroll-hint",
+    ) as HTMLElement;
 
     registerDisplayPanel(
       "live-rail",
@@ -157,7 +159,8 @@ export class LiveRail implements Component {
 
     // Update scroll hint
     if (this.scrollHint) {
-      const canScroll = this.logContainer!.scrollWidth > this.logContainer!.clientWidth;
+      const canScroll =
+        this.logContainer!.scrollWidth > this.logContainer!.clientWidth;
       this.scrollHint.style.opacity = canScroll ? "1" : "0";
     }
   }

@@ -2,7 +2,12 @@
 
 import { registry } from "./components/registry.js";
 import { PANEL_KEYS } from "./keys.js";
-import { panels, registerDisplayPanel, setPanelHidden, getPanelElement } from "./panels.js";
+import {
+  panels,
+  registerDisplayPanel,
+  setPanelHidden,
+  getPanelElement,
+} from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./colors.js";
@@ -201,7 +206,11 @@ export class HUD implements Component {
 
     const detail = this.modeChip.querySelector(".mode-detail");
     if (detail) {
-      detail.textContent = [run?.profile, (run?.tasks ?? []).join(", "), run?.fidelity]
+      detail.textContent = [
+        run?.profile,
+        (run?.tasks ?? []).join(", "),
+        run?.fidelity,
+      ]
         .filter(Boolean)
         .join(" · ");
     }
@@ -238,13 +247,17 @@ export class HUD implements Component {
   };
 
   /** The panel reads the run the reader is looking at. */
-  private onRunChanged = (_runId: string | null, metrics: RunMetrics | null): void => {
+  private onRunChanged = (
+    _runId: string | null,
+    metrics: RunMetrics | null,
+  ): void => {
     if (!metrics) return;
     this.resources = (metrics.resources ?? {}) as CampaignResources;
     if (typeof metrics.required_seeds === "number") {
       this.requiredSeeds = metrics.required_seeds;
     }
-    this.measuredSeeds = this.resources.seeds_per_arm ?? metrics.records?.length ?? 0;
+    this.measuredSeeds =
+      this.resources.seeds_per_arm ?? metrics.records?.length ?? 0;
     this.updateModeChip(metrics.run as RunStatus | undefined);
     this.updateSource(metrics.store);
     this.updateResourceRows();
@@ -257,7 +270,9 @@ export class HUD implements Component {
    * that does not know which it is looking at cannot tell a finished run
    * from a paused one.
    */
-  private updateSource(store: { source?: string; published_at?: string } | undefined): void {
+  private updateSource(
+    store: { source?: string; published_at?: string } | undefined,
+  ): void {
     if (!this.sourceValue) return;
     const source = store?.source;
     if (!source) {
@@ -269,9 +284,12 @@ export class HUD implements Component {
       const published = store?.published_at
         ? new Date(store.published_at).toLocaleTimeString()
         : "";
-      this.sourceValue.textContent = published ? `snapshot ${published}` : "snapshot";
+      this.sourceValue.textContent = published
+        ? `snapshot ${published}`
+        : "snapshot";
       this.sourceValue.style.color = "var(--insufficient)";
-      this.sourceValue.title = "The writer published this copy; it is as fresh as its last publish.";
+      this.sourceValue.title =
+        "The writer published this copy; it is as fresh as its last publish.";
       return;
     }
     this.sourceValue.textContent = "live";
@@ -330,17 +348,25 @@ export class HUD implements Component {
       return;
     }
     const missing = Math.max(0, this.requiredSeeds - this.measuredSeeds);
-    const progress = this.requiredSeeds > 0 ? this.measuredSeeds / this.requiredSeeds : 0;
-    this.claimValue.textContent = missing > 0 ? `${missing} more (${this.requiredSeeds} needed)` : `Ready (${this.requiredSeeds} met)`;
-    this.claimValue.style.color = missing > 0 ? "var(--insufficient)" : "var(--passed)";
+    const progress =
+      this.requiredSeeds > 0 ? this.measuredSeeds / this.requiredSeeds : 0;
+    this.claimValue.textContent =
+      missing > 0
+        ? `${missing} more (${this.requiredSeeds} needed)`
+        : `Ready (${this.requiredSeeds} met)`;
+    this.claimValue.style.color =
+      missing > 0 ? "var(--insufficient)" : "var(--passed)";
     this.claimFill.style.width = `${Math.min(100, progress * 100)}%`;
-    this.claimFill.style.background = missing > 0 ? "var(--insufficient)" : "var(--passed)";
+    this.claimFill.style.background =
+      missing > 0 ? "var(--insufficient)" : "var(--passed)";
   }
 
   private updateConnection(): void {
     if (!this.connectionPill) return;
     const dot = this.connectionPill.querySelector(".dot") as HTMLElement;
-    const label = this.connectionPill.querySelector("span:last-child") as HTMLElement;
+    const label = this.connectionPill.querySelector(
+      "span:last-child",
+    ) as HTMLElement;
     const color = this.connected ? "var(--ok)" : "var(--error)";
     dot.style.background = color;
     this.connectionPill.style.background = `${color}22`;

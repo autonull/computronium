@@ -12,7 +12,7 @@ import { getSceneContext } from "../components/context.js";
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
-import { cellKey, mean, stageState } from "./state.js";
+import { cellKey, mean, stageState } from "./store.js";
 import { createTextSprite } from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -287,11 +287,7 @@ export class TerrainView implements StageView {
     this.sceneGroup.add(zSprite);
   }
 
-  private frame(
-    columns: Column[],
-    xValues: string[],
-    yValues: string[],
-  ): void {
+  private frame(columns: Column[], xValues: string[], yValues: string[]): void {
     const context = getSceneContext();
     if (!context) return;
     if (columns.length === 0) return;

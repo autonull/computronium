@@ -29,14 +29,10 @@ import {
   stageState,
   stddev,
   type AxisSelection,
-  type StageChange,
-} from "./stage/state.js";
+} from "./stage/store.js";
+import type { StageChange } from "./stage/payloads.js";
 import { createTextSprite } from "./stage/sprites.js";
-import {
-  AXIS_NAMES,
-  type AxisName,
-  type CellData,
-} from "./cell-data.js";
+import { AXIS_NAMES, type AxisName, type CellData } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
 
 interface AxisMeta {
@@ -162,10 +158,18 @@ export class DiscoveryMap implements Component {
     const hasArms = arms.length > 0;
 
     // Toggle empty state
-    const emptyState = this.legendElement?.querySelector("#legend-empty-state") as HTMLElement;
-    const view = this.legendElement?.querySelector("#legend-view") as HTMLElement;
-    const armsBlock = this.legendElement?.querySelector("#legend-arms-block") as HTMLElement;
-    const axesBlock = this.legendElement?.querySelector("#legend-axes-block") as HTMLElement;
+    const emptyState = this.legendElement?.querySelector(
+      "#legend-empty-state",
+    ) as HTMLElement;
+    const view = this.legendElement?.querySelector(
+      "#legend-view",
+    ) as HTMLElement;
+    const armsBlock = this.legendElement?.querySelector(
+      "#legend-arms-block",
+    ) as HTMLElement;
+    const axesBlock = this.legendElement?.querySelector(
+      "#legend-axes-block",
+    ) as HTMLElement;
 
     if (emptyState) emptyState.style.display = hasSpace ? "none" : "flex";
     if (view) view.style.display = hasSpace ? "block" : "none";
@@ -173,7 +177,9 @@ export class DiscoveryMap implements Component {
     if (axesBlock) axesBlock.style.display = hasSpace ? "block" : "none";
 
     // Update cell count in title
-    const countEl = this.legendElement?.querySelector("#legend-cell-count") as HTMLElement;
+    const countEl = this.legendElement?.querySelector(
+      "#legend-cell-count",
+    ) as HTMLElement;
     if (countEl && space) {
       const counts = {
         measured: Array.from(stageState.aggregates.keys()).filter((key) =>
@@ -252,12 +258,15 @@ export class DiscoveryMap implements Component {
 
     // Coordinate chips
     const coordRow = document.createElement("div");
-    coordRow.style.cssText = "display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;";
+    coordRow.style.cssText =
+      "display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;";
     Object.entries(cell.coordinate)
       .filter(([, value]) => value)
       .forEach(([axis, value]) => {
         const isCredit = axis === "credit";
-        const color = isCredit ? (ARM_COLORS[value] || PALETTE.gradient) : "var(--text-secondary)";
+        const color = isCredit
+          ? ARM_COLORS[value] || PALETTE.gradient
+          : "var(--text-secondary)";
         const chip = document.createElement("span");
         chip.style.cssText = `
           padding: 2px 8px;
@@ -275,7 +284,8 @@ export class DiscoveryMap implements Component {
 
     // Status with icon
     const statusRow = document.createElement("div");
-    statusRow.style.cssText = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;";
+    statusRow.style.cssText =
+      "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;";
     const statusColors: Record<CellData["status"], string> = {
       measured: PALETTE.measured,
       legal: PALETTE.legal_unmeasured,
@@ -301,7 +311,8 @@ export class DiscoveryMap implements Component {
     if (cell.status === "measured" && cell.metrics) {
       const m = cell.metrics;
       const metricsRow = document.createElement("div");
-      metricsRow.style.cssText = "display: flex; gap: 16px; font-size: 11px; color: var(--text-secondary);";
+      metricsRow.style.cssText =
+        "display: flex; gap: 16px; font-size: 11px; color: var(--text-secondary);";
       const acc = m.val_acc ?? 0;
       const std = m.val_acc_std ?? 0;
       const seeds = m.n_seeds ?? 0;
@@ -318,7 +329,8 @@ export class DiscoveryMap implements Component {
     // Legal cell: show actionable hint
     if (cell.status === "legal") {
       const hint = document.createElement("div");
-      hint.style.cssText = "margin-top: 6px; padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px; font-size: 10px; color: var(--text-muted);";
+      hint.style.cssText =
+        "margin-top: 6px; padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px; font-size: 10px; color: var(--text-muted);";
       const seeds = cell.requiredSeeds ?? 0;
       hint.textContent = `Click to queue ${seeds} seeds →`;
       element.appendChild(hint);
@@ -327,7 +339,8 @@ export class DiscoveryMap implements Component {
     // Void cell: show reason
     if (cell.voidReason) {
       const reason = document.createElement("div");
-      reason.style.cssText = "margin-top: 6px; padding: 6px 8px; background: var(--void)11; border: 1px solid var(--void)44; border-radius: 4px; font-size: 10px; color: var(--void);";
+      reason.style.cssText =
+        "margin-top: 6px; padding: 6px 8px; background: var(--void)11; border: 1px solid var(--void)44; border-radius: 4px; font-size: 10px; color: var(--void);";
       reason.textContent = cell.voidReason;
       element.appendChild(reason);
     }
@@ -338,7 +351,10 @@ export class DiscoveryMap implements Component {
       this.pointerX + 16,
       window.innerWidth - box.width - 8,
     );
-    const top = Math.min(this.pointerY + 16, window.innerHeight - box.height - 8);
+    const top = Math.min(
+      this.pointerY + 16,
+      window.innerHeight - box.height - 8,
+    );
     element.style.left = `${Math.max(8, left)}px`;
     element.style.top = `${Math.max(8, top)}px`;
   }
@@ -409,9 +425,10 @@ export class DiscoveryMap implements Component {
 
   /** The run the grid shows, chosen by the reader. */
   private createRunPicker(): void {
-    const select = this.legendElement?.querySelector<HTMLSelectElement>(
-      "#legend-run-picker",
-    );
+    const select =
+      this.legendElement?.querySelector<HTMLSelectElement>(
+        "#legend-run-picker",
+      );
     if (!select) return;
 
     select.addEventListener("change", () => {
@@ -420,9 +437,10 @@ export class DiscoveryMap implements Component {
   }
 
   private updateRunPicker(): void {
-    const select = this.legendElement?.querySelector<HTMLSelectElement>(
-      "#legend-run-picker",
-    );
+    const select =
+      this.legendElement?.querySelector<HTMLSelectElement>(
+        "#legend-run-picker",
+      );
     const detail = this.legendElement?.querySelector("#legend-run");
     if (!select) return;
 
@@ -912,8 +930,10 @@ export class DiscoveryMap implements Component {
     if (!context?.controls) return;
     if (this.xValues.length === 0 || this.zValues.length === 0) return;
 
-    const halfX = ((this.xValues.length - 1) * this.spacing) / 2 + this.cellSize;
-    const halfZ = ((this.zValues.length - 1) * this.spacing) / 2 + this.cellSize;
+    const halfX =
+      ((this.xValues.length - 1) * this.spacing) / 2 + this.cellSize;
+    const halfZ =
+      ((this.zValues.length - 1) * this.spacing) / 2 + this.cellSize;
     const top = (this.yValues.length - 1) * this.spacing + this.cellSize;
     const front = halfZ + 1.8;
     const floor = -0.8;
@@ -965,7 +985,8 @@ export class DiscoveryMap implements Component {
     // canvas for the whole of the run.
     if (!metricsData?.run) return;
 
-    const runId = typeof data?.campaign_id === "string" ? data.campaign_id : null;
+    const runId =
+      typeof data?.campaign_id === "string" ? data.campaign_id : null;
     if (!runId) return;
 
     // The grid shows one run at a time. A store holds several — a run, and
@@ -1029,7 +1050,8 @@ export class DiscoveryMap implements Component {
     const target = this.pillarHeight(data);
     const previous = this.cellHeights.get(key) ?? 0;
     this.cellHeights.set(key, target);
-    newMesh.scale.y = target > 0 ? Math.min(1, Math.max(previous / target, 0.001)) : 1;
+    newMesh.scale.y =
+      target > 0 ? Math.min(1, Math.max(previous / target, 0.001)) : 1;
 
     if (isPareto) {
       // Add Pareto highlight ring
@@ -1165,17 +1187,17 @@ export class DiscoveryMap implements Component {
 
   /** The cell a point in the world belongs to. */
   private cellAt(point: THREE.Vector3): string | null {
-    const xIdx = Math.round(point.x / this.spacing + (this.xValues.length - 1) / 2);
+    const xIdx = Math.round(
+      point.x / this.spacing + (this.xValues.length - 1) / 2,
+    );
     const yIdx = Math.round(point.y / this.spacing);
-    const zIdx = Math.round(point.z / this.spacing + (this.zValues.length - 1) / 2);
+    const zIdx = Math.round(
+      point.z / this.spacing + (this.zValues.length - 1) / 2,
+    );
     if (xIdx < 0 || xIdx >= this.xValues.length) return null;
     if (yIdx < 0 || yIdx >= this.yValues.length) return null;
     if (zIdx < 0 || zIdx >= this.zValues.length) return null;
-    return cellKey(
-      this.xValues[xIdx],
-      this.yValues[yIdx],
-      this.zValues[zIdx],
-    );
+    return cellKey(this.xValues[xIdx], this.yValues[yIdx], this.zValues[zIdx]);
   }
 
   private highlightCell(key: string, highlight: boolean): void {
@@ -1184,7 +1206,8 @@ export class DiscoveryMap implements Component {
 
     const canvas = this.renderer?.domElement;
     if (canvas) {
-      canvas.style.cursor = highlight && this.isCellActionable(key) ? "pointer" : "grab";
+      canvas.style.cursor =
+        highlight && this.isCellActionable(key) ? "pointer" : "grab";
     }
 
     if (

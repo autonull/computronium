@@ -2,7 +2,11 @@
 
 import { registry } from "./components/registry.js";
 import { panels, registerPanel, closeButton } from "./panels.js";
-import { createPanelShell, getPanelElement, destroyPanelShell } from "./shell.js";
+import {
+  createPanelShell,
+  getPanelElement,
+  destroyPanelShell,
+} from "./shell.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
 import type { CellData } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
@@ -350,7 +354,8 @@ export class CellDrawer implements Component {
       '.drawer-btn[data-action="replicate"]',
     );
     if (replicate) {
-      replicate.textContent = data.status === "measured" ? "Queue Rest" : "Queue";
+      replicate.textContent =
+        data.status === "measured" ? "Queue Rest" : "Queue";
     }
 
     const note = content.querySelector("#drawer-action-note");
@@ -373,7 +378,8 @@ export class CellDrawer implements Component {
       }
       return `This cell has enough seeds for a claim. Preregister locks in the protocol for a confirmatory run.`;
     }
-    const outside = data.inDeclaration === false ? " (outside this run's declaration)" : "";
+    const outside =
+      data.inDeclaration === false ? " (outside this run's declaration)" : "";
     const seeds = data.requiredSeeds ?? 0;
     return `Queue measures this cell (${seeds} seeds). Adopt as Quest writes the question first, then queues a new confirming run.${outside}`;
   }
@@ -387,10 +393,7 @@ export class CellDrawer implements Component {
       : PALETTE.text_secondary;
   }
 
-  private async runAction(
-    action: string,
-    data: CellData,
-  ): Promise<void> {
+  private async runAction(action: string, data: CellData): Promise<void> {
     if (!data.runId) {
       this.setStatus("This cell belongs to no run yet.", true);
       return;
@@ -404,10 +407,11 @@ export class CellDrawer implements Component {
     });
     this.setStatus("Working…");
 
-    const thresholdInput = this.content?.querySelector<HTMLInputElement>(
-      "#drawer-threshold",
-    );
-    const threshold = thresholdInput?.value ? Number(thresholdInput.value) : null;
+    const thresholdInput =
+      this.content?.querySelector<HTMLInputElement>("#drawer-threshold");
+    const threshold = thresholdInput?.value
+      ? Number(thresholdInput.value)
+      : null;
     const body: Record<string, unknown> = { coordinate: data.coordinate };
     if (threshold !== null && Number.isFinite(threshold)) {
       body.threshold = threshold;
@@ -494,11 +498,16 @@ export class CellDrawer implements Component {
     const yMin = low - pad;
     const yMax = high + pad;
 
-    const toX = (i: number) => (i / (curve.length - 1 || 1)) * (width - 20) + 10;
-    const toY = (v: number) => height - 10 - ((v - yMin) / (yMax - yMin)) * (height - 20);
+    const toX = (i: number) =>
+      (i / (curve.length - 1 || 1)) * (width - 20) + 10;
+    const toY = (v: number) =>
+      height - 10 - ((v - yMin) / (yMax - yMin)) * (height - 20);
 
     // Background
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#0a0e14";
+    ctx.fillStyle =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--bg")
+        .trim() || "#0a0e14";
     ctx.fillRect(0, 0, width, height);
 
     // Chance line

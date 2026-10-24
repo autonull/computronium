@@ -22,7 +22,8 @@ import { PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
 import { createTextSprite } from "./sprites.js";
-import { cellKey, stageState, type MultiRunSpace, type StageChange } from "./state.js";
+import { cellKey, stageState } from "./store.js";
+import type { MultiRunSpace, StageChange } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 /** The colours the runs are told apart by. */
@@ -208,7 +209,8 @@ export class MultiRunView implements StageView {
     }
 
     this.clear();
-    const { tiles, blocks, xValues, yValues, zValues, labelled } = this.cells(space);
+    const { tiles, blocks, xValues, yValues, zValues, labelled } =
+      this.cells(space);
 
     this.addGround(tiles);
     this.addBlocks(blocks);
@@ -333,7 +335,12 @@ export class MultiRunView implements StageView {
     // and the reader is here to know where the runs went.
     xValues.forEach((value, index) => {
       if (!labelled.has(value)) return;
-      const sprite = createTextSprite(value, 0.26, valueMaterial, SPACING * 0.9);
+      const sprite = createTextSprite(
+        value,
+        0.26,
+        valueMaterial,
+        SPACING * 0.9,
+      );
       sprite.position.set(
         (index - (xValues.length - 1) / 2) * SPACING,
         -0.45,

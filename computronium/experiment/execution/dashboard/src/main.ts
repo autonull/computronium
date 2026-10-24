@@ -66,9 +66,11 @@ function showError(message: string): void {
     <button class="global-error-close">&times;</button>
   `;
   // Add click handler for close button
-  errorElement.querySelector(".global-error-close")?.addEventListener("click", () => {
-    errorElement.remove();
-  });
+  errorElement
+    .querySelector(".global-error-close")
+    ?.addEventListener("click", () => {
+      errorElement.remove();
+    });
   overlay.appendChild(errorElement);
   // Auto-dismiss after 10 seconds
   setTimeout(() => errorElement?.remove(), 10000);
@@ -120,9 +122,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   setAction("view-cycle", () => viewSwitcher.cycle());
 
-  setAction("cell-replicate", () => window.dispatchEvent(new CustomEvent("cell-action-replicate")));
-  setAction("cell-preregister", () => window.dispatchEvent(new CustomEvent("cell-action-preregister")));
-  setAction("cell-quest", () => window.dispatchEvent(new CustomEvent("cell-action-quest")));
+  setAction("cell-replicate", () =>
+    window.dispatchEvent(new CustomEvent("cell-action-replicate")),
+  );
+  setAction("cell-preregister", () =>
+    window.dispatchEvent(new CustomEvent("cell-action-preregister")),
+  );
+  setAction("cell-quest", () =>
+    window.dispatchEvent(new CustomEvent("cell-action-quest")),
+  );
 
   setAction("help", () => helpOverlay.toggle());
   setAction("escape", () => {
@@ -156,7 +164,8 @@ window.addEventListener("keydown", (event) => {
     const chord = `shift+${key}`;
     const binding = bindingsByChord.get(chord);
     if (binding) {
-      if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected()) return;
+      if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected())
+        return;
       binding.run();
       return;
     }
@@ -165,7 +174,8 @@ window.addEventListener("keydown", (event) => {
   // Direct key match
   const binding = bindingsByKey.get(key);
   if (binding) {
-    if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected()) return;
+    if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected())
+      return;
     binding.run();
     return;
   }
@@ -181,7 +191,9 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: "high-performance",
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(profile.software ? 1 : Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(
+  profile.software ? 1 : Math.min(window.devicePixelRatio, 2),
+);
 renderer.shadowMap.enabled = profile.shadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -305,7 +317,13 @@ requestAnimationFrame(animate);
   wsClient,
   router,
   bindings: {
-    list: () => allBindings().map((b) => ({ id: b.id, label: b.label, group: b.group, key: b.key })),
+    list: () =>
+      allBindings().map((b) => ({
+        id: b.id,
+        label: b.label,
+        group: b.group,
+        key: b.key,
+      })),
   },
 };
 

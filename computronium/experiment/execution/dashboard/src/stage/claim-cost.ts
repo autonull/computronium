@@ -15,7 +15,7 @@ import {
   stageState,
   varyingAxes,
   type CellAggregate,
-} from "./state.js";
+} from "./store.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 interface Cost {
@@ -165,7 +165,10 @@ export class ClaimCostView implements StageView {
 
     // The requirement, drawn across every row: the line the run has not reached.
     const requiredX = toX(stageState.requiredSeeds);
-    if (requiredX > frame.rect.x && requiredX < frame.rect.x + frame.rect.width) {
+    if (
+      requiredX > frame.rect.x &&
+      requiredX < frame.rect.x + frame.rect.width
+    ) {
       ctx.strokeStyle = PALETTE.text_secondary;
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 4]);

@@ -7,7 +7,8 @@ export interface WSMessage {
   [key: string]: any;
 }
 
-type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
+type ConnectionState =
+  "disconnected" | "connecting" | "connected" | "reconnecting";
 
 /**
  * MessageRouter - Components self-register handlers for message types.
@@ -252,7 +253,10 @@ export class WSClient {
   }
 
   private flushQueue(): void {
-    while (this.messageQueue.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
+    while (
+      this.messageQueue.length > 0 &&
+      this.ws?.readyState === WebSocket.OPEN
+    ) {
       const msg = this.messageQueue.shift()!;
       this.ws.send(JSON.stringify(msg));
     }
@@ -313,7 +317,11 @@ export class WSClient {
   }
 
   /** Get connection quality metrics. */
-  getConnectionQuality(): { state: ConnectionState; latency: number; missedPongs: number } {
+  getConnectionQuality(): {
+    state: ConnectionState;
+    latency: number;
+    missedPongs: number;
+  } {
     return {
       state: this.state,
       latency: this.lastPong ? Date.now() - this.lastPong : -1,

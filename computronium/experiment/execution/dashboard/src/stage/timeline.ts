@@ -11,7 +11,8 @@
 import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawRowFrame } from "./plot2d.js";
-import { stageState, type StageSpan } from "./state.js";
+import { stageState } from "./store.js";
+import type { StageSpan } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 export class TimelineView implements StageView {
@@ -102,7 +103,12 @@ export class TimelineView implements StageView {
       const from = toX(silence.from);
       const to = toX(silence.to);
       ctx.fillStyle = `${PALETTE.warn}18`;
-      ctx.fillRect(from, frame.rect.y, Math.max(2, to - from), frame.rect.height);
+      ctx.fillRect(
+        from,
+        frame.rect.y,
+        Math.max(2, to - from),
+        frame.rect.height,
+      );
     }
 
     // The connectors: the run's shape, from one stage to the next.
@@ -150,8 +156,8 @@ export class TimelineView implements StageView {
     drawNote(
       ctx,
       area,
-      `${spans.length} stages · ${timeline.events.length} events · `
-        + `${seconds.toFixed(1)} s from the first word to the last`,
+      `${spans.length} stages · ${timeline.events.length} events · ` +
+        `${seconds.toFixed(1)} s from the first word to the last`,
     );
 
     this.drawn = true;

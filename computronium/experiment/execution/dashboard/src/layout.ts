@@ -122,9 +122,9 @@ export const WORKSPACES: Record<string, Omit<WorkspaceData, "updatedAt">> = {
 export const DEFAULT_DOCK_PREFS: Record<string, DockPreference> = {
   "control-bar": { dock: "bottom", zIndex: 100, defaultOpen: true },
   "live-rail": { dock: "right", zIndex: 90, defaultOpen: true },
-  "caption": { dock: "bottom", zIndex: 80, defaultOpen: true },
-  "legend": { dock: "bottom", zIndex: 70, defaultOpen: true },
-  "hud": { dock: "top", zIndex: 60, defaultOpen: false },
+  caption: { dock: "bottom", zIndex: 80, defaultOpen: true },
+  legend: { dock: "bottom", zIndex: 70, defaultOpen: true },
+  hud: { dock: "top", zIndex: 60, defaultOpen: false },
   "plotter-pareto": { dock: "right", zIndex: 50, defaultOpen: true },
   "plotter-ablation": { dock: "right", zIndex: 40, defaultOpen: false },
   "plotter-variability": { dock: "right", zIndex: 30, defaultOpen: false },
@@ -152,11 +152,19 @@ export class LayoutManager {
 
     const overlay = document.getElementById("ui-overlay");
     if (!overlay) {
-      throw new Error("ui-overlay not found — layout must init after DOM ready");
+      throw new Error(
+        "ui-overlay not found — layout must init after DOM ready",
+      );
     }
 
     // Create dock containers
-    for (const dock of ["top", "bottom", "left", "right", "floating"] as Dock[]) {
+    for (const dock of [
+      "top",
+      "bottom",
+      "left",
+      "right",
+      "floating",
+    ] as Dock[]) {
       const element = document.createElement("div");
       element.id = `dock-${dock}`;
       element.className = `dock dock-${dock}`;
@@ -277,9 +285,14 @@ export class LayoutManager {
 
     // Insert at the correct order position
     const placementsInDock = this.getPlacementsInDock(dock);
-    const insertIndex = placementsInDock.findIndex((p) => p.order > this.panelPlacements.get(panelId)!.order);
+    const insertIndex = placementsInDock.findIndex(
+      (p) => p.order > this.panelPlacements.get(panelId)!.order,
+    );
     const children = Array.from(dockEl.children) as HTMLElement[];
-    const refEl = insertIndex >= 0 && insertIndex < children.length ? children[insertIndex] : null;
+    const refEl =
+      insertIndex >= 0 && insertIndex < children.length
+        ? children[insertIndex]
+        : null;
     dockEl.insertBefore(panelEl, refEl);
   }
 
@@ -475,7 +488,11 @@ export class LayoutManager {
       padding: 2px;
     `;
 
-    const workspaceInfos: Array<{ id: "watch" | "audit" | "drive"; label: string; title: string }> = [
+    const workspaceInfos: Array<{
+      id: "watch" | "audit" | "drive";
+      label: string;
+      title: string;
+    }> = [
       { id: "watch", label: "▦", title: "Watch — campaigns in real time" },
       { id: "audit", label: "▣", title: "Audit — evidence and judgement" },
       { id: "drive", label: "▸", title: "Drive — the instrument" },
@@ -527,8 +544,14 @@ export class LayoutManager {
       transition: all var(--motion-fast) var(--ease-out);
     `;
     resetBtn.addEventListener("click", () => this.reset());
-    resetBtn.addEventListener("mouseenter", () => (resetBtn.style.color = "var(--text-primary)"));
-    resetBtn.addEventListener("mouseleave", () => (resetBtn.style.color = "var(--text-muted)"));
+    resetBtn.addEventListener(
+      "mouseenter",
+      () => (resetBtn.style.color = "var(--text-primary)"),
+    );
+    resetBtn.addEventListener(
+      "mouseleave",
+      () => (resetBtn.style.color = "var(--text-muted)"),
+    );
     container.appendChild(resetBtn);
 
     return container;
@@ -536,12 +559,18 @@ export class LayoutManager {
 
   /** Refresh the switcher buttons' active state. */
   refreshSwitcher(container: HTMLElement): void {
-    for (const button of container.querySelectorAll<HTMLButtonElement>("button[data-workspace]")) {
+    for (const button of container.querySelectorAll<HTMLButtonElement>(
+      "button[data-workspace]",
+    )) {
       const ws = button.dataset.workspace as "watch" | "audit" | "drive";
       const isActive = this.currentWorkspace === ws;
       button.style.background = isActive ? "var(--bg-primary)" : "transparent";
-      button.style.color = isActive ? "var(--text-primary)" : "var(--text-secondary)";
-      button.style.border = isActive ? "1px solid var(--border-bright)" : "none";
+      button.style.color = isActive
+        ? "var(--text-primary)"
+        : "var(--text-secondary)";
+      button.style.border = isActive
+        ? "1px solid var(--border-bright)"
+        : "none";
     }
   }
 }
@@ -550,7 +579,10 @@ export class LayoutManager {
 export const layout = new LayoutManager();
 
 /** Register a panel with the layout manager (convenience for panel modules). */
-export function registerPanelLayout(panelId: string, preference?: Partial<DockPreference>): void {
+export function registerPanelLayout(
+  panelId: string,
+  preference?: Partial<DockPreference>,
+): void {
   const defaultPref = DEFAULT_DOCK_PREFS[panelId] ?? { dock: "floating" };
   layout.registerPanel(panelId, { ...defaultPref, ...preference });
 }

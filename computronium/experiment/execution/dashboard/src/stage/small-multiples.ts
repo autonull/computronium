@@ -15,7 +15,7 @@ import {
   stageState,
   varyingAxes,
   type CellAggregate,
-} from "./state.js";
+} from "./store.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 interface Panel {
@@ -136,10 +136,16 @@ export class SmallMultiplesView implements StageView {
 
       ctx.strokeStyle = PALETTE.border;
       ctx.lineWidth = 1;
-      ctx.strokeRect(plot.x + 0.5, plot.y + 0.5, plot.width - 1, plot.height - 1);
+      ctx.strokeRect(
+        plot.x + 0.5,
+        plot.y + 0.5,
+        plot.width - 1,
+        plot.height - 1,
+      );
 
       // The chance level, under every panel: what every seed is measured against.
-      const chanceY = plot.y + plot.height * (1 - (chance - yMin) / (yMax - yMin));
+      const chanceY =
+        plot.y + plot.height * (1 - (chance - yMin) / (yMax - yMin));
       ctx.strokeStyle = PALETTE.chance_line;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
@@ -155,8 +161,7 @@ export class SmallMultiplesView implements StageView {
         ctx.lineWidth = 1.8;
         ctx.beginPath();
         curve.forEach((point, pointIndex) => {
-          const x =
-            plot.x + (point.epoch / maxEpoch) * plot.width;
+          const x = plot.x + (point.epoch / maxEpoch) * plot.width;
           const y =
             plot.y + plot.height * (1 - (point.val_acc - yMin) / (yMax - yMin));
           if (pointIndex === 0) ctx.moveTo(x, y);
@@ -172,8 +177,7 @@ export class SmallMultiplesView implements StageView {
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
         [yMax, (yMax + yMin) / 2, yMin].forEach((tick) => {
-          const y =
-            plot.y + plot.height * (1 - (tick - yMin) / (yMax - yMin));
+          const y = plot.y + plot.height * (1 - (tick - yMin) / (yMax - yMin));
           ctx.fillText(tick.toFixed(2), plot.x - 6, y);
         });
       }
@@ -194,8 +198,8 @@ export class SmallMultiplesView implements StageView {
     drawNote(
       ctx,
       area,
-      `${panels.length} cells · ${seeds} seeds`
-        + ` · the dashed line is the chance level (${chance.toFixed(2)})`,
+      `${panels.length} cells · ${seeds} seeds` +
+        ` · the dashed line is the chance level (${chance.toFixed(2)})`,
     );
 
     this.drawn = true;

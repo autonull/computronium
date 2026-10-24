@@ -9,7 +9,7 @@
 import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
-import { cellKey, mean, stageState } from "./state.js";
+import { cellKey, mean, stageState } from "./store.js";
 import { wrapLabel } from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -212,7 +212,11 @@ export class MatrixView implements StageView {
         ctx.fillText(
           line,
           plot.x - 12,
-          plot.y + yi * cellHeight + cellHeight / 2 - (lines.length - 1) * 8 + index * 16,
+          plot.y +
+            yi * cellHeight +
+            cellHeight / 2 -
+            (lines.length - 1) * 8 +
+            index * 16,
         );
       });
     });

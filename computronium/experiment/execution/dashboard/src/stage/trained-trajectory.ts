@@ -17,7 +17,7 @@ import {
   scaleY,
 } from "./plot2d.js";
 import { rampColor } from "./ramp.js";
-import { stageState, type CellDynamics } from "./state.js";
+import { stageState, type CellDynamics } from "./store.js";
 import { registerView } from "./registry.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -30,11 +30,7 @@ function trainedDynamics(): CellDynamics | null {
 
 function trainedCellName(payload: CellDynamics): string {
   const coordinate = payload.cell?.coordinate ?? {};
-  return [
-    coordinate.geometry,
-    coordinate.dynamics,
-    coordinate.credit,
-  ]
+  return [coordinate.geometry, coordinate.dynamics, coordinate.credit]
     .filter((part) => typeof part === "string" && part.length > 0)
     .join(" · ");
 }
@@ -101,8 +97,8 @@ export class TrainedTrajectoryView implements StageView {
     const xMax = Math.max(...xs);
     const yMin = Math.min(...ys);
     const yMax = Math.max(...ys);
-    const xSpan = (xMax - xMin) || 1;
-    const ySpan = (yMax - yMin) || 1;
+    const xSpan = xMax - xMin || 1;
+    const ySpan = yMax - yMin || 1;
 
     const frame = drawFrame(ctx, area, {
       xMin: xMin - xSpan * pad,
@@ -120,7 +116,10 @@ export class TrainedTrajectoryView implements StageView {
       ctx.strokeStyle = rampColor(t);
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(scaleX(path[index - 1][0], frame), scaleY(path[index - 1][1], frame));
+      ctx.moveTo(
+        scaleX(path[index - 1][0], frame),
+        scaleY(path[index - 1][1], frame),
+      );
       ctx.lineTo(scaleX(path[index][0], frame), scaleY(path[index][1], frame));
       ctx.stroke();
     }
@@ -147,7 +146,7 @@ export class TrainedTrajectoryView implements StageView {
       const band = frame.rect.height * 0.16;
       const base = frame.rect.y + frame.rect.height - band * 0.5;
       const toY = (value: number): number =>
-        base - ((value - lowest) / ((highest - lowest) || 1)) * band * 0.5;
+        base - ((value - lowest) / (highest - lowest || 1)) * band * 0.5;
       ctx.strokeStyle = PALETTE.thermodynamic_contrast;
       ctx.lineWidth = 1.5;
       ctx.beginPath();

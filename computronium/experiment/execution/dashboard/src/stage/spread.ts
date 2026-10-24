@@ -9,7 +9,7 @@
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawCategoryFrame, drawNote } from "./plot2d.js";
-import { stageState } from "./state.js";
+import { stageState } from "./store.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 interface Arm {
@@ -128,7 +128,8 @@ export class SpreadView implements StageView {
     });
 
     // The chance level: what every arm is measured against.
-    const chanceY = frame.rect.y + frame.rect.height * (1 - chance / frame.yMax);
+    const chanceY =
+      frame.rect.y + frame.rect.height * (1 - chance / frame.yMax);
     ctx.strokeStyle = PALETTE.chance_line;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 5]);
@@ -197,7 +198,8 @@ export class SpreadView implements StageView {
       });
 
       // The mean, across the arm.
-      const mean = arm.values.reduce((sum, v) => sum + v, 0) / arm.values.length;
+      const mean =
+        arm.values.reduce((sum, v) => sum + v, 0) / arm.values.length;
       ctx.strokeStyle = PALETTE.text_primary;
       ctx.lineWidth = 1.5;
       ctx.beginPath();

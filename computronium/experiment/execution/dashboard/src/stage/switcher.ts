@@ -36,7 +36,8 @@ import "./trained-spectrum.js";
 import "./trained-trajectory.js";
 import "./trajectory.js";
 import "./uncertainty.js";
-import { stageState, type StageChange } from "./state.js";
+import { stageState } from "./store.js";
+import type { StageChange } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
 import type { Component } from "../components/registry.js";
 
@@ -140,10 +141,7 @@ export class ViewSwitcher implements Component {
   private onKeyDown = (event: KeyboardEvent): void => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target as HTMLElement | null;
-    if (
-      target &&
-      ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)
-    ) {
+    if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
       return;
     }
 
@@ -203,7 +201,8 @@ export class ViewSwitcher implements Component {
       punctuation.push(view.key);
     });
     const parts = ["V cycles"];
-    if (digits.length > 0) parts.push(`${digits[0]}–${digits[digits.length - 1]} pick`);
+    if (digits.length > 0)
+      parts.push(`${digits[0]}–${digits[digits.length - 1]} pick`);
     if (letters.length > 0) parts.push(`${letters.join(" ")} pick`);
     if (punctuation.length > 0) parts.push(`${punctuation.join(" ")} pick`);
     return parts.join(" · ");
@@ -245,14 +244,15 @@ export class ViewSwitcher implements Component {
     `;
 
     // Group views by the README's six sections
-    const groups: Array<{ group: string; label: string; views: StageView[] }> = [
-      { group: "the space", label: "The space", views: [] },
-      { group: "the run", label: "The run", views: [] },
-      { group: "the evidence", label: "The evidence", views: [] },
-      { group: "the process", label: "The process", views: [] },
-      { group: "the judgement", label: "The judgement", views: [] },
-      { group: "the system", label: "The system", views: [] },
-    ];
+    const groups: Array<{ group: string; label: string; views: StageView[] }> =
+      [
+        { group: "the space", label: "The space", views: [] },
+        { group: "the run", label: "The run", views: [] },
+        { group: "the evidence", label: "The evidence", views: [] },
+        { group: "the process", label: "The process", views: [] },
+        { group: "the judgement", label: "The judgement", views: [] },
+        { group: "the system", label: "The system", views: [] },
+      ];
 
     for (const view of this.views) {
       const g = groups.find((grp) => grp.group === view.group);
@@ -304,7 +304,8 @@ export class ViewSwitcher implements Component {
 
     const keys = document.createElement("div");
     keys.textContent = this.keyHint();
-    keys.style.cssText = "font-size: 10px; color: var(--text-muted); margin-top: 6px;";
+    keys.style.cssText =
+      "font-size: 10px; color: var(--text-muted); margin-top: 6px;";
     section.appendChild(keys);
 
     this.section = section;

@@ -7,7 +7,7 @@ import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawFrame, drawNote, scaleX, scaleY } from "./plot2d.js";
 import { rampColor } from "./ramp.js";
-import { stageState, type CellDynamics } from "./state.js";
+import { stageState, type CellDynamics } from "./store.js";
 import { registerView } from "./registry.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -20,11 +20,7 @@ function trainedDynamics(): CellDynamics | null {
 
 function trainedCellName(payload: CellDynamics): string {
   const coordinate = payload.cell?.coordinate ?? {};
-  return [
-    coordinate.geometry,
-    coordinate.dynamics,
-    coordinate.credit,
-  ]
+  return [coordinate.geometry, coordinate.dynamics, coordinate.credit]
     .filter((part) => typeof part === "string" && part.length > 0)
     .join(" · ");
 }
@@ -108,7 +104,7 @@ export class TrainedLandscapeView implements StageView {
     ctx.clip();
     grid.forEach((row, i) => {
       row.forEach((value, j) => {
-        const t = (value - lowest) / ((highest - lowest) || 1);
+        const t = (value - lowest) / (highest - lowest || 1);
         ctx.fillStyle = rampColor(1 - t);
         const x = frame.rect.x + cellWidth * i;
         const y = frame.rect.y + frame.rect.height - cellHeight * (j + 1);

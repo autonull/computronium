@@ -56,7 +56,11 @@ export function createTextSprite(
   context.textAlign = "center";
   context.textBaseline = "middle";
   lines.forEach((line, i) => {
-    context.fillText(line, canvas.width / 2, lineHeight * i + lineHeight / 2 + 8);
+    context.fillText(
+      line,
+      canvas.width / 2,
+      lineHeight * i + lineHeight / 2 + 8,
+    );
   });
 
   const texture = new THREE.CanvasTexture(canvas);

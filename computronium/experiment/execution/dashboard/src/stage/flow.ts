@@ -14,7 +14,8 @@
 import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
-import { stageState, type FlowStage } from "./state.js";
+import { stageState } from "./store.js";
+import type { FlowStage } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 /** The space between the title and the columns. */

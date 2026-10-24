@@ -24,7 +24,12 @@
 
 import { registry } from "./components/registry.js";
 import { CONTROL_KEYS } from "./keys.js";
-import { panels, registerDisplayPanel, setPanelHidden, closeButton } from "./panels.js";
+import {
+  panels,
+  registerDisplayPanel,
+  setPanelHidden,
+  closeButton,
+} from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { runSelection } from "./run-selection.js";
 import type { Component } from "./components/registry.js";
@@ -250,7 +255,11 @@ export class ControlPanel implements Component {
     if (!this.container) return;
     const headings = this.container.querySelectorAll("h4");
     for (const h of headings) {
-      if (h.textContent?.toLowerCase().includes(sectionId.toLowerCase().replace("-", " "))) {
+      if (
+        h.textContent
+          ?.toLowerCase()
+          .includes(sectionId.toLowerCase().replace("-", " "))
+      ) {
         h.scrollIntoView({ behavior: "smooth", block: "start" });
         // Briefly highlight
         h.style.transition = "background 0.3s ease";
@@ -326,7 +335,9 @@ export class ControlPanel implements Component {
 
   private bindEvents(): void {
     if (!this.container) return;
-    this.profileSelect?.addEventListener("change", () => this.renderProfileNote());
+    this.profileSelect?.addEventListener("change", () =>
+      this.renderProfileNote(),
+    );
     this.container
       .querySelector<HTMLButtonElement>(".start")!
       .addEventListener("click", () => void this.startRun());
@@ -436,7 +447,11 @@ export class ControlPanel implements Component {
       const response = await fetch("/api/control");
       const body = (await response.json()) as {
         control?: { paused: boolean; cancel: boolean };
-        status?: { stage: string; cells_done: number; in_flight: number } | null;
+        status?: {
+          stage: string;
+          cells_done: number;
+          in_flight: number;
+        } | null;
         readable: boolean;
         error: string | null;
       };
@@ -484,7 +499,9 @@ export class ControlPanel implements Component {
     this.profileNote.textContent = [
       profile.description,
       `fidelity ${profile.fidelity} · ${profile.n_seeds} seeds · ${profile.epochs} epochs`,
-      profile.budget_seconds ? `budget ${profile.budget_seconds}s` : "no budget",
+      profile.budget_seconds
+        ? `budget ${profile.budget_seconds}s`
+        : "no budget",
       `policy ${profile.policy}`,
       `axes ${profile.axes.map((a) => a.axis).join(", ") || "all"}`,
     ].join(" · ");
@@ -540,9 +557,12 @@ export class ControlPanel implements Component {
       ["run", run.run_id],
       ["status", String(run.status)],
       ["profile", String(declaration.profile ?? "—")],
-      ["tasks", (declaration.tasks as string[] ?? []).join(", ") || "—"],
+      ["tasks", ((declaration.tasks as string[]) ?? []).join(", ") || "—"],
       ["fidelity", String(declaration.fidelity ?? "—")],
-      ["objectives", (declaration.objectives as string[] ?? []).join(", ") || "—"],
+      [
+        "objectives",
+        ((declaration.objectives as string[]) ?? []).join(", ") || "—",
+      ],
       ["mode", String(declaration.mode ?? "—")],
       ["declared cells", String(declaration.declared_cells ?? "—")],
       ["records", String(run.records)],
@@ -592,8 +612,10 @@ export class ControlPanel implements Component {
   private async startRun(): Promise<void> {
     if (!this.profileSelect) return;
     const overrides: Record<string, unknown> = {};
-    if (this.seedsInput?.value) overrides.n_seeds = Number(this.seedsInput.value);
-    if (this.epochsInput?.value) overrides.epochs = Number(this.epochsInput.value);
+    if (this.seedsInput?.value)
+      overrides.n_seeds = Number(this.seedsInput.value);
+    if (this.epochsInput?.value)
+      overrides.epochs = Number(this.epochsInput.value);
     if (this.budgetInput?.value) {
       overrides.budget_seconds = Number(this.budgetInput.value);
     }
@@ -638,7 +660,9 @@ export class ControlPanel implements Component {
   }
 
   /** One of the three cell verbs, without a click in the 3D scene. */
-  private async cellAction(action: "replicate" | "preregister" | "quest"): Promise<void> {
+  private async cellAction(
+    action: "replicate" | "preregister" | "quest",
+  ): Promise<void> {
     const runId = this.currentRunId();
     if (!runId) {
       this.cellNote!.textContent = "no run is selected";
@@ -650,7 +674,10 @@ export class ControlPanel implements Component {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coordinate: this.cellCoordinate() }),
       });
-      const body = (await response.json()) as { error?: string; message?: string };
+      const body = (await response.json()) as {
+        error?: string;
+        message?: string;
+      };
       this.cellNote!.textContent =
         body.error ?? body.message ?? `${action} was refused`;
     } catch {
@@ -696,7 +723,10 @@ export class ControlPanel implements Component {
         what === "report"
           ? (body.report ?? "")
           : JSON.stringify(body.records ?? [], null, 2);
-      this.download(`${runId}-${endpoint}.${what === "report" ? "txt" : "json"}`, text);
+      this.download(
+        `${runId}-${endpoint}.${what === "report" ? "txt" : "json"}`,
+        text,
+      );
       this.exportNote!.textContent = `the ${what} was taken`;
     } catch {
       this.exportNote!.textContent = "the dashboard could not reach the server";

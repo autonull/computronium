@@ -9,7 +9,8 @@
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawRowFrame } from "./plot2d.js";
-import { stageState, type ContrastArm, type ContrastPair } from "./state.js";
+import { stageState } from "./store.js";
+import type { ContrastArm, ContrastPair } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 export class ContrastView implements StageView {
@@ -65,10 +66,11 @@ export class ContrastView implements StageView {
     const frame = drawRowFrame(ctx, area, {
       xMin: 0,
       xMax: highest * 1.15,
-      rows: contrast.pairs.map((pair: ContrastPair) => `${pair.a} vs ${pair.b}`),
+      rows: contrast.pairs.map(
+        (pair: ContrastPair) => `${pair.a} vs ${pair.b}`,
+      ),
       title: "The contrast",
-      subtitle:
-        `the ${contrast.axis} arms on ${contrast.metric}, and what separates them`,
+      subtitle: `the ${contrast.axis} arms on ${contrast.metric}, and what separates them`,
       xLabel: contrast.metric,
     });
 
@@ -82,12 +84,7 @@ export class ContrastView implements StageView {
 
       // The gap between the two arms, filled: the difference, as a distance.
       ctx.fillStyle = `${PALETTE.gradient}33`;
-      ctx.fillRect(
-        Math.min(left, right),
-        y - 11,
-        Math.abs(right - left),
-        22,
-      );
+      ctx.fillRect(Math.min(left, right), y - 11, Math.abs(right - left), 22);
 
       // The line between the two arms: the gap they share.
       ctx.strokeStyle = PALETTE.border_bright;
@@ -144,11 +141,11 @@ export class ContrastView implements StageView {
       ctx,
       area,
       test.tested
-        ? `the test ran: p=${test.p_value?.toFixed(4)} (alpha=${test.alpha})`
-          + ` · dz=${test.cohens_dz?.toFixed(2)}`
-          + ` · ${test.shared_cells} shared cells`
-        : `no test ran: ${test.shared_cells} shared cell`
-          + `${test.shared_cells === 1 ? "" : "s"}, ${test.required_cells} required`,
+        ? `the test ran: p=${test.p_value?.toFixed(4)} (alpha=${test.alpha})` +
+            ` · dz=${test.cohens_dz?.toFixed(2)}` +
+            ` · ${test.shared_cells} shared cells`
+        : `no test ran: ${test.shared_cells} shared cell` +
+            `${test.shared_cells === 1 ? "" : "s"}, ${test.required_cells} required`,
     );
 
     this.drawn = true;

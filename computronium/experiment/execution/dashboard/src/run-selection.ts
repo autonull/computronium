@@ -49,7 +49,10 @@ export interface GateThresholds {
   use_confirmation_seeds_for_l2: boolean;
 }
 
-export type RunListener = (runId: string | null, metrics: RunMetrics | null) => void;
+export type RunListener = (
+  runId: string | null,
+  metrics: RunMetrics | null,
+) => void;
 
 class RunSelection {
   private metricsByRun: Map<string, RunMetrics> = new Map();
@@ -93,7 +96,9 @@ class RunSelection {
   }
 
   private notify(): void {
-    this.listeners.forEach((listener) => listener(this.selectedRunId, this.selected));
+    this.listeners.forEach((listener) =>
+      listener(this.selectedRunId, this.selected),
+    );
   }
 
   /** The run that started last: the one in progress, when there is one. */

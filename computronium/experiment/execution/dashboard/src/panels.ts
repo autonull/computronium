@@ -106,7 +106,10 @@ export const panels = new PanelRegistry();
 export const HIDDEN_CLASS = "panel-hidden";
 
 /** Hide or show a panel element, keeping the display it was built with. */
-export function setPanelHidden(element: HTMLElement | null, hidden: boolean): void {
+export function setPanelHidden(
+  element: HTMLElement | null,
+  hidden: boolean,
+): void {
   if (!element) return;
   element.classList.toggle(HIDDEN_CLASS, hidden);
 }
@@ -227,7 +230,8 @@ export class PanelRail implements Component {
     const ids = panels.list().map((panel) => panel.id);
     const known = [...this.buttons.keys()];
     const changed =
-      ids.length !== known.length || ids.some((id, index) => id !== known[index]);
+      ids.length !== known.length ||
+      ids.some((id, index) => id !== known[index]);
     if (changed) {
       this.build();
       return;
@@ -242,8 +246,12 @@ export class PanelRail implements Component {
       if (!button) continue;
       const open = panel.isOpen();
       button.style.color = open ? "var(--text-primary)" : "var(--text-muted)";
-      button.style.borderColor = open ? "var(--border-bright)" : "var(--border)";
-      button.style.background = open ? "var(--bg-primary)" : "var(--bg-tertiary)";
+      button.style.borderColor = open
+        ? "var(--border-bright)"
+        : "var(--border)";
+      button.style.background = open
+        ? "var(--bg-primary)"
+        : "var(--bg-tertiary)";
     }
   }
 }

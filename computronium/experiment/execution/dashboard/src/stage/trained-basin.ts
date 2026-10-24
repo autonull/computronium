@@ -7,7 +7,7 @@ import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawFrame, drawNote, scaleX, scaleY } from "./plot2d.js";
 import { rampColor } from "./ramp.js";
-import { stageState, type CellDynamics } from "./state.js";
+import { stageState, type CellDynamics } from "./store.js";
 import { registerView } from "./registry.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -20,11 +20,7 @@ function trainedDynamics(): CellDynamics | null {
 
 function trainedCellName(payload: CellDynamics): string {
   const coordinate = payload.cell?.coordinate ?? {};
-  return [
-    coordinate.geometry,
-    coordinate.dynamics,
-    coordinate.credit,
-  ]
+  return [coordinate.geometry, coordinate.dynamics, coordinate.credit]
     .filter((part) => typeof part === "string" && part.length > 0)
     .join(" · ");
 }
@@ -84,10 +80,7 @@ export class TrainedBasinView implements StageView {
     const ctx = stageCanvas.begin();
     const area = stageCanvas.area();
     const paths = basin.paths;
-    const farthest = Math.max(
-      ...paths.flatMap((path) => path.distances),
-      1e-6,
-    );
+    const farthest = Math.max(...paths.flatMap((path) => path.distances), 1e-6);
 
     const frame = drawFrame(ctx, area, {
       xMin: 0,
@@ -120,7 +113,8 @@ export class TrainedBasinView implements StageView {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     basin.stability.forEach((share, index) => {
-      const x = frame.rect.x + (frame.rect.width / radii.length) * (index + 0.5);
+      const x =
+        frame.rect.x + (frame.rect.width / radii.length) * (index + 0.5);
       ctx.fillStyle = share > 0 ? PALETTE.ok : PALETTE.warn;
       ctx.fillText(`${Math.round(share * 100)}% back`, x, frame.rect.y + 12);
       ctx.fillStyle = PALETTE.text_secondary;

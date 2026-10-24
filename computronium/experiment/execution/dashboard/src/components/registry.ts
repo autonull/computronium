@@ -59,7 +59,9 @@ export class ComponentRegistry {
     const visit = (name: string): void => {
       if (visited.has(name)) return;
       if (visiting.has(name)) {
-        console.warn(`[ComponentRegistry] Circular dependency detected: ${name}`);
+        console.warn(
+          `[ComponentRegistry] Circular dependency detected: ${name}`,
+        );
         return;
       }
       visiting.add(name);
@@ -127,7 +129,9 @@ export class ComponentRegistry {
 
   /** Get all registered component names in init order. */
   list(): string[] {
-    return this.initOrder.length > 0 ? this.initOrder : Array.from(this.components.keys());
+    return this.initOrder.length > 0
+      ? this.initOrder
+      : Array.from(this.components.keys());
   }
 
   /** Run health checks on all components. */

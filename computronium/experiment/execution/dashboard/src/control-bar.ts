@@ -260,7 +260,9 @@ export class ControlBar implements Component {
     );
 
     // Listen for layout changes to refresh workspace switcher
-    this.layoutUnsubscribe = getLayout().onChange(() => this.refreshWorkspaceSwitcher());
+    this.layoutUnsubscribe = getLayout().onChange(() =>
+      this.refreshWorkspaceSwitcher(),
+    );
 
     this.timer = window.setInterval(() => {
       void this.poll();
@@ -278,7 +280,9 @@ export class ControlBar implements Component {
 
   private refreshWorkspaceSwitcher(): void {
     if (!this.workspaceSwitcherContainer) return;
-    const switcher = this.workspaceSwitcherContainer.querySelector(".workspace-switcher");
+    const switcher = this.workspaceSwitcherContainer.querySelector(
+      ".workspace-switcher",
+    );
     if (switcher) {
       getLayout().refreshSwitcher(switcher as HTMLElement);
     }
@@ -293,7 +297,8 @@ export class ControlBar implements Component {
     this.stepButton = verbs[1];
     this.stopButton = verbs[2];
 
-    this.slider = this.container.querySelector<HTMLInputElement>(".ceiling-slider");
+    this.slider =
+      this.container.querySelector<HTMLInputElement>(".ceiling-slider");
     this.ceilingValue = this.container.querySelector(".ceiling-value");
     this.levelFill = this.container.querySelector(".level-fill");
     this.levelText = this.container.querySelector(".level-text");
@@ -303,7 +308,9 @@ export class ControlBar implements Component {
     this.statusText = this.container.querySelector(".status-text");
 
     // Initialize workspace switcher
-    this.workspaceSwitcherContainer = this.container.querySelector(".workspace-switcher");
+    this.workspaceSwitcherContainer = this.container.querySelector(
+      ".workspace-switcher",
+    );
     if (this.workspaceSwitcherContainer) {
       const switcher = getLayout().buildWorkspaceSwitcher();
       this.workspaceSwitcherContainer.appendChild(switcher);
@@ -426,16 +433,12 @@ export class ControlBar implements Component {
 
     const reason = payload.readable
       ? ""
-      : payload.error ?? "the control plane could not be read";
+      : (payload.error ?? "the control plane could not be read");
     if (this.playButton) this.playButton.disabled = !payload.readable;
     if (this.playButton && reason) this.playButton.title = reason;
 
     if (this.slider) {
-      const max = Math.max(
-        1,
-        payload.machine?.cpu_count ?? 1,
-        ceiling || 1,
-      );
+      const max = Math.max(1, payload.machine?.cpu_count ?? 1, ceiling || 1);
       this.slider.max = String(max);
       this.slider.value = String(Math.max(1, ceiling || 1));
       this.slider.disabled = !payload.readable;
@@ -452,7 +455,8 @@ export class ControlBar implements Component {
       this.levelFill.style.width = `${fraction * 100}%`;
       // Color transitions: green when idle, amber when busy, red when saturated
       if (fraction === 0) this.levelFill.style.background = "var(--promoted)";
-      else if (fraction < 0.5) this.levelFill.style.background = "var(--promoted)";
+      else if (fraction < 0.5)
+        this.levelFill.style.background = "var(--promoted)";
       else if (fraction < 0.85) this.levelFill.style.background = "var(--warn)";
       else this.levelFill.style.background = "var(--error)";
     }
@@ -492,9 +496,7 @@ export class ControlBar implements Component {
 
     const ceiling = Math.max(
       1,
-      this.payload?.control.max_workers ??
-        this.payload?.status?.ceiling ??
-        1,
+      this.payload?.control.max_workers ?? this.payload?.status?.ceiling ?? 1,
     );
     const step = width / Math.max(1, TRACE_SAMPLES - 1);
     const offset = width - (this.samples.length - 1) * step;
@@ -554,7 +556,12 @@ export class ControlBar implements Component {
       // Level dot
       const levelY = height - Math.min(1, latest.level / ceiling) * height;
       const levelFrac = latest.level / ceiling;
-      ctx.fillStyle = levelFrac < 0.5 ? "var(--promoted)" : levelFrac < 0.85 ? "var(--warn)" : "var(--error)";
+      ctx.fillStyle =
+        levelFrac < 0.5
+          ? "var(--promoted)"
+          : levelFrac < 0.85
+            ? "var(--warn)"
+            : "var(--error)";
       ctx.beginPath();
       ctx.arc(x - 6, levelY, 2.5, 0, Math.PI * 2);
       ctx.fill();

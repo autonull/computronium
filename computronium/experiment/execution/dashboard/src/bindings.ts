@@ -43,24 +43,96 @@ export function getAction(id: string): (() => void) | undefined {
 /** All keyboard bindings, in precedence order (first match wins). */
 export const BINDINGS: Binding[] = [
   // Chart tabs — numbers first
-  { id: "chart-pareto", label: "Pareto frontier", group: "Charts", key: "p", run: () => actions["chart-pareto"]?.() },
-  { id: "chart-ablation", label: "Ablation chart", group: "Charts", key: "a", run: () => actions["chart-ablation"]?.() },
-  { id: "chart-variability", label: "Variability chart", group: "Charts", key: "s", run: () => actions["chart-variability"]?.() },
+  {
+    id: "chart-pareto",
+    label: "Pareto frontier",
+    group: "Charts",
+    key: "p",
+    run: () => actions["chart-pareto"]?.(),
+  },
+  {
+    id: "chart-ablation",
+    label: "Ablation chart",
+    group: "Charts",
+    key: "a",
+    run: () => actions["chart-ablation"]?.(),
+  },
+  {
+    id: "chart-variability",
+    label: "Variability chart",
+    group: "Charts",
+    key: "s",
+    run: () => actions["chart-variability"]?.(),
+  },
 
   // Control bar verbs
-  { id: "control-play", label: "Play / Pause", group: "Run Control", key: " ", run: () => actions["control-play"]?.() },
-  { id: "control-step", label: "Step one batch", group: "Run Control", key: "w", run: () => actions["control-step"]?.() },
-  { id: "control-stop", label: "Stop run", group: "Run Control", key: "x", run: () => actions["control-stop"]?.() },
-  { id: "control-panel", label: "Control panel", group: "Run Control", key: "z", run: () => actions["control-panel"]?.() },
+  {
+    id: "control-play",
+    label: "Play / Pause",
+    group: "Run Control",
+    key: " ",
+    run: () => actions["control-play"]?.(),
+  },
+  {
+    id: "control-step",
+    label: "Step one batch",
+    group: "Run Control",
+    key: "w",
+    run: () => actions["control-step"]?.(),
+  },
+  {
+    id: "control-stop",
+    label: "Stop run",
+    group: "Run Control",
+    key: "x",
+    run: () => actions["control-stop"]?.(),
+  },
+  {
+    id: "control-panel",
+    label: "Control panel",
+    group: "Run Control",
+    key: "z",
+    run: () => actions["control-panel"]?.(),
+  },
 
   // Panels
-  { id: "panel-hud", label: "Mission Control (HUD)", group: "Panels", key: "h", run: () => actions["panel-hud"]?.() },
-  { id: "panel-rail", label: "Live Rail", group: "Panels", key: "r", run: () => actions["panel-rail"]?.() },
-  { id: "panel-caption", label: "Caption", group: "Panels", key: "c", run: () => actions["panel-caption"]?.() },
-  { id: "panel-legend", label: "Legend", group: "Panels", key: "q", run: () => actions["panel-legend"]?.() },
+  {
+    id: "panel-hud",
+    label: "Mission Control (HUD)",
+    group: "Panels",
+    key: "h",
+    run: () => actions["panel-hud"]?.(),
+  },
+  {
+    id: "panel-rail",
+    label: "Live Rail",
+    group: "Panels",
+    key: "r",
+    run: () => actions["panel-rail"]?.(),
+  },
+  {
+    id: "panel-caption",
+    label: "Caption",
+    group: "Panels",
+    key: "c",
+    run: () => actions["panel-caption"]?.(),
+  },
+  {
+    id: "panel-legend",
+    label: "Legend",
+    group: "Panels",
+    key: "q",
+    run: () => actions["panel-legend"]?.(),
+  },
 
   // Stage views
-  { id: "view-cycle", label: "Cycle stage views", group: "Stage", key: "v", run: () => actions["view-cycle"]?.() },
+  {
+    id: "view-cycle",
+    label: "Cycle stage views",
+    group: "Stage",
+    key: "v",
+    run: () => actions["view-cycle"]?.(),
+  },
 
   // Cell actions (require a selected cell) — chords only, no direct keys
   {
@@ -89,8 +161,20 @@ export const BINDINGS: Binding[] = [
   },
 
   // General
-  { id: "help", label: "Show help", group: "General", chord: "shift+/", run: () => actions["help"]?.() },
-  { id: "escape", label: "Close drawer / dismiss", group: "General", key: "escape", run: () => actions["escape"]?.() },
+  {
+    id: "help",
+    label: "Show help",
+    group: "General",
+    chord: "shift+/",
+    run: () => actions["help"]?.(),
+  },
+  {
+    id: "escape",
+    label: "Close drawer / dismiss",
+    group: "General",
+    key: "escape",
+    run: () => actions["escape"]?.(),
+  },
 ];
 
 /** BINDINGS grouped by group, for the help overlay and palette. */

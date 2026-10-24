@@ -11,8 +11,12 @@ import { getSceneContext } from "../components/context.js";
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
-import { stageState } from "./state.js";
-import { createDotTexture, createRingSprite, createTextSprite } from "./sprites.js";
+import { stageState } from "./store.js";
+import {
+  createDotTexture,
+  createRingSprite,
+  createTextSprite,
+} from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 /** The size of the plot the points are drawn in. */

@@ -9,7 +9,7 @@
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawFrame, drawNote, scaleX, scaleY } from "./plot2d.js";
-import { stageState } from "./state.js";
+import { stageState } from "./store.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 interface ArmCurve {
@@ -138,7 +138,13 @@ export class ConvergenceView implements StageView {
       curve.points.forEach((point) => {
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(scaleX(point.epoch, frame), scaleY(point.val_acc, frame), 3, 0, Math.PI * 2);
+        ctx.arc(
+          scaleX(point.epoch, frame),
+          scaleY(point.val_acc, frame),
+          3,
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
       });
     });

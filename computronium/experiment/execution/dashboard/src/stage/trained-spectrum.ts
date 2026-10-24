@@ -14,7 +14,7 @@ import {
   scaleY,
 } from "./plot2d.js";
 import { rampColor } from "./ramp.js";
-import { stageState, type CellDynamics } from "./state.js";
+import { stageState, type CellDynamics } from "./store.js";
 import { registerView } from "./registry.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -27,11 +27,7 @@ function trainedDynamics(): CellDynamics | null {
 
 function trainedCellName(payload: CellDynamics): string {
   const coordinate = payload.cell?.coordinate ?? {};
-  return [
-    coordinate.geometry,
-    coordinate.dynamics,
-    coordinate.credit,
-  ]
+  return [coordinate.geometry, coordinate.dynamics, coordinate.credit]
     .filter((part) => typeof part === "string" && part.length > 0)
     .join(" · ");
 }
@@ -102,8 +98,8 @@ export class TrainedSpectrumView implements StageView {
       yLabel: "growth per step",
       title: "The trained spectrum",
       subtitle: trainedNote(payload),
-      xTicks: niceTicks(0, spectrum.length, 6).filter(
-        (tick) => Number.isInteger(tick),
+      xTicks: niceTicks(0, spectrum.length, 6).filter((tick) =>
+        Number.isInteger(tick),
       ),
     });
 
@@ -122,16 +118,17 @@ export class TrainedSpectrumView implements StageView {
       const y = scaleY(value, frame);
       const growing = value > 0;
       ctx.fillStyle = growing ? PALETTE.warn : PALETTE.ok;
-      ctx.fillRect(centre - width / 2, Math.min(y, zero), width, Math.abs(y - zero));
+      ctx.fillRect(
+        centre - width / 2,
+        Math.min(y, zero),
+        width,
+        Math.abs(y - zero),
+      );
       ctx.font = "11px 'JetBrains Mono', monospace";
       ctx.fillStyle = growing ? PALETTE.warn : PALETTE.ok;
       ctx.textAlign = "center";
       ctx.textBaseline = growing ? "bottom" : "top";
-      ctx.fillText(
-        formatTick(value),
-        centre,
-        growing ? y - 5 : y + 5,
-      );
+      ctx.fillText(formatTick(value), centre, growing ? y - 5 : y + 5);
     });
 
     drawNote(ctx, area, payload.verdict ?? "");

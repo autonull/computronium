@@ -80,9 +80,7 @@ export class StageCanvas {
   */
   area(): Area {
     const legend = document.getElementById("discovery-legend");
-    const legendRight = legend
-      ? legend.getBoundingClientRect().right
-      : 0;
+    const legendRight = legend ? legend.getBoundingClientRect().right : 0;
     const x = Math.max(40, legendRight + 24);
     const width = Math.max(200, window.innerWidth * FREE_WIDTH - x);
     return {

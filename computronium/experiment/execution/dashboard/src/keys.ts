@@ -49,5 +49,7 @@ export const RESERVED_KEYS: ReadonlySet<string> = _claimedKeys();
 
 /** The letters no key has taken. */
 export const FREE_KEYS: ReadonlySet<string> = new Set(
-  "abcdefghijklmnopqrstuvwxyz".split("").filter((key) => !RESERVED_KEYS.has(key)),
+  "abcdefghijklmnopqrstuvwxyz"
+    .split("")
+    .filter((key) => !RESERVED_KEYS.has(key)),
 );

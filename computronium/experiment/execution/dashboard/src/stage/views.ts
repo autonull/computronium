@@ -6,7 +6,7 @@
  * was copied rather than invented.
  */
 
-import type { StageChange } from "./state.js";
+import type { StageChange } from "./payloads.js";
 
 /** Logical group for the view toolbar — the README's six sections. */
 export type ViewGroup =

@@ -68,12 +68,7 @@ export class HelpOverlay implements Component {
 
   async init(): Promise<void> {
     this.createOverlay();
-    registerDisplayPanel(
-      "help-overlay",
-      "help",
-      "?",
-      () => this.container,
-    );
+    registerDisplayPanel("help-overlay", "help", "?", () => this.container);
     console.log("[HelpOverlay] Initialized");
   }
 
@@ -84,10 +79,17 @@ export class HelpOverlay implements Component {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     const target = event.target as HTMLElement | null;
-    const isInput = target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
+    const isInput =
+      target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
     if (isInput) return;
 
-    if (event.key === "?" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (
+      event.key === "?" &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
       event.preventDefault();
       this.toggle();
     }
@@ -117,11 +119,14 @@ export class HelpOverlay implements Component {
       transition: opacity 0.2s ease;
     `;
 
-    const groupsHtml = SHORTCUT_GROUPS.map((group) => `
+    const groupsHtml = SHORTCUT_GROUPS.map(
+      (group) => `
       <div style="margin-bottom: 24px;">
         <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 12px; text-transform: uppercase;">${group.title}</div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px;">
-          ${group.items.map((item) => `
+          ${group.items
+            .map(
+              (item) => `
             <div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px;">
               <kbd style="
                 font-family: 'JetBrains Mono', monospace;
@@ -137,10 +142,13 @@ export class HelpOverlay implements Component {
               ">${item.key}</kbd>
               <span style="font-size: 12px; color: var(--text-primary);">${item.description}</span>
             </div>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </div>
       </div>
-    `).join("");
+    `,
+    ).join("");
 
     this.container.innerHTML = `
       <div style="
@@ -209,7 +217,7 @@ export class HelpOverlay implements Component {
   private trapFocus(): void {
     if (!this.dialog) return;
     const focusable = this.dialog.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
     if (focusable.length === 0) return;
 

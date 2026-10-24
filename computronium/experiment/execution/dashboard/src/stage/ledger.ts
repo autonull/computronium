@@ -12,7 +12,8 @@
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
-import { stageState, type LedgerArm } from "./state.js";
+import { stageState } from "./store.js";
+import type { LedgerArm } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
 
 /** The colour a verdict is written in. */
@@ -86,7 +87,10 @@ export class LedgerView implements StageView {
     standings: Record<string, number>,
     arms: number,
   ): void {
-    const total = Object.values(standings).reduce((sum, count) => sum + count, 0);
+    const total = Object.values(standings).reduce(
+      (sum, count) => sum + count,
+      0,
+    );
     if (total === 0) return;
 
     const height = 18;
@@ -188,11 +192,7 @@ export class LedgerView implements StageView {
         ctx.textBaseline = "middle";
         ctx.fillStyle = PALETTE.text_secondary;
         ctx.fillText(`${axis.axis} = ${axis.value}`, area.x, y);
-        ctx.fillText(
-          `${axis.mean.toFixed(3)}`,
-          area.x + 300,
-          y,
-        );
+        ctx.fillText(`${axis.mean.toFixed(3)}`, area.x + 300, y);
         ctx.fillText(
           `${axis.n} measurements · ${axis.cells} cells`,
           area.x + 460,
@@ -222,20 +222,24 @@ export class LedgerView implements StageView {
 
     if (ledger.significance) {
       y += 14;
-      wrapText(ctx, `the report's test — ${ledger.significance}`, area.width).forEach(
-        (line) => {
-          ctx.fillStyle = PALETTE.text_secondary;
-          ctx.fillText(line, area.x, y);
-          y += 20;
-        },
-      );
+      wrapText(
+        ctx,
+        `the report's test — ${ledger.significance}`,
+        area.width,
+      ).forEach((line) => {
+        ctx.fillStyle = PALETTE.text_secondary;
+        ctx.fillText(line, area.x, y);
+        y += 20;
+      });
     }
 
     drawNote(
       ctx,
       area,
-      `a claim needs ${ledger.min_seeds} seeds per cell`
-        + (ledger.chance !== null ? ` · the chance level is ${ledger.chance.toFixed(3)}` : ""),
+      `a claim needs ${ledger.min_seeds} seeds per cell` +
+        (ledger.chance !== null
+          ? ` · the chance level is ${ledger.chance.toFixed(3)}`
+          : ""),
     );
 
     this.drawn = true;

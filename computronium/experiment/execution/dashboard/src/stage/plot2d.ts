@@ -71,10 +71,7 @@ export function formatTick(value: number): string {
   return value.toExponential(1);
 }
 
-export function scaleX(
-  value: number,
-  frame: PlotFrame,
-): number {
+export function scaleX(value: number, frame: PlotFrame): number {
   const span = frame.xMax - frame.xMin;
   if (span === 0) return frame.rect.x;
   return frame.rect.x + ((value - frame.xMin) / span) * frame.rect.width;
@@ -84,7 +81,9 @@ export function scaleY(value: number, frame: PlotFrame): number {
   const span = frame.yMax - frame.yMin;
   if (span === 0) return frame.rect.y + frame.rect.height;
   return (
-    frame.rect.y + frame.rect.height - ((value - frame.yMin) / span) * frame.rect.height
+    frame.rect.y +
+    frame.rect.height -
+    ((value - frame.yMin) / span) * frame.rect.height
   );
 }
 
@@ -160,7 +159,11 @@ export function drawFrame(
   ctx.fillStyle = PALETTE.text_secondary;
   ctx.font = "13px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
-  ctx.fillText(options.xLabel, rect.x + rect.width / 2, rect.y + rect.height + 46);
+  ctx.fillText(
+    options.xLabel,
+    rect.x + rect.width / 2,
+    rect.y + rect.height + 46,
+  );
   ctx.save();
   ctx.translate(rect.x - 56, rect.y + rect.height / 2);
   ctx.rotate(-Math.PI / 2);
@@ -406,7 +409,11 @@ export function drawRowFrame(
   ctx.font = "13px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(options.xLabel, rect.x + rect.width / 2, rect.y + rect.height + 46);
+  ctx.fillText(
+    options.xLabel,
+    rect.x + rect.width / 2,
+    rect.y + rect.height + 46,
+  );
 
   return frame;
 }

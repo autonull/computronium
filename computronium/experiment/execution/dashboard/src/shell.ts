@@ -39,7 +39,17 @@ export interface PanelShellOptions {
  *  Also registers with the layout manager for dock management.
  */
 export function createPanelShell(options: PanelShellOptions): HTMLElement {
-  const { id, title, glyph, key, body, className = "", dock, defaultOpen = false, onToggle } = options;
+  const {
+    id,
+    title,
+    glyph,
+    key,
+    body,
+    className = "",
+    dock,
+    defaultOpen = false,
+    onToggle,
+  } = options;
 
   const overlay = document.getElementById("ui-overlay");
   if (!overlay) {
