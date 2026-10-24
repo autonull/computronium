@@ -32,7 +32,7 @@ DASHBOARD_SRC = (
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
 
 # The punctuation a new view takes, in the order the plan offers it.
-PUNCTUATION = [",", ".", "/", ";", "'"]
+PUNCTUATION = [",", ".", "/", "'"]
 
 # The letters each group holds, as the plan records them.
 PANEL_LETTERS = {"h", "r", "c", "q"}
@@ -88,7 +88,11 @@ def _binding_table() -> list[tuple[str, str, str]]:
         key_match = re.search(r'key:\s*"([^"]+)"', obj)
         group_match = re.search(r'group:\s*"([^"]+)"', obj)
         if key_match and group_match:
-            bindings.append((binding_id, key_match.group(1).lower(), group_match.group(1)))
+            bindings.append((
+                binding_id,
+                key_match.group(1).lower(),
+                group_match.group(1),
+            ))
     return bindings
 
 
@@ -170,9 +174,21 @@ def test_no_letter_is_free() -> None:
 
 def test_each_group_holds_the_letters_the_plan_says() -> None:
     """The groups are named in the plan, and the plan is the lock."""
-    panel_keys = {key for _owner, key in _claims_from_bindings() if _owner.startswith("binding:panel-")}
-    chart_keys = {key for _owner, key in _claims_from_bindings() if _owner.startswith("binding:chart-")}
-    control_keys = {key for _owner, key in _claims_from_bindings() if _owner.startswith("binding:control-")}
+    panel_keys = {
+        key
+        for owner, key in _claims_from_bindings()
+        if owner.startswith("binding:panel-")
+    }
+    chart_keys = {
+        key
+        for owner, key in _claims_from_bindings()
+        if owner.startswith("binding:chart-")
+    }
+    control_keys = {
+        key
+        for owner, key in _claims_from_bindings()
+        if owner.startswith("binding:control-")
+    }
     view_keys = {key for _owner, key in _claims_from_views() if key in LETTERS}
 
     assert panel_keys == PANEL_LETTERS

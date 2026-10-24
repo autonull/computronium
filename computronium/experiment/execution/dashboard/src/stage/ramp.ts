@@ -5,7 +5,7 @@
     and the colours between them are the anchors mixed.
 */
 
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 
 function parseHex(hex: string): [number, number, number] {
   const value = hex.replace("#", "");

@@ -18,7 +18,7 @@ import { PANEL_KEYS } from "./keys.js";
 import { registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
-import { ARM_COLORS, PALETTE } from "./palette.js";
+import { ARM_COLORS, PALETTE } from "./colors.js";
 import { runSelection } from "./run-selection.js";
 import axisMetadata from "./axis-metadata.json";
 import { frameBox } from "./stage/framing.js";

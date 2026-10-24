@@ -6,7 +6,7 @@
     written under it, because a wide arm is why the claim is not made.
 */
 
-import { ARM_COLORS, PALETTE } from "../palette.js";
+import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawCategoryFrame, drawNote } from "./plot2d.js";
 import { stageState } from "./state.js";

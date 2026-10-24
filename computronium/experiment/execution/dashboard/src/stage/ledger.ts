@@ -9,7 +9,7 @@
     claims hides the hole the claims leave.
 */
 
-import { ARM_COLORS, PALETTE } from "../palette.js";
+import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
 import { stageState, type LedgerArm } from "./state.js";

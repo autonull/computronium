@@ -128,6 +128,11 @@ export class ViewSwitcher implements Component {
     this.section = null;
   }
 
+  /** Get all registered views (for palette). */
+  getViews(): StageView[] {
+    return this.views;
+  }
+
   /** The view that stands on the stage. */
   get activeId(): string | null {
     return this.active?.id ?? null;

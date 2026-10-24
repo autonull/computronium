@@ -3,7 +3,7 @@
 import { registry } from "./components/registry.js";
 import { panels, registerPanel, closeButton } from "./panels.js";
 import { createPanelShell, getPanelElement, destroyPanelShell } from "./shell.js";
-import { PALETTE, ARM_COLORS } from "./palette.js";
+import { PALETTE, ARM_COLORS } from "./colors.js";
 import type { CellData } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
 
@@ -20,6 +20,7 @@ export class CellDrawer implements Component {
   private content: HTMLElement | null = null;
   private sparklineCanvas: HTMLCanvasElement | null = null;
   private currentData: CellData | null = null;
+  private changeListeners = new Set<() => void>();
 
   async init(): Promise<void> {
     this.panel = createPanelShell({
@@ -78,8 +79,40 @@ export class CellDrawer implements Component {
     return this.currentData !== null;
   }
 
+  /** Subscribe to cell selection changes. */
+  onChange(listener: () => void): () => void {
+    this.changeListeners.add(listener);
+    return () => this.changeListeners.delete(listener);
+  }
+
+  private notifyChange(): void {
+    for (const listener of this.changeListeners) listener();
+  }
+
+  /** Replicate the currently selected cell (called from palette). */
+  replicateSelected(): void {
+    if (!this.currentData) return;
+    this.runAction("replicate", this.currentData);
+    this.notifyChange();
+  }
+
+  /** Preregister the currently selected cell (called from palette). */
+  preregisterSelected(): void {
+    if (!this.currentData) return;
+    this.runAction("preregister", this.currentData);
+    this.notifyChange();
+  }
+
+  /** Adopt the currently selected cell as a quest (called from palette). */
+  adoptQuestSelected(): void {
+    if (!this.currentData) return;
+    this.runAction("quest", this.currentData);
+    this.notifyChange();
+  }
+
   private onCellSelected = (event: CustomEvent): void => {
     this.show(event.detail);
+    this.notifyChange();
   };
 
   show(data: CellData): void {
@@ -93,6 +126,7 @@ export class CellDrawer implements Component {
     panels.toggle("cell-drawer"); // Closes via panel registry
     this.stopSparkline();
     this.currentData = null;
+    this.notifyChange();
   }
 
   private renderContent(data: CellData): void {

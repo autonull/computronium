@@ -13,7 +13,7 @@ import { TAB_KEYS } from "./keys.js";
 import { panels, registerDisplayPanel, setPanelHidden, getPanelElement } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
-import { PALETTE, ARM_COLORS } from "./palette.js";
+import { PALETTE, ARM_COLORS } from "./colors.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
 import type { Component } from "./components/registry.js";
 

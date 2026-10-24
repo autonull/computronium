@@ -8,7 +8,7 @@
     the run did nothing.
 */
 
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawRowFrame } from "./plot2d.js";
 import { stageState, type StageSpan } from "./state.js";

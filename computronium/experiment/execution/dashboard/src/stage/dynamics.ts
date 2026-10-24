@@ -13,7 +13,7 @@
     say so rather than drawing an empty stage.
 */
 
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import {
   drawFrame,

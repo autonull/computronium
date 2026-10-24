@@ -6,7 +6,7 @@
     "the claim cannot be made yet: too few seeds".
 */
 
-import { ARM_COLORS, PALETTE } from "../palette.js";
+import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawRowFrame } from "./plot2d.js";
 import {

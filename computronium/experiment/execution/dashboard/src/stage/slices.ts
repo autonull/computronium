@@ -9,7 +9,7 @@
     and the same cell is looked at three ways.
 */
 
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
 import { cellKey, mean, stageState } from "./state.js";

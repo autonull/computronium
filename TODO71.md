@@ -513,7 +513,7 @@ the README's dashboard section and the toolbar agree, word for word.
 | Phase 0 — the binding layer | ✅ |
 | Phase 1 — the panel shell | ✅ |
 | Phase 2 — the layout grammar and the workspaces | ✅ |
-| Phase 3 — the palette and the first-run door | ⬜ |
+| Phase 3 — the palette and the first-run door | ✅ |
 | Phase 4 — the registries and the taxonomy | ⬜ |
 | Phase 5 — the store, split | ⬜ |
 | Phase 6 — the tour, the help, the docs | ⬜ |

@@ -16,7 +16,7 @@ import { PANEL_KEYS } from "./keys.js";
 import { panels, registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
-import { PALETTE } from "./palette.js";
+import { PALETTE } from "./colors.js";
 import type { Component } from "./components/registry.js";
 
 interface NarrationFrame {

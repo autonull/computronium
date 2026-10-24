@@ -6,7 +6,7 @@
     and the records are already on the stage.
 */
 
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
 import { cellKey, mean, stageState } from "./state.js";

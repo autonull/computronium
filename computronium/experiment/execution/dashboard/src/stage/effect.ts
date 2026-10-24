@@ -8,7 +8,7 @@
     run is big enough to attribute anything at all.
 */
 
-import { ARM_COLORS, PALETTE } from "../palette.js";
+import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawCategoryFrame, drawNote } from "./plot2d.js";
 import { stageState, type AttributionArm, type AttributionAxis } from "./state.js";

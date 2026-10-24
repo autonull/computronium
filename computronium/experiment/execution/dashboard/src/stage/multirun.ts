@@ -18,7 +18,7 @@
 
 import * as THREE from "three";
 import { getSceneContext } from "../components/context.js";
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
 import { createTextSprite } from "./sprites.js";

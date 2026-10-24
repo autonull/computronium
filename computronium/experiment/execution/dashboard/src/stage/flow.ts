@@ -11,7 +11,7 @@
     the declared space.
 */
 
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
 import { stageState, type FlowStage } from "./state.js";

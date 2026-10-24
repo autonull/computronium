@@ -5,7 +5,7 @@ import { PANEL_KEYS } from "./keys.js";
 import { panels, registerDisplayPanel, setPanelHidden, getPanelElement } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { router, wsClient } from "./ws-client.js";
-import { PALETTE } from "./palette.js";
+import { PALETTE } from "./colors.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
 import type { Component } from "./components/registry.js";
 

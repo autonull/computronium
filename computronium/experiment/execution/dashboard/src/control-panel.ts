@@ -245,6 +245,22 @@ export class ControlPanel implements Component {
   private cellNote: HTMLElement | null = null;
   private exportNote: HTMLElement | null = null;
 
+  /** Scroll a section into view (for palette deep links). */
+  showSection(sectionId: string): void {
+    if (!this.container) return;
+    const headings = this.container.querySelectorAll("h4");
+    for (const h of headings) {
+      if (h.textContent?.toLowerCase().includes(sectionId.toLowerCase().replace("-", " "))) {
+        h.scrollIntoView({ behavior: "smooth", block: "start" });
+        // Briefly highlight
+        h.style.transition = "background 0.3s ease";
+        h.style.background = "var(--gradient)22";
+        setTimeout(() => (h.style.background = ""), 800);
+        break;
+      }
+    }
+  }
+
   async init(): Promise<void> {
     this.container = createPanelShell({
       id: "control-panel",

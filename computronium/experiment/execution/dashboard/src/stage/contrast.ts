@@ -6,7 +6,7 @@
     difference, but it is not yet a finding.
 */
 
-import { ARM_COLORS, PALETTE } from "../palette.js";
+import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawRowFrame } from "./plot2d.js";
 import { stageState, type ContrastArm, type ContrastPair } from "./state.js";

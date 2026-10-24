@@ -5,7 +5,7 @@
     system rather than two drawings.
 */
 
-import { PALETTE } from "../palette.js";
+import { PALETTE } from "../colors.js";
 import { wrapLabel } from "./sprites.js";
 import type { Area } from "./canvas2d.js";
 

@@ -39,8 +39,10 @@ export const CYCLE_KEY = _cycleKey();
     the next view takes a punctuation key — and the list that says which
     lives here, beside the others, rather than in a plan that will be
     forgotten.
+
+    Note: `;` is reserved for the command palette (opened via shift+; = `:`).
 */
-export const PUNCTUATION_KEYS: readonly string[] = [",", ".", "/", ";", "'"];
+export const PUNCTUATION_KEYS: readonly string[] = [",", ".", "/", "'"];
 
 /** Every key that belongs to something else (derived from bindings + views). */
 export const RESERVED_KEYS: ReadonlySet<string> = _claimedKeys();

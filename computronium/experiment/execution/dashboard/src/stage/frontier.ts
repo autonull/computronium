@@ -8,7 +8,7 @@
 
 import * as THREE from "three";
 import { getSceneContext } from "../components/context.js";
-import { ARM_COLORS, PALETTE } from "../palette.js";
+import { ARM_COLORS, PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
 import { stageState } from "./state.js";

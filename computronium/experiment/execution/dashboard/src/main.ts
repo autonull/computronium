@@ -15,7 +15,7 @@ import { caption } from "./caption.js";
 import { hud } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
 import { helpOverlay } from "./help-overlay.js";
-import { PALETTE } from "./palette.js";
+import { initPalette, palette } from "./palette.js";
 import { panels } from "./panels.js";
 import { layout } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
@@ -100,6 +100,9 @@ wsClient.waitForConnection(15000).then((connected) => {
 document.addEventListener("DOMContentLoaded", async () => {
   // Initialize layout manager first (sets up docks, restores workspace)
   await layout.init();
+
+  // Initialize command palette
+  await initPalette();
 
   setAction("chart-pareto", () => plotter.showTab("pareto"));
   setAction("chart-ablation", () => plotter.showTab("ablation"));
@@ -298,6 +301,7 @@ requestAnimationFrame(animate);
   controlPanel,
   panels,
   layout,
+  palette,
   wsClient,
   router,
   bindings: {

@@ -6,7 +6,7 @@
     can see which cells are steady and which are a toss of the coin.
 */
 
-import { ARM_COLORS, PALETTE } from "../palette.js";
+import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle } from "./plot2d.js";
 import {
