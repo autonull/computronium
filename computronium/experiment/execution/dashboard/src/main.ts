@@ -15,9 +15,10 @@ import { hud } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
 import { helpOverlay } from "./help-overlay.js";
 import { PALETTE } from "./palette.js";
-import { CONTROL_KEYS, TAB_KEYS, PANEL_KEYS } from "./keys.js";
 import { panels } from "./panels.js";
+import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { detectRenderProfile } from "./render-profile.js";
+import type { Binding } from "./bindings.js";
 
 // Global error handler
 window.addEventListener("error", (event) => {
@@ -93,83 +94,73 @@ wsClient.waitForConnection(15000).then((connected) => {
 // Components self-register with the registry on import; the registry
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
-// Keyboard shortcuts: charts, panels, control bar, and global actions.
-// The charts are picked by letters; panels by their own; control bar by verbs.
-const TAB_BY_KEY = new Map<string, string>(
-  Object.entries(TAB_KEYS).map(([name, key]) => [key, name]),
-);
+// Wire binding actions after components initialize
+document.addEventListener("DOMContentLoaded", () => {
+  setAction("chart-pareto", () => plotter.showTab("pareto"));
+  setAction("chart-ablation", () => plotter.showTab("ablation"));
+  setAction("chart-variability", () => plotter.showTab("variability"));
 
-// Build panel key map
-const PANEL_BY_KEY = new Map<string, string>(
-  Object.entries(PANEL_KEYS).map(([name, key]) => [key, name]),
-);
+  setAction("control-play", () => controlBar.togglePlay());
+  setAction("control-step", () => controlBar.step());
+  setAction("control-stop", () => controlBar.stop());
+  setAction("control-panel", () => panels.toggle("control-panel"));
+
+  setAction("panel-hud", () => panels.toggle("hud"));
+  setAction("panel-rail", () => panels.toggle("live-rail"));
+  setAction("panel-caption", () => panels.toggle("caption"));
+  setAction("panel-legend", () => panels.toggle("legend"));
+
+  setAction("view-cycle", () => viewSwitcher.cycle());
+
+  setAction("cell-replicate", () => window.dispatchEvent(new CustomEvent("cell-action-replicate")));
+  setAction("cell-preregister", () => window.dispatchEvent(new CustomEvent("cell-action-preregister")));
+  setAction("cell-quest", () => window.dispatchEvent(new CustomEvent("cell-action-quest")));
+
+  setAction("help", () => helpOverlay.toggle());
+  setAction("escape", () => {
+    if (cellDrawer.hasCellSelected()) cellDrawer.hide();
+    else helpOverlay.hide();
+  });
+});
+
+// Keyboard shortcuts: the binding layer is the single source of truth.
+
+const bindingsByKey = new Map<string, Binding>();
+const bindingsByChord = new Map<string, Binding>();
+for (const binding of BINDINGS) {
+  if (binding.key) bindingsByKey.set(binding.key.toLowerCase(), binding);
+  if (binding.chord) bindingsByChord.set(binding.chord.toLowerCase(), binding);
+}
 
 window.addEventListener("keydown", (event) => {
-  // Ignore if modifier keys pressed (except Shift for ?)
+  // Ignore if modifier keys pressed (except Shift for chords)
   if (event.metaKey || event.ctrlKey || event.altKey) return;
-  
+
   const target = event.target as HTMLElement | null;
   if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
     return;
   }
-  
+
   const key = event.key.toLowerCase();
-  
-  // Chart tabs
-  const tab = TAB_BY_KEY.get(key);
-  if (tab) {
-    plotter.showTab(tab);
+
+  // Check for shifted chords first (e.g., shift+r)
+  if (event.shiftKey) {
+    const chord = `shift+${key}`;
+    const binding = bindingsByChord.get(chord);
+    if (binding) {
+      if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected()) return;
+      binding.run();
+      return;
+    }
+  }
+
+  // Direct key match
+  const binding = bindingsByKey.get(key);
+  if (binding) {
+    if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected()) return;
+    binding.run();
     return;
   }
-  
-  // Control bar verbs
-  if (key === CONTROL_KEYS.play) {
-    controlBar.togglePlay();
-    return;
-  }
-  if (key === CONTROL_KEYS.step) {
-    controlBar.step();
-    return;
-  }
-  if (key === CONTROL_KEYS.stop) {
-    controlBar.stop();
-    return;
-  }
-  if (key === CONTROL_KEYS.panel) {
-    panels.toggle("control-panel");
-    return;
-  }
-  
-  // Panel toggles (HUD, Legend, Caption, Live Rail)
-  const panelId = PANEL_BY_KEY.get(key);
-  if (panelId) {
-    panels.toggle(panelId);
-    return;
-  }
-  
-  // Cycle stage views
-  if (key === "v") {
-    viewSwitcher.cycle();
-    return;
-  }
-  
-  // Cell actions (when a cell is selected)
-  if (key === "r") {
-    window.dispatchEvent(new CustomEvent("cell-action-replicate"));
-    return;
-  }
-  if (key === "p") {
-    window.dispatchEvent(new CustomEvent("cell-action-preregister"));
-    return;
-  }
-  if (key === "q") {
-    window.dispatchEvent(new CustomEvent("cell-action-quest"));
-    return;
-  }
-  
-  // Fallback: generic panel by key
-  const panel = panels.byKey(key);
-  if (panel) panels.toggle(panel.id);
 });
 
 // Three.js scene setup (shared by DiscoveryMap and HUD)
@@ -303,6 +294,9 @@ requestAnimationFrame(animate);
   panels,
   wsClient,
   router,
+  bindings: {
+    list: () => allBindings().map((b) => ({ id: b.id, label: b.label, group: b.group, key: b.key })),
+  },
 };
 
 console.log("🚀 Computronium Dashboard initialized");

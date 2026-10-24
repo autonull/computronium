@@ -121,6 +121,11 @@ export class CellDrawer implements Component {
     return this.panel.style.transform === "translateX(0)";
   }
 
+  /** Whether a cell is currently selected (drawer has data). */
+  hasCellSelected(): boolean {
+    return this.currentData !== null;
+  }
+
   private onCellSelected = (event: CustomEvent): void => {
     this.show(event.detail);
   };

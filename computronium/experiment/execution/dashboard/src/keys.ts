@@ -8,33 +8,30 @@
     TODO69 left four letters free. TODO70's controls took all four, and took
     the spacebar for play/pause besides. The next view takes a punctuation
     key from the list below — the letters are gone.
+
+    The authoritative source is now src/bindings.ts. This module derives its
+    exported objects from the binding table so there is one list and no drift.
 */
 
+import {
+  panelKeys as _panelKeys,
+  tabKeys as _tabKeys,
+  controlKeys as _controlKeys,
+  cycleKey as _cycleKey,
+  claimedKeys as _claimedKeys,
+} from "./bindings.js";
+
 /** The panels that can be hidden, and the key that hides each. */
-export const PANEL_KEYS = {
-  hud: "h",
-  rail: "r",
-  caption: "c",
-  legend: "q",
-} as const;
+export const PANEL_KEYS = _panelKeys();
 
 /** The charts, and the key that shows each. */
-export const TAB_KEYS = {
-  pareto: "p",
-  ablation: "a",
-  variability: "s",
-} as const;
+export const TAB_KEYS = _tabKeys();
 
 /** The control bar's verbs: play and pause, stop, step, and the panel. */
-export const CONTROL_KEYS = {
-  play: " ",
-  stop: "x",
-  step: "w",
-  panel: "z",
-} as const;
+export const CONTROL_KEYS = _controlKeys();
 
 /** The key that cycles the stage's views. */
-export const CYCLE_KEY = "v";
+export const CYCLE_KEY = _cycleKey();
 
 /** The punctuation a new view takes, in the order it is offered.
 
@@ -45,13 +42,8 @@ export const CYCLE_KEY = "v";
 */
 export const PUNCTUATION_KEYS: readonly string[] = [",", ".", "/", ";", "'"];
 
-/** Every key that belongs to something else. */
-export const RESERVED_KEYS: ReadonlySet<string> = new Set([
-  ...Object.values(PANEL_KEYS),
-  ...Object.values(TAB_KEYS),
-  ...Object.values(CONTROL_KEYS),
-  CYCLE_KEY,
-]);
+/** Every key that belongs to something else (derived from bindings + views). */
+export const RESERVED_KEYS: ReadonlySet<string> = _claimedKeys();
 
 /** The letters no key has taken. */
 export const FREE_KEYS: ReadonlySet<string> = new Set(

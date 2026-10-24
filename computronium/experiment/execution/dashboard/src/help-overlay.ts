@@ -1,70 +1,58 @@
-/** Help Overlay — Keyboard Shortcuts Reference (press ?). */
+/** Help Overlay — Keyboard Shortcuts Reference (press ?).
+
+    Rendered from the binding table (src/bindings.ts) so the help can never
+    lie about what keys do.
+*/
 
 import { registry } from "./components/registry.js";
-import { PANEL_KEYS } from "./keys.js";
-import { TAB_KEYS } from "./keys.js";
-import { CONTROL_KEYS } from "./keys.js";
-import { CYCLE_KEY } from "./keys.js";
-import { closeButton, panels, registerDisplayPanel } from "./panels.js";
+import { closeButton, registerDisplayPanel } from "./panels.js";
+import { allBindings } from "./bindings.js";
 import type { Component } from "./components/registry.js";
+
+interface ShortcutItem {
+  key: string;
+  description: string;
+}
 
 interface ShortcutGroup {
   title: string;
-  items: Array<{ key: string; description: string }>;
+  items: ShortcutItem[];
 }
 
-const SHORTCUT_GROUPS: ShortcutGroup[] = [
-  {
-    title: "Navigation",
-    items: [
-      { key: CYCLE_KEY, description: "Cycle stage views" },
-      { key: "Mouse drag", description: "Orbit camera" },
-      { key: "Scroll", description: "Zoom camera" },
-      { key: "Shift + drag", description: "Pan camera" },
-    ],
-  },
-  {
-    title: "Panels",
-    items: [
-      { key: PANEL_KEYS.hud, description: "Toggle Mission Control (HUD)" },
-      { key: PANEL_KEYS.rail, description: "Toggle Live Rail" },
-      { key: PANEL_KEYS.caption, description: "Toggle Caption" },
-      { key: PANEL_KEYS.legend, description: "Toggle Legend" },
-      { key: CONTROL_KEYS.panel, description: "Toggle Control Panel" },
-    ],
-  },
-  {
-    title: "Charts",
-    items: [
-      { key: TAB_KEYS.pareto, description: "Show Pareto frontier" },
-      { key: TAB_KEYS.ablation, description: "Show Ablation chart" },
-      { key: TAB_KEYS.variability, description: "Show Variability chart" },
-    ],
-  },
-  {
-    title: "Run Control",
-    items: [
-      { key: CONTROL_KEYS.play, description: "Play / Pause run" },
-      { key: CONTROL_KEYS.step, description: "Step one batch" },
-      { key: CONTROL_KEYS.stop, description: "Stop run" },
-    ],
-  },
-  {
-    title: "Cell Actions (click a cell first)",
-    items: [
-      { key: "R", description: "Replicate (queue remaining seeds)" },
-      { key: "P", description: "Preregister (confirm protocol)" },
-      { key: "Q", description: "Adopt as Quest (new run)" },
-    ],
-  },
-  {
-    title: "General",
-    items: [
-      { key: "?", description: "Show this help" },
-      { key: "Esc", description: "Close drawer / dismiss" },
-    ],
-  },
-];
+function buildGroups(): ShortcutGroup[] {
+  const bindings = allBindings();
+  const groups = new Map<string, ShortcutItem[]>();
+
+  for (const binding of bindings) {
+    const key = binding.chord
+      ? binding.chord.replace("shift+", "Shift + ").toUpperCase()
+      : binding.key
+        ? binding.key.toUpperCase()
+        : "";
+    if (!key) continue;
+
+    const groupTitle = binding.group;
+    if (!groups.has(groupTitle)) groups.set(groupTitle, []);
+    groups.get(groupTitle)!.push({ key, description: binding.label });
+  }
+
+  // Order groups for display
+  const groupOrder = [
+    "Navigation",
+    "Panels",
+    "Charts",
+    "Run Control",
+    "Cell Actions",
+    "Stage",
+    "General",
+  ];
+
+  return groupOrder
+    .map((title) => ({ title, items: groups.get(title) ?? [] }))
+    .filter((g) => g.items.length > 0);
+}
+
+const SHORTCUT_GROUPS = buildGroups();
 
 export class HelpOverlay implements Component {
   name = "HelpOverlay";
@@ -95,7 +83,6 @@ export class HelpOverlay implements Component {
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
-    // Ignore if typing in input
     const target = event.target as HTMLElement | null;
     const isInput = target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
     if (isInput) return;
@@ -194,13 +181,11 @@ export class HelpOverlay implements Component {
 
   show(): void {
     if (!this.container || !this.dialog) return;
-    // Store last focused element
     this.lastFocused = document.activeElement as HTMLElement;
-    
+
     this.container.style.display = "flex";
-    // Trap focus
     this.trapFocus();
-    
+
     requestAnimationFrame(() => {
       this.container!.style.opacity = "1";
       if (this.dialog) this.dialog.style.transform = "scale(1)";
@@ -218,7 +203,6 @@ export class HelpOverlay implements Component {
     }, 200);
     this.isOpen = false;
     document.body.style.overflow = "";
-    // Restore focus
     if (this.lastFocused) this.lastFocused.focus();
   }
 
@@ -228,10 +212,10 @@ export class HelpOverlay implements Component {
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
     if (focusable.length === 0) return;
-    
+
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    
+
     const handleTab = (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;
       if (event.shiftKey) {
@@ -246,15 +230,13 @@ export class HelpOverlay implements Component {
         }
       }
     };
-    
+
     this.dialog.addEventListener("keydown", handleTab);
-    // Clean up on hide
     const cleanup = () => {
       this.dialog?.removeEventListener("keydown", handleTab);
     };
     this.container?.addEventListener("transitionend", cleanup, { once: true });
-    
-    // Focus first element
+
     first.focus();
   }
 }
