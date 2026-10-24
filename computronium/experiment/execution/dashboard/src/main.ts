@@ -17,6 +17,7 @@ import { viewSwitcher } from "./stage/switcher.js";
 import { helpOverlay } from "./help-overlay.js";
 import { PALETTE } from "./palette.js";
 import { panels } from "./panels.js";
+import { layout } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { detectRenderProfile } from "./render-profile.js";
 import type { Binding } from "./bindings.js";
@@ -96,7 +97,10 @@ wsClient.waitForConnection(15000).then((connected) => {
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
 // Wire binding actions after components initialize
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // Initialize layout manager first (sets up docks, restores workspace)
+  await layout.init();
+
   setAction("chart-pareto", () => plotter.showTab("pareto"));
   setAction("chart-ablation", () => plotter.showTab("ablation"));
   setAction("chart-variability", () => plotter.showTab("variability"));
@@ -293,6 +297,7 @@ requestAnimationFrame(animate);
   controlBar,
   controlPanel,
   panels,
+  layout,
   wsClient,
   router,
   bindings: {

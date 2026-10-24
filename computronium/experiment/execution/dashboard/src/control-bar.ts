@@ -19,6 +19,7 @@
 import { registry } from "./components/registry.js";
 import { panels, registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
+import { layout, getLayout } from "./layout.js";
 import type { Component } from "./components/registry.js";
 
 /** How often the bar asks the server what the run is doing. */
@@ -180,6 +181,9 @@ function createControlBarBody(): string {
         background: var(--border);
         border-color: var(--border-bright);
       }
+      .control-bar .workspace-switcher {
+        margin-left: 8px;
+      }
     </style>
     <button class="verb verb-primary" data-action="play" title="Play — release the run">▶</button>
     <button class="verb" data-action="step" title="Step — release exactly one more batch" disabled>⏭</button>
@@ -207,6 +211,7 @@ function createControlBarBody(): string {
     <canvas class="trace-canvas" width="130" height="42"></canvas>
     <div class="separator"></div>
     <span class="status-text">no run is reporting</span>
+    <div class="workspace-switcher"></div>
     <button class="door-btn" data-action="panel" title="Open control panel">⚙</button>
   `;
 }
@@ -231,6 +236,8 @@ export class ControlBar implements Component {
   private payload: ControlPayload | null = null;
   private samples: Sample[] = [];
 
+  private layoutUnsubscribe: (() => void) | null = null;
+
   async init(): Promise<void> {
     this.container = createPanelShell({
       id: "control-bar",
@@ -252,6 +259,9 @@ export class ControlBar implements Component {
       () => this.container,
     );
 
+    // Listen for layout changes to refresh workspace switcher
+    this.layoutUnsubscribe = getLayout().onChange(() => this.refreshWorkspaceSwitcher());
+
     this.timer = window.setInterval(() => {
       void this.poll();
     }, POLL_MS);
@@ -261,8 +271,20 @@ export class ControlBar implements Component {
   async destroy(): Promise<void> {
     if (this.timer !== null) window.clearInterval(this.timer);
     this.timer = null;
+    this.layoutUnsubscribe?.();
+    this.layoutUnsubscribe = null;
     this.container?.remove();
   }
+
+  private refreshWorkspaceSwitcher(): void {
+    if (!this.workspaceSwitcherContainer) return;
+    const switcher = this.workspaceSwitcherContainer.querySelector(".workspace-switcher");
+    if (switcher) {
+      getLayout().refreshSwitcher(switcher as HTMLElement);
+    }
+  }
+
+  private workspaceSwitcherContainer: HTMLElement | null = null;
 
   private bindElements(): void {
     if (!this.container) return;
@@ -279,6 +301,13 @@ export class ControlBar implements Component {
     this.cpuText = this.container.querySelector(".cpu-text");
     this.trace = this.container.querySelector("canvas.trace-canvas");
     this.statusText = this.container.querySelector(".status-text");
+
+    // Initialize workspace switcher
+    this.workspaceSwitcherContainer = this.container.querySelector(".workspace-switcher");
+    if (this.workspaceSwitcherContainer) {
+      const switcher = getLayout().buildWorkspaceSwitcher();
+      this.workspaceSwitcherContainer.appendChild(switcher);
+    }
   }
 
   private bindEvents(): void {

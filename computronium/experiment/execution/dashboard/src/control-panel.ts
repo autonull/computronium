@@ -252,7 +252,7 @@ export class ControlPanel implements Component {
       glyph: "⚙",
       key: CONTROL_KEYS.panel,
       body: createControlPanelBody(),
-      dock: "left",
+      dock: "floating",
       defaultOpen: false,
     });
 

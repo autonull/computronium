@@ -27,7 +27,7 @@ export class CellDrawer implements Component {
       title: "Cell Details",
       glyph: "◧",
       body: createCellDrawerBody(),
-      dock: "right",
+      dock: "floating",
       defaultOpen: false,
     });
 
@@ -67,18 +67,10 @@ export class CellDrawer implements Component {
     }
   };
 
-  /** The drawer covers the right-hand panels; they step aside for it. */
-  private shiftPanels(open: boolean): void {
-    const right = open ? 400 : 44;
-    ["hud", "chart-column"].forEach((id) => {
-      document.getElementById(id)?.style.setProperty("right", `${right}px`);
-    });
-  }
-
   /** Whether the drawer is showing. */
   isOpen(): boolean {
     if (!this.panel) return false;
-    return this.panel.style.transform === "translateX(0)";
+    return !this.panel.classList.contains("panel-hidden");
   }
 
   /** Whether a cell is currently selected (drawer has data). */
@@ -93,14 +85,12 @@ export class CellDrawer implements Component {
   show(data: CellData): void {
     this.currentData = data;
     this.renderContent(data);
-    this.panel!.style.transform = "translateX(0)";
-    this.shiftPanels(true);
+    panels.toggle("cell-drawer"); // Opens via panel registry
     this.startSparkline(data);
   }
 
   hide(): void {
-    this.panel!.style.transform = "translateX(100%)";
-    this.shiftPanels(false);
+    panels.toggle("cell-drawer"); // Closes via panel registry
     this.stopSparkline();
     this.currentData = null;
   }

@@ -166,29 +166,17 @@ export class Plotter implements Component {
     this.paretoPlot?.destroy();
     this.ablationPlot?.destroy();
     this.variabilityPlot?.destroy();
-    this.container?.remove();
+    this.tooltip?.remove();
+    this.tooltip = null;
+    // Chart panels are managed by layout manager; they'll be cleaned up by panel registry
   }
 
   private createUI(): void {
     const overlay = document.getElementById("ui-overlay");
     if (!overlay) return;
 
-    this.container = document.createElement("div");
-    this.container.id = "chart-column";
-    // Position handled by CSS
-    this.container.style.cssText = `
-      position: fixed;
-      top: 330px;
-      bottom: 130px;
-      right: 44px;
-      width: 520px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      overflow-y: auto;
-      z-index: 150;
-      pointer-events: none;
-    `;
+    // Chart panels are now managed by the layout manager (right dock).
+    // No chart-column container needed — each panel is a dock child.
 
     for (const chart of CHARTS) {
       const panel = createPanelShell({
@@ -205,7 +193,6 @@ export class Plotter implements Component {
         },
       });
       this.chartPanels.set(chart.id, panel);
-      this.container.appendChild(panel);
 
       // Download button
       panel
@@ -227,8 +214,8 @@ export class Plotter implements Component {
       );
     }
 
-    overlay.appendChild(this.container);
-
+    // Tooltip is attached to the first chart panel's body (or overlay)
+    const firstPanel = this.chartPanels.get("pareto") ?? this.chartPanels.values().next().value;
     this.tooltip = document.createElement("div");
     this.tooltip.id = "plotter-tooltip";
     this.tooltip.style.cssText = `
@@ -246,7 +233,11 @@ export class Plotter implements Component {
       z-index: 10;
       box-shadow: 0 4px 16px rgba(0,0,0,0.5);
     `;
-    this.container.appendChild(this.tooltip);
+    if (firstPanel) {
+      firstPanel.appendChild(this.tooltip);
+    } else {
+      overlay.appendChild(this.tooltip);
+    }
   }
 
   /** Show one of the charts: "pareto", "ablation" or "variability". */
@@ -821,18 +812,23 @@ export class Plotter implements Component {
 
   /** The tooltip follows the cursor and says what the point is. */
   private showTooltip(plot: uPlot, content: string): void {
-    if (!this.tooltip || !this.container) return;
+    if (!this.tooltip) return;
     const cursor = plot.cursor;
     if (!cursor || cursor.left == null || cursor.top == null) {
       this.hideTooltip();
       return;
     }
     const canvasRect = plot.ctx.canvas.getBoundingClientRect();
-    const containerRect = this.container.getBoundingClientRect();
+    const panelEl = this.chartPanels.get("pareto") ?? this.chartPanels.values().next().value;
+    const panelRect = panelEl?.getBoundingClientRect();
+    if (!panelRect) {
+      this.hideTooltip();
+      return;
+    }
     this.tooltip.innerHTML = content;
     this.tooltip.style.display = "block";
-    this.tooltip.style.left = `${canvasRect.left - containerRect.left + plot.bbox.left + cursor.left + 14}px`;
-    this.tooltip.style.top = `${canvasRect.top - containerRect.top + plot.bbox.top + cursor.top + 14}px`;
+    this.tooltip.style.left = `${canvasRect.left - panelRect.left + plot.bbox.left + cursor.left + 14}px`;
+    this.tooltip.style.top = `${canvasRect.top - panelRect.top + plot.bbox.top + cursor.top + 14}px`;
   }
 
   private hideTooltip(): void {

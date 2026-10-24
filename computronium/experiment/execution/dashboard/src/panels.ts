@@ -12,6 +12,7 @@
 */
 
 import { registry } from "./components/registry.js";
+import { layout } from "./layout.js";
 import type { Component } from "./components/registry.js";
 
 /** One panel the reader can show, hide and close. */
@@ -56,6 +57,8 @@ export class PanelRegistry {
     const panel = this.panels.get(id);
     if (!panel) return;
     panel.toggle();
+    // Notify layout manager of open/close state change
+    layout.setPanelOpen(id, panel.isOpen());
     this.notify();
   }
 

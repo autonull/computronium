@@ -11,6 +11,7 @@
  */
 
 import { closeButton, panels, setPanelHidden } from "./panels.js";
+import { layout } from "./layout.js";
 
 export interface PanelShellOptions {
   /** The panel's dom id: what the reader, and the tour, name it by. */
@@ -35,6 +36,7 @@ export interface PanelShellOptions {
 
 /** Create a panel with the shared chrome: header (title + ×), body, and
  *  register it with the panel registry so the rail works unchanged.
+ *  Also registers with the layout manager for dock management.
  */
 export function createPanelShell(options: PanelShellOptions): HTMLElement {
   const { id, title, glyph, key, body, className = "", dock, defaultOpen = false, onToggle } = options;
@@ -75,6 +77,11 @@ export function createPanelShell(options: PanelShellOptions): HTMLElement {
   // Hide by default unless defaultOpen
   setPanelHidden(panel, !defaultOpen);
 
+  // Register with layout manager for dock management
+  if (dock) {
+    layout.registerPanel(id, { dock, defaultOpen });
+  }
+
   // Wire the registry toggle to also notify shell
   const originalToggle = () => {
     const isOpen = !panel.classList.contains("panel-hidden");
@@ -89,6 +96,8 @@ export function createPanelShell(options: PanelShellOptions): HTMLElement {
       const currentlyHidden = panel.classList.contains("panel-hidden");
       if (shouldBeHidden !== currentlyHidden) {
         setPanelHidden(panel, shouldBeHidden);
+        // Notify layout manager of open/close state change
+        layout.setPanelOpen(id, !shouldBeHidden);
         onToggle?.(!shouldBeHidden);
       }
     }
