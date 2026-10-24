@@ -686,6 +686,7 @@ class Tour:
         mirror_dir: Path,
         timeout_ms: int,
         min_records: int,
+        run_id: str,
     ) -> None:
         self.page = page
         self.port = port
@@ -693,7 +694,7 @@ class Tour:
         self.mirror_dir = mirror_dir
         self.timeout_ms = timeout_ms
         self.min_records = min_records
-        self.run_id = ""
+        self.run_id = run_id
         self.outcomes: list[Outcome] = []
         self.shots = {shot.name: shot for shot in TOUR}
 
@@ -704,8 +705,6 @@ class Tour:
         self.page.wait_for_timeout(1000)
 
         wait_for_measured(self.page, self.timeout_ms)
-        wait_for_records(self.port, self.min_records, timeout=RECORDS_TIMEOUT)
-        self.run_id = latest_run(self.port)
         self.page.wait_for_timeout(3000)
         self.overview()
         self.palette_shots()
@@ -1375,7 +1374,7 @@ def capture(
     mirror_dir: Path,
     timeout_ms: int,
     min_records: int,
-    campaign_done: threading.Event,
+    run_id: str,
 ) -> list[Outcome]:
     """Take every shot of the tour; return what became of each."""
     from playwright.sync_api import sync_playwright
@@ -1392,18 +1391,17 @@ def capture(
                 mirror_dir,
                 timeout_ms,
                 min_records,
+                run_id,
             )
             outcomes = tour.run()
         finally:
             browser.close()
 
-    # The report is written once the run has finished: the store is the
-    # campaign's until then, and a reader cannot read a file being written.
-    campaign_done.wait(timeout=600)
-    status = wait_for_run_to_finish(port, tour.run_id)
+    # The report is written once the run has finished.
+    status = wait_for_run_to_finish(port, run_id)
     logger.info("The run finished as %s", status)
     outcomes.extend(
-        capture_report(port, store_path, tour.run_id, output_dir, mirror_dir)
+        capture_report(port, store_path, run_id, output_dir, mirror_dir)
     )
     return outcomes
 
@@ -1436,10 +1434,16 @@ def main() -> int:
         help="Records to wait for before the tour: the demo campaign's full set.",
     )
     parser.add_argument("--timeout", type=int, default=90000)
+    parser.add_argument(
+        "--skip-campaigns",
+        action="store_true",
+        help="Use existing store data; skip running demo/third campaigns.",
+    )
     args = parser.parse_args()
 
     store_path = args.store
-    clear_store(store_path)
+    if not args.skip_campaigns:
+        clear_store(store_path)
     store_path.parent.mkdir(parents=True, exist_ok=True)
 
     _dashboard, _thread, server_error = start_dashboard(args.port, store_path)
@@ -1448,7 +1452,27 @@ def main() -> int:
         return 1
     logger.info("Dashboard serving on port %d", args.port)
 
-    campaign_done = threading.Event()
+    if args.skip_campaigns:
+        # Use existing data: find a run with enough records
+        wait_for_records(args.port, args.min_records, timeout=30)
+        demo_run_id = latest_run(args.port)
+        logger.info("Using existing run %s with %d+ records", demo_run_id, args.min_records)
+    else:
+        # Run the demo campaign FIRST so the tour has measured cells to photograph
+        logger.info("Running the demo campaign in-process...")
+        exit_code = run_demo_campaign(store_path)
+        logger.info("Demo campaign exited with %d", exit_code)
+
+        # Get the demo run ID BEFORE running the third campaign
+        wait_for_records(args.port, args.min_records, timeout=RECORDS_TIMEOUT)
+        demo_run_id = latest_run(args.port)
+        logger.info("Demo run %s has %d+ records", demo_run_id, args.min_records)
+
+        # Run the third campaign (re-measure demo cells) for the comp diff
+        logger.info("Running the third campaign (re-measure demo cells) in-process...")
+        run_third_campaign(store_path)
+
+    # Now run the tour with the demo campaign's data
     outcomes: list[Outcome] = []
     capture_error: list[BaseException] = []
 
@@ -1462,7 +1486,7 @@ def main() -> int:
                     args.mirror,
                     args.timeout,
                     args.min_records,
-                    campaign_done,
+                    demo_run_id,
                 )
             )
         except BaseException as exc:  # ruff: ignore[blind-except] - reported to the main thread
@@ -1471,27 +1495,8 @@ def main() -> int:
 
     capture_thread = threading.Thread(target=run_capture, daemon=True)
     capture_thread.start()
-
-    logger.info("Running the second campaign in-process...")
-    second_code = run_second_campaign(store_path)
-    logger.info("Running the demo campaign in-process...")
-    exit_code = run_demo_campaign(store_path)
-    logger.info("Running the third campaign (re-measure demo cells) in-process...")
-    run_third_campaign(store_path)
-    campaign_done.set()
-
-    # Capture the comp diff between the demo run and the third run (same cells, different seeds)
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as playwright:
-        browser = launch_browser(playwright)
-        page = browser.new_page(viewport=VIEWPORT)
-        try:
-            capture_comp_diff(page, args, store_path, outcomes)
-        finally:
-            browser.close()
-
     capture_thread.join(timeout=600)
+
     if capture_error:
         return 1
     if server_error:
@@ -1500,6 +1505,18 @@ def main() -> int:
     if not outcomes:
         logger.error("The tour produced no shots")
         return 1
+
+    if not args.skip_campaigns:
+        # Capture the comp diff between the demo run and the third run
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = launch_browser(playwright)
+            page = browser.new_page(viewport=VIEWPORT)
+            try:
+                capture_comp_diff(page, args, store_path, outcomes)
+            finally:
+                browser.close()
 
     for outcome in outcomes:
         if outcome.failed:
@@ -1512,8 +1529,7 @@ def main() -> int:
         json.dumps({
             "shots": len(outcomes),
             "failed": failed,
-            "campaign_exit": exit_code,
-            "second_campaign_exit": second_code,
+            "campaign_exit": exit_code if not args.skip_campaigns else 0,
         })
     )
     return 1 if failed else 0
