@@ -29,7 +29,7 @@ interface Cost {
 export class ClaimCostView implements StageView {
   id = "cost";
   name = "The claim's cost";
-  group = "process" as ViewGroup;
+  group = "the evidence" as ViewGroup;
   caption =
     "The seeds each cell measured, against the seeds a claim is measured against.";
 

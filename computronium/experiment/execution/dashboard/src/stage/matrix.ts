@@ -24,7 +24,7 @@ interface Column {
 export class MatrixView implements StageView {
   id = "matrix";
   name = "Evidence matrix";
-  group = "analysis" as ViewGroup;
+  group = "the run" as ViewGroup;
   caption =
     "The space seen from above: one axis against another, every column a number, the refusals in the void colour.";
 

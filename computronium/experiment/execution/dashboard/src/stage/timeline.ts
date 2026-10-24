@@ -17,7 +17,7 @@ import type { StageView, ViewGroup } from "./views.js";
 export class TimelineView implements StageView {
   id = "timeline";
   name = "The timeline";
-  group = "process" as ViewGroup;
+  group = "the process" as ViewGroup;
   caption =
     "The run's stages, in the order it reached them, and the time each held it.";
   key = "t";

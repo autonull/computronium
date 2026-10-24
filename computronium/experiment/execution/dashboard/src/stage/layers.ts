@@ -46,7 +46,7 @@ interface Sheet {
 export class LayersView implements StageView {
   id = "layers";
   name = "Layers";
-  group = "space" as ViewGroup;
+  group = "the space" as ViewGroup;
   key = "y";
   caption =
     "The space cut into sheets: the lit ones are the cells the run measured.";

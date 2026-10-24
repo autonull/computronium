@@ -39,7 +39,7 @@ const VIEW_DIRECTION = new THREE.Vector3(0.34, 0.4, 0.85);
 export class MultiRunView implements StageView {
   id = "multirun";
   name = "The multi-run space";
-  group = "multi" as ViewGroup;
+  group = "the space" as ViewGroup;
   key = "u";
   caption =
     "Several runs' evidence in one space: each run's cells stand in the run's own colour.";

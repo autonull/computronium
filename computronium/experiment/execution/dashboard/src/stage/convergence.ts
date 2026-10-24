@@ -20,7 +20,7 @@ interface ArmCurve {
 export class ConvergenceView implements StageView {
   id = "convergence";
   name = "Convergence";
-  group = "process" as ViewGroup;
+  group = "the run" as ViewGroup;
   caption =
     "Accuracy against epoch, one curve per arm, with the chance level under them.";
 

@@ -15,7 +15,7 @@ import type { StageView, ViewGroup } from "./views.js";
 export class ContrastView implements StageView {
   id = "contrast";
   name = "The contrast";
-  group = "analysis" as ViewGroup;
+  group = "the judgement" as ViewGroup;
   caption =
     "The run's arms against one another, and whether the test could be run.";
   key = "d";

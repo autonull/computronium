@@ -11,33 +11,32 @@ import { registry } from "../components/registry.js";
 import { discoveryMap } from "../discovery-map.js";
 import { viewGlyph } from "../icons.js";
 import { CYCLE_KEY, RESERVED_KEYS } from "../keys.js";
-import { ClaimCostView } from "./claim-cost.js";
-import { ContrastView } from "./contrast.js";
-import { ConvergenceView } from "./convergence.js";
-import {
-  BasinView,
-  LandscapeView,
-  SpectrumView,
-  TrainedBasinView,
-  TrainedLandscapeView,
-  TrainedSpectrumView,
-  TrainedTrajectoryView,
-  TrajectoryView,
-} from "./dynamics.js";
-import { EffectView } from "./effect.js";
-import { FlowView } from "./flow.js";
-import { FrontierView } from "./frontier.js";
-import { LayersView } from "./layers.js";
-import { LedgerView } from "./ledger.js";
-import { MatrixView } from "./matrix.js";
-import { MultiRunView } from "./multirun.js";
-import { SlicesView } from "./slices.js";
-import { SmallMultiplesView } from "./small-multiples.js";
-import { SpreadView } from "./spread.js";
+import { getViews, VIEW_GROUPS } from "./registry.js";
+import "./basin.js";
+import "./claim-cost.js";
+import "./contrast.js";
+import "./convergence.js";
+import "./effect.js";
+import "./flow.js";
+import "./frontier.js";
+import "./landscape.js";
+import "./layers.js";
+import "./ledger.js";
+import "./matrix.js";
+import "./multirun.js";
+import "./slices.js";
+import "./small-multiples.js";
+import "./spread.js";
+import "./spectrum.js";
+import "./terrain.js";
+import "./timeline.js";
+import "./trained-basin.js";
+import "./trained-landscape.js";
+import "./trained-spectrum.js";
+import "./trained-trajectory.js";
+import "./trajectory.js";
+import "./uncertainty.js";
 import { stageState, type StageChange } from "./state.js";
-import { TerrainView } from "./terrain.js";
-import { TimelineView } from "./timeline.js";
-import { UncertaintyView } from "./uncertainty.js";
 import type { StageView, ViewGroup } from "./views.js";
 import type { Component } from "../components/registry.js";
 
@@ -45,7 +44,7 @@ import type { Component } from "../components/registry.js";
 class SpaceView implements StageView {
   id = "space";
   name = "Space";
-  group = "space" as ViewGroup;
+  group = "the space" as ViewGroup;
   caption =
     "The declared space: the gaps as cages, the measured cells as pillars, the refusals as crosses.";
 
@@ -81,33 +80,8 @@ export class ViewSwitcher implements Component {
   private keyOf = new Map<string, string>();
 
   constructor() {
-    this.views = [
-      new SpaceView(),
-      new TerrainView(),
-      new FrontierView(),
-      new MatrixView(),
-      new ConvergenceView(),
-      new SmallMultiplesView(),
-      new SpreadView(),
-      new ClaimCostView(),
-      new UncertaintyView(),
-      new TimelineView(),
-      new LedgerView(),
-      new ContrastView(),
-      new FlowView(),
-      new EffectView(),
-      new LayersView(),
-      new TrajectoryView(),
-      new SpectrumView(),
-      new BasinView(),
-      new LandscapeView(),
-      new TrainedTrajectoryView(),
-      new TrainedSpectrumView(),
-      new TrainedBasinView(),
-      new TrainedLandscapeView(),
-      new MultiRunView(),
-      new SlicesView(),
-    ];
+    // Views are loaded via registry.ts imports; getViews() returns them in registration order
+    this.views = getViews();
   }
 
   async init(): Promise<void> {
@@ -270,14 +244,14 @@ export class ViewSwitcher implements Component {
       padding-bottom: 2px;
     `;
 
-    // Group views by category with separators
+    // Group views by the README's six sections
     const groups: Array<{ group: string; label: string; views: StageView[] }> = [
-      { group: "space", label: "Space", views: [] },
-      { group: "analysis", label: "Analysis", views: [] },
-      { group: "process", label: "Process", views: [] },
-      { group: "dynamics", label: "Dynamics", views: [] },
-      { group: "trained", label: "Trained", views: [] },
-      { group: "multi", label: "Multi", views: [] },
+      { group: "the space", label: "The space", views: [] },
+      { group: "the run", label: "The run", views: [] },
+      { group: "the evidence", label: "The evidence", views: [] },
+      { group: "the process", label: "The process", views: [] },
+      { group: "the judgement", label: "The judgement", views: [] },
+      { group: "the system", label: "The system", views: [] },
     ];
 
     for (const view of this.views) {

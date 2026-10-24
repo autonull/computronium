@@ -28,7 +28,7 @@ interface Panel {
 export class SmallMultiplesView implements StageView {
   id = "multiples";
   name = "Small multiples";
-  group = "analysis" as ViewGroup;
+  group = "the evidence" as ViewGroup;
   caption =
     "One panel per cell: every seed's own curve, on the same accuracy scale.";
 

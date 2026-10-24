@@ -26,7 +26,7 @@ const LABEL_ROOM = 92;
 export class FlowView implements StageView {
   id = "flow";
   name = "The flow";
-  group = "process" as ViewGroup;
+  group = "the process" as ViewGroup;
   caption =
     "The run's cells, stage by stage: what each one handled, and what the gate refused.";
   key = "f";

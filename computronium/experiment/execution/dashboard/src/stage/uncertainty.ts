@@ -33,7 +33,7 @@ interface Interval {
 export class UncertaintyView implements StageView {
   id = "uncertainty";
   name = "The uncertainty";
-  group = "analysis" as ViewGroup;
+  group = "the evidence" as ViewGroup;
   caption =
     "Each cell's mean and the margin the gate asks for, against the chance level.";
 

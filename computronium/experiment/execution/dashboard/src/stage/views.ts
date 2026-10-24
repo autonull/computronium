@@ -8,8 +8,14 @@
 
 import type { StageChange } from "./state.js";
 
-/** Logical group for the view toolbar. */
-export type ViewGroup = "space" | "analysis" | "process" | "dynamics" | "trained" | "multi";
+/** Logical group for the view toolbar — the README's six sections. */
+export type ViewGroup =
+  | "the space"
+  | "the run"
+  | "the evidence"
+  | "the process"
+  | "the judgement"
+  | "the system";
 
 export interface StageView {
   /** The view's name, as the reader sees it. */

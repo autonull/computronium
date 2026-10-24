@@ -17,7 +17,7 @@ import type { StageView, ViewGroup } from "./views.js";
 export class EffectView implements StageView {
   id = "effect";
   name = "The effect";
-  group = "analysis" as ViewGroup;
+  group = "the process" as ViewGroup;
   caption =
     "Which axis moved the objective, and which the run held fixed: the run's attribution, and its limits.";
   key = "e";

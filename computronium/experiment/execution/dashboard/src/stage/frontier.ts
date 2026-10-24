@@ -31,7 +31,7 @@ interface Point {
 export class FrontierView implements StageView {
   id = "frontier";
   name = "Frontier";
-  group = "space" as ViewGroup;
+  group = "the run" as ViewGroup;
   caption =
     "Every measured cell in accuracy, speed and parameters; the frontier is the line nothing beat.";
 

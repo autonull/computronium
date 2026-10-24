@@ -45,7 +45,7 @@ function bandwidth(values: number[]): number {
 export class SpreadView implements StageView {
   id = "spread";
   name = "The spread";
-  group = "analysis" as ViewGroup;
+  group = "the evidence" as ViewGroup;
   caption =
     "One violin per arm, across its seeds: the width is the spread, not the mean.";
 

@@ -45,7 +45,7 @@ interface SliceCell {
 export class SlicesView implements StageView {
   id = "slices";
   name = "The slices";
-  group = "analysis" as ViewGroup;
+  group = "the space" as ViewGroup;
   /** The letters are gone; the next view takes a punctuation key. */
   key = ",";
   caption =

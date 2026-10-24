@@ -25,7 +25,7 @@ const VERDICT_COLORS: Record<string, string> = {
 export class LedgerView implements StageView {
   id = "ledger";
   name = "The ledger";
-  group = "process" as ViewGroup;
+  group = "the judgement" as ViewGroup;
   caption =
     "Every arm the run measured, its evidence, and the gate's standing on it.";
   key = "l";

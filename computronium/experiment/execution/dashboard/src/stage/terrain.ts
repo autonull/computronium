@@ -38,7 +38,7 @@ interface Column {
 export class TerrainView implements StageView {
   id = "terrain";
   name = "Terrain";
-  group = "space" as ViewGroup;
+  group = "the run" as ViewGroup;
   caption =
     "The space as a heightfield: accuracy is the height, the gaps are flat, the refusals are craters.";
 
