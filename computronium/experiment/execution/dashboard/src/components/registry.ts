@@ -9,15 +9,23 @@ export interface Component {
 
   /** Optional: unique component name for debugging. */
   name?: string;
+
+  /** Optional: dependencies - names of components that must be initialized first. */
+  dependencies?: string[];
+
+  /** Optional: health check - returns true if component is healthy. */
+  healthCheck?(): Promise<boolean> | boolean;
 }
 
 /**
  * ComponentRegistry - Auto-discovery and lifecycle management.
  * Components are registered via `register()` and auto-initialized.
+ * Supports dependency ordering and health checks.
  */
 export class ComponentRegistry {
   private components: Map<string, Component> = new Map();
   private initialized = false;
+  private initOrder: string[] = [];
 
   /** Register a component. */
   register(component: Component): void {
@@ -42,10 +50,50 @@ export class ComponentRegistry {
     }
   }
 
-  /** Initialize all registered components. */
+  /** Compute initialization order based on dependencies. */
+  private computeInitOrder(): string[] {
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const order: string[] = [];
+
+    const visit = (name: string): void => {
+      if (visited.has(name)) return;
+      if (visiting.has(name)) {
+        console.warn(`[ComponentRegistry] Circular dependency detected: ${name}`);
+        return;
+      }
+      visiting.add(name);
+
+      const component = this.components.get(name);
+      if (component?.dependencies) {
+        for (const dep of component.dependencies) {
+          if (this.components.has(dep)) {
+            visit(dep);
+          }
+        }
+      }
+
+      visiting.delete(name);
+      visited.add(name);
+      order.push(name);
+    };
+
+    for (const name of this.components.keys()) {
+      visit(name);
+    }
+
+    return order;
+  }
+
+  /** Initialize all registered components in dependency order. */
   async initAll(): Promise<void> {
+    if (this.initialized) return;
+    this.initOrder = this.computeInitOrder();
     this.initialized = true;
-    for (const [name, component] of this.components) {
+
+    for (const name of this.initOrder) {
+      const component = this.components.get(name);
+      if (!component) continue;
       try {
         await component.init();
         console.log(`[ComponentRegistry] Initialized: ${name}`);
@@ -55,9 +103,11 @@ export class ComponentRegistry {
     }
   }
 
-  /** Destroy all registered components. */
+  /** Destroy all registered components in reverse initialization order. */
   async destroyAll(): Promise<void> {
-    for (const [name, component] of this.components) {
+    for (const name of [...this.initOrder].reverse()) {
+      const component = this.components.get(name);
+      if (!component) continue;
       try {
         await component.destroy();
         console.log(`[ComponentRegistry] Destroyed: ${name}`);
@@ -67,16 +117,40 @@ export class ComponentRegistry {
     }
     this.components.clear();
     this.initialized = false;
+    this.initOrder = [];
   }
 
   /** Get a component by name. */
-  get(name: string): Component | undefined {
-    return this.components.get(name);
+  get<T extends Component = Component>(name: string): T | undefined {
+    return this.components.get(name) as T | undefined;
   }
 
-  /** Get all registered component names. */
+  /** Get all registered component names in init order. */
   list(): string[] {
-    return Array.from(this.components.keys());
+    return this.initOrder.length > 0 ? this.initOrder : Array.from(this.components.keys());
+  }
+
+  /** Run health checks on all components. */
+  async healthCheck(): Promise<Record<string, boolean>> {
+    const results: Record<string, boolean> = {};
+    for (const [name, component] of this.components) {
+      if (component.healthCheck) {
+        try {
+          results[name] = await Promise.resolve(component.healthCheck());
+        } catch {
+          results[name] = false;
+        }
+      } else {
+        results[name] = true;
+      }
+    }
+    return results;
+  }
+
+  /** Check if all components are healthy. */
+  async isHealthy(): Promise<boolean> {
+    const results = await this.healthCheck();
+    return Object.values(results).every((v) => v);
   }
 }
 

@@ -62,6 +62,7 @@ export class HUD implements Component {
   private rowElements: Map<string, { fill: HTMLElement; value: HTMLElement }> =
     new Map();
   private claimValue: HTMLElement | null = null;
+  private claimFill: HTMLElement | null = null;
   private sourceValue: HTMLElement | null = null;
   private statusData: StatusData = {};
   private resources: CampaignResources = {};
@@ -106,53 +107,35 @@ export class HUD implements Component {
 
     this.panel = document.createElement("div");
     this.panel.id = "hud";
+    this.panel.className = "panel";
     this.panel.style.cssText = `
-      position: fixed;
       top: 20px;
       right: 44px;
       width: 260px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px 16px;
-      font-size: 11px;
       z-index: 150;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     `;
 
     this.panel.innerHTML = `
-      <div id="hud-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-        <span style="font-weight: 600; color: var(--text-primary); letter-spacing: 0.08em;">MISSION CONTROL</span>
+      <div id="hud-header" class="panel-header">
+        <span class="panel-title">MISSION CONTROL</span>
         <div style="flex: 1;"></div>
-        <span id="hud-connection" style="
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          padding: 2px 8px;
-          border-radius: 12px;
-          background: var(--error)22;
-          border: 1px solid var(--error)88;
-          color: var(--error);
-        ">
-          <span class="dot" style="width: 6px; height: 6px; border-radius: 50%; background: var(--error);"></span>
+        <span id="hud-connection" class="connection-pill">
+          <span class="dot status-dot error"></span>
           <span>offline</span>
         </span>
       </div>
       <div id="hud-meters" style="display: flex; flex-direction: column; gap: 9px;"></div>
       <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);">
-        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-          <span style="color: var(--text-secondary);">PICTURE</span>
-          <span id="hud-source" style="font-weight: 600; color: ${PALETTE.text_secondary};">—</span>
+        <div class="meter-label-row">
+          <span class="meter-label">PICTURE</span>
+          <span id="hud-source" class="meter-value" style="color: var(--text-secondary);">—</span>
         </div>
         <div id="hud-claim-row" style="display: flex; flex-direction: column; gap: 4px;">
-          <div style="display: flex; justify-content: space-between; align-items: baseline;">
-            <span style="color: var(--text-secondary);">SEEDS TO CLAIM</span>
-            <span id="hud-claim" style="font-weight: 700; color: ${PALETTE.insufficient};">—</span>
+          <div class="meter-label-row">
+            <span class="meter-label">SEEDS TO CLAIM</span>
+            <span id="hud-claim" class="meter-value" style="color: var(--insufficient);">—</span>
           </div>
-          <div style="height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;">
-            <div id="hud-claim-fill" style="height: 100%; width: 0%; background: var(--insufficient); border-radius: 2px; transition: width var(--motion-normal) var(--ease-out), background-color var(--motion-fast);"></div>
-          </div>
+          <div class="meter-bar"><div id="hud-claim-fill" class="meter-fill" style="background: var(--insufficient);"></div></div>
         </div>
       </div>
     `;
@@ -163,14 +146,15 @@ export class HUD implements Component {
     header.appendChild(closeButton(() => panels.toggle("hud")));
 
     const meters = this.panel.querySelector<HTMLElement>("#hud-meters")!;
-    this.addMeter(meters, "device", "DEVICE", PALETTE.gradient);
-    this.addMeter(meters, "memory", "MEMORY", PALETTE.memory);
-    this.addMeter(meters, "walltime", "WALLTIME", PALETTE.cpu);
-    this.addMeter(meters, "gpu", "GPU", PALETTE.gpu);
-    this.addMeter(meters, "cpu", "CPU", PALETTE.cpu);
-    this.addMeter(meters, "records", "RECORDS", PALETTE.promoted);
+    this.addMeter(meters, "device", "DEVICE", "var(--gradient)");
+    this.addMeter(meters, "memory", "MEMORY", "var(--memory)");
+    this.addMeter(meters, "walltime", "WALLTIME", "var(--cpu)");
+    this.addMeter(meters, "gpu", "GPU", "var(--gpu)");
+    this.addMeter(meters, "cpu", "CPU", "var(--cpu)");
+    this.addMeter(meters, "records", "RECORDS", "var(--promoted)");
 
     this.claimValue = this.panel.querySelector("#hud-claim");
+    this.claimFill = this.panel.querySelector("#hud-claim-fill");
     this.connectionPill = this.panel.querySelector("#hud-connection");
     this.sourceValue = this.panel.querySelector("#hud-source");
   }
@@ -182,15 +166,13 @@ export class HUD implements Component {
     color: string,
   ): void {
     const row = document.createElement("div");
-    row.style.cssText = "display: flex; flex-direction: column; gap: 3px;";
+    row.className = "meter-row";
     row.innerHTML = `
-      <div style="display: flex; justify-content: space-between;">
-        <span style="color: var(--text-secondary);">${label}</span>
-        <span class="hud-value" style="color: var(--text-primary);">—</span>
+      <div class="meter-label-row">
+        <span class="meter-label">${label}</span>
+        <span class="meter-value hud-value">—</span>
       </div>
-      <div style="height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;">
-        <div class="hud-fill" style="height: 100%; width: 0%; background: ${color}; border-radius: 2px; transition: width 0.4s ease;"></div>
-      </div>
+      <div class="meter-bar"><div class="meter-fill hud-fill" style="background: ${color};"></div></div>
     `;
     container.appendChild(row);
     this.rows.set(key, { key, label, value: "", fraction: 0, color });
@@ -206,29 +188,10 @@ export class HUD implements Component {
 
     this.modeChip = document.createElement("div");
     this.modeChip.id = "mode-chip";
-    this.modeChip.style.cssText = `
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      padding: 6px 14px;
-      border-radius: 16px;
-      background: ${PALETTE.text_muted}22;
-      border: 1px solid ${PALETTE.text_muted}88;
-      color: ${PALETTE.text_muted};
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      z-index: 150;
-      line-height: 1.5;
-    `;
+    this.modeChip.className = "mode-chip";
     this.modeChip.innerHTML = `
       <div class="mode-label">NO RUN</div>
-      <div class="mode-detail" style="
-        font-weight: 400;
-        letter-spacing: 0.02em;
-        font-size: 10px;
-        opacity: 0.8;
-      "></div>
+      <div class="mode-detail"></div>
     `;
     overlay.appendChild(this.modeChip);
   }
@@ -315,7 +278,7 @@ export class HUD implements Component {
     const source = store?.source;
     if (!source) {
       this.sourceValue.textContent = "—";
-      this.sourceValue.style.color = PALETTE.text_secondary;
+      this.sourceValue.style.color = "var(--text-secondary)";
       return;
     }
     if (source === "snapshot") {
@@ -323,12 +286,12 @@ export class HUD implements Component {
         ? new Date(store.published_at).toLocaleTimeString()
         : "";
       this.sourceValue.textContent = published ? `snapshot ${published}` : "snapshot";
-      this.sourceValue.style.color = PALETTE.insufficient;
+      this.sourceValue.style.color = "var(--insufficient)";
       this.sourceValue.title = "The writer published this copy; it is as fresh as its last publish.";
       return;
     }
     this.sourceValue.textContent = "live";
-    this.sourceValue.style.color = PALETTE.passed;
+    this.sourceValue.style.color = "var(--passed)";
     this.sourceValue.title = "The store itself, read as it is written.";
   }
 
@@ -376,28 +339,25 @@ export class HUD implements Component {
   }
 
   private updateClaim(): void {
-    if (!this.claimValue) return;
-    const fill = this.panel?.querySelector("#hud-claim-fill") as HTMLElement;
+    if (!this.claimValue || !this.claimFill) return;
     if (this.requiredSeeds <= 0) {
       this.claimValue.textContent = "—";
-      if (fill) fill.style.width = "0%";
+      this.claimFill.style.width = "0%";
       return;
     }
     const missing = Math.max(0, this.requiredSeeds - this.measuredSeeds);
     const progress = this.requiredSeeds > 0 ? this.measuredSeeds / this.requiredSeeds : 0;
     this.claimValue.textContent = missing > 0 ? `${missing} more (${this.requiredSeeds} needed)` : `Ready (${this.requiredSeeds} met)`;
-    this.claimValue.style.color = missing > 0 ? PALETTE.insufficient : PALETTE.passed;
-    if (fill) {
-      fill.style.width = `${Math.min(100, progress * 100)}%`;
-      fill.style.background = missing > 0 ? "var(--insufficient)" : "var(--passed)";
-    }
+    this.claimValue.style.color = missing > 0 ? "var(--insufficient)" : "var(--passed)";
+    this.claimFill.style.width = `${Math.min(100, progress * 100)}%`;
+    this.claimFill.style.background = missing > 0 ? "var(--insufficient)" : "var(--passed)";
   }
 
   private updateConnection(): void {
     if (!this.connectionPill) return;
     const dot = this.connectionPill.querySelector(".dot") as HTMLElement;
     const label = this.connectionPill.querySelector("span:last-child") as HTMLElement;
-    const color = this.connected ? PALETTE.ok : PALETTE.error;
+    const color = this.connected ? "var(--ok)" : "var(--error)";
     dot.style.background = color;
     this.connectionPill.style.background = `${color}22`;
     this.connectionPill.style.borderColor = `${color}88`;

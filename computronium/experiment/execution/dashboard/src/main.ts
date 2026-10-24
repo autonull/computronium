@@ -15,7 +15,7 @@ import { hud } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
 import { helpOverlay } from "./help-overlay.js";
 import { PALETTE } from "./palette.js";
-import { CONTROL_KEYS, TAB_KEYS } from "./keys.js";
+import { CONTROL_KEYS, TAB_KEYS, PANEL_KEYS } from "./keys.js";
 import { panels } from "./panels.js";
 import { detectRenderProfile } from "./render-profile.js";
 
@@ -30,44 +30,18 @@ window.addEventListener("unhandledrejection", (event) => {
   showError(event.reason?.message || "Unhandled promise rejection");
 });
 
-// Loading state
+// Loading state - uses .global-loading CSS class
 let loadingElement: HTMLElement | null = null;
-let errorElement: HTMLElement | null = null;
 
 function showLoading(message = "Initializing dashboard..."): void {
   const overlay = document.getElementById("ui-overlay");
   if (!overlay) return;
   loadingElement = document.createElement("div");
   loadingElement.id = "global-loading";
-  loadingElement.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 32px 48px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    z-index: 1000;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-  `;
+  loadingElement.className = "global-loading";
   loadingElement.innerHTML = `
-    <div style="
-      width: 48px;
-      height: 48px;
-      border: 3px solid var(--border);
-      border-top-color: ${PALETTE.gradient};
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    "></div>
-    <div style="font-size: 14px; color: var(--text-primary);">${message}</div>
-    <style>
-      @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    <div class="global-loading-spinner"></div>
+    <div class="global-loading-text">${message}</div>
   `;
   overlay.appendChild(loadingElement);
 }
@@ -80,39 +54,18 @@ function hideLoading(): void {
 function showError(message: string): void {
   const overlay = document.getElementById("ui-overlay");
   if (!overlay) return;
-  errorElement = document.createElement("div");
+  const errorElement = document.createElement("div");
   errorElement.id = "global-error";
-  errorElement.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: ${PALETTE.error}22;
-    border: 1px solid ${PALETTE.error}88;
-    border-radius: 8px;
-    padding: 16px 24px;
-    color: ${PALETTE.error};
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    z-index: 1000;
-    max-width: 400px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  `;
+  errorElement.className = "global-error";
   errorElement.innerHTML = `
     <span>✗</span>
     <span>${message}</span>
-    <button onclick="this.parentElement.remove()" style="
-      background: none;
-      border: none;
-      color: ${PALETTE.error};
-      font-size: 18px;
-      cursor: pointer;
-      line-height: 1;
-      padding: 0 4px;
-    ">&times;</button>
+    <button class="global-error-close">&times;</button>
   `;
+  // Add click handler for close button
+  errorElement.querySelector(".global-error-close")?.addEventListener("click", () => {
+    errorElement.remove();
+  });
   overlay.appendChild(errorElement);
   // Auto-dismiss after 10 seconds
   setTimeout(() => errorElement?.remove(), 10000);
@@ -140,25 +93,36 @@ wsClient.waitForConnection(15000).then((connected) => {
 // Components self-register with the registry on import; the registry
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
-// Keyboard shortcuts: the charts, the panels, and the control bar.
-// The number keys belong to the stage's views (V cycles them); the charts
-// are picked by the letters that name them, the panels by their own, and the
-// control bar by the verbs it holds.
+// Keyboard shortcuts: charts, panels, control bar, and global actions.
+// The charts are picked by letters; panels by their own; control bar by verbs.
 const TAB_BY_KEY = new Map<string, string>(
   Object.entries(TAB_KEYS).map(([name, key]) => [key, name]),
 );
+
+// Build panel key map
+const PANEL_BY_KEY = new Map<string, string>(
+  Object.entries(PANEL_KEYS).map(([name, key]) => [key, name]),
+);
+
 window.addEventListener("keydown", (event) => {
+  // Ignore if modifier keys pressed (except Shift for ?)
   if (event.metaKey || event.ctrlKey || event.altKey) return;
+  
   const target = event.target as HTMLElement | null;
   if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
     return;
   }
+  
   const key = event.key.toLowerCase();
+  
+  // Chart tabs
   const tab = TAB_BY_KEY.get(key);
   if (tab) {
     plotter.showTab(tab);
     return;
   }
+  
+  // Control bar verbs
   if (key === CONTROL_KEYS.play) {
     controlBar.togglePlay();
     return;
@@ -175,6 +139,35 @@ window.addEventListener("keydown", (event) => {
     panels.toggle("control-panel");
     return;
   }
+  
+  // Panel toggles (HUD, Legend, Caption, Live Rail)
+  const panelId = PANEL_BY_KEY.get(key);
+  if (panelId) {
+    panels.toggle(panelId);
+    return;
+  }
+  
+  // Cycle stage views
+  if (key === "v") {
+    viewSwitcher.cycle();
+    return;
+  }
+  
+  // Cell actions (when a cell is selected)
+  if (key === "r") {
+    window.dispatchEvent(new CustomEvent("cell-action-replicate"));
+    return;
+  }
+  if (key === "p") {
+    window.dispatchEvent(new CustomEvent("cell-action-preregister"));
+    return;
+  }
+  if (key === "q") {
+    window.dispatchEvent(new CustomEvent("cell-action-quest"));
+    return;
+  }
+  
+  // Fallback: generic panel by key
   const panel = panels.byKey(key);
   if (panel) panels.toggle(panel.id);
 });

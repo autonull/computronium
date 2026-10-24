@@ -70,7 +70,9 @@ export class HelpOverlay implements Component {
   name = "HelpOverlay";
 
   private container: HTMLElement | null = null;
+  private dialog: HTMLElement | null = null;
   private isOpen = false;
+  private lastFocused: HTMLElement | null = null;
 
   constructor() {
     window.addEventListener("keydown", this.onKeyDown);
@@ -78,6 +80,12 @@ export class HelpOverlay implements Component {
 
   async init(): Promise<void> {
     this.createOverlay();
+    registerDisplayPanel(
+      "help-overlay",
+      "help",
+      "?",
+      () => this.container,
+    );
     console.log("[HelpOverlay] Initialized");
   }
 
@@ -87,11 +95,12 @@ export class HelpOverlay implements Component {
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
+    // Ignore if typing in input
+    const target = event.target as HTMLElement | null;
+    const isInput = target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
+    if (isInput) return;
+
     if (event.key === "?" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
-        return;
-      }
       event.preventDefault();
       this.toggle();
     }
@@ -106,6 +115,9 @@ export class HelpOverlay implements Component {
 
     this.container = document.createElement("div");
     this.container.id = "help-overlay";
+    this.container.setAttribute("role", "dialog");
+    this.container.setAttribute("aria-modal", "true");
+    this.container.setAttribute("aria-labelledby", "help-title");
     this.container.style.cssText = `
       position: fixed;
       inset: 0;
@@ -158,14 +170,14 @@ export class HelpOverlay implements Component {
         transition: transform 0.2s ease;
       ">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
-          <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em;">Keyboard Shortcuts</h2>
-          <span style="font-size: 11px; color: var(--text-muted);">Press <kbd style="font-family: 'JetBrains Mono', monospace; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px;">?</kbd> again to close</span>
+          <h2 id="help-title" style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em;">Keyboard Shortcuts</h2>
+          <span style="font-size: 11px; color: var(--text-muted);">Press <kbd style="font-family: 'JetBrains Mono', monospace; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px;">?</kbd> again or <kbd style="font-family: 'JetBrains Mono', monospace; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px;">Esc</kbd> to close</span>
         </div>
         ${groupsHtml}
       </div>
     `;
 
-    overlay.appendChild(this.container);
+    this.dialog = this.container.querySelector("div")!;
 
     // Click backdrop to close
     this.container.addEventListener("click", (event) => {
@@ -181,27 +193,69 @@ export class HelpOverlay implements Component {
   }
 
   show(): void {
-    if (!this.container) return;
+    if (!this.container || !this.dialog) return;
+    // Store last focused element
+    this.lastFocused = document.activeElement as HTMLElement;
+    
     this.container.style.display = "flex";
+    // Trap focus
+    this.trapFocus();
+    
     requestAnimationFrame(() => {
       this.container!.style.opacity = "1";
-      const dialog = this.container!.querySelector("div");
-      if (dialog) (dialog as HTMLElement).style.transform = "scale(1)";
+      if (this.dialog) this.dialog.style.transform = "scale(1)";
     });
     this.isOpen = true;
     document.body.style.overflow = "hidden";
   }
 
   hide(): void {
-    if (!this.container) return;
+    if (!this.container || !this.dialog) return;
     this.container.style.opacity = "0";
-    const dialog = this.container.querySelector("div");
-    if (dialog) (dialog as HTMLElement).style.transform = "scale(0.95)";
+    this.dialog.style.transform = "scale(0.95)";
     setTimeout(() => {
       if (this.container) this.container.style.display = "none";
     }, 200);
     this.isOpen = false;
     document.body.style.overflow = "";
+    // Restore focus
+    if (this.lastFocused) this.lastFocused.focus();
+  }
+
+  private trapFocus(): void {
+    if (!this.dialog) return;
+    const focusable = this.dialog.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    
+    const handleTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      if (event.shiftKey) {
+        if (document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    
+    this.dialog.addEventListener("keydown", handleTab);
+    // Clean up on hide
+    const cleanup = () => {
+      this.dialog?.removeEventListener("keydown", handleTab);
+    };
+    this.container?.addEventListener("transitionend", cleanup, { once: true });
+    
+    // Focus first element
+    first.focus();
   }
 }
 

@@ -107,7 +107,7 @@ export class MessageRouter {
 }
 
 /**
- * WebSocket client with auto-reconnect, connection state, and MessageRouter integration.
+ * WebSocket client with auto-reconnect, connection state, heartbeat, and MessageRouter integration.
  */
 export class WSClient {
   private ws: WebSocket | null = null;
@@ -120,6 +120,11 @@ export class WSClient {
   private state: ConnectionState = "disconnected";
   private stateListeners: Set<(state: ConnectionState) => void> = new Set();
   private messageQueue: WSMessage[] = [];
+  private heartbeatInterval: number | null = null;
+  private lastPong = 0;
+  private missedPongs = 0;
+  private readonly maxMissedPongs = 3;
+  private readonly heartbeatIntervalMs = 15000;
 
   constructor(url: string, router: MessageRouter) {
     this.url = url;
@@ -141,7 +146,9 @@ export class WSClient {
 
   private setState(state: ConnectionState): void {
     if (this.state === state) return;
+    const oldState = this.state;
     this.state = state;
+    console.log(`[WS] State: ${oldState} → ${state}`);
     this.stateListeners.forEach((l) => l(state));
   }
 
@@ -161,7 +168,10 @@ export class WSClient {
       console.log("[WS] Connected");
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
+      this.missedPongs = 0;
+      this.lastPong = Date.now();
       this.setState("connected");
+      this.startHeartbeat();
       // Flush any queued messages
       this.flushQueue();
     };
@@ -169,14 +179,21 @@ export class WSClient {
     this.ws.onmessage = async (event) => {
       try {
         const message = JSON.parse(event.data);
+        // Handle pong messages
+        if (message.type === "pong") {
+          this.lastPong = Date.now();
+          this.missedPongs = 0;
+          return;
+        }
         await this.router.dispatch(message);
       } catch (e) {
         console.error("[WS] Failed to parse message:", e);
       }
     };
 
-    this.ws.onclose = () => {
-      console.log("[WS] Disconnected");
+    this.ws.onclose = (event) => {
+      console.log("[WS] Disconnected:", event.code, event.reason);
+      this.stopHeartbeat();
       this.setState("disconnected");
       if (this.shouldReconnect) this.scheduleReconnect();
     };
@@ -186,16 +203,41 @@ export class WSClient {
     };
   }
 
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatInterval = window.setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.missedPongs++;
+        if (this.missedPongs > this.maxMissedPongs) {
+          console.warn("[WS] Heartbeat failed - closing connection");
+          this.ws.close(1000, "Heartbeat timeout");
+          return;
+        }
+        this.ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, this.heartbeatIntervalMs);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval !== null) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
   private scheduleReconnect(): void {
     if (this.state === "reconnecting") return;
     this.setState("reconnecting");
-    const delay = Math.min(
+    // Exponential backoff with jitter (±25%)
+    const baseDelay = Math.min(
       this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts),
       this.maxReconnectDelay,
     );
+    const jitter = baseDelay * 0.25 * (Math.random() * 2 - 1);
+    const delay = Math.max(100, baseDelay + jitter);
     this.reconnectAttempts++;
     console.log(
-      `[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`,
+      `[WS] Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts})`,
     );
     setTimeout(() => this.connect(), delay);
   }
@@ -216,9 +258,34 @@ export class WSClient {
     }
   }
 
+  /** Send a message with optional response handling. */
+  async request(message: WSMessage, timeoutMs = 5000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const requestId = `${message.type}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const messageWithId = { ...message, request_id: requestId };
+
+      const unsubscribe = this.router.once(requestId, (response) => {
+        clearTimeout(timer);
+        if (response.error) {
+          reject(new Error(response.error));
+        } else {
+          resolve(response.data);
+        }
+      });
+
+      const timer = setTimeout(() => {
+        unsubscribe();
+        reject(new Error(`Request timeout: ${message.type}`));
+      }, timeoutMs);
+
+      this.send(messageWithId);
+    });
+  }
+
   disconnect(): void {
     this.shouldReconnect = false;
-    this.ws?.close();
+    this.stopHeartbeat();
+    this.ws?.close(1000, "Client disconnect");
     this.ws = null;
     this.setState("disconnected");
   }
@@ -243,6 +310,15 @@ export class WSClient {
 
   get isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /** Get connection quality metrics. */
+  getConnectionQuality(): { state: ConnectionState; latency: number; missedPongs: number } {
+    return {
+      state: this.state,
+      latency: this.lastPong ? Date.now() - this.lastPong : -1,
+      missedPongs: this.missedPongs,
+    };
   }
 }
 
