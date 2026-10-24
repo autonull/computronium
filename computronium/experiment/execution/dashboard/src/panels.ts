@@ -260,6 +260,11 @@ export function registerPanel(
   panels.register({ id, label, glyph, key, toggle, isOpen });
 }
 
+/** Get a panel element by its id. */
+export function getPanelElement(id: string): HTMLElement | null {
+  return document.getElementById(id);
+}
+
 /** Register a panel that shows and hides itself by its own display. */
 export function registerDisplayPanel(
   id: string,

@@ -2,6 +2,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
+import "./dashboard.css";
 import { router, wsClient } from "./ws-client.js";
 import { setSceneContext } from "./components/context.js";
 import { controlBar } from "./control-bar.js";

@@ -1,23 +1,24 @@
-/** The control bar: the verbs, always visible (TODO70).
-
-    The dashboard is an instrument: these are the buttons that act on the run,
-    and they act on the run itself — through the control plane, which a run
-    in another process reads. Nothing here is decorative, and nothing here is
-    a control the server does not offer: a verb the server cannot honour is
-    disabled, with the reason in its tooltip.
-
-    The bar polls the control endpoint at 2 Hz. The dashboard's own update
-    loop runs every two seconds, which is far too slow for a meter that is
-    meant to move.
-
-    The ceiling and the use are two different numbers, and the bar shows
-    both: the slider sets the ceiling, the meter shows the cells in flight
-    now, and the machine's own CPU is a third mark. Collapsing them into
-    one number would be a lie about which is which.
-*/
+/** The control bar: the verbs, always visible (TODO70, refactored for TODO71 Phase 1).
+ *
+ * The dashboard is an instrument: these are the buttons that act on the run,
+ * and they act on the run itself — through the control plane, which a run
+ * in another process reads. Nothing here is decorative, and nothing here is
+ * a control the server does not offer: a verb the server cannot honour is
+ * disabled, with the reason in its tooltip.
+ *
+ * The bar polls the control endpoint at 2 Hz. The dashboard's own update
+ * loop runs every two seconds, which is far too slow for a meter that is
+ * meant to move.
+ *
+ * The ceiling and the use are two different numbers, and the bar shows
+ * both: the slider sets the ceiling, the meter shows the cells in flight
+ * now, and the machine's own CPU is a third mark. Collapsing them into
+ * one number would be a lie about which is which.
+ */
 
 import { registry } from "./components/registry.js";
-import { closeButton, panels, registerDisplayPanel } from "./panels.js";
+import { panels, registerDisplayPanel } from "./panels.js";
+import { createPanelShell } from "./shell.js";
 import type { Component } from "./components/registry.js";
 
 /** How often the bar asks the server what the run is doing. */
@@ -61,6 +62,155 @@ interface Sample {
   cpu: number;
 }
 
+function createControlBarBody(): string {
+  return `
+    <style>
+      .control-bar .verb {
+        width: 36px;
+        height: 32px;
+        font-size: 16px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all var(--motion-fast) var(--ease-out);
+      }
+      .control-bar .verb:not(:disabled):hover {
+        background: var(--border);
+        border-color: var(--border-bright);
+        transform: translateY(-1px);
+      }
+      .control-bar .verb:not(:disabled):active {
+        transform: translateY(0) scale(0.95);
+      }
+      .control-bar .verb:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .control-bar .verb-primary:not(:disabled) {
+        background: var(--gradient)22;
+        border-color: var(--gradient)66;
+        color: var(--gradient);
+      }
+      .control-bar .verb-primary:not(:disabled):hover {
+        background: var(--gradient)33;
+        border-color: var(--gradient);
+      }
+      .control-bar .verb-danger:not(:disabled) {
+        background: var(--error)22;
+        border-color: var(--error)66;
+        color: var(--error);
+      }
+      .control-bar .verb-danger:not(:disabled):hover {
+        background: var(--error)33;
+        border-color: var(--error);
+      }
+      .control-bar .separator {
+        width: 1px;
+        height: 24px;
+        background: var(--border);
+      }
+      .control-bar .meter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 150px;
+      }
+      .control-bar .meter-label-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .control-bar .meter-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+      }
+      .control-bar .meter-value {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .control-bar .meter-bar {
+        height: 6px;
+        background: var(--bg);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .control-bar .meter-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 3px;
+        transition: width var(--motion-normal) var(--ease-out), background-color var(--motion-fast);
+      }
+      .control-bar .ceiling-slider {
+        width: 150px;
+        accent-color: var(--gradient);
+      }
+      .control-bar .trace-canvas {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+      }
+      .control-bar .status-text {
+        min-width: 120px;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .control-bar .door-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 15px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all var(--motion-fast) var(--ease-out);
+      }
+      .control-bar .door-btn:hover {
+        background: var(--border);
+        border-color: var(--border-bright);
+      }
+    </style>
+    <button class="verb verb-primary" data-action="play" title="Play — release the run">▶</button>
+    <button class="verb" data-action="step" title="Step — release exactly one more batch" disabled>⏭</button>
+    <button class="verb verb-danger" data-action="stop" title="Stop — end the run at its next boundary">⏹</button>
+    <div class="separator"></div>
+    <div class="meter-group">
+      <div class="meter-label-row">
+        <span class="meter-label">CEILING</span>
+        <span class="meter-value ceiling-value">—</span>
+      </div>
+      <input class="ceiling-slider" type="range" min="1" max="8" value="4" />
+    </div>
+    <div class="meter-group">
+      <div class="meter-label-row">
+        <span class="meter-label">CELLS</span>
+        <span class="meter-value level-text">—</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill level-fill" style="background: var(--promoted);"></div></div>
+      <div class="meter-label-row">
+        <span class="meter-label">CPU</span>
+        <span class="meter-value cpu-text">—</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill cpu-fill" style="background: var(--cpu);"></div></div>
+    </div>
+    <canvas class="trace-canvas" width="130" height="42"></canvas>
+    <div class="separator"></div>
+    <span class="status-text">no run is reporting</span>
+    <button class="door-btn" data-action="panel" title="Open control panel">⚙</button>
+  `;
+}
+
 export class ControlBar implements Component {
   name = "ControlBar";
 
@@ -82,13 +232,26 @@ export class ControlBar implements Component {
   private samples: Sample[] = [];
 
   async init(): Promise<void> {
-    this.createBar();
+    this.container = createPanelShell({
+      id: "control-bar",
+      title: "Control Bar",
+      glyph: "⏯",
+      body: createControlBarBody(),
+      dock: "bottom",
+      defaultOpen: true,
+      className: "control-bar-panel",
+    });
+
+    this.bindElements();
+    this.bindEvents();
+
     registerDisplayPanel(
       "control-bar",
       "control bar",
       "⏯",
       () => this.container,
     );
+
     this.timer = window.setInterval(() => {
       void this.poll();
     }, POLL_MS);
@@ -99,6 +262,42 @@ export class ControlBar implements Component {
     if (this.timer !== null) window.clearInterval(this.timer);
     this.timer = null;
     this.container?.remove();
+  }
+
+  private bindElements(): void {
+    if (!this.container) return;
+    const verbs = this.container.querySelectorAll<HTMLButtonElement>(".verb");
+    this.playButton = verbs[0];
+    this.stepButton = verbs[1];
+    this.stopButton = verbs[2];
+
+    this.slider = this.container.querySelector<HTMLInputElement>(".ceiling-slider");
+    this.ceilingValue = this.container.querySelector(".ceiling-value");
+    this.levelFill = this.container.querySelector(".level-fill");
+    this.levelText = this.container.querySelector(".level-text");
+    this.cpuFill = this.container.querySelector(".cpu-fill");
+    this.cpuText = this.container.querySelector(".cpu-text");
+    this.trace = this.container.querySelector("canvas.trace-canvas");
+    this.statusText = this.container.querySelector(".status-text");
+  }
+
+  private bindEvents(): void {
+    if (!this.container) return;
+    this.playButton?.addEventListener("click", () => this.togglePlay());
+    this.stepButton?.addEventListener("click", () => this.step());
+    this.stopButton?.addEventListener("click", () => this.stop());
+    this.slider?.addEventListener("input", (e) => {
+      const target = e.target as HTMLInputElement;
+      const value = Number(target.value);
+      if (this.ceilingValue) this.ceilingValue.textContent = String(value);
+    });
+    this.slider?.addEventListener("change", () => {
+      const value = Number(this.slider?.value ?? 1);
+      void this.command({ max_workers: value });
+    });
+    this.container
+      .querySelector<HTMLButtonElement>(".door-btn")!
+      .addEventListener("click", () => panels.toggle("control-panel"));
   }
 
   /** Play or pause: the button shows what the server says, and the browser
@@ -336,216 +535,6 @@ export class ControlBar implements Component {
   /** Say why a command did not land. */
   private setStatus(text: string): void {
     if (this.statusText) this.statusText.textContent = text;
-  }
-
-  private createBar(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
-
-    this.container = document.createElement("div");
-    this.container.id = "control-bar";
-    this.container.style.cssText = `
-      position: fixed;
-      bottom: 126px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 14px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      font-size: 11px;
-      color: var(--text-secondary);
-      z-index: 165;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
-      transition: box-shadow var(--motion-fast), border-color var(--motion-fast);
-    `;
-
-    this.container.innerHTML = `
-      <style>
-        .control-bar .verb {
-          width: 36px;
-          height: 32px;
-          font-size: 16px;
-          background: var(--bg-tertiary);
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          color: var(--text-primary);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all var(--motion-fast) var(--ease-out);
-        }
-        .control-bar .verb:not(:disabled):hover {
-          background: var(--border);
-          border-color: var(--border-bright);
-          transform: translateY(-1px);
-        }
-        .control-bar .verb:not(:disabled):active {
-          transform: translateY(0) scale(0.95);
-        }
-        .control-bar .verb:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-        .control-bar .verb-primary:not(:disabled) {
-          background: var(--gradient)22;
-          border-color: var(--gradient)66;
-          color: var(--gradient);
-        }
-        .control-bar .verb-primary:not(:disabled):hover {
-          background: var(--gradient)33;
-          border-color: var(--gradient);
-        }
-        .control-bar .verb-danger:not(:disabled) {
-          background: var(--error)22;
-          border-color: var(--error)66;
-          color: var(--error);
-        }
-        .control-bar .verb-danger:not(:disabled):hover {
-          background: var(--error)33;
-          border-color: var(--error);
-        }
-        .control-bar .separator {
-          width: 1px;
-          height: 24px;
-          background: var(--border);
-        }
-        .control-bar .meter-group {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          min-width: 150px;
-        }
-        .control-bar .meter-label-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: baseline;
-        }
-        .control-bar .meter-label {
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--text-secondary);
-        }
-        .control-bar .meter-value {
-          color: var(--text-primary);
-          font-weight: 600;
-          font-variant-numeric: tabular-nums;
-        }
-        .control-bar .meter-bar {
-          height: 6px;
-          background: var(--bg);
-          border-radius: 3px;
-          overflow: hidden;
-        }
-        .control-bar .meter-fill {
-          height: 100%;
-          width: 0%;
-          border-radius: 3px;
-          transition: width var(--motion-normal) var(--ease-out), background-color var(--motion-fast);
-        }
-        .control-bar .ceiling-slider {
-          width: 150px;
-          accent-color: var(--gradient);
-        }
-        .control-bar .trace-canvas {
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          background: var(--bg);
-        }
-        .control-bar .status-text {
-          min-width: 120px;
-          color: var(--text-secondary);
-          font-variant-numeric: tabular-nums;
-        }
-        .control-bar .door-btn {
-          width: 30px;
-          height: 30px;
-          font-size: 15px;
-          background: var(--bg-tertiary);
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          color: var(--text-primary);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all var(--motion-fast) var(--ease-out);
-        }
-        .control-bar .door-btn:hover {
-          background: var(--border);
-          border-color: var(--border-bright);
-        }
-      </style>
-      <button class="verb verb-primary" data-action="play" title="Play — release the run">▶</button>
-      <button class="verb" data-action="step" title="Step — release exactly one more batch" disabled>⏭</button>
-      <button class="verb verb-danger" data-action="stop" title="Stop — end the run at its next boundary">⏹</button>
-      <div class="separator"></div>
-      <div class="meter-group">
-        <div class="meter-label-row">
-          <span class="meter-label">CEILING</span>
-          <span class="meter-value ceiling-value">—</span>
-        </div>
-        <input class="ceiling-slider" type="range" min="1" max="8" value="4" />
-      </div>
-      <div class="meter-group">
-        <div class="meter-label-row">
-          <span class="meter-label">CELLS</span>
-          <span class="meter-value level-text">—</span>
-        </div>
-        <div class="meter-bar"><div class="meter-fill level-fill" style="background: var(--promoted);"></div></div>
-        <div class="meter-label-row">
-          <span class="meter-label">CPU</span>
-          <span class="meter-value cpu-text">—</span>
-        </div>
-        <div class="meter-bar"><div class="meter-fill cpu-fill" style="background: var(--cpu);"></div></div>
-      </div>
-      <canvas class="trace-canvas" width="130" height="42"></canvas>
-      <div class="separator"></div>
-      <span class="status-text">no run is reporting</span>
-      <button class="door-btn" data-action="panel" title="Open control panel">⚙</button>
-    `;
-
-    overlay.appendChild(this.container);
-
-    const verbs = this.container.querySelectorAll<HTMLButtonElement>(".verb");
-    this.playButton = verbs[0];
-    this.stepButton = verbs[1];
-    this.stopButton = verbs[2];
-    this.playButton.addEventListener("click", () => this.togglePlay());
-    this.stepButton.addEventListener("click", () => this.step());
-    this.stopButton.addEventListener("click", () => this.stop());
-
-    this.slider = this.container.querySelector<HTMLInputElement>(".ceiling-slider");
-    this.slider?.addEventListener("input", (e) => {
-      const target = e.target as HTMLInputElement;
-      const value = Number(target.value);
-      this.ceilingValue!.textContent = String(value);
-    });
-    this.slider?.addEventListener("change", () => {
-      const value = Number(this.slider?.value ?? 1);
-      void this.command({ max_workers: value });
-    });
-    this.ceilingValue = this.container.querySelector(".ceiling-value");
-    this.levelFill = this.container.querySelector(".level-fill");
-    this.levelText = this.container.querySelector(".level-text");
-    this.cpuFill = this.container.querySelector(".cpu-fill");
-    this.cpuText = this.container.querySelector(".cpu-text");
-    this.trace = this.container.querySelector("canvas.trace-canvas");
-    this.statusText = this.container.querySelector(".status-text");
-    this.container
-      .querySelector<HTMLButtonElement>(".door-btn")!
-      .addEventListener("click", () => panels.toggle("control-panel"));
-
-    const close = closeButton(() => panels.toggle("control-bar"));
-    close.style.position = "absolute";
-    close.style.top = "-10px";
-    close.style.right = "-8px";
-    this.container.appendChild(close);
   }
 }
 

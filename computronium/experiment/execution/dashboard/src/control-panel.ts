@@ -1,30 +1,31 @@
-/** The control panel: the options that do not belong on a bar (TODO70).
-
-    Four sections, and each one replaces something that needed a terminal:
-
-    **New run** — the profile picker, what the profile declares, the
-    reader's edits, and Start. Without a campaign queue the panel says so
-    and gives the command to type: the dashboard must never appear to have
-    a control it does not have.
-
-    **This run** — the run's declaration as it stands. A run's declaration is
-    frozen once it has begun, so the panel shows it and says so rather than
-    offering an editor that would lie.
-
-    **The queue** — the campaigns waiting and running, with cancel and
-    preempt, and the queue's own ceilings.
-
-    **Cells** — the three cell verbs, reachable without clicking a cell in
-    the 3D scene.
-
-    **Exports** — the narration script, the run's report, and the records as
-    JSON: the dashboard is the whole instrument, and a reader can take the
-    picture away.
-*/
+/** The control panel: the options that do not belong on a bar (TODO70, refactored for TODO71 Phase 1).
+ *
+ * Four sections, and each one replaces something that needed a terminal:
+ *
+ * **New run** — the profile picker, what the profile declares, the
+ * reader's edits, and Start. Without a campaign queue the panel says so
+ * and gives the command to type: the dashboard must never appear to have
+ * a control it does not have.
+ *
+ * **This run** — the run's declaration as it stands. A run's declaration is
+ * frozen once it has begun, so the panel shows it and says so rather than
+ * offering an editor that would lie.
+ *
+ * **The queue** — the campaigns waiting and running, with cancel and
+ * preempt, and the queue's own ceilings.
+ *
+ * **Cells** — the three cell verbs, reachable without clicking a cell in
+ * the 3D scene.
+ *
+ * **Exports** — the narration script, the run's report, and the records as
+ * JSON: the dashboard is the whole instrument, and a reader can take the
+ * picture away.
+ */
 
 import { registry } from "./components/registry.js";
 import { CONTROL_KEYS } from "./keys.js";
-import { closeButton, panels, registerDisplayPanel, setPanelHidden } from "./panels.js";
+import { panels, registerDisplayPanel, setPanelHidden, closeButton } from "./panels.js";
+import { createPanelShell } from "./shell.js";
 import { runSelection } from "./run-selection.js";
 import type { Component } from "./components/registry.js";
 
@@ -74,6 +75,153 @@ const CELL_AXES = [
   "update",
 ] as const;
 
+function createControlPanelBody(): string {
+  return `
+    <style>
+      #control-panel h4 {
+        margin: 14px 0 6px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        color: var(--text-primary);
+      }
+      #control-panel table.kv, #control-panel table.list {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      #control-panel table.kv th, #control-panel table.list th {
+        text-align: left;
+        font-weight: 500;
+        color: var(--text-secondary);
+        padding: 2px 6px 2px 0;
+        vertical-align: top;
+      }
+      #control-panel table.kv td, #control-panel table.list td {
+        color: var(--text-primary);
+        padding: 2px 6px 2px 0;
+        vertical-align: top;
+      }
+      #control-panel .note {
+        color: var(--text-secondary);
+        margin: 4px 0 8px;
+        line-height: 1.4;
+      }
+      #control-panel .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin: 4px 0;
+      }
+      #control-panel input, #control-panel select {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 11px;
+        padding: 2px 4px;
+        min-width: 0;
+      }
+      #control-panel button.mini {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text-primary);
+        font-size: 11px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      #control-panel button.action {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text-primary);
+        font-size: 11px;
+        padding: 4px 10px;
+        cursor: pointer;
+        transition: all 0.1s ease;
+      }
+      #control-panel button.action:hover:not(:disabled) {
+        background: var(--border);
+        border-color: var(--border-bright);
+      }
+      #control-panel button.action:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      #control-panel .cell-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      #control-panel .cell-row label {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 10px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      #control-panel .cell-row select {
+        font-size: 10px;
+        padding: 2px 6px;
+      }
+    </style>
+    <div id="control-panel-header" style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-weight: 600; color: var(--text-primary); letter-spacing: 0.08em;">CONTROL</span>
+      <div style="flex: 1;"></div>
+    </div>
+
+    <h4>NEW RUN</h4>
+    <div class="row">
+      <select class="profile"></select>
+      <select class="device">
+        <option value="auto">auto</option>
+        <option value="cpu">cpu</option>
+        <option value="cuda">cuda</option>
+      </select>
+    </div>
+    <div class="note profile-note"></div>
+    <div class="row">
+      <label>seeds</label><input class="seeds" type="number" min="1" />
+      <label>epochs</label><input class="epochs" type="number" min="1" />
+      <label>budget</label><input class="budget" type="number" min="1" />
+      <select class="fidelity">
+        <option value="L0">L0</option>
+        <option value="L1">L1</option>
+        <option value="L2">L2</option>
+      </select>
+    </div>
+    <div class="row">
+      <button class="action start">Start run</button>
+    </div>
+    <div class="note new-run-note"></div>
+
+    <h4>THIS RUN</h4>
+    <div class="run-section"></div>
+
+    <h4>THE QUEUE</h4>
+    <div class="queue-section"></div>
+
+    <h4>CELLS</h4>
+    <div class="row cell-row"></div>
+    <div class="row">
+      <button class="action replicate">Replicate</button>
+      <button class="action preregister">Preregister</button>
+      <button class="action quest">Quest</button>
+    </div>
+    <div class="note cell-note"></div>
+
+    <h4>EXPORTS</h4>
+    <div class="row">
+      <button class="action export-script">Narration script</button>
+      <button class="action export-report">Run report</button>
+      <button class="action export-records">Records as JSON</button>
+    </div>
+    <div class="note export-note"></div>
+  `;
+}
+
 export class ControlPanel implements Component {
   name = "ControlPanel";
 
@@ -98,7 +246,19 @@ export class ControlPanel implements Component {
   private exportNote: HTMLElement | null = null;
 
   async init(): Promise<void> {
-    this.createPanel();
+    this.container = createPanelShell({
+      id: "control-panel",
+      title: "Control Panel",
+      glyph: "⚙",
+      key: CONTROL_KEYS.panel,
+      body: createControlPanelBody(),
+      dock: "left",
+      defaultOpen: false,
+    });
+
+    this.bindElements();
+    this.bindEvents();
+
     registerDisplayPanel(
       "control-panel",
       "control panel",
@@ -112,6 +272,66 @@ export class ControlPanel implements Component {
 
   async destroy(): Promise<void> {
     this.container?.remove();
+  }
+
+  private bindElements(): void {
+    if (!this.container) return;
+    this.newRunSection = this.container.querySelector(".new-run-note");
+    this.runSection = this.container.querySelector(".run-section");
+    this.queueSection = this.container.querySelector(".queue-section");
+    this.cellSection = this.container.querySelector(".cell-section");
+    this.exportSection = this.container.querySelector(".export-note");
+    this.profileSelect = this.container.querySelector(".profile");
+    this.profileNote = this.container.querySelector(".profile-note");
+    this.newRunNote = this.container.querySelector(".new-run-note");
+    this.cellNote = this.container.querySelector(".cell-note");
+    this.exportNote = this.container.querySelector(".export-note");
+    this.seedsInput = this.container.querySelector(".seeds");
+    this.epochsInput = this.container.querySelector(".epochs");
+    this.budgetInput = this.container.querySelector(".budget");
+    this.deviceSelect = this.container.querySelector(".device");
+    this.fidelitySelect = this.container.querySelector(".fidelity");
+
+    const cellRow = this.container.querySelector<HTMLElement>(".cell-row")!;
+    for (const axis of CELL_AXES) {
+      const label = document.createElement("label");
+      label.textContent = axis;
+      const select = document.createElement("select");
+      select.className = `cell-${axis}`;
+      label.appendChild(select);
+      cellRow.appendChild(label);
+      this.cellSelects.set(axis, select);
+    }
+
+    this.container
+      .querySelector<HTMLElement>("#control-panel-header")!
+      .appendChild(closeButton(() => panels.toggle("control-panel")));
+  }
+
+  private bindEvents(): void {
+    if (!this.container) return;
+    this.profileSelect?.addEventListener("change", () => this.renderProfileNote());
+    this.container
+      .querySelector<HTMLButtonElement>(".start")!
+      .addEventListener("click", () => void this.startRun());
+    this.container
+      .querySelector<HTMLButtonElement>(".replicate")!
+      .addEventListener("click", () => void this.cellAction("replicate"));
+    this.container
+      .querySelector<HTMLButtonElement>(".preregister")!
+      .addEventListener("click", () => void this.cellAction("preregister"));
+    this.container
+      .querySelector<HTMLButtonElement>(".quest")!
+      .addEventListener("click", () => void this.cellAction("quest"));
+    this.container
+      .querySelector<HTMLButtonElement>(".export-script")!
+      .addEventListener("click", () => void this.export("script"));
+    this.container
+      .querySelector<HTMLButtonElement>(".export-report")!
+      .addEventListener("click", () => void this.export("report"));
+    this.container
+      .querySelector<HTMLButtonElement>(".export-records")!
+      .addEventListener("click", () => void this.export("records"));
   }
 
   /** The profiles and the axes the form offers. */
@@ -475,205 +695,6 @@ export class ControlPanel implements Component {
     link.href = URL.createObjectURL(blob);
     link.click();
     URL.revokeObjectURL(link.href);
-  }
-
-  private createPanel(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
-
-    this.container = document.createElement("div");
-    this.container.id = "control-panel";
-    this.container.style.cssText = `
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      width: 430px;
-      max-height: calc(100vh - 340px);
-      overflow-y: auto;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px 16px;
-      font-size: 11px;
-      color: var(--text-secondary);
-      z-index: 165;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    `;
-    this.container.innerHTML = `
-      <style>
-        #control-panel h4 {
-          margin: 14px 0 6px;
-          font-size: 11px;
-          letter-spacing: 0.08em;
-          color: var(--text-primary);
-        }
-        #control-panel table.kv, #control-panel table.list {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 11px;
-        }
-        #control-panel table.kv th, #control-panel table.list th {
-          text-align: left;
-          font-weight: 500;
-          color: var(--text-secondary);
-          padding: 2px 6px 2px 0;
-          vertical-align: top;
-        }
-        #control-panel table.kv td, #control-panel table.list td {
-          color: var(--text-primary);
-          padding: 2px 6px 2px 0;
-          vertical-align: top;
-        }
-        #control-panel .note {
-          color: var(--text-secondary);
-          margin: 4px 0 8px;
-          line-height: 1.4;
-        }
-        #control-panel .row {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          margin: 4px 0;
-        }
-        #control-panel input, #control-panel select {
-          background: var(--bg-tertiary);
-          color: var(--text-primary);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          font-size: 11px;
-          padding: 2px 4px;
-          min-width: 0;
-        }
-        #control-panel button.mini {
-          background: var(--bg-tertiary);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          color: var(--text-primary);
-          font-size: 11px;
-          padding: 2px 8px;
-          cursor: pointer;
-        }
-        #control-panel button.action {
-          background: var(--bg-tertiary);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          color: var(--text-primary);
-          font-size: 11px;
-          padding: 4px 10px;
-          cursor: pointer;
-        }
-      </style>
-      <div id="control-panel-header" style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-weight: 600; color: var(--text-primary); letter-spacing: 0.08em;">CONTROL</span>
-        <div style="flex: 1;"></div>
-      </div>
-
-      <h4>NEW RUN</h4>
-      <div class="row">
-        <select class="profile"></select>
-        <select class="device">
-          <option value="auto">auto</option>
-          <option value="cpu">cpu</option>
-          <option value="cuda">cuda</option>
-        </select>
-      </div>
-      <div class="note profile-note"></div>
-      <div class="row">
-        <label>seeds</label><input class="seeds" type="number" min="1" />
-        <label>epochs</label><input class="epochs" type="number" min="1" />
-        <label>budget</label><input class="budget" type="number" min="1" />
-        <select class="fidelity">
-          <option value="L0">L0</option>
-          <option value="L1">L1</option>
-          <option value="L2">L2</option>
-        </select>
-      </div>
-      <div class="row">
-        <button class="action start">Start run</button>
-      </div>
-      <div class="note new-run-note"></div>
-
-      <h4>THIS RUN</h4>
-      <div class="run-section"></div>
-
-      <h4>THE QUEUE</h4>
-      <div class="queue-section"></div>
-
-      <h4>CELLS</h4>
-      <div class="row cell-row"></div>
-      <div class="row">
-        <button class="action replicate">Replicate</button>
-        <button class="action preregister">Preregister</button>
-        <button class="action quest">Quest</button>
-      </div>
-      <div class="note cell-note"></div>
-
-      <h4>EXPORTS</h4>
-      <div class="row">
-        <button class="action export-script">Narration script</button>
-        <button class="action export-report">Run report</button>
-        <button class="action export-records">Records as JSON</button>
-      </div>
-      <div class="note export-note"></div>
-    `;
-
-    overlay.appendChild(this.container);
-    // The control panel is a popup: it opens when the reader asks for it.
-    setPanelHidden(this.container, true);
-    this.container
-      .querySelector<HTMLElement>("#control-panel-header")!
-      .appendChild(closeButton(() => panels.toggle("control-panel")));
-
-    this.newRunSection = this.container.querySelector(".new-run-note");
-    this.runSection = this.container.querySelector(".run-section");
-    this.queueSection = this.container.querySelector(".queue-section");
-    this.cellSection = this.container.querySelector(".cell-section");
-    this.exportSection = this.container.querySelector(".export-note");
-    this.profileSelect = this.container.querySelector(".profile");
-    this.profileNote = this.container.querySelector(".profile-note");
-    this.newRunNote = this.container.querySelector(".new-run-note");
-    this.cellNote = this.container.querySelector(".cell-note");
-    this.exportNote = this.container.querySelector(".export-note");
-    this.seedsInput = this.container.querySelector(".seeds");
-    this.epochsInput = this.container.querySelector(".epochs");
-    this.budgetInput = this.container.querySelector(".budget");
-    this.deviceSelect = this.container.querySelector(".device");
-    this.fidelitySelect = this.container.querySelector(".fidelity");
-
-    this.profileSelect?.addEventListener("change", () => this.renderProfileNote());
-
-    const cellRow = this.container.querySelector<HTMLElement>(".cell-row")!;
-    for (const axis of CELL_AXES) {
-      const label = document.createElement("label");
-      label.textContent = axis;
-      const select = document.createElement("select");
-      select.className = `cell-${axis}`;
-      label.appendChild(select);
-      cellRow.appendChild(label);
-      this.cellSelects.set(axis, select);
-    }
-
-    this.container
-      .querySelector<HTMLButtonElement>(".start")!
-      .addEventListener("click", () => void this.startRun());
-    this.container
-      .querySelector<HTMLButtonElement>(".replicate")!
-      .addEventListener("click", () => void this.cellAction("replicate"));
-    this.container
-      .querySelector<HTMLButtonElement>(".preregister")!
-      .addEventListener("click", () => void this.cellAction("preregister"));
-    this.container
-      .querySelector<HTMLButtonElement>(".quest")!
-      .addEventListener("click", () => void this.cellAction("quest"));
-    this.container
-      .querySelector<HTMLButtonElement>(".export-script")!
-      .addEventListener("click", () => void this.export("script"));
-    this.container
-      .querySelector<HTMLButtonElement>(".export-report")!
-      .addEventListener("click", () => void this.export("report"));
-    this.container
-      .querySelector<HTMLButtonElement>(".export-records")!
-      .addEventListener("click", () => void this.export("records"));
   }
 }
 

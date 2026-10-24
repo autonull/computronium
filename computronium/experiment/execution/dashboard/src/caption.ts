@@ -1,4 +1,4 @@
-/** Caption — the closed-caption overlay (TODO69 Phase 1).
+/** Caption — the closed-caption overlay (TODO69 Phase 1, refactored for TODO71 Phase 1).
  *
  * The words come from the server. The `narration` frame carries the state —
  * what the system is doing now — and every `pipeline_event` frame carries the
@@ -13,11 +13,8 @@
 
 import { registry } from "./components/registry.js";
 import { PANEL_KEYS } from "./keys.js";
-import {
-  closeButton,
-  panels,
-  registerDisplayPanel,
-} from "./panels.js";
+import { panels, registerDisplayPanel } from "./panels.js";
+import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import type { Component } from "./components/registry.js";
@@ -40,6 +37,13 @@ const LEVEL_COLORS: Record<string, string> = {
   error: PALETTE.error,
 };
 
+function createCaptionBody(): string {
+  return `
+    <div id="caption-headline">The dashboard is starting.</div>
+    <div id="caption-context"></div>
+  `;
+}
+
 export class Caption implements Component {
   name = "Caption";
 
@@ -57,8 +61,20 @@ export class Caption implements Component {
   }
 
   async init(): Promise<void> {
-    this.createUI();
-    this.render();
+    this.container = createPanelShell({
+      id: "caption",
+      title: "Caption",
+      glyph: "▤",
+      key: PANEL_KEYS.caption,
+      body: createCaptionBody(),
+      dock: "bottom",
+      defaultOpen: true,
+      className: "caption-panel",
+    });
+
+    this.headline = this.container.querySelector("#caption-headline");
+    this.context = this.container.querySelector("#caption-context");
+
     registerDisplayPanel(
       "caption",
       "caption",
@@ -66,6 +82,7 @@ export class Caption implements Component {
       () => this.container,
       PANEL_KEYS.caption,
     );
+    this.render();
   }
 
   async destroy(): Promise<void> {
@@ -76,9 +93,9 @@ export class Caption implements Component {
   }
 
   /** Say a sentence, in the server's words, for a few seconds.
-
-      The text is never composed here: it comes from the narration, and the
-      caller only decides when to show it again. */
+   *
+   * The text is never composed here: it comes from the narration, and the
+   * caller only decides when to show it again. */
   say(text: string, level = "ok"): void {
     if (!text) return;
     this.spoken = { text, level };
@@ -101,59 +118,6 @@ export class Caption implements Component {
     if (!data?.sentence) return;
     this.say(data.sentence, data.level ?? "ok");
   };
-
-  private createUI(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
-
-    this.container = document.createElement("div");
-    this.container.id = "caption";
-    this.container.style.cssText = `
-      position: fixed;
-      bottom: 200px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 820px;
-      max-width: calc(100vw - 80px);
-      padding: 12px 20px;
-      background: rgba(10, 14, 20, 0.92);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      text-align: center;
-      z-index: 160;
-      pointer-events: none;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
-      backdrop-filter: blur(8px);
-    `;
-
-    this.container.innerHTML = `
-      <div id="caption-headline" style="
-        font-size: 22px;
-        line-height: 1.3;
-        color: var(--text-primary);
-        text-shadow: 0 2px 6px rgba(0,0,0,0.8);
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      ">The dashboard is starting.</div>
-      <div id="caption-context" style="
-        margin-top: 6px;
-        font-size: 14px;
-        line-height: 1.35;
-        color: var(--text-secondary);
-      "></div>
-    `;
-
-    overlay.appendChild(this.container);
-    const close = closeButton(() => panels.toggle("caption"));
-    close.style.position = "absolute";
-    close.style.top = "4px";
-    close.style.right = "8px";
-    this.container.appendChild(close);
-    this.headline = this.container.querySelector("#caption-headline");
-    this.context = this.container.querySelector("#caption-context");
-  }
 
   private render(): void {
     if (!this.headline || !this.context) return;

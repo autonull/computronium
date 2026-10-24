@@ -1,10 +1,17 @@
-/** Cell Drawer — Slide-in Detail Panel (TODO68 Phase 2). */
+/** Cell Drawer — Slide-in Detail Panel (TODO68 Phase 2, refactored for TODO71 Phase 1). */
 
 import { registry } from "./components/registry.js";
-import { registerPanel } from "./panels.js";
+import { panels, registerPanel, closeButton } from "./panels.js";
+import { createPanelShell, getPanelElement, destroyPanelShell } from "./shell.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
 import type { CellData } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
+
+function createCellDrawerBody(): string {
+  return `
+    <div id="drawer-content"></div>
+  `;
+}
 
 export class CellDrawer implements Component {
   name = "CellDrawer";
@@ -15,8 +22,17 @@ export class CellDrawer implements Component {
   private currentData: CellData | null = null;
 
   async init(): Promise<void> {
-    this.createPanel();
-    this.setupEvents();
+    this.panel = createPanelShell({
+      id: "cell-drawer",
+      title: "Cell Details",
+      glyph: "◧",
+      body: createCellDrawerBody(),
+      dock: "right",
+      defaultOpen: false,
+    });
+
+    this.content = this.panel.querySelector("#drawer-content")!;
+
     registerPanel(
       "cell-drawer",
       "cell drawer",
@@ -35,62 +51,6 @@ export class CellDrawer implements Component {
       this.onCellSelected as EventListener,
     );
     window.removeEventListener("keydown", this.onKeyDown);
-  }
-
-  private createPanel(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
-
-    this.panel = document.createElement("div");
-    this.panel.id = "cell-drawer";
-    this.panel.style.cssText = `
-      position: fixed;
-      top: 0;
-      right: 0;
-      width: 380px;
-      height: 100%;
-      background: var(--bg-secondary);
-      border-left: 1px solid var(--border);
-      transform: translateX(100%);
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 200;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    `;
-
-    this.panel.innerHTML = `
-      <div id="drawer-header" style="
-        padding: 16px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      ">
-        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Cell Details</h3>
-        <button id="drawer-close" style="
-          background: none;
-          border: none;
-          color: var(--text-secondary);
-          font-size: 20px;
-          cursor: pointer;
-          padding: 4px;
-          line-height: 1;
-        ">&times;</button>
-      </div>
-      <div id="drawer-content" style="
-        flex: 1;
-        overflow-y: auto;
-        padding: 16px;
-      "></div>
-    `;
-
-    overlay.appendChild(this.panel);
-    this.content = this.panel.querySelector("#drawer-content")!;
-
-    this.panel
-      .querySelector("#drawer-close")!
-      .addEventListener("click", () => this.hide());
   }
 
   private setupEvents(): void {
@@ -194,8 +154,7 @@ export class CellDrawer implements Component {
             .filter(([, v]) => v)
             .map(
               ([axis, value]) => `
-              <span style="
-                padding: 4px 10px;
+              <span class="coord-chip" data-axis="${axis}" style="
                 background: ${axis === "credit" ? armColor + "22" : "var(--bg-tertiary)"};
                 border: 1px solid ${axis === "credit" ? armColor + "88" : "var(--border)"};
                 border-radius: 12px;
@@ -215,13 +174,7 @@ export class CellDrawer implements Component {
           ? `
         <div style="margin-bottom: 20px;">
           <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">VALIDATION ACCURACY</div>
-          <div style="
-            font-size: 42px;
-            font-weight: 700;
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--text-primary);
-            line-height: 1;
-          ">${valAcc.toFixed(3)}</div>
+          <div class="drawer-metric-value">${valAcc.toFixed(3)}</div>
           <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
             ± ${(metrics.val_acc_std ?? 0).toFixed(3)} (n=${nSeeds})
           </div>
@@ -232,8 +185,7 @@ export class CellDrawer implements Component {
 
       <div style="margin-bottom: 20px; padding: 12px; background: var(--bg-tertiary); border-radius: 6px;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-          <span style="
-            padding: 4px 10px;
+          <span class="verdict-badge" style="
             background: ${verdictColor}22;
             border: 1px solid ${verdictColor}88;
             border-radius: 12px;
@@ -241,6 +193,7 @@ export class CellDrawer implements Component {
             font-weight: 600;
             color: ${verdictColor};
             text-transform: uppercase;
+            padding: 4px 10px;
           ">${verdict}</span>
           <span style="font-size: 12px; color: var(--text-secondary);">Chance level: ${chance}</span>
         </div>
@@ -249,8 +202,8 @@ export class CellDrawer implements Component {
             ? `<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">${data.voidReason}</div>`
             : ""
         }
-        <div style="height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;">
-          <div style="
+        <div class="progress-bar" style="height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;">
+          <div class="progress-fill" style="
             width: ${Math.min(100, (valAcc / (chance * 2)) * 100)}%;
             height: 100%;
             background: linear-gradient(90deg, ${PALETTE.rejected}, ${PALETTE.insufficient}, ${PALETTE.passed});
@@ -264,7 +217,7 @@ export class CellDrawer implements Component {
           ? `
         <div style="margin-bottom: 20px;">
           <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">SEEDS TO CLAIM</div>
-          <div style="font-size: 24px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: ${PALETTE.insufficient};">
+          <div class="drawer-metric-value" style="color: ${PALETTE.insufficient};">
             ${seedsToClaim}
           </div>
           <div style="font-size: 11px; color: var(--text-secondary);">(d=0.5, α=0.05)</div>
@@ -280,11 +233,11 @@ export class CellDrawer implements Component {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">
             <div>
               <div style="color: var(--text-secondary);">Wall Time</div>
-              <div style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">${metrics.walltime_s.toFixed(1)}s</div>
+              <div class="drawer-metric-value" style="font-size: 14px;">${metrics.walltime_s.toFixed(1)}s</div>
             </div>
             <div>
               <div style="color: var(--text-secondary);">Parameters</div>
-              <div style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">${((metrics.param_count ?? 0) / 1000).toFixed(1)}K</div>
+              <div class="drawer-metric-value" style="font-size: 14px;">${((metrics.param_count ?? 0) / 1000).toFixed(1)}K</div>
             </div>
           </div>
         </div>
@@ -328,65 +281,6 @@ export class CellDrawer implements Component {
         <div id="drawer-status" style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; min-height: 18px;"></div>
       </div>
     `;
-
-    // Add button styles
-    const style = document.createElement("style");
-    style.textContent = `
-      .drawer-btn {
-        padding: 10px 12px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        color: var(--text-secondary);
-        font-size: 11px;
-        font-weight: 500;
-        cursor: not-allowed;
-        transition: all var(--motion-fast) var(--ease-out);
-        white-space: nowrap;
-      }
-      .drawer-btn:not(:disabled):hover {
-        background: var(--border);
-        color: var(--text-primary);
-        border-color: var(--border-bright);
-        transform: translateY(-1px);
-      }
-      .drawer-btn:not(:disabled):active {
-        transform: translateY(0) scale(0.98);
-      }
-      .drawer-btn:not(:disabled) {
-        cursor: pointer;
-        color: var(--text-primary);
-      }
-      .drawer-btn:disabled {
-        opacity: 0.4;
-      }
-      .drawer-btn-primary:not(:disabled) {
-        background: var(--gradient)22;
-        border-color: var(--gradient)66;
-        color: var(--gradient);
-      }
-      .drawer-btn-primary:not(:disabled):hover {
-        background: var(--gradient)33;
-        border-color: var(--gradient);
-        color: var(--gradient);
-      }
-      .drawer-input {
-        padding: 8px 10px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        color: var(--text-primary);
-        font-size: 11px;
-        font-family: 'JetBrains Mono', monospace;
-        transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
-      }
-      .drawer-input:focus-visible {
-        outline: none;
-        border-color: var(--gradient);
-        box-shadow: 0 0 0 2px var(--gradient)33;
-      }
-    `;
-    this.content.appendChild(style);
 
     this.wireActions(data);
   }

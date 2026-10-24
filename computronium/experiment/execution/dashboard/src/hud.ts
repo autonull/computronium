@@ -1,12 +1,9 @@
-/** HUD — Mission Control Panel (TODO68 Phase 4). */
+/** HUD — Mission Control Panel (TODO68 Phase 4, refactored for TODO71 Phase 1). */
 
 import { registry } from "./components/registry.js";
 import { PANEL_KEYS } from "./keys.js";
-import {
-  closeButton,
-  panels,
-  registerDisplayPanel,
-} from "./panels.js";
+import { panels, registerDisplayPanel, setPanelHidden, getPanelElement } from "./panels.js";
+import { createPanelShell } from "./shell.js";
 import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
@@ -52,6 +49,25 @@ interface MeterRow {
   color: string;
 }
 
+function createHudBody(): string {
+  return `
+    <div id="hud-meters"></div>
+    <div class="hud-source-row">
+      <div class="meter-label-row">
+        <span class="meter-label">PICTURE</span>
+        <span id="hud-source" class="meter-value hud-source-value">—</span>
+      </div>
+      <div id="hud-claim-row">
+        <div class="meter-label-row">
+          <span class="meter-label">SEEDS TO CLAIM</span>
+          <span id="hud-claim" class="meter-value hud-claim-value">—</span>
+        </div>
+        <div class="meter-bar"><div id="hud-claim-fill" class="meter-fill hud-claim-fill"></div></div>
+      </div>
+    </div>
+  `;
+}
+
 export class HUD implements Component {
   name = "HUD";
 
@@ -78,8 +94,18 @@ export class HUD implements Component {
   }
 
   async init(): Promise<void> {
-    this.createPanel();
+    this.panel = createPanelShell({
+      id: "hud",
+      title: "MISSION CONTROL",
+      glyph: "◱",
+      key: PANEL_KEYS.hud,
+      body: createHudBody(),
+      dock: "top",
+      defaultOpen: true,
+    });
     this.createModeChip();
+    this.setupMeters();
+
     registerDisplayPanel(
       "hud",
       "mission control",
@@ -101,50 +127,8 @@ export class HUD implements Component {
     this.modeChip?.remove();
   }
 
-  private createPanel(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
-
-    this.panel = document.createElement("div");
-    this.panel.id = "hud";
-    this.panel.className = "panel";
-    this.panel.style.cssText = `
-      top: 20px;
-      right: 44px;
-      width: 260px;
-      z-index: 150;
-    `;
-
-    this.panel.innerHTML = `
-      <div id="hud-header" class="panel-header">
-        <span class="panel-title">MISSION CONTROL</span>
-        <div style="flex: 1;"></div>
-        <span id="hud-connection" class="connection-pill">
-          <span class="dot status-dot error"></span>
-          <span>offline</span>
-        </span>
-      </div>
-      <div id="hud-meters" style="display: flex; flex-direction: column; gap: 9px;"></div>
-      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);">
-        <div class="meter-label-row">
-          <span class="meter-label">PICTURE</span>
-          <span id="hud-source" class="meter-value" style="color: var(--text-secondary);">—</span>
-        </div>
-        <div id="hud-claim-row" style="display: flex; flex-direction: column; gap: 4px;">
-          <div class="meter-label-row">
-            <span class="meter-label">SEEDS TO CLAIM</span>
-            <span id="hud-claim" class="meter-value" style="color: var(--insufficient);">—</span>
-          </div>
-          <div class="meter-bar"><div id="hud-claim-fill" class="meter-fill" style="background: var(--insufficient);"></div></div>
-        </div>
-      </div>
-    `;
-
-    overlay.appendChild(this.panel);
-
-    const header = this.panel.querySelector<HTMLElement>("#hud-header")!;
-    header.appendChild(closeButton(() => panels.toggle("hud")));
-
+  private setupMeters(): void {
+    if (!this.panel) return;
     const meters = this.panel.querySelector<HTMLElement>("#hud-meters")!;
     this.addMeter(meters, "device", "DEVICE", "var(--gradient)");
     this.addMeter(meters, "memory", "MEMORY", "var(--memory)");
@@ -268,11 +252,11 @@ export class HUD implements Component {
   };
 
   /** Where the picture came from: the store itself, or the writer's mirror.
-
-      A snapshot lags the run by the writer's publish interval, and a reader
-      that does not know which it is looking at cannot tell a finished run
-      from a paused one.
-  */
+   *
+   * A snapshot lags the run by the writer's publish interval, and a reader
+   * that does not know which it is looking at cannot tell a finished run
+   * from a paused one.
+   */
   private updateSource(store: { source?: string; published_at?: string } | undefined): void {
     if (!this.sourceValue) return;
     const source = store?.source;

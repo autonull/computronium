@@ -1,16 +1,17 @@
-/** Plotter — uPlot Charts (Pareto, Ablation, Variability) (TODO68 Phase 3).
-
-    The three charts are three panels, not one tabbed container (TODO70):
-    closing the Pareto chart must leave the ablation chart alone. They sit in
-    a column under the HUD, each with its own title, its own ×, and its own
-    download button.
-*/
+/** Plotter — uPlot Charts (Pareto, Ablation, Variability) (TODO68 Phase 3, refactored for TODO71 Phase 1).
+ *
+ * The three charts are three panels, not one tabbed container (TODO70):
+ * closing the Pareto chart must leave the ablation chart alone. They sit in
+ * a column under the HUD, each with its own title, its own ×, and its own
+ * download button.
+ */
 
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { registry } from "./components/registry.js";
 import { TAB_KEYS } from "./keys.js";
-import { closeButton, panels, registerDisplayPanel, setPanelHidden } from "./panels.js";
+import { panels, registerDisplayPanel, setPanelHidden, getPanelElement } from "./panels.js";
+import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./palette.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
@@ -99,6 +100,33 @@ interface AblationGroup {
   }>;
 }
 
+function createChartPanelBody(chart: ChartSpec): string {
+  return `
+    <div id="${chart.hostId}" style="flex: 1; position: relative; overflow: hidden;"></div>
+    <div class="chart-empty-state">
+      <div class="empty-icon">${chart.glyph}</div>
+      <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${chart.title}</div>
+      <div style="font-size: 11px; color: var(--text-secondary); max-width: 280px; line-height: 1.5;">${getEmptyHint(chart.id)}</div>
+    </div>
+    <div class="chart-toolbar">
+      <span class="chart-status">No data</span>
+    </div>
+  `;
+}
+
+function getEmptyHint(chartId: string): string {
+  switch (chartId) {
+    case "pareto":
+      return "Shows validation accuracy vs. speed for each measured cell. Pareto frontier cells are not dominated on both axes.";
+    case "ablation":
+      return "Shows how each credit arm performs when other axes are held fixed. Error bars = ±1 std dev. Dashed line = chance level.";
+    case "variability":
+      return "Shows seed-to-seed spread per credit arm. Box = IQR, line = median, whiskers = 1.5×IQR, dots = outliers. Dashed line = chance level.";
+    default:
+      return "Select a run from the legend to populate this chart.";
+  }
+}
+
 export class Plotter implements Component {
   name = "Plotter";
 
@@ -147,6 +175,7 @@ export class Plotter implements Component {
 
     this.container = document.createElement("div");
     this.container.id = "chart-column";
+    // Position handled by CSS
     this.container.style.cssText = `
       position: fixed;
       top: 330px;
@@ -162,7 +191,40 @@ export class Plotter implements Component {
     `;
 
     for (const chart of CHARTS) {
-      this.container.appendChild(this.createChartPanel(chart));
+      const panel = createPanelShell({
+        id: chart.panelId,
+        title: chart.title,
+        glyph: chart.glyph,
+        key: chart.key,
+        body: createChartPanelBody(chart),
+        dock: "right",
+        defaultOpen: chart.id === "pareto",
+        className: "chart-panel",
+        onToggle: (open) => {
+          if (open) this.initPlot(chart.id);
+        },
+      });
+      this.chartPanels.set(chart.id, panel);
+      this.container.appendChild(panel);
+
+      // Download button
+      panel
+        .querySelector<HTMLElement>(".chart-download")!
+        .addEventListener("click", () => this.download(chart.id));
+
+      // Empty hint
+      const emptyHint = panel.querySelector<HTMLElement>(".chart-empty-hint");
+      if (emptyHint) {
+        // Already in body template
+      }
+
+      registerDisplayPanel(
+        chart.panelId,
+        chart.title.toLowerCase(),
+        chart.glyph,
+        () => this.chartPanels.get(chart.id) ?? null,
+        chart.key,
+      );
     }
 
     overlay.appendChild(this.container);
@@ -185,153 +247,14 @@ export class Plotter implements Component {
       box-shadow: 0 4px 16px rgba(0,0,0,0.5);
     `;
     this.container.appendChild(this.tooltip);
-
-    // The Pareto chart is the working one; the other two are a reader's
-    // choice, and each is closed on its own.
-    this.setPanelOpen(CHARTS[0].id, true);
-  }
-
-  /** One chart's panel: its title, its ×, its plot and its download. */
-  private createChartPanel(chart: ChartSpec): HTMLElement {
-    const panel = document.createElement("div");
-    panel.id = chart.panelId;
-    panel.className = "chart-panel";
-    panel.style.cssText = `
-      position: relative;
-      flex: 0 0 auto;
-      height: 300px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      pointer-events: auto;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    `;
-
-    panel.innerHTML = `
-      <div class="chart-header" style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        border-bottom: 1px solid var(--border);
-        background: var(--bg-tertiary);
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-primary);
-      ">
-        <span class="chart-title">${chart.title}</span>
-        <div style="flex: 1;"></div>
-        <div class="chart-empty-hint" style="
-          display: none;
-          align-items: center;
-          gap: 6px;
-          padding: 4px 10px;
-          background: var(--bg);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          font-size: 10px;
-          color: var(--text-muted);
-        ">
-          <span>No data yet</span>
-          <span style="color: var(--text-secondary);">→</span>
-          <span>Select a run from the legend</span>
-        </div>
-        <button class="chart-download" style="
-          padding: 3px 8px;
-          background: var(--bg-secondary);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          color: var(--text-primary);
-          font-size: 11px;
-          cursor: pointer;
-        ">PNG</button>
-      </div>
-      <div id="${chart.hostId}" style="flex: 1; position: relative; overflow: hidden;"></div>
-      <div class="chart-empty-state" style="
-        display: none;
-        position: absolute;
-        inset: 0;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-        gap: 12px;
-        padding: 24px;
-        text-align: center;
-        background: var(--bg-secondary);
-        border-radius: 0 0 8px 8px;
-      ">
-        <div class="empty-icon" style="font-size: 48px; opacity: 0.2;">${chart.glyph}</div>
-        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${chart.title}</div>
-        <div style="font-size: 11px; color: var(--text-secondary); max-width: 280px; line-height: 1.5;">${this.getEmptyHint(chart.id)}</div>
-      </div>
-      <div class="chart-toolbar" style="
-        padding: 6px 12px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        font-size: 11px;
-        color: var(--text-secondary);
-      ">
-        <span class="chart-status" style="
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        ">No data</span>
-      </div>
-    `;
-    // Every chart but the Pareto one starts closed: the working mode is one
-    // chart, and each of the others is the reader's own choice.
-    setPanelHidden(panel, true);
-
-    const header = panel.querySelector<HTMLElement>(".chart-header")!;
-    header.appendChild(closeButton(() => panels.toggle(chart.panelId)));
-    panel
-      .querySelector<HTMLElement>(".chart-download")!
-      .addEventListener("click", () => this.download(chart.id));
-
-    this.chartPanels.set(chart.id, panel);
-    registerDisplayPanel(
-      chart.panelId,
-      chart.title.toLowerCase(),
-      chart.glyph,
-      () => this.chartPanels.get(chart.id) ?? null,
-      chart.key,
-    );
-    return panel;
-  }
-
-  /** Context-aware empty state hints. */
-  private getEmptyHint(chartId: string): string {
-    switch (chartId) {
-      case "pareto":
-        return "Shows validation accuracy vs. speed for each measured cell. Pareto frontier cells are not dominated on both axes.";
-      case "ablation":
-        return "Shows how each credit arm performs when other axes are held fixed. Error bars = ±1 std dev. Dashed line = chance level.";
-      case "variability":
-        return "Shows seed-to-seed spread per credit arm. Box = IQR, line = median, whiskers = 1.5×IQR, dots = outliers. Dashed line = chance level.";
-      default:
-        return "Select a run from the legend to populate this chart.";
-    }
   }
 
   /** Show one of the charts: "pareto", "ablation" or "variability". */
   showTab(tab: string): void {
     const chart = CHARTS.find((candidate) => candidate.id === tab);
     if (!chart) return;
-    this.setPanelOpen(chart.id, true);
+    panels.toggle(chart.panelId);
     this.chartPanels.get(chart.id)?.scrollIntoView({ block: "nearest" });
-  }
-
-  /** Open or close one chart's panel, and nothing else. */
-  private setPanelOpen(id: string, open: boolean): void {
-    const panel = this.chartPanels.get(id);
-    if (!panel) return;
-    setPanelHidden(panel, !open);
-    if (open) this.initPlot(id);
   }
 
   /** Draw a chart the first time its panel is opened. */
@@ -1025,10 +948,10 @@ export class Plotter implements Component {
   }
 
   /** The chart with its axes, not just the plot area.
-
-    uPlot draws the axes on their own canvases; the plot area alone is a
-    rectangle of points with no labels on it.
-  */
+   *
+   * uPlot draws the axes on their own canvases; the plot area alone is a
+   * rectangle of points with no labels on it.
+   */
   private exportImage(plot: uPlot): string {
     const canvases = Array.from(
       plot.root.querySelectorAll("canvas"),

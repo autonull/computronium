@@ -511,7 +511,7 @@ the README's dashboard section and the toolbar agree, word for word.
 | Piece | State |
 |-------|-------|
 | Phase 0 — the binding layer | ✅ |
-| Phase 1 — the panel shell | ⬜ |
+| Phase 1 — the panel shell | ✅ |
 | Phase 2 — the layout grammar and the workspaces | ⬜ |
 | Phase 3 — the palette and the first-run door | ⬜ |
 | Phase 4 — the registries and the taxonomy | ⬜ |

@@ -16,6 +16,7 @@ import { registry } from "./components/registry.js";
 import { getSceneContext } from "./components/context.js";
 import { PANEL_KEYS } from "./keys.js";
 import { registerDisplayPanel } from "./panels.js";
+import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
 import { ARM_COLORS, PALETTE } from "./palette.js";
 import { runSelection } from "./run-selection.js";
@@ -103,13 +104,6 @@ export class DiscoveryMap implements Component {
     this.setupInteraction();
     this.createLegend();
     this.createReadout();
-    registerDisplayPanel(
-      "discovery-legend",
-      "legend",
-      "▦",
-      () => this.legendElement,
-      PANEL_KEYS.legend,
-    );
 
     // The stage's state is the map's state: the space, the records and the
     // axes the reader picked are shared with the other views. The legend
@@ -354,28 +348,24 @@ export class DiscoveryMap implements Component {
   }
 
   private createLegend(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
+    this.legendElement = createPanelShell({
+      id: "discovery-legend",
+      title: "Discovery Map",
+      glyph: "▦",
+      key: PANEL_KEYS.legend,
+      body: this.legendBody(),
+      dock: "bottom",
+      defaultOpen: true,
+    });
 
-    this.legendElement = document.createElement("div");
-    this.legendElement.id = "discovery-legend";
-    this.legendElement.style.cssText = `
-      position: fixed;
-      bottom: 140px;
-      left: 20px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
-      font-size: 12px;
-      z-index: 100;
-      min-width: 240px;
-      max-width: 360px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      backdrop-filter: blur(8px);
-    `;
+    this.createRunPicker();
+    this.createAxisPicker();
+    this.updateLegendArms();
+    this.updateLegendAxes();
+  }
 
-    this.legendElement.innerHTML = `
+  private legendBody(): string {
+    return `
       <div id="legend-title" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
         <span style="font-weight: 600; color: var(--text-primary);">Discovery Map</span>
         <span id="legend-cell-count" style="font-size: 11px; color: var(--text-muted);"></span>
@@ -387,15 +377,15 @@ export class DiscoveryMap implements Component {
       </div>
       <div id="legend-view" style="display: none;"></div>
       <div id="legend-marks" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
-        <div class="legend-item" style="display: flex; align-items: center; gap: 8px;">
+        <div class="legend-item">
           <div style="width: 14px; height: 14px; background: var(--measured); border-radius: 3px; box-shadow: 0 0 10px var(--measured);"></div>
           <span style="font-size: 11px;">Measured — glowing pillar</span>
         </div>
-        <div class="legend-item" style="display: flex; align-items: center; gap: 8px;">
+        <div class="legend-item">
           <div style="width: 14px; height: 14px; background: transparent; border: 2px solid var(--legal-unmeasured); border-radius: 3px;"></div>
           <span style="font-size: 11px;">Legal gap — click to queue</span>
         </div>
-        <div class="legend-item" style="display: flex; align-items: center; gap: 8px;">
+        <div class="legend-item">
           <svg width="14" height="14" viewBox="0 0 14 14"><line x1="2" y1="2" x2="12" y2="12" stroke="var(--void)" stroke-width="2"/><line x1="12" y1="2" x2="2" y2="12" stroke="var(--void)" stroke-width="2"/></svg>
           <span style="font-size: 11px;">Void — system refuses</span>
         </div>
@@ -406,15 +396,7 @@ export class DiscoveryMap implements Component {
       </div>
       <div id="legend-run-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
         <div style="font-weight: 600; margin-bottom: 6px; font-size: 11px;">Run</div>
-        <select id="legend-run-picker" style="
-          width: 100%;
-          background: var(--bg-tertiary);
-          color: var(--text-primary);
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          font-size: 11px;
-          padding: 6px 10px;
-        "></select>
+        <select id="legend-run-picker"></select>
         <div id="legend-run" style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; min-height: 16px;"></div>
       </div>
       <div id="legend-axes-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: none;">
@@ -423,12 +405,6 @@ export class DiscoveryMap implements Component {
         <div id="legend-axes" style="font-size: 10px; color: var(--text-muted); margin-top: 6px;"></div>
       </div>
     `;
-
-    overlay.appendChild(this.legendElement);
-    this.createRunPicker();
-    this.createAxisPicker();
-    this.updateLegendArms();
-    this.updateLegendAxes();
   }
 
   /** The run the grid shows, chosen by the reader. */

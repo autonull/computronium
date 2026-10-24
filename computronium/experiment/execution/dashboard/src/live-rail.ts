@@ -1,12 +1,9 @@
-/** Live Rail — Scrolling Pipeline Event Log (TODO68 Phase 4). */
+/** Live Rail — Scrolling Pipeline Event Log (TODO68 Phase 4, refactored for TODO71 Phase 1). */
 
 import { registry } from "./components/registry.js";
 import { PANEL_KEYS } from "./keys.js";
-import {
-  closeButton,
-  panels,
-  registerDisplayPanel,
-} from "./panels.js";
+import { panels, registerDisplayPanel, getPanelElement } from "./panels.js";
+import { createPanelShell } from "./shell.js";
 import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./palette.js";
 import type { Component } from "./components/registry.js";
@@ -17,6 +14,23 @@ interface PipelineEvent {
   level: "ok" | "warn" | "error";
   timestamp: string;
   run_id?: string;
+}
+
+function createLiveRailBody(): string {
+  return `
+    <div id="rail-header" class="rail-header-inner">
+      <span class="rail-connection" id="rail-connection">
+        <span class="dot"></span>
+        <span class="rail-label">Disconnected</span>
+      </span>
+      <div style="flex: 1;"></div>
+      <span id="rail-queue" class="rail-queue">0 running · 0 queued</span>
+      <span id="rail-count" class="rail-count">0 events</span>
+    </div>
+    <div id="rail-log"></div>
+    <!-- Scroll hint -->
+    <div id="rail-scroll-hint"></div>
+  `;
 }
 
 export class LiveRail implements Component {
@@ -35,7 +49,20 @@ export class LiveRail implements Component {
   }
 
   async init(): Promise<void> {
-    this.createUI();
+    this.container = createPanelShell({
+      id: "live-rail",
+      title: "LIVE RAIL",
+      glyph: "≡",
+      key: PANEL_KEYS.rail,
+      body: createLiveRailBody(),
+      dock: "bottom",
+      defaultOpen: true,
+      className: "live-rail-panel",
+    });
+
+    this.logContainer = this.container.querySelector("#rail-log")!;
+    this.scrollHint = this.container.querySelector("#rail-scroll-hint") as HTMLElement;
+
     registerDisplayPanel(
       "live-rail",
       "live rail",
@@ -51,99 +78,6 @@ export class LiveRail implements Component {
     router.unregister("pipeline_event", this.onPipelineEvent);
     router.unregister("status_update", this.onStatusUpdate);
     this.container?.remove();
-  }
-
-  private createUI(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
-
-    this.container = document.createElement("div");
-    this.container.id = "live-rail";
-    this.container.style.cssText = `
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 120px;
-      background: linear-gradient(to top, var(--bg), transparent);
-      border-top: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      z-index: 100;
-      pointer-events: none;
-    `;
-
-    this.container.innerHTML = `
-      <div id="rail-header" style="
-        padding: 8px 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 11px;
-        color: var(--text-secondary);
-        border-bottom: 1px solid var(--border);
-        background: var(--bg-secondary);
-      ">
-        <span style="font-weight: 600; color: var(--text-primary);">LIVE RAIL</span>
-        <span id="rail-connection" style="
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          padding: 2px 8px;
-          border-radius: 12px;
-          background: var(--error)22;
-          border: 1px solid var(--error)88;
-          color: var(--error);
-        ">
-          <span class="dot" style="width: 6px; height: 6px; border-radius: 50%; background: var(--error);"></span>
-          <span class="rail-label">Disconnected</span>
-        </span>
-        <div style="flex: 1;"></div>
-        <span id="rail-queue" style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">0 running · 0 queued</span>
-        <span id="rail-count" style="color: var(--text-muted);">0 events</span>
-      </div>
-      <div id="rail-log" style="
-        flex: 1;
-        overflow-x: auto;
-        overflow-y: hidden;
-        display: flex;
-        gap: 16px;
-        padding: 8px 16px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        white-space: nowrap;
-        scrollbar-width: thin;
-        scrollbar-color: var(--border) transparent;
-      "></div>
-      <!-- Scroll hint -->
-      <div id="rail-scroll-hint" style="
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        width: 60px;
-        height: 100%;
-        pointer-events: none;
-        background: linear-gradient(to left, var(--bg), transparent);
-        opacity: 0;
-        transition: opacity var(--motion-fast);
-      "></div>
-    `;
-
-    overlay.appendChild(this.container);
-    this.container
-      .querySelector<HTMLElement>("#rail-header")!
-      .appendChild(closeButton(() => panels.toggle("live-rail")));
-    this.logContainer = this.container.querySelector("#rail-log")!;
-    this.scrollHint = this.container.querySelector("#rail-scroll-hint") as HTMLElement;
-
-    // Show scroll hint when content overflows
-    this.logContainer.addEventListener("scroll", () => {
-      if (this.scrollHint) {
-        const atStart = this.logContainer!.scrollLeft === 0;
-        const canScroll = this.logContainer!.scrollWidth > this.logContainer!.clientWidth;
-        this.scrollHint.style.opacity = atStart && canScroll ? "1" : "0";
-      }
-    });
   }
 
   private onPipelineEvent = (data: PipelineEvent): void => {
@@ -203,22 +137,11 @@ export class LiveRail implements Component {
         const isLatest = index === 0;
 
         return `
-          <span style="
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            background: ${isLatest ? "var(--bg-primary)" : "var(--bg-secondary)"};
-            border: 1px solid ${isLatest ? "var(--border-bright)" : "var(--border)"};
-            border-radius: 18px;
-            color: var(--text-primary);
-            font-weight: ${isLatest ? "500" : "400"};
-            box-shadow: ${isLatest ? "0 2px 8px rgba(0,0,0,0.3)" : "none"};
-          ">
-            <span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">${time}</span>
-            <span style="color: ${color}; font-size: 12px;">${icons[event.level] ?? "•"}</span>
-            <span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;">${event.stage}</span>
-            <span>${event.message}</span>
+          <span class="rail-event ${isLatest ? "latest" : ""}">
+            <span class="rail-time">${time}</span>
+            <span class="rail-icon" style="color: ${color};">${icons[event.level] ?? "•"}</span>
+            <span class="rail-stage">${event.stage}</span>
+            <span class="rail-message">${event.message}</span>
           </span>
         `;
       })
