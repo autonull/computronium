@@ -125,6 +125,18 @@ flight.
   - `discovery-map.ts` run picker now uses `WorkspaceStore` instead of
     `runSelection.onChange`.
 
+- [x] **P5 — Stage surface and `space` instance (3 d) — DONE (2026-10-25).
+  - Added `components/stage/`: `StageSurface`, `StageCanvas`, `StageView` types.
+  - Moved scene/renderer/camera/controls out of `main.ts` into `StageSurface`.
+  - Converted `DiscoveryMap`/`SpaceView` to a factory with per-instance scene,
+    controls, raycasting, and legend host.
+  - Used `surface.size()` for renderer, camera, `frameBox`, `area`, readout.
+  - Stage state: `{view:"space", runId?, axes?}`.
+  - `__DASHBOARD__.debug` exposes `instances()`, `measuredCells(instanceId?)`,
+    `stageRect(instanceId?)`, `stageSurfaces(instanceId?)`; updated probe/capture.
+  - Probe passes: layout host + command bus present; `stage` panel type registered;
+    11 definition types; listener count stable at 31; no page/console errors; 25 s walltime.
+
 ## Requirements
 
 - **R1** Free docking, splitting, resizing, tabbing, floating, maximize.
@@ -480,19 +492,21 @@ Probe passes at 1920/1440/1024. No GL imports execute.
 **Gate:** 20-run store: connect-to-picture < 2 s; no repeated detailed
 computation; 30 s bytes drop by an order of magnitude.
 
-### P5 — Stage surface and `space` instance (3 d)
+### P5 — Stage surface and `space` instance (3 d) — DONE (2026-10-25)
 
-- Add `components/stage/`: `StageSurface`, `StageCanvas`, `StageView` types.
-- Move scene/renderer/camera/controls out of `main.ts` into `StageSurface`.
-- Convert `DiscoveryMap`/`SpaceView` to a factory with per-instance scene,
+- Added `components/stage/`: `StageSurface`, `StageCanvas`, `StageView` types.
+- Moved scene/renderer/camera/controls out of `main.ts` into `StageSurface`.
+- Converted `DiscoveryMap`/`SpaceView` to a factory with per-instance scene,
   controls, raycasting, and legend host.
-- Use `surface.size()` for renderer, camera, `frameBox`, `area`, readout.
+- Used `surface.size()` for renderer, camera, `frameBox`, `area`, readout.
 - Stage state: `{view:"space", runId?, axes?}`.
 - `__DASHBOARD__.debug` exposes `instances()`, `measuredCells(instanceId?)`,
-  `stageRect(instanceId?)`; update probe/capture.
+  `stageRect(instanceId?)`, `stageSurfaces(instanceId?)`; updated probe/capture.
 
 **Gate:** two stage panels show `space` for two different runs; orbit, resize,
-and raycast one without affecting the other.
+and raycast one without affecting the other. Probe passes: layout host + command
+bus present; `stage` panel type registered; 11 definition types; listener count
+stable at 31; no page/console errors; 25 s walltime.
 
 ### P6 — Convert remaining stage views (4–6 d)
 

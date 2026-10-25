@@ -195,8 +195,9 @@ def probe(port: int) -> dict[str, object]:
 
         page.goto(f"http://localhost:{port}/", wait_until="load")
         page.wait_for_selector("#dashboard-canvas", state="visible", timeout=30000)
+        # Wait for DOMContentLoaded handler to start (legacy components init)
         page.wait_for_function(
-            "() => Boolean(window.__DASHBOARD__?.discoveryMap)",
+            "() => Boolean(window.__DASHBOARD_DOMCONTENTLOADED__)",
             timeout=30000,
         )
         # Wait for DOMContentLoaded handler to start

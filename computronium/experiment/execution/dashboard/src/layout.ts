@@ -1,7 +1,6 @@
 /** Layout presets as LayoutSpec (TODO72 P2). */
 
 import { dockviewHost } from "./layout/dockview-host.js";
-import { viewSwitcher } from "./stage/switcher.js";
 import type { LayoutSpec } from "./layout/types.js";
 
 export type Preset = "watch" | "audit" | "drive";
@@ -47,7 +46,6 @@ export function applyPreset(preset: Preset): void {
   const spec = PRESET_SPECS[preset];
   if (!spec) return;
   currentPreset = preset;
-  viewSwitcher.show("space"); // default view for now
   dockviewHost.applySpec(spec);
 }
 

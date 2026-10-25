@@ -1,15 +1,11 @@
-/** Three.js Dashboard Main Entry Point (TODO72 P2 — Dockview). */
+/** Three.js Dashboard Main Entry Point (TODO72 P5 — StageSurface). */
 
-import * as THREE from "three";
-import { OrbitControls } from "three-stdlib";
 import "./palette.css";
 import "./dashboard.css";
 import { router, wsClient } from "./ws-client.js";
-import { setSceneContext } from "./components/context.js";
 import { registry } from "./components/registry.js";
 import { ControlBar } from "./control-bar.js";
 import { ControlPanel } from "./control-panel.js";
-import { DiscoveryMap } from "./discovery-map.js";
 import { CellDrawer } from "./cell-drawer.js";
 import { Plotter } from "./plotter.js";
 import { LiveRail } from "./live-rail.js";
@@ -22,7 +18,6 @@ import { initPalette, openPalette } from "./palette.js";
 import { panels, getPanelElement } from "./panels.js";
 import { applyPreset, reset, applyWorkspace } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
-import { detectRenderProfile } from "./render-profile.js";
 import { initHints } from "./hints.js";
 import { menubar } from "./menubar.js";
 import { dockviewHost } from "./layout/dockview-host.js";
@@ -38,12 +33,12 @@ import "./layout/components/cell-drawer.js";
 import "./layout/components/pareto-chart.js";
 import "./layout/components/ablation-chart.js";
 import "./layout/components/variability-chart.js";
+import "./layout/components/stage.js";
 import type { Binding } from "./bindings.js";
 import type { LayoutHost } from "./layout/types.js";
 
 // Legacy component instances kept for keyboard bindings and __DASHBOARD__ debug
 const legacyHud = new HUD();
-const legacyDiscoveryMap = new DiscoveryMap();
 const legacyPlotter = new Plotter();
 const legacyLiveRail = new LiveRail();
 const legacyCaption = new Caption();
@@ -129,7 +124,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   (window as any).__DASHBOARD_DOMCONTENTLOADED__ = true;
   // Initialize legacy components (needed for bindings and debug)
   await legacyHud.init();
-  await legacyDiscoveryMap.init();
   await legacyPlotter.init();
   await legacyLiveRail.init();
   await legacyCaption.init();
@@ -180,6 +174,40 @@ document.addEventListener("DOMContentLoaded", async () => {
   setAction("panel-legend", () => commands.execute("panel-legend"));
 
   setAction("view-cycle", () => commands.execute("view-cycle"));
+
+  // Stage view commands — set view on focused stage panel
+  const stageViews = ["space", "ledger", "timeline", "landscape", "basin", "spectrum", "trajectory", "flow", "frontier", "contrast", "convergence", "uncertainty", "effect", "spread", "matrix", "layers", "slices", "small-multiples", "ramp", "terrain", "claim-cost", "plot2d", "multirun", "trained-trajectory", "trained-basin", "trained-landscape", "trained-spectrum"];
+  for (const view of stageViews) {
+    setAction(`view-${view}`, () => commands.execute(`view-${view}`));
+  }
+
+  // Register view commands
+  for (const view of stageViews) {
+    if (commands.has(`view-${view}`)) continue;
+    commands.register(`view-${view}`, () => {
+      const api = dockviewHost.getApi();
+      if (!api) return;
+      const panel = api.activePanel;
+      if (!panel) return;
+      // Check if it's a stage panel (use type assertion for dockview panel)
+      if ((panel as any).component === "stage") {
+        dockviewHost.setState(panel.id, { view });
+      }
+    }, `View: ${view}`);
+  }
+  if (!commands.has("view-cycle")) {
+    commands.register("view-cycle", () => {
+      const api = dockviewHost.getApi();
+      if (!api) return;
+      const panel = api.activePanel;
+      if (!panel || (panel as any).component !== "stage") return;
+      const views = stageViews;
+      const currentView = (panel.api.getParameters()?.view as string) || "space";
+      const currentIndex = views.indexOf(currentView);
+      const nextView = views[(currentIndex + 1) % views.length];
+      dockviewHost.setState(panel.id, { view: nextView });
+    }, "Cycle Stage View");
+  }
 
   setAction("cell-replicate", () =>
     window.dispatchEvent(new CustomEvent("cell-action-replicate")),
@@ -246,126 +274,9 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-// Three.js scene setup (shared by DiscoveryMap and HUD)
-const canvas = document.getElementById("dashboard-canvas") as HTMLCanvasElement;
-const profile = detectRenderProfile();
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: profile.antialias,
-  alpha: true,
-  powerPreference: "high-performance",
-});
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(
-  profile.software ? 1 : Math.min(window.devicePixelRatio, 2),
-);
-renderer.shadowMap.enabled = profile.shadows;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0e14); // var(--bg)
-scene.fog = new THREE.FogExp2(0x0a0e14, 0.015);
-
-// Camera
-const camera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  200,
-);
-camera.position.set(3.3, 4.4, 8.8);
-camera.lookAt(0, 1.0, 0.1);
-
-// Orbit controls
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.0, 0.1);
-controls.enableDamping = true;
-controls.dampingFactor = 0.05;
-controls.enablePan = true;
-controls.minDistance = 5;
-controls.maxDistance = 80;
-controls.maxPolarAngle = Math.PI / 2 - 0.05;
-
-// Publish the shared scene so components bind to the live scene, not copies.
-// The controls are part of it: the discovery map frames the grid it builds,
-// and framing is a move of the camera's target.
-setSceneContext({ scene, camera, renderer, controls });
-
-// Lights
-const ambientLight = new THREE.AmbientLight(0x444466, 0.6);
-scene.add(ambientLight);
-
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-directionalLight.position.set(10, 20, 10);
-directionalLight.castShadow = profile.shadows;
-directionalLight.shadow.mapSize.width = 2048;
-directionalLight.shadow.mapSize.height = 2048;
-directionalLight.shadow.camera.near = 1;
-directionalLight.shadow.camera.far = 50;
-directionalLight.shadow.camera.left = -20;
-directionalLight.shadow.camera.right = 20;
-directionalLight.shadow.camera.top = 20;
-directionalLight.shadow.camera.bottom = -20;
-scene.add(directionalLight);
-
-// Hemisphere light for nice ambient
-const hemiLight = new THREE.HemisphereLight(0x88aaff, 0x222233, 0.5);
-scene.add(hemiLight);
-
-// Grid helper (subtle, sized to the discovery map)
-const gridHelper = new THREE.GridHelper(8, 8, 0x243040, 0x161d28);
-gridHelper.position.y = -0.01;
-const gridMaterial = gridHelper.material as THREE.Material;
-gridMaterial.transparent = true;
-gridMaterial.opacity = 0.35;
-scene.add(gridHelper);
-
-// Axis labels (will be updated by DiscoveryMap)
-const axisLabels: THREE.Mesh[] = [];
-
-// Resize handler
-function onResize(): void {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(
-    profile.software ? 1 : Math.min(window.devicePixelRatio, 2),
-  );
-}
-window.addEventListener("resize", onResize);
-
-// Animation loop — capped so the render never starves the event loop that
-// carries the dashboard's data.
-const frameIntervalMs = 1000 / profile.fps;
-let lastTime = 0;
-function animate(time: number): void {
-  requestAnimationFrame(animate);
-
-  if (time - lastTime < frameIntervalMs) return;
-
-  const delta = (time - lastTime) / 1000;
-  lastTime = time;
-
-  controls.update();
-
-  // Update components that need per-frame updates
-  legacyDiscoveryMap.update(delta);
-
-  renderer.render(scene, camera);
-}
-
-// Start animation loop
-requestAnimationFrame(animate);
-
 // Expose for debugging
 (window as any).__DASHBOARD__ = {
-  scene,
-  camera,
-  renderer,
-  controls,
-  discoveryMap: legacyDiscoveryMap,
+  // Legacy scene removed — each stage panel owns its own StageSurface
   cellDrawer: legacyCellDrawer,
   plotter: legacyPlotter,
   liveRail: legacyLiveRail,
@@ -421,6 +332,21 @@ requestAnimationFrame(animate);
         return { x: rect.left - containerRect.left, y: rect.top - containerRect.top, width: rect.width, height: rect.height };
       }
       return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+    },
+    stageSurfaces: (instanceId?: string) => {
+      const api = dockviewHost.getApi();
+      if (!api) return [];
+      const panels = instanceId
+        ? [api.getPanel(instanceId)].filter(Boolean)
+        : api.panels;
+      return panels.map((panel: any) => {
+        const handle = panel?.api?.contentRenderer?.init?.toString();
+        return {
+          id: panel.id,
+          type: panel.component,
+          rect: panel.api.group.element.getBoundingClientRect(),
+        };
+      });
     },
   },
 };

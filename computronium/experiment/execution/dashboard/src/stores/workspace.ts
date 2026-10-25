@@ -5,7 +5,7 @@ Components subscribe to the parts they need.
 */
 
 import { metricsStore } from "./metrics.js";
-import type { AxisSelection } from "../stage/payloads.js";
+import type { AxisSelection } from "../layout/types.js";
 
 export interface RunSummary {
   run_id: string;
@@ -35,6 +35,14 @@ export class WorkspaceStore {
   };
   private listeners = new Set<Listener>();
   private runsSummaryUnsubscribe: (() => void) | null = null;
+
+  get selectedRunId(): string | null {
+    return this.state.selectedRunId;
+  }
+
+  get axes(): AxisSelection {
+    return this.state.axes;
+  }
 
   constructor() {
     // Subscribe to metrics store's runs summary

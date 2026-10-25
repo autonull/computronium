@@ -4,14 +4,10 @@ One fetch per (runId, axes, values) key; multiple subscribers per key.
 Deduplicates in-flight promises so simultaneous views don't trigger parallel fetches.
 */
 
-import { AXIS_NAMES, type AxisName } from "../cell-data.js";
+import { AXIS_NAMES, type AxisName, type SpaceCell, type SpacePayload as CellDataSpacePayload } from "../cell-data.js";
 import type { AxisSelection } from "../stage/payloads.js";
 
-export interface SpacePayload {
-  cells: any[];
-  axes: { x: AxisName; y: AxisName; z: AxisName };
-  values: Record<AxisName, string[]>;
-}
+export type SpacePayload = CellDataSpacePayload;
 
 type SpaceKey = string; // "runId|x|y|z|values..."
 

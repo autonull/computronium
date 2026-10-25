@@ -90,17 +90,41 @@ export interface LayoutHost {
   onChange(cb: (doc: LayoutDocument) => void): () => void;
 }
 
+/** The three axes the stage shows, and the three it holds. */
+export type AxisName =
+  | "credit"
+  | "geometry"
+  | "dynamics"
+  | "substrate"
+  | "plasticity"
+  | "update";
+
+export interface AxisSelection {
+  x: AxisName;
+  y: AxisName;
+  z: AxisName;
+}
+
 export interface WorkspaceStore {
-  selectedRunId: string | null;
-  axes: Record<string, string>;
+  readonly selectedRunId: string | null;
+  readonly axes: AxisSelection;
+  getSelectedRunId(): string | null;
+  getAxes(): AxisSelection;
+  onSelectionChange(listener: () => void): () => void;
+  onAxesChange(listener: () => void): () => void;
+  onChange(listener: () => void): () => void;
 }
 
 export interface MetricsStore {
-  metricsFor(runId: string): Promise<unknown>;
+  get(runId: string): unknown | null;
+  subscribe(runId: string, listener: () => void): () => void;
+  setMetrics(runId: string, metrics: unknown): void;
 }
 
 export interface SpaceStore {
-  spaceFor(key: string): Promise<unknown>;
+  get(runId: string, axes: AxisSelection, values: Record<AxisName, string[]>): unknown | null;
+  subscribe(runId: string, axes: AxisSelection, values: Record<AxisName, string[]>, listener: () => void): () => void;
+  set(runId: string, axes: AxisSelection, values: Record<AxisName, string[]>, payload: unknown): void;
 }
 
 export interface CommandBus {
@@ -140,20 +164,27 @@ export interface ComponentDefinition<S extends JsonValue = JsonValue> {
 export interface StageCanvas {
   readonly canvas: HTMLCanvasElement;
   clear(): void;
+  resize(size: Size): void;
 }
+
+import * as THREE from "three";
+import { OrbitControls } from "three-stdlib";
 
 export interface StageSurface {
   readonly root: HTMLElement;
   readonly three: {
-    scene: unknown;
-    camera: unknown;
-    renderer: unknown;
-    controls: unknown;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    renderer: THREE.WebGLRenderer;
+    controls: OrbitControls;
   };
   readonly flat: StageCanvas;
   size(): Size;
   resize(): void;
   dispose(): void;
+  onFrame(cb: (delta: number) => void): () => void;
+  start(): void;
+  stop(): void;
 }
 
 export interface StageViewContext {
@@ -180,5 +211,6 @@ export interface StageViewDefinition {
   view: string;
   title: string;
   key?: string;
+  group?: string;
   create(ctx: StageViewContext): StageViewInstance;
 }

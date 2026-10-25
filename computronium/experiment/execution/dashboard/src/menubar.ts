@@ -11,12 +11,14 @@
 import { registry } from "./components/registry.js";
 import { panels } from "./panels.js";
 import { layoutManager, registerLayoutComponent } from "./layout-manager.js";
-import { viewSwitcher } from "./stage/switcher.js";
+import { listStageViews } from "./components/stage/registry.js";
 import { wsClient } from "./ws-client.js";
 import { applyPreset, getCurrentPreset } from "./layout.js";
 import { openPalette } from "./palette.js";
 import { helpOverlay } from "./help-overlay.js";
 import { runSelection } from "./run-selection.js";
+import { dockviewHost } from "./layout/dockview-host.js";
+import { commands } from "./layout/commands.js";
 import type { Component } from "./components/registry.js";
 
 function getLegacyControlPanel(): any {
@@ -487,7 +489,7 @@ export class Menubar implements Component {
       } else if (panelId) {
         panels.toggle(panelId);
       } else if (viewId) {
-        viewSwitcher.show(viewId);
+        commands.execute(`view-${viewId}`);
       } else if (action) {
         await this.handleAction(action, item as HTMLElement);
       }
@@ -615,26 +617,27 @@ export class Menubar implements Component {
   }
 
   private bindViewToggles(): void {
-    viewSwitcher.getViews().forEach((v) => {
-      // Views don't have a change event, but we can rebuild on layout change
-    });
-    layoutManager.getGoldenLayout()?.on("stateChanged", () => this.renderViewToggles());
+    // Views don't have a change event, but we can rebuild on layout change
+    dockviewHost.onChange(() => this.renderViewToggles());
   }
 
   private renderViewToggles(): void {
     const container = this.container?.querySelector("#view-toggles");
     if (!container) return;
 
-    const views = viewSwitcher.getViews();
-    const activeId = viewSwitcher.activeId;
+    const views = listStageViews();
+    const api = dockviewHost.getApi();
+    const panel = api?.activePanel;
+    const activeView = panel && (panel as any).component === "stage" ? (panel.api.getParameters()?.view as string) : null;
+
     container.innerHTML = views
       .map((v) => {
-        const active = v.id === activeId;
+        const active = v.view === activeView;
         const key = v.key ? `<kbd class="shortcut">${v.key.toUpperCase()}</kbd>` : "";
         return `
-          <div class="menubar-item${active ? " active" : ""}" data-view="${v.id}">
+          <div class="menubar-item${active ? " active" : ""}" data-view="${v.view}">
             <input type="checkbox" class="menubar-checkbox" ${active ? "checked" : ""}>
-            <span>${v.name}</span>
+            <span>${v.title}</span>
             ${key}
           </div>
         `;

@@ -2,10 +2,11 @@
 
 import { BINDINGS, allBindings } from "./bindings.js";
 import { panels } from "./panels.js";
-import { viewSwitcher } from "./stage/switcher.js";
+import { listStageViews } from "./components/stage/registry.js";
 import { helpOverlay } from "./help-overlay.js";
 import { wsClient } from "./ws-client.js";
 import { applyPreset, getCurrentPreset } from "./layout.js";
+import { commands } from "./layout/commands.js";
 
 function getLegacyCellDrawer(): any {
   return (window as any).__DASHBOARD__?.cellDrawer ?? null;
@@ -110,9 +111,9 @@ class CommandPalette {
     }
 
     // Views
-    for (const v of viewSwitcher.getViews()) {
-      const b = BINDINGS.find((x) => x.id === `view-${v.id}`);
-      e.push({ id: `view-${v.id}`, label: v.name, group: "views", hint: b?.key ?? b?.chord ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); viewSwitcher.show(v.id); } });
+    for (const v of listStageViews()) {
+      const b = BINDINGS.find((x) => x.id === `view-${v.view}`);
+      e.push({ id: `view-${v.view}`, label: v.title, group: "views", hint: b?.key ?? b?.chord ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); commands.execute(`view-${v.view}`); } });
     }
 
     // Panels

@@ -8,7 +8,9 @@
 
 import { commands } from "./commands.js";
 import { getDefinition, resolveState } from "./definitions.js";
-import { runSelection } from "../run-selection.js";
+import { workspaceStore } from "../stores/workspace.js";
+import { metricsStore } from "../stores/metrics.js";
+import { spaceStore } from "../stores/space.js";
 import type {
   ComponentContext,
   ComponentHandle,
@@ -35,19 +37,9 @@ const CASCADE = 26;
 function context(instanceId: string): ComponentContext {
   return {
     instanceId,
-    workspace: {
-      get selectedRunId() {
-        return runSelection.selectedId;
-      },
-      axes: {},
-    },
-    metrics: {
-      metricsFor: async (runId: string) => {
-        const entry = runSelection.runs.find(([id]) => id === runId);
-        return entry?.[1] ?? null;
-      },
-    },
-    spaces: { spaceFor: async () => null },
+    workspace: workspaceStore,
+    metrics: metricsStore,
+    spaces: spaceStore,
     commands: {
       register: (id, run, title) => commands.register(id, run, title),
       execute: (id) => commands.execute(id),
