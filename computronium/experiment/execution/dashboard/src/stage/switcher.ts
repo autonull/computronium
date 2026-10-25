@@ -8,7 +8,6 @@
 */
 
 import { registry } from "../components/registry.js";
-import { discoveryMap } from "../discovery-map.js";
 import { viewGlyph } from "../icons.js";
 import { CYCLE_KEY, RESERVED_KEYS } from "../keys.js";
 import { getViews, VIEW_GROUPS, registerView } from "./registry.js";
@@ -41,6 +40,10 @@ import type { StageChange } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
 import type { Component } from "../components/registry.js";
 
+function getLegacyDiscoveryMap(): any {
+  return (window as any).__DASHBOARD__?.discoveryMap ?? null;
+}
+
 /** The discovery map, as one of the stage's views. */
 class SpaceView implements StageView {
   id = "space";
@@ -50,19 +53,19 @@ class SpaceView implements StageView {
     "The declared space: the gaps as cages, the measured cells as pillars, the refusals as crosses.";
 
   enter(): void {
-    discoveryMap.show();
+    getLegacyDiscoveryMap()?.show();
   }
 
   exit(): void {
-    discoveryMap.hide();
+    getLegacyDiscoveryMap()?.hide();
   }
 
   refresh(change: StageChange): void {
-    discoveryMap.refreshView(change);
+    getLegacyDiscoveryMap()?.refreshView(change);
   }
 
   ready(): boolean {
-    return discoveryMap.hasMeasured();
+    return getLegacyDiscoveryMap()?.hasMeasured?.() ?? false;
   }
 }
 

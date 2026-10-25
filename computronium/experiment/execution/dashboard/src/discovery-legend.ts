@@ -187,7 +187,7 @@ export class DiscoveryLegendView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
+/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
 export class DiscoveryLegend implements Component {
   name = "DiscoveryLegend";
   private container: HTMLElement | null = null;
@@ -224,6 +224,3 @@ export class DiscoveryLegend implements Component {
     this.view?.render();
   }
 }
-
-export const discoveryLegend = new DiscoveryLegend();
-registry.register(discoveryLegend);

@@ -342,7 +342,7 @@ export class CellDrawerView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
+/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
 export class CellDrawer implements Component {
   name = "CellDrawer";
 
@@ -414,6 +414,3 @@ export class CellDrawer implements Component {
     this.view?.show(data);
   }
 }
-
-export const cellDrawer = new CellDrawer();
-registry.register(cellDrawer);

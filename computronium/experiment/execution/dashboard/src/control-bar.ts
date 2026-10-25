@@ -158,7 +158,7 @@ export class ControlBarView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
+/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
 export class ControlBar implements Component {
   name = "ControlBar";
   private container: HTMLElement | null = null;
@@ -196,6 +196,3 @@ export class ControlBar implements Component {
     controlStore.stop();
   }
 }
-
-export const controlBar = new ControlBar();
-registry.register(controlBar);

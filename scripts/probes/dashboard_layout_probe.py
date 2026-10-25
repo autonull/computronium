@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Does the dashboard's layout host keep its promises? (TODO72 P0)
+"""Does the dashboard's layout host keep its promises? (TODO72 P0/P1)
 
 The layout is the thing the plan rewrites, so the probe measures what the
 layout does rather than what the picture looks like: the stage's rectangle,
@@ -22,11 +22,11 @@ cycle, 33 after it, and 33 after reload; panel open/close through the legacy
 registry; 24.97 s walltime; no page or console errors.
 
 P1 absolute host (2026-10-25): `hud` open + duplicate yields 2 views with
-distinct `{runId}` states and 0 nodes matching `#hud`; all eight definitions
+distinct `{runId}` states and 0 nodes matching `#hud`; all ten definitions
 (hud, caption, live-rail, control-bar, discovery-legend, control-panel,
 cell-drawer, pareto-chart, ablation-chart, variability-chart) open together;
 10 views created; listeners 33/33/33; no errors; duplicate `plotter-tooltip`
-IDs are a known minor issue.
+IDs are a known minor issue. P1 gate met.
 """
 
 from __future__ import annotations

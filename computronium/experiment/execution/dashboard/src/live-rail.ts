@@ -102,7 +102,7 @@ export class LiveRailView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
+/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
 export class LiveRail implements Component {
   name = "LiveRail";
   private container: HTMLElement | null = null;
@@ -136,6 +136,3 @@ export class LiveRail implements Component {
     this.view?.setQueue(running, queued);
   }
 }
-
-export const liveRail = new LiveRail();
-registry.register(liveRail);

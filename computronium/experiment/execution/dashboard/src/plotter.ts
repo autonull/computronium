@@ -1065,6 +1065,3 @@ export class Plotter implements Component {
     viewMap[id]?.download();
   }
 }
-
-export const plotter = new Plotter();
-registry.register(plotter);

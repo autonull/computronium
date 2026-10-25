@@ -7,14 +7,14 @@ import "./dashboard.css";
 import { router, wsClient } from "./ws-client.js";
 import { setSceneContext } from "./components/context.js";
 import { registry } from "./components/registry.js";
-import { controlBar } from "./control-bar.js";
-import { controlPanel } from "./control-panel.js";
-import { discoveryMap } from "./discovery-map.js";
-import { cellDrawer } from "./cell-drawer.js";
-import { plotter } from "./plotter.js";
-import { liveRail } from "./live-rail.js";
-import { caption } from "./caption.js";
-import { hud } from "./hud.js";
+import { ControlBar } from "./control-bar.js";
+import { ControlPanel } from "./control-panel.js";
+import { DiscoveryMap } from "./discovery-map.js";
+import { CellDrawer } from "./cell-drawer.js";
+import { Plotter } from "./plotter.js";
+import { LiveRail } from "./live-rail.js";
+import { Caption } from "./caption.js";
+import { HUD } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
 import { runSelection } from "./run-selection.js";
 import { helpOverlay } from "./help-overlay.js";
@@ -40,6 +40,16 @@ import "./layout/components/pareto-chart.js";
 import "./layout/components/ablation-chart.js";
 import "./layout/components/variability-chart.js";
 import type { Binding } from "./bindings.js";
+
+// Legacy component instances for GoldenLayout (until P2)
+const legacyHud = new HUD();
+const legacyDiscoveryMap = new DiscoveryMap();
+const legacyPlotter = new Plotter();
+const legacyLiveRail = new LiveRail();
+const legacyCaption = new Caption();
+const legacyControlBar = new ControlBar();
+const legacyControlPanel = new ControlPanel();
+const legacyCellDrawer = new CellDrawer();
 
 // Global error handler
 window.addEventListener("error", (event) => {
@@ -121,20 +131,31 @@ wsClient.waitForConnection(15000).then((connected) => {
 // Initialize the registry (which initializes all registered components including
 // layoutManager and menubar), then wire up bindings.
 document.addEventListener("DOMContentLoaded", async () => {
-  // Initialize all registered components via the registry
+  // Initialize legacy components for GoldenLayout (they no longer auto-register)
+  await legacyHud.init();
+  await legacyDiscoveryMap.init();
+  await legacyPlotter.init();
+  await legacyLiveRail.init();
+  await legacyCaption.init();
+  await legacyControlBar.init();
+  await legacyControlPanel.init();
+  await legacyCellDrawer.init();
+
+  // Initialize all registered components via the registry (layoutManager, menubar, etc.)
   await registry.initAll();
 
   // NOW register layout components - panel elements exist after component init
+  // Use normalized IDs matching the new definition types
   registerLayoutComponent("control-bar", () => getPanelElement("control-bar"));
   registerLayoutComponent("live-rail", () => getPanelElement("live-rail"));
   registerLayoutComponent("caption", () => getPanelElement("caption"));
-  registerLayoutComponent("legend", () => getPanelElement("discovery-legend"));
+  registerLayoutComponent("discovery-legend", () => getPanelElement("discovery-legend"));
   registerLayoutComponent("hud", () => getPanelElement("hud"));
   registerLayoutComponent("control-panel", () => getPanelElement("control-panel"));
   registerLayoutComponent("cell-drawer", () => getPanelElement("cell-drawer"));
-  registerLayoutComponent("pareto", () => getPanelElement("plotter-pareto"));
-  registerLayoutComponent("ablation", () => getPanelElement("plotter-ablation"));
-  registerLayoutComponent("variability", () => getPanelElement("plotter-variability"));
+  registerLayoutComponent("pareto-chart", () => getPanelElement("plotter-pareto"));
+  registerLayoutComponent("ablation-chart", () => getPanelElement("plotter-ablation"));
+  registerLayoutComponent("variability-chart", () => getPanelElement("plotter-variability"));
 
   // Tell layoutManager to register the components now that elements exist
   layoutManager.registerComponents();
@@ -148,19 +169,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Initialize keyboard hints (Shift to show)
   initHints();
 
-  setAction("chart-pareto", () => plotter.showTab("pareto"));
-  setAction("chart-ablation", () => plotter.showTab("ablation"));
-  setAction("chart-variability", () => plotter.showTab("variability"));
+  setAction("chart-pareto", () => legacyPlotter.showTab("pareto"));
+  setAction("chart-ablation", () => legacyPlotter.showTab("ablation"));
+  setAction("chart-variability", () => legacyPlotter.showTab("variability"));
 
-  setAction("control-play", () => controlBar.togglePlay());
-  setAction("control-step", () => controlBar.step());
-  setAction("control-stop", () => controlBar.stop());
+  setAction("control-play", () => legacyControlBar.togglePlay());
+  setAction("control-step", () => legacyControlBar.step());
+  setAction("control-stop", () => legacyControlBar.stop());
   setAction("control-panel", () => panels.toggle("control-panel"));
 
   setAction("panel-hud", () => panels.toggle("hud"));
   setAction("panel-rail", () => panels.toggle("live-rail"));
   setAction("panel-caption", () => panels.toggle("caption"));
-  setAction("panel-legend", () => panels.toggle("legend"));
+  setAction("panel-legend", () => panels.toggle("discovery-legend"));
 
   setAction("view-cycle", () => viewSwitcher.cycle());
 
@@ -182,7 +203,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   setAction("escape", () => {
-    if (cellDrawer.hasCellSelected()) cellDrawer.hide();
+    if (legacyCellDrawer.hasCellSelected()) legacyCellDrawer.hide();
     else helpOverlay.hide();
   });
 });
@@ -212,7 +233,7 @@ window.addEventListener("keydown", (event) => {
     const chord = `shift+${key}`;
     const binding = bindingsByChord.get(chord);
     if (binding) {
-      if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected())
+      if (binding.when === "cell-selected" && !legacyCellDrawer.hasCellSelected())
         return;
       binding.run();
       return;
@@ -222,7 +243,7 @@ window.addEventListener("keydown", (event) => {
   // Direct key match
   const binding = bindingsByKey.get(key);
   if (binding) {
-    if (binding.when === "cell-selected" && !cellDrawer.hasCellSelected())
+    if (binding.when === "cell-selected" && !legacyCellDrawer.hasCellSelected())
       return;
     binding.run();
     return;
@@ -334,7 +355,7 @@ function animate(time: number): void {
   controls.update();
 
   // Update components that need per-frame updates
-  discoveryMap.update(delta);
+  legacyDiscoveryMap.update(delta);
 
   renderer.render(scene, camera);
 }
@@ -348,16 +369,16 @@ requestAnimationFrame(animate);
   camera,
   renderer,
   controls,
-  discoveryMap,
-  cellDrawer,
-  plotter,
-  liveRail,
-  caption,
-  hud,
+  discoveryMap: legacyDiscoveryMap,
+  cellDrawer: legacyCellDrawer,
+  plotter: legacyPlotter,
+  liveRail: legacyLiveRail,
+  caption: legacyCaption,
+  hud: legacyHud,
   helpOverlay,
   viewSwitcher,
-  controlBar,
-  controlPanel,
+  controlBar: legacyControlBar,
+  controlPanel: legacyControlPanel,
   panels,
   layout: { reset, applyWorkspace },
   layoutHost: absoluteHost,

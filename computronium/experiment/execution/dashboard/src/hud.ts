@@ -331,7 +331,7 @@ export class HudView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
+/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
 export class HUD implements Component {
   name = "HUD";
   private panel: HTMLElement | null = null;
@@ -367,6 +367,3 @@ export class HUD implements Component {
     this.view?.setMeasuredSeeds(n);
   }
 }
-
-export const hud = new HUD();
-registry.register(hud);

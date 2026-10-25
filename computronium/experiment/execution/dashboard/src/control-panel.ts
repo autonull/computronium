@@ -441,7 +441,7 @@ export class ControlPanelView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
+/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
 export class ControlPanel implements Component {
   name = "ControlPanel";
 
@@ -475,6 +475,3 @@ export class ControlPanel implements Component {
     this.container?.remove();
   }
 }
-
-export const controlPanel = new ControlPanel();
-registry.register(controlPanel);

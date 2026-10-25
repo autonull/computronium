@@ -27,7 +27,7 @@ const DEFAULT_LAYOUT: ContentItem[] = [
         width: 25,
         content: [
           { type: "component", componentName: "control-panel", title: "Control Panel", isClosable: true },
-          { type: "component", componentName: "legend", title: "Legend", isClosable: true },
+          { type: "component", componentName: "discovery-legend", title: "Discovery Legend", isClosable: true },
         ],
       },
       {
@@ -42,9 +42,9 @@ const DEFAULT_LAYOUT: ContentItem[] = [
         width: 25,
         content: [
           { type: "component", componentName: "hud", title: "Mission Control", isClosable: true },
-          { type: "component", componentName: "pareto", title: "Pareto", isClosable: true },
-          { type: "component", componentName: "ablation", title: "Ablation", isClosable: true },
-          { type: "component", componentName: "variability", title: "Variability", isClosable: true },
+          { type: "component", componentName: "pareto-chart", title: "Pareto", isClosable: true },
+          { type: "component", componentName: "ablation-chart", title: "Ablation", isClosable: true },
+          { type: "component", componentName: "variability-chart", title: "Variability", isClosable: true },
         ],
       },
     ],
@@ -182,9 +182,9 @@ export class LayoutManager implements Component {
     // Map layout component names to view switcher IDs
     const viewMap: Record<string, string> = {
       space: "space",
-      pareto: "pareto",
-      ablation: "ablation",
-      variability: "variability",
+      "pareto-chart": "pareto",
+      "ablation-chart": "ablation",
+      "variability-chart": "variability",
       flow: "flow",
       ledger: "ledger",
       timeline: "timeline",

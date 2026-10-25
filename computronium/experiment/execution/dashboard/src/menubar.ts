@@ -12,14 +12,22 @@ import { registry } from "./components/registry.js";
 import { panels } from "./panels.js";
 import { layoutManager, registerLayoutComponent } from "./layout-manager.js";
 import { viewSwitcher } from "./stage/switcher.js";
-import { controlPanel } from "./control-panel.js";
 import { wsClient } from "./ws-client.js";
 import { applyPreset, getCurrentPreset } from "./layout.js";
 import { openPalette } from "./palette.js";
 import { helpOverlay } from "./help-overlay.js";
 import { runSelection } from "./run-selection.js";
-import { controlBar } from "./control-bar.js";
 import type { Component } from "./components/registry.js";
+
+function getLegacyControlPanel(): any {
+  return (window as any).__DASHBOARD__?.controlPanel ?? null;
+}
+function getLegacyControlBar(): any {
+  return (window as any).__DASHBOARD__?.controlBar ?? null;
+}
+function getLegacyCellDrawer(): any {
+  return (window as any).__DASHBOARD__?.cellDrawer ?? null;
+}
 
 interface DatabaseInfo {
   path: string;
@@ -515,25 +523,25 @@ export class Menubar implements Component {
     switch (action) {
       case "start-run":
         panels.toggle("control-panel");
-        controlPanel.showSection("new-run");
+        getLegacyControlPanel()?.showSection("new-run");
         break;
       case "pause-run":
-        controlBar.togglePlay();
+        getLegacyControlBar()?.togglePlay();
         break;
       case "step-run":
-        controlBar.step();
+        getLegacyControlBar()?.step();
         break;
       case "stop-run":
-        controlBar.stop();
+        getLegacyControlBar()?.stop();
         break;
       case "replicate-cell":
-        import("./cell-drawer.js").then(({ cellDrawer }) => cellDrawer.replicateSelected());
+        getLegacyCellDrawer()?.replicateSelected?.();
         break;
       case "preregister-cell":
-        import("./cell-drawer.js").then(({ cellDrawer }) => cellDrawer.preregisterSelected());
+        getLegacyCellDrawer()?.preregisterSelected?.();
         break;
       case "adopt-quest":
-        import("./cell-drawer.js").then(({ cellDrawer }) => cellDrawer.adoptQuestSelected());
+        getLegacyCellDrawer()?.adoptQuestSelected?.();
         break;
       case "palette":
         openPalette();
@@ -588,7 +596,7 @@ export class Menubar implements Component {
     const container = this.container?.querySelector("#panel-toggles");
     if (!container) return;
 
-    const panelOrder = ["control-bar", "live-rail", "caption", "legend", "hud", "control-panel", "cell-drawer", "plotter-pareto", "plotter-ablation", "plotter-variability", "help-overlay"];
+    const panelOrder = ["control-bar", "live-rail", "caption", "discovery-legend", "hud", "control-panel", "cell-drawer", "pareto-chart", "ablation-chart", "variability-chart", "help-overlay"];
     container.innerHTML = panelOrder
       .map((id) => {
         const panel = panels.get(id);

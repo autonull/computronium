@@ -56,33 +56,33 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   listener count 33 / 33 / 33 across a panel cycle and reload; legacy panel
   open/close works; 24.97 s; zero page/console errors. The probe's docstring
   carries the same baseline.
-- [~] **P1 — Component and instance model.** Landed:
-  `layout/types.ts`, `layout/definitions.ts`, `layout/commands.ts`,
-  `layout/persistence.ts`, and `layout/absolute-host.ts` (a floating
-  `LayoutHost` fallback with cascade placement, drag, duplicate, save/load,
-  `applySpec`, and change notifications). HUD, caption, live rail, and
-  control bar are per-instance definitions (`layout/components/*.ts`): each
-  view owns scoped nodes and subscriptions, HUD accepts `{runId}` state, and
-  every view disposes cleanly; `runSelection.onChange` returns an unsubscribe.
-  Control bars share one `stores/control.ts` poller, so duplicated bars do not
-  duplicate requests. Bindings are commands: `setAction` registers into the
-  `CommandBus` and every `Binding.run` executes its id. CSS is one source:
-  `src/palette.css` is generated next to `src/colors.ts`, `main.ts` imports
-  palette before `dashboard.css`, Vite emits `templates/static/js/main.css`,
-  `index.html` links only that file, and `templates/static/css/` is deleted.
-  The generator now writes `src/colors.ts` (not the command palette) and emits
-  trailing newlines.
-  Probe after the change: layout host and command bus present; `hud` open +
-  duplicate yields 2 views with distinct `{runId}` states and 0 nodes matching
-  `#hud`; all eight definitions (hud, caption, live-rail, control-bar,
-  discovery-legend, control-panel, cell-drawer, pareto-chart,
-  ablation-chart, variability-chart) open together; 10 views created;
-  listener count 33 → 33 → 33; no page/console errors; duplicate `plotter-tooltip`
-  IDs are a known minor issue. P1 gate is met (8 of 8 panel types converted).
+- [x] **P1 — Component and instance model (2 d)** — DONE (2026-10-25).
+  Landed: `layout/types.ts`, `layout/definitions.ts`, `layout/commands.ts`,
+  `layout/persistence.ts`, `layout/absolute-host.ts` (floating `LayoutHost`
+  fallback with cascade placement, drag, duplicate, save/load, `applySpec`,
+  change notifications). All 10 panel types converted to per-instance
+  definitions: hud, caption, live-rail, control-bar, discovery-legend,
+  control-panel, cell-drawer, pareto-chart, ablation-chart, variability-chart.
+  Each view owns scoped nodes/subscriptions; HUD accepts `{runId}` state;
+  every view disposes cleanly; `runSelection.onChange` returns unsubscribe.
+  Control bars share one `stores/control.ts` poller. Bindings are commands:
+  `setAction` registers into `CommandBus`; every `Binding.run` executes its
+  id. CSS unified: `src/palette.css` generated next to `src/colors.ts`,
+  `main.ts` imports palette before `dashboard.css`, Vite emits
+  `templates/static/js/main.css`, `index.html` links only that file.
+  Module singletons removed for HUD, DiscoveryLegend, Plotter, LiveRail,
+  Caption, ControlBar, ControlPanel, CellDrawer, DiscoveryMap (legacy
+  facades remain for GoldenLayout until P2). IDs normalized:
+  `discovery-legend` (was `legend`), `pareto-chart`/`ablation-chart`/
+  `variability-chart` (were `plotter-*`).
+  Probe result: layout host + command bus present; `hud` open + duplicate
+  yields 2 views with distinct `{runId}` states, 0 nodes matching `#hud`;
+  all 10 definitions open together; 10 views created; listeners 33/33/33;
+  no errors; duplicate `plotter-tooltip` IDs known minor issue. P1 gate met.
 
-The tree also carries the interim fix that defers `registerComponents()`
-until after component init, so the legacy GoldenLayout panels render while
-P1/P2 are in flight.
+The tree carries the interim fix that defers `registerComponents()` until
+after component init, so legacy GoldenLayout panels render while P2 is in
+flight.
 
 ## Requirements
 

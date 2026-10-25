@@ -3,12 +3,19 @@
 import { BINDINGS, allBindings } from "./bindings.js";
 import { panels } from "./panels.js";
 import { viewSwitcher } from "./stage/switcher.js";
-import { cellDrawer } from "./cell-drawer.js";
-import { controlPanel } from "./control-panel.js";
-import { controlBar } from "./control-bar.js";
 import { helpOverlay } from "./help-overlay.js";
 import { wsClient } from "./ws-client.js";
 import { applyPreset, getCurrentPreset } from "./layout.js";
+
+function getLegacyCellDrawer(): any {
+  return (window as any).__DASHBOARD__?.cellDrawer ?? null;
+}
+function getLegacyControlPanel(): any {
+  return (window as any).__DASHBOARD__?.controlPanel ?? null;
+}
+function getLegacyControlBar(): any {
+  return (window as any).__DASHBOARD__?.controlBar ?? null;
+}
 
 interface Entry {
   id: string;
@@ -41,7 +48,8 @@ class CommandPalette {
     document.body.appendChild(this.container!);
     this.unsubLayout = () => {}; // no-op, rebuild on open
     this.unsubPanels = panels.onChange(() => { if (this.open) this.rebuild(); });
-    this.unsubDrawer = cellDrawer.onChange?.(() => { if (this.open) this.rebuild(); });
+    const drawer = getLegacyCellDrawer();
+    this.unsubDrawer = drawer?.onChange?.(() => { if (this.open) this.rebuild(); });
     this.rebuild();
     document.addEventListener("keydown", this.onGlobalKey);
     console.log("[Palette] Ready");
@@ -85,14 +93,15 @@ class CommandPalette {
     const e: Entry[] = [];
     let order = 0;
     const hasRun = wsClient.isConnected;
-    const hasCell = cellDrawer.hasCellSelected();
+    const drawer = getLegacyCellDrawer();
+    const hasCell = drawer?.hasCellSelected?.() ?? false;
 
     // The next question
-    e.push({ id: "start-run", label: hasRun ? "Start a new run" : "Start a run", group: "the next question", hint: "z", enabled: true, sortOrder: order++, run: () => { this.close(); controlPanel.showSection("new-run"); panels.toggle("control-panel"); } });
-    e.push({ id: "replicate-cell", label: "Replicate selected cell", group: "the next question", hint: "⇧R", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); cellDrawer.replicateSelected(); } });
-    e.push({ id: "preregister-claim", label: "Preregister claim", group: "the next question", hint: "⇧P", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); cellDrawer.preregisterSelected(); } });
-    e.push({ id: "adopt-quest", label: "Adopt as quest (new run)", group: "the next question", hint: "⇧Q", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); cellDrawer.adoptQuestSelected(); } });
-    e.push({ id: "show-queue", label: "Show run queue", group: "the next question", hint: "z → Queue", enabled: true, sortOrder: order++, run: () => { this.close(); controlPanel.showSection("queue"); panels.toggle("control-panel"); } });
+    e.push({ id: "start-run", label: hasRun ? "Start a new run" : "Start a run", group: "the next question", hint: "z", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("new-run"); panels.toggle("control-panel"); } });
+    e.push({ id: "replicate-cell", label: "Replicate selected cell", group: "the next question", hint: "⇧R", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.replicateSelected?.(); } });
+    e.push({ id: "preregister-claim", label: "Preregister claim", group: "the next question", hint: "⇧P", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.preregisterSelected?.(); } });
+    e.push({ id: "adopt-quest", label: "Adopt as quest (new run)", group: "the next question", hint: "⇧Q", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.adoptQuestSelected?.(); } });
+    e.push({ id: "show-queue", label: "Show run queue", group: "the next question", hint: "z → Queue", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("queue"); panels.toggle("control-panel"); } });
 
     // Workspaces
     for (const [id, label] of [["watch", "Watch — campaigns"], ["audit", "Audit — evidence"], ["drive", "Drive — instrument"], ["reset", "Reset to Watch"]] as const) {
@@ -125,7 +134,7 @@ class CommandPalette {
 
   private checkWhen(w: "always" | "cell-selected" | "run-active"): boolean {
     if (w === "always") return true;
-    if (w === "cell-selected") return cellDrawer.hasCellSelected();
+    if (w === "cell-selected") return getLegacyCellDrawer()?.hasCellSelected?.() ?? false;
     return wsClient.isConnected;
   }
   private whenReason(w: "always" | "cell-selected" | "run-active"): string {

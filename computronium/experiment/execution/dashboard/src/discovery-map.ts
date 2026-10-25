@@ -1322,7 +1322,3 @@ export class DiscoveryMap implements Component {
     return data.status === "legal" || data.status === "measured";
   }
 }
-
-// Register with global registry
-export const discoveryMap = new DiscoveryMap();
-registry.register(discoveryMap);

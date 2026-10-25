@@ -5,9 +5,13 @@ import { panels, registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { wsClient } from "./ws-client.js";
 import { runSelection } from "./run-selection.js";
-import { cellDrawer } from "./cell-drawer.js";
 import { PALETTE } from "./colors.js";
 import type { Component } from "./components/registry.js";
+import type { CellDrawer } from "./cell-drawer.js";
+
+function getLegacyCellDrawer(): CellDrawer | null {
+  return (window as any).__DASHBOARD__?.cellDrawer ?? null;
+}
 
 export function createCaptionBody(): string {
   return `
@@ -25,18 +29,24 @@ export class CaptionView {
   private lastText = "";
   private readonly disposers: (() => void)[] = [];
 
-  constructor(private readonly root: HTMLElement) {
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly cellDrawer: CellDrawer | null = null,
+  ) {
     this.headline = this.query(".caption-headline");
     this.context = this.query(".caption-context");
     this.detail = this.query(".caption-detail");
+    const drawer = this.cellDrawer ?? getLegacyCellDrawer();
     this.disposers.push(
       wsClient.onStateChange((state) => {
         if (state === "connected") this.render();
         else this.set("Connecting…", "", "");
       }),
       runSelection.onChange(() => this.render()),
-      cellDrawer.onChange(() => this.render()),
     );
+    if (drawer) {
+      this.disposers.push(drawer.onChange(() => this.render()));
+    }
     this.render();
   }
 
@@ -69,7 +79,8 @@ export class CaptionView {
 
   private render(): void {
     const run = runSelection.selected;
-    const cell = cellDrawer.hasCellSelected() ? cellDrawer.currentCell : null;
+    const drawer = this.cellDrawer ?? getLegacyCellDrawer();
+    const cell = drawer?.hasCellSelected() ? drawer.currentCell : null;
 
     if (this.lastText) {
       this.set(this.lastText, "", "");
@@ -127,7 +138,7 @@ export class CaptionView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
+/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
 export class Caption implements Component {
   name = "Caption";
   private container: HTMLElement | null = null;
@@ -143,7 +154,8 @@ export class Caption implements Component {
       defaultOpen: true,
       className: "caption-panel",
     });
-    this.view = new CaptionView(this.container);
+    const drawer = (window as any).__DASHBOARD__?.cellDrawer ?? null;
+    this.view = new CaptionView(this.container, drawer);
     registerDisplayPanel("caption", "caption", "◈", () => this.container);
   }
 
@@ -165,6 +177,3 @@ export class Caption implements Component {
     this.view?.clear();
   }
 }
-
-export const caption = new Caption();
-registry.register(caption);
