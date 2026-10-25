@@ -10,6 +10,8 @@
  *  rather than maintained beside it.
  */
 
+import { commands } from "./layout/commands.js";
+
 export interface Binding {
   /** Unique id for this binding. */
   id: string;
@@ -33,6 +35,8 @@ const actions: Record<string, () => void> = {};
 /** Register an action implementation by binding id. */
 export function setAction(id: string, fn: () => void): void {
   actions[id] = fn;
+  if (commands.has(id)) commands.replace(id, fn);
+  else commands.register(id, fn, id);
 }
 
 /** Get an action implementation by binding id. */
@@ -190,6 +194,13 @@ export const BINDINGS: Binding[] = [
     run: () => actions["collapse-all"]?.(),
   },
 ];
+
+// Every binding is a command: chrome executes the id, not a captured closure.
+for (const binding of BINDINGS) {
+  binding.run = () => {
+    commands.tryExecute(binding.id);
+  };
+}
 
 /** BINDINGS grouped by group, for the help overlay and palette. */
 export function bindingsByGroup(): Map<string, Binding[]> {

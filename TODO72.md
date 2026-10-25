@@ -60,10 +60,13 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   `layout/types.ts`, `layout/definitions.ts`, `layout/commands.ts`,
   `layout/persistence.ts`, and `layout/absolute-host.ts` (a floating
   `LayoutHost` fallback with cascade placement, drag, duplicate, save/load,
-  `applySpec`, and change notifications). The HUD is now a per-instance
-  definition (`layout/components/hud.ts`): `HudView` owns scoped nodes and
-  subscriptions, accepts `{runId}` state, and disposes cleanly;
-  `runSelection.onChange` returns an unsubscribe. CSS is one source:
+  `applySpec`, and change notifications). HUD, caption, live rail, and
+  control bar are per-instance definitions (`layout/components/*.ts`): each
+  view owns scoped nodes and subscriptions, HUD accepts `{runId}` state, and
+  every view disposes cleanly; `runSelection.onChange` returns an unsubscribe.
+  Control bars share one `stores/control.ts` poller, so duplicated bars do not
+  duplicate requests. Bindings are commands: `setAction` registers into the
+  `CommandBus` and every `Binding.run` executes its id. CSS is one source:
   `src/palette.css` is generated next to `src/colors.ts`, `main.ts` imports
   palette before `dashboard.css`, Vite emits `templates/static/js/main.css`,
   `index.html` links only that file, and `templates/static/css/` is deleted.
@@ -71,11 +74,11 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   trailing newlines.
   Probe after the change: layout host and command bus present; `hud` open +
   duplicate yields 2 views with distinct `{runId}` states and 0 nodes matching
-  `#hud`; listener count 33 → 33 → 33; no page/console errors; 25.03 s.
-  **Not yet done:** convert discovery-legend/plotter/live-rail/caption/
-  control-bar/control-panel/cell-drawer to definitions; wire menubar/palette/
-  bindings to `commands`; finish id normalization. P1 gate is partially met
-  (HUD only), not closed.
+  `#hud`; all four definitions open together with no duplicate ids; listener
+  count 33 → 33 → 33; no page/console errors.
+  **Not yet done:** convert discovery-legend/plotter/control-panel/
+  cell-drawer to definitions; finish id normalization. P1 gate is partially
+  met (HUD + caption + rail + control bar), not closed.
 
 The tree also carries the interim fix that defers `registerComponents()`
 until after component init, so the legacy GoldenLayout panels render while
@@ -363,14 +366,14 @@ across components must be limited to the component's own host.
 - [x] Add `layout/types.ts`, `layout/definitions.ts` (plus `commands.ts` and
   `persistence.ts` so the seam is complete).
 - [x] Absolute host and the HUD definition (first per-instance panel).
+- [x] Convert HUD, caption, live rail, control bar.
 - [ ] Convert the remaining panels to definitions with per-instance factories:
-  `discovery-legend`, `plotter`, `live-rail`, `caption`, `control-bar`,
-  `control-panel`, `cell-drawer`.
+  `discovery-legend`, `plotter`, `control-panel`, `cell-drawer`.
 - [ ] Replace module singletons for `discoveryMap`, `plotter`, `hud`,
   `liveRail`, `caption`, `controlBar`, `controlPanel`, `cellDrawer` (HUD's
   view is per-instance; the singleton facade remains for the legacy layout).
-- [~] Add `CommandBus` (registry, presets, `LayoutCommands` landed); menubar/
-  palette/bindings still call module singletons.
+- [x] Add `CommandBus`; bindings register and execute through it. Menubar/
+  palette call binding rows, so they reach the bus too.
 - [ ] Normalize ids: `discovery-legend`, `chart`; no aliases.
 - [x] CSS: one `src/dashboard.css`; generated `src/palette.css`; duplicated
   static CSS deleted; one link in `index.html`.

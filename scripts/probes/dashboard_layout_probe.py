@@ -22,8 +22,9 @@ cycle, 33 after it, and 33 after reload; panel open/close through the legacy
 registry; 24.97 s walltime; no page or console errors.
 
 P1 absolute host (2026-10-25): `hud` open + duplicate yields 2 views with
-distinct `{runId}` states and 0 nodes matching `#hud`; listeners 33/33/33;
-25.03 s; no errors.
+distinct `{runId}` states and 0 nodes matching `#hud`; all four definitions
+(hud, caption, live-rail, control-bar) open together with no duplicate ids;
+listeners 33/33/33; no errors.
 """
 
 from __future__ import annotations
@@ -130,6 +131,22 @@ def _panel_cycle(page) -> dict[str, object]:
                     if (duplicate) host.close(duplicate);
                     host.close(id);
                 }
+                const types = (dbg.definitions?.list?.() ?? [])
+                    .map(definition => definition.type);
+                const openedAll = [];
+                for (const type of types) {
+                    openedAll.push(host.open(type));
+                }
+                const layer = document.getElementById('absolute-layout-layer');
+                const ids = layer
+                    ? [...layer.querySelectorAll('[id]')].map(node => node.id)
+                    : [];
+                const duplicates = ids.filter(
+                    (value, index) => ids.indexOf(value) !== index
+                );
+                if (typeof host.close === 'function') {
+                    for (const opened of openedAll) host.close(opened);
+                }
                 return {
                     mode: 'layout-host',
                     opened: id,
@@ -138,6 +155,9 @@ def _panel_cycle(page) -> dict[str, object]:
                     views,
                     rootIds,
                     states,
+                    definitionTypes: types,
+                    allViews: openedAll.length,
+                    duplicateIds: duplicates,
                 };
             }
             const panel = dbg.panels?.get('hud');

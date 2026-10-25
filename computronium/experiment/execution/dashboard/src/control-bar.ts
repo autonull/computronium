@@ -3,15 +3,10 @@
 import { registry } from "./components/registry.js";
 import { panels, registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
+import { controlStore, type ControlPayload } from "./stores/control.js";
 import type { Component } from "./components/registry.js";
 
-const POLL_MS = 500;
-
-interface ControlState { paused: boolean; step_budget: number; max_workers: number | null; cancel: boolean; revision: number; }
-interface RunStatus { run_id: string; stage: string; in_flight: number; cells_done: number; ceiling: number; }
-interface ControlPayload { control: ControlState; status: RunStatus | null; readable: boolean; error: string | null; machine: { cpu_percent: number; cpu_count: number | null }; }
-
-function createBody(): string {
+export function createControlBarBody(): string {
   return `
     <style>
       .ctrl .verb { width: 36px; height: 32px; font-size: 16px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; }
@@ -53,123 +48,153 @@ function createBody(): string {
   `;
 }
 
+/** A control bar bound to one root element and the shared control store. */
+export class ControlBarView {
+  private readonly playBtn: HTMLButtonElement;
+  private readonly stepBtn: HTMLButtonElement;
+  private readonly stopBtn: HTMLButtonElement;
+  private readonly slider: HTMLInputElement;
+  private readonly ceilEl: HTMLElement;
+  private readonly cellsFill: HTMLElement;
+  private readonly cellsEl: HTMLElement;
+  private readonly cpuFill: HTMLElement;
+  private readonly cpuEl: HTMLElement;
+  private readonly statusEl: HTMLElement;
+  private readonly unsubscribe: () => void;
+
+  constructor(
+    private readonly root: HTMLElement,
+    openControlPanel: () => void = () => panels.toggle("control-panel"),
+  ) {
+    this.playBtn = this.query("[data-act=play]");
+    this.stepBtn = this.query("[data-act=step]");
+    this.stopBtn = this.query("[data-act=stop]");
+    this.slider = this.query(".slider");
+    this.ceilEl = this.query(".ceil");
+    this.cellsFill = this.query(".cells-fill");
+    this.cellsEl = this.query(".cells");
+    this.cpuFill = this.query(".cpu-fill");
+    this.cpuEl = this.query(".cpu");
+    this.statusEl = this.query(".status");
+
+    this.playBtn.addEventListener("click", () => controlStore.togglePlay());
+    this.stepBtn.addEventListener("click", () => controlStore.step());
+    this.stopBtn.addEventListener("click", () => {
+      if (confirm("Stop the run?")) controlStore.stop();
+    });
+    this.slider.addEventListener("change", () =>
+      controlStore.setCeiling(Number(this.slider.value)),
+    );
+    this.query("[data-act=panel]").addEventListener("click", openControlPanel);
+    this.unsubscribe = controlStore.subscribe((payload) => this.render(payload));
+  }
+
+  dispose(): void {
+    this.unsubscribe();
+  }
+
+  private query<T extends HTMLElement>(selector: string): T {
+    const el = this.root.querySelector<T>(selector);
+    if (!el) throw new Error(`[ControlBar] missing element: ${selector}`);
+    return el;
+  }
+
+  private render(p: ControlPayload | null): void {
+    if (!p) return;
+    const c = p.control;
+    const s = p.status;
+    const inFlight = s?.in_flight ?? 0;
+    const ceiling = c.max_workers ?? s?.ceiling ?? 0;
+    const cpu = p.machine?.cpu_percent ?? 0;
+
+    const paused = c.paused;
+    this.playBtn.textContent = paused ? "▶" : "⏸";
+    this.playBtn.classList.toggle("primary", paused);
+    this.playBtn.classList.toggle("danger", !paused);
+    this.playBtn.title = paused ? "Play" : "Pause";
+
+    const canStep = c.paused && p.readable;
+    this.stepBtn.disabled = !canStep;
+    this.stepBtn.title = canStep
+      ? "Step"
+      : c.paused
+        ? "Control plane not readable"
+        : "Run not paused";
+    this.stopBtn.disabled = !p.readable;
+    this.playBtn.disabled = !p.readable;
+    if (!p.readable) this.playBtn.title = p.error || "control plane unreadable";
+
+    const max = Math.max(1, p.machine?.cpu_count ?? 1, ceiling || 1);
+    this.slider.max = String(max);
+    this.slider.value = String(Math.max(1, ceiling || 1));
+    this.slider.disabled = !p.readable;
+    this.ceilEl.textContent = ceiling ? String(ceiling) : "—";
+
+    const frac = ceiling ? Math.min(1, inFlight / ceiling) : 0;
+    this.cellsFill.style.width = `${frac * 100}%`;
+    this.cellsFill.style.background =
+      frac < 0.5
+        ? "var(--promoted)"
+        : frac < 0.85
+          ? "var(--warn)"
+          : "var(--error)";
+    this.cellsEl.textContent = `${inFlight}${ceiling ? ` / ${ceiling}` : ""}`;
+
+    const cpuPercent = Math.min(100, Math.max(0, cpu));
+    this.cpuFill.style.width = `${cpuPercent}%`;
+    this.cpuFill.style.background =
+      cpuPercent < 30
+        ? "var(--cpu)"
+        : cpuPercent < 70
+          ? "var(--warn)"
+          : "var(--error)";
+    this.cpuEl.textContent = `${cpu.toFixed(0)}%`;
+
+    if (p.readable) {
+      this.statusEl.textContent = s
+        ? `${s.stage.replace("s", "S")} · ${s.cells_done} cells`
+        : "no run";
+    }
+  }
+}
+
+/** The legacy singleton panel used by GoldenLayout until P2. */
 export class ControlBar implements Component {
   name = "ControlBar";
   private container: HTMLElement | null = null;
-  private playBtn: HTMLButtonElement | null = null;
-  private stepBtn: HTMLButtonElement | null = null;
-  private stopBtn: HTMLButtonElement | null = null;
-  private slider: HTMLInputElement | null = null;
-  private ceilEl: HTMLElement | null = null;
-  private cellsFill: HTMLElement | null = null;
-  private cellsEl: HTMLElement | null = null;
-  private cpuFill: HTMLElement | null = null;
-  private cpuEl: HTMLElement | null = null;
-  private statusEl: HTMLElement | null = null;
-  private timer: number | null = null;
-  private payload: ControlPayload | null = null;
+  private view: ControlBarView | null = null;
 
   async init(): Promise<void> {
-    this.container = createPanelShell({ id: "control-bar", title: "Control Bar", glyph: "⏯", body: createBody(), dock: "bottom", defaultOpen: true, className: "control-bar-panel" });
-    this.bind();
+    this.container = createPanelShell({
+      id: "control-bar",
+      title: "Control Bar",
+      glyph: "⏯",
+      body: createControlBarBody(),
+      dock: "bottom",
+      defaultOpen: true,
+      className: "control-bar-panel",
+    });
+    this.view = new ControlBarView(this.container);
     registerDisplayPanel("control-bar", "control bar", "⏯", () => this.container);
-    this.timer = window.setInterval(() => this.poll(), POLL_MS);
-    await this.poll();
   }
 
-  async destroy(): Promise<void> { if (this.timer) clearInterval(this.timer); this.container?.remove(); }
-
-  private bind(): void {
-    if (!this.container) return;
-    const root = this.container;
-    this.playBtn = root.querySelector("[data-act=play]")!;
-    this.stepBtn = root.querySelector("[data-act=step]")!;
-    this.stopBtn = root.querySelector("[data-act=stop]")!;
-    this.slider = root.querySelector(".slider")!;
-    this.ceilEl = root.querySelector(".ceil")!;
-    this.cellsFill = root.querySelector(".cells-fill")!;
-    this.cellsEl = root.querySelector(".cells")!;
-    this.cpuFill = root.querySelector(".cpu-fill")!;
-    this.cpuEl = root.querySelector(".cpu")!;
-    this.statusEl = root.querySelector(".status")!;
-
-    this.playBtn?.addEventListener("click", () => this.cmd({ paused: !this.payload?.control.paused }));
-    this.stepBtn?.addEventListener("click", () => this.cmd({ step: true }));
-    this.stopBtn?.addEventListener("click", () => { if (confirm("Stop the run?")) this.cmd({ cancel: true }); });
-    this.slider?.addEventListener("change", () => this.cmd({ max_workers: Number(this.slider!.value) }));
-    root.querySelector("[data-act=panel]")!.addEventListener("click", () => panels.toggle("control-panel"));
+  async destroy(): Promise<void> {
+    this.view?.dispose();
+    this.view = null;
+    this.container?.remove();
   }
 
-  private async poll(): Promise<void> {
-    try {
-      const res = await fetch("/api/control");
-      if (!res.ok) return;
-      this.payload = await res.json();
-      this.render();
-    } catch { /* keep last state */ }
+  togglePlay(): void {
+    controlStore.togglePlay();
   }
 
-  private async cmd(changes: Record<string, unknown>): Promise<void> {
-    const rev = this.payload?.control.revision;
-    try {
-      const res = await fetch("/api/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...changes, revision: rev }) });
-      if (!res.ok) { const b = await res.json().catch(() => ({})); this.setStatus(b.error || "command refused"); return; }
-      await this.poll();
-    } catch { this.setStatus("cannot reach server"); }
+  step(): void {
+    controlStore.step();
   }
 
-  private render(): void {
-    const p = this.payload; if (!p) return;
-    const c = p.control, s = p.status;
-    const inFlight = s?.in_flight ?? 0, ceiling = c.max_workers ?? s?.ceiling ?? 0, cpu = p.machine?.cpu_percent ?? 0;
-
-    if (this.playBtn) {
-      const paused = c.paused;
-      this.playBtn.textContent = paused ? "▶" : "⏸";
-      this.playBtn.classList.toggle("primary", paused);
-      this.playBtn.classList.toggle("danger", !paused);
-      this.playBtn.title = paused ? "Play" : "Pause";
-    }
-    if (this.stepBtn) {
-      const can = c.paused && p.readable;
-      this.stepBtn.disabled = !can;
-      this.stepBtn.title = can ? "Step" : c.paused ? "Control plane not readable" : "Run not paused";
-    }
-    if (this.stopBtn) { this.stopBtn.disabled = !p.readable; }
-    if (this.playBtn) { this.playBtn.disabled = !p.readable; if (!p.readable) this.playBtn.title = p.error || "control plane unreadable"; }
-
-    if (this.slider) {
-      const max = Math.max(1, p.machine?.cpu_count ?? 1, ceiling || 1);
-      this.slider.max = String(max);
-      this.slider.value = String(Math.max(1, ceiling || 1));
-      this.slider.disabled = !p.readable;
-    }
-    if (this.ceilEl) this.ceilEl.textContent = ceiling ? String(ceiling) : "—";
-
-    if (this.cellsFill) {
-      const frac = ceiling ? Math.min(1, inFlight / ceiling) : 0;
-      this.cellsFill.style.width = `${frac * 100}%`;
-      this.cellsFill.style.background = frac === 0 ? "var(--promoted)" : frac < 0.5 ? "var(--promoted)" : frac < 0.85 ? "var(--warn)" : "var(--error)";
-    }
-    if (this.cellsEl) this.cellsEl.textContent = `${inFlight}${ceiling ? ` / ${ceiling}` : ""}`;
-
-    if (this.cpuFill) {
-      const cpc = Math.min(100, Math.max(0, cpu));
-      this.cpuFill.style.width = `${cpc}%`;
-      this.cpuFill.style.background = cpc < 30 ? "var(--cpu)" : cpc < 70 ? "var(--warn)" : "var(--error)";
-    }
-    if (this.cpuEl) this.cpuEl.textContent = `${cpu.toFixed(0)}%`;
-
-    if (this.statusEl && p.readable) {
-      this.statusEl.textContent = s ? `${s.stage.replace("s","S")} · ${s.cells_done} cells` : "no run";
-    }
+  stop(): void {
+    controlStore.stop();
   }
-
-  private setStatus(t: string): void { if (this.statusEl) this.statusEl.textContent = t; }
-
-  togglePlay(): void { this.cmd({ paused: !this.payload?.control.paused }); }
-  step(): void { this.cmd({ step: true }); }
-  stop(): void { this.cmd({ cancel: true }); }
 }
 
 export const controlBar = new ControlBar();

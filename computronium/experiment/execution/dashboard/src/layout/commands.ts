@@ -26,6 +26,20 @@ export class CommandRegistry {
     this.commands.set(id, { id, title, run });
   }
 
+  has(id: string): boolean {
+    return this.commands.has(id);
+  }
+
+  tryExecute(id: string): boolean {
+    if (!this.commands.has(id)) return false;
+    this.execute(id);
+    return true;
+  }
+
+  replace(id: string, run: () => void | Promise<void>, title = id): void {
+    this.commands.set(id, { id, title, run });
+  }
+
   execute(id: string): void {
     const command = this.commands.get(id);
     if (!command) throw new Error(`unknown command: ${id}`);

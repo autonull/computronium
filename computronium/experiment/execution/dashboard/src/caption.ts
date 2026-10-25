@@ -1,4 +1,4 @@
-/** Caption — the dashboard's voice. Shows run state, selected cell, guidance. */
+/** Caption — the dashboard's voice, one view per instance. */
 
 import { registry } from "./components/registry.js";
 import { panels, registerDisplayPanel } from "./panels.js";
@@ -9,36 +9,63 @@ import { cellDrawer } from "./cell-drawer.js";
 import { PALETTE } from "./colors.js";
 import type { Component } from "./components/registry.js";
 
-function createBody(): string {
+export function createCaptionBody(): string {
   return `
-    <div id="caption-headline" style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-    <div id="caption-context" style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;"></div>
-    <div id="caption-detail" style="font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;"></div>
+    <div class="caption-headline" style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+    <div class="caption-context" style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;"></div>
+    <div class="caption-detail" style="font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;"></div>
   `;
 }
 
-export class Caption implements Component {
-  name = "Caption";
-  private container: HTMLElement | null = null;
-  private headline: HTMLElement | null = null;
-  private context: HTMLElement | null = null;
-  private detail: HTMLElement | null = null;
+/** A caption bound to one root element and its own subscriptions. */
+export class CaptionView {
+  private readonly headline: HTMLElement;
+  private readonly context: HTMLElement;
+  private readonly detail: HTMLElement;
   private lastText = "";
-  private unsub: (() => void) | null = null;
+  private readonly disposers: (() => void)[] = [];
 
-  async init(): Promise<void> {
-    this.container = createPanelShell({ id: "caption", title: "Caption", glyph: "◈", body: createBody(), dock: "bottom", defaultOpen: true, className: "caption-panel" });
-    this.headline = this.container.querySelector("#caption-headline")!;
-    this.context = this.container.querySelector("#caption-context")!;
-    this.detail = this.container.querySelector("#caption-detail")!;
-    registerDisplayPanel("caption", "caption", "◈", () => this.container);
-    this.unsub = wsClient.onStateChange((state) => { if (state === "connected") this.render(); else this.set("Connecting…", "", ""); });
-    runSelection.onChange(() => this.render());
-    cellDrawer.onChange?.(() => this.render());
+  constructor(private readonly root: HTMLElement) {
+    this.headline = this.query(".caption-headline");
+    this.context = this.query(".caption-context");
+    this.detail = this.query(".caption-detail");
+    this.disposers.push(
+      wsClient.onStateChange((state) => {
+        if (state === "connected") this.render();
+        else this.set("Connecting…", "", "");
+      }),
+      runSelection.onChange(() => this.render()),
+      cellDrawer.onChange(() => this.render()),
+    );
     this.render();
   }
 
-  async destroy(): Promise<void> { this.unsub?.(); this.container?.remove(); }
+  dispose(): void {
+    for (const dispose of this.disposers) dispose();
+    this.disposers.length = 0;
+  }
+
+  set(headline: string, context = "", detail = ""): void {
+    this.headline.textContent = headline;
+    this.context.textContent = context;
+    this.detail.textContent = detail;
+  }
+
+  notify(text: string, ctx = "", det = ""): void {
+    this.lastText = text;
+    this.set(text, ctx, det);
+  }
+
+  clear(): void {
+    this.lastText = "";
+    this.render();
+  }
+
+  private query<T extends HTMLElement>(selector: string): T {
+    const el = this.root.querySelector<T>(selector);
+    if (!el) throw new Error(`[Caption] missing element: ${selector}`);
+    return el;
+  }
 
   private render(): void {
     const run = runSelection.selected;
@@ -65,23 +92,78 @@ export class Caption implements Component {
       const status = cell.status;
       const valAcc = cell.metrics?.val_acc ?? 0;
       const chance = cell.chance ?? 0.1;
-      const coordStr = Object.entries(coord).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join(", ");
-      const verdict = status === "measured" ? (valAcc > chance + 0.1 ? "PASSED" : valAcc <= chance ? "REJECTED" : "INSUFFICIENT") : status.toUpperCase();
-      const verdictColor = verdict === "PASSED" ? PALETTE.promoted : verdict === "REJECTED" ? PALETTE.rejected : PALETTE.insufficient;
-      this.set(`${mode} · ${cellsDone} cells · ${profile}@${fidelity}`, `Cell: ${coordStr} · ${verdict} (${valAcc.toFixed(3)} vs ${chance})`, `Shift+R replicate · Shift+P preregister · Shift+Q quest · D toggle`);
+      const coordStr = Object.entries(coord)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ");
+      const verdict =
+        status === "measured"
+          ? valAcc > chance + 0.1
+            ? "PASSED"
+            : valAcc <= chance
+              ? "REJECTED"
+              : "INSUFFICIENT"
+          : status.toUpperCase();
+      const verdictColor =
+        verdict === "PASSED"
+          ? PALETTE.promoted
+          : verdict === "REJECTED"
+            ? PALETTE.rejected
+            : PALETTE.insufficient;
+      this.set(
+        `${mode} · ${cellsDone} cells · ${profile}@${fidelity}`,
+        `Cell: ${coordStr} · ${verdict} (${valAcc.toFixed(3)} vs ${chance})`,
+        `Shift+R replicate · Shift+P preregister · Shift+Q quest · D toggle`,
+      );
+      this.detail.style.color = verdictColor;
     } else {
-      this.set(`${mode} · ${cellsDone} cells · ${profile}@${fidelity}`, requiredSeeds > 0 ? `Seeds to claim: ${requiredSeeds}` : "Click a cell to inspect", "V cycle views · 1-9 pick view · Z start run · Space play/pause");
+      this.set(
+        `${mode} · ${cellsDone} cells · ${profile}@${fidelity}`,
+        requiredSeeds > 0 ? `Seeds to claim: ${requiredSeeds}` : "Click a cell to inspect",
+        "V cycle views · 1-9 pick view · Z start run · Space play/pause",
+      );
+      this.detail.style.color = "var(--text-muted)";
     }
+  }
+}
+
+/** The legacy singleton panel used by GoldenLayout until P2. */
+export class Caption implements Component {
+  name = "Caption";
+  private container: HTMLElement | null = null;
+  private view: CaptionView | null = null;
+
+  async init(): Promise<void> {
+    this.container = createPanelShell({
+      id: "caption",
+      title: "Caption",
+      glyph: "◈",
+      body: createCaptionBody(),
+      dock: "bottom",
+      defaultOpen: true,
+      className: "caption-panel",
+    });
+    this.view = new CaptionView(this.container);
+    registerDisplayPanel("caption", "caption", "◈", () => this.container);
+  }
+
+  async destroy(): Promise<void> {
+    this.view?.dispose();
+    this.view = null;
+    this.container?.remove();
   }
 
   set(headline: string, context = "", detail = ""): void {
-    if (this.headline) this.headline.textContent = headline;
-    if (this.context) this.context.textContent = context;
-    if (this.detail) this.detail.textContent = detail;
+    this.view?.set(headline, context, detail);
   }
 
-  notify(text: string, ctx = "", det = ""): void { this.lastText = text; this.set(text, ctx, det); }
-  clear(): void { this.lastText = ""; this.render(); }
+  notify(text: string, ctx = "", det = ""): void {
+    this.view?.notify(text, ctx, det);
+  }
+
+  clear(): void {
+    this.view?.clear();
+  }
 }
 
 export const caption = new Caption();

@@ -1,4 +1,4 @@
-/** Simple live rail — scrolling event log. */
+/** Live rail — scrolling event log, one view per instance. */
 
 import { registry } from "./components/registry.js";
 import { panels, registerDisplayPanel } from "./panels.js";
@@ -7,9 +7,16 @@ import { wsClient } from "./ws-client.js";
 import { PALETTE } from "./colors.js";
 import type { Component } from "./components/registry.js";
 
-interface Event { stage: string; message: string; level: "ok" | "warn" | "error"; timestamp: string; }
+type EventLevel = "ok" | "warn" | "error";
 
-function createBody(): string {
+interface Event {
+  stage: string;
+  message: string;
+  level: EventLevel;
+  timestamp: string;
+}
+
+export function createRailBody(): string {
   return `
     <style>
       .rail-header { display: flex; align-items: center; gap: 8px; padding: 4px 8px; margin-bottom: 4px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; }
@@ -23,62 +30,110 @@ function createBody(): string {
       .rail-event.error .rail-msg { color: var(--error); }
     </style>
     <div class="rail-header">
-      <span class="rail-conn"><span class="rail-dot" id="rail-dot"></span><span id="rail-label">Disconnected</span></span>
+      <span class="rail-conn"><span class="rail-dot"></span><span class="rail-label">Disconnected</span></span>
       <span style="flex: 1;"></span>
-      <span id="rail-queue" style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">0 running · 0 queued</span>
+      <span class="rail-queue" style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">0 running · 0 queued</span>
     </div>
-    <div class="rail-log" id="rail-log"></div>
+    <div class="rail-log"></div>
   `;
 }
 
-export class LiveRail implements Component {
-  name = "LiveRail";
-  private container: HTMLElement | null = null;
-  private log: HTMLElement | null = null;
-  private dot: HTMLElement | null = null;
-  private label: HTMLElement | null = null;
-  private queue: HTMLElement | null = null;
+/** A rail bound to one root element and its own event history. */
+export class LiveRailView {
+  private readonly log: HTMLElement;
+  private readonly dot: HTMLElement;
+  private readonly label: HTMLElement;
+  private readonly queue: HTMLElement;
   private events: Event[] = [];
-  private maxEvents = 100;
+  private readonly disposers: (() => void)[] = [];
 
-  async init(): Promise<void> {
-    this.container = createPanelShell({ id: "live-rail", title: "Live Rail", glyph: "≡", body: createBody(), dock: "right", defaultOpen: true, className: "live-rail-panel" });
-    this.log = this.container.querySelector("#rail-log")!;
-    this.dot = this.container.querySelector("#rail-dot")!;
-    this.label = this.container.querySelector("#rail-label")!;
-    this.queue = this.container.querySelector("#rail-queue")!;
-    registerDisplayPanel("live-rail", "live rail", "≡", () => this.container);
-    wsClient.onStateChange((s) => this.setConn(s === "connected"));
-    console.log("[LiveRail] Ready");
+  constructor(private readonly root: HTMLElement) {
+    this.log = this.query(".rail-log");
+    this.dot = this.query(".rail-dot");
+    this.label = this.query(".rail-label");
+    this.queue = this.query(".rail-queue");
+    this.disposers.push(
+      wsClient.onStateChange((state) => this.setConn(state === "connected")),
+    );
   }
 
-  async destroy(): Promise<void> { this.container?.remove(); }
+  dispose(): void {
+    for (const dispose of this.disposers) dispose();
+    this.disposers.length = 0;
+    this.events = [];
+  }
+
+  add(stage: string, message: string, level: EventLevel = "ok"): void {
+    this.events.unshift({
+      stage,
+      message,
+      level,
+      timestamp: new Date().toISOString(),
+    });
+    if (this.events.length > 100) this.events.pop();
+    this.render();
+  }
+
+  setQueue(running: number, queued: number): void {
+    this.queue.textContent = `${running} running · ${queued} queued`;
+  }
+
+  private query<T extends HTMLElement>(selector: string): T {
+    const el = this.root.querySelector<T>(selector);
+    if (!el) throw new Error(`[LiveRail] missing element: ${selector}`);
+    return el;
+  }
 
   private setConn(connected: boolean): void {
-    if (!this.dot || !this.label) return;
     this.dot.style.background = connected ? "var(--ok)" : "var(--error)";
     this.label.textContent = connected ? "Connected" : "Disconnected";
   }
 
-  add(stage: string, message: string, level: "ok" | "warn" | "error" = "ok"): void {
-    this.events.unshift({ stage, message, level, timestamp: new Date().toISOString() });
-    if (this.events.length > this.maxEvents) this.events.pop();
-    this.render();
+  private render(): void {
+    const icons = { ok: "✓", warn: "⚠", error: "✗" };
+    const colors = { ok: PALETTE.ok, warn: PALETTE.warn, error: PALETTE.error };
+    this.log.innerHTML = this.events
+      .map((event) => {
+        const time = new Date(event.timestamp).toLocaleTimeString();
+        return `<div class="rail-event ${event.level}"><span class="rail-time">${time}</span><span style="color:${colors[event.level]}">${icons[event.level]}</span><span class="rail-stage">${event.stage}</span><span class="rail-msg">${event.message}</span></div>`;
+      })
+      .join("");
+    this.log.scrollTop = 0;
+  }
+}
+
+/** The legacy singleton panel used by GoldenLayout until P2. */
+export class LiveRail implements Component {
+  name = "LiveRail";
+  private container: HTMLElement | null = null;
+  private view: LiveRailView | null = null;
+
+  async init(): Promise<void> {
+    this.container = createPanelShell({
+      id: "live-rail",
+      title: "Live Rail",
+      glyph: "≡",
+      body: createRailBody(),
+      dock: "right",
+      defaultOpen: true,
+      className: "live-rail-panel",
+    });
+    this.view = new LiveRailView(this.container);
+    registerDisplayPanel("live-rail", "live rail", "≡", () => this.container);
   }
 
-  private render(): void {
-    if (!this.log) return;
-    this.log.innerHTML = this.events.map((e) => {
-      const time = new Date(e.timestamp).toLocaleTimeString();
-      const icons = { ok: "✓", warn: "⚠", error: "✗" };
-      const colors = { ok: PALETTE.ok, warn: PALETTE.warn, error: PALETTE.error };
-      return `<div class="rail-event ${e.level}"><span class="rail-time">${time}</span><span style="color:${colors[e.level]}">${icons[e.level]}</span><span class="rail-stage">${e.stage}</span><span class="rail-msg">${e.message}</span></div>`;
-    }).join("");
-    this.log.scrollTop = 0;
+  async destroy(): Promise<void> {
+    this.view?.dispose();
+    this.view = null;
+    this.container?.remove();
+  }
+
+  add(stage: string, message: string, level: EventLevel = "ok"): void {
+    this.view?.add(stage, message, level);
   }
 
   setQueue(running: number, queued: number): void {
-    if (this.queue) this.queue.textContent = `${running} running · ${queued} queued`;
+    this.view?.setQueue(running, queued);
   }
 }
 

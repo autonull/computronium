@@ -30,6 +30,9 @@ import { absoluteHost } from "./layout/absolute-host.js";
 import { commands } from "./layout/commands.js";
 import { listDefinitions } from "./layout/definitions.js";
 import "./layout/components/hud.js";
+import "./layout/components/caption.js";
+import "./layout/components/live-rail.js";
+import "./layout/components/control-bar.js";
 import type { Binding } from "./bindings.js";
 
 // Global error handler
