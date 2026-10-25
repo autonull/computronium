@@ -112,32 +112,32 @@ def _panel_cycle(page) -> dict[str, object]:
     and the probe uses it automatically.
     """
     return page.evaluate(
-        """() => {
+        """async () => {
             const dbg = window.__DASHBOARD__;
             const host = dbg.layoutHost || dbg.layout;
             if (host && typeof host.open === 'function') {
                 const runs = (dbg.runSelection?.runs ?? []).map(([id]) => id);
-                const id = host.open('hud', {runId: runs[0] ?? null});
+                const id = await host.open('hud', {runId: runs[0] ?? null});
                 const duplicate = typeof host.duplicate === 'function'
-                    ? host.duplicate(id) : null;
+                    ? await host.duplicate(id) : null;
                 if (duplicate && typeof host.setState === 'function') {
-                    host.setState(duplicate, {runId: runs[1] ?? null});
+                    await host.setState(duplicate, {runId: runs[1] ?? null});
                 }
-                const list = typeof host.list === 'function' ? host.list() : [];
+                const list = typeof host.list === 'function' ? await host.list() : [];
                 const views = document.querySelectorAll(
                     '[data-component="hud"]'
                 ).length;
                 const rootIds = document.querySelectorAll('#hud').length;
                 const states = list.map(meta => meta.state);
                 if (typeof host.close === 'function') {
-                    if (duplicate) host.close(duplicate);
-                    host.close(id);
+                    if (duplicate) await host.close(duplicate);
+                    await host.close(id);
                 }
                 const types = (dbg.definitions?.list?.() ?? [])
                     .map(definition => definition.type);
                 const openedAll = [];
                 for (const type of types) {
-                    openedAll.push(host.open(type));
+                    openedAll.push(await host.open(type));
                 }
                 const layer = document.getElementById('absolute-layout-layer');
                 const ids = layer
@@ -147,7 +147,7 @@ def _panel_cycle(page) -> dict[str, object]:
                     (value, index) => ids.indexOf(value) !== index
                 );
                 if (typeof host.close === 'function') {
-                    for (const opened of openedAll) host.close(opened);
+                    for (const opened of openedAll) await host.close(opened);
                 }
                 return {
                     mode: 'layout-host',
@@ -199,6 +199,29 @@ def probe(port: int) -> dict[str, object]:
             "() => Boolean(window.__DASHBOARD__?.discoveryMap)",
             timeout=30000,
         )
+        # Wait for DOMContentLoaded handler to start
+        page.wait_for_function(
+            "() => Boolean(window.__DASHBOARD_DOMCONTENTLOADED__)",
+            timeout=30000,
+        )
+        # Wait for Dockview host workspace element to be created
+        page.wait_for_selector("#workspace", state="attached", timeout=30000)
+        # Wait for mount to start
+        page.wait_for_function(
+            "() => Boolean(window.__DASHBOARD__?.layoutHost?.mountStarted)",
+            timeout=30000,
+        )
+        # Wait for mount to complete or fail
+        page.wait_for_function(
+            "() => Boolean(window.__DASHBOARD__?.layoutHost?.mountComplete || window.__DASHBOARD__?.layoutHost?.mountError)",
+            timeout=30000,
+        )
+        # Check for mount error
+        mount_error = page.evaluate(
+            "() => window.__DASHBOARD__?.layoutHost?.mountError?.message || null"
+        )
+        if mount_error:
+            raise RuntimeError(f"DockviewHost mount failed: {mount_error}")
         # Measured cells are the data signal, but the probe still reports the
         # layout when the page has none: a blank grid is a finding, not a
         # reason to hang.

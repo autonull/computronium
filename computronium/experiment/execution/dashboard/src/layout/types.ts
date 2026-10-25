@@ -76,17 +76,17 @@ export interface OpenOptions {
 
 export interface LayoutHost {
   mount(root: HTMLElement): Promise<void>;
-  open(type: string, state?: JsonValue, opts?: OpenOptions): string;
-  openAt(type: string, location: DropLocation, state?: JsonValue): string;
-  duplicate(instanceId: string): string;
+  open(type: string, state?: JsonValue, opts?: OpenOptions): Promise<string>;
+  openAt(type: string, location: DropLocation, state?: JsonValue): Promise<string>;
+  duplicate(instanceId: string): Promise<string>;
   close(instanceId: string): void;
   focus(instanceId: string): void;
   setState(instanceId: string, state: JsonValue): void;
   list(): PanelInstanceMeta[];
   active(): string | null;
   save(): LayoutDocument;
-  load(doc: LayoutDocument): void;
-  applySpec(spec: LayoutSpec): void;
+  load(doc: LayoutDocument): Promise<void>;
+  applySpec(spec: LayoutSpec): Promise<void>;
   onChange(cb: (doc: LayoutDocument) => void): () => void;
 }
 

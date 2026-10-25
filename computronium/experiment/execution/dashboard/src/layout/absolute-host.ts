@@ -71,7 +71,7 @@ export class AbsoluteHost implements LayoutHost {
     root.appendChild(this.layer);
   }
 
-  open(type: string, state?: JsonValue, opts: OpenOptions = {}): string {
+  async open(type: string, state?: JsonValue, opts: OpenOptions = {}): Promise<string> {
     const definition = getDefinition(type);
     if (!definition) throw new Error(`unknown component type: ${type}`);
     const layer = this.ensureLayer();
@@ -149,7 +149,7 @@ export class AbsoluteHost implements LayoutHost {
     return id;
   }
 
-  openAt(type: string, location: DropLocation, state?: JsonValue): string {
+  async openAt(type: string, location: DropLocation, state?: JsonValue): Promise<string> {
     const opts: OpenOptions = {};
     if (location.kind === "float" && location.rect) {
       opts.size = {
@@ -157,14 +157,14 @@ export class AbsoluteHost implements LayoutHost {
         height: location.rect.height,
       };
     }
-    const id = this.open(type, state, opts);
+    const id = await this.open(type, state, opts);
     if (location.kind === "float" && location.rect) {
       this.place(id, location.rect);
     }
     return id;
   }
 
-  duplicate(instanceId: string): string {
+  async duplicate(instanceId: string): Promise<string> {
     const source = this.instances.get(instanceId);
     if (!source) throw new Error(`unknown instance: ${instanceId}`);
     return this.open(source.meta.type, source.meta.state, {
@@ -227,7 +227,7 @@ export class AbsoluteHost implements LayoutHost {
     };
   }
 
-  load(doc: LayoutDocument): void {
+  async load(doc: LayoutDocument): Promise<void> {
     if (doc.engine !== "absolute") {
       throw new Error(`absolute host cannot load ${doc.engine} layouts`);
     }
@@ -258,7 +258,7 @@ export class AbsoluteHost implements LayoutHost {
       }
     }
     for (const meta of doc.instances) {
-      const id = this.open(meta.type, meta.state, {
+      const id = await this.open(meta.type, meta.state, {
         title: meta.title,
         size: rects.get(meta.id)
           ? {
@@ -272,11 +272,11 @@ export class AbsoluteHost implements LayoutHost {
     }
   }
 
-  applySpec(spec: LayoutSpec): void {
+  async applySpec(spec: LayoutSpec): Promise<void> {
     this.clear();
     const layer = this.ensureLayer();
     const rect = layer.getBoundingClientRect();
-    this.applyNodes(spec.nodes, { x: 0, y: 0, width: rect.width, height: rect.height });
+    await this.applyNodes(spec.nodes, { x: 0, y: 0, width: rect.width, height: rect.height });
   }
 
   onChange(cb: (doc: LayoutDocument) => void): () => void {
@@ -284,19 +284,20 @@ export class AbsoluteHost implements LayoutHost {
     return () => this.listeners.delete(cb);
   }
 
-  private applyNodes(nodes: LayoutNode[], area: Rect): void {
+  private async applyNodes(nodes: LayoutNode[], area: Rect): Promise<void> {
     if (nodes.length === 0) return;
     const each = area.height / nodes.length;
-    nodes.forEach((node, index) => {
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes[index];
       const slot = { ...area, y: area.y + each * index, height: each };
-      this.applyNode(node, slot);
-    });
+      await this.applyNode(node, slot);
+    }
   }
 
-  private applyNode(node: LayoutNode, area: Rect): void {
+  private async applyNode(node: LayoutNode, area: Rect): Promise<void> {
     switch (node.kind) {
       case "panel": {
-        const id = this.open(node.type, node.state, {
+        const id = await this.open(node.type, node.state, {
           title: node.title,
           size: { width: area.width, height: area.height },
         });
@@ -304,20 +305,20 @@ export class AbsoluteHost implements LayoutHost {
         break;
       }
       case "float": {
-        const id = this.open(node.panel.kind === "panel" ? node.panel.type : "hud", undefined, {
+        const id = await this.open(node.panel.kind === "panel" ? node.panel.type : "hud", undefined, {
           size: { width: node.rect.width, height: node.rect.height },
         });
         this.place(id, node.rect);
         break;
       }
       case "tabs": {
-        node.panels.forEach((panel, index) => {
-          this.applyNode(panel, {
+        for (const [index, panel] of node.panels.entries()) {
+          await this.applyNode(panel, {
             ...area,
             x: area.x + index * 12,
             y: area.y + index * 12,
           });
-        });
+        }
         break;
       }
       case "split": {
@@ -326,14 +327,14 @@ export class AbsoluteHost implements LayoutHost {
         const weights = node.sizes ?? node.children.map(() => 1);
         const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
         let offset = 0;
-        node.children.forEach((child, index) => {
+        for (const [index, child] of node.children.entries()) {
           const span = ((horizontal ? area.width : area.height) * weights[index]) / total;
           const slot = horizontal
             ? { ...area, x: area.x + offset, width: span }
             : { ...area, y: area.y + offset, height: span };
-          this.applyNode(child, slot);
+          await this.applyNode(child, slot);
           offset += span;
-        });
+        }
         break;
       }
     }

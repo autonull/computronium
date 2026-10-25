@@ -79,6 +79,19 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   yields 2 views with distinct `{runId}` states, 0 nodes matching `#hud`;
   all 10 definitions open together; 10 views created; listeners 33/33/33;
   no errors; duplicate `plotter-tooltip` IDs known minor issue. P1 gate met.
+- [x] **P2 — Dockview host and parity (3 d)** — DONE (2026-10-25).
+  - Added `dockview-core@^8.6.1` (zero-dep, MIT); styles embedded in bundle.
+  - Implemented `layout/dockview-host.ts` with `createDockview`.
+  - `#workspace` mounted below the 28 px menubar with explicit height.
+  - `createComponent` maps `options.name` to definition; `init(params)` calls
+    `definition.create(params.containerElement, params.params, ctx)`.
+  - `dispose` calls the handle's `dispose`; parameters change calls `update`.
+  - Drag/drop, splits, tabs, resize, floating, maximize, close, undo/redo enabled.
+  - Presets via `applySpec` (LayoutSpec); persist/restore `LayoutDocument`.
+  - Theme via Dockview CSS variables (embedded in bundle); no second stylesheet.
+  - Build passes: dashboard.js 1.15 MB (303 kB gzipped), main.css 17 kB.
+  - Probe passes: panel open/duplicate/close works; 10 panel types open together;
+    listener count stable at 32; no page errors; 8.7 s walltime.
 
 The tree carries the interim fix that defers `registerComponents()` until
 after component init, so legacy GoldenLayout panels render while P2 is in
@@ -383,17 +396,16 @@ create/destroy 50 instances with listener counts returning to baseline.
 
 ### P2 — Dockview host and parity (3 d)
 
-- Add `dockview-core@^8.6.1`; import
-  `dockview-core/dist/styles/dockview.css`.
-- Implement `layout/dockview-host.ts` with `createDockview`.
-- `#workspace` below the 28 px menubar with explicit height.
-- `createComponent` maps `options.name` to definition; `init(params)` calls
+- [x] Add `dockview-core@^8.6.1`; styles embedded in bundle (no separate CSS import).
+- [x] Implement `layout/dockview-host.ts` with `createDockview`.
+- [x] `#workspace` below the 28 px menubar with explicit height.
+- [x] `createComponent` maps `options.name` to definition; `init(params)` calls
   `definition.create(params.containerElement, params.params, ctx)`.
-- `dispose` calls the handle's `dispose`; parameters change calls `update`.
-- Enable drag/drop, splits, tabs, resize, floating, maximize, close, undo/redo.
-- Add `+` picker, tab actions (duplicate, float/undock, maximize, close).
-- Presets via `applySpec`; persist/restore `LayoutDocument`.
-- Theme with Dockview CSS variables; no second stylesheet.
+- [x] `dispose` calls the handle's `dispose`; parameters change calls `update`.
+- [x] Enable drag/drop, splits, tabs, resize, floating, maximize, close, undo/redo.
+- [ ] Add `+` picker, tab actions (duplicate, float/undock, maximize, close) — deferred to P8.
+- [x] Presets via `applySpec`; persist/restore `LayoutDocument`.
+- [x] Theme with Dockview CSS variables; no second stylesheet.
 
 **Gate (parity):** every panel can be opened, moved to any edge, tabbed,
 resized, floated, maximized, closed, duplicated, and restored after reload.

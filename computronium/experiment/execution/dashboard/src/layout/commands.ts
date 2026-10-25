@@ -76,11 +76,11 @@ export function listPresets(): string[] {
 export class LayoutCommands {
   constructor(private readonly host: () => LayoutHost | null) {}
 
-  open(type: string, state?: JsonValue, opts?: OpenOptions): string | null {
+  async open(type: string, state?: JsonValue, opts?: OpenOptions): Promise<string | null> {
     return this.host()?.open(type, state, opts) ?? null;
   }
 
-  duplicate(instanceId: string): string | null {
+  async duplicate(instanceId: string): Promise<string | null> {
     return this.host()?.duplicate(instanceId) ?? null;
   }
 

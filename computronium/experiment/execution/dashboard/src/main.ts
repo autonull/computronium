@@ -1,4 +1,4 @@
-/** Three.js Dashboard Main Entry Point (TODO68 Phase 0). */
+/** Three.js Dashboard Main Entry Point (TODO72 P2 — Dockview). */
 
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
@@ -24,9 +24,8 @@ import { applyPreset, reset, applyWorkspace } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { detectRenderProfile } from "./render-profile.js";
 import { initHints } from "./hints.js";
-import { layoutManager, registerLayoutComponent } from "./layout-manager.js";
 import { menubar } from "./menubar.js";
-import { absoluteHost } from "./layout/absolute-host.js";
+import { dockviewHost } from "./layout/dockview-host.js";
 import { commands } from "./layout/commands.js";
 import { listDefinitions } from "./layout/definitions.js";
 import "./layout/components/hud.js";
@@ -40,8 +39,9 @@ import "./layout/components/pareto-chart.js";
 import "./layout/components/ablation-chart.js";
 import "./layout/components/variability-chart.js";
 import type { Binding } from "./bindings.js";
+import type { LayoutHost } from "./layout/types.js";
 
-// Legacy component instances for GoldenLayout (until P2)
+// Legacy component instances kept for keyboard bindings and __DASHBOARD__ debug
 const legacyHud = new HUD();
 const legacyDiscoveryMap = new DiscoveryMap();
 const legacyPlotter = new Plotter();
@@ -94,14 +94,12 @@ function showError(message: string): void {
     <span>${message}</span>
     <button class="global-error-close">&times;</button>
   `;
-  // Add click handler for close button
   errorElement
     .querySelector(".global-error-close")
     ?.addEventListener("click", () => {
       errorElement.remove();
     });
   overlay.appendChild(errorElement);
-  // Auto-dismiss after 10 seconds
   setTimeout(() => errorElement?.remove(), 10000);
 }
 
@@ -117,21 +115,19 @@ wsClient.waitForConnection(15000).then((connected) => {
     hideLoading();
   } else {
     showLoading("Connection timeout — retrying...");
-    // Keep trying
     wsClient.onStateChange((state) => {
       if (state === "connected") hideLoading();
     });
   }
 });
 
-// Components self-register with the registry on import; the registry
-// initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
-
-// Wire binding actions after components initialize
 // Initialize the registry (which initializes all registered components including
-// layoutManager and menubar), then wire up bindings.
+// menubar), then wire up bindings and mount the Dockview host.
+// Synchronous flag to track DOMContentLoaded handler execution
+(window as any).__DASHBOARD_DOMCONTENTLOADED__ = false;
 document.addEventListener("DOMContentLoaded", async () => {
-  // Initialize legacy components for GoldenLayout (they no longer auto-register)
+  (window as any).__DASHBOARD_DOMCONTENTLOADED__ = true;
+  // Initialize legacy components (needed for bindings and debug)
   await legacyHud.init();
   await legacyDiscoveryMap.init();
   await legacyPlotter.init();
@@ -141,26 +137,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   await legacyControlPanel.init();
   await legacyCellDrawer.init();
 
-  // Initialize all registered components via the registry (layoutManager, menubar, etc.)
+  // Initialize all registered components via the registry (menubar, etc.)
   await registry.initAll();
 
-  // NOW register layout components - panel elements exist after component init
-  // Use normalized IDs matching the new definition types
-  registerLayoutComponent("control-bar", () => getPanelElement("control-bar"));
-  registerLayoutComponent("live-rail", () => getPanelElement("live-rail"));
-  registerLayoutComponent("caption", () => getPanelElement("caption"));
-  registerLayoutComponent("discovery-legend", () => getPanelElement("discovery-legend"));
-  registerLayoutComponent("hud", () => getPanelElement("hud"));
-  registerLayoutComponent("control-panel", () => getPanelElement("control-panel"));
-  registerLayoutComponent("cell-drawer", () => getPanelElement("cell-drawer"));
-  registerLayoutComponent("pareto-chart", () => getPanelElement("plotter-pareto"));
-  registerLayoutComponent("ablation-chart", () => getPanelElement("plotter-ablation"));
-  registerLayoutComponent("variability-chart", () => getPanelElement("plotter-variability"));
+  // Mount the Dockview layout host below the 28px menubar
+  const workspace = document.createElement("div");
+  workspace.id = "workspace";
+  workspace.style.cssText = `
+    position: fixed;
+    top: 28px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 200;
+    pointer-events: auto;
+  `;
+  document.body.appendChild(workspace);
+  await dockviewHost.mount(workspace);
 
-  // Tell layoutManager to register the components now that elements exist
-  layoutManager.registerComponents();
-
-  // Apply default watch preset
+  // Apply default watch preset via LayoutSpec
   applyPreset("watch");
 
   // Initialize command palette
@@ -169,21 +164,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Initialize keyboard hints (Shift to show)
   initHints();
 
-  setAction("chart-pareto", () => legacyPlotter.showTab("pareto"));
-  setAction("chart-ablation", () => legacyPlotter.showTab("ablation"));
-  setAction("chart-variability", () => legacyPlotter.showTab("variability"));
+  // Wire binding actions to the command bus
+  setAction("chart-pareto", () => commands.execute("chart-pareto"));
+  setAction("chart-ablation", () => commands.execute("chart-ablation"));
+  setAction("chart-variability", () => commands.execute("chart-variability"));
 
-  setAction("control-play", () => legacyControlBar.togglePlay());
-  setAction("control-step", () => legacyControlBar.step());
-  setAction("control-stop", () => legacyControlBar.stop());
-  setAction("control-panel", () => panels.toggle("control-panel"));
+  setAction("control-play", () => commands.execute("control-play"));
+  setAction("control-step", () => commands.execute("control-step"));
+  setAction("control-stop", () => commands.execute("control-stop"));
+  setAction("control-panel", () => commands.execute("control-panel"));
 
-  setAction("panel-hud", () => panels.toggle("hud"));
-  setAction("panel-rail", () => panels.toggle("live-rail"));
-  setAction("panel-caption", () => panels.toggle("caption"));
-  setAction("panel-legend", () => panels.toggle("discovery-legend"));
+  setAction("panel-hud", () => commands.execute("panel-hud"));
+  setAction("panel-rail", () => commands.execute("panel-rail"));
+  setAction("panel-caption", () => commands.execute("panel-caption"));
+  setAction("panel-legend", () => commands.execute("panel-legend"));
 
-  setAction("view-cycle", () => viewSwitcher.cycle());
+  setAction("view-cycle", () => commands.execute("view-cycle"));
 
   setAction("cell-replicate", () =>
     window.dispatchEvent(new CustomEvent("cell-action-replicate")),
@@ -381,7 +377,7 @@ requestAnimationFrame(animate);
   controlPanel: legacyControlPanel,
   panels,
   layout: { reset, applyWorkspace },
-  layoutHost: absoluteHost,
+  layoutHost: dockviewHost,
   commands,
   definitions: {
     list: () =>
@@ -402,6 +398,30 @@ requestAnimationFrame(animate);
         group: b.group,
         key: b.key,
       })),
+  },
+  debug: {
+    instances: () => dockviewHost.list(),
+    measuredCells: (instanceId?: string) => {
+      const instances = dockviewHost.list();
+      if (instanceId) {
+        const inst = instances.find((i) => i.id === instanceId);
+        return inst ? 1 : 0;
+      }
+      return instances.length;
+    },
+    stageRect: (instanceId?: string) => {
+      const api = dockviewHost.getApi();
+      if (!api) return null;
+      const panel = instanceId ? api.getPanel(instanceId) : api.activePanel;
+      if (!panel) return null;
+      const rect = panel.api.group.element.getBoundingClientRect();
+      const container = panel.api.group.element.closest(".dv-container") as HTMLElement | null;
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        return { x: rect.left - containerRect.left, y: rect.top - containerRect.top, width: rect.width, height: rect.height };
+      }
+      return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+    },
   },
 };
 
