@@ -48,7 +48,25 @@ The `discovery-legend` panel element is created and registered, but GoldenLayout
 
 **Root cause**: GoldenLayout components are registered with factories that call `getPanelElement(id)` which returns `null` until the element is appended to DOM by GoldenLayout. This is a circular dependency - GoldenLayout calls the factory to get the element to append, but the factory expects the element to already exist.
 
-**Next step**: Fix the factory functions to create elements on-demand, or register components with GoldenLayout after elements are created.
+**Attempted fix**: Deferred GoldenLayout creation until after component init by moving `registerComponents()` call to after `registry.initAll()` in main.ts. LayoutManager now creates GoldenLayout on-demand in `registerComponents()`.
+
+**If this fails**: The layout-manager.ts init() only creates the container, not GoldenLayout. registerComponents() creates GoldenLayout and registers factories. Called from main.ts after registry.initAll().
+
+**Debug steps**: Check browser console for "[LayoutManager] GoldenLayout created and components registered" message.
+
+## Plan
+
+| Priority | Task | Estimate | Status |
+|----------|------|----------|--------|
+| 0 | **Fix GoldenLayout deferred init** | 15 min | 🔴 **CURRENT** - Waiting for browser test result |
+| 1 | Debug campaign_metrics Replay | - | ✅ DONE |
+| 2 | Fix runSelection Auto-Select | - | ✅ DONE |
+| 3 | Default to Space View | - | ✅ DONE |
+| 4 | Optimize Capture Scripts | 15 min | ⏳ Pending |
+| 5 | Hero Shot + Tour | 5 min | ⏳ Pending |
+
+**If GoldenLayout deferred init fails**: Fall back to removing GoldenLayout entirely (Option A) and use CSS Grid for fixed layout.
+
 
 **Debug steps (no campaign re-run needed):**
 ```bash
