@@ -514,6 +514,10 @@ class WebDashboard:
         async def api_runs() -> JSONResponse:
             return JSONResponse(await self._get_store_runs())
 
+        @self.app.get("/api/runs/summary")
+        async def api_runs_summary() -> JSONResponse:
+            return JSONResponse(await self._get_runs_summary())
+
         @self.app.get("/api/campaigns/{campaign_id}")
         async def api_campaign_detail(campaign_id: str) -> JSONResponse:
             return JSONResponse(await self._get_campaign_detail(campaign_id))
@@ -1004,16 +1008,45 @@ class WebDashboard:
 
         try:
             with self._readable_store() as store:
+                record_counts = store.count_records_by_run()
                 runs = [
                     {
                         "run_id": run.run_id,
                         "status": run.status,
-                        "records": len(list(store.query_records(run_id=run.run_id))),
+                        "records": record_counts.get(run.run_id, 0),
                     }
                     for run in store.query_runs()
                 ]
         except Exception as e:
             logger.debug("Store unavailable for run listing: %s", e)
+            return {"error": str(e), "runs": []}
+        else:
+            return {"runs": runs}
+
+    async def _get_runs_summary(self) -> dict[str, Any]:
+        """Lightweight run catalog for dashboard connect: run_id, status, record_count, started_at, profile, task."""
+        if not self.config.store_path:
+            return {"error": "No store path configured"}
+
+        try:
+            with self._readable_store() as store:
+                record_counts = store.count_records_by_run()
+                runs = [
+                    {
+                        "run_id": run.run_id,
+                        "status": run.status,
+                        "record_count": record_counts.get(run.run_id, 0),
+                        "started_at": run.started_at.isoformat()
+                        if run.started_at
+                        else None,
+                        "profile": run.spec.profile if run.spec else None,
+                        "task": run.spec.task if run.spec else None,
+                        "fidelity": run.spec.fidelity if run.spec else None,
+                    }
+                    for run in store.query_runs()
+                ]
+        except Exception as e:
+            logger.debug("Store unavailable for runs summary: %s", e)
             return {"error": str(e), "runs": []}
         else:
             return {"runs": runs}

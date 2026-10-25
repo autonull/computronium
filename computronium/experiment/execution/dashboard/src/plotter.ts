@@ -20,6 +20,7 @@ import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
+import { metricsStore } from "./stores/metrics.js";
 import type { Component } from "./components/registry.js";
 import type { JsonValue } from "./layout/types.js";
 
@@ -173,15 +174,43 @@ abstract class PlotterChartView {
     `;
     root.appendChild(this.tooltip);
 
+    // Subscribe to metrics for the currently selected run
     this.disposers.push(
-      router.register("campaign_metrics", this.onCampaignMetrics),
-      runSelection.onChange(this.onRunChanged),
+      runSelection.onChange(() => {
+        const runId = runSelection.selectedId;
+        if (runId) {
+          void this.subscribeToRun(runId);
+        }
+      }),
+      // Initial subscription
+      (() => {
+        const runId = runSelection.selectedId;
+        if (runId) void this.subscribeToRun(runId);
+        return () => {}; // Return empty unsubscribe function
+      })(),
     );
   }
+
+  private subscribeToRun(runId: string): void {
+    // Unsubscribe from previous run if any
+    if (this.currentRunUnsubscribe) {
+      this.currentRunUnsubscribe();
+    }
+    this.currentRunUnsubscribe = metricsStore.subscribe(runId, () => {
+      const metrics = metricsStore.get(runId);
+      if (metrics) {
+        this.onRunChanged(runId, metrics);
+      }
+    });
+  }
+
+  private currentRunUnsubscribe: (() => void) | null = null;
 
   dispose(): void {
     for (const dispose of this.disposers) dispose();
     this.disposers.length = 0;
+    this.currentRunUnsubscribe?.();
+    this.currentRunUnsubscribe = null;
     this.plot?.destroy();
     this.plot = null;
     this.tooltip?.remove();
@@ -192,17 +221,10 @@ abstract class PlotterChartView {
 
   abstract refresh(): void;
 
-  private onCampaignMetrics = (data: any): void => {
-    const { data: metricsData } = data;
-    if (!metricsData?.records) return;
-    runSelection.observe(data?.campaign_id, metricsData);
-  };
-
   private onRunChanged = (
-    _runId: string | null,
-    metrics: RunMetrics | null,
+    _runId: string,
+    metrics: RunMetrics,
   ): void => {
-    if (!metrics) return;
     this.records = metrics.records ?? [];
     this.paretoFlags = metrics.pareto ?? [];
     this.ablationGroups = metrics.ablation_groups ?? [];

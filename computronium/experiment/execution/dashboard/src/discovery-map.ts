@@ -24,6 +24,7 @@ import { viewSwitcher } from "./stage/switcher.js";
 import { openPalette } from "./palette.js";
 import axisMetadata from "./axis-metadata.json";
 import { frameBox } from "./stage/framing.js";
+import { workspaceStore } from "./stores/workspace.js";
 import {
   cellKey,
   mean,
@@ -88,7 +89,6 @@ export class DiscoveryMap implements Component {
     // Register WebSocket handlers IMMEDIATELY in constructor
     // This ensures handlers are ready before any WebSocket messages arrive
     router.register("queue_update", this.onQueueUpdate);
-    router.register("campaign_metrics", this.onCampaignMetrics);
   }
 
   async init(): Promise<void> {
@@ -109,14 +109,13 @@ export class DiscoveryMap implements Component {
     // axes the reader picked are shared with the other views. The legend
     // follows it; the grid is drawn by whoever stands on the stage.
     stageState.onChange(() => this.updateLegend());
-    runSelection.onChange(() => this.updateRunPicker());
+    workspaceStore.onRunsChange(() => this.updateRunPicker());
 
     console.log("[DiscoveryMap] Initialized");
   }
 
   async destroy(): Promise<void> {
     router.unregister("queue_update", this.onQueueUpdate);
-    router.unregister("campaign_metrics", this.onCampaignMetrics);
     this.clearGrid();
     this.legendElement?.remove();
     this.readoutElement?.remove();
@@ -500,15 +499,15 @@ export class DiscoveryMap implements Component {
     const detail = this.legendElement?.querySelector("#legend-run");
     if (!select) return;
 
-    const runs = runSelection.runs;
+    const runs = workspaceStore.getRuns();
     select.innerHTML = "";
-    runs.forEach(([runId, metrics]) => {
+    runs.forEach((run) => {
       const option = document.createElement("option");
-      const profile = metrics?.run?.profile ?? "run";
-      const records = metrics?.records?.length ?? 0;
-      option.value = runId;
-      option.textContent = `${runId.slice(0, 8)} · ${profile} · ${records}`;
-      option.selected = runId === runSelection.selectedId;
+      const profile = run.profile ?? "run";
+      const records = run.record_count ?? 0;
+      option.value = run.run_id;
+      option.textContent = `${run.run_id.slice(0, 8)} · ${profile} · ${records}`;
+      option.selected = run.run_id === workspaceStore.getSelectedRunId();
       select.appendChild(option);
     });
     if (runs.length === 0) {
@@ -520,15 +519,16 @@ export class DiscoveryMap implements Component {
     }
     select.disabled = false;
 
-    const metrics = runSelection.selected;
+    const selectedId = workspaceStore.getSelectedRunId();
+    const metrics = selectedId ? runSelection.getMetrics(selectedId) : null;
     if (!detail) return;
     if (!metrics) {
-      detail.textContent = "";
+      detail.textContent = selectedId ? `run ${selectedId.slice(0, 8)}` : "";
       return;
     }
     const run = metrics.run ?? {};
     detail.textContent = [
-      `run ${(runSelection.selectedId ?? "").slice(0, 8)}`,
+      `run ${(selectedId ?? "").slice(0, 8)}`,
       run.mode,
       `${metrics.records?.length ?? 0} records`,
     ]
@@ -1049,17 +1049,6 @@ export class DiscoveryMap implements Component {
 
   private onQueueUpdate = (_data: unknown): void => {
     // The queue says what is running; the grid says what was measured.
-  };
-
-  private onCampaignMetrics = (data: any): void => {
-    const metricsData = data?.data;
-    if (!metricsData?.run) return;
-
-    const runId =
-      typeof data?.campaign_id === "string" ? data.campaign_id : null;
-    if (!runId) return;
-
-    runSelection.observe(runId, metricsData);
   };
 
   /** Mark the cells that have records and light them up. */

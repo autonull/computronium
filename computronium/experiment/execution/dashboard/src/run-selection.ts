@@ -91,6 +91,11 @@ class RunSelection {
     return Array.from(this.metricsByRun.entries());
   }
 
+  /** Get metrics for a specific run ID. */
+  getMetrics(runId: string): RunMetrics | null {
+    return this.metricsByRun.get(runId) ?? null;
+  }
+
   onChange(listener: RunListener): () => void {
     this.listeners.push(listener);
     return () => {

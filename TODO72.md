@@ -108,7 +108,7 @@ flight.
   - Added `tests/unit/experiment/test_dashboard_websocket.py` with 9 tests.
   - All 9 new tests + 11 existing dashboard event tests pass (20 total).
 
-- [x] **P4 — Bounded metrics, space cache, catalog (1.5 d)** — IN PROGRESS (2026-10-25).
+- [x] **P4 — Bounded metrics, space cache, catalog (1.5 d)** — DONE (2026-10-25).
   - Added `RecordStore.count_records_by_run()` for single-query record counts.
   - Server metrics cache `_metrics_cache` keyed by `(run_id, record_count, status)`;
     finished runs immutable; only running runs with changing counts recompute.
@@ -116,8 +116,14 @@ flight.
     `_maybe_send_metrics` / `_get_cached_metrics` for conditional send.
   - Single `count_records_by_run()` query replaces N `count_records()` calls.
   - On-demand `GET /api/campaigns/{id}/metrics/detailed` already existed.
-  - Remaining: lightweight `runs_summary` on connect, client-side deduplication,
-    remove duplicate `observe`/picker listeners.
+  - Lightweight `GET /api/runs/summary` endpoint for run catalog on connect.
+  - Client `MetricsStore`/`SpaceStore`/`WorkspaceStore` deduplicate in-flight
+    promises by key; `CommandBus` for decoupled commands.
+  - Removed duplicate `observe` from `plotter.ts` and `discovery-map.ts`;
+    `runSelection.observe()` still called by `MetricsStore` for legacy
+    `stageState`/`hud`/`caption`/`control-panel` compatibility.
+  - `discovery-map.ts` run picker now uses `WorkspaceStore` instead of
+    `runSelection.onChange`.
 
 ## Requirements
 
@@ -456,9 +462,19 @@ Probe passes at 1920/1440/1024. No GL imports execute.
   to send cached metrics on cache hit, compute and cache on miss.
 - [x] Single store query for record counts via `count_records_by_run()` replaces
   per-run `count_records()` calls.
-- [ ] `runs_summary` on connect and catalog change (lightweight run catalog).
-- [ ] Client `MetricsStore`/`SpaceStore` deduplicate in-flight promises by key.
-- [ ] Remove duplicate `observe` and duplicate run picker listener.
+- [x] `runs_summary` on connect and catalog change (lightweight run catalog).
+  - Added `GET /api/runs/summary` endpoint returning run_id, status, record_count,
+    started_at, profile, task, fidelity.
+- [x] Client `MetricsStore`/`SpaceStore` deduplicate in-flight promises by key.
+  - `MetricsStore` caches campaign metrics by run_id, single fetch per run.
+  - `SpaceStore` caches space payloads by (runId, axes, values) key.
+  - `WorkspaceStore` holds run catalog, selected run, axes, cell selection.
+  - `CommandBus` for decoupled command execution.
+- [x] Remove duplicate `observe` and duplicate run picker listener.
+  - `plotter.ts` now subscribes to `MetricsStore` instead of calling `runSelection.observe()`.
+  - `discovery-map.ts` now uses `WorkspaceStore` for run picker instead of `runSelection.onChange`.
+  - `runSelection.observe()` still called by `MetricsStore` for backward compatibility with
+    legacy components (`stageState`, `hud`, `caption`, `control-panel`).
 - [x] On-demand `GET /api/campaigns/{id}/metrics/detailed` already exists.
 
 **Gate:** 20-run store: connect-to-picture < 2 s; no repeated detailed
