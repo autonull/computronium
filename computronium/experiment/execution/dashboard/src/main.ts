@@ -2,6 +2,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
+import "./palette.css";
 import "./dashboard.css";
 import { router, wsClient } from "./ws-client.js";
 import { setSceneContext } from "./components/context.js";
@@ -25,6 +26,10 @@ import { detectRenderProfile } from "./render-profile.js";
 import { initHints } from "./hints.js";
 import { layoutManager, registerLayoutComponent } from "./layout-manager.js";
 import { menubar } from "./menubar.js";
+import { absoluteHost } from "./layout/absolute-host.js";
+import { commands } from "./layout/commands.js";
+import { listDefinitions } from "./layout/definitions.js";
+import "./layout/components/hud.js";
 import type { Binding } from "./bindings.js";
 
 // Global error handler
@@ -346,6 +351,16 @@ requestAnimationFrame(animate);
   controlPanel,
   panels,
   layout: { reset, applyWorkspace },
+  layoutHost: absoluteHost,
+  commands,
+  definitions: {
+    list: () =>
+      listDefinitions().map((definition) => ({
+        type: definition.type,
+        title: definition.title,
+        icon: definition.icon,
+      })),
+  },
   wsClient,
   router,
   runSelection,

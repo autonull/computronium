@@ -147,7 +147,7 @@ def generate_python() -> str:
     for k, v in PALETTE_SOURCE.items():
         lines.append(f'    "{k}": "{v}",')
     lines.append("}")
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
 def generate_typescript() -> str:
@@ -163,25 +163,25 @@ def generate_typescript() -> str:
     lines.append("// ─── Arm Color Map ────────────────────────────────────────────")
     lines.append("export const ARM_COLORS: Record<string, string> = {")
     for k, v in ARM_COLORS.items():
-        lines.append(f'  "{k}": "{v}",')
+        lines.append(f'  {k}: "{v}",')
     lines.append("};")
     lines.append("")
     lines.append("// ─── Substrate Color Map ──────────────────────────────────────")
     lines.append("export const SUBSTRATE_COLORS: Record<string, string> = {")
     for k, v in SUBSTRATE_COLORS.items():
-        lines.append(f'  "{k}": "{v}",')
+        lines.append(f'  {k}: "{v}",')
     lines.append("};")
     lines.append("")
     lines.append("// ─── Full Palette Object ───────────────────────────────────────")
     lines.append("export const PALETTE: Record<string, string> = {")
     for k, v in PALETTE_SOURCE.items():
-        lines.append(f'  "{k}": "{v}",')
+        lines.append(f'  {k}: "{v}",')
     lines.append("};")
     lines.append("")
     lines.append("// Type helper for arm names")
     lines.append("export type ArmName = keyof typeof ARM_COLORS;")
     lines.append("export type SubstrateName = keyof typeof SUBSTRATE_COLORS;")
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
 def generate_css() -> str:
@@ -194,7 +194,7 @@ def generate_css() -> str:
     for key, value in CSS_VARS.items():
         lines.append(f"  --{key}: {value};")
     lines.append("}")
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
@@ -214,7 +214,7 @@ def main() -> None:
         / "execution"
         / "dashboard"
         / "src"
-        / "palette.ts"
+        / "colors.ts"
     )
     ts_out.parent.mkdir(parents=True, exist_ok=True)
     ts_out.write_text(generate_typescript(), encoding="utf-8")
@@ -227,9 +227,7 @@ def main() -> None:
         / "experiment"
         / "execution"
         / "dashboard"
-        / "templates"
-        / "static"
-        / "css"
+        / "src"
         / "palette.css"
     )
     css_out.parent.mkdir(parents=True, exist_ok=True)

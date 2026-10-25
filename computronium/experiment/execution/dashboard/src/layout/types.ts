@@ -61,7 +61,7 @@ export interface PanelInstanceMeta {
 
 export interface LayoutDocument {
   version: 1;
-  engine: "dockview";
+  engine: string;
   engineVersion: number;
   data: JsonValue;
   instances: PanelInstanceMeta[];

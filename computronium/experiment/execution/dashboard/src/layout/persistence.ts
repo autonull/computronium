@@ -50,7 +50,7 @@ export function isLayoutDocument(value: unknown): value is LayoutDocument {
   const doc = value as Record<string, unknown>;
   return (
     doc.version === LAYOUT_VERSION &&
-    doc.engine === LAYOUT_ENGINE &&
+    typeof doc.engine === "string" &&
     typeof doc.engineVersion === "number" &&
     isJsonValue(doc.data) &&
     Array.isArray(doc.instances) &&

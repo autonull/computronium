@@ -91,8 +91,12 @@ class RunSelection {
     return Array.from(this.metricsByRun.entries());
   }
 
-  onChange(listener: RunListener): void {
+  onChange(listener: RunListener): () => void {
     this.listeners.push(listener);
+    return () => {
+      const index = this.listeners.indexOf(listener);
+      if (index >= 0) this.listeners.splice(index, 1);
+    };
   }
 
   private notify(): void {

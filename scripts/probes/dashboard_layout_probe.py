@@ -20,6 +20,10 @@ Measured baseline (2026-10-25, ``experiment.duckdb``, 1920x1080): canvas rect
 first load and 4 of 512 known after reload; listener count 33 before the panel
 cycle, 33 after it, and 33 after reload; panel open/close through the legacy
 registry; 24.97 s walltime; no page or console errors.
+
+P1 absolute host (2026-10-25): `hud` open + duplicate yields 2 views with
+distinct `{runId}` states and 0 nodes matching `#hud`; listeners 33/33/33;
+25.03 s; no errors.
 """
 
 from __future__ import annotations
@@ -109,15 +113,32 @@ def _panel_cycle(page) -> dict[str, object]:
             const dbg = window.__DASHBOARD__;
             const host = dbg.layoutHost || dbg.layout;
             if (host && typeof host.open === 'function') {
-                const id = host.open('hud');
+                const runs = (dbg.runSelection?.runs ?? []).map(([id]) => id);
+                const id = host.open('hud', {runId: runs[0] ?? null});
                 const duplicate = typeof host.duplicate === 'function'
                     ? host.duplicate(id) : null;
+                if (duplicate && typeof host.setState === 'function') {
+                    host.setState(duplicate, {runId: runs[1] ?? null});
+                }
                 const list = typeof host.list === 'function' ? host.list() : [];
+                const views = document.querySelectorAll(
+                    '[data-component="hud"]'
+                ).length;
+                const rootIds = document.querySelectorAll('#hud').length;
+                const states = list.map(meta => meta.state);
                 if (typeof host.close === 'function') {
                     if (duplicate) host.close(duplicate);
                     host.close(id);
                 }
-                return {mode: 'layout-host', opened: id, duplicate, list: list.length};
+                return {
+                    mode: 'layout-host',
+                    opened: id,
+                    duplicate,
+                    list: list.length,
+                    views,
+                    rootIds,
+                    states,
+                };
             }
             const panel = dbg.panels?.get('hud');
             if (!panel) return {mode: 'none'};

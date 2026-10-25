@@ -56,17 +56,30 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   listener count 33 / 33 / 33 across a panel cycle and reload; legacy panel
   open/close works; 24.97 s; zero page/console errors. The probe's docstring
   carries the same baseline.
-- [~] **P1 — Component and instance model.** Seam files landed:
-  `layout/types.ts` (engine-neutral vocabulary), `layout/definitions.ts`
-  (component-type registry), `layout/commands.ts` (command registry, presets,
-  `LayoutCommands`), `layout/persistence.ts` (versioned envelope, unknown-type
-  pruning). `tsc --noEmit` clean. **Not yet done:** convert the panel
-  singletons to definitions, add `CommandBus` wiring to menubar/palette/
-  bindings, normalize ids/CSS. P1 gate has not run.
+- [~] **P1 — Component and instance model.** Landed:
+  `layout/types.ts`, `layout/definitions.ts`, `layout/commands.ts`,
+  `layout/persistence.ts`, and `layout/absolute-host.ts` (a floating
+  `LayoutHost` fallback with cascade placement, drag, duplicate, save/load,
+  `applySpec`, and change notifications). The HUD is now a per-instance
+  definition (`layout/components/hud.ts`): `HudView` owns scoped nodes and
+  subscriptions, accepts `{runId}` state, and disposes cleanly;
+  `runSelection.onChange` returns an unsubscribe. CSS is one source:
+  `src/palette.css` is generated next to `src/colors.ts`, `main.ts` imports
+  palette before `dashboard.css`, Vite emits `templates/static/js/main.css`,
+  `index.html` links only that file, and `templates/static/css/` is deleted.
+  The generator now writes `src/colors.ts` (not the command palette) and emits
+  trailing newlines.
+  Probe after the change: layout host and command bus present; `hud` open +
+  duplicate yields 2 views with distinct `{runId}` states and 0 nodes matching
+  `#hud`; listener count 33 → 33 → 33; no page/console errors; 25.03 s.
+  **Not yet done:** convert discovery-legend/plotter/live-rail/caption/
+  control-bar/control-panel/cell-drawer to definitions; wire menubar/palette/
+  bindings to `commands`; finish id normalization. P1 gate is partially met
+  (HUD only), not closed.
 
-The tree also carries an uncommitted interim fix that defers
-`registerComponents()` until after component init, so the legacy GoldenLayout
-panels render while P1/P2 are in flight.
+The tree also carries the interim fix that defers `registerComponents()`
+until after component init, so the legacy GoldenLayout panels render while
+P1/P2 are in flight.
 
 ## Requirements
 
@@ -349,14 +362,18 @@ across components must be limited to the component's own host.
 
 - [x] Add `layout/types.ts`, `layout/definitions.ts` (plus `commands.ts` and
   `persistence.ts` so the seam is complete).
-- [ ] Convert panels to definitions with per-instance factories. Mount temporarily
-  with an absolute host so the dashboard stays usable before Dockview.
-- Replace module singletons for `discoveryMap`, `plotter`, `hud`, `liveRail`,
-  `caption`, `controlBar`, `controlPanel`, `cellDrawer`.
-- Add `CommandBus`; menubar/palette/bindings call commands.
-- Normalize ids: `discovery-legend`, `chart`; no aliases.
-- CSS: one `src/dashboard.css`; generated `src/palette.css`; delete duplicated
-  static CSS; one link in `index.html`.
+- [x] Absolute host and the HUD definition (first per-instance panel).
+- [ ] Convert the remaining panels to definitions with per-instance factories:
+  `discovery-legend`, `plotter`, `live-rail`, `caption`, `control-bar`,
+  `control-panel`, `cell-drawer`.
+- [ ] Replace module singletons for `discoveryMap`, `plotter`, `hud`,
+  `liveRail`, `caption`, `controlBar`, `controlPanel`, `cellDrawer` (HUD's
+  view is per-instance; the singleton facade remains for the legacy layout).
+- [~] Add `CommandBus` (registry, presets, `LayoutCommands` landed); menubar/
+  palette/bindings still call module singletons.
+- [ ] Normalize ids: `discovery-legend`, `chart`; no aliases.
+- [x] CSS: one `src/dashboard.css`; generated `src/palette.css`; duplicated
+  static CSS deleted; one link in `index.html`.
 
 **Gate:** two `hud` and two `discovery-legend` instances update independently;
 create/destroy 50 instances with listener counts returning to baseline.

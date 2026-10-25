@@ -1,4 +1,4 @@
-/** HUD — Mission Control Panel. */
+/** HUD — Mission Control Panel, one view per instance. */
 
 import { registry } from "./components/registry.js";
 import { PANEL_KEYS } from "./keys.js";
@@ -8,6 +8,7 @@ import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./colors.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
 import type { Component } from "./components/registry.js";
+import type { JsonValue } from "./layout/types.js";
 
 interface StatusData {
   gpu_utilization?: number;
@@ -49,7 +50,7 @@ interface MeterRow {
   color: string;
 }
 
-function createHudBody(): string {
+export function createHudBody(): string {
   return `
     <style>
       .hud-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
@@ -75,100 +76,119 @@ function createHudBody(): string {
     </style>
     <div class="hud-header">
       <div class="hud-mode">
-        <span class="hud-mode-label" id="hud-mode-label">NO RUN</span>
-        <span class="hud-mode-detail" id="hud-mode-detail"></span>
+        <span class="hud-mode-label">NO RUN</span>
+        <span class="hud-mode-detail"></span>
       </div>
       <div class="hud-connection">
-        <span class="dot" id="hud-dot"></span>
-        <span id="hud-conn-label">Disconnected</span>
+        <span class="dot"></span>
+        <span class="hud-conn-label">Disconnected</span>
       </div>
     </div>
-    <div class="hud-meters" id="hud-meters"></div>
+    <div class="hud-meters"></div>
     <div class="hud-claim">
       <div class="hud-claim-row">
         <span class="hud-claim-label">SEEDS TO CLAIM</span>
-        <span class="hud-claim-value" id="hud-claim">—</span>
+        <span class="hud-claim-value">—</span>
       </div>
-      <div class="hud-claim-bar"><div class="hud-claim-fill" id="hud-claim-fill"></div></div>
+      <div class="hud-claim-bar"><div class="hud-claim-fill"></div></div>
     </div>
     <div class="hud-source">
       <span>PICTURE</span>
-      <span id="hud-source">—</span>
+      <span class="hud-source-value">—</span>
     </div>
   `;
 }
 
-export class HUD implements Component {
-  name = "HUD";
+/** A HUD bound to one root element and its own subscriptions. */
+function readRunId(state: JsonValue): string | null {
+  if (!state || Array.isArray(state) || typeof state !== "object") return null;
+  const runId = state["runId"];
+  return typeof runId === "string" ? runId : null;
+}
 
-  private panel: HTMLElement | null = null;
-  private rows: Map<string, MeterRow> = new Map();
-  private rowElements: Map<string, { fill: HTMLElement; value: HTMLElement }> = new Map();
-  private claimValue: HTMLElement | null = null;
-  private claimFill: HTMLElement | null = null;
-  private sourceValue: HTMLElement | null = null;
-  private modeLabel: HTMLElement | null = null;
-  private modeDetail: HTMLElement | null = null;
-  private dot: HTMLElement | null = null;
-  private connLabel: HTMLElement | null = null;
+export class HudView {
+  private runId: string | null;
+  private rows = new Map<string, MeterRow>();
+  private rowElements = new Map<
+    string,
+    { fill: HTMLElement; value: HTMLElement }
+  >();
+  private claimValue: HTMLElement;
+  private claimFill: HTMLElement;
+  private sourceValue: HTMLElement;
+  private modeLabel: HTMLElement;
+  private modeDetail: HTMLElement;
+  private dot: HTMLElement;
+  private connLabel: HTMLElement;
   private statusData: StatusData = {};
   private resources: CampaignResources = {};
   private requiredSeeds = 0;
   private measuredSeeds = 0;
   private connected = false;
+  private readonly disposers: (() => void)[] = [];
 
-  constructor() {
-    router.register("status_update", this.onStatusUpdate);
-    router.register("campaign_metrics", this.onCampaignMetrics);
-    runSelection.onChange(this.onRunChanged);
-  }
+  constructor(
+    private readonly root: HTMLElement,
+    state: JsonValue = null,
+  ) {
+    this.runId = readRunId(state);
+    this.modeLabel = this.query(".hud-mode-label");
+    this.modeDetail = this.query(".hud-mode-detail");
+    this.dot = this.query(".hud-connection .dot");
+    this.connLabel = this.query(".hud-conn-label");
+    this.claimValue = this.query(".hud-claim-value");
+    this.claimFill = this.query(".hud-claim-fill");
+    this.sourceValue = this.query(".hud-source-value");
 
-  async init(): Promise<void> {
-    this.panel = createPanelShell({
-      id: "hud",
-      title: "MISSION CONTROL",
-      glyph: "◱",
-      key: PANEL_KEYS.hud,
-      body: createHudBody(),
-      dock: "top",
-      defaultOpen: true,
-    });
-
-    this.bindElements();
-    registerDisplayPanel("hud", "mission control", "◱", () => this.panel, PANEL_KEYS.hud);
-    wsClient.onStateChange((state) => {
-      this.connected = state === "connected";
-      this.updateConnection();
-    });
-    console.log("[HUD] Ready");
-  }
-
-  async destroy(): Promise<void> {
-    router.unregister("status_update", this.onStatusUpdate);
-    router.unregister("campaign_metrics", this.onCampaignMetrics);
-    this.panel?.remove();
-  }
-
-  private bindElements(): void {
-    if (!this.panel) return;
-    this.modeLabel = this.panel.querySelector("#hud-mode-label")!;
-    this.modeDetail = this.panel.querySelector("#hud-mode-detail")!;
-    this.dot = this.panel.querySelector("#hud-dot")!;
-    this.connLabel = this.panel.querySelector("#hud-conn-label")!;
-    this.claimValue = this.panel.querySelector("#hud-claim")!;
-    this.claimFill = this.panel.querySelector("#hud-claim-fill")!;
-    this.sourceValue = this.panel.querySelector("#hud-source")!;
-
-    const meters = this.panel.querySelector<HTMLElement>("#hud-meters")!;
+    const meters = this.query(".hud-meters");
     this.addMeter(meters, "device", "DEVICE", "var(--gradient)");
     this.addMeter(meters, "memory", "MEMORY", "var(--memory)");
     this.addMeter(meters, "walltime", "WALLTIME", "var(--cpu)");
     this.addMeter(meters, "gpu", "GPU", "var(--gpu)");
     this.addMeter(meters, "cpu", "CPU", "var(--cpu)");
     this.addMeter(meters, "records", "RECORDS", "var(--promoted)");
+
+    this.disposers.push(
+      router.register("status_update", this.onStatusUpdate),
+      router.register("campaign_metrics", this.onCampaignMetrics),
+      runSelection.onChange(this.onRunChanged),
+      wsClient.onStateChange((state) => {
+        this.connected = state === "connected";
+        this.updateConnection();
+      }),
+    );
+    this.renderMeters();
   }
 
-  private addMeter(container: HTMLElement, key: string, label: string, color: string): void {
+  update(state: JsonValue): void {
+    this.runId = readRunId(state);
+    this.onRunChanged(runSelection.selectedId, runSelection.selected);
+  }
+
+  dispose(): void {
+    for (const dispose of this.disposers) dispose();
+    this.disposers.length = 0;
+    this.rows.clear();
+    this.rowElements.clear();
+  }
+
+  setMeasuredSeeds(n: number): void {
+    this.measuredSeeds = n;
+    this.renderMeters();
+  }
+
+  private query<T extends HTMLElement>(selector: string): T {
+    const el = this.root.querySelector<T>(selector);
+    if (!el) throw new Error(`[HUD] missing element: ${selector}`);
+    return el;
+  }
+
+  private addMeter(
+    container: HTMLElement,
+    key: string,
+    label: string,
+    color: string,
+  ): void {
     const row = document.createElement("div");
     row.className = "hud-meter";
     row.innerHTML = `
@@ -196,28 +216,36 @@ export class HUD implements Component {
     this.renderMeters();
   };
 
-  private onRunChanged = (_runId: string | null, metrics: RunMetrics | null): void => {
+  private onRunChanged = (
+    _runId: string | null,
+    metrics: RunMetrics | null,
+  ): void => {
     if (!metrics) return;
+    const runId = metrics.run?.run_id ?? null;
+    if (this.runId && runId !== this.runId) return;
     this.requiredSeeds = metrics.required_seeds ?? 0;
     this.updateModeChip(metrics.run);
     this.updateSource(metrics);
   };
 
   private updateModeChip(run: RunStatus | undefined): void {
-    if (!this.modeLabel || !this.modeDetail) return;
     const mode = run?.mode ?? "NO RUN";
-    const color = mode === "PREREGISTERED" ? PALETTE.passed
-      : mode === "EXPLORATORY" ? PALETTE.insufficient
-      : PALETTE.text_muted;
+    const color =
+      mode === "PREREGISTERED"
+        ? PALETTE.passed
+        : mode === "EXPLORATORY"
+          ? PALETTE.insufficient
+          : PALETTE.text_muted;
     this.modeLabel.textContent = mode;
     this.modeLabel.style.background = color + "22";
     this.modeLabel.style.borderColor = color + "88";
     this.modeLabel.style.color = color;
-    this.modeDetail.textContent = run?.profile ? `${run.profile} · ${run.fidelity}` : "";
+    this.modeDetail.textContent = run?.profile
+      ? `${run.profile} · ${run.fidelity}`
+      : "";
   }
 
   private updateSource(metrics: RunMetrics): void {
-    if (!this.sourceValue) return;
     const store = metrics.store;
     if (store?.source && store?.published_at) {
       const t = new Date(store.published_at).toLocaleTimeString();
@@ -228,28 +256,68 @@ export class HUD implements Component {
   }
 
   private updateConnection(): void {
-    if (!this.dot || !this.connLabel) return;
-    this.dot.style.background = this.connected ? "var(--ok)" : "var(--error)";
+    this.dot.style.background = this.connected
+      ? "var(--ok)"
+      : "var(--error)";
     this.connLabel.textContent = this.connected ? "Connected" : "Disconnected";
   }
 
   private renderMeters(): void {
-    const { running_campaigns, queued_campaigns, used_gpus, max_gpus, used_cpus, max_cpus, used_memory_gb, max_memory_gb } = this.statusData;
+    const {
+      running_campaigns,
+      queued_campaigns,
+      used_gpus,
+      max_gpus,
+      used_cpus,
+      max_cpus,
+      used_memory_gb,
+      max_memory_gb,
+    } = this.statusData;
     const { device, memory_mb, walltime_s, records } = this.resources;
 
     this.setMeter("device", device ?? "—");
-    this.setMeter("memory", memory_mb ? `${(memory_mb / 1024).toFixed(1)} GB` : max_memory_gb ? `${used_memory_gb ?? 0}/${max_memory_gb} GB` : "—", max_memory_gb ? (used_memory_gb ?? 0) / max_memory_gb : 0);
-    this.setMeter("walltime", walltime_s ? `${(walltime_s / 60).toFixed(1)} min` : "—");
-    this.setMeter("gpu", used_gpus && max_gpus ? `${used_gpus}/${max_gpus}` : "—", max_gpus ? (used_gpus ?? 0) / max_gpus : 0);
-    this.setMeter("cpu", used_cpus && max_cpus ? `${used_cpus}/${max_cpus}` : "—", max_cpus ? (used_cpus ?? 0) / max_cpus : 0);
-    this.setMeter("records", records ? String(records) : running_campaigns ? `${running_campaigns} running, ${queued_campaigns} queued` : "—");
+    this.setMeter(
+      "memory",
+      memory_mb
+        ? `${(memory_mb / 1024).toFixed(1)} GB`
+        : max_memory_gb
+          ? `${used_memory_gb ?? 0}/${max_memory_gb} GB`
+          : "—",
+      max_memory_gb ? (used_memory_gb ?? 0) / max_memory_gb : 0,
+    );
+    this.setMeter(
+      "walltime",
+      walltime_s ? `${(walltime_s / 60).toFixed(1)} min` : "—",
+    );
+    this.setMeter(
+      "gpu",
+      used_gpus && max_gpus ? `${used_gpus}/${max_gpus}` : "—",
+      max_gpus ? (used_gpus ?? 0) / max_gpus : 0,
+    );
+    this.setMeter(
+      "cpu",
+      used_cpus && max_cpus ? `${used_cpus}/${max_cpus}` : "—",
+      max_cpus ? (used_cpus ?? 0) / max_cpus : 0,
+    );
+    this.setMeter(
+      "records",
+      records
+        ? String(records)
+        : running_campaigns
+          ? `${running_campaigns} running, ${queued_campaigns} queued`
+          : "—",
+    );
 
-    // Seeds to claim
-    if (this.claimValue && this.claimFill) {
-      const missing = this.requiredSeeds > 0 ? Math.max(0, this.requiredSeeds - this.measuredSeeds) : 0;
-      this.claimValue.textContent = this.requiredSeeds > 0 ? `${missing} / ${this.requiredSeeds}` : "—";
-      this.claimFill.style.width = this.requiredSeeds > 0 ? `${Math.min(100, (1 - missing / this.requiredSeeds) * 100)}%` : "0%";
-    }
+    const missing =
+      this.requiredSeeds > 0
+        ? Math.max(0, this.requiredSeeds - this.measuredSeeds)
+        : 0;
+    this.claimValue.textContent =
+      this.requiredSeeds > 0 ? `${missing} / ${this.requiredSeeds}` : "—";
+    this.claimFill.style.width =
+      this.requiredSeeds > 0
+        ? `${Math.min(100, (1 - missing / this.requiredSeeds) * 100)}%`
+        : "0%";
   }
 
   private setMeter(key: string, value: string, fraction = 0): void {
@@ -261,11 +329,42 @@ export class HUD implements Component {
     el.value.textContent = value;
     el.fill.style.width = `${fraction * 100}%`;
   }
+}
 
-  // Called by plotter when a cell is measured
+/** The legacy singleton panel used by GoldenLayout until P2. */
+export class HUD implements Component {
+  name = "HUD";
+  private panel: HTMLElement | null = null;
+  private view: HudView | null = null;
+
+  async init(): Promise<void> {
+    this.panel = createPanelShell({
+      id: "hud",
+      title: "MISSION CONTROL",
+      glyph: "◱",
+      key: PANEL_KEYS.hud,
+      body: createHudBody(),
+      dock: "top",
+      defaultOpen: true,
+    });
+    this.view = new HudView(this.panel);
+    registerDisplayPanel(
+      "hud",
+      "mission control",
+      "◱",
+      () => this.panel,
+      PANEL_KEYS.hud,
+    );
+  }
+
+  async destroy(): Promise<void> {
+    this.view?.dispose();
+    this.view = null;
+    this.panel?.remove();
+  }
+
   setMeasuredSeeds(n: number): void {
-    this.measuredSeeds = n;
-    this.renderMeters();
+    this.view?.setMeasuredSeeds(n);
   }
 }
 
