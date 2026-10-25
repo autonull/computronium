@@ -9,6 +9,7 @@
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle } from "./plot2d.js";
+import { registerView } from "./registry.js";
 import {
   cellLabel,
   measuredCells,
@@ -205,3 +206,5 @@ export class SmallMultiplesView implements StageView {
     this.drawn = true;
   }
 }
+
+registerView(new SmallMultiplesView());

@@ -659,6 +659,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-timeout" },
     { name = "selenium" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -767,6 +768,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "selenium", specifier = ">=4.0" },
+    { name = "websockets", specifier = ">=17.3" },
 ]
 
 [[package]]

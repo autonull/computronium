@@ -21,6 +21,7 @@ import { getSceneContext } from "../components/context.js";
 import { PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
+import { registerView } from "./registry.js";
 import { createTextSprite } from "./sprites.js";
 import { cellKey, stageState } from "./store.js";
 import type { MultiRunSpace, StageChange } from "./payloads.js";
@@ -430,3 +431,5 @@ export class MultiRunView implements StageView {
     );
   }
 }
+
+registerView(new MultiRunView());

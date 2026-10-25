@@ -162,6 +162,13 @@ export const BINDINGS: Binding[] = [
 
   // General
   {
+    id: "palette",
+    label: "Command palette",
+    group: "General",
+    chord: "shift+;",
+    run: () => actions["palette"]?.(),
+  },
+  {
     id: "help",
     label: "Show help",
     group: "General",
@@ -174,6 +181,13 @@ export const BINDINGS: Binding[] = [
     group: "General",
     key: "escape",
     run: () => actions["escape"]?.(),
+  },
+  {
+    id: "collapse-all",
+    label: "Close all panels",
+    group: "General",
+    chord: "shift+c",
+    run: () => actions["collapse-all"]?.(),
   },
 ];
 

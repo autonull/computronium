@@ -12,6 +12,7 @@
 import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
+import { registerView } from "./registry.js";
 import { cellKey, mean, stageState } from "./store.js";
 import { wrapLabel } from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
@@ -267,3 +268,5 @@ export class SlicesView implements StageView {
     this.drawn = measured > 0;
   }
 }
+
+registerView(new SlicesView());

@@ -11,6 +11,7 @@ import { getSceneContext } from "../components/context.js";
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
+import { registerView } from "./registry.js";
 import { stageState } from "./store.js";
 import {
   createDotTexture,
@@ -289,6 +290,8 @@ export class FrontierView implements StageView {
     );
   }
 }
+
+registerView(new FrontierView());
 
 interface Extent {
   min: number;

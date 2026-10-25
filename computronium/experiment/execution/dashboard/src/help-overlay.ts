@@ -1,252 +1,77 @@
-/** Help Overlay — Keyboard Shortcuts Reference (press ?).
-
-    Rendered from the binding table (src/bindings.ts) so the help can never
-    lie about what keys do.
-*/
+/** Simple help overlay — keyboard shortcuts from bindings. */
 
 import { registry } from "./components/registry.js";
-import { closeButton, registerDisplayPanel } from "./panels.js";
+import { registerDisplayPanel } from "./panels.js";
 import { allBindings } from "./bindings.js";
 import type { Component } from "./components/registry.js";
 
-interface ShortcutItem {
-  key: string;
-  description: string;
-}
-
-interface ShortcutGroup {
-  title: string;
-  items: ShortcutItem[];
-}
-
-function buildGroups(): ShortcutGroup[] {
-  const bindings = allBindings();
-  const groups = new Map<string, ShortcutItem[]>();
-
-  for (const binding of bindings) {
-    const key = binding.chord
-      ? binding.chord.replace("shift+", "Shift + ").toUpperCase()
-      : binding.key
-        ? binding.key.toUpperCase()
-        : "";
-    if (!key) continue;
-
-    const groupTitle = binding.group;
-    if (!groups.has(groupTitle)) groups.set(groupTitle, []);
-    groups.get(groupTitle)!.push({ key, description: binding.label });
+function buildGroups() {
+  const groups = new Map<string, { key: string; desc: string }[]>();
+  for (const b of allBindings()) {
+    const k = b.chord ? `Shift+${b.chord.split("+")[1].toUpperCase()}` : b.key?.toUpperCase();
+    if (!k) continue;
+    const g = b.group;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g)!.push({ key: k, desc: b.label });
   }
-
-  // Order groups for display
-  const groupOrder = [
-    "Navigation",
-    "Panels",
-    "Charts",
-    "Run Control",
-    "Cell Actions",
-    "Stage",
-    "General",
-  ];
-
-  return groupOrder
-    .map((title) => ({ title, items: groups.get(title) ?? [] }))
-    .filter((g) => g.items.length > 0);
+  const order = ["Navigation", "Panels", "Charts", "Run Control", "Cell Actions", "Stage", "General"];
+  return order.map((t) => ({ title: t, items: groups.get(t) ?? [] })).filter((g) => g.items.length);
 }
 
-const SHORTCUT_GROUPS = buildGroups();
+const GROUPS = buildGroups();
 
 export class HelpOverlay implements Component {
   name = "HelpOverlay";
-
   private container: HTMLElement | null = null;
-  private dialog: HTMLElement | null = null;
-  private isOpen = false;
-  private lastFocused: HTMLElement | null = null;
+  private open = false;
 
-  constructor() {
-    window.addEventListener("keydown", this.onKeyDown);
-  }
+  constructor() { window.addEventListener("keydown", this.onKey); }
 
   async init(): Promise<void> {
-    this.createOverlay();
-    registerDisplayPanel("help-overlay", "help", "?", () => this.container);
-    console.log("[HelpOverlay] Initialized");
-  }
-
-  async destroy(): Promise<void> {
-    window.removeEventListener("keydown", this.onKeyDown);
-    this.container?.remove();
-  }
-
-  private onKeyDown = (event: KeyboardEvent): void => {
-    const target = event.target as HTMLElement | null;
-    const isInput =
-      target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
-    if (isInput) return;
-
-    if (
-      event.key === "?" &&
-      !event.shiftKey &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey
-    ) {
-      event.preventDefault();
-      this.toggle();
-    }
-    if (event.key === "Escape" && this.isOpen) {
-      this.hide();
-    }
-  };
-
-  private createOverlay(): void {
     const overlay = document.getElementById("ui-overlay");
     if (!overlay) return;
-
     this.container = document.createElement("div");
     this.container.id = "help-overlay";
-    this.container.setAttribute("role", "dialog");
-    this.container.setAttribute("aria-modal", "true");
-    this.container.setAttribute("aria-labelledby", "help-title");
-    this.container.style.cssText = `
-      position: fixed;
-      inset: 0;
-      background: rgba(10, 14, 20, 0.92);
-      z-index: 1000;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    `;
-
-    const groupsHtml = SHORTCUT_GROUPS.map(
-      (group) => `
-      <div style="margin-bottom: 24px;">
-        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 12px; text-transform: uppercase;">${group.title}</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px;">
-          ${group.items
-            .map(
-              (item) => `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px;">
-              <kbd style="
-                font-family: 'JetBrains Mono', monospace;
-                font-size: 11px;
-                padding: 2px 8px;
-                background: var(--bg);
-                border: 1px solid var(--border-bright);
-                border-radius: 4px;
-                color: var(--text-primary);
-                min-width: 48px;
-                text-align: center;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-              ">${item.key}</kbd>
-              <span style="font-size: 12px; color: var(--text-primary);">${item.description}</span>
-            </div>
-          `,
-            )
-            .join("")}
-        </div>
-      </div>
-    `,
-    ).join("");
-
+    this.container.style.cssText = `position: fixed; inset: 0; background: rgba(10,14,20,0.92); z-index: 1000; display: none; align-items: center; justify-content: center;`;
     this.container.innerHTML = `
-      <div style="
-        width: 90%;
-        max-width: 800px;
-        max-height: 85vh;
-        overflow-y: auto;
-        background: var(--bg-secondary);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 32px;
-        box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-        transform: scale(0.95);
-        transition: transform 0.2s ease;
-      ">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
-          <h2 id="help-title" style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em;">Keyboard Shortcuts</h2>
-          <span style="font-size: 11px; color: var(--text-muted);">Press <kbd style="font-family: 'JetBrains Mono', monospace; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px;">?</kbd> again or <kbd style="font-family: 'JetBrains Mono', monospace; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px;">Esc</kbd> to close</span>
+      <div style="width: 90%; max-width: 800px; max-height: 85vh; overflow: auto; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+          <h2 style="margin: 0; font-size: 16px;">Keyboard Shortcuts</h2>
+          <span style="font-size: 11px; color: var(--text-muted);">Press ? or Esc to close</span>
         </div>
-        ${groupsHtml}
+        ${GROUPS.map((g) => `
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">${g.title}</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 6px;">
+              ${g.items.map((i) => `
+                <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px;">
+                  <kbd style="font-family: monospace; font-size: 10px; padding: 2px 6px; background: var(--bg); border: 1px solid var(--border-bright); border-radius: 3px; color: var(--text-primary); min-width: 40px; text-align: center;">${i.key}</kbd>
+                  <span style="font-size: 11px; color: var(--text-primary);">${i.desc}</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `).join("")}
       </div>
     `;
-
-    this.dialog = this.container.querySelector("div")!;
-
-    // Click backdrop to close
-    this.container.addEventListener("click", (event) => {
-      if (event.target === this.container) {
-        this.hide();
-      }
-    });
+    overlay.appendChild(this.container);
+    this.container.addEventListener("click", (e) => { if (e.target === this.container) this.hide(); });
+    registerDisplayPanel("help-overlay", "help", "?", () => this.container);
+    console.log("[HelpOverlay] Ready");
   }
 
-  toggle(): void {
-    if (this.isOpen) this.hide();
-    else this.show();
-  }
+  async destroy(): Promise<void> { window.removeEventListener("keydown", this.onKey); this.container?.remove(); }
 
-  show(): void {
-    if (!this.container || !this.dialog) return;
-    this.lastFocused = document.activeElement as HTMLElement;
+  private onKey = (e: KeyboardEvent): void => {
+    const t = e.target as HTMLElement | null;
+    if (t && ["INPUT", "SELECT", "TEXTAREA"].includes(t.tagName)) return;
+    if (e.key === "?" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); this.toggle(); }
+    if (e.key === "Escape" && this.open) this.hide();
+  };
 
-    this.container.style.display = "flex";
-    this.trapFocus();
-
-    requestAnimationFrame(() => {
-      this.container!.style.opacity = "1";
-      if (this.dialog) this.dialog.style.transform = "scale(1)";
-    });
-    this.isOpen = true;
-    document.body.style.overflow = "hidden";
-  }
-
-  hide(): void {
-    if (!this.container || !this.dialog) return;
-    this.container.style.opacity = "0";
-    this.dialog.style.transform = "scale(0.95)";
-    setTimeout(() => {
-      if (this.container) this.container.style.display = "none";
-    }, 200);
-    this.isOpen = false;
-    document.body.style.overflow = "";
-    if (this.lastFocused) this.lastFocused.focus();
-  }
-
-  private trapFocus(): void {
-    if (!this.dialog) return;
-    const focusable = this.dialog.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    );
-    if (focusable.length === 0) return;
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-
-    const handleTab = (event: KeyboardEvent) => {
-      if (event.key !== "Tab") return;
-      if (event.shiftKey) {
-        if (document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        }
-      } else {
-        if (document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
-    };
-
-    this.dialog.addEventListener("keydown", handleTab);
-    const cleanup = () => {
-      this.dialog?.removeEventListener("keydown", handleTab);
-    };
-    this.container?.addEventListener("transitionend", cleanup, { once: true });
-
-    first.focus();
-  }
+  toggle(): void { this.open ? this.hide() : this.show(); }
+  show(): void { if (!this.container) return; this.container.style.display = "flex"; this.open = true; }
+  hide(): void { if (!this.container) return; this.container.style.display = "none"; this.open = false; }
 }
 
 export const helpOverlay = new HelpOverlay();

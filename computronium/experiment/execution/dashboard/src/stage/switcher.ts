@@ -11,7 +11,7 @@ import { registry } from "../components/registry.js";
 import { discoveryMap } from "../discovery-map.js";
 import { viewGlyph } from "../icons.js";
 import { CYCLE_KEY, RESERVED_KEYS } from "../keys.js";
-import { getViews, VIEW_GROUPS } from "./registry.js";
+import { getViews, VIEW_GROUPS, registerView } from "./registry.js";
 import "./basin.js";
 import "./claim-cost.js";
 import "./contrast.js";
@@ -66,6 +66,9 @@ class SpaceView implements StageView {
   }
 }
 
+// Register the SpaceView so it appears in the view switcher
+registerView(new SpaceView());
+
 export class ViewSwitcher implements Component {
   name = "ViewSwitcher";
 
@@ -91,7 +94,7 @@ export class ViewSwitcher implements Component {
     this.buildKeys();
     this.buildSection();
     this.attachSection();
-    this.show(this.views[0].id);
+    this.show("space");
     console.log("[ViewSwitcher] Initialized");
   }
 
@@ -164,8 +167,19 @@ export class ViewSwitcher implements Component {
   private buildKeys(): void {
     this.keys.clear();
     this.keyOf.clear();
-    this.views.forEach((view, index) => {
-      const digit = index < 9 ? String(index + 1) : "";
+
+    // The space view (discovery map) always gets key "1" as the primary view
+    const spaceView = this.views.find((v) => v.id === "space");
+    const otherViews = this.views.filter((v) => v.id !== "space");
+
+    if (spaceView) {
+      this.keys.set("1", spaceView);
+      this.keyOf.set(spaceView.id, "1");
+    }
+
+    // Assign keys 2-9 to the first 8 other views
+    otherViews.forEach((view, index) => {
+      const digit = index < 8 ? String(index + 2) : "";
       if (digit) {
         this.keys.set(digit, view);
         this.keyOf.set(view.id, digit);

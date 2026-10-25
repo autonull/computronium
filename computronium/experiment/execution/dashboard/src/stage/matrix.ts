@@ -9,6 +9,7 @@
 import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { rampColor } from "./ramp.js";
+import { registerView } from "./registry.js";
 import { cellKey, mean, stageState } from "./store.js";
 import { wrapLabel } from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
@@ -272,6 +273,8 @@ export class MatrixView implements StageView {
     ctx.stroke();
   }
 }
+
+registerView(new MatrixView());
 
 /** The colour a number is written in: dark on a bright cell, light on a dark one. */
 function textOn(fraction: number): string {

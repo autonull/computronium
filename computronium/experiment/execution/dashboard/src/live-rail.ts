@@ -1,168 +1,84 @@
-/** Live Rail — Scrolling Pipeline Event Log (TODO68 Phase 4, refactored for TODO71 Phase 1). */
+/** Simple live rail — scrolling event log. */
 
 import { registry } from "./components/registry.js";
-import { PANEL_KEYS } from "./keys.js";
-import { panels, registerDisplayPanel, getPanelElement } from "./panels.js";
+import { panels, registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
-import { router, wsClient } from "./ws-client.js";
+import { wsClient } from "./ws-client.js";
 import { PALETTE } from "./colors.js";
 import type { Component } from "./components/registry.js";
 
-interface PipelineEvent {
-  stage: string;
-  message: string;
-  level: "ok" | "warn" | "error";
-  timestamp: string;
-  run_id?: string;
-}
+interface Event { stage: string; message: string; level: "ok" | "warn" | "error"; timestamp: string; }
 
-function createLiveRailBody(): string {
+function createBody(): string {
   return `
-    <div id="rail-header" class="rail-header-inner">
-      <span class="rail-connection" id="rail-connection">
-        <span class="dot"></span>
-        <span class="rail-label">Disconnected</span>
-      </span>
-      <div style="flex: 1;"></div>
-      <span id="rail-queue" class="rail-queue">0 running · 0 queued</span>
-      <span id="rail-count" class="rail-count">0 events</span>
+    <style>
+      .rail-header { display: flex; align-items: center; gap: 8px; padding: 4px 8px; margin-bottom: 4px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; }
+      .rail-dot { width: 8px; height: 8px; border-radius: 50%; }
+      .rail-log { max-height: 180px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+      .rail-event { display: flex; align-items: center; gap: 6px; padding: 3px 6px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 3px; font-size: 10px; }
+      .rail-time { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .rail-stage { color: var(--text-secondary); font-weight: 500; min-width: 70px; }
+      .rail-msg { color: var(--text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .rail-event.warn .rail-msg { color: var(--warn); }
+      .rail-event.error .rail-msg { color: var(--error); }
+    </style>
+    <div class="rail-header">
+      <span class="rail-conn"><span class="rail-dot" id="rail-dot"></span><span id="rail-label">Disconnected</span></span>
+      <span style="flex: 1;"></span>
+      <span id="rail-queue" style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">0 running · 0 queued</span>
     </div>
-    <div id="rail-log"></div>
-    <!-- Scroll hint -->
-    <div id="rail-scroll-hint"></div>
+    <div class="rail-log" id="rail-log"></div>
   `;
 }
 
 export class LiveRail implements Component {
   name = "LiveRail";
-
   private container: HTMLElement | null = null;
-  private logContainer: HTMLElement | null = null;
-  private scrollHint: HTMLElement | null = null;
-  private events: PipelineEvent[] = [];
-  private maxEvents = 50;
-
-  constructor() {
-    // Register WebSocket handlers IMMEDIATELY in constructor
-    router.register("pipeline_event", this.onPipelineEvent);
-    router.register("status_update", this.onStatusUpdate);
-  }
+  private log: HTMLElement | null = null;
+  private dot: HTMLElement | null = null;
+  private label: HTMLElement | null = null;
+  private queue: HTMLElement | null = null;
+  private events: Event[] = [];
+  private maxEvents = 100;
 
   async init(): Promise<void> {
-    this.container = createPanelShell({
-      id: "live-rail",
-      title: "LIVE RAIL",
-      glyph: "≡",
-      key: PANEL_KEYS.rail,
-      body: createLiveRailBody(),
-      dock: "bottom",
-      defaultOpen: true,
-      className: "live-rail-panel",
-    });
-
-    this.logContainer = this.container.querySelector("#rail-log")!;
-    this.scrollHint = this.container.querySelector(
-      "#rail-scroll-hint",
-    ) as HTMLElement;
-
-    registerDisplayPanel(
-      "live-rail",
-      "live rail",
-      "≡",
-      () => this.container,
-      PANEL_KEYS.rail,
-    );
-    wsClient.onStateChange((state) => this.setConnected(state === "connected"));
-    console.log("[LiveRail] Initialized");
+    this.container = createPanelShell({ id: "live-rail", title: "Live Rail", glyph: "≡", body: createBody(), dock: "right", defaultOpen: true, className: "live-rail-panel" });
+    this.log = this.container.querySelector("#rail-log")!;
+    this.dot = this.container.querySelector("#rail-dot")!;
+    this.label = this.container.querySelector("#rail-label")!;
+    this.queue = this.container.querySelector("#rail-queue")!;
+    registerDisplayPanel("live-rail", "live rail", "≡", () => this.container);
+    wsClient.onStateChange((s) => this.setConn(s === "connected"));
+    console.log("[LiveRail] Ready");
   }
 
-  async destroy(): Promise<void> {
-    router.unregister("pipeline_event", this.onPipelineEvent);
-    router.unregister("status_update", this.onStatusUpdate);
-    this.container?.remove();
+  async destroy(): Promise<void> { this.container?.remove(); }
+
+  private setConn(connected: boolean): void {
+    if (!this.dot || !this.label) return;
+    this.dot.style.background = connected ? "var(--ok)" : "var(--error)";
+    this.label.textContent = connected ? "Connected" : "Disconnected";
   }
 
-  private onPipelineEvent = (data: PipelineEvent): void => {
-    this.events.unshift(data);
+  add(stage: string, message: string, level: "ok" | "warn" | "error" = "ok"): void {
+    this.events.unshift({ stage, message, level, timestamp: new Date().toISOString() });
     if (this.events.length > this.maxEvents) this.events.pop();
     this.render();
-  };
-
-  private onStatusUpdate = (data: any): void => {
-    const running = data?.data?.running_campaigns ?? 0;
-    const queued = data?.data?.queued_campaigns ?? 0;
-    const countEl = this.container?.querySelector(
-      "#rail-queue",
-    ) as HTMLElement | null;
-    if (countEl) {
-      countEl.textContent = `${running} running · ${queued} queued`;
-    }
-  };
-
-  /** The pill reports the socket, not the campaign: one says "connected",
-      the other says "idle". */
-  private setConnected(connected: boolean): void {
-    const connEl = this.container?.querySelector(
-      "#rail-connection",
-    ) as HTMLElement | null;
-    if (!connEl) return;
-
-    const dot = connEl.querySelector(".dot") as HTMLElement | null;
-    const text = connEl.querySelector(".rail-label") as HTMLElement | null;
-    if (!dot || !text) return;
-
-    const color = connected ? PALETTE.ok : PALETTE.error;
-    dot.style.background = color;
-    connEl.style.background = color + "22";
-    connEl.style.borderColor = color + "88";
-    connEl.style.color = color;
-    text.textContent = connected ? "Connected" : "Disconnected";
   }
 
   private render(): void {
-    if (!this.logContainer) return;
+    if (!this.log) return;
+    this.log.innerHTML = this.events.map((e) => {
+      const time = new Date(e.timestamp).toLocaleTimeString();
+      const icons = { ok: "✓", warn: "⚠", error: "✗" };
+      const colors = { ok: PALETTE.ok, warn: PALETTE.warn, error: PALETTE.error };
+      return `<div class="rail-event ${e.level}"><span class="rail-time">${time}</span><span style="color:${colors[e.level]}">${icons[e.level]}</span><span class="rail-stage">${e.stage}</span><span class="rail-msg">${e.message}</span></div>`;
+    }).join("");
+    this.log.scrollTop = 0;
+  }
 
-    this.logContainer.innerHTML = this.events
-      .map((event, index) => {
-        const time = new Date(event.timestamp).toLocaleTimeString();
-        const levelColors: Record<string, string> = {
-          ok: PALETTE.ok,
-          warn: PALETTE.warn,
-          error: PALETTE.error,
-        };
-        const color = levelColors[event.level] || PALETTE.text_secondary;
-        const icons: Record<string, string> = {
-          ok: "✓",
-          warn: "⚠",
-          error: "✗",
-        };
-        const isLatest = index === 0;
-
-        return `
-          <span class="rail-event ${isLatest ? "latest" : ""}">
-            <span class="rail-time">${time}</span>
-            <span class="rail-icon" style="color: ${color};">${icons[event.level] ?? "•"}</span>
-            <span class="rail-stage">${event.stage}</span>
-            <span class="rail-message">${event.message}</span>
-          </span>
-        `;
-      })
-      .join("");
-
-    const countEl = this.container?.querySelector(
-      "#rail-count",
-    ) as HTMLElement | null;
-    if (countEl) countEl.textContent = `${this.events.length} events`;
-
-    // Auto-scroll to latest (left side)
-    this.logContainer.scrollLeft = 0;
-
-    // Update scroll hint
-    if (this.scrollHint) {
-      const canScroll =
-        this.logContainer!.scrollWidth > this.logContainer!.clientWidth;
-      this.scrollHint.style.opacity = canScroll ? "1" : "0";
-    }
+  setQueue(running: number, queued: number): void {
+    if (this.queue) this.queue.textContent = `${running} running · ${queued} queued`;
   }
 }
 

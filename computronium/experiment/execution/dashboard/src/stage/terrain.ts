@@ -12,6 +12,7 @@ import { getSceneContext } from "../components/context.js";
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { frameBox } from "./framing.js";
 import { disposeObject } from "./scene.js";
+import { registerView } from "./registry.js";
 import { cellKey, mean, stageState } from "./store.js";
 import { createTextSprite } from "./sprites.js";
 import type { StageView, ViewGroup } from "./views.js";
@@ -305,3 +306,5 @@ export class TerrainView implements StageView {
     );
   }
 }
+
+registerView(new TerrainView());

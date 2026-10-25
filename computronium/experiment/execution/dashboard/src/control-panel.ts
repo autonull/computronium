@@ -1,37 +1,11 @@
-/** The control panel: the options that do not belong on a bar (TODO70, refactored for TODO71 Phase 1).
- *
- * Four sections, and each one replaces something that needed a terminal:
- *
- * **New run** — the profile picker, what the profile declares, the
- * reader's edits, and Start. Without a campaign queue the panel says so
- * and gives the command to type: the dashboard must never appear to have
- * a control it does not have.
- *
- * **This run** — the run's declaration as it stands. A run's declaration is
- * frozen once it has begun, so the panel shows it and says so rather than
- * offering an editor that would lie.
- *
- * **The queue** — the campaigns waiting and running, with cancel and
- * preempt, and the queue's own ceilings.
- *
- * **Cells** — the three cell verbs, reachable without clicking a cell in
- * the 3D scene.
- *
- * **Exports** — the narration script, the run's report, and the records as
- * JSON: the dashboard is the whole instrument, and a reader can take the
- * picture away.
- */
+/** The control panel: the options that do not belong on a bar. */
 
 import { registry } from "./components/registry.js";
 import { CONTROL_KEYS } from "./keys.js";
-import {
-  panels,
-  registerDisplayPanel,
-  setPanelHidden,
-  closeButton,
-} from "./panels.js";
+import { panels, registerDisplayPanel, closeButton } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { runSelection } from "./run-selection.js";
+import { cellDrawer } from "./cell-drawer.js";
 import type { Component } from "./components/registry.js";
 
 /** One profile, as the server offers it. */
@@ -54,12 +28,7 @@ interface Profile {
 /** One axis, as the server offers it. */
 interface Axis {
   axis: string;
-  primitives: {
-    name: string;
-    description: string;
-    available: boolean;
-    unavailable_reason: string | null;
-  }[];
+  primitives: { name: string; description: string; available: boolean; unavailable_reason: string | null }[];
 }
 
 /** One campaign, as the queue holds it. */
@@ -71,159 +40,127 @@ interface Campaign {
 }
 
 /** The six axes a cell names, in the order the ontology declares them. */
-const CELL_AXES = [
-  "substrate",
-  "geometry",
-  "dynamics",
-  "plasticity",
-  "credit",
-  "update",
+const CELL_AXES = ["substrate", "geometry", "dynamics", "plasticity", "credit", "update"] as const;
+
+const SECTIONS = [
+  { id: "new-run", title: "New Run", key: "1" },
+  { id: "this-run", title: "This Run", key: "2" },
+  { id: "queue", title: "The Queue", key: "3" },
+  { id: "cells", title: "Cells", key: "4" },
+  { id: "exports", title: "Exports", key: "5" },
 ] as const;
 
 function createControlPanelBody(): string {
   return `
     <style>
-      #control-panel h4 {
-        margin: 14px 0 6px;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        color: var(--text-primary);
-      }
-      #control-panel table.kv, #control-panel table.list {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 11px;
-      }
-      #control-panel table.kv th, #control-panel table.list th {
-        text-align: left;
-        font-weight: 500;
-        color: var(--text-secondary);
-        padding: 2px 6px 2px 0;
-        vertical-align: top;
-      }
-      #control-panel table.kv td, #control-panel table.list td {
-        color: var(--text-primary);
-        padding: 2px 6px 2px 0;
-        vertical-align: top;
-      }
-      #control-panel .note {
-        color: var(--text-secondary);
-        margin: 4px 0 8px;
-        line-height: 1.4;
-      }
-      #control-panel .row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        margin: 4px 0;
-      }
-      #control-panel input, #control-panel select {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 11px;
-        padding: 2px 4px;
-        min-width: 0;
-      }
-      #control-panel button.mini {
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        color: var(--text-primary);
-        font-size: 11px;
-        padding: 2px 8px;
-        cursor: pointer;
-      }
-      #control-panel button.action {
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        color: var(--text-primary);
-        font-size: 11px;
-        padding: 4px 10px;
-        cursor: pointer;
-        transition: all 0.1s ease;
-      }
-      #control-panel button.action:hover:not(:disabled) {
-        background: var(--border);
-        border-color: var(--border-bright);
-      }
-      #control-panel button.action:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
-      #control-panel .cell-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-      }
-      #control-panel .cell-row label {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        font-size: 10px;
-        color: var(--text-secondary);
-        white-space: nowrap;
-      }
-      #control-panel .cell-row select {
-        font-size: 10px;
-        padding: 2px 6px;
-      }
+      #control-panel h4 { margin: 14px 0 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--text-secondary); text-transform: uppercase; }
+      #control-panel table.kv, #control-panel table.list { width: 100%; border-collapse: collapse; font-size: 11px; }
+      #control-panel table.kv th, #control-panel table.list th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 2px 6px 2px 0; vertical-align: top; }
+      #control-panel table.kv td, #control-panel table.list td { color: var(--text-primary); padding: 2px 6px 2px 0; vertical-align: top; }
+      #control-panel .note { color: var(--text-secondary); margin: 4px 0 8px; line-height: 1.4; font-size: 11px; }
+      #control-panel .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+      #control-panel input, #control-panel select { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; padding: 2px 4px; min-width: 0; }
+      #control-panel button.mini { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 2px 8px; cursor: pointer; }
+      #control-panel button.action { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 6px 12px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+      #control-panel button.action:hover:not(:disabled) { background: var(--bg-primary); border-color: var(--border-bright); }
+      #control-panel button.action:disabled { opacity: 0.4; cursor: not-allowed; }
+      #control-panel button.action.primary { background: var(--gradient)22; border-color: var(--gradient)66; color: var(--gradient); }
+      #control-panel button.action.primary:hover:not(:disabled) { background: var(--gradient)33; border-color: var(--gradient); }
+      #control-panel button.action.danger { background: var(--error)22; border-color: var(--error)66; color: var(--error); }
+      #control-panel button.action.danger:hover:not(:disabled) { background: var(--error)33; border-color: var(--error); }
+      #control-panel .cell-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      #control-panel .cell-row label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+      #control-panel .cell-row select { font-size: 10px; padding: 2px 6px; }
+      #control-panel .section-tabs { display: flex; gap: 2px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      #control-panel .tab { padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px 4px 0 0; color: var(--text-secondary); font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; position: relative; margin-bottom: -1px; }
+      #control-panel .tab:hover { background: var(--border); color: var(--text-primary); }
+      #control-panel .tab.active { background: var(--bg-secondary); border-color: var(--border-bright); color: var(--text-primary); }
+      #control-panel .tab .kbd { font-family: monospace; font-size: 9px; padding: 1px 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); margin-left: 4px; }
+      #control-panel .tab-content { display: none; }
+      #control-panel .tab-content.active { display: block; animation: fadeIn 0.1s ease; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+      #control-panel .kbd-hint { font-family: monospace; font-size: 9px; padding: 1px 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); margin-left: 6px; }
+      .empty-state { text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 11px; }
+      .empty-state .icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
     </style>
-    <div id="control-panel-header" style="display: flex; align-items: center; gap: 8px;">
+    <div id="control-panel-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
       <span style="font-weight: 600; color: var(--text-primary); letter-spacing: 0.08em;">CONTROL</span>
       <div style="flex: 1;"></div>
     </div>
 
-    <h4>NEW RUN</h4>
-    <div class="row">
-      <select class="profile"></select>
-      <select class="device">
-        <option value="auto">auto</option>
-        <option value="cpu">cpu</option>
-        <option value="cuda">cuda</option>
-      </select>
+    <div class="section-tabs" id="section-tabs">
+      ${SECTIONS.map((s) => `
+        <button class="tab${s.id === "new-run" ? " active" : ""}" data-section="${s.id}" title="Switch to ${s.title} (${s.key})">
+          ${s.title}<span class="kbd">${s.key}</span>
+        </button>
+      `).join("")}
     </div>
-    <div class="note profile-note"></div>
-    <div class="row">
-      <label>seeds</label><input class="seeds" type="number" min="1" />
-      <label>epochs</label><input class="epochs" type="number" min="1" />
-      <label>budget</label><input class="budget" type="number" min="1" />
-      <select class="fidelity">
-        <option value="L0">L0</option>
-        <option value="L1">L1</option>
-        <option value="L2">L2</option>
-      </select>
-    </div>
-    <div class="row">
-      <button class="action start">Start run</button>
-    </div>
-    <div class="note new-run-note"></div>
 
-    <h4>THIS RUN</h4>
-    <div class="run-section"></div>
-
-    <h4>THE QUEUE</h4>
-    <div class="queue-section"></div>
-
-    <h4>CELLS</h4>
-    <div class="row cell-row"></div>
-    <div class="row">
-      <button class="action replicate">Replicate</button>
-      <button class="action preregister">Preregister</button>
-      <button class="action quest">Quest</button>
+    <div class="tab-content active" id="tab-new-run">
+      <h4>NEW RUN</h4>
+      <div class="row">
+        <select class="profile" style="flex: 1;"></select>
+        <select class="device">
+          <option value="auto">auto</option>
+          <option value="cpu">cpu</option>
+          <option value="cuda">cuda</option>
+        </select>
+      </div>
+      <div class="note profile-note"></div>
+      <div class="row">
+        <label>seeds</label><input class="seeds" type="number" min="1" />
+        <label>epochs</label><input class="epochs" type="number" min="1" />
+        <label>budget (s)</label><input class="budget" type="number" min="1" />
+        <select class="fidelity">
+          <option value="L0">L0</option>
+          <option value="L1">L1</option>
+          <option value="L2">L2</option>
+        </select>
+      </div>
+      <div class="row">
+        <button class="action start primary">Start run <span class="kbd">Z</span></button>
+      </div>
+      <div class="note new-run-note"></div>
     </div>
-    <div class="note cell-note"></div>
 
-    <h4>EXPORTS</h4>
-    <div class="row">
-      <button class="action export-script">Narration script</button>
-      <button class="action export-report">Run report</button>
-      <button class="action export-records">Records as JSON</button>
+    <div class="tab-content" id="tab-this-run">
+      <h4>THIS RUN</h4>
+      <div class="run-section empty-state">
+        <div class="icon">📋</div>
+        <div>No run selected</div>
+        <div style="margin-top: 4px; font-size: 10px;">Pick a run in the legend</div>
+      </div>
     </div>
-    <div class="note export-note"></div>
+
+    <div class="tab-content" id="tab-queue">
+      <h4>THE QUEUE</h4>
+      <div class="queue-section empty-state">
+        <div class="icon">📦</div>
+        <div>No campaigns queued</div>
+        <div style="margin-top: 4px; font-size: 10px;">Start a run to see queue</div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-cells">
+      <h4>CELLS</h4>
+      <div class="row cell-row"></div>
+      <div class="row">
+        <button class="action replicate">Replicate <span class="kbd">⇧R</span></button>
+        <button class="action preregister">Preregister <span class="kbd">⇧P</span></button>
+        <button class="action quest primary">Adopt as Quest <span class="kbd">⇧Q</span></button>
+      </div>
+      <div class="note cell-note">Select a cell on the map or in the drawer to enable actions.</div>
+    </div>
+
+    <div class="tab-content" id="tab-exports">
+      <h4>EXPORTS</h4>
+      <div class="row">
+        <button class="action export-script">Narration script <span class="kbd">E S</span></button>
+        <button class="action export-report">Run report <span class="kbd">E R</span></button>
+        <button class="action export-records">Records as JSON <span class="kbd">E J</span></button>
+      </div>
+      <div class="note export-note">Exports download immediately.</div>
+    </div>
   `;
 }
 
@@ -233,11 +170,6 @@ export class ControlPanel implements Component {
   private container: HTMLElement | null = null;
   private profiles: Profile[] = [];
   private axes: Axis[] = [];
-  private newRunSection: HTMLElement | null = null;
-  private runSection: HTMLElement | null = null;
-  private queueSection: HTMLElement | null = null;
-  private cellSection: HTMLElement | null = null;
-  private exportSection: HTMLElement | null = null;
   private profileSelect: HTMLSelectElement | null = null;
   private seedsInput: HTMLInputElement | null = null;
   private epochsInput: HTMLInputElement | null = null;
@@ -246,28 +178,17 @@ export class ControlPanel implements Component {
   private fidelitySelect: HTMLSelectElement | null = null;
   private profileNote: HTMLElement | null = null;
   private newRunNote: HTMLElement | null = null;
+  private runSection: HTMLElement | null = null;
+  private queueSection: HTMLElement | null = null;
   private cellSelects = new Map<string, HTMLSelectElement>();
   private cellNote: HTMLElement | null = null;
   private exportNote: HTMLElement | null = null;
+  private activeTab = "new-run";
 
-  /** Scroll a section into view (for palette deep links). */
   showSection(sectionId: string): void {
     if (!this.container) return;
-    const headings = this.container.querySelectorAll("h4");
-    for (const h of headings) {
-      if (
-        h.textContent
-          ?.toLowerCase()
-          .includes(sectionId.toLowerCase().replace("-", " "))
-      ) {
-        h.scrollIntoView({ behavior: "smooth", block: "start" });
-        // Briefly highlight
-        h.style.transition = "background 0.3s ease";
-        h.style.background = "var(--gradient)22";
-        setTimeout(() => (h.style.background = ""), 800);
-        break;
-      }
-    }
+    const tab = this.container.querySelector(`.tab[data-section="${sectionId}"]`) as HTMLElement;
+    if (tab) tab.click();
   }
 
   async init(): Promise<void> {
@@ -283,34 +204,22 @@ export class ControlPanel implements Component {
 
     this.bindElements();
     this.bindEvents();
-
-    registerDisplayPanel(
-      "control-panel",
-      "control panel",
-      "⚙",
-      () => this.container,
-      CONTROL_KEYS.panel,
-    );
+    registerDisplayPanel("control-panel", "control panel", "⚙", () => this.container, CONTROL_KEYS.panel);
     await this.loadCatalogue();
     void this.refresh();
   }
 
-  async destroy(): Promise<void> {
-    this.container?.remove();
-  }
+  async destroy(): Promise<void> { this.container?.remove(); }
 
   private bindElements(): void {
     if (!this.container) return;
-    this.newRunSection = this.container.querySelector(".new-run-note");
     this.runSection = this.container.querySelector(".run-section");
     this.queueSection = this.container.querySelector(".queue-section");
-    this.cellSection = this.container.querySelector(".cell-section");
-    this.exportSection = this.container.querySelector(".export-note");
+    this.cellNote = this.container.querySelector(".cell-note");
+    this.exportNote = this.container.querySelector(".export-note");
     this.profileSelect = this.container.querySelector(".profile");
     this.profileNote = this.container.querySelector(".profile-note");
     this.newRunNote = this.container.querySelector(".new-run-note");
-    this.cellNote = this.container.querySelector(".cell-note");
-    this.exportNote = this.container.querySelector(".export-note");
     this.seedsInput = this.container.querySelector(".seeds");
     this.epochsInput = this.container.querySelector(".epochs");
     this.budgetInput = this.container.querySelector(".budget");
@@ -328,419 +237,223 @@ export class ControlPanel implements Component {
       this.cellSelects.set(axis, select);
     }
 
-    this.container
-      .querySelector<HTMLElement>("#control-panel-header")!
-      .appendChild(closeButton(() => panels.toggle("control-panel")));
+    // Tab switching
+    for (const tab of this.container.querySelectorAll<HTMLButtonElement>(".tab")) {
+      tab.addEventListener("click", () => this.switchTab(tab.dataset.section!));
+    }
+
+    // Number keys 1-5 for tabs
+    this.container.addEventListener("keydown", (e) => {
+      if (e.key >= "1" && e.key <= "5" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const t = e.target as HTMLElement;
+        if (!["INPUT", "SELECT", "TEXTAREA"].includes(t.tagName)) {
+          e.preventDefault();
+          this.switchTab(SECTIONS[Number(e.key) - 1].id);
+        }
+      }
+    });
+
+    this.container.querySelector<HTMLElement>("#control-panel-header")!.appendChild(closeButton(() => panels.toggle("control-panel")));
+  }
+
+  private switchTab(id: string): void {
+    if (!this.container) return;
+    for (const tab of this.container.querySelectorAll<HTMLButtonElement>(".tab")) tab.classList.toggle("active", tab.dataset.section === id);
+    for (const content of this.container.querySelectorAll<HTMLElement>(".tab-content")) content.classList.toggle("active", content.id === `tab-${id}`);
+    this.activeTab = id;
   }
 
   private bindEvents(): void {
     if (!this.container) return;
-    this.profileSelect?.addEventListener("change", () =>
-      this.renderProfileNote(),
-    );
-    this.container
-      .querySelector<HTMLButtonElement>(".start")!
-      .addEventListener("click", () => void this.startRun());
-    this.container
-      .querySelector<HTMLButtonElement>(".replicate")!
-      .addEventListener("click", () => void this.cellAction("replicate"));
-    this.container
-      .querySelector<HTMLButtonElement>(".preregister")!
-      .addEventListener("click", () => void this.cellAction("preregister"));
-    this.container
-      .querySelector<HTMLButtonElement>(".quest")!
-      .addEventListener("click", () => void this.cellAction("quest"));
-    this.container
-      .querySelector<HTMLButtonElement>(".export-script")!
-      .addEventListener("click", () => void this.export("script"));
-    this.container
-      .querySelector<HTMLButtonElement>(".export-report")!
-      .addEventListener("click", () => void this.export("report"));
-    this.container
-      .querySelector<HTMLButtonElement>(".export-records")!
-      .addEventListener("click", () => void this.export("records"));
+    this.profileSelect?.addEventListener("change", () => this.renderProfileNote());
+    this.container.querySelector<HTMLButtonElement>(".start")!.addEventListener("click", () => void this.startRun());
+    this.container.querySelector<HTMLButtonElement>(".replicate")!.addEventListener("click", () => void this.cellAction("replicate"));
+    this.container.querySelector<HTMLButtonElement>(".preregister")!.addEventListener("click", () => void this.cellAction("preregister"));
+    this.container.querySelector<HTMLButtonElement>(".quest")!.addEventListener("click", () => void this.cellAction("quest"));
+    this.container.querySelector<HTMLButtonElement>(".export-script")!.addEventListener("click", () => void this.export("script"));
+    this.container.querySelector<HTMLButtonElement>(".export-report")!.addEventListener("click", () => void this.export("report"));
+    this.container.querySelector<HTMLButtonElement>(".export-records")!.addEventListener("click", () => void this.export("records"));
   }
 
-  /** The profiles and the axes the form offers. */
   private async loadCatalogue(): Promise<void> {
     try {
-      const [profiles, axes] = await Promise.all([
+      const [profiles, axesResponse] = await Promise.all([
         fetch("/api/profiles").then((r) => r.json()),
         fetch("/api/axes").then((r) => r.json()),
       ]);
-      this.profiles = (profiles.profiles ?? []) as Profile[];
-      this.axes = (axes.axes ?? []) as Axis[];
-    } catch {
-      this.profiles = [];
-      this.axes = [];
-    }
-    this.renderProfileOptions();
-    this.renderCellOptions();
-  }
-
-  /** What the reader can change, and what the run is doing now. */
-  private async refresh(): Promise<void> {
-    await Promise.all([
-      this.refreshRuns(),
-      this.refreshQueue(),
-      this.refreshStatus(),
-    ]);
-  }
-
-  /** The runs the store holds, and the declaration of each. */
-  private async refreshRuns(): Promise<void> {
-    if (!this.runSection) return;
-    try {
-      const response = await fetch("/api/runs");
-      const body = (await response.json()) as {
-        runs?: {
-          run_id: string;
-          status: string;
-          records: number;
-          seeds_owed?: number;
-          declaration?: Record<string, unknown>;
-        }[];
-      };
-      const runId = this.currentRunId();
-      const run = (body.runs ?? []).find((r) => r.run_id === runId);
-      this.runSection.innerHTML = this.renderRun(run);
-    } catch {
-      this.runSection.innerHTML = `<div class="note">the store did not answer</div>`;
-    }
-  }
-
-  /** The queue's campaigns, and its own ceilings. */
-  private async refreshQueue(): Promise<void> {
-    if (!this.queueSection) return;
-    try {
-      const [campaigns, queue] = await Promise.all([
-        fetch("/api/campaigns").then((r) => r.json()),
-        fetch("/api/queue").then((r) => r.json()),
-      ]);
-      this.queueSection.innerHTML = this.renderQueue(
-        (campaigns.campaigns ?? []) as Campaign[],
-        queue as Record<string, unknown>,
-      );
-      this.queueSection
-        .querySelectorAll<HTMLButtonElement>("[data-cancel]")
-        .forEach((button) =>
-          button.addEventListener("click", () => {
-            void this.cancelCampaign(button.dataset.cancel ?? "");
-          }),
-        );
-      this.queueSection
-        .querySelectorAll<HTMLButtonElement>("[data-preempt]")
-        .forEach((button) =>
-          button.addEventListener("click", () => {
-            void this.preemptCampaign(button.dataset.preempt ?? "");
-          }),
-        );
-    } catch {
-      this.queueSection.innerHTML = `<div class="note">the queue did not answer</div>`;
-    }
-  }
-
-  /** The run's own account of itself, from the control plane. */
-  private async refreshStatus(): Promise<void> {
-    if (!this.newRunSection) return;
-    try {
-      const response = await fetch("/api/control");
-      const body = (await response.json()) as {
-        control?: { paused: boolean; cancel: boolean };
-        status?: {
-          stage: string;
-          cells_done: number;
-          in_flight: number;
-        } | null;
-        readable: boolean;
-        error: string | null;
-      };
-      if (!body.readable) {
-        this.newRunNote!.textContent =
-          body.error ?? "the control plane could not be read";
-        return;
+      this.profiles = profiles ?? [];
+      this.axes = axesResponse?.axes ?? [];
+      if (this.profileSelect) {
+        this.profileSelect.innerHTML = this.profiles.map((p) => `<option value="${p.name}">${p.name}</option>`).join("");
+        this.renderProfileNote();
       }
-      const status = body.status;
-      this.newRunNote!.textContent = status
-        ? `The run is in ${status.stage} with ${status.cells_done} cells measured.`
-        : "No run is reporting. The panel can still start one.";
-    } catch {
-      this.newRunNote!.textContent = "the server did not answer";
-    }
+    } catch { /* ignore */ }
   }
 
-  /** The run the panel is about. */
-  private currentRunId(): string | null {
-    return runSelection.selectedId ?? null;
-  }
-
-  private renderProfileOptions(): void {
-    if (!this.profileSelect) return;
-    this.profileSelect.innerHTML = "";
-    for (const profile of this.profiles) {
-      const option = document.createElement("option");
-      option.value = profile.name;
-      option.textContent = profile.name;
-      this.profileSelect.appendChild(option);
-    }
-    this.renderProfileNote();
-  }
-
-  /** What the chosen profile declares, before the reader edits anything. */
   private renderProfileNote(): void {
-    if (!this.profileNote || !this.profileSelect) return;
-    const profile = this.profiles.find(
-      (candidate) => candidate.name === this.profileSelect!.value,
-    );
-    if (!profile) {
-      this.profileNote.textContent = "";
+    if (!this.profileSelect || !this.profileNote) return;
+    const p = this.profiles.find((x) => x.name === this.profileSelect!.value);
+    if (!p) return;
+    const axesStr = p.axes.map((a) => a.axis).join(", ");
+    this.profileNote.innerHTML = `
+      <div style="margin-bottom: 4px;"><strong>${p.description || "No description"}</strong></div>
+      <div style="font-size: 10px; color: var(--text-secondary);">
+        Task: ${p.task} · Fidelity: ${p.fidelity} · Axes: ${axesStr}
+      </div>
+      <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+        Seeds: ${p.n_seeds} · Epochs: ${p.epochs} · Budget: ${p.budget_seconds ? p.budget_seconds + "s" : "∞"} · Policy: ${p.policy}
+      </div>
+    `;
+    this.seedsInput!.value = String(p.n_seeds);
+    this.epochsInput!.value = String(p.epochs);
+    this.budgetInput!.value = p.budget_seconds ? String(p.budget_seconds) : "";
+    this.fidelitySelect!.value = p.fidelity;
+  }
+
+  private async refresh(): Promise<void> {
+    this.renderRun();
+    await this.renderQueue();
+    this.renderAxes();
+  }
+
+  private renderRun(): void {
+    if (!this.runSection) return;
+    const metrics = runSelection.selected;
+    if (!metrics?.run) {
+      this.runSection.innerHTML = `<div class="empty-state"><div class="icon">📋</div><div>No run selected</div><div style="margin-top: 4px; font-size: 10px;">Pick a run in the legend</div></div>`;
       return;
     }
-    this.profileNote.textContent = [
-      profile.description,
-      `fidelity ${profile.fidelity} · ${profile.n_seeds} seeds · ${profile.epochs} epochs`,
-      profile.budget_seconds
-        ? `budget ${profile.budget_seconds}s`
-        : "no budget",
-      `policy ${profile.policy}`,
-      `axes ${profile.axes.map((a) => a.axis).join(", ") || "all"}`,
-    ].join(" · ");
-    if (this.seedsInput) this.seedsInput.value = String(profile.n_seeds);
-    if (this.epochsInput) this.epochsInput.value = String(profile.epochs);
-    if (this.budgetInput) {
-      this.budgetInput.value = profile.budget_seconds
-        ? String(profile.budget_seconds)
-        : "";
-    }
-    if (this.fidelitySelect) this.fidelitySelect.value = profile.fidelity;
+    const r = metrics.run;
+    this.runSection.innerHTML = `
+      <table class="kv">
+        <tr><th>Run ID</th><td>${r.run_id?.slice(0, 12)}…</td></tr>
+        <tr><th>Profile</th><td>${r.profile}</td></tr>
+        <tr><th>Fidelity</th><td>${r.fidelity}</td></tr>
+        <tr><th>Mode</th><td>${r.mode}</td></tr>
+        <tr><th>Started</th><td>${r.started_at ? new Date(r.started_at).toLocaleString() : "—"}</td></tr>
+      </table>
+      <div class="note">This run's declaration is frozen.</div>
+    `;
   }
 
-  /** One select per axis, so a cell can be named without the 3D scene. */
-  private renderCellOptions(): void {
-    for (const axis of CELL_AXES) {
-      const select = this.cellSelects.get(axis);
-      if (!select) continue;
-      const available = this.axes.find((a) => a.axis === axis);
-      select.innerHTML = "";
-      for (const primitive of available?.primitives ?? []) {
-        const option = document.createElement("option");
-        option.value = primitive.name;
-        option.textContent = primitive.available
-          ? primitive.name
-          : `${primitive.name} (unavailable)`;
-        option.disabled = !primitive.available;
-        select.appendChild(option);
-      }
-      const first = select.querySelector<HTMLOptionElement>(
-        "option:not([disabled])",
-      );
-      if (first) select.value = first.value;
-    }
-  }
-
-  private renderRun(
-    run:
-      | {
-          run_id: string;
-          status: string;
-          records: number;
-          seeds_owed?: number;
-          declaration?: Record<string, unknown>;
-        }
-      | undefined,
-  ): string {
-    if (!run) {
-      return `<div class="note">no run is selected</div>`;
-    }
-    const declaration = run.declaration ?? {};
-    const rows: [string, string][] = [
-      ["run", run.run_id],
-      ["status", String(run.status)],
-      ["profile", String(declaration.profile ?? "—")],
-      ["tasks", ((declaration.tasks as string[]) ?? []).join(", ") || "—"],
-      ["fidelity", String(declaration.fidelity ?? "—")],
-      [
-        "objectives",
-        ((declaration.objectives as string[]) ?? []).join(", ") || "—",
-      ],
-      ["mode", String(declaration.mode ?? "—")],
-      ["declared cells", String(declaration.declared_cells ?? "—")],
-      ["records", String(run.records)],
-      ["seeds still owed", String(run.seeds_owed ?? "—")],
-    ];
-    return [
-      `<div class="note">A run's declaration is frozen once it has begun; the panel shows it rather than offering an editor that would lie.</div>`,
-      `<table class="kv">${rows
-        .map(([key, value]) => `<tr><th>${key}</th><td>${value}</td></tr>`)
-        .join("")}</table>`,
-    ].join("");
-  }
-
-  private renderQueue(
-    campaigns: Campaign[],
-    queue: Record<string, unknown>,
-  ): string {
-    const rows = campaigns
-      .map(
-        (campaign) => `<tr>
-          <td>${campaign.campaign_id}</td>
-          <td>${campaign.name}</td>
-          <td>${campaign.status}</td>
-          <td>
-            <button data-cancel="${campaign.campaign_id}" class="mini">cancel</button>
-            <button data-preempt="${campaign.campaign_id}" class="mini">preempt</button>
-          </td>
-        </tr>`,
-      )
-      .join("");
-    const ceilings: [string, string][] = [
-      ["max concurrent", String(queue.max_concurrent ?? "—")],
-      ["max cpus", String(queue.max_cpus ?? "—")],
-      ["max gpus", String(queue.max_gpus ?? "—")],
-    ];
-    return [
-      `<table class="kv">${ceilings
-        .map(([key, value]) => `<tr><th>${key}</th><td>${value}</td></tr>`)
-        .join("")}</table>`,
-      rows
-        ? `<table class="list"><tr><th>id</th><th>name</th><th>status</th><th></th></tr>${rows}</table>`
-        : `<div class="note">the queue is empty</div>`,
-    ].join("");
-  }
-
-  /** Start the run the reader described. */
-  private async startRun(): Promise<void> {
-    if (!this.profileSelect) return;
-    const overrides: Record<string, unknown> = {};
-    if (this.seedsInput?.value)
-      overrides.n_seeds = Number(this.seedsInput.value);
-    if (this.epochsInput?.value)
-      overrides.epochs = Number(this.epochsInput.value);
-    if (this.budgetInput?.value) {
-      overrides.budget_seconds = Number(this.budgetInput.value);
-    }
-    if (this.fidelitySelect?.value) {
-      overrides.fidelity = this.fidelitySelect.value;
-    }
+  private async renderQueue(): Promise<void> {
+    if (!this.queueSection) return;
     try {
-      const response = await fetch("/api/runs", {
+      const res = await fetch("/api/queue");
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const campaigns = data.campaigns ?? [];
+      if (!campaigns.length) {
+        this.queueSection.innerHTML = `<div class="empty-state"><div class="icon">📦</div><div>No campaigns queued</div></div>`;
+        return;
+      }
+      this.queueSection.innerHTML = `
+        <table class="list">
+          <thead><tr><th>Campaign</th><th>Status</th><th>Priority</th><th></th></tr></thead>
+          <tbody>
+            ${campaigns.map((c: Campaign) => `
+              <tr>
+                <td>${c.name}</td>
+                <td>${c.status}</td>
+                <td>${c.priority}</td>
+                <td><button class="mini" data-cancel="${c.campaign_id}">Cancel</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      for (const btn of this.queueSection.querySelectorAll<HTMLButtonElement>("[data-cancel]")) {
+        btn.addEventListener("click", () => this.cancelCampaign(btn.dataset.cancel!));
+      }
+    } catch { this.queueSection.innerHTML = `<div class="empty-state"><div class="icon">⚠</div><div>Cannot load queue</div></div>`; }
+  }
+
+  private renderAxes(): void {
+    if (!this.cellNote) return;
+    const axes = this.axes.find((a) => a.axis === "credit")?.primitives ?? [];
+    if (!axes.length) return;
+    for (const [axis, select] of this.cellSelects) {
+      const options = this.axes.find((a) => a.axis === axis)?.primitives ?? [];
+      const current = select.value;
+      select.innerHTML = `<option value="">—</option>` + options.map((o) => `<option value="${o.name}" ${!o.available ? "disabled" : ""}>${o.name}${!o.available ? " (unavailable)" : ""}</option>`).join("");
+      if (options.some((o) => o.name === current)) select.value = current;
+    }
+    this.cellNote.textContent = "Pick axes for the cell, then use the action buttons. Shift+R/P/Q also work from anywhere.";
+  }
+
+  private async startRun(): Promise<void> {
+    const btn = this.container!.querySelector<HTMLButtonElement>(".start")!;
+    btn.disabled = true;
+    btn.textContent = "Starting…";
+    try {
+      const res = await fetch("/api/run/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          profile: this.profileSelect.value,
-          overrides,
-          device: this.deviceSelect?.value ?? undefined,
+          profile: this.profileSelect!.value,
+          device: this.deviceSelect!.value,
+          n_seeds: Number(this.seedsInput!.value),
+          epochs: Number(this.epochsInput!.value),
+          budget_seconds: this.budgetInput!.value ? Number(this.budgetInput!.value) : null,
+          fidelity: this.fidelitySelect!.value,
         }),
       });
-      const body = (await response.json()) as {
-        started?: boolean;
-        error?: string;
-        command?: string;
-        campaign_id?: string;
-      };
-      if (body.started) {
-        this.newRunNote!.textContent = `The run is queued as ${body.campaign_id}.`;
-      } else {
-        this.newRunNote!.textContent = `${body.error ?? "the run was refused"}. ${
-          body.command ?? ""
-        }`;
-      }
-    } catch {
-      this.newRunNote!.textContent = "the dashboard could not reach the server";
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Failed");
+      if (this.newRunNote) this.newRunNote.textContent = body.message || "Run started";
+      runSelection.select(body.run_id ?? null);
+    } catch (e) {
+      if (this.newRunNote) this.newRunNote.textContent = (e as Error).message;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Start run <span class="kbd">Z</span>';
     }
   }
 
-  /** The cell the reader named, as the cell verbs want it. */
-  private cellCoordinate(): Record<string, string> {
+  private async cellAction(action: string): Promise<void> {
     const coordinate: Record<string, string> = {};
-    for (const axis of CELL_AXES) {
-      coordinate[axis] = this.cellSelects.get(axis)?.value ?? "";
+    for (const [axis, select] of this.cellSelects) {
+      if (select.value) coordinate[axis] = select.value;
     }
-    return coordinate;
-  }
-
-  /** One of the three cell verbs, without a click in the 3D scene. */
-  private async cellAction(
-    action: "replicate" | "preregister" | "quest",
-  ): Promise<void> {
-    const runId = this.currentRunId();
-    if (!runId) {
-      this.cellNote!.textContent = "no run is selected";
-      return;
-    }
+    if (!Object.keys(coordinate).length) { this.cellNote!.textContent = "Select at least one axis"; return; }
+    this.cellNote!.textContent = "Sending…";
     try {
-      const response = await fetch(`/api/cells/${runId}/${action}`, {
+      const res = await fetch("/api/cell/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coordinate: this.cellCoordinate() }),
+        body: JSON.stringify({ run_id: runSelection.selectedId, coordinate, action }),
       });
-      const body = (await response.json()) as {
-        error?: string;
-        message?: string;
-      };
-      this.cellNote!.textContent =
-        body.error ?? body.message ?? `${action} was refused`;
-    } catch {
-      this.cellNote!.textContent = "the dashboard could not reach the server";
-    }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Failed");
+      this.cellNote!.textContent = body.message || "Done";
+      if (action === "replicate" || action === "quest") cellDrawer.hide();
+    } catch (e) { this.cellNote!.textContent = (e as Error).message; }
   }
 
   private async cancelCampaign(campaignId: string): Promise<void> {
-    await fetch(`/api/campaigns/${campaignId}/cancel`, { method: "POST" });
-    await this.refreshQueue();
-  }
-
-  private async preemptCampaign(campaignId: string): Promise<void> {
-    await fetch(`/api/campaigns/${campaignId}/preempt`, { method: "POST" });
-    await this.refreshQueue();
-  }
-
-  /** Take the picture away: the script, the report, or the records. */
-  private async export(what: "script" | "report" | "records"): Promise<void> {
-    const runId = this.currentRunId();
-    if (!runId) {
-      this.exportNote!.textContent = "no run is selected";
-      return;
-    }
+    if (!confirm(`Cancel campaign ${campaignId}?`)) return;
     try {
-      if (what === "script") {
-        const body = (await fetch("/api/narration").then((r) => r.json())) as {
-          script?: string;
-        };
-        this.download("narration.txt", body.script ?? "");
-        this.exportNote!.textContent = "the narration script was taken";
-        return;
-      }
-      const endpoint = what === "report" ? "report" : "records";
-      const body = (await fetch(`/api/runs/${runId}/${endpoint}`).then((r) =>
-        r.json(),
-      )) as { report?: string; records?: unknown[]; error?: string };
-      if (body.error) {
-        this.exportNote!.textContent = body.error;
-        return;
-      }
-      const text =
-        what === "report"
-          ? (body.report ?? "")
-          : JSON.stringify(body.records ?? [], null, 2);
-      this.download(
-        `${runId}-${endpoint}.${what === "report" ? "txt" : "json"}`,
-        text,
-      );
-      this.exportNote!.textContent = `the ${what} was taken`;
-    } catch {
-      this.exportNote!.textContent = "the dashboard could not reach the server";
-    }
+      await fetch(`/api/queue/${campaignId}`, { method: "DELETE" });
+      this.renderQueue();
+    } catch { /* ignore */ }
   }
 
-  /** Hand a file to the reader. */
-  private download(name: string, text: string): void {
-    const blob = new Blob([text], { type: "text/plain" });
-    const link = document.createElement("a");
-    link.download = name;
-    link.href = URL.createObjectURL(blob);
-    link.click();
-    URL.revokeObjectURL(link.href);
+  private async export(type: string): Promise<void> {
+    const runId = runSelection.selectedId;
+    if (!runId) { this.exportNote!.textContent = "No run selected"; return; }
+    this.exportNote!.textContent = "Preparing…";
+    try {
+      const res = await fetch(`/api/export/${type}?run_id=${runId}`);
+      if (!res.ok) throw new Error("Failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${type}-${runId.slice(0, 8)}.${type === "records" ? "json" : "txt"}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.exportNote!.textContent = "Downloaded";
+    } catch { this.exportNote!.textContent = "Export failed"; }
   }
 }
 

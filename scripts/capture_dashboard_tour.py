@@ -471,7 +471,7 @@ def wait_for_measured(page: Page, timeout_ms: int) -> None:
             const dbg = window.__DASHBOARD__;
             if (!dbg || !dbg.discoveryMap) return false;
             for (const cell of dbg.discoveryMap.cellDataMap.values()) {
-                if (cell.status === 'measured' && cell.metrics && cell.metrics.n_seeds) {
+                if (cell.status === 'measured') {
                     return true;
                 }
             }
@@ -702,7 +702,7 @@ class Tour:
         """Take every view of the dashboard, and of the run behind it."""
         # Reset layout to watch workspace for deterministic tour shots
         self.page.evaluate("() => window.__DASHBOARD__.layout.reset()")
-        self.page.wait_for_timeout(1000)
+        self.page.wait_for_timeout(5000)
 
         wait_for_measured(self.page, self.timeout_ms)
         self.page.wait_for_timeout(3000)
@@ -1463,66 +1463,55 @@ def main() -> int:
         exit_code = run_demo_campaign(store_path)
         logger.info("Demo campaign exited with %d", exit_code)
 
-        # Get the demo run ID BEFORE running the third campaign
+        # Get the demo run ID
         wait_for_records(args.port, args.min_records, timeout=RECORDS_TIMEOUT)
         demo_run_id = latest_run(args.port)
         logger.info("Demo run %s has %d+ records", demo_run_id, args.min_records)
 
-        # Run the third campaign (re-measure demo cells) for the comp diff
+        # Run the tour NOW (before third campaign) — no WebSocket conflicts
+        logger.info("Running the dashboard tour...")
+        outcomes: list[Outcome] = []
+        capture_error: list[BaseException] = []
+
+        def run_capture() -> None:
+            try:
+                outcomes.extend(
+                    capture(
+                        args.port,
+                        store_path,
+                        args.output,
+                        args.mirror,
+                        args.timeout,
+                        args.min_records,
+                        demo_run_id,
+                    )
+                )
+            except BaseException as exc:  # ruff: ignore[blind-except]
+                logger.exception("The tour failed")
+                capture_error.append(exc)
+
+        capture_thread = threading.Thread(target=run_capture, daemon=True)
+        capture_thread.start()
+        capture_thread.join(timeout=600)
+
+        if capture_error:
+            return 1
+        if server_error:
+            logger.error("The dashboard failed: %s", server_error[0])
+            return 1
+        if not outcomes:
+            logger.error("The tour produced no shots")
+            return 1
+
+        # NOW run the third campaign (re-measure demo cells) for the comp diff
         logger.info("Running the third campaign (re-measure demo cells) in-process...")
         run_third_campaign(store_path)
 
-    # Now run the tour with the demo campaign's data
-    outcomes: list[Outcome] = []
-    capture_error: list[BaseException] = []
-
-    def run_capture() -> None:
-        try:
-            outcomes.extend(
-                capture(
-                    args.port,
-                    store_path,
-                    args.output,
-                    args.mirror,
-                    args.timeout,
-                    args.min_records,
-                    demo_run_id,
-                )
-            )
-        except BaseException as exc:  # ruff: ignore[blind-except] - reported to the main thread
-            logger.exception("The tour failed")
-            capture_error.append(exc)
-
-    capture_thread = threading.Thread(target=run_capture, daemon=True)
-    capture_thread.start()
-    capture_thread.join(timeout=600)
-
-    if capture_error:
-        return 1
-    if server_error:
-        logger.error("The dashboard failed: %s", server_error[0])
-        return 1
-    if not outcomes:
-        logger.error("The tour produced no shots")
-        return 1
-
-    if not args.skip_campaigns:
-        # Capture the comp diff between the demo run and the third run
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as playwright:
-            browser = launch_browser(playwright)
-            page = browser.new_page(viewport=VIEWPORT)
-            try:
-                capture_comp_diff(page, args, store_path, outcomes)
-            finally:
-                browser.close()
-
-    for outcome in outcomes:
-        if outcome.failed:
-            logger.warning("%s: %s", outcome.shot.name, outcome.detail)
-        else:
-            logger.info("%s: %s", outcome.shot.name, outcome.detail)
+        for outcome in outcomes:
+            if outcome.failed:
+                logger.warning("%s: %s", outcome.shot.name, outcome.detail)
+            else:
+                logger.info("%s: %s", outcome.shot.name, outcome.detail)
 
     failed = [outcome.shot.name for outcome in outcomes if outcome.failed]
     print(

@@ -5,6 +5,7 @@ import { OrbitControls } from "three-stdlib";
 import "./dashboard.css";
 import { router, wsClient } from "./ws-client.js";
 import { setSceneContext } from "./components/context.js";
+import { registry } from "./components/registry.js";
 import { controlBar } from "./control-bar.js";
 import { controlPanel } from "./control-panel.js";
 import { discoveryMap } from "./discovery-map.js";
@@ -14,12 +15,16 @@ import { liveRail } from "./live-rail.js";
 import { caption } from "./caption.js";
 import { hud } from "./hud.js";
 import { viewSwitcher } from "./stage/switcher.js";
+import { runSelection } from "./run-selection.js";
 import { helpOverlay } from "./help-overlay.js";
-import { initPalette, palette } from "./palette.js";
-import { panels } from "./panels.js";
-import { layout } from "./layout.js";
+import { initPalette, openPalette } from "./palette.js";
+import { panels, getPanelElement } from "./panels.js";
+import { applyPreset, reset, applyWorkspace } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { detectRenderProfile } from "./render-profile.js";
+import { initHints } from "./hints.js";
+import { layoutManager, registerLayoutComponent } from "./layout-manager.js";
+import { menubar } from "./menubar.js";
 import type { Binding } from "./bindings.js";
 
 // Global error handler
@@ -98,13 +103,37 @@ wsClient.waitForConnection(15000).then((connected) => {
 // Components self-register with the registry on import; the registry
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
+function getPanelElementFn(id: string) {
+  return () => getPanelElement(id);
+}
+
+// Register core panels as layout components
+registerLayoutComponent("control-bar", getPanelElementFn("control-bar"));
+registerLayoutComponent("live-rail", getPanelElementFn("live-rail"));
+registerLayoutComponent("caption", getPanelElementFn("caption"));
+registerLayoutComponent("legend", getPanelElementFn("discovery-legend"));
+registerLayoutComponent("hud", getPanelElementFn("hud"));
+registerLayoutComponent("control-panel", getPanelElementFn("control-panel"));
+registerLayoutComponent("cell-drawer", getPanelElementFn("cell-drawer"));
+registerLayoutComponent("pareto", getPanelElementFn("plotter-pareto"));
+registerLayoutComponent("ablation", getPanelElementFn("plotter-ablation"));
+registerLayoutComponent("variability", getPanelElementFn("plotter-variability"));
+
 // Wire binding actions after components initialize
+// Initialize the registry (which initializes all registered components including
+// layoutManager and menubar), then wire up bindings.
 document.addEventListener("DOMContentLoaded", async () => {
-  // Initialize layout manager first (sets up docks, restores workspace)
-  await layout.init();
+  // Initialize all registered components via the registry
+  await registry.initAll();
+
+  // Apply default watch preset
+  applyPreset("watch");
 
   // Initialize command palette
   await initPalette();
+
+  // Initialize keyboard hints (Shift to show)
+  initHints();
 
   setAction("chart-pareto", () => plotter.showTab("pareto"));
   setAction("chart-ablation", () => plotter.showTab("ablation"));
@@ -133,6 +162,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   );
 
   setAction("help", () => helpOverlay.toggle());
+  setAction("palette", () => openPalette());
+  setAction("collapse-all", () => {
+    for (const panel of panels.list()) {
+      if (panel.isOpen()) panel.toggle();
+    }
+  });
   setAction("escape", () => {
     if (cellDrawer.hasCellSelected()) cellDrawer.hide();
     else helpOverlay.hide();
@@ -287,7 +322,6 @@ function animate(time: number): void {
 
   // Update components that need per-frame updates
   discoveryMap.update(delta);
-  hud.update(delta);
 
   renderer.render(scene, camera);
 }
@@ -312,10 +346,10 @@ requestAnimationFrame(animate);
   controlBar,
   controlPanel,
   panels,
-  layout,
-  palette,
+  layout: { reset, applyWorkspace },
   wsClient,
   router,
+  runSelection,
   bindings: {
     list: () =>
       allBindings().map((b) => ({

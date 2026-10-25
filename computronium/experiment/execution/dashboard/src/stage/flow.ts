@@ -14,6 +14,7 @@
 import { PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
+import { registerView } from "./registry.js";
 import { stageState } from "./store.js";
 import type { FlowStage } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
@@ -176,3 +177,5 @@ export class FlowView implements StageView {
     });
   }
 }
+
+registerView(new FlowView());

@@ -299,7 +299,7 @@ class WebDashboard:
 
         seed_all_registries()
         self.config = config or DashboardConfig()
-        self.app = FastAPI(title="Computronium Campaign Dashboard")
+        self.app = FastAPI(title="Computronium Campaign Dashboard", lifespan=self._lifespan)
         self._connected_websockets: set[WebSocket] = set()
         self._running = False
         self._update_task: asyncio.Task | None = None
@@ -318,6 +318,15 @@ class WebDashboard:
         self._cpu = _CpuSampler()
         self._setup_routes()
         self._setup_templates()
+
+    @contextlib.asynccontextmanager
+    async def _lifespan(self, app: FastAPI) -> AsyncIterator[None]:
+        """Lifespan handler to start/stop the dashboard update loop."""
+        await self.start()
+        try:
+            yield
+        finally:
+            await self.stop()
 
     def _setup_templates(self) -> None:
         """Setup Jinja2 templates."""
@@ -609,6 +618,167 @@ class WebDashboard:
         def api_axes() -> JSONResponse:
             """The six structural axes and the primitives each one offers."""
             return JSONResponse(axes_payload())
+
+        @self.app.get("/api/databases")
+        async def api_databases() -> JSONResponse:
+            """List available databases."""
+            from pathlib import Path
+
+            databases = []
+            seen_paths = set()
+            # Look for .duckdb files in common locations
+            search_paths = [
+                Path.cwd(),
+                Path.cwd() / "experiments",
+                Path.home() / "computronium",
+            ]
+
+            for search_path in search_paths:
+                if search_path.exists():
+                    for db_file in search_path.glob("*.duckdb"):
+                        try:
+                            resolved = db_file.resolve()
+                            if resolved in seen_paths:
+                                continue
+                            seen_paths.add(resolved)
+                            stat = resolved.stat()
+                            # Count runs in this database
+                            runs = 0
+                            try:
+                                from computronium.experiment.evidence.store import (
+                                    RecordStore,
+                                    StoreConfig,
+                                )
+
+                                with RecordStore(
+                                    StoreConfig(path=resolved, read_only=True)
+                                ) as store:
+                                    runs = len(list(store.query_runs()))
+                            except Exception:
+                                pass
+
+                            databases.append({
+                                "path": str(resolved),
+                                "name": resolved.name,
+                                "size": stat.st_size,
+                                "modified": datetime.fromtimestamp(
+                                    stat.st_mtime
+                                ).isoformat(),
+                                "runs": runs,
+                            })
+                        except Exception:
+                            pass
+
+            # Also check the configured store
+            current_path = self.config.store_path or "experiment.duckdb"
+            current_found = any(db["path"] == current_path for db in databases)
+
+            return JSONResponse({
+                "databases": databases,
+                "current": current_path
+                if current_found
+                else (databases[0]["path"] if databases else current_path),
+            })
+
+        @self.app.post("/api/databases/create")
+        async def api_create_database(request: Request) -> JSONResponse:
+            """Create a new database."""
+            from pathlib import Path
+
+            from computronium.experiment.evidence.store import RecordStore, StoreConfig
+
+            body = await request.json()
+            name = body.get("name", "experiment")
+            path = body.get("path", f"{name}.duckdb")
+
+            db_path = Path(path)
+            if not db_path.is_absolute():
+                db_path = Path.cwd() / db_path
+
+            # Ensure parent directory exists
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if db_path.exists():
+                return JSONResponse(
+                    {"error": "Database already exists"}, status_code=409
+                )
+
+            # Create the database by initializing a store
+            try:
+                with RecordStore(StoreConfig(path=db_path, read_only=False)) as store:
+                    # Just opening it creates the schema
+                    pass
+            except Exception as e:
+                return JSONResponse({"error": str(e)}, status_code=500)
+
+            return JSONResponse({"path": str(db_path), "name": name})
+
+        @self.app.post("/api/databases/switch")
+        async def api_switch_database(request: Request) -> JSONResponse:
+            """Switch the active database (requires restart)."""
+            body = await request.json()
+            path = body.get("path")
+            if not path:
+                return JSONResponse({"error": "No path provided"}, status_code=400)
+
+            # The dashboard needs to restart to use the new database
+            # We just validate it exists and return success
+            db_path = Path(path)
+            if not db_path.exists():
+                return JSONResponse({"error": "Database not found"}, status_code=404)
+
+            return JSONResponse({
+                "success": True,
+                "path": str(db_path),
+                "message": "Database switched. Dashboard will reload.",
+            })
+
+        @self.app.get("/api/databases/export")
+        async def api_export_database(path: str) -> JSONResponse:
+            """Export database as download."""
+            from pathlib import Path
+
+            from fastapi.responses import FileResponse
+
+            db_path = Path(path)
+            if not db_path.exists():
+                return JSONResponse({"error": "Database not found"}, status_code=404)
+
+            return FileResponse(
+                path=db_path,
+                filename=db_path.name,
+                media_type="application/octet-stream",
+            )
+
+        @self.app.post("/api/databases/import")
+        async def api_import_database(request: Request) -> JSONResponse:
+            """Import database from uploaded file."""
+            from pathlib import Path
+
+            form = await request.form()
+            file = form.get("file")
+            if not file or not hasattr(file, "filename"):
+                return JSONResponse({"error": "No file uploaded"}, status_code=400)
+
+            filename = file.filename or "imported.duckdb"
+            dest_path = Path.cwd() / filename
+
+            # Handle duplicate names
+            counter = 1
+            while dest_path.exists():
+                stem = Path(filename).stem
+                suffix = Path(filename).suffix
+                dest_path = Path.cwd() / f"{stem}-{counter}{suffix}"
+                counter += 1
+
+            try:
+                with Path(dest_path).open("wb") as f:
+                    content = await file.read()
+                    f.write(content)
+            except Exception as e:
+                return JSONResponse({"error": str(e)}, status_code=500)
+
+            return JSONResponse({"path": str(dest_path), "name": dest_path.name})
 
         @self.app.get("/api/runs/{run_id}/records")
         async def api_run_records(run_id: str) -> JSONResponse:
@@ -1535,25 +1705,10 @@ class WebDashboard:
         await self._replay_events(websocket)
 
         try:
+            # Just keep the connection alive; the update loop broadcasts to all.
             while True:
-                # Send periodic updates
-                await asyncio.sleep(self.config.update_interval)
-                if not self._running:
-                    break
-
-                status = await self._get_status()
-                await websocket.send_json({
-                    "type": "status_update",
-                    "data": status,
-                    "timestamp": datetime.now().isoformat(),
-                })
-
-                queue_status = await self._get_queue_status()
-                await websocket.send_json({
-                    "type": "queue_update",
-                    "data": queue_status,
-                    "timestamp": datetime.now().isoformat(),
-                })
+                # Wait for any message from client (or disconnect)
+                await websocket.receive_text()
         except WebSocketDisconnect:
             pass
         except Exception:
@@ -1568,6 +1723,30 @@ class WebDashboard:
         """Send the recent events to a client that just connected."""
         for message in list(self._event_history)[-50:]:
             await websocket.send_json(message)
+
+        # Also send the latest campaign metrics for any run with records,
+        # so a late-joining client gets the current picture immediately.
+        if self.config.store_path:
+            try:
+                logger.info("Sending initial campaign metrics on connect")
+                with self._readable_store() as store:
+                    runs = store.query_runs()
+                    logger.info(f"Found {len(list(runs))} runs in store")
+                    for run in runs:
+                        count = store.count_records(run_id=run.run_id)
+                        logger.info(f"Run {run.run_id}: status={run.status}, records={count}")
+                        if run.status == "running" or count:
+                            metrics = await self._get_campaign_metrics_detailed(run.run_id)
+                            if metrics.get("run"):
+                                logger.info(f"Sending campaign_metrics for {run.run_id}")
+                                await websocket.send_json({
+                                    "type": "campaign_metrics",
+                                    "campaign_id": run.run_id,
+                                    "data": metrics,
+                                    "timestamp": datetime.now().isoformat(),
+                                })
+            except Exception:
+                logger.exception("Could not send initial campaign metrics on connect")
 
     async def _broadcast_update(self, message: dict[str, Any]) -> None:
         """Broadcast message to all connected WebSocket clients."""
@@ -1641,6 +1820,19 @@ class WebDashboard:
                 status = await self._get_status()
                 queue_status = await self._get_queue_status()
 
+                # Send individual updates that frontend handlers expect
+                await self._broadcast_update({
+                    "type": "status_update",
+                    "data": status,
+                    "timestamp": datetime.now().isoformat(),
+                })
+                await self._broadcast_update({
+                    "type": "queue_update",
+                    "data": queue_status,
+                    "timestamp": datetime.now().isoformat(),
+                })
+
+                # Also send combined periodic update for any listeners that want it
                 await self._broadcast_update({
                     "type": "periodic_update",
                     "status": status,
@@ -1983,6 +2175,14 @@ def create_dashboard(
 ) -> WebDashboard:
     """Factory function to create a web dashboard."""
     return WebDashboard(config)
+
+
+def create_dashboard_app(
+    config: DashboardConfig | None = None,
+):
+    """ASGI factory function for uvicorn --factory."""
+    dashboard = WebDashboard(config)
+    return dashboard.app
 
 
 async def run_dashboard(

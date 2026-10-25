@@ -9,6 +9,7 @@
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawCategoryFrame, drawNote } from "./plot2d.js";
+import { registerView } from "./registry.js";
 import { stageState } from "./store.js";
 import type { StageView, ViewGroup } from "./views.js";
 
@@ -241,3 +242,5 @@ export class SpreadView implements StageView {
     this.drawn = true;
   }
 }
+
+registerView(new SpreadView());

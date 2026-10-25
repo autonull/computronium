@@ -15,11 +15,13 @@ import * as THREE from "three";
 import { registry } from "./components/registry.js";
 import { getSceneContext } from "./components/context.js";
 import { PANEL_KEYS } from "./keys.js";
-import { registerDisplayPanel } from "./panels.js";
+import { registerDisplayPanel, panels } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
 import { ARM_COLORS, PALETTE } from "./colors.js";
 import { runSelection } from "./run-selection.js";
+import { viewSwitcher } from "./stage/switcher.js";
+import { openPalette } from "./palette.js";
 import axisMetadata from "./axis-metadata.json";
 import { frameBox } from "./stage/framing.js";
 import {
@@ -99,6 +101,8 @@ export class DiscoveryMap implements Component {
 
     this.setupInteraction();
     this.createLegend();
+    this.createRunPicker();
+    this.updateRunPicker();
     this.createReadout();
 
     // The stage's state is the map's state: the space, the records and the
@@ -170,11 +174,19 @@ export class DiscoveryMap implements Component {
     const axesBlock = this.legendElement?.querySelector(
       "#legend-axes-block",
     ) as HTMLElement;
+    const summaryEl = this.legendElement?.querySelector(
+      "#legend-summary",
+    ) as HTMLElement;
+    const actionsEl = this.legendElement?.querySelector(
+      "#legend-actions",
+    ) as HTMLElement;
 
     if (emptyState) emptyState.style.display = hasSpace ? "none" : "flex";
     if (view) view.style.display = hasSpace ? "block" : "none";
     if (armsBlock) armsBlock.style.display = hasArms ? "block" : "none";
     if (axesBlock) axesBlock.style.display = hasSpace ? "block" : "none";
+    if (summaryEl) summaryEl.style.display = hasSpace ? "flex" : "none";
+    if (actionsEl) actionsEl.style.display = hasSpace ? "flex" : "none";
 
     // Update cell count in title
     const countEl = this.legendElement?.querySelector(
@@ -189,6 +201,33 @@ export class DiscoveryMap implements Component {
         void: space.counts.void,
       };
       countEl.textContent = `${counts.measured + counts.legal + counts.void} cells`;
+
+      // Update summary
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <div class="legend-summary-item"><span class="legend-chip"><span class="dot" style="background: var(--measured);"></span>measured</span> ${counts.measured}</div>
+          <div class="legend-summary-item"><span class="legend-chip"><span class="dot" style="background: var(--legal-unmeasured); border: 2px solid var(--legal-unmeasured);"></span>legal</span> ${counts.legal}</div>
+          <div class="legend-summary-item"><span class="legend-chip"><span class="dot" style="background: transparent; border: 2px solid var(--void);"></span>void</span> ${counts.void}</div>
+          <div class="legend-summary-item"><span class="legend-chip"><span class="dot" style="background: var(--promoted);"></span>arms</span> ${arms.length}</div>
+        `;
+      }
+
+      // Update actions
+      if (actionsEl) {
+        actionsEl.innerHTML = `
+          <button class="legend-btn" data-action="cycle">V cycle views</button>
+          <button class="legend-btn" data-action="palette">: palette</button>
+          <button class="legend-btn" data-action="picker">Z start run</button>
+          <button class="legend-btn primary" data-action="run-picker">pick run</button>
+        `;
+        actionsEl.querySelector("[data-action=cycle]")!.addEventListener("click", () => viewSwitcher.cycle());
+        actionsEl.querySelector("[data-action=palette]")!.addEventListener("click", () => openPalette());
+        actionsEl.querySelector("[data-action=picker]")!.addEventListener("click", () => panels.toggle("control-panel"));
+        actionsEl.querySelector("[data-action=run-picker]")!.addEventListener("click", () => {
+          const select = this.legendElement?.querySelector<HTMLSelectElement>("#legend-run-picker");
+          if (select) select.focus();
+        });
+      }
     }
 
     this.refreshAxisOptions();
@@ -373,6 +412,7 @@ export class DiscoveryMap implements Component {
       dock: "bottom",
       defaultOpen: true,
     });
+    registerDisplayPanel("discovery-legend", "Discovery Map", "▦", () => this.legendElement, PANEL_KEYS.legend);
 
     this.createRunPicker();
     this.createAxisPicker();
@@ -382,6 +422,17 @@ export class DiscoveryMap implements Component {
 
   private legendBody(): string {
     return `
+      <style>
+        .legend-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; font-size: 10px; color: var(--text-secondary); }
+        .legend-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .legend-summary { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-size: 10px; }
+        .legend-summary-item { display: flex; align-items: center; gap: 4px; }
+        .legend-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .legend-btn { padding: 4px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer; }
+        .legend-btn:hover { background: var(--border); color: var(--text-primary); }
+        .legend-btn.primary { background: var(--gradient)22; border-color: var(--gradient)66; color: var(--gradient); }
+        .legend-btn.primary:hover { background: var(--gradient)33; border-color: var(--gradient); }
+      </style>
       <div id="legend-title" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
         <span style="font-weight: 600; color: var(--text-primary);">Discovery Map</span>
         <span id="legend-cell-count" style="font-size: 11px; color: var(--text-muted);"></span>
@@ -406,6 +457,7 @@ export class DiscoveryMap implements Component {
           <span style="font-size: 11px;">Void — system refuses</span>
         </div>
       </div>
+      <div id="legend-summary" class="legend-summary" style="display: none;"></div>
       <div id="legend-arms-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: none;">
         <div style="font-weight: 600; margin-bottom: 6px; font-size: 11px;">Credit Arms</div>
         <div id="legend-arms" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
@@ -415,11 +467,15 @@ export class DiscoveryMap implements Component {
         <select id="legend-run-picker"></select>
         <div id="legend-run" style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; min-height: 16px;"></div>
       </div>
-      <div id="legend-axes-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: none;">
-        <div style="font-weight: 600; margin-bottom: 6px; font-size: 11px;">Axes (click to change)</div>
-        <div id="legend-axis-picker" style="display: flex; flex-direction: column; gap: 5px;"></div>
-        <div id="legend-axes" style="font-size: 10px; color: var(--text-muted); margin-top: 6px;"></div>
+      <div id="legend-axes-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <span style="font-weight: 600; font-size: 11px;">Axes (click to change)</span>
+          <span style="font-size: 9px; color: var(--text-muted);">X Y Z = slice dimensions</span>
+        </div>
+        <div id="legend-axis-picker" style="display: flex; flex-direction: column; gap: 4px;"></div>
+        <div id="legend-axes" style="font-size: 9px; color: var(--text-muted); margin-top: 4px;"></div>
       </div>
+      <div id="legend-actions" class="legend-actions" style="display: none;"></div>
     `;
   }
 
@@ -532,7 +588,7 @@ export class DiscoveryMap implements Component {
       row.innerHTML = "";
       const label = document.createElement("span");
       label.textContent = dimension.toUpperCase();
-      label.style.cssText = "color: var(--text-secondary); width: 12px;";
+      label.style.cssText = "color: var(--text-primary); font-weight: 600; width: 16px; font-size: 10px;";
       row.appendChild(label);
 
       AXIS_NAMES.forEach((axis) => {
@@ -544,24 +600,42 @@ export class DiscoveryMap implements Component {
         button.disabled = taken.has(axis);
         button.style.cssText = `
           flex: 0 0 auto;
-          padding: 1px 5px;
-          background: ${active ? "var(--bg-primary)" : "var(--bg-tertiary)"};
-          border: 1px solid ${active ? "var(--border-bright)" : "var(--border)"};
+          padding: 2px 8px;
+          background: ${active ? "var(--gradient)22" : "var(--bg-tertiary)"};
+          border: 1px solid ${active ? "var(--gradient)66" : "var(--border)"};
           border-radius: 4px;
-          color: ${active ? "var(--text-primary)" : "var(--text-secondary)"};
+          color: ${active ? "var(--gradient)" : taken.has(axis) ? "var(--text-muted)" : "var(--text-secondary)"};
           font-size: 10px;
-          cursor: pointer;
-          opacity: ${taken.has(axis) ? 0.4 : 1};
+          font-weight: ${active ? "600" : "500"};
+          cursor: ${taken.has(axis) ? "not-allowed" : "pointer"};
+          opacity: ${taken.has(axis) ? 0.5 : 1};
+          transition: all 0.1s ease;
         `;
         button.addEventListener("click", () => {
-          stageState.setAxes({
-            ...stageState.axes,
-            [dimension]: axis,
-          });
+          stageState.setAxes({ ...stageState.axes, [dimension]: axis });
+        });
+        button.addEventListener("mouseenter", () => {
+          if (!button.disabled && !active) {
+            button.style.background = "var(--border)";
+            button.style.borderColor = "var(--border-bright)";
+          }
+        });
+        button.addEventListener("mouseleave", () => {
+          if (!button.disabled && !active) {
+            button.style.background = "var(--bg-tertiary)";
+            button.style.borderColor = "var(--border)";
+          }
         });
         row.appendChild(button);
       });
     });
+
+    // Update axes summary
+    const axesSummary = this.legendElement?.querySelector("#legend-axes");
+    if (axesSummary) {
+      const { x, y, z } = stageState.axes;
+      axesSummary.textContent = `Slice: ${x} × ${y} × ${z}  ·  Click an axis button to change`;
+    }
   }
 
   private updateLegendArms(): void {
@@ -979,19 +1053,12 @@ export class DiscoveryMap implements Component {
 
   private onCampaignMetrics = (data: any): void => {
     const metricsData = data?.data;
-    // A run that has started but not yet measured still names itself: its
-    // declaration is the space the grid draws, and the empty space is the
-    // truth about it. Waiting for the first record would show a blank
-    // canvas for the whole of the run.
     if (!metricsData?.run) return;
 
     const runId =
       typeof data?.campaign_id === "string" ? data.campaign_id : null;
     if (!runId) return;
 
-    // The grid shows one run at a time. A store holds several — a run, and
-    // the runs its own answers spawned — so the choice is made once, in the
-    // shared selection, and the legend names the run the picture shows.
     runSelection.observe(runId, metricsData);
   };
 

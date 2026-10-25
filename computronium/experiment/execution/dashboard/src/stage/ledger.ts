@@ -12,6 +12,7 @@
 import { ARM_COLORS, PALETTE } from "../colors.js";
 import { stageCanvas } from "./canvas2d.js";
 import { drawNote, drawTitle, wrapText } from "./plot2d.js";
+import { registerView } from "./registry.js";
 import { stageState } from "./store.js";
 import type { LedgerArm } from "./payloads.js";
 import type { StageView, ViewGroup } from "./views.js";
@@ -245,3 +246,5 @@ export class LedgerView implements StageView {
     this.drawn = true;
   }
 }
+
+registerView(new LedgerView());

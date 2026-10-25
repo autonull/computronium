@@ -108,13 +108,17 @@ interface AblationGroup {
 function createChartPanelBody(chart: ChartSpec): string {
   return `
     <div id="${chart.hostId}" style="flex: 1; position: relative; overflow: hidden;"></div>
-    <div class="chart-empty-state">
-      <div class="empty-icon">${chart.glyph}</div>
+    <div class="chart-empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center;">
+      <div class="empty-icon" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;">${chart.glyph}</div>
       <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${chart.title}</div>
-      <div style="font-size: 11px; color: var(--text-secondary); max-width: 280px; line-height: 1.5;">${getEmptyHint(chart.id)}</div>
+      <div style="font-size: 11px; color: var(--text-secondary); max-width: 280px; line-height: 1.5; margin-top: 6px;">${getEmptyHint(chart.id)}</div>
+      <div style="margin-top: 12px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-size: 10px; color: var(--text-muted);">
+        Press <kbd style="font-family: monospace; padding: 1px 5px; background: var(--bg); border: 1px solid var(--border-bright); border-radius: 3px;">${chart.key?.toUpperCase()}</kbd> to toggle · Pick a run in the legend
+      </div>
     </div>
-    <div class="chart-toolbar">
-      <span class="chart-status">No data</span>
+    <div class="chart-toolbar" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--border); background: var(--bg-tertiary); font-size: 10px;">
+      <span class="chart-status" style="color: var(--text-secondary);">No data</span>
+      <button class="chart-download" title="Download chart as PNG" style="background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; color: var(--text-secondary); font-size: 10px; cursor: pointer;">↓ PNG</button>
     </div>
   `;
 }
@@ -122,11 +126,11 @@ function createChartPanelBody(chart: ChartSpec): string {
 function getEmptyHint(chartId: string): string {
   switch (chartId) {
     case "pareto":
-      return "Shows validation accuracy vs. speed for each measured cell. Pareto frontier cells are not dominated on both axes.";
+      return "Validation accuracy vs. speed per cell. Pareto frontier = not dominated on both axes.";
     case "ablation":
-      return "Shows how each credit arm performs when other axes are held fixed. Error bars = ±1 std dev. Dashed line = chance level.";
+      return "Credit arm performance with other axes fixed. Error bars = ±1σ. Dashed = chance.";
     case "variability":
-      return "Shows seed-to-seed spread per credit arm. Box = IQR, line = median, whiskers = 1.5×IQR, dots = outliers. Dashed line = chance level.";
+      return "Seed-to-seed spread per arm. Box = IQR, line = median, whiskers = 1.5×IQR. Dashed = chance.";
     default:
       return "Select a run from the legend to populate this chart.";
   }
@@ -154,6 +158,8 @@ export class Plotter implements Component {
   private categoryLabels: string[] = [];
   /** The axes the ablation chart holds fixed. */
   private ablationFixedAxes = "";
+  /** Whether we've auto-opened the Pareto chart on first data. */
+  private paretoAutoOpened = false;
 
   constructor() {
     // Register WebSocket handlers IMMEDIATELY in constructor
@@ -191,7 +197,7 @@ export class Plotter implements Component {
         key: chart.key,
         body: createChartPanelBody(chart),
         dock: "right",
-        defaultOpen: chart.id === "pareto",
+        defaultOpen: false,
         className: "chart-panel",
         onToggle: (open) => {
           if (open) this.initPlot(chart.id);
@@ -284,6 +290,15 @@ export class Plotter implements Component {
     if (typeof metrics.chance === "number") this.chance = metrics.chance;
     this.updatePlots();
     this.updateStatus();
+
+    // Auto-open Pareto chart on first data arrival
+    if (this.records.length > 0 && !this.paretoAutoOpened) {
+      this.paretoAutoOpened = true;
+      const paretoPanel = this.chartPanels.get("pareto");
+      if (paretoPanel && paretoPanel.classList.contains("panel-hidden")) {
+        panels.toggle("plotter-pareto");
+      }
+    }
   };
 
   private updateStatus(): void {
@@ -295,16 +310,12 @@ export class Plotter implements Component {
     for (const panel of this.chartPanels.values()) {
       const statusEl = panel.querySelector<HTMLElement>(".chart-status");
       const emptyState = panel.querySelector<HTMLElement>(".chart-empty-state");
-      const emptyHint = panel.querySelector<HTMLElement>(".chart-empty-hint");
       if (statusEl) {
         statusEl.textContent = hasData ? counts + fixed : "No run selected";
         statusEl.title = statusEl.textContent;
       }
       if (emptyState) {
         emptyState.style.display = hasData ? "none" : "flex";
-      }
-      if (emptyHint) {
-        emptyHint.style.display = hasData ? "none" : "flex";
       }
     }
   }
@@ -313,9 +324,7 @@ export class Plotter implements Component {
     const hasData = this.records.length > 0;
     for (const panel of this.chartPanels.values()) {
       const emptyState = panel.querySelector<HTMLElement>(".chart-empty-state");
-      const emptyHint = panel.querySelector<HTMLElement>(".chart-empty-hint");
       if (emptyState) emptyState.style.display = hasData ? "none" : "flex";
-      if (emptyHint) emptyHint.style.display = hasData ? "none" : "flex";
     }
     if (this.paretoPlot) this.updateParetoPlot();
     if (this.ablationPlot) this.updateAblationPlot();

@@ -10,7 +10,8 @@
   "dependencies": {
     "three": "^0.168.0",
     "three-stdlib": "^2.32.0",
-    "uplot": "^1.6.32"
+    "uplot": "^1.6.32",
+    "golden-layout": "^2.6.0"
   },
   "devDependencies": {
     "@types/three": "^0.168.0",
