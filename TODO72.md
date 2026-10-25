@@ -74,11 +74,12 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   trailing newlines.
   Probe after the change: layout host and command bus present; `hud` open +
   duplicate yields 2 views with distinct `{runId}` states and 0 nodes matching
-  `#hud`; all four definitions open together with no duplicate ids; listener
-  count 33 → 33 → 33; no page/console errors.
-  **Not yet done:** convert discovery-legend/plotter/control-panel/
-  cell-drawer to definitions; finish id normalization. P1 gate is partially
-  met (HUD + caption + rail + control bar), not closed.
+  `#hud`; all five definitions (hud, caption, live-rail, control-bar,
+  discovery-legend) open together with no duplicate ids; listener count
+  33 → 33 → 33; no page/console errors.
+  **Not yet done:** convert plotter (pareto/ablation/variability),
+  control-panel, cell-drawer to definitions; finish id normalization. P1
+  gate is partially met (5 of 8), not closed.
 
 The tree also carries the interim fix that defers `registerComponents()`
 until after component init, so the legacy GoldenLayout panels render while
@@ -366,9 +367,9 @@ across components must be limited to the component's own host.
 - [x] Add `layout/types.ts`, `layout/definitions.ts` (plus `commands.ts` and
   `persistence.ts` so the seam is complete).
 - [x] Absolute host and the HUD definition (first per-instance panel).
-- [x] Convert HUD, caption, live rail, control bar.
+- [x] Convert HUD, caption, live rail, control bar, discovery-legend.
 - [ ] Convert the remaining panels to definitions with per-instance factories:
-  `discovery-legend`, `plotter`, `control-panel`, `cell-drawer`.
+  `plotter` (pareto/ablation/variability), `control-panel`, `cell-drawer`.
 - [ ] Replace module singletons for `discoveryMap`, `plotter`, `hud`,
   `liveRail`, `caption`, `controlBar`, `controlPanel`, `cellDrawer` (HUD's
   view is per-instance; the singleton facade remains for the legacy layout).

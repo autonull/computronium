@@ -110,9 +110,13 @@ export class StageState {
     router.register("pipeline_event", () => scheduleTimeline(this));
   }
 
-  /** Subscribe to state changes. */
-  onChange(listener: (change: StageChange) => void): void {
+  /** Subscribe to state changes. Returns unsubscribe function. */
+  onChange(listener: (change: StageChange) => void): () => void {
     this.listeners.push(listener);
+    return () => {
+      const index = this.listeners.indexOf(listener);
+      if (index >= 0) this.listeners.splice(index, 1);
+    };
   }
 
   private notify(change: StageChange): void {

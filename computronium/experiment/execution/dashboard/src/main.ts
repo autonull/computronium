@@ -33,6 +33,7 @@ import "./layout/components/hud.js";
 import "./layout/components/caption.js";
 import "./layout/components/live-rail.js";
 import "./layout/components/control-bar.js";
+import "./layout/components/discovery-legend.js";
 import type { Binding } from "./bindings.js";
 
 // Global error handler
