@@ -299,8 +299,11 @@ class WebDashboard:
 
         seed_all_registries()
         self.config = config or DashboardConfig()
-        self.app = FastAPI(title="Computronium Campaign Dashboard", lifespan=self._lifespan)
+        self.app = FastAPI(
+            title="Computronium Campaign Dashboard", lifespan=self._lifespan
+        )
         self._connected_websockets: set[WebSocket] = set()
+        self._ws_locks: dict[WebSocket, asyncio.Lock] = {}
         self._running = False
         self._update_task: asyncio.Task | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -1115,106 +1118,110 @@ class WebDashboard:
         - records: All records serialized via RecordSerializer
         - pareto: Boolean flags indicating which records are on the Pareto frontier
         - ablation_groups: Structured ablation data from ReportGenerator
+
+        Blocking store work runs in a thread to avoid stalling the event loop.
         """
         if not self.config.store_path:
             return {"error": "No store path configured"}
 
         try:
-            from computronium.experiment.analysis import (
-                compute_pareto_frontier as analysis_compute_pareto_frontier,
+            return await asyncio.to_thread(
+                self._get_campaign_metrics_detailed_sync, campaign_id
             )
-            from computronium.experiment.execution.statistical_promotion import (
-                GateThresholds,
-            )
-            from computronium.experiment.surface.report import (
-                ReportGenerator,
-                chance_level,
-                measured_cells,
-            )
-
-            # CRITICAL: read_only=True for all dashboard store access
-            with self._store_view() as view:
-                store = view.store
-                generator = ReportGenerator(store)
-                records = list(generator._store.query_records(run_id=campaign_id))
-                run = store.query_run(campaign_id)
-                claim_metrics = generator.claim_metrics(campaign_id)
-
-                if not records:
-                    # A run that has measured nothing yet is still the run the
-                    # dashboard is watching: its declaration is the space the
-                    # map draws, and the absence of evidence is what the
-                    # narration reports. An empty dashboard is a dashboard
-                    # that has forgotten the run it is watching.
-                    return self._empty_run_metrics(
-                        run, campaign_id, claim_metrics, view
-                    )
-
-                # Compute Pareto frontier over registered objectives
-                pareto_points, _ = analysis_compute_pareto_frontier(
-                    records, list(PARETO_OBJECTIVES)
-                )
-                # Pareto points are keyed by measurement_key, not record_id
-                pareto_ids = {p["record_id"] for p in pareto_points}
-
-                # Get structured ablation groups
-                ablation_groups = generator.get_ablation_groups(campaign_id)
-
-                # Chance line and power requirement come from the task and the
-                # gate thresholds, never from a hand-written constant.
-                chance = chance_level(
-                    records[0].schedule.task_id, "validation_accuracy"
-                )
-
-                # What the campaign has actually burned, measured.
-                memory_values = [
-                    float(r.payload["memory_mb"])
-                    for r in records
-                    if isinstance(r.payload.get("memory_mb"), int | float)
-                ]
-                walltime_values = [
-                    float(r.payload["walltime_s"])
-                    for r in records
-                    if isinstance(r.payload.get("walltime_s"), int | float)
-                ]
-                seeds_per_cell: dict[tuple[str, str, str], int] = {}
-                for r in records:
-                    key = (r.credit, r.geometry, r.dynamics)
-                    seeds_per_cell[key] = seeds_per_cell.get(key, 0) + 1
-                resources = {
-                    "device": records[0].schedule.device,
-                    "memory_mb": max(memory_values, default=0.0),
-                    "walltime_s": sum(walltime_values),
-                    "records": len(records),
-                    "seeds_per_arm": max(seeds_per_cell.values(), default=0),
-                }
-
-                return {
-                    "records": [serializer.to_api_dict(r) for r in records],
-                    "pareto": [r.measurement_key in pareto_ids for r in records],
-                    "ablation_groups": ablation_groups,
-                    "chance": chance,
-                    "required_seeds": GateThresholds().required_seeds_per_group,
-                    "gate": GateThresholds().to_dict(),
-                    "resources": resources,
-                    "store": {
-                        "source": view.source,
-                        "published_at": (
-                            view.published_at.isoformat() if view.published_at else None
-                        ),
-                    },
-                    "run": run_status(
-                        run.spec if run else None,
-                        campaign_id,
-                        claim_metrics,
-                        run.started_at if run else None,
-                        measured_cells(records),
-                        run.status if run else None,
-                    ),
-                }
         except Exception as e:
             logger.exception("Error fetching detailed campaign metrics")
             return {"error": str(e)}
+
+    def _get_campaign_metrics_detailed_sync(self, campaign_id: str) -> dict[str, Any]:
+        """Synchronous implementation of detailed campaign metrics (runs in thread)."""
+        from computronium.experiment.analysis import (
+            compute_pareto_frontier as analysis_compute_pareto_frontier,
+        )
+        from computronium.experiment.execution.statistical_promotion import (
+            GateThresholds,
+        )
+        from computronium.experiment.surface.report import (
+            ReportGenerator,
+            chance_level,
+            measured_cells,
+        )
+
+        # CRITICAL: read_only=True for all dashboard store access
+        with self._store_view() as view:
+            store = view.store
+            generator = ReportGenerator(store)
+            records = list(generator._store.query_records(run_id=campaign_id))
+            run = store.query_run(campaign_id)
+            claim_metrics = generator.claim_metrics(campaign_id)
+
+            if not records:
+                # A run that has measured nothing yet is still the run the
+                # dashboard is watching: its declaration is the space the
+                # map draws, and the absence of evidence is what the
+                # narration reports. An empty dashboard is a dashboard
+                # that has forgotten the run it is watching.
+                return self._empty_run_metrics(run, campaign_id, claim_metrics, view)
+
+            # Compute Pareto frontier over registered objectives
+            pareto_points, _ = analysis_compute_pareto_frontier(
+                records, list(PARETO_OBJECTIVES)
+            )
+            # Pareto points are keyed by measurement_key, not record_id
+            pareto_ids = {p["record_id"] for p in pareto_points}
+
+            # Get structured ablation groups
+            ablation_groups = generator.get_ablation_groups(campaign_id)
+
+            # Chance line and power requirement come from the task and the
+            # gate thresholds, never from a hand-written constant.
+            chance = chance_level(records[0].schedule.task_id, "validation_accuracy")
+
+            # What the campaign has actually burned, measured.
+            memory_values = [
+                float(r.payload["memory_mb"])
+                for r in records
+                if isinstance(r.payload.get("memory_mb"), int | float)
+            ]
+            walltime_values = [
+                float(r.payload["walltime_s"])
+                for r in records
+                if isinstance(r.payload.get("walltime_s"), int | float)
+            ]
+            seeds_per_cell: dict[tuple[str, str, str], int] = {}
+            for r in records:
+                key = (r.credit, r.geometry, r.dynamics)
+                seeds_per_cell[key] = seeds_per_cell.get(key, 0) + 1
+            resources = {
+                "device": records[0].schedule.device,
+                "memory_mb": max(memory_values, default=0.0),
+                "walltime_s": sum(walltime_values),
+                "records": len(records),
+                "seeds_per_arm": max(seeds_per_cell.values(), default=0),
+            }
+
+            return {
+                "records": [serializer.to_api_dict(r) for r in records],
+                "pareto": [r.measurement_key in pareto_ids for r in records],
+                "ablation_groups": ablation_groups,
+                "chance": chance,
+                "required_seeds": GateThresholds().required_seeds_per_group,
+                "gate": GateThresholds().to_dict(),
+                "resources": resources,
+                "store": {
+                    "source": view.source,
+                    "published_at": (
+                        view.published_at.isoformat() if view.published_at else None
+                    ),
+                },
+                "run": run_status(
+                    run.spec if run else None,
+                    campaign_id,
+                    claim_metrics,
+                    run.started_at if run else None,
+                    measured_cells(records),
+                    run.status if run else None,
+                ),
+            }
 
     def _empty_run_metrics(
         self,
@@ -1699,69 +1706,103 @@ class WebDashboard:
         """Handle WebSocket connections for real-time updates."""
         await websocket.accept()
         self._connected_websockets.add(websocket)
+        self._ws_locks[websocket] = asyncio.Lock()
         logger.info(f"WebSocket connected. Total: {len(self._connected_websockets)}")
 
         # A client that arrives late still sees what happened.
         await self._replay_events(websocket)
 
         try:
-            # Just keep the connection alive; the update loop broadcasts to all.
+            # Keep the connection alive; handle incoming messages (ping/pong).
             while True:
-                # Wait for any message from client (or disconnect)
-                await websocket.receive_text()
+                data = await websocket.receive_text()
+                try:
+                    message = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if message.get("type") == "ping":
+                    await self._send_json(websocket, {"type": "pong"})
         except WebSocketDisconnect:
             pass
         except Exception:
             logger.exception("WebSocket error")
         finally:
             self._connected_websockets.discard(websocket)
+            self._ws_locks.pop(websocket, None)
             logger.info(
                 f"WebSocket disconnected. Total: {len(self._connected_websockets)}"
             )
 
+    async def _send_json(self, websocket: WebSocket, message: dict[str, Any]) -> bool:
+        """Send JSON to a single websocket with its lock. Returns True on success."""
+        lock = self._ws_locks.get(websocket)
+        if lock is None:
+            return False
+        async with lock:
+            try:
+                await websocket.send_json(message)
+                return True
+            except Exception:
+                return False
+
     async def _replay_events(self, websocket: WebSocket) -> None:
         """Send the recent events to a client that just connected."""
+        # Ensure the socket has a lock for _send_json
+        if websocket not in self._ws_locks:
+            self._ws_locks[websocket] = asyncio.Lock()
+
         for message in list(self._event_history)[-50:]:
-            await websocket.send_json(message)
+            await self._send_json(websocket, message)
 
         # Also send the latest campaign metrics for any run with records,
         # so a late-joining client gets the current picture immediately.
-        if self.config.store_path:
-            try:
-                logger.info("Sending initial campaign metrics on connect")
-                with self._readable_store() as store:
-                    runs = store.query_runs()
-                    logger.info(f"Found {len(list(runs))} runs in store")
-                    for run in runs:
-                        count = store.count_records(run_id=run.run_id)
-                        logger.info(f"Run {run.run_id}: status={run.status}, records={count}")
-                        if run.status == "running" or count:
-                            metrics = await self._get_campaign_metrics_detailed(run.run_id)
-                            if metrics.get("run"):
-                                logger.info(f"Sending campaign_metrics for {run.run_id}")
-                                await websocket.send_json({
+        if not self.config.store_path:
+            return
+
+        try:
+            logger.info("Sending initial campaign metrics on connect")
+            with self._readable_store() as store:
+                runs = store.query_runs()
+                logger.info(f"Found {len(list(runs))} runs in store")
+                for run in runs:
+                    count = store.count_records(run_id=run.run_id)
+                    logger.info(
+                        f"Run {run.run_id}: status={run.status}, records={count}"
+                    )
+                    if run.status == "running" or count:
+                        metrics = await self._get_campaign_metrics_detailed(run.run_id)
+                        if metrics.get("run"):
+                            logger.info(f"Sending campaign_metrics for {run.run_id}")
+                            await self._send_json(
+                                websocket,
+                                {
                                     "type": "campaign_metrics",
                                     "campaign_id": run.run_id,
                                     "data": metrics,
                                     "timestamp": datetime.now().isoformat(),
-                                })
-            except Exception:
-                logger.exception("Could not send initial campaign metrics on connect")
+                                },
+                            )
+        except Exception:
+            logger.exception("Could not send initial campaign metrics on connect")
 
     async def _broadcast_update(self, message: dict[str, Any]) -> None:
         """Broadcast message to all connected WebSocket clients."""
         if not self._connected_websockets:
             return
 
-        dead = set()
-        for ws in self._connected_websockets:
-            try:
-                await ws.send_json(message)
-            except Exception:
-                dead.add(ws)
-
-        for ws in dead:
-            self._connected_websockets.discard(ws)
+        # Iterate over a tuple to avoid mutation during iteration.
+        for ws in tuple(self._connected_websockets):
+            lock = self._ws_locks.get(ws)
+            if lock is None:
+                # Backward compat: create lock for sockets added directly to set
+                lock = asyncio.Lock()
+                self._ws_locks[ws] = lock
+            async with lock:
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    self._connected_websockets.discard(ws)
+                    self._ws_locks.pop(ws, None)
 
     async def start(self) -> None:
         """Start the dashboard update loop."""
@@ -1875,30 +1916,15 @@ class WebDashboard:
             return
 
         try:
-            with self._readable_store() as store:
-                runs = store.query_runs()
-                record_counts = {
-                    run.run_id: store.count_records(run_id=run.run_id) for run in runs
-                }
-                run_ids = [
-                    run.run_id
-                    for run in runs
-                    if run.status == "running" or record_counts[run.run_id]
-                ]
-
-            # The run the dashboard is about is the one that started last, and
-            # the browser picks the same one: the picture and the narration
-            # must be about the same run.
-            newest = max(
-                (run for run in runs if run.run_id in run_ids),
-                key=lambda run: run.started_at,
-                default=None,
-            )
+            # Fetch run IDs with records in a thread to avoid blocking.
+            run_ids, newest_id = await asyncio.to_thread(self._get_store_run_ids_sync)
 
             # A run writing from another process shows up here as records
             # landing in the store — the only progress a cross-process
             # dashboard can honestly report.
-            self._announce_store_progress(record_counts)
+            self._announce_store_progress(
+                await asyncio.to_thread(self._get_record_counts_sync, run_ids)
+            )
 
             for run_id in run_ids:
                 metrics = await self._get_campaign_metrics_detailed(run_id)
@@ -1913,10 +1939,38 @@ class WebDashboard:
                     "data": metrics,
                     "timestamp": datetime.now().isoformat(),
                 })
-                if newest is not None and run_id == newest.run_id:
+                if newest_id is not None and run_id == newest_id:
                     await self._refresh_narration(metrics)
         except Exception:
             logger.debug("Store unavailable for broadcast", exc_info=True)
+
+    def _get_store_run_ids_sync(self) -> tuple[list[str], str | None]:
+        """Synchronous helper to get run IDs with records and the newest run ID."""
+        with self._readable_store() as store:
+            runs = store.query_runs()
+            record_counts = {
+                run.run_id: store.count_records(run_id=run.run_id) for run in runs
+            }
+            run_ids = [
+                run.run_id
+                for run in runs
+                if run.status == "running" or record_counts[run.run_id]
+            ]
+
+            # The run the dashboard is about is the one that started last, and
+            # the browser picks the same one: the picture and the narration
+            # must be about the same run.
+            newest = max(
+                (run for run in runs if run.run_id in run_ids),
+                key=lambda run: run.started_at,
+                default=None,
+            )
+            return run_ids, newest.run_id if newest else None
+
+    def _get_record_counts_sync(self, run_ids: list[str]) -> dict[str, int]:
+        """Synchronous helper to get record counts for runs."""
+        with self._readable_store() as store:
+            return {run_id: store.count_records(run_id=run_id) for run_id in run_ids}
 
     async def _refresh_narration(self, metrics: dict[str, Any]) -> None:
         """Say what the system is doing, now, and tell the clients.

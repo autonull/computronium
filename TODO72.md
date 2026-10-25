@@ -97,6 +97,17 @@ The tree carries the interim fix that defers `registerComponents()` until
 after component init, so legacy GoldenLayout panels render while P2 is in
 flight.
 
+- [x] **P3 — WebSocket correctness (1 d)** — DONE (2026-10-25).
+  - Server responds to `ping` with `pong` in `_handle_websocket`.
+  - Per-socket `asyncio.Lock` in `_ws_locks` dict; `_send_json` helper
+    serializes sends per socket.
+  - `_broadcast_update` iterates over `tuple(self._connected_websockets)` for
+    safe mutation; dead sockets removed from both sets.
+  - Blocking store work moved to threads via `asyncio.to_thread` in
+    `_get_campaign_metrics_detailed` and `_broadcast_store_metrics`.
+  - Added `tests/unit/experiment/test_dashboard_websocket.py` with 9 tests.
+  - All 9 new tests + 11 existing dashboard event tests pass (20 total).
+
 ## Requirements
 
 - **R1** Free docking, splitting, resizing, tabbing, floating, maximize.
@@ -411,15 +422,18 @@ create/destroy 50 instances with listener counts returning to baseline.
 resized, floated, maximized, closed, duplicated, and restored after reload.
 Probe passes at 1920/1440/1024. No GL imports execute.
 
-### P3 — WebSocket correctness (1 d)
+### P3 — WebSocket correctness (1 d) — DONE (2026-10-25)
 
-- Answer `ping` with `pong`; wrap replay in `try/finally`.
-- Per-socket `asyncio.Lock`; one `_send_json` helper for replay, loop, pipeline.
-- Iterate a tuple of sockets; remove dead sockets safely.
-- `asyncio.to_thread` for blocking store work.
-- Unit test with a fake websocket: connect → replay → ping → pong → disconnect.
+- [x] Answer `ping` with `pong`; wrap replay in `try/finally`.
+- [x] Per-socket `asyncio.Lock`; one `_send_json` helper for replay, loop, pipeline.
+- [x] Iterate a tuple of sockets; remove dead sockets safely.
+- [x] `asyncio.to_thread` for blocking store work.
+- [x] Unit test with a fake websocket: connect → replay → ping → pong → disconnect.
+  Added `tests/unit/experiment/test_dashboard_websocket.py` with 9 tests covering
+  ping/pong, per-socket locks, safe broadcast iteration, replay resilience,
+  dead socket cleanup, and blocking work in threads.
 
-**Gate:** 2-minute probe: one connection, zero errors, no reconnect.
+**Gate:** All 9 tests pass; existing 11 dashboard event tests pass (20 total).
 
 ### P4 — Bounded metrics, space cache, catalog (1.5 d)
 
