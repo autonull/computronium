@@ -1443,6 +1443,15 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             result = self._conn.execute("SELECT COUNT(*) FROM records").fetchone()
         return result[0] if result is not None else 0
 
+    def count_records_by_run(self) -> dict[str, int]:
+        """Count records grouped by run_id in a single query."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        rows = self._conn.execute(
+            "SELECT run_id, COUNT(*) FROM records GROUP BY run_id"
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
     # =========================================================================
     # Public read API (L14: surface consumes these; no _conn reach-ins)
     # =========================================================================

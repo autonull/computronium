@@ -108,6 +108,17 @@ flight.
   - Added `tests/unit/experiment/test_dashboard_websocket.py` with 9 tests.
   - All 9 new tests + 11 existing dashboard event tests pass (20 total).
 
+- [x] **P4 — Bounded metrics, space cache, catalog (1.5 d)** — IN PROGRESS (2026-10-25).
+  - Added `RecordStore.count_records_by_run()` for single-query record counts.
+  - Server metrics cache `_metrics_cache` keyed by `(run_id, record_count, status)`;
+    finished runs immutable; only running runs with changing counts recompute.
+  - `_broadcast_campaign_metrics` / `_broadcast_store_metrics` use
+    `_maybe_send_metrics` / `_get_cached_metrics` for conditional send.
+  - Single `count_records_by_run()` query replaces N `count_records()` calls.
+  - On-demand `GET /api/campaigns/{id}/metrics/detailed` already existed.
+  - Remaining: lightweight `runs_summary` on connect, client-side deduplication,
+    remove duplicate `observe`/picker listeners.
+
 ## Requirements
 
 - **R1** Free docking, splitting, resizing, tabbing, floating, maximize.
@@ -435,16 +446,20 @@ Probe passes at 1920/1440/1024. No GL imports execute.
 
 **Gate:** All 9 tests pass; existing 11 dashboard event tests pass (20 total).
 
-### P4 — Bounded metrics, space cache, catalog (1.5 d)
+### P4 — Bounded metrics, space cache, catalog (1.5 d) — IN PROGRESS
 
-- `RecordStore.count_records_by_run()`.
-- `runs_summary` on connect and catalog change.
-- Server metrics cache keyed by `(run_id, record_count, status)`; finished runs
-  are immutable.
-- Client `MetricsStore`/`SpaceStore` deduplicate in-flight promises by key.
-- One `campaign_metrics` ingest; remove duplicate `observe` and duplicate run
-  picker listener.
-- On-demand `GET /api/campaigns/{id}/metrics/detailed`.
+- [x] `RecordStore.count_records_by_run()` — single-query record counts for all runs.
+- [x] Server metrics cache keyed by `(run_id, record_count, status)`; finished runs
+  are immutable; only running runs with changing record counts recompute.
+- [x] Conditional broadcasting: `_broadcast_campaign_metrics` and
+  `_broadcast_store_metrics` now use `_maybe_send_metrics` / `_get_cached_metrics`
+  to send cached metrics on cache hit, compute and cache on miss.
+- [x] Single store query for record counts via `count_records_by_run()` replaces
+  per-run `count_records()` calls.
+- [ ] `runs_summary` on connect and catalog change (lightweight run catalog).
+- [ ] Client `MetricsStore`/`SpaceStore` deduplicate in-flight promises by key.
+- [ ] Remove duplicate `observe` and duplicate run picker listener.
+- [x] On-demand `GET /api/campaigns/{id}/metrics/detailed` already exists.
 
 **Gate:** 20-run store: connect-to-picture < 2 s; no repeated detailed
 computation; 30 s bytes drop by an order of magnitude.

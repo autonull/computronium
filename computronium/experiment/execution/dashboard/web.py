@@ -319,6 +319,10 @@ class WebDashboard:
         # from the same store path (TODO70).
         self._control = ControlPlane(control_plane_path(self.config.store_path))
         self._cpu = _CpuSampler()
+        # Server-side metrics cache: key = (run_id, record_count, status)
+        # Value = detailed metrics. Finished runs are immutable; only running
+        # runs with changing record counts are recomputed.
+        self._metrics_cache: dict[tuple[str, int, str], dict[str, Any]] = {}
         self._setup_routes()
         self._setup_templates()
 
@@ -1896,15 +1900,20 @@ class WebDashboard:
 
         campaigns = await self._get_all_campaigns()
         for campaign in campaigns.get("campaigns", []):
-            if campaign["status"] != "running":
+            campaign_id = campaign["campaign_id"]
+            status = campaign["status"]
+            # Only send detailed metrics for running campaigns
+            if status != "running":
                 continue
-            metrics = await self._get_campaign_metrics_detailed(campaign["campaign_id"])
-            await self._broadcast_update({
-                "type": "campaign_metrics",
-                "campaign_id": campaign["campaign_id"],
-                "data": metrics,
-                "timestamp": datetime.now().isoformat(),
-            })
+            # Get record count for cache key
+            record_count = 0
+            if self.config.store_path:
+                try:
+                    with self._readable_store() as store:
+                        record_count = store.count_records(run_id=campaign_id)
+                except Exception:
+                    pass
+            await self._maybe_send_metrics(campaign_id, status, record_count)
 
     async def _broadcast_store_metrics(self) -> None:
         """Metrics for every run with records in the store.
@@ -1919,42 +1928,101 @@ class WebDashboard:
             # Fetch run IDs with records in a thread to avoid blocking.
             run_ids, newest_id = await asyncio.to_thread(self._get_store_run_ids_sync)
 
+            # Get record counts for all runs in one query
+            record_counts = await asyncio.to_thread(
+                self._get_record_counts_sync, run_ids
+            )
+
             # A run writing from another process shows up here as records
             # landing in the store — the only progress a cross-process
             # dashboard can honestly report.
-            self._announce_store_progress(
-                await asyncio.to_thread(self._get_record_counts_sync, run_ids)
-            )
+            self._announce_store_progress(record_counts)
 
             for run_id in run_ids:
-                metrics = await self._get_campaign_metrics_detailed(run_id)
-                if not metrics.get("run"):
-                    continue
-                # A run that has started but not yet measured is still worth
-                # sending: its declaration is the space the map draws, and
-                # the empty space is the truth about it.
-                await self._broadcast_update({
-                    "type": "campaign_metrics",
-                    "campaign_id": run_id,
-                    "data": metrics,
-                    "timestamp": datetime.now().isoformat(),
-                })
+                record_count = record_counts.get(run_id, 0)
+                # Get run status
+                run_status = "unknown"
+                try:
+                    with self._readable_store() as store:
+                        run = store.query_run(run_id)
+                        if run:
+                            run_status = run.status
+                except Exception:
+                    pass
+                await self._maybe_send_metrics(run_id, run_status, record_count)
                 if newest_id is not None and run_id == newest_id:
+                    # Still need to send metrics to get narration
+                    metrics = await self._get_cached_metrics(
+                        run_id, run_status, record_count
+                    )
                     await self._refresh_narration(metrics)
         except Exception:
             logger.debug("Store unavailable for broadcast", exc_info=True)
+
+    async def _maybe_send_metrics(
+        self, run_id: str, status: str, record_count: int
+    ) -> None:
+        """Send metrics only if cache key changed (running) or never sent (finished)."""
+        cache_key = (run_id, record_count, status)
+        cached = self._metrics_cache.get(cache_key)
+
+        if cached is not None:
+            # Cache hit: metrics haven't changed, send cached version
+            await self._broadcast_update({
+                "type": "campaign_metrics",
+                "campaign_id": run_id,
+                "data": cached,
+                "timestamp": datetime.now().isoformat(),
+            })
+            return
+
+        # Cache miss: compute and cache
+        metrics = await self._get_campaign_metrics_detailed(run_id)
+        if not metrics.get("run"):
+            # Run not ready yet, don't cache or send
+            return
+
+        # Cache the metrics
+        self._metrics_cache[cache_key] = metrics
+
+        # For finished runs, we can also store with a special "finished" key
+        # so we don't recompute if status changes to finished
+        if status != "running":
+            finished_key = (run_id, record_count, "finished")
+            self._metrics_cache[finished_key] = metrics
+
+        await self._broadcast_update({
+            "type": "campaign_metrics",
+            "campaign_id": run_id,
+            "data": metrics,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+    async def _get_cached_metrics(
+        self, run_id: str, status: str, record_count: int
+    ) -> dict[str, Any]:
+        """Get metrics from cache or compute if missing."""
+        cache_key = (run_id, record_count, status)
+        if cache_key in self._metrics_cache:
+            return self._metrics_cache[cache_key]
+        # Compute and cache
+        metrics = await self._get_campaign_metrics_detailed(run_id)
+        if metrics.get("run"):
+            self._metrics_cache[cache_key] = metrics
+            if status != "running":
+                finished_key = (run_id, record_count, "finished")
+                self._metrics_cache[finished_key] = metrics
+        return metrics
 
     def _get_store_run_ids_sync(self) -> tuple[list[str], str | None]:
         """Synchronous helper to get run IDs with records and the newest run ID."""
         with self._readable_store() as store:
             runs = store.query_runs()
-            record_counts = {
-                run.run_id: store.count_records(run_id=run.run_id) for run in runs
-            }
+            record_counts = store.count_records_by_run()
             run_ids = [
                 run.run_id
                 for run in runs
-                if run.status == "running" or record_counts[run.run_id]
+                if run.status == "running" or record_counts.get(run.run_id, 0)
             ]
 
             # The run the dashboard is about is the one that started last, and
@@ -1970,7 +2038,8 @@ class WebDashboard:
     def _get_record_counts_sync(self, run_ids: list[str]) -> dict[str, int]:
         """Synchronous helper to get record counts for runs."""
         with self._readable_store() as store:
-            return {run_id: store.count_records(run_id=run_id) for run_id in run_ids}
+            all_counts = store.count_records_by_run()
+            return {run_id: all_counts.get(run_id, 0) for run_id in run_ids}
 
     async def _refresh_narration(self, metrics: dict[str, Any]) -> None:
         """Say what the system is doing, now, and tell the clients.
