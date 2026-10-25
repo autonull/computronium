@@ -302,8 +302,9 @@ export class DiscoveryMap implements Component {
       .filter(([, value]) => value)
       .forEach(([axis, value]) => {
         const isCredit = axis === "credit";
+        const armColor = ARM_COLORS[value as string];
         const color = isCredit
-          ? ARM_COLORS[value] || PALETTE.gradient
+          ? armColor ?? PALETTE.gradient
           : "var(--text-secondary)";
         const chip = document.createElement("span");
         chip.style.cssText = `

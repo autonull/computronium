@@ -31,6 +31,7 @@ export interface CellCoordinate {
   substrate?: string;
   plasticity?: string;
   update?: string;
+  [key: string]: string | undefined;
 }
 
 export interface CellData {

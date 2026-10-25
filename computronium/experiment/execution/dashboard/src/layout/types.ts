@@ -25,6 +25,13 @@ export interface Rect {
   height: number;
 }
 
+export interface Area {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type DropLocation =
   | { kind: "edge"; edge: "left" | "right" | "top" | "bottom" }
   | { kind: "tab"; instanceId: string }
@@ -165,6 +172,8 @@ export interface StageCanvas {
   readonly canvas: HTMLCanvasElement;
   clear(): void;
   resize(size: Size): void;
+  begin(): CanvasRenderingContext2D;
+  area(): Area;
 }
 
 import * as THREE from "three";

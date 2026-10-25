@@ -8,6 +8,16 @@
 import { AXIS_NAMES, type AxisName } from "../cell-data.js";
 import { type GateThresholds, type RunMetrics } from "../run-selection.js";
 import { router } from "../ws-client.js";
+export type {
+  CellDynamics,
+  MultiRunSpace,
+  RunAccount,
+  RunAttribution,
+  RunFlow,
+  RunTimeline,
+  SpacePayload,
+} from "./payloads.js";
+
 import {
   type CellDynamics,
   type MultiRunSpace,

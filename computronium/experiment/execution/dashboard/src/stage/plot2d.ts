@@ -7,7 +7,9 @@
 
 import { PALETTE } from "../colors.js";
 import { wrapLabel } from "./sprites.js";
-import type { Area } from "./canvas2d.js";
+import type { Area } from "../layout/types.js";
+
+export type { Area };
 
 /** The margins a frame leaves for its labels. */
 const MARGIN = { top: 64, right: 36, bottom: 62, left: 78 };

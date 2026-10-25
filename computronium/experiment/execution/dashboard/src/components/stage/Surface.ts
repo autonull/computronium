@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
 import { detectRenderProfile } from "../../render-profile.js";
-import type { Size, Rect, StageCanvas, StageSurface } from "../../layout/types.js";
+import type { Size, Rect, Area, StageCanvas, StageSurface } from "../../layout/types.js";
 
 /** Per-instance 2D canvas for overlay rendering. */
 export class StageCanvasImpl implements StageCanvas {
@@ -30,6 +30,29 @@ export class StageCanvasImpl implements StageCanvas {
     this.canvas.style.width = `${size.width}px`;
     this.canvas.style.height = `${size.height}px`;
     this.context.scale(dpr, dpr);
+  }
+
+  /** Begin a picture: the canvas is cleared, and its context is returned. */
+  begin(): CanvasRenderingContext2D {
+    const ctx = this.context;
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.fillStyle = "#0a0e14";
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    return ctx;
+  }
+
+  /** The part of the window the picture may use: the panels leave it free. */
+  area(): Area {
+    const legend = document.getElementById("discovery-legend");
+    const legendRight = legend ? legend.getBoundingClientRect().right : 0;
+    const x = Math.max(40, legendRight + 24);
+    const width = Math.max(200, window.innerWidth * 0.85 - x);
+    return {
+      x,
+      y: 70,
+      width,
+      height: Math.max(200, window.innerHeight * 0.85 - 70),
+    };
   }
 }
 

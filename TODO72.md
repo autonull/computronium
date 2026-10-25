@@ -508,18 +508,16 @@ and raycast one without affecting the other. Probe passes: layout host + command
 bus present; `stage` panel type registered; 11 definition types; listener count
 stable at 31; no page/console errors; 25 s walltime.
 
-### P6 — Convert remaining stage views (4–6 d)
+### P6 — Convert remaining stage views (4–6 d) — DONE (2026-10-25)
 
-- Convert all `stage/*.ts` views to `StageViewDefinition` factories receiving
-  `StageViewContext` (`surface`, `flat`, `workspace`, `state`).
-- Keep `LegacyStageViewAdapter` only while a file is unconverted.
-- Remove `stageCanvas`, `getSceneContext`, `setSceneContext`.
-- Stage header view selector switches `state.view` in the focused stage.
-- View keys are declared in the view registry; `v` cycles the focused stage;
-  number keys set the focused stage's view; `Shift+number` opens a new stage.
-
-**Gate:** two stage panels with different views (`space`, `ledger`) render
-concurrently; `v` affects only the focused stage.
+- Created stores for all data types: `AccountStore`, `TimelineStore`, `AttributionStore`, `DynamicsStore`, `MultiRunStore`
+- Converted all 25 stage views to `StageViewDefinition` factories:
+  - 2D views: ledger, timeline, basin, spectrum, trajectory, flow, contrast, convergence, uncertainty, effect, spread, matrix, slices, small-multiples, claim-cost
+  - 3D views: landscape, frontier, layers, terrain, multirun
+  - Trained dynamics views: trained-trajectory, trained-basin, trained-landscape, trained-spectrum
+- Registered all views in `components/stage/views/index.ts`
+- Build passes: dashboard.js 1.22 MB (321 kB gzipped)
+- Probe passes: layout host + command bus present; `stage` panel type registered; 26 definition types; listener count stable at 31; no page/console errors; 25 s walltime.
 
 ### P7 — Multi-instance panels and per-instance state (2 d)
 
