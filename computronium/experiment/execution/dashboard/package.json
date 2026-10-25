@@ -8,10 +8,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "golden-layout": "^2.6.0",
     "three": "^0.168.0",
     "three-stdlib": "^2.32.0",
-    "uplot": "^1.6.32",
-    "golden-layout": "^2.6.0"
+    "uplot": "^1.6.32"
   },
   "devDependencies": {
     "@types/three": "^0.168.0",

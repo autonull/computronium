@@ -110,14 +110,15 @@ export class LayoutManager implements Component {
       },
     });
 
-    this.registerComponents();
+    // Don't register components yet - factories aren't ready
+    // registerComponents() will be called from main.ts after component init
     this.setupEventHandlers();
     this.initialized = true;
 
     console.log("[LayoutManager] Initialized with GoldenLayout");
   }
 
-  private registerComponents(): void {
+  registerComponents(): void {
     if (!this.gl) return;
 
     // Register all known panel components

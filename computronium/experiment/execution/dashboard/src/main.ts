@@ -103,28 +103,27 @@ wsClient.waitForConnection(15000).then((connected) => {
 // Components self-register with the registry on import; the registry
 // initializes them on DOMContentLoaded (after __DASHBOARD__ is published).
 
-function getPanelElementFn(id: string) {
-  return () => getPanelElement(id);
-}
-
-// Register core panels as layout components
-registerLayoutComponent("control-bar", getPanelElementFn("control-bar"));
-registerLayoutComponent("live-rail", getPanelElementFn("live-rail"));
-registerLayoutComponent("caption", getPanelElementFn("caption"));
-registerLayoutComponent("legend", getPanelElementFn("discovery-legend"));
-registerLayoutComponent("hud", getPanelElementFn("hud"));
-registerLayoutComponent("control-panel", getPanelElementFn("control-panel"));
-registerLayoutComponent("cell-drawer", getPanelElementFn("cell-drawer"));
-registerLayoutComponent("pareto", getPanelElementFn("plotter-pareto"));
-registerLayoutComponent("ablation", getPanelElementFn("plotter-ablation"));
-registerLayoutComponent("variability", getPanelElementFn("plotter-variability"));
-
 // Wire binding actions after components initialize
 // Initialize the registry (which initializes all registered components including
 // layoutManager and menubar), then wire up bindings.
 document.addEventListener("DOMContentLoaded", async () => {
   // Initialize all registered components via the registry
   await registry.initAll();
+
+  // NOW register layout components - panel elements exist after component init
+  registerLayoutComponent("control-bar", () => getPanelElement("control-bar"));
+  registerLayoutComponent("live-rail", () => getPanelElement("live-rail"));
+  registerLayoutComponent("caption", () => getPanelElement("caption"));
+  registerLayoutComponent("legend", () => getPanelElement("discovery-legend"));
+  registerLayoutComponent("hud", () => getPanelElement("hud"));
+  registerLayoutComponent("control-panel", () => getPanelElement("control-panel"));
+  registerLayoutComponent("cell-drawer", () => getPanelElement("cell-drawer"));
+  registerLayoutComponent("pareto", () => getPanelElement("plotter-pareto"));
+  registerLayoutComponent("ablation", () => getPanelElement("plotter-ablation"));
+  registerLayoutComponent("variability", () => getPanelElement("plotter-variability"));
+
+  // Tell layoutManager to register the components now that elements exist
+  layoutManager.registerComponents();
 
   // Apply default watch preset
   applyPreset("watch");
