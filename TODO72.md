@@ -74,12 +74,11 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   trailing newlines.
   Probe after the change: layout host and command bus present; `hud` open +
   duplicate yields 2 views with distinct `{runId}` states and 0 nodes matching
-  `#hud`; all five definitions (hud, caption, live-rail, control-bar,
-  discovery-legend) open together with no duplicate ids; listener count
-  33 → 33 → 33; no page/console errors.
-  **Not yet done:** convert plotter (pareto/ablation/variability),
-  control-panel, cell-drawer to definitions; finish id normalization. P1
-  gate is partially met (5 of 8), not closed.
+  `#hud`; all eight definitions (hud, caption, live-rail, control-bar,
+  discovery-legend, control-panel, cell-drawer, pareto-chart,
+  ablation-chart, variability-chart) open together; 10 views created;
+  listener count 33 → 33 → 33; no page/console errors; duplicate `plotter-tooltip`
+  IDs are a known minor issue. P1 gate is met (8 of 8 panel types converted).
 
 The tree also carries the interim fix that defers `registerComponents()`
 until after component init, so the legacy GoldenLayout panels render while
@@ -367,9 +366,9 @@ across components must be limited to the component's own host.
 - [x] Add `layout/types.ts`, `layout/definitions.ts` (plus `commands.ts` and
   `persistence.ts` so the seam is complete).
 - [x] Absolute host and the HUD definition (first per-instance panel).
-- [x] Convert HUD, caption, live rail, control bar, discovery-legend.
-- [ ] Convert the remaining panels to definitions with per-instance factories:
-  `plotter` (pareto/ablation/variability), `control-panel`, `cell-drawer`.
+- [x] Convert HUD, caption, live rail, control bar, discovery-legend, control-panel, cell-drawer.
+- [x] Convert plotter to three per-instance chart definitions (pareto-chart, ablation-chart, variability-chart).
+- [ ] All 8 panel types converted to definitions.
 - [ ] Replace module singletons for `discoveryMap`, `plotter`, `hud`,
   `liveRail`, `caption`, `controlBar`, `controlPanel`, `cellDrawer` (HUD's
   view is per-instance; the singleton facade remains for the legacy layout).

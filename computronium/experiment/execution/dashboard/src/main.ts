@@ -34,6 +34,11 @@ import "./layout/components/caption.js";
 import "./layout/components/live-rail.js";
 import "./layout/components/control-bar.js";
 import "./layout/components/discovery-legend.js";
+import "./layout/components/control-panel.js";
+import "./layout/components/cell-drawer.js";
+import "./layout/components/pareto-chart.js";
+import "./layout/components/ablation-chart.js";
+import "./layout/components/variability-chart.js";
 import type { Binding } from "./bindings.js";
 
 // Global error handler

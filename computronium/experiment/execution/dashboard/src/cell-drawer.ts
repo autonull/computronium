@@ -6,52 +6,40 @@ import { createPanelShell } from "./shell.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
 import type { CellData } from "./cell-data.js";
 import type { Component } from "./components/registry.js";
+import type { JsonValue } from "./layout/types.js";
 
-function createCellDrawerBody(): string {
+export function createCellDrawerBody(): string {
   return `<div id="drawer-content"></div>`;
 }
 
-export class CellDrawer implements Component {
-  name = "CellDrawer";
-
-  private panel: HTMLElement | null = null;
+/** A cell drawer bound to one root element and its own subscriptions. */
+export class CellDrawerView {
   private content: HTMLElement | null = null;
-  private sparklineCanvas: HTMLCanvasElement | null = null;
   private currentData: CellData | null = null;
-  private changeListeners = new Set<() => void>();
+  private readonly disposers: (() => void)[] = [];
 
-  async init(): Promise<void> {
-    this.panel = createPanelShell({
-      id: "cell-drawer",
-      title: "Cell Details",
-      glyph: "◧",
-      key: "d",
-      body: createCellDrawerBody(),
-      dock: "floating",
-      defaultOpen: false,
-    });
-
-    this.content = this.panel.querySelector("#drawer-content")!;
-
-    registerPanel(
-      "cell-drawer",
-      "cell drawer",
-      "◧",
-      () => this.hide(),
-      () => this.isOpen(),
-      "d",
+  constructor(
+    private readonly root: HTMLElement,
+    _state: JsonValue = null,
+  ) {
+    this.content = root.querySelector("#drawer-content")!;
+    this.disposers.push(
+      () => window.removeEventListener("cell-selected", this.onCellSelected as EventListener),
+      () => window.removeEventListener("keydown", this.onKeyDown),
     );
-
     window.addEventListener("cell-selected", this.onCellSelected as EventListener);
     window.addEventListener("keydown", this.onKeyDown);
-    console.log("[CellDrawer] Ready");
   }
 
-  async destroy(): Promise<void> {
+  dispose(): void {
+    for (const dispose of this.disposers) dispose();
+    this.disposers.length = 0;
     this.stopSparkline();
-    this.panel?.remove();
-    window.removeEventListener("cell-selected", this.onCellSelected as EventListener);
-    window.removeEventListener("keydown", this.onKeyDown);
+    this.currentData = null;
+  }
+
+  update(state: JsonValue): void {
+    // Could receive new cell data via state
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -66,7 +54,7 @@ export class CellDrawer implements Component {
   };
 
   isOpen(): boolean {
-    return this.panel ? !this.panel.classList.contains("panel-hidden") : false;
+    return this.root && !this.root.classList.contains("panel-hidden");
   }
 
   hasCellSelected(): boolean {
@@ -77,36 +65,8 @@ export class CellDrawer implements Component {
     return this.currentData;
   }
 
-  onChange(listener: () => void): () => void {
-    this.changeListeners.add(listener);
-    return () => this.changeListeners.delete(listener);
-  }
-
-  private notifyChange(): void {
-    for (const l of this.changeListeners) l();
-  }
-
-  replicateSelected(): void {
-    if (!this.currentData) return;
-    this.runAction("replicate", this.currentData);
-    this.notifyChange();
-  }
-
-  preregisterSelected(): void {
-    if (!this.currentData) return;
-    this.runAction("preregister", this.currentData);
-    this.notifyChange();
-  }
-
-  adoptQuestSelected(): void {
-    if (!this.currentData) return;
-    this.runAction("quest", this.currentData);
-    this.notifyChange();
-  }
-
   private onCellSelected = (event: CustomEvent): void => {
     this.show(event.detail);
-    this.notifyChange();
   };
 
   show(data: CellData): void {
@@ -120,7 +80,6 @@ export class CellDrawer implements Component {
     panels.toggle("cell-drawer");
     this.stopSparkline();
     this.currentData = null;
-    this.notifyChange();
   }
 
   private renderContent(data: CellData): void {
@@ -368,6 +327,91 @@ export class CellDrawer implements Component {
 
   private stopSparkline(): void {
     // Cleanup
+  }
+
+  replicateSelected(): void {
+    if (this.currentData) this.runAction("replicate", this.currentData);
+  }
+
+  preregisterSelected(): void {
+    if (this.currentData) this.runAction("preregister", this.currentData);
+  }
+
+  adoptQuestSelected(): void {
+    if (this.currentData) this.runAction("quest", this.currentData);
+  }
+}
+
+/** The legacy singleton panel used by GoldenLayout until P2. */
+export class CellDrawer implements Component {
+  name = "CellDrawer";
+
+  private panel: HTMLElement | null = null;
+  private view: CellDrawerView | null = null;
+
+  async init(): Promise<void> {
+    this.panel = createPanelShell({
+      id: "cell-drawer",
+      title: "Cell Details",
+      glyph: "◧",
+      key: "d",
+      body: createCellDrawerBody(),
+      dock: "floating",
+      defaultOpen: false,
+    });
+
+    this.view = new CellDrawerView(this.panel);
+    registerPanel(
+      "cell-drawer",
+      "cell drawer",
+      "◧",
+      () => this.hide(),
+      () => this.isOpen(),
+      "d",
+    );
+  }
+
+  async destroy(): Promise<void> {
+    this.view?.dispose();
+    this.view = null;
+    this.panel?.remove();
+  }
+
+  isOpen(): boolean {
+    return this.panel ? !this.panel.classList.contains("panel-hidden") : false;
+  }
+
+  hasCellSelected(): boolean {
+    return this.view?.hasCellSelected() ?? false;
+  }
+
+  get currentCell(): CellData | null {
+    return this.view?.currentCell ?? null;
+  }
+
+  onChange(listener: () => void): () => void {
+    // Legacy compatibility
+    return () => {};
+  }
+
+  replicateSelected(): void {
+    this.view?.replicateSelected();
+  }
+
+  preregisterSelected(): void {
+    this.view?.preregisterSelected();
+  }
+
+  adoptQuestSelected(): void {
+    this.view?.adoptQuestSelected();
+  }
+
+  hide(): void {
+    this.view?.hide();
+  }
+
+  private show(data: CellData): void {
+    this.view?.show(data);
   }
 }
 

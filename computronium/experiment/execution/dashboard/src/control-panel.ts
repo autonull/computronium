@@ -2,11 +2,13 @@
 
 import { registry } from "./components/registry.js";
 import { CONTROL_KEYS } from "./keys.js";
-import { panels, registerDisplayPanel, closeButton } from "./panels.js";
+import { panels, registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { runSelection } from "./run-selection.js";
-import { cellDrawer } from "./cell-drawer.js";
+import { stageState } from "./stage/store.js";
+import { PALETTE } from "./colors.js";
 import type { Component } from "./components/registry.js";
+import type { JsonValue } from "./layout/types.js";
 
 /** One profile, as the server offers it. */
 interface Profile {
@@ -50,7 +52,7 @@ const SECTIONS = [
   { id: "exports", title: "Exports", key: "5" },
 ] as const;
 
-function createControlPanelBody(): string {
+export function createControlPanelBody(): string {
   return `
     <style>
       #control-panel h4 { margin: 14px 0 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--text-secondary); text-transform: uppercase; }
@@ -164,10 +166,8 @@ function createControlPanelBody(): string {
   `;
 }
 
-export class ControlPanel implements Component {
-  name = "ControlPanel";
-
-  private container: HTMLElement | null = null;
+/** A control panel bound to one root element and its own subscriptions. */
+export class ControlPanelView {
   private profiles: Profile[] = [];
   private axes: Axis[] = [];
   private profileSelect: HTMLSelectElement | null = null;
@@ -184,49 +184,42 @@ export class ControlPanel implements Component {
   private cellNote: HTMLElement | null = null;
   private exportNote: HTMLElement | null = null;
   private activeTab = "new-run";
+  private readonly disposers: (() => void)[] = [];
 
-  showSection(sectionId: string): void {
-    if (!this.container) return;
-    const tab = this.container.querySelector(`.tab[data-section="${sectionId}"]`) as HTMLElement;
-    if (tab) tab.click();
-  }
-
-  async init(): Promise<void> {
-    this.container = createPanelShell({
-      id: "control-panel",
-      title: "Control Panel",
-      glyph: "⚙",
-      key: CONTROL_KEYS.panel,
-      body: createControlPanelBody(),
-      dock: "floating",
-      defaultOpen: false,
-    });
-
+  constructor(
+    private readonly root: HTMLElement,
+    _state: JsonValue = null,
+  ) {
     this.bindElements();
     this.bindEvents();
-    registerDisplayPanel("control-panel", "control panel", "⚙", () => this.container, CONTROL_KEYS.panel);
-    await this.loadCatalogue();
-    void this.refresh();
+    this.disposers.push(runSelection.onChange(() => this.renderRun()));
+    this.loadCatalogue();
   }
 
-  async destroy(): Promise<void> { this.container?.remove(); }
+  dispose(): void {
+    for (const dispose of this.disposers) dispose();
+    this.disposers.length = 0;
+  }
+
+  update(_state: JsonValue): void {
+    this.refresh();
+  }
 
   private bindElements(): void {
-    if (!this.container) return;
-    this.runSection = this.container.querySelector(".run-section");
-    this.queueSection = this.container.querySelector(".queue-section");
-    this.cellNote = this.container.querySelector(".cell-note");
-    this.exportNote = this.container.querySelector(".export-note");
-    this.profileSelect = this.container.querySelector(".profile");
-    this.profileNote = this.container.querySelector(".profile-note");
-    this.newRunNote = this.container.querySelector(".new-run-note");
-    this.seedsInput = this.container.querySelector(".seeds");
-    this.epochsInput = this.container.querySelector(".epochs");
-    this.budgetInput = this.container.querySelector(".budget");
-    this.deviceSelect = this.container.querySelector(".device");
-    this.fidelitySelect = this.container.querySelector(".fidelity");
+    this.runSection = this.root.querySelector(".run-section");
+    this.queueSection = this.root.querySelector(".queue-section");
+    this.cellNote = this.root.querySelector(".cell-note");
+    this.exportNote = this.root.querySelector(".export-note");
+    this.profileSelect = this.root.querySelector(".profile");
+    this.profileNote = this.root.querySelector(".profile-note");
+    this.newRunNote = this.root.querySelector(".new-run-note");
+    this.seedsInput = this.root.querySelector(".seeds");
+    this.epochsInput = this.root.querySelector(".epochs");
+    this.budgetInput = this.root.querySelector(".budget");
+    this.deviceSelect = this.root.querySelector(".device");
+    this.fidelitySelect = this.root.querySelector(".fidelity");
 
-    const cellRow = this.container.querySelector<HTMLElement>(".cell-row")!;
+    const cellRow = this.root.querySelector<HTMLElement>(".cell-row")!;
     for (const axis of CELL_AXES) {
       const label = document.createElement("label");
       label.textContent = axis;
@@ -237,13 +230,11 @@ export class ControlPanel implements Component {
       this.cellSelects.set(axis, select);
     }
 
-    // Tab switching
-    for (const tab of this.container.querySelectorAll<HTMLButtonElement>(".tab")) {
+    for (const tab of this.root.querySelectorAll<HTMLButtonElement>(".tab")) {
       tab.addEventListener("click", () => this.switchTab(tab.dataset.section!));
     }
 
-    // Number keys 1-5 for tabs
-    this.container.addEventListener("keydown", (e) => {
+    this.root.addEventListener("keydown", (e) => {
       if (e.key >= "1" && e.key <= "5" && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const t = e.target as HTMLElement;
         if (!["INPUT", "SELECT", "TEXTAREA"].includes(t.tagName)) {
@@ -252,27 +243,23 @@ export class ControlPanel implements Component {
         }
       }
     });
-
-    this.container.querySelector<HTMLElement>("#control-panel-header")!.appendChild(closeButton(() => panels.toggle("control-panel")));
   }
 
   private switchTab(id: string): void {
-    if (!this.container) return;
-    for (const tab of this.container.querySelectorAll<HTMLButtonElement>(".tab")) tab.classList.toggle("active", tab.dataset.section === id);
-    for (const content of this.container.querySelectorAll<HTMLElement>(".tab-content")) content.classList.toggle("active", content.id === `tab-${id}`);
+    for (const tab of this.root.querySelectorAll<HTMLButtonElement>(".tab")) tab.classList.toggle("active", tab.dataset.section === id);
+    for (const content of this.root.querySelectorAll<HTMLElement>(".tab-content")) content.classList.toggle("active", content.id === `tab-${id}`);
     this.activeTab = id;
   }
 
   private bindEvents(): void {
-    if (!this.container) return;
     this.profileSelect?.addEventListener("change", () => this.renderProfileNote());
-    this.container.querySelector<HTMLButtonElement>(".start")!.addEventListener("click", () => void this.startRun());
-    this.container.querySelector<HTMLButtonElement>(".replicate")!.addEventListener("click", () => void this.cellAction("replicate"));
-    this.container.querySelector<HTMLButtonElement>(".preregister")!.addEventListener("click", () => void this.cellAction("preregister"));
-    this.container.querySelector<HTMLButtonElement>(".quest")!.addEventListener("click", () => void this.cellAction("quest"));
-    this.container.querySelector<HTMLButtonElement>(".export-script")!.addEventListener("click", () => void this.export("script"));
-    this.container.querySelector<HTMLButtonElement>(".export-report")!.addEventListener("click", () => void this.export("report"));
-    this.container.querySelector<HTMLButtonElement>(".export-records")!.addEventListener("click", () => void this.export("records"));
+    this.root.querySelector<HTMLButtonElement>(".start")!.addEventListener("click", () => void this.startRun());
+    this.root.querySelector<HTMLButtonElement>(".replicate")!.addEventListener("click", () => void this.cellAction("replicate"));
+    this.root.querySelector<HTMLButtonElement>(".preregister")!.addEventListener("click", () => void this.cellAction("preregister"));
+    this.root.querySelector<HTMLButtonElement>(".quest")!.addEventListener("click", () => void this.cellAction("quest"));
+    this.root.querySelector<HTMLButtonElement>(".export-script")!.addEventListener("click", () => void this.export("script"));
+    this.root.querySelector<HTMLButtonElement>(".export-report")!.addEventListener("click", () => void this.export("report"));
+    this.root.querySelector<HTMLButtonElement>(".export-records")!.addEventListener("click", () => void this.export("records"));
   }
 
   private async loadCatalogue(): Promise<void> {
@@ -370,8 +357,6 @@ export class ControlPanel implements Component {
 
   private renderAxes(): void {
     if (!this.cellNote) return;
-    const axes = this.axes.find((a) => a.axis === "credit")?.primitives ?? [];
-    if (!axes.length) return;
     for (const [axis, select] of this.cellSelects) {
       const options = this.axes.find((a) => a.axis === axis)?.primitives ?? [];
       const current = select.value;
@@ -382,7 +367,7 @@ export class ControlPanel implements Component {
   }
 
   private async startRun(): Promise<void> {
-    const btn = this.container!.querySelector<HTMLButtonElement>(".start")!;
+    const btn = this.root.querySelector<HTMLButtonElement>(".start")!;
     btn.disabled = true;
     btn.textContent = "Starting…";
     try {
@@ -426,7 +411,6 @@ export class ControlPanel implements Component {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Failed");
       this.cellNote!.textContent = body.message || "Done";
-      if (action === "replicate" || action === "quest") cellDrawer.hide();
     } catch (e) { this.cellNote!.textContent = (e as Error).message; }
   }
 
@@ -454,6 +438,41 @@ export class ControlPanel implements Component {
       URL.revokeObjectURL(url);
       this.exportNote!.textContent = "Downloaded";
     } catch { this.exportNote!.textContent = "Export failed"; }
+  }
+}
+
+/** The legacy singleton panel used by GoldenLayout until P2. */
+export class ControlPanel implements Component {
+  name = "ControlPanel";
+
+  private container: HTMLElement | null = null;
+  private view: ControlPanelView | null = null;
+
+  showSection(sectionId: string): void {
+    if (!this.container) return;
+    const tab = this.container.querySelector(`.tab[data-section="${sectionId}"]`) as HTMLElement;
+    if (tab) tab.click();
+  }
+
+  async init(): Promise<void> {
+    this.container = createPanelShell({
+      id: "control-panel",
+      title: "Control Panel",
+      glyph: "⚙",
+      key: CONTROL_KEYS.panel,
+      body: createControlPanelBody(),
+      dock: "floating",
+      defaultOpen: false,
+    });
+
+    this.view = new ControlPanelView(this.container);
+    registerDisplayPanel("control-panel", "control panel", "⚙", () => this.container, CONTROL_KEYS.panel);
+  }
+
+  async destroy(): Promise<void> {
+    this.view?.dispose();
+    this.view = null;
+    this.container?.remove();
   }
 }
 

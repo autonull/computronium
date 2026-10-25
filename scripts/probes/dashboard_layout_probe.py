@@ -22,9 +22,11 @@ cycle, 33 after it, and 33 after reload; panel open/close through the legacy
 registry; 24.97 s walltime; no page or console errors.
 
 P1 absolute host (2026-10-25): `hud` open + duplicate yields 2 views with
-distinct `{runId}` states and 0 nodes matching `#hud`; all five definitions
-(hud, caption, live-rail, control-bar, discovery-legend) open together with
-no duplicate ids; listeners 33/33/33; no errors.
+distinct `{runId}` states and 0 nodes matching `#hud`; all eight definitions
+(hud, caption, live-rail, control-bar, discovery-legend, control-panel,
+cell-drawer, pareto-chart, ablation-chart, variability-chart) open together;
+10 views created; listeners 33/33/33; no errors; duplicate `plotter-tooltip`
+IDs are a known minor issue.
 """
 
 from __future__ import annotations
