@@ -6,9 +6,9 @@
     "css": {
       "dvPosition": "relative",
       "tabHeight": "26px",
-      "tabCount": 6,
-      "groupCount": 6,
-      "groupHeight": "456px"
+      "tabCount": 10,
+      "groupCount": 10,
+      "groupHeight": "280px"
     },
     "chrome": {
       "menubarExists": true,
@@ -24,10 +24,10 @@
         "x": 420,
         "y": 54,
         "width": 1500,
-        "height": 885,
+        "height": 1654,
         "top": 54,
         "right": 1920,
-        "bottom": 939,
+        "bottom": 1708,
         "left": 420
       },
       "workspace": {
@@ -42,16 +42,16 @@
       },
       "leftWidth": 420,
       "rightWidth": 0,
-      "bottomHeight": 115,
-      "leftCount": 2,
+      "bottomHeight": 84,
+      "leftCount": 1,
       "rightCount": 0,
       "bottomCount": 3,
       "stage_pct_w": 78.125,
-      "stage_pct_h": 84.1254752851711,
+      "stage_pct_h": 157.22433460076047,
       "stage_ge_60x55": true,
       "left_in_range": true,
       "right_in_range": false,
-      "bottom_in_range": true
+      "bottom_in_range": false
     },
     "stage": {
       "ready": true,
@@ -59,21 +59,21 @@
       "view": "space",
       "canvas": {
         "w": 1500,
-        "h": 885,
+        "h": 1654,
         "dpr": 1
       },
       "rect": {
         "x": 420,
         "y": 54,
         "width": 1500,
-        "height": 885,
+        "height": 1654,
         "top": 54,
         "right": 1920,
-        "bottom": 939,
+        "bottom": 1708,
         "left": 420
       },
-      "aspect": 1.694915254237288,
-      "expected_aspect": 1.694915254237288,
+      "aspect": 0.9068923821039904,
+      "expected_aspect": 0.9068923821039904,
       "aspect_ok": true,
       "canvas_matches_rect_dpr": true,
       "height_equals_panel": true,
@@ -108,20 +108,20 @@
           "x": 420,
           "y": 54,
           "width": 1500,
-          "height": 885,
+          "height": 1654,
           "top": 54,
           "right": 1920,
-          "bottom": 939,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 1500,
-          "height": 885,
+          "height": 1654,
           "top": 54,
           "right": 1920,
-          "bottom": 939,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -131,20 +131,20 @@
           "x": 420,
           "y": 54,
           "width": 1179,
-          "height": 885,
+          "height": 1654,
           "top": 54,
           "right": 1599,
-          "bottom": 939,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 1179,
-          "height": 885,
+          "height": 1654,
           "top": 54,
           "right": 1599,
-          "bottom": 939,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -154,20 +154,20 @@
           "x": 420,
           "y": 54,
           "width": 1179,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1599,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 1179,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1599,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -177,20 +177,20 @@
           "x": 420,
           "y": 54,
           "width": 1179,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1599,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 1179,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1599,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -216,25 +216,25 @@
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-watch.png",
-        "diff_pct": 4.302948678185266
+        "diff_pct": 2.7453491890583397
       },
       "dashboard-audit": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-audit.png",
-        "diff_pct": 4.433129715363512
+        "diff_pct": 3.2543847207092713
       },
       "dashboard-drive": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-drive.png",
-        "diff_pct": 4.556967012628096
+        "diff_pct": 3.3304828708746874
       },
       "dashboard-free": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-free.png",
-        "diff_pct": 4.699463658920359
+        "diff_pct": 3.61653157276285
       },
       "dashboard-map": {
         "baseline_exists": true,
@@ -281,9 +281,9 @@
     "css": {
       "dvPosition": "relative",
       "tabHeight": "26px",
-      "tabCount": 6,
-      "groupCount": 6,
-      "groupHeight": "378px"
+      "tabCount": 10,
+      "groupCount": 10,
+      "groupHeight": "280px"
     },
     "chrome": {
       "menubarExists": true,
@@ -299,10 +299,10 @@
         "x": 420,
         "y": 54,
         "width": 1020,
-        "height": 729,
+        "height": 1654,
         "top": 54,
         "right": 1440,
-        "bottom": 783,
+        "bottom": 1708,
         "left": 420
       },
       "workspace": {
@@ -317,12 +317,12 @@
       },
       "leftWidth": 420,
       "rightWidth": 0,
-      "bottomHeight": 91,
-      "leftCount": 2,
+      "bottomHeight": 84,
+      "leftCount": 1,
       "rightCount": 0,
       "bottomCount": 3,
       "stage_pct_w": 70.83333333333334,
-      "stage_pct_h": 83.60091743119266,
+      "stage_pct_h": 189.67889908256882,
       "stage_ge_60x55": true,
       "left_in_range": true,
       "right_in_range": false,
@@ -334,21 +334,21 @@
       "view": "space",
       "canvas": {
         "w": 1020,
-        "h": 729,
+        "h": 1654,
         "dpr": 1
       },
       "rect": {
         "x": 420,
         "y": 54,
         "width": 1020,
-        "height": 729,
+        "height": 1654,
         "top": 54,
         "right": 1440,
-        "bottom": 783,
+        "bottom": 1708,
         "left": 420
       },
-      "aspect": 1.3991769547325104,
-      "expected_aspect": 1.3991769547325104,
+      "aspect": 0.6166868198307134,
+      "expected_aspect": 0.6166868198307134,
       "aspect_ok": true,
       "canvas_matches_rect_dpr": true,
       "height_equals_panel": true,
@@ -383,20 +383,20 @@
           "x": 420,
           "y": 54,
           "width": 1020,
-          "height": 729,
+          "height": 1654,
           "top": 54,
           "right": 1440,
-          "bottom": 783,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 1020,
-          "height": 729,
+          "height": 1654,
           "top": 54,
           "right": 1440,
-          "bottom": 783,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -406,20 +406,20 @@
           "x": 420,
           "y": 54,
           "width": 740,
-          "height": 729,
+          "height": 1654,
           "top": 54,
           "right": 1160,
-          "bottom": 783,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 740,
-          "height": 729,
+          "height": 1654,
           "top": 54,
           "right": 1160,
-          "bottom": 783,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -429,20 +429,20 @@
           "x": 420,
           "y": 54,
           "width": 740,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1160,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 740,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1160,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -452,20 +452,20 @@
           "x": 420,
           "y": 54,
           "width": 740,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1160,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "rect2": {
           "x": 420,
           "y": 54,
           "width": 740,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 1160,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 420
         },
         "idempotent": true
@@ -491,25 +491,25 @@
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-watch.png",
-        "diff_pct": 4.302948678185266
+        "diff_pct": 2.7453491890583397
       },
       "dashboard-audit": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-audit.png",
-        "diff_pct": 4.433129715363512
+        "diff_pct": 3.2543847207092713
       },
       "dashboard-drive": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-drive.png",
-        "diff_pct": 4.556967012628096
+        "diff_pct": 3.3304828708746874
       },
       "dashboard-free": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-free.png",
-        "diff_pct": 4.699463658920359
+        "diff_pct": 3.61653157276285
       },
       "dashboard-map": {
         "baseline_exists": true,
@@ -556,9 +556,9 @@
     "css": {
       "dvPosition": "relative",
       "tabHeight": "27px",
-      "tabCount": 6,
-      "groupCount": 6,
-      "groupHeight": "315px"
+      "tabCount": 10,
+      "groupCount": 10,
+      "groupHeight": "280px"
     },
     "chrome": {
       "menubarExists": true,
@@ -574,10 +574,10 @@
         "x": 309,
         "y": 54,
         "width": 715,
-        "height": 604,
+        "height": 1654,
         "top": 54,
         "right": 1024,
-        "bottom": 658,
+        "bottom": 1708,
         "left": 309
       },
       "workspace": {
@@ -593,11 +593,11 @@
       "leftWidth": 309,
       "rightWidth": 0,
       "bottomHeight": 84,
-      "leftCount": 2,
+      "leftCount": 1,
       "rightCount": 0,
       "bottomCount": 3,
       "stage_pct_w": 69.82421875,
-      "stage_pct_h": 81.62162162162161,
+      "stage_pct_h": 223.51351351351352,
       "stage_ge_60x55": true,
       "left_in_range": true,
       "right_in_range": false,
@@ -609,21 +609,21 @@
       "view": "space",
       "canvas": {
         "w": 715,
-        "h": 604,
+        "h": 1654,
         "dpr": 1
       },
       "rect": {
         "x": 309,
         "y": 54,
         "width": 715,
-        "height": 604,
+        "height": 1654,
         "top": 54,
         "right": 1024,
-        "bottom": 658,
+        "bottom": 1708,
         "left": 309
       },
-      "aspect": 1.1837748344370862,
-      "expected_aspect": 1.1837748344370862,
+      "aspect": 0.4322853688029021,
+      "expected_aspect": 0.4322853688029021,
       "aspect_ok": true,
       "canvas_matches_rect_dpr": true,
       "height_equals_panel": true,
@@ -658,20 +658,20 @@
           "x": 309,
           "y": 54,
           "width": 715,
-          "height": 604,
+          "height": 1654,
           "top": 54,
           "right": 1024,
-          "bottom": 658,
+          "bottom": 1708,
           "left": 309
         },
         "rect2": {
           "x": 309,
           "y": 54,
           "width": 715,
-          "height": 604,
+          "height": 1654,
           "top": 54,
           "right": 1024,
-          "bottom": 658,
+          "bottom": 1708,
           "left": 309
         },
         "idempotent": true
@@ -681,20 +681,20 @@
           "x": 309,
           "y": 54,
           "width": 435,
-          "height": 604,
+          "height": 1654,
           "top": 54,
           "right": 744,
-          "bottom": 658,
+          "bottom": 1708,
           "left": 309
         },
         "rect2": {
           "x": 309,
           "y": 54,
           "width": 435,
-          "height": 604,
+          "height": 1654,
           "top": 54,
           "right": 744,
-          "bottom": 658,
+          "bottom": 1708,
           "left": 309
         },
         "idempotent": true
@@ -704,20 +704,20 @@
           "x": 309,
           "y": 54,
           "width": 435,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 744,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 309
         },
         "rect2": {
           "x": 309,
           "y": 54,
           "width": 435,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 744,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 309
         },
         "idempotent": true
@@ -727,20 +727,20 @@
           "x": 309,
           "y": 54,
           "width": 435,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 744,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 309
         },
         "rect2": {
           "x": 309,
           "y": 54,
           "width": 435,
-          "height": 1094,
+          "height": 1654,
           "top": 54,
           "right": 744,
-          "bottom": 1148,
+          "bottom": 1708,
           "left": 309
         },
         "idempotent": true
@@ -766,25 +766,25 @@
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-watch.png",
-        "diff_pct": 4.302948678185266
+        "diff_pct": 2.7453491890583397
       },
       "dashboard-audit": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-audit.png",
-        "diff_pct": 4.433129715363512
+        "diff_pct": 3.2543847207092713
       },
       "dashboard-drive": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-drive.png",
-        "diff_pct": 4.556967012628096
+        "diff_pct": 3.3304828708746874
       },
       "dashboard-free": {
         "baseline_exists": true,
         "current_exists": true,
         "current_path": "/home/me/computronium/docs/screenshots/assets/dashboard-free.png",
-        "diff_pct": 4.699463658920359
+        "diff_pct": 3.61653157276285
       },
       "dashboard-map": {
         "baseline_exists": true,
