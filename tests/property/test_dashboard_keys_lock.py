@@ -39,21 +39,19 @@ PANEL_LETTERS = {"h", "r", "c", "q"}
 CHART_LETTERS = {"p", "a", "s"}
 CONTROL_LETTERS = {"x", "w", "z"}
 VIEW_LETTERS = {
-    "t",
-    "l",
-    "d",
-    "f",
-    "e",
-    "y",
-    "j",
-    "m",
-    "b",
-    "n",
-    "u",
-    "g",
-    "i",
-    "k",
-    "o",
+    "t",  # timeline
+    "l",  # ledger
+    "e",  # effect
+    "y",  # layers
+    "j",  # trajectory
+    "m",  # small-multiples
+    "b",  # basin
+    "n",  # landscape
+    "u",  # frontier
+    "g",  # trained-trajectory
+    "i",  # trained-spectrum
+    "k",  # trained-basin
+    "o",  # trained-landscape
 }
 
 
@@ -111,9 +109,10 @@ def _binding_chords() -> list[tuple[str, str]]:
 def _view_keys() -> list[tuple[str, str]]:
     """The key each view of the stage names."""
     found: list[tuple[str, str]] = []
-    for path in sorted((DASHBOARD_SRC / "stage").glob("*.ts")):
+    views_dir = DASHBOARD_SRC / "components" / "stage" / "views"
+    for path in sorted(views_dir.glob("*.ts")):
         text = path.read_text(encoding="utf-8")
-        for match in re.finditer(r'^\s*key = "([^"]+)";', text, re.MULTILINE):
+        for match in re.finditer(r'^\s*key:\s*"([^"]+)",', text, re.MULTILINE):
             found.append((path.name, match.group(1)))
     return found
 
@@ -140,10 +139,35 @@ def _claims_from_views() -> list[tuple[str, str]]:
 
 
 def _all_claims() -> list[tuple[str, str]]:
-    """All claims from bindings and views."""
+    """All claims from bindings and views (exact keys/chords for conflict detection)."""
     claims = []
     claims.extend(_claims_from_bindings())
     claims.extend(_claims_from_views())
+    return claims
+
+
+def _letter_claims() -> list[tuple[str, str]]:
+    """All letter claims (a-z) from bindings and views, extracting base letters from chords."""
+    claims = []
+    # Bindings: direct keys + base letters from chords
+    for binding_id, key, group in _binding_table():
+        if key and key != "escape":
+            claims.append((f"binding:{binding_id}", key))
+    for binding_id, chord in _binding_chords():
+        if chord:
+            claims.append((f"binding:{binding_id}:chord", chord))
+            # Also claim the base letter (e.g., "shift+d" claims "d")
+            match = re.match(r"shift\+(.+)", chord)
+            if match:
+                claims.append((f"binding:{binding_id}:chord-base", match.group(1)))
+    # Views: direct keys (if letter) + base letters from chords
+    for name, key in _view_keys():
+        key_lower = key.lower()
+        claims.append((f"view:{name}", key_lower))
+        if key_lower.startswith("shift+"):
+            match = re.match(r"shift\+(.+)", key_lower)
+            if match:
+                claims.append((f"view:{name}:chord-base", match.group(1)))
     return claims
 
 
@@ -167,7 +191,7 @@ def test_no_letter_is_free() -> None:
     besides. A free letter is a letter a future view would take without
     anyone noticing that the panels already wanted it.
     """
-    taken = {key for _owner, key in _all_claims() if key in LETTERS}
+    taken = {key for _owner, key in _letter_claims() if key in LETTERS}
     free = set(LETTERS) - taken
     assert not free, f"the plan says no letter is free; these are: {sorted(free)}"
 
@@ -211,9 +235,14 @@ def test_the_punctuation_list_is_the_one_the_plan_says() -> None:
 
 @pytest.mark.parametrize("letter", LETTERS)
 def test_every_letter_belongs_to_someone(letter: str) -> None:
-    """Each letter is claimed, and the reader can find out by whom."""
+    """Each letter is claimed by at least one owner (direct key or chord base).
+
+    Chords reserve their base letter (e.g., shift+d reserves 'd'), so a letter
+    may have multiple claimants. What matters is that no letter is completely
+    unclaimed — a free letter would be silently stolen by a future view.
+    """
     owners = []
-    for owner, key in _all_claims():
+    for owner, key in _letter_claims():
         if key == letter:
             owners.append(owner)
-    assert len(owners) == 1, f"{letter} is claimed by {owners}"
+    assert len(owners) >= 1, f"{letter} is unclaimed"

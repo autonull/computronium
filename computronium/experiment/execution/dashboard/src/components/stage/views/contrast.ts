@@ -230,7 +230,7 @@ export function createContrastView(context: StageViewContext): StageViewInstance
 export const contrastViewDefinition: StageViewDefinition = {
   view: "contrast",
   title: "The contrast",
-  key: "d",
+  key: "shift+v",
   group: "the judgement",
   create: createContrastView,
 };

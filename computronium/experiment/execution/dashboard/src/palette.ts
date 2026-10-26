@@ -22,6 +22,7 @@ interface Entry {
   label: string;
   group: string;
   hint?: string;
+  description?: string;
   enabled: boolean;
   reason?: string;
   run: () => void;
@@ -95,35 +96,35 @@ class CommandPalette {
     const hasCell = drawer?.hasCellSelected?.() ?? false;
 
     // The next question
-    e.push({ id: "start-run", label: hasRun ? "Start a new run" : "Start a run", group: "the next question", hint: "z", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("new-run"); commands.execute("panel-control-panel"); } });
-    e.push({ id: "replicate-cell", label: "Replicate selected cell", group: "the next question", hint: "⇧R", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.replicateSelected?.(); } });
-    e.push({ id: "preregister-claim", label: "Preregister claim", group: "the next question", hint: "⇧P", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.preregisterSelected?.(); } });
-    e.push({ id: "adopt-quest", label: "Adopt as quest (new run)", group: "the next question", hint: "⇧Q", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.adoptQuestSelected?.(); } });
-    e.push({ id: "show-queue", label: "Show run queue", group: "the next question", hint: "z → Queue", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("queue"); commands.execute("panel-control-panel"); } });
+    e.push({ id: "start-run", label: hasRun ? "Start a new run" : "Start a run", group: "the next question", hint: "z", description: "Launch a new experiment run", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("new-run"); commands.execute("panel-control-panel"); } });
+    e.push({ id: "replicate-cell", label: "Replicate selected cell", group: "the next question", hint: "⇧R", description: "Queue remaining seeds for the selected cell", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.replicateSelected?.(); } });
+    e.push({ id: "preregister-claim", label: "Preregister claim", group: "the next question", hint: "⇧P", description: "Confirm protocol before measuring", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.preregisterSelected?.(); } });
+    e.push({ id: "adopt-quest", label: "Adopt as quest (new run)", group: "the next question", hint: "⇧Q", description: "Launch a new run from this cell", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.adoptQuestSelected?.(); } });
+    e.push({ id: "show-queue", label: "Show run queue", group: "the next question", hint: "z → Queue", description: "View queued and running campaigns", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("queue"); commands.execute("panel-control-panel"); } });
 
     // Workspaces
-    for (const [id, label] of [["watch", "Watch — campaigns"], ["audit", "Audit — evidence"], ["drive", "Drive — instrument"], ["reset", "Reset to Watch"]] as const) {
+    for (const [id, label, desc] of [["watch", "Watch — campaigns", "Stage + legend + controls"], ["audit", "Audit — evidence", "Watch + HUD"], ["drive", "Drive — instrument", "Watch + charts"], ["reset", "Reset to Watch", "Return to Watch preset"]] as const) {
       const active = id !== "reset" && applyPreset === undefined ? false : getCurrentPreset() === id;
-      e.push({ id: `ws-${id}`, label, group: "workspaces", hint: "", enabled: id === "reset" || !active, reason: active ? "Active" : undefined, sortOrder: order++, run: () => { this.close(); if (id === "reset") applyPreset("watch"); else applyPreset(id as any); } });
+      e.push({ id: `ws-${id}`, label, group: "workspaces", hint: "", description: desc, enabled: id === "reset" || !active, reason: active ? "Active" : undefined, sortOrder: order++, run: () => { this.close(); if (id === "reset") applyPreset("watch"); else applyPreset(id as any); } });
     }
 
     // Views
     for (const v of listStageViews()) {
       const b = BINDINGS.find((x) => x.id === `view-${v.view}`);
-      e.push({ id: `view-${v.view}`, label: v.title, group: "views", hint: b?.key ?? b?.chord ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); commands.execute(`view-${v.view}`); } });
+      e.push({ id: `view-${v.view}`, label: v.title, group: "views", hint: b?.key ?? b?.chord ?? "", description: (v as any).description ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); commands.execute(`view-${v.view}`); } });
     }
 
     // Panels
     const panelCommands = commands.list().filter((c) => c.id.startsWith("panel-"));
     for (const cmd of panelCommands) {
       const b = BINDINGS.find((x) => x.id === cmd.id);
-      e.push({ id: cmd.id, label: cmd.title, group: "panels", hint: b?.key ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); commands.execute(cmd.id); } });
+      e.push({ id: cmd.id, label: cmd.title, group: "panels", hint: b?.key ?? "", description: (cmd as any).description ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); commands.execute(cmd.id); } });
     }
 
     // Verbs
     for (const b of BINDINGS) {
       if (b.group === "Run Control" || b.group === "General") {
-        e.push({ id: b.id, label: b.label, group: b.group === "Run Control" ? "verbs" : "general", hint: b.key === " " ? "Space" : (b.key ?? b.chord ?? ""), enabled: b.when ? this.checkWhen(b.when) : true, reason: b.when && !this.checkWhen(b.when) ? this.whenReason(b.when) : undefined, sortOrder: order++, run: () => { this.close(); b.run(); } });
+        e.push({ id: b.id, label: b.label, group: b.group === "Run Control" ? "verbs" : "general", hint: b.key === " " ? "Space" : (b.key ?? b.chord ?? ""), description: (b as any).description ?? "", enabled: b.when ? this.checkWhen(b.when) : true, reason: b.when && !this.checkWhen(b.when) ? this.whenReason(b.when) : undefined, sortOrder: order++, run: () => { this.close(); b.run(); } });
       }
     }
 
@@ -143,8 +144,26 @@ class CommandPalette {
 
   private filter(): void {
     const q = this.input!.value.toLowerCase().trim();
-    if (!q) this.filtered = [...this.entries];
-    else this.filtered = this.entries.filter((e) => e.label.toLowerCase().includes(q) || e.hint?.toLowerCase().includes(q));
+    if (!q) {
+      this.filtered = [...this.entries];
+    } else {
+      // Ranking: Exact > Prefix > Fuzzy > Group
+      const scored = this.entries.map((e) => {
+        const label = e.label.toLowerCase();
+        const hint = e.hint?.toLowerCase() ?? "";
+        const group = e.group.toLowerCase();
+        let score = 0;
+        if (label === q) score = 4; // Exact
+        else if (label.startsWith(q)) score = 3; // Prefix
+        else if (label.includes(q) || hint.includes(q)) score = 2; // Fuzzy
+        else if (group.includes(q)) score = 1; // Group
+        return { entry: e, score };
+      });
+      this.filtered = scored
+        .filter((s) => s.score > 0)
+        .sort((a, b) => b.score - a.score || a.entry.sortOrder! - b.entry.sortOrder!)
+        .map((s) => s.entry);
+    }
     this.selected = 0;
     this.render();
   }
@@ -162,14 +181,16 @@ class CommandPalette {
       if (e.group !== currentGroup) {
         currentGroup = e.group;
         const h = document.createElement("div");
-        h.style.cssText = `padding: 6px 10px 2px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600;`;
+        h.style.cssText = `padding: 6px 10px 2px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; user-select: none;`;
         h.textContent = e.group;
         this.list.appendChild(h);
       }
       const item = document.createElement("div");
       item.style.cssText = `display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 4px; cursor: ${e.enabled ? "pointer" : "not-allowed"}; ${!e.enabled ? "opacity: 0.5;" : ""}`;
       if (i === this.selected) item.style.background = "var(--gradient)1a";
-      item.innerHTML = `<span style="flex: 1; font-size: 12px; color: var(--text-primary);">${this.highlight(e.label)}</span>${e.hint ? `<kbd style="font-size: 9px; padding: 1px 5px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary);">${e.hint}</kbd>` : ""}${e.reason ? `<span style="font-size: 10px; color: var(--text-muted);">${e.reason}</span>` : ""}`;
+      // Show description as subtitle if available
+      const desc = e.description ? `<div style="font-size: 10px; color: var(--text-muted); margin-left: 8px;">${e.description}</div>` : "";
+      item.innerHTML = `<span style="flex: 1; font-size: 12px; color: var(--text-primary);">${this.highlight(e.label)}</span>${e.hint ? `<kbd style="font-size: 9px; padding: 1px 5px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary);">${e.hint}</kbd>` : ""}${e.reason ? `<span style="font-size: 10px; color: var(--text-muted);">${e.reason}</span>` : ""}${desc ? `<div style="display: flex; flex-direction: column;">${desc}</div>` : ""}`;
       if (e.enabled) {
         item.addEventListener("click", () => { this.selected = i; e.run(); });
         item.addEventListener("mouseenter", () => (this.selected = i));

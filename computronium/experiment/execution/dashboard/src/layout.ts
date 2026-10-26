@@ -16,33 +16,35 @@ const stage = (view = "space"): LayoutNode => ({
   size: { ratio: 0.677, width: 1280, height: 720 },
 });
 
-/** Left column: legend + control-panel (clamped 300–360px). */
+/** Left column: legend + control-panel (clamped 280–420px).
+ * Ratio 0.293 gives ~300px at 1024, ~422px at 1440, ~562px at 1920.
+ * Split minPx/maxPx constrains the branch size in Dockview's grid. */
 const leftColumn = (): LayoutNode => ({
   kind: "split",
   direction: "column",
-  // At 1920px: 300px = 15.6%
-  size: { ratio: 0.15625, minPx: 300, maxPx: 360, width: 300, height: 1080 },
+  size: { ratio: 0.293, minPx: 280, maxPx: 420, width: 1920, height: 1080 },
   children: [
     { kind: "panel", type: "discovery-legend", title: "Discovery Map", size: { ratio: 0.5, width: 300, height: 540 } },
     { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 300, height: 540 } },
   ],
 });
 
-/** Right column for Audit: HUD only (clamped 320–400px). */
+/** Right column for Audit: HUD only (clamped 280–420px).
+ * Ratio 0.195 gives ~200px at 1024, ~280px at 1440, ~374px at 1920. */
 const rightColumnAudit = (): LayoutNode => ({
   kind: "split",
   direction: "column",
-  size: { ratio: 0.1667, minPx: 320, maxPx: 400, width: 320, height: 1080 },
+  size: { ratio: 0.195, minPx: 280, maxPx: 420, width: 1920, height: 1080 },
   children: [
     { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 1, width: 320, height: 1080 } },
   ],
 });
 
-/** Right column for Drive: HUD + Charts (clamped 320–400px). */
+/** Right column for Drive: HUD + Charts (clamped 280–420px). */
 const rightColumnDrive = (): LayoutNode => ({
   kind: "split",
   direction: "column",
-  size: { ratio: 0.1667, minPx: 320, maxPx: 400, width: 320, height: 1080 },
+  size: { ratio: 0.195, minPx: 280, maxPx: 420, width: 1920, height: 1080 },
   children: [
     { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 270 } },
     { kind: "panel", type: "pareto-chart", title: "Pareto", size: { ratio: 0.25, width: 320, height: 270 } },
@@ -54,12 +56,11 @@ const rightColumnDrive = (): LayoutNode => ({
 /** Right column for Free: HUD + Charts (same as Drive). */
 const rightColumn = (): LayoutNode => rightColumnDrive();
 
-/** Bottom row: control-bar + caption + live-rail (clamped 120–160px). */
+/** Bottom row: control-bar + caption + live-rail (clamped 110–180px). */
 const bottomRow = (): LayoutNode => ({
   kind: "split",
   direction: "row",
-  // At 1080px: 140px = 13%
-  size: { ratio: 0.13, minPx: 120, maxPx: 160, width: 1920, height: 140 },
+  size: { ratio: 0.135, minPx: 110, maxPx: 180, width: 1920, height: 1080 },
   children: [
     { kind: "panel", type: "control-bar", title: "Control Bar", size: { ratio: 0.33, width: 640, height: 140 } },
     { kind: "panel", type: "caption", title: "Caption", size: { ratio: 0.34, width: 640, height: 140 } },

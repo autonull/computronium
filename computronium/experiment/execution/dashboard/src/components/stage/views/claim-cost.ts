@@ -270,7 +270,7 @@ export function createClaimCostView(context: StageViewContext): StageViewInstanc
 export const claimCostViewDefinition: StageViewDefinition = {
   view: "claim-cost",
   title: "The claim's cost",
-  key: "c",
+  key: "/",
   group: "the evidence",
   create: createClaimCostView,
 };

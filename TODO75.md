@@ -2,11 +2,14 @@
 
 **Status:** Created 2026-10-26 — Optimized 3-track, ~5 day plan. Pre-existing issues from TODO70–74 + usability gaps for "total usability."
 
+**Progress:** Day 1-2 Complete — Track 1 (A1, A2), Track 1B (S2, S3), Track 2 (B1, B2, B3, C3, C5), Track 2B (S4, S5, S6, S7), Track 3 (F1, F2) — DONE
+**Remaining:** Track 1 (A3 Geometry), Track 1B (S1), Track 1B/S1 integration with Geometry — IN PROGRESS
+
 ---
 
 ## Pre-Existing Blockers (Must Fix — CI Gates)
 
-### 1. Pyright Errors in `web.py` (7 errors) — **Track 1, Day 1**
+### 1. Pyright Errors in `web.py` (7 errors) — **Track 1, Day 1** ✅ **DONE**
 **File:** `computronium/experiment/execution/dashboard/web.py`
 
 | Line | Error | Fix |
@@ -18,11 +21,11 @@
 | 774 | `str` has no `filename` | Fix upload handling — use `UploadFile` |
 | 787 | `str` has no `read` | Use `UploadFile.read()` |
 
-**Gate:** `uv run pyright computronium/experiment/execution/dashboard/web.py` → clean
+**Gate:** `uv run pyright computronium/experiment/execution/dashboard/web.py` → clean ✅
 
 ---
 
-### 2. Keys Lock Test Failures (18 conflicts) — **Track 1, Day 1**
+### 2. Keys Lock Test Failures (18 conflicts) — **Track 1, Day 1** ✅ **DONE**
 **File:** `src/bindings.ts` + view keys in `src/components/stage/views/*.ts`
 
 | Key | Conflicts | Resolution |
@@ -41,7 +44,7 @@
 
 **Rule:** Presets lose direct keys → chords. Views take punctuation reserve (`,`, `.`, `/`, `'`), then chords. No letter claimed twice across bindings + views.
 
-**Gate:** `uv run pytest tests/property/test_dashboard_keys_lock.py -q` → 100% pass
+**Gate:** `uv run pytest tests/property/test_dashboard_keys_lock.py -q` → 100% pass ✅
 
 ---
 
@@ -58,60 +61,60 @@
 
 ---
 
-## First-Run + Core Polish (Acceptance Criteria) — **Track 2, Days 1–2**
+## First-Run + Core Polish (Acceptance Criteria) — **Track 2, Days 1–2** ✅ **DONE**
 
 All items independent — **run in parallel** once Track 1 unblocks keys.
 
 | Item | File(s) | Description | Gate |
 |------|---------|-------------|------|
-| **B1** Void view CTA | `src/components/stage/views/space.ts` (void view) | Add "Start a run" button in empty state → opens control panel New Run section | First-run: dashboard → click CTA → sees results <60s |
-| **B2** Quick Run progress | `src/control-bar.ts` | Spinner while POST in-flight; toast "Run complete" on done | First-run |
-| **B3** Cells section disable | `src/control-panel.ts` (Cells section) | Replicate/Preregister/Quest disabled with inline reason "No cell selected" | Keyboard-only |
-| **C5** Focus management | `src/palette.ts`, `src/shell.ts` | Palette → panel focuses first actionable; Escape closes consistently | Keyboard-only |
-| **C3** Chart empty state hints | `src/plotter.ts` (3 chart panels) | Pareto: "Run with multiple credit arms" → link to profile picker; Ablation: "Add credit-axis groups"; Variability: "Add seeds in control panel" | First-run |
+| **B1** Void view CTA | `src/components/stage/views/space.ts` (void view) | Add "Start a run" button in empty state → opens control panel New Run section | First-run: dashboard → click CTA → sees results <60s ✅ |
+| **B2** Quick Run progress | `src/control-bar.ts` | Spinner while POST in-flight; toast "Run complete" on done | First-run ✅ |
+| **B3** Cells section disable | `src/control-panel.ts` (Cells section) | Replicate/Preregister/Quest disabled with inline reason "No cell selected" | Keyboard-only ✅ |
+| **C5** Focus management | `src/palette.ts`, `src/shell.ts` | Palette → panel focuses first actionable; Escape closes consistently | Keyboard-only ✅ |
+| **C3** Chart empty state hints | `src/plotter.ts` (3 chart panels) | Pareto: "Run with multiple credit arms" → link to profile picker; Ablation: "Add credit-axis groups"; Variability: "Add seeds in control panel" | First-run ✅ |
 
 **Note:** View search (C1) **cut** — palette (`:`) already provides fuzzy search over all views.
 
 ---
 
-## Dev Velocity (Accelerates All Frontend Work) — **Track 3, Day 1 Start**
+## Dev Velocity (Accelerates All Frontend Work) — **Track 3, Day 1 Start** ✅ **DONE**
 
 | Item | Description |
 |------|-------------|
-| **F1** HMR | `vite.config.ts`: proxy `/api` + `/ws` to FastAPI. `npm run dev` → instant TS/CSS reload. |
-| **F2** Config file | `scripts/config.yaml` for probe/capture: ports, store path, viewport, timeouts. |
+| **F1** HMR | `vite.config.ts`: proxy `/api` + `/ws` to FastAPI. `npm run dev` → instant TS/CSS reload. ✅ |
+| **F2** Config file | `scripts/config.yaml` for probe/capture: ports, store path, viewport, timeouts. ✅ |
 
 ---
 
 ## UI/UX Streamlining (Parallel Sub-Tracks — No Functionality Loss)
 
-### Track 1B: Layout & Density (Parallel with Track 1, Day 1)
+### Track 1B: Layout & Density (Parallel with Track 1, Day 1) — **PARTIAL**
 *All items reduce horizontal/vertical space at 1024×768 → directly helps Geometry gate.*
 
 | Item | File(s) | Description | Gate Alignment |
 |------|---------|-------------|----------------|
 | **S1** Panel Rail Grouping | `src/panels.ts`, `src/layout.ts` | Collapsible groups: `[Charts] [Inspect] [Control]` instead of 10 individual toggles. Single rail toggle expands accordion. | Geometry 1024×768 |
-| **S2** Control Bar Responsive | `src/control-bar.ts`, `dashboard.css` | Media query `<1200px`: collapse trace to sparkline, hide slider labels, group verbs `[▶⏸][⏭][⏹]` with tooltips. | Geometry 1024×768 |
-| **S3** Legend Chip Axes | `src/components/discovery-legend.ts` | Replace 3 stacked dropdowns/rows with single-row chip groups per axis: `X: [credit ▼] [geometry ▼] [update ▼]`. Click cycles. | Geometry, Usability |
+| **S2** Control Bar Responsive | `src/control-bar.ts`, `dashboard.css` | Media query `<1200px`: collapse trace to sparkline, hide slider labels, group verbs `[▶⏸][⏭][⏹]` with tooltips. | Geometry 1024×768 ✅ |
+| **S3** Legend Chip Axes | `src/components/discovery-legend.ts` | Replace 3 stacked dropdowns/rows with single-row chip groups per axis: `X: [credit ▼] [geometry ▼] [update ▼]`. Click cycles. | Geometry, Usability ✅ |
 
-### Track 2B: Empty States & Feedback (Parallel with Track 2, Days 1–2)
+### Track 2B: Empty States & Feedback (Parallel with Track 2, Days 1–2) — **PARTIAL**
 *All items reuse one component → less code, consistent UX, helps First-Run + Keyboard-Only gates.*
 
 | Item | File(s) | Description | Gate Alignment |
 |------|---------|-------------|----------------|
-| **S4** Unified EmptyState | `src/components/EmptyState.ts` (new) + 5 call sites | Single component: icon + title + sentence + **primary CTA**. Used in: void view, Pareto, Ablation, Variability, Caption. | B1, C3, First-run |
-| **S5** Caption Contextual | `src/caption.ts` | Always visible: no run → CTA; run active → status + counts; cell selected → detail + verb hints. | B1, C5, Keyboard-only |
-| **S6** Palette Ranking | `src/palette.ts` | Exact > prefix > fuzzy > group; show descriptions as subtitles; group headers non-selectable. | Keyboard-only |
-| **S7** Quick Run Inline | `src/control-bar.ts` | Button expands on hover/focus showing profile summary (fidelity, seeds, arms, ~30s). | B2, First-run |
+| **S4** Unified EmptyState | `src/components/EmptyState.ts` (new) + 5 call sites | Single component: icon + title + sentence + **primary CTA**. Used in: void view, Pareto, Ablation, Variability, Caption. | B1, C3, First-run ✅ |
+| **S5** Caption Contextual | `src/caption.ts` | Always visible: no run → CTA; run active → status + counts; cell selected → detail + verb hints. | B1, C5, Keyboard-only ✅ |
+| **S6** Palette Ranking | `src/palette.ts` | Exact > prefix > fuzzy > group; show descriptions as subtitles; group headers non-selectable. | Keyboard-only ✅ |
+| **S7** Quick Run Inline | `src/control-bar.ts` | Button expands on hover/focus showing profile summary (fidelity, seeds, arms, ~30s). | B2, First-run ✅ |
 
 **Non-functional guarantees:**
 - S1: All 10 panels still toggleable; group state persists in `localStorage`
-- S2: Full control bar visible at ≥1200px; no verb removed
-- S3: All 6 axes still selectable; chip click = cycle (same as button row)
-- S4: Each empty state keeps its specific message/CTA; only chrome unified
-- S5: Caption still shows cell coordinate on hover; adds context, doesn't remove
-- S6: Palette still opens on `:`; fuzzy match unchanged; only ranking + subtitles added
-- S7: Quick Run button still works on click; inline summary is progressive disclosure
+- S2: Full control bar visible at ≥1200px; no verb removed ✅
+- S3: All 6 axes still selectable; chip click = cycle (same as button row) ✅
+- S4: Each empty state keeps its specific message/CTA; only chrome unified ✅
+- S5: Caption still shows cell coordinate on hover; adds context, doesn't remove ✅
+- S6: Palette still opens on `:`; fuzzy match unchanged; only ranking + subtitles added ✅
+- S7: Quick Run button still works on click; inline summary is progressive disclosure ✅
 
 ---
 

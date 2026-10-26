@@ -181,7 +181,7 @@ export function createSpectrumView(context: StageViewContext): StageViewInstance
 export const spectrumViewDefinition: StageViewDefinition = {
   view: "spectrum",
   title: "The spectrum",
-  key: "m",
+  key: "shift+m",
   group: "the system",
   create: createSpectrumView,
 };

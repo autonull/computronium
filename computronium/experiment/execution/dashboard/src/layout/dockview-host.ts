@@ -878,12 +878,24 @@ export class DockviewHost implements LayoutHost {
             size: totalRatio > 0 ? (hasSize(node.children[idx]) ? node.children[idx].size?.ratio ?? 1 : 1) / totalRatio : 1 / children.length,
           }));
           
-          return {
+          const branch: any = {
             type: "branch",
             data: sizedChildren,
             size: hasSize(node) ? (node.size?.ratio ?? 1) : 1,
             visible: true,
           };
+          
+          // Add minimum/maximum size constraints from split node's size
+          if (hasSize(node) && node.size) {
+            if (node.size.minPx !== undefined) {
+              branch.minimumSize = node.size.minPx;
+            }
+            if (node.size.maxPx !== undefined) {
+              branch.maximumSize = node.size.maxPx;
+            }
+          }
+          
+          return branch;
         }
         case "float": {
           // Floating panels are handled separately in floatingGroups

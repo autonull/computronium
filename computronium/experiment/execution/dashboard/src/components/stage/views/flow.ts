@@ -257,7 +257,7 @@ export function createFlowView(context: StageViewContext): StageViewInstance {
 export const flowViewDefinition: StageViewDefinition = {
   view: "flow",
   title: "The flow",
-  key: "f",
+  key: ".",
   group: "the process",
   create: createFlowView,
 };

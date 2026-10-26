@@ -1,0 +1,58 @@
+# Dashboard probe/capture configuration (TODO75 F2)
+# 
+# Used by scripts/probes/dashboard_picture_probe.py and
+# scripts/capture_dashboard_tour.py / scripts/capture_dashboard_screenshot.py
+
+# FastAPI server port
+port: 8080
+
+# Dashboard dev server port (Vite)
+dev_port: 3000
+
+# DuckDB store path
+store_path: "experiment.duckdb"
+
+# Viewports to test (width x height)
+viewports:
+  - name: "1920x1080"
+    width: 1920
+    height: 1080
+  - name: "1440x900"
+    width: 1440
+    height: 900
+  - name: "1024x768"
+    width: 1024
+    height: 768
+
+# Timeouts (seconds)
+timeouts:
+  # Dashboard server startup
+  server_startup: 30
+  # HTTP health check
+  http_health: 10
+  # WebSocket connection
+  ws_connect: 10
+  # Wait for records in store
+  wait_records: 180
+  # Probe wait for stage ready
+  stage_ready: 30
+  # Page load
+  page_load: 30
+
+# Screenshot/capture settings
+screenshot:
+  # Output directory
+  output_dir: "docs/screenshots"
+  # Baseline directory (for diffing)
+  baseline_dir: "/tmp/opencode/baseline"
+  # Image diff threshold (0-100)
+  diff_threshold: 5.0
+
+# Campaign settings
+campaign:
+  # Demo profile to run
+  profile: "demo"
+  # Minimum records to consider run complete
+  min_records: 5
+  # Max rounds
+  max_rounds: 2

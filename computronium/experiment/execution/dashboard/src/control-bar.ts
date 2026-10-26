@@ -21,14 +21,31 @@ export function createControlBarBody(): string {
       .ctrl .status { min-width: 100px; color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 12px; }
       .ctrl .door { width: 30px; height: 30px; font-size: 14px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; }
       .ctrl .door:hover { background: var(--border); }
-      .ctrl .quick-run { padding: 6px 12px; font-size: 11px; background: var(--gradient)22; border: 1px solid var(--gradient)66; border-radius: 4px; color: var(--gradient); cursor: pointer; }
+      .ctrl .quick-run { padding: 6px 12px; font-size: 11px; background: var(--gradient)22; border: 1px solid var(--gradient)66; border-radius: 4px; color: var(--gradient); cursor: pointer; position: relative; }
       .ctrl .quick-run:hover { background: var(--gradient)33; }
       .ctrl .quick-run:disabled { opacity: 0.4; cursor: not-allowed; }
+      .ctrl .quick-run:hover .quick-run-inline,
+      .ctrl .quick-run:focus-within .quick-run-inline { display: block; }
+      .ctrl .quick-run-inline { display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 6px; padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; font-size: 10px; color: var(--text-secondary); white-space: nowrap; box-shadow: 0 -4px 16px rgba(0,0,0,0.4); z-index: 10; }
+      .ctrl .quick-run-inline .summary-row { display: flex; gap: 16px; margin: 4px 0; }
+      .ctrl .quick-run-inline .summary-label { color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .ctrl .quick-run-inline .summary-value { color: var(--text-primary); font-weight: 600; font-size: 10px; }
+      
+      /* Responsive: <1200px */
+      @media (max-width: 1199px) {
+        .ctrl .meter-label { display: none; }
+        .ctrl .slider { width: 80px; }
+        .ctrl .status { min-width: 60px; font-size: 10px; }
+        .ctrl .quick-run { padding: 6px 8px; font-size: 10px; }
+        .ctrl .verb-group { display: flex; gap: 2px; }
+      }
     </style>
     <div class="ctrl" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-      <button class="verb primary" data-act="play" title="Play">▶</button>
-      <button class="verb" data-act="step" title="Step one batch" disabled>⏭</button>
-      <button class="verb danger" data-act="stop" title="Stop run">⏹</button>
+      <div class="verb-group" style="display: flex; gap: 2px;">
+        <button class="verb primary" data-act="play" title="Play">▶</button>
+        <button class="verb" data-act="step" title="Step one batch" disabled>⏭</button>
+        <button class="verb danger" data-act="stop" title="Stop run">⏹</button>
+      </div>
       <div class="sep"></div>
       <div class="meter">
         <div class="meter-row"><span class="meter-label">Ceiling</span><span class="meter-value ceil">—</span></div>
@@ -42,7 +59,16 @@ export function createControlBarBody(): string {
       </div>
       <div class="sep"></div>
       <span class="status">no run</span>
-      <button class="quick-run" data-act="quick-run" title="Start quick run (diverse cells in ~30s)" disabled>Quick Run</button>
+      <button class="quick-run" data-act="quick-run" title="Start quick run (diverse cells in ~30s)" disabled>
+        Quick Run
+        <div class="quick-run-inline">
+          <div class="summary-row"><span class="summary-label">Profile</span><span class="summary-value">quick-run</span></div>
+          <div class="summary-row"><span class="summary-label">Fidelity</span><span class="summary-value">L0</span></div>
+          <div class="summary-row"><span class="summary-label">Seeds</span><span class="summary-value">1</span></div>
+          <div class="summary-row"><span class="summary-label">Arms</span><span class="summary-value">6</span></div>
+          <div class="summary-row"><span class="summary-label">Est. time</span><span class="summary-value">~30s</span></div>
+        </div>
+      </button>
       <button class="door" data-act="panel" title="Control panel">⚙</button>
     </div>
   `;
@@ -104,7 +130,13 @@ export class ControlBarView {
 
   private async startQuickRun(): Promise<void> {
     this.quickRunBtn.disabled = true;
-    this.quickRunBtn.textContent = "Starting...";
+    this.quickRunBtn.innerHTML = `<span class="ctrl-spinner" style="display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:ctrl-spin 0.8s linear infinite;margin-right:6px;vertical-align:middle;"></span>Starting...`;
+    if (!document.getElementById("ctrl-spinner-style")) {
+      const style = document.createElement("style");
+      style.id = "ctrl-spinner-style";
+      style.textContent = "@keyframes ctrl-spin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(style);
+    }
     try {
       const response = await fetch("/api/runs", {
         method: "POST",
@@ -113,6 +145,7 @@ export class ControlBarView {
       });
       const result = await response.json();
       if (result.started) {
+        this.showToast("Run complete — tracking cells…");
         this.quickRunBtn.textContent = "Started";
         setTimeout(() => {
           this.quickRunBtn.textContent = "Quick Run";
@@ -133,6 +166,30 @@ export class ControlBarView {
         this.quickRunBtn.disabled = false;
       }, 2000);
     }
+  }
+
+  private showToast(message: string): void {
+    const overlay = document.getElementById("ui-overlay");
+    if (!overlay) return;
+    const toast = document.createElement("div");
+    toast.style.cssText = `
+      position: fixed; bottom: 24px; right: 24px; z-index: 1000; pointer-events: auto;
+      padding: 12px 20px; background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-size: 12px;
+      color: var(--text-primary); animation: ctrl-toast-in 0.2s ease-out;
+    `;
+    toast.textContent = message;
+    if (!document.getElementById("ctrl-toast-style")) {
+      const style = document.createElement("style");
+      style.id = "ctrl-toast-style";
+      style.textContent = "@keyframes ctrl-toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}";
+      document.head.appendChild(style);
+    }
+    overlay.appendChild(toast);
+    setTimeout(() => {
+      toast.style.animation = "ctrl-toast-in 0.2s ease-out reverse";
+      setTimeout(() => toast.remove(), 200);
+    }, 3000);
   }
 
   private render(p: ControlPayload | null): void {

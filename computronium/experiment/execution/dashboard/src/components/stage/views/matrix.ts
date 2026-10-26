@@ -373,7 +373,7 @@ export function createMatrixView(context: StageViewContext): StageViewInstance {
 export const matrixViewDefinition: StageViewDefinition = {
   view: "matrix",
   title: "Evidence matrix",
-  key: "x",
+  key: "shift+x",
   group: "the run",
   create: createMatrixView,
 };

@@ -295,7 +295,7 @@ export function createSpreadView(context: StageViewContext): StageViewInstance {
 export const spreadViewDefinition: StageViewDefinition = {
   view: "spread",
   title: "The spread",
-  key: "s",
+  key: "shift+s",
   group: "the evidence",
   create: createSpreadView,
 };

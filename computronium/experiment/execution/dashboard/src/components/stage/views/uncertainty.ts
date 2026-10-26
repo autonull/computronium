@@ -264,7 +264,7 @@ export function createUncertaintyView(context: StageViewContext): StageViewInsta
 export const uncertaintyViewDefinition: StageViewDefinition = {
   view: "uncertainty",
   title: "The uncertainty",
-  key: "x",
+  key: "shift+z",
   group: "the evidence",
   create: createUncertaintyView,
 };

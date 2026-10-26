@@ -20,8 +20,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
@@ -745,7 +748,7 @@ class WebDashboard:
             })
 
         @self.app.get("/api/databases/export")
-        async def api_export_database(path: str) -> JSONResponse:
+        async def api_export_database(path: str) -> Response:
             """Export database as download."""
             from pathlib import Path
 
@@ -762,16 +765,14 @@ class WebDashboard:
             )
 
         @self.app.post("/api/databases/import")
-        async def api_import_database(request: Request) -> JSONResponse:
+        async def api_import_database(file: UploadFile) -> JSONResponse:
             """Import database from uploaded file."""
             from pathlib import Path
 
-            form = await request.form()
-            file = form.get("file")
-            if not file or not hasattr(file, "filename"):
+            if not file or not file.filename:
                 return JSONResponse({"error": "No file uploaded"}, status_code=400)
 
-            filename = file.filename or "imported.duckdb"
+            filename = file.filename
             dest_path = Path.cwd() / filename
 
             # Handle duplicate names

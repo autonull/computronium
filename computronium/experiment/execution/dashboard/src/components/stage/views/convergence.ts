@@ -226,7 +226,7 @@ export function createConvergenceView(context: StageViewContext): StageViewInsta
 export const convergenceViewDefinition: StageViewDefinition = {
   view: "convergence",
   title: "Convergence",
-  key: "c",
+  key: "'",
   group: "the run",
   create: createConvergenceView,
 };

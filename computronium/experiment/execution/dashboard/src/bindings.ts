@@ -138,33 +138,33 @@ export const BINDINGS: Binding[] = [
     run: () => actions["view-cycle"]?.(),
   },
 
-  // Preset workspaces
+  // Preset workspaces — chords only (direct keys moved to avoid conflicts)
   {
     id: "preset-watch",
     label: "Watch preset (stage + legend + controls)",
     group: "Presets",
-    key: "w",
+    chord: "shift+w",
     run: () => actions["preset-watch"]?.(),
   },
   {
     id: "preset-audit",
     label: "Audit preset (+ HUD)",
     group: "Presets",
-    key: "a",
+    chord: "shift+a",
     run: () => actions["preset-audit"]?.(),
   },
   {
     id: "preset-drive",
     label: "Drive preset (+ charts)",
     group: "Presets",
-    key: "d",
+    chord: "shift+d",
     run: () => actions["preset-drive"]?.(),
   },
   {
     id: "preset-free",
     label: "Free preset (all floating)",
     group: "Presets",
-    key: "f",
+    chord: "shift+f",
     run: () => actions["preset-free"]?.(),
   },
 

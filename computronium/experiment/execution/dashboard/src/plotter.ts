@@ -9,6 +9,7 @@
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { registry } from "./components/registry.js";
+import { createEmptyState, createChartEmptyState } from "./components/EmptyState.js";
 import { TAB_KEYS } from "./keys.js";
 import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
@@ -107,14 +108,7 @@ interface AblationGroup {
 export function createChartPanelBody(chart: ChartSpec): string {
   return `
     <div id="${chart.hostId}" style="flex: 1; position: relative; overflow: hidden;"></div>
-    <div class="chart-empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center;">
-      <div class="empty-icon" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;">${chart.glyph}</div>
-      <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${chart.title}</div>
-      <div style="font-size: 11px; color: var(--text-secondary); max-width: 280px; line-height: 1.5; margin-top: 6px;">${getEmptyHint(chart.id)}</div>
-      <div style="margin-top: 12px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-size: 10px; color: var(--text-muted);">
-        Press <kbd style="font-family: monospace; padding: 1px 5px; background: var(--bg); border: 1px solid var(--border-bright); border-radius: 3px;">${chart.key?.toUpperCase()}</kbd> to toggle · Pick a run in the legend
-      </div>
-    </div>
+    <div class="chart-empty-state"></div>
     <div class="chart-toolbar" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--border); background: var(--bg-tertiary); font-size: 10px;">
       <span class="chart-status" style="color: var(--text-secondary);">No data</span>
       <button class="chart-download" title="Download chart as PNG" style="background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; color: var(--text-secondary); font-size: 10px; cursor: pointer;">↓ PNG</button>
@@ -125,14 +119,34 @@ export function createChartPanelBody(chart: ChartSpec): string {
 function getEmptyHint(chartId: string): string {
   switch (chartId) {
     case "pareto":
-      return "Validation accuracy vs. speed per cell. Pareto frontier = not dominated on both axes.";
+      return "Run with multiple credit arms to populate the frontier. Pick a profile with credit axis variety.";
     case "ablation":
-      return "Credit arm performance with other axes fixed. Error bars = ±1σ. Dashed = chance.";
+      return "Add credit-axis groups to see ablation. Profiles with credit axis variety enable this chart.";
     case "variability":
-      return "Seed-to-seed spread per arm. Box = IQR, line = median, whiskers = 1.5×IQR. Dashed = chance.";
+      return "Add seeds in the control panel (seeds > 1) to see seed-to-seed spread.";
     default:
       return "Select a run from the legend to populate this chart.";
   }
+}
+
+function initEmptyState(chartId: "pareto" | "ablation" | "variability", root: HTMLElement, glyph: string, title: string, key: string): void {
+  const emptyStateEl = root.querySelector<HTMLElement>(".chart-empty-state");
+  if (!emptyStateEl) return;
+
+  const hints: Record<string, string> = {
+    pareto: "Run with multiple credit arms to populate the frontier. Pick a profile with credit axis variety.",
+    ablation: "Add credit-axis groups to see ablation. Profiles with credit axis variety enable this chart.",
+    variability: "Add seeds in the control panel (seeds > 1) to see seed-to-seed spread.",
+  };
+
+  const emptyState = createChartEmptyState(
+    chartId,
+    glyph,
+    title,
+    key
+  );
+  emptyStateEl.innerHTML = "";
+  emptyStateEl.appendChild(emptyState);
 }
 
 /** Base view class shared by the three chart views. */
@@ -381,6 +395,7 @@ abstract class PlotterChartView {
 export class PlotterParetoView extends PlotterChartView {
   constructor(host: HTMLElement, _state: JsonValue = null) {
     super(host);
+    initEmptyState("pareto", host, "◭", "Pareto frontier", "p");
     this.initPlot();
   }
 
@@ -603,6 +618,7 @@ export class PlotterParetoView extends PlotterChartView {
 export class PlotterAblationView extends PlotterChartView {
   constructor(host: HTMLElement, _state: JsonValue = null) {
     super(host);
+    initEmptyState("ablation", host, "▥", "Ablation", "a");
     this.initPlot();
   }
 
@@ -795,6 +811,7 @@ export class PlotterAblationView extends PlotterChartView {
 export class PlotterVariabilityView extends PlotterChartView {
   constructor(host: HTMLElement, _state: JsonValue = null) {
     super(host);
+    initEmptyState("variability", host, "◇", "Variability", "s");
     this.initPlot();
   }
 

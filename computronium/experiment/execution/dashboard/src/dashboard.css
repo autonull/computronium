@@ -44,6 +44,15 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
 #ui-overlay { position: fixed; top: var(--menubar-height, 28px); left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 100; }
 
+/* Empty State CTA — shown when no run is selected */
+.ui-empty-cta { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; display: none; flex-direction: column; align-items: center; gap: 16px; text-align: center; padding: 32px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
+.ui-empty-cta.visible { display: flex; }
+.ui-empty-cta .icon { font-size: 48px; opacity: 0.6; }
+.ui-empty-cta .title { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.ui-empty-cta .message { font-size: 13px; color: var(--text-secondary); max-width: 280px; }
+.ui-empty-cta .cta-btn { padding: 12px 24px; font-size: 13px; font-weight: 600; background: var(--gradient)22; border: 1px solid var(--gradient)66; border-radius: 8px; color: var(--gradient); cursor: pointer; transition: background 0.1s, border-color 0.1s; }
+.ui-empty-cta .cta-btn:hover { background: var(--gradient)33; border-color: var(--gradient); }
+
 #menubar-container { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; pointer-events: auto; }
 
 /* HUD - within layout */

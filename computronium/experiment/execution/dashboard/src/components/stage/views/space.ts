@@ -109,6 +109,9 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     // Create readout overlay
     createReadout();
 
+    // Create empty state CTA (hidden by default)
+    createEmptyCta();
+
     // Subscribe to workspace changes (run selection, axes)
     workspaceUnsub = workspace.onChange(() => {
       const newRunId = workspace.getSelectedRunId();
@@ -255,17 +258,56 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     if (readoutElement) readoutElement.style.display = "none";
   }
 
+  let emptyCtaElement: HTMLElement | null = null;
+
+  function createEmptyCta(): void {
+    const overlayEl = document.getElementById("ui-overlay");
+    if (!overlayEl) return;
+    emptyCtaElement = document.createElement("div");
+    emptyCtaElement.className = "ui-empty-cta";
+    emptyCtaElement.innerHTML = `
+      <div class="icon">🚀</div>
+      <div class="title">Welcome to Computronium</div>
+      <div class="message">No run selected. Start a quick run to explore the discovery map.</div>
+      <button class="cta-btn" data-act="start-run">Start a Run</button>
+    `;
+    const btn = emptyCtaElement.querySelector<HTMLButtonElement>("[data-act=start-run]");
+    btn?.addEventListener("click", () => {
+      // Open control panel and focus the New Run section
+      const panelBtn = document.querySelector<HTMLButtonElement>('.ctrl [data-act="panel"]');
+      panelBtn?.click();
+      // Focus the quick run button in control panel
+      setTimeout(() => {
+        const quickRunBtn = document.querySelector<HTMLButtonElement>('.ctrl [data-act="quick-run"]');
+        quickRunBtn?.focus();
+      }, 100);
+    });
+    overlayEl?.appendChild(emptyCtaElement);
+  }
+
+  function showEmptyCta(): void {
+    if (!emptyCtaElement) createEmptyCta();
+    emptyCtaElement?.classList.add("visible");
+  }
+
+  function hideEmptyCta(): void {
+    emptyCtaElement?.classList.remove("visible");
+  }
+
   function applyAxes(): void {
     if (!runId) {
       visible = false;
       clearGrid();
+      showEmptyCta();
       return;
     }
+    hideEmptyCta();
 
     const space = spaceStore.get(runId, axes, spaceValues);
     if (!space) {
       visible = false;
       clearGrid();
+      showEmptyCta();
       return;
     }
 

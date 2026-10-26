@@ -180,6 +180,9 @@ export class ControlPanelView {
   private cellSelects = new Map<string, HTMLSelectElement>();
   private cellNote: HTMLElement | null = null;
   private exportNote: HTMLElement | null = null;
+  private replicateBtn: HTMLButtonElement | null = null;
+  private preregisterBtn: HTMLButtonElement | null = null;
+  private questBtn: HTMLButtonElement | null = null;
   private activeTab = "new-run";
   private readonly disposers: (() => void)[] = [];
 
@@ -226,6 +229,11 @@ export class ControlPanelView {
       cellRow.appendChild(label);
       this.cellSelects.set(axis, select);
     }
+
+    // Cell action buttons
+    this.replicateBtn = this.root.querySelector<HTMLButtonElement>(".replicate")!;
+    this.preregisterBtn = this.root.querySelector<HTMLButtonElement>(".preregister")!;
+    this.questBtn = this.root.querySelector<HTMLButtonElement>(".quest")!;
 
     for (const tab of this.root.querySelectorAll<HTMLButtonElement>(".tab")) {
       tab.addEventListener("click", () => this.switchTab(tab.dataset.section!));
@@ -399,7 +407,35 @@ export class ControlPanelView {
   }
 
   private cellAction(action: "replicate" | "preregister" | "quest"): void {
+    const cellKey = workspaceStore.getCellSelection();
+    if (!cellKey) {
+      this.showCellNote("No cell selected");
+      return;
+    }
+    this.hideCellNote();
     window.dispatchEvent(new CustomEvent(`cell-action-${action}`));
+  }
+
+  private showCellNote(message: string): void {
+    if (this.cellNote) {
+      this.cellNote.textContent = message;
+      this.cellNote.style.color = "var(--warn)";
+    }
+    this.disableCellButtons(true);
+  }
+
+  private hideCellNote(): void {
+    if (this.cellNote) {
+      this.cellNote.textContent = "Select a cell on the map or in the drawer to enable actions.";
+      this.cellNote.style.color = "var(--text-muted)";
+    }
+    this.disableCellButtons(false);
+  }
+
+  private disableCellButtons(disabled: boolean): void {
+    this.replicateBtn!.disabled = disabled;
+    this.preregisterBtn!.disabled = disabled;
+    this.questBtn!.disabled = disabled;
   }
 
   private export(type: "script" | "report" | "records"): void {

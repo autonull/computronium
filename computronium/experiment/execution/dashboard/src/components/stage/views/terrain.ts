@@ -412,7 +412,7 @@ export function createTerrainView(context: StageViewContext): StageViewInstance 
 export const terrainViewDefinition: StageViewDefinition = {
   view: "terrain",
   title: "Terrain",
-  key: "r",
+  key: "shift+t",
   group: "the run",
   create: createTerrainView,
 };

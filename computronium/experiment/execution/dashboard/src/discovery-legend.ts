@@ -128,15 +128,18 @@ export class DiscoveryLegendView {
 
   private renderAxesPicker(): void {
     const axesNames: Array<keyof AxisSelection> = ["x", "y", "z"];
-    const availableAxes = ["credit", "geometry", "dynamics", "substrate", "plasticity", "update"];
+    const availableAxes = ["credit", "geometry", "dynamics", "substrate", "plasticity", "update"] as const;
+    type AxisName = typeof availableAxes[number];
     this.axesContainer.innerHTML = axesNames.map((axisKey) => `
-      <div style="display: flex; flex-direction: column; gap: 2px; min-width: 80px;">
-        <div style="font-size: 9px; text-transform: uppercase; color: var(--text-muted);">${axisKey.toUpperCase()}</div>
-        <div style="display: flex; gap: 2px; flex-wrap: wrap;">
+      <div class="legend-axis-group" style="display: flex; align-items: center; gap: 4px; min-width: 120px; flex-wrap: wrap;">
+        <span style="font-size: 9px; text-transform: uppercase; color: var(--text-muted);">${axisKey.toUpperCase()}</span>
+        <div class="legend-axis-chips" data-axis-key="${axisKey}" style="display: flex; gap: 2px; flex-wrap: wrap;">
           ${availableAxes.map((axis) => `
-            <button class="legend-axis-btn${this.options.axes[axisKey] === axis ? " active" : ""}" 
+            <button class="legend-axis-chip${this.options.axes[axisKey] === axis ? " active" : ""}" 
                     data-axis-key="${axisKey}" data-axis-value="${axis}"
-                    title="Set ${axisKey} axis to ${axis}">
+                    title="Click to cycle ${axisKey} axis"
+                    style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; font-size: 10px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;"
+                    ${this.options.axes[axisKey] === axis ? 'style="background: var(--gradient)22; border-color: var(--gradient)66; color: var(--gradient);"' : ""}>
               ${axis}
             </button>
           `).join("")}
@@ -144,11 +147,13 @@ export class DiscoveryLegendView {
       </div>
     `).join("");
 
-    for (const btn of this.axesContainer.querySelectorAll<HTMLButtonElement>(".legend-axis-btn")) {
-      btn.addEventListener("click", () => {
-        const key = btn.dataset.axisKey as keyof AxisSelection;
-        const value = btn.dataset.axisValue as AxisSelection[keyof AxisSelection];
-        this.options.axes[key] = value;
+    for (const chip of this.axesContainer.querySelectorAll<HTMLButtonElement>(".legend-axis-chip")) {
+      chip.addEventListener("click", () => {
+        const key = chip.dataset.axisKey as keyof AxisSelection;
+        const currentIdx = availableAxes.indexOf(this.options.axes[key]);
+        const nextIdx = (currentIdx + 1) % availableAxes.length;
+        const nextAxis = availableAxes[nextIdx];
+        this.options.axes[key] = nextAxis;
         this.renderAxesPicker();
         this.options.workspace.setAxes(this.options.axes);
       });

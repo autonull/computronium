@@ -470,7 +470,7 @@ export function createMultirunView(context: StageViewContext): StageViewInstance
 export const multirunViewDefinition: StageViewDefinition = {
   view: "multirun",
   title: "The multi-run space",
-  key: "u",
+  key: "shift+u",
   group: "the space",
   create: createMultirunView,
 };
