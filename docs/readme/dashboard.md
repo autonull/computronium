@@ -15,11 +15,11 @@ uv run comp run demo --store experiment.duckdb     # a campaign to watch
 
 | The whole system | The space, alone | One cell's evidence |
 |---|---|---|
-| ![The dashboard](docs/readme/assets/dashboard-hero.png) | ![The discovery map](docs/readme/assets/dashboard-map.png) | ![A measured cell](docs/readme/assets/dashboard-cell.png) |
+| ![The dashboard](docs/readme/assets/dashboard-hero.png) | ![The discovery map](docs/readme/assets/dashboard-map.png) | ![A measured cell](docs/screenshots/tour/stage-space.png) |
 
 | What the system refuses | The charts | The caption |
 |---|---|---|
-| ![A void cell](docs/readme/assets/dashboard-void.png) | ![The Pareto chart](docs/readme/assets/dashboard-pareto.png) | ![The caption](docs/readme/assets/dashboard-caption.png) |
+| ![A void cell](docs/screenshots/tour/stage-space.png) | ![The Pareto chart](docs/readme/assets/panel-pareto.png) | ![The caption](docs/readme/assets/panel-caption.png) |
 
 And the dashboard is an instrument, not a picture: the verbs at the bottom of
 the screen reach the run itself, through a control plane the run in another
@@ -87,7 +87,6 @@ letter of its own — and the legend names the view that is on.
 - Figure gallery: `figure-seed-violins.png`, `figure-gallery-swap-credit.png`, `figure-gallery-epc-settle.png`, `figure-gallery-coverage.png`, `figure-gallery-failures.png`
 - Report plots: `report-pareto.png`, `report-seed-stability.png`
 - Coverage/catalogue: `coverage-report.png`, `catalog.png`, `method-cards.png`, `power-analysis.png`
-- Cell/void evidence: `dashboard-cell.png`, `dashboard-void.png`, `dashboard-caption.png`, `dashboard-pareto.png`
 
 These will be regenerated in a follow-up capture pass.
 
