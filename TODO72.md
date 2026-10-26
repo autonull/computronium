@@ -566,6 +566,55 @@ stable at 31; no page/console errors; 25 s walltime.
 
 **Gate:** hero < 60 s with `--reuse-store`; tour all frames; >2% view diffs.
 
+---
+
+## Fresh Session Plan: Conclusive Dashboard Fix
+
+The screenshots are malformed because the **watch preset layout is broken** — panels don't fill the viewport, the stage isn't full-screen, and the 3D scene isn't rendering correctly. Root causes identified:
+
+### Immediate Fixes (do these first in fresh session)
+
+1. **Watch preset layout** (`src/layout.ts`) — the `split`/`tabs` structure doesn't produce a full-screen stage with side panels. Current watch spec creates nested splits but Dockview doesn't size them to fill the viewport. Fix: use a single row split with stage on left (flex: 1) and tabset on right (fixed width), or use `floating: false` with explicit sizes that sum to viewport.
+
+2. **Stage panel default size** — `defaultSize: {width: 800, height: 600}` is too small. The stage should fill available space. Remove defaultSize or make it responsive.
+
+3. **Stage header** — the new 30px header inside the stage panel steals vertical space from the Three.js canvas. Move view/run selectors to Dockview tab badges (already implemented in `StageTabRenderer`) and remove the internal header.
+
+4. **Camera/renderer init timing** — `StageSurface` creates camera at fixed aspect (1) before first resize. The `frameBox` calls in views use stale camera aspect. Fix: defer `frameBox` until after first `resize()` completes, or make views listen for `surface.size()` change.
+
+5. **Tour wait conditions** — `wait_for_measured` / `wait_for_view` use `debug.measuredCells()` which sums ALL stage instances. The tour opens one stage but debug API may report cells from a different instance. Fix: tour should open stage via `layoutHost.open('stage', {view, runId})`, capture its instanceId, then poll `debug.stage(instanceId)`.
+
+### Visual Quality Gates (must pass before tour)
+
+- [ ] **Full-screen watch layout**: stage fills viewport minus menubar (28px), side panels docked right at 360px width
+- [ ] **No internal stage header**: view/run shown only in Dockview tab badges
+- [ ] **Space view renders pillars immediately**: measured cells visible within 3s of stage open
+- [ ] **All 25 views draw distinct frames**: pixel diff >2% between any two views
+- [ ] **Probe passes at 1920/1440/1024**: responsive layout at all breakpoints
+
+### Remaining P9 Work
+
+- [ ] Fix watch preset → full-screen stage + right tabset
+- [ ] Remove internal stage header, use Dockview tab badges only
+- [ ] Fix camera aspect initialization in StageSurface + views
+- [ ] Update tour script wait conditions to use instance-specific debug API
+- [ ] Run full tour, verify all frames distinct
+- [ ] Delete GoldenLayout code (layout-manager.ts, golden-layout.d.ts, panels.ts, shell.ts legacy)
+
+### Commands for Fresh Session
+
+```bash
+# Build & probe
+cd computronium/experiment/execution/dashboard && npm run build
+uv run python scripts/probes/dashboard_layout_probe.py --store experiment.duckdb
+
+# Hero shot
+uv run python scripts/capture_dashboard_screenshot.py --reuse-store --port 8084
+
+# Full tour (after fixes)
+uv run python scripts/capture_dashboard_tour.py --skip-campaigns --port 8085
+```
+
 ## Flexibility acceptance matrix
 
 | Check | Pass condition |
