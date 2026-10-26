@@ -190,15 +190,20 @@ def start_dashboard(
 
 
 def clear_store(store_path: Path) -> None:
-    """Remove the store and the mirror the writer publishes.
+    """Remove the store, the mirror, and the control plane.
 
     The mirror is a copy of the store, and it outlives the store it was
     published from: a capture that leaves the old mirror behind reads the
     last run's records as if they were this run's.
+
+    The control plane is a JSON document beside the store that the dashboard
+    writes and the run reads. A stale control plane with cancel=true would
+    cause a new run to stop immediately.
     """
     from computronium.experiment.evidence.mirror import mirror_path
+    from computronium.experiment.execution.control import control_plane_path
 
-    for path in (store_path, mirror_path(store_path)):
+    for path in (store_path, mirror_path(store_path), control_plane_path(store_path)):
         if path.exists():
             path.unlink()
             logger.info("Removed %s", path)
