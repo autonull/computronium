@@ -204,6 +204,74 @@
         }
       ],
       "page": []
+    },
+    "baseline_inventory": {
+      "dashboard-hero": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-hero.png",
+        "diff_pct": 5.2754609456951504
+      },
+      "dashboard-watch": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-watch.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-audit": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-audit.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-drive": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-drive.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-free": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-free.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-map": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-map.png",
+        "diff_pct": 1.9932664861211975
+      },
+      "dashboard-cell": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-cell.png",
+        "diff_pct": 0.0
+      },
+      "panel-hud": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-hud.png",
+        "diff_pct": 0.0
+      },
+      "panel-legend": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-legend.png",
+        "diff_pct": 0.0
+      },
+      "panel-live-rail": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-live-rail.png",
+        "diff_pct": 0.0
+      },
+      "panel-view-toolbar": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-view-toolbar.png",
+        "diff_pct": 0.0
+      }
     }
   },
   {
@@ -411,6 +479,74 @@
         }
       ],
       "page": []
+    },
+    "baseline_inventory": {
+      "dashboard-hero": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-hero.png",
+        "diff_pct": 5.2754609456951504
+      },
+      "dashboard-watch": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-watch.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-audit": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-audit.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-drive": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-drive.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-free": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-free.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-map": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-map.png",
+        "diff_pct": 1.9932664861211975
+      },
+      "dashboard-cell": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-cell.png",
+        "diff_pct": 0.0
+      },
+      "panel-hud": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-hud.png",
+        "diff_pct": 0.0
+      },
+      "panel-legend": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-legend.png",
+        "diff_pct": 0.0
+      },
+      "panel-live-rail": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-live-rail.png",
+        "diff_pct": 0.0
+      },
+      "panel-view-toolbar": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-view-toolbar.png",
+        "diff_pct": 0.0
+      }
     }
   },
   {
@@ -618,6 +754,74 @@
         }
       ],
       "page": []
+    },
+    "baseline_inventory": {
+      "dashboard-hero": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-hero.png",
+        "diff_pct": 5.2754609456951504
+      },
+      "dashboard-watch": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-watch.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-audit": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-audit.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-drive": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-drive.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-free": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-free.png",
+        "diff_pct": 0.0
+      },
+      "dashboard-map": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-map.png",
+        "diff_pct": 1.9932664861211975
+      },
+      "dashboard-cell": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/dashboard-cell.png",
+        "diff_pct": 0.0
+      },
+      "panel-hud": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-hud.png",
+        "diff_pct": 0.0
+      },
+      "panel-legend": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-legend.png",
+        "diff_pct": 0.0
+      },
+      "panel-live-rail": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-live-rail.png",
+        "diff_pct": 0.0
+      },
+      "panel-view-toolbar": {
+        "baseline_exists": true,
+        "current_exists": true,
+        "current_path": "/home/me/computronium/docs/readme/assets/panel-view-toolbar.png",
+        "diff_pct": 0.0
+      }
     }
   }
 ]

@@ -54,6 +54,23 @@ VIEWPORTS = [
 # Presets to test idempotence
 PRESETS = ["watch", "audit", "drive", "free"]
 
+# Baseline inventory (never committed; extracted from git history)
+BASELINE_FILES = [
+    "dashboard-hero",
+    "dashboard-watch",
+    "dashboard-audit",
+    "dashboard-drive",
+    "dashboard-free",
+    "dashboard-map",
+    "dashboard-cell",
+    "panel-hud",
+    "panel-legend",
+    "panel-live-rail",
+    "panel-view-toolbar",
+]
+
+BASELINE_DIR = Path("/tmp/opencode/baseline")
+
 
 def probe_viewport(port: int, viewport: dict) -> dict:
     """Run all picture contracts at one viewport."""
@@ -485,10 +502,52 @@ def probe_viewport(port: int, viewport: dict) -> dict:
         )
         result["chrome"]["duplicateIds"] = duplicate_ids
 
+        # --- Baseline Inventory Check ---
+        baseline_inventory = {}
+        for name in BASELINE_FILES:
+            baseline_path = BASELINE_DIR / f"{name}.png"
+            current_paths = [
+                REPO_ROOT / "docs" / "readme" / "assets" / f"{name}.png",
+                REPO_ROOT / "docs" / "screenshots" / "tour" / f"{name}.png",
+                REPO_ROOT / "docs" / "screenshots" / f"{name}.png",
+            ]
+            current_path = next((p for p in current_paths if p.exists()), None)
+            
+            baseline_exists = baseline_path.exists()
+            current_exists = current_path is not None
+            
+            comparison = None
+            if baseline_exists and current_exists:
+                comparison = image_diff_pct(baseline_path, current_path)
+            
+            baseline_inventory[name] = {
+                "baseline_exists": baseline_exists,
+                "current_exists": current_exists,
+                "current_path": str(current_path) if current_path else None,
+                "diff_pct": comparison,
+            }
+        
+        result["baseline_inventory"] = baseline_inventory
+
         context.close()
         browser.close()
 
         return result
+
+
+def image_diff_pct(img1: Path, img2: Path) -> float:
+    """Calculate percentage difference between two images."""
+    from PIL import Image
+    import numpy as np
+
+    a = np.array(Image.open(img1).convert("RGB"))
+    b = np.array(Image.open(img2).convert("RGB"))
+
+    if a.shape != b.shape:
+        return 100.0
+
+    diff = np.abs(a.astype(float) - b.astype(float))
+    return float(np.mean(diff) / 255.0 * 100)
 
 
 def main() -> int:
@@ -561,6 +620,16 @@ def main() -> int:
             geo_ok = r["geometry"].get("stage_ge_60x55", False) and r["geometry"].get("left_in_range", False)
             stage_ok = r["stage"].get("ready", False) and r["stage"].get("measured", 0) > 0
             print(f"  {r['viewport']}: CSS={'✓' if css_ok else '✗'} Chrome={'✓' if chrome_ok else '✗'} Geo={'✓' if geo_ok else '✗'} Stage={'✓' if stage_ok else '✗'}")
+
+    # Baseline inventory summary (from 1920x1080 viewport)
+    baseline_result = next((r for r in all_results if r.get("viewport") == "1920x1080"), None)
+    if baseline_result and "baseline_inventory" in baseline_result:
+        print("\nBaseline inventory:")
+        for name, info in baseline_result["baseline_inventory"].items():
+            base = "✓" if info["baseline_exists"] else "✗"
+            curr = "✓" if info["current_exists"] else "✗"
+            diff = f" diff={info['diff_pct']:.1f}%" if info["diff_pct"] is not None else ""
+            print(f"  {name}: baseline={base} current={curr}{diff}")
 
     if server_error:
         logger.error(f"Dashboard failed: {server_error[0]}")
