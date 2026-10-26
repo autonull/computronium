@@ -35,14 +35,9 @@ cells in flight at once, and start a run from nothing — all of it from the
 browser, and all of it reaching the run rather than a picture of it.
 
 **Workspaces** — three named arrangements, one switch:
-| Watch | Audit | Drive |
-|---|---|---|
-| ![Watch](docs/readme/assets/dashboard-watch.png) | ![Audit](docs/readme/assets/dashboard-audit.png) | ![Drive](docs/readme/assets/dashboard-drive.png) |
-
-**The command palette** — every verb reachable without a memorized letter:
-| The palette | The palette on an empty store |
-|---|---|
-| ![The palette](docs/readme/assets/dashboard-palette.png) | ![Empty store palette](docs/readme/assets/dashboard-palette-empty.png) |
+| Watch | Audit | Drive | Free |
+|---|---|---|---|
+| ![Watch](docs/readme/assets/dashboard-watch.png) | ![Audit](docs/readme/assets/dashboard-audit.png) | ![Drive](docs/readme/assets/dashboard-drive.png) | ![Free](docs/readme/assets/dashboard-free.png) |
 
 The canvas is a stage, and the view is a choice: `V` cycles the views, the
 number keys pick one — and a view that does not fit in the numbers has a
