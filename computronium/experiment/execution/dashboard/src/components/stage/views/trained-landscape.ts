@@ -214,7 +214,7 @@ export function createTrainedLandscapeView(context: StageViewContext): StageView
 export const trainedLandscapeViewDefinition: StageViewDefinition = {
   view: "trained-landscape",
   title: "The trained landscape",
-  key: "o",
+  key: "shift+o",
   group: "the system",
   create: createTrainedLandscapeView,
 };

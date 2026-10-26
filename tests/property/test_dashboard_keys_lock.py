@@ -35,23 +35,28 @@ LETTERS = "abcdefghijklmnopqrstuvwxyz"
 PUNCTUATION = [",", ".", "/", "'"]
 
 # The letters each group holds, as the plan records them.
-PANEL_LETTERS = {"h", "r", "c", "q"}
+PANEL_LETTERS = {"h", "r", "c", "q", "n", "t", "u", "e", "o"}
 CHART_LETTERS = {"p", "a", "s"}
 CONTROL_LETTERS = {"x", "w", "z"}
 VIEW_LETTERS = {
-    "t",  # timeline
     "l",  # ledger
-    "e",  # effect
     "y",  # layers
     "j",  # trajectory
     "m",  # small-multiples
     "b",  # basin
-    "n",  # landscape
-    "u",  # frontier
     "g",  # trained-trajectory
     "i",  # trained-spectrum
     "k",  # trained-basin
-    "o",  # trained-landscape
+    "v",  # contrast (shift+v base)
+    "s",  # spread (shift+s base)
+    "x",  # matrix (shift+x base)
+    "u",  # multirun (shift+u base)
+    "z",  # uncertainty (shift+z base)
+    "n",  # landscape (shift+n base)
+    "t",  # timeline (shift+t base)
+    "g",  # frontier (shift+g base)
+    "e",  # effect (shift+e base)
+    "o",  # trained-landscape (shift+o base)
 }
 
 
@@ -213,7 +218,15 @@ def test_each_group_holds_the_letters_the_plan_says() -> None:
         for owner, key in _claims_from_bindings()
         if owner.startswith("binding:control-")
     }
-    view_keys = {key for _owner, key in _claims_from_views() if key in LETTERS}
+    # Views: collect direct keys + base letters from chords
+    view_keys: set[str] = set()
+    for _owner, key in _claims_from_views():
+        if key in LETTERS:
+            view_keys.add(key)
+        elif key.startswith("shift+"):
+            base = key.split("+")[1]
+            if base in LETTERS:
+                view_keys.add(base)
 
     assert panel_keys == PANEL_LETTERS
     assert chart_keys == CHART_LETTERS

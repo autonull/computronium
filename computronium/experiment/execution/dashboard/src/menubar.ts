@@ -762,7 +762,7 @@ export class Menubar implements Component {
   }> = [
     { name: "Charts", types: ["pareto-chart", "ablation-chart", "variability-chart"], icon: "📊" },
     { name: "Inspect", types: ["discovery-legend", "hud", "cell-drawer"], icon: "🔍" },
-    { name: "Control", types: ["control-panel", "control-bar", "caption", "live-rail"], icon: "⚙️" },
+    { name: "Control", types: ["new-run-panel", "this-run-panel", "queue-panel", "cells-panel", "exports-panel", "control-bar", "caption", "live-rail"], icon: "⚙️" },
   ];
 
   private renderPanelToggles(): void {

@@ -274,7 +274,7 @@ export function createLandscapeView(context: StageViewContext): StageViewInstanc
 export const landscapeViewDefinition: StageViewDefinition = {
   view: "landscape",
   title: "The landscape",
-  key: "n",
+  key: "shift+n",
   group: "the system",
   create: createLandscapeView,
 };

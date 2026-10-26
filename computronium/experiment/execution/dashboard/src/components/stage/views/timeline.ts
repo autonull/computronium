@@ -245,7 +245,7 @@ export function createTimelineView(context: StageViewContext): StageViewInstance
 export const timelineViewDefinition: StageViewDefinition = {
   view: "timeline",
   title: "The timeline",
-  key: "t",
+  key: "shift+t",
   group: "the process",
   create: createTimelineView,
 };

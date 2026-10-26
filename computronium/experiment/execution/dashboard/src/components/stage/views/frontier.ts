@@ -362,7 +362,7 @@ export function createFrontierView(context: StageViewContext): StageViewInstance
 export const frontierViewDefinition: StageViewDefinition = {
   view: "frontier",
   title: "Frontier",
-  key: "u",
+  key: "shift+g",
   group: "the run",
   create: createFrontierView,
 };

@@ -128,6 +128,41 @@ export const BINDINGS: Binding[] = [
     key: "q",
     run: () => actions["panel-legend"]?.(),
   },
+  {
+    id: "panel-new-run",
+    label: "New Run",
+    group: "Panels",
+    key: "n",
+    run: () => actions["panel-new-run"]?.(),
+  },
+  {
+    id: "panel-this-run",
+    label: "This Run",
+    group: "Panels",
+    key: "t",
+    run: () => actions["panel-this-run"]?.(),
+  },
+  {
+    id: "panel-queue",
+    label: "Queue",
+    group: "Panels",
+    key: "u",
+    run: () => actions["panel-queue"]?.(),
+  },
+  {
+    id: "panel-cells",
+    label: "Cells",
+    group: "Panels",
+    key: "e",
+    run: () => actions["panel-cells"]?.(),
+  },
+  {
+    id: "panel-exports",
+    label: "Exports",
+    group: "Panels",
+    key: "o",
+    run: () => actions["panel-exports"]?.(),
+  },
 
   // Stage views
   {

@@ -150,7 +150,12 @@ export function registerLayoutCommands(): void {
   commands.register("panel-caption", () => layoutCommands.open("caption"), "Open Caption");
   commands.register("panel-legend", () => layoutCommands.open("discovery-legend"), "Open Discovery Legend");
   commands.register("panel-control-bar", () => layoutCommands.open("control-bar"), "Open Control Bar");
-  commands.register("panel-control-panel", () => layoutCommands.open("control-panel"), "Open Control Panel");
+  commands.register("panel-control-panel", () => layoutCommands.open("control-panel"), "Open Control Panel (legacy)");
+  commands.register("panel-new-run", () => layoutCommands.open("new-run-panel"), "Open New Run Panel");
+  commands.register("panel-this-run", () => layoutCommands.open("this-run-panel"), "Open This Run Panel");
+  commands.register("panel-queue", () => layoutCommands.open("queue-panel"), "Open Queue Panel");
+  commands.register("panel-cells", () => layoutCommands.open("cells-panel"), "Open Cells Panel");
+  commands.register("panel-exports", () => layoutCommands.open("exports-panel"), "Open Exports Panel");
   commands.register("panel-cell-drawer", () => layoutCommands.open("cell-drawer"), "Open Cell Drawer");
   commands.register("panel-pareto-chart", () => layoutCommands.open("pareto-chart"), "Open Pareto Chart");
   commands.register("panel-ablation-chart", () => layoutCommands.open("ablation-chart"), "Open Ablation Chart");

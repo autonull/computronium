@@ -220,7 +220,7 @@ export function createEffectView(context: StageViewContext): StageViewInstance {
 export const effectViewDefinition: StageViewDefinition = {
   view: "effect",
   title: "The effect",
-  key: "e",
+  key: "shift+e",
   group: "the process",
   create: createEffectView,
 };

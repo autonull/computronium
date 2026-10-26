@@ -24,6 +24,11 @@ import "./layout/components/live-rail.js";
 import "./layout/components/control-bar.js";
 import "./layout/components/discovery-legend.js";
 import "./layout/components/control-panel.js";
+import "./layout/components/new-run-panel.js";
+import "./layout/components/this-run-panel.js";
+import "./layout/components/queue-panel.js";
+import "./layout/components/cells-panel.js";
+import "./layout/components/exports-panel.js";
 import "./layout/components/cell-drawer.js";
 import "./layout/components/pareto-chart.js";
 import "./layout/components/ablation-chart.js";
@@ -163,26 +168,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     setAction(`view-${view}`, () => commands.execute(`view-${view}`));
   }
 
-  // Register view commands
+  // Register view commands — target first stage panel (or all if multiple)
   for (const view of stageViews) {
     if (commands.has(`view-${view}`)) continue;
     commands.register(`view-${view}`, () => {
       const api = dockviewHost.getApi();
       if (!api) return;
-      const panel = api.activePanel;
+      // Find first stage panel (not just active panel)
+      const panel = api.panels.find((candidate) => candidate.view.contentComponent === "stage");
       if (!panel) return;
-      // Check if it's a stage panel (use type assertion for dockview panel)
-      if (panel.view.contentComponent === "stage") {
-        dockviewHost.setState(panel.id, { view });
-      }
+      dockviewHost.setState(panel.id, { view });
     }, `View: ${view}`);
   }
   if (!commands.has("view-cycle")) {
     commands.register("view-cycle", () => {
       const api = dockviewHost.getApi();
       if (!api) return;
-      const panel = api.activePanel;
-      if (!panel || panel.view.contentComponent !== "stage") return;
+      const panel = api.panels.find((candidate) => candidate.view.contentComponent === "stage");
+      if (!panel) return;
       const views = stageViews;
       const currentView = (panel.api.getParameters()?.view as string) || "space";
       const currentIndex = views.indexOf(currentView);

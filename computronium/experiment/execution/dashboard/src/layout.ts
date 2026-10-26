@@ -16,7 +16,7 @@ const stage = (view = "space"): LayoutNode => ({
   size: { ratio: 0.677, width: 1280, height: 720 },
 });
 
-/** Left column: legend + control-panel (clamped 280–420px).
+/** Left column: legend + new-run + this-run + queue + cells + exports (clamped 280–420px).
  * Ratio 0.293 gives ~300px at 1024, ~422px at 1440, ~562px at 1920.
  * Panel minPx constrains the column width in Dockview's grid. */
 const leftColumn = (): LayoutNode => ({
@@ -24,8 +24,12 @@ const leftColumn = (): LayoutNode => ({
   direction: "column",
   size: { ratio: 0.293, minPx: 280, maxPx: 420, width: 1920, height: 1080 },
   children: [
-    { kind: "panel", type: "discovery-legend", title: "Discovery Map", size: { ratio: 0.5, minPx: 280, width: 300, height: 540 } },
-    { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, minPx: 280, width: 300, height: 540 } },
+    { kind: "panel", type: "discovery-legend", title: "Discovery Map", size: { ratio: 0.3, minPx: 280, width: 300, height: 324 } },
+    { kind: "panel", type: "new-run-panel", title: "New Run", size: { ratio: 0.2, minPx: 280, width: 300, height: 216 } },
+    { kind: "panel", type: "this-run-panel", title: "This Run", size: { ratio: 0.15, minPx: 280, width: 300, height: 162 } },
+    { kind: "panel", type: "queue-panel", title: "Queue", size: { ratio: 0.15, minPx: 280, width: 300, height: 162 } },
+    { kind: "panel", type: "cells-panel", title: "Cells", size: { ratio: 0.1, minPx: 280, width: 300, height: 108 } },
+    { kind: "panel", type: "exports-panel", title: "Exports", size: { ratio: 0.1, minPx: 280, width: 300, height: 108 } },
   ],
 });
 
