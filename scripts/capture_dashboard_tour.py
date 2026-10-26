@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Capture a tour of the dashboard across presets and views (TODO73 P10.5).
+"""Capture a comprehensive tour of the dashboard (TODO73 P10.5).
 
-Drives from definitions.list() + layout.presets; per-view instanceId, waits for
-getStageDebug(id) matching view+ready, crops stage rect, diff >2% vs prior;
-reports {id, rect, ready, diff}.
+Captures:
+- 4 presets (full dashboard shots)
+- 27 stage views (crops)
+- 10 panel types (full panel shots)
+
+Each capture waits for readiness, crops appropriately, and diffs vs prior.
 """
 
 from __future__ import annotations
@@ -12,7 +15,6 @@ import argparse
 import json
 import logging
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -43,11 +45,43 @@ TOUR_OUTPUT = REPO_ROOT / "docs" / "screenshots" / "tour"
 # Presets to tour
 PRESETS = ["watch", "audit", "drive", "free"]
 
-# Stage views to tour (subset for speed)
+# All 27 registered stage views
 STAGE_VIEWS = [
     "space", "ledger", "timeline", "landscape", "basin", "spectrum",
     "trajectory", "flow", "frontier", "contrast", "convergence",
+    "uncertainty", "effect", "spread", "matrix", "layers", "slices",
+    "small-multiples", "terrain", "claim-cost", "multirun",
+    "trained-trajectory", "trained-basin", "trained-landscape",
+    "trained-spectrum", "plot2d", "ramp",
 ]
+
+# Panel types (from layout/definitions.ts imports in main.ts)
+PANEL_TYPES = [
+    "discovery-legend",
+    "control-panel",
+    "hud",
+    "pareto-chart",
+    "ablation-chart",
+    "variability-chart",
+    "control-bar",
+    "caption",
+    "live-rail",
+    "cell-drawer",
+]
+
+# Panel display names for filenames
+PANEL_NAMES = {
+    "discovery-legend": "panel-legend",
+    "control-panel": "panel-control-panel",
+    "hud": "panel-hud",
+    "pareto-chart": "panel-pareto",
+    "ablation-chart": "panel-ablation",
+    "variability-chart": "panel-variability",
+    "control-bar": "panel-control-bar",
+    "caption": "panel-caption",
+    "live-rail": "panel-live-rail",
+    "cell-drawer": "panel-cell-drawer",
+}
 
 
 def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: float = 30.0) -> dict:
@@ -56,7 +90,6 @@ def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: flo
     last_rect = None
     stable_count = 0
 
-    # Views that require measured data to be "ready"
     data_views = {"space"}
 
     while time.time() < deadline:
@@ -72,9 +105,8 @@ def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: flo
         if debug and debug.get("view") == expected_view:
             canvas = debug.get("canvas", {})
             if canvas.get("w", 0) > 0 and canvas.get("h", 0) > 0:
-                # For data views, also require ready (measured > 0)
                 if expected_view in data_views and not debug.get("ready"):
-                    pass  # Not ready yet
+                    pass
                 else:
                     rect = page.evaluate(
                         """(id) => {
@@ -106,16 +138,36 @@ def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: flo
     raise TimeoutError(f"Stage {instance_id} view {expected_view} not ready in {timeout}s: {json.dumps(debug)}")
 
 
+def wait_for_panel_ready(page, instance_id: str, timeout: float = 15.0) -> dict:
+    """Wait for a panel to be ready (has content rendered)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        debug = page.evaluate(
+            """(id) => {
+                const dbg = window.__DASHBOARD__;
+                if (!dbg || !dbg.debug) return null;
+                const instances = dbg.debug.instances ? dbg.debug.instances() : [];
+                const panel = instances.find(i => i.id === id);
+                return panel ? {type: panel.type, title: panel.title} : null;
+            }""",
+            instance_id,
+        )
+        if debug:
+            # Give it a moment to render content
+            page.wait_for_timeout(500)
+            return debug
+        time.sleep(0.2)
+    raise TimeoutError(f"Panel {instance_id} not ready in {timeout}s")
+
+
 def filter_console_errors(console_messages: list[dict]) -> list[dict]:
-    """Filter out known benign console errors (e.g., favicon.ico 404)."""
+    """Filter out known benign console errors."""
     filtered = []
     for msg in console_messages:
         if msg["type"] == "error":
             text = msg["text"]
-            # Ignore favicon.ico 404 and other known benign resource 404s
             if "favicon.ico" in text or "Failed to load resource" in text:
                 continue
-            # Ignore dynamic import failures for layout.js (preset application)
             if "Failed to fetch dynamically imported module" in text and "layout.js" in text:
                 continue
             filtered.append(msg)
@@ -123,7 +175,7 @@ def filter_console_errors(console_messages: list[dict]) -> list[dict]:
 
 
 def check_duplicate_ids(page) -> tuple[int, list[str]]:
-    """Count duplicate DOM ids and return the duplicate IDs."""
+    """Count duplicate DOM ids."""
     result = page.evaluate(
         """() => {
             const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
@@ -150,21 +202,35 @@ def apply_preset(page, preset: str) -> bool:
     return result
 
 
-def open_stage_view(page, view: str) -> str | None:
-    """Open a stage panel with a specific view via layoutHost.open."""
+def open_panel(page, panel_type: str) -> str | None:
+    """Open a panel via layoutHost.open."""
     instance_id = page.evaluate(
-        """async (view) => {
+        """async (type) => {
             const host = window.__DASHBOARD__?.layoutHost;
             if (!host || !host.open) throw new Error("No layoutHost");
-            return await host.open("stage", {view: view});
+            return await host.open(type);
         }""",
-        view,
+        panel_type,
     )
     return instance_id
 
 
-def crop_stage_screenshot(page, instance_id: str, output: Path) -> dict:
-    """Crop the stage rectangle from a full-page screenshot and save."""
+def close_panel(page, instance_id: str) -> bool:
+    """Close a panel via layoutHost.close."""
+    result = page.evaluate(
+        """(id) => {
+            const host = window.__DASHBOARD__?.layoutHost;
+            if (!host || !host.close) return false;
+            host.close(id);
+            return true;
+        }""",
+        instance_id,
+    )
+    return result
+
+
+def crop_panel_screenshot(page, instance_id: str, output: Path) -> dict:
+    """Crop a panel's rectangle from a full-page screenshot."""
     rect = page.evaluate(
         """(id) => {
             const dbg = window.__DASHBOARD__;
@@ -176,11 +242,9 @@ def crop_stage_screenshot(page, instance_id: str, output: Path) -> dict:
     if not rect:
         raise RuntimeError(f"Could not get rect for {instance_id}")
 
-    # Take full page screenshot
     full_path = output.with_suffix(".full.png")
     page.screenshot(path=str(full_path))
 
-    # Crop using PIL
     from PIL import Image
     img = Image.open(full_path)
     cropped = img.crop((rect["x"], rect["y"], rect["x"] + rect["width"], rect["y"] + rect["height"]))
@@ -188,6 +252,13 @@ def crop_stage_screenshot(page, instance_id: str, output: Path) -> dict:
     full_path.unlink()
 
     return rect
+
+
+def full_dashboard_screenshot(page, output: Path) -> dict:
+    """Capture full dashboard screenshot."""
+    page.wait_for_timeout(500)
+    page.screenshot(path=str(output))
+    return {"width": VIEWPORT["width"], "height": VIEWPORT["height"]}
 
 
 def image_diff_pct(img1: Path, img2: Path) -> float:
@@ -206,7 +277,7 @@ def image_diff_pct(img1: Path, img2: Path) -> float:
 
 
 def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: bool = False) -> list[dict]:
-    """Capture the dashboard tour."""
+    """Capture the comprehensive dashboard tour."""
     from playwright.sync_api import sync_playwright
 
     console_messages: list[dict] = []
@@ -233,55 +304,43 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
 
         previous_crop = None
 
-        # Tour presets
+        # ========== 1. PRESET FULL DASHBOARD SHOTS ==========
+        logger.info("=== Capturing Presets (full dashboard) ===")
         for preset in PRESETS:
             logger.info(f"Applying preset: {preset}")
+            apply_preset(page, preset)
+            page.wait_for_timeout(1500)
 
-            # Apply preset via layout module
-            page.evaluate(
-                """(preset) => {
-                    const dbg = window.__DASHBOARD__;
-                    if (!dbg || !dbg.layout || !dbg.layout.applyPreset) return;
-                    dbg.layout.applyPreset(preset);
-                }""",
-                preset,
-            )
-            page.wait_for_timeout(1000)
+            # Full dashboard shot
+            output_path = output_dir / f"dashboard-{preset}.png"
+            full_dashboard_screenshot(page, output_path)
 
-            # Get the stage instance from the preset
-            instance_id = page.evaluate(
-                """() => {
-                    const dbg = window.__DASHBOARD__;
-                    if (!dbg || !dbg.debug) return null;
-                    const instances = dbg.debug.instances ? dbg.debug.instances() : [];
-                    const stage = instances.find(i => i.type === 'stage');
-                    return stage?.id || null;
-                }"""
-            )
+            diff = 0.0
+            if previous_crop:
+                diff = image_diff_pct(previous_crop, output_path)
+            previous_crop = output_path
 
-            if instance_id:
-                debug = wait_for_stage_view(page, instance_id, "space")
-                crop_path = output_dir / f"dashboard-{preset}.png"
-                rect = crop_stage_screenshot(page, instance_id, crop_path)
+            report.append({
+                "type": "preset-full",
+                "preset": preset,
+                "path": str(output_path.relative_to(REPO_ROOT)),
+                "diff_pct": diff,
+            })
+            logger.info(f"  {preset}: full dashboard, diff={diff:.1f}%")
 
-                diff = 0.0
-                if previous_crop:
-                    diff = image_diff_pct(previous_crop, crop_path)
-                previous_crop = crop_path
+        # ========== 2. STAGE VIEWS (crops) ==========
+        logger.info("=== Capturing Stage Views (crops) ===")
+        # Use the last preset's stage instance
+        instance_id = page.evaluate(
+            """() => {
+                const dbg = window.__DASHBOARD__;
+                if (!dbg || !dbg.debug) return null;
+                const instances = dbg.debug.instances ? dbg.debug.instances() : [];
+                const stage = instances.find(i => i.type === 'stage');
+                return stage?.id || null;
+            }"""
+        )
 
-                report.append({
-                    "type": "preset",
-                    "preset": preset,
-                    "instance_id": instance_id,
-                    "rect": rect,
-                    "ready": debug.get("ready"),
-                    "measured": debug.get("measured"),
-                    "view": debug.get("view"),
-                    "diff_pct": diff,
-                })
-                logger.info(f"  {preset}: {rect['width']}x{rect['height']}, measured={debug.get('measured')}, diff={diff:.1f}%")
-
-        # Tour stage views (on the last preset's stage)
         if instance_id:
             for view in STAGE_VIEWS:
                 logger.info(f"Switching to view: {view}")
@@ -297,7 +356,7 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
 
                 debug = wait_for_stage_view(page, instance_id, view)
                 crop_path = output_dir / f"stage-{view}.png"
-                rect = crop_stage_screenshot(page, instance_id, crop_path)
+                rect = crop_panel_screenshot(page, instance_id, crop_path)
 
                 diff = 0.0
                 if previous_crop:
@@ -305,15 +364,51 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
                 previous_crop = crop_path
 
                 report.append({
-                    "type": "view",
+                    "type": "stage-view",
                     "view": view,
                     "instance_id": instance_id,
                     "rect": rect,
                     "ready": debug.get("ready"),
                     "measured": debug.get("measured"),
+                    "path": str(crop_path.relative_to(REPO_ROOT)),
                     "diff_pct": diff,
                 })
                 logger.info(f"  {view}: {rect['width']}x{rect['height']}, measured={debug.get('measured')}, diff={diff:.1f}%")
+
+        # ========== 3. PANEL TYPES (full panel shots) ==========
+        logger.info("=== Capturing Panel Types ===")
+        for panel_type in PANEL_TYPES:
+            panel_name = PANEL_NAMES.get(panel_type, panel_type)
+            logger.info(f"Opening panel: {panel_type}")
+
+            # Open panel as floating to capture cleanly
+            instance_id = open_panel(page, panel_type)
+            if not instance_id:
+                logger.warning(f"  Failed to open {panel_type}")
+                continue
+
+            try:
+                wait_for_panel_ready(page, instance_id)
+                output_path = output_dir / f"{panel_name}.png"
+                rect = crop_panel_screenshot(page, instance_id, output_path)
+
+                diff = 0.0
+                if previous_crop:
+                    diff = image_diff_pct(previous_crop, output_path)
+                previous_crop = output_path
+
+                report.append({
+                    "type": "panel",
+                    "panel_type": panel_type,
+                    "panel_name": panel_name,
+                    "instance_id": instance_id,
+                    "rect": rect,
+                    "path": str(output_path.relative_to(REPO_ROOT)),
+                    "diff_pct": diff,
+                })
+                logger.info(f"  {panel_name}: {rect['width']}x{rect['height']}, diff={diff:.1f}%")
+            finally:
+                close_panel(page, instance_id)
 
         # Check for errors
         console_errors = filter_console_errors(console_messages)
