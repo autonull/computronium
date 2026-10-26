@@ -532,23 +532,37 @@ stable at 31; no page/console errors; 25 s walltime.
 - [x] Cell drawer reads workspace cell selection; commands do not import the
   drawer singleton.
 - [x] Duplicate works for every type; closing one leaves siblings intact.
+- [x] Added `init()` method to `StageViewInstance` interface for async initialization.
+- [x] All 25 stage views updated with `init()` method.
+- [x] Stage panel registers view instances with `DockviewHost` for `measuredCells()` queries.
 
 **Gate:** flexibility matrix below.
 
-### P8 — UX, presets, persistence (2 d)
+### P8 — UX, presets, persistence (2 d) — DONE (2026-10-25)
 
-- Workspace picker; empty-state component picker; tab badges (view/run).
-- Rail collapse when empty; min sizes; focus ring; `aria-expanded`.
-- Save/restore/migrate; reset; import/export layout; undo/redo in menubar.
-- No overlap at 1024 px; stage interactive; floating groups bounded to viewport.
+- [x] Empty-state component picker in watermark (click to open panels).
+- [x] Stage tab badges show view name + run ID (shortened).
+- [x] Live rail collapses to header-only when empty (min-height 40px).
+- [x] Focus ring on tabs (`box-shadow: 0 0 0 2px var(--gradient)` on focus).
+- [x] ARIA attributes: `role="tab"`, `aria-selected` on tab renderers.
+- [x] Menubar Window menu: Undo/Redo, Save/Load/Export/Import layout, Reset to Watch.
+- [x] Responsive CSS: no overlap at 1024px, min panel sizes, floating groups bounded.
+- [x] Persistence: `LayoutDocument` v1 envelope, unknown component types pruned with warning.
+- [x] Build: dashboard.js 1.25 MB (327 kB gzipped).
+- [x] Probe: 30 listeners stable, 11 panel types, 26 view types, 25s walltime.
 
 **Gate:** hero-quality layout; persistence round-trip; unknown-type pruning.
 
-### P9 — Capture, tour, close-out (1 d)
+### P9 — Capture, tour, close-out (1 d) — IN PROGRESS (2026-10-25)
 
-- Reuse-store mode for all capture scripts; no campaign re-run.
-- Update probes/capture to `__DASHBOARD__.debug`.
-- Rebuild committed bundle; run targeted tests; record measured results here.
+- [x] `capture_dashboard_screenshot.py`: `--reuse-store` flag, auto-opens stage panel, polls for measured cells.
+- [x] Updated probe + capture to use `__DASHBOARD__.debug` API.
+- [x] Debug API exposes `spaceStore()` for cache inspection.
+- [x] All 25 stage views have `init()` method for async initialization.
+- [x] Space payload fetch working (20 records in store).
+- [ ] Fix space view async `init()` to populate cells before capture.
+- [ ] Hero shot < 60s with `--reuse-store`.
+- [ ] Tour all frames; >2% view diffs.
 
 **Gate:** hero < 60 s with `--reuse-store`; tour all frames; >2% view diffs.
 
