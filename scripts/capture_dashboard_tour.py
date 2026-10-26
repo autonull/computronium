@@ -308,6 +308,15 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
         logger.info("=== Capturing Presets (full dashboard) ===")
         for preset in PRESETS:
             logger.info(f"Applying preset: {preset}")
+            # Reset to clean state first (closes any floating panels)
+            page.evaluate(
+                """() => {
+                    const dbg = window.__DASHBOARD__;
+                    if (!dbg || !dbg.layout) return;
+                    dbg.layout.reset();
+                }"""
+            )
+            page.wait_for_timeout(500)
             apply_preset(page, preset)
             page.wait_for_timeout(1500)
 
@@ -330,7 +339,19 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
 
         # ========== 2. STAGE VIEWS (crops) ==========
         logger.info("=== Capturing Stage Views (crops) ===")
-        # Use the last preset's stage instance
+        # Reset to clean "watch" preset (no floating panels) for stage views
+        page.evaluate(
+            """() => {
+                const dbg = window.__DASHBOARD__;
+                if (!dbg || !dbg.layout) return;
+                dbg.layout.reset();
+            }"""
+        )
+        page.wait_for_timeout(500)
+        apply_preset(page, "watch")
+        page.wait_for_timeout(1500)
+
+        # Get the stage instance from the clean watch preset
         instance_id = page.evaluate(
             """() => {
                 const dbg = window.__DASHBOARD__;
