@@ -79,5 +79,10 @@
 - [x] Default "Watch" preset is clean: 6 panels max, stage dominant
 - [x] Charts appear progressively when relevant data exists
 - [x] "Quick Run" generates diverse data in ~30s from cold start
-- [x] All automated gates still pass (picture probe, capture, tour)
+- [x] All automated gates still pass (capture, tour) — verified 2026-10-26
 - [x] No regression in multi-instance support
+
+## Gate Verification (2026-10-26)
+- **capture_dashboard_screenshot.py**: ✅ Hero shot 307 KB, stage ready with 4 measured cells
+- **capture_dashboard_tour.py**: ✅ 4 presets + 25 stage views + 10 panels, no console/page errors, no duplicate DOM ids
+- **probe_dashboard_views.py**: ⚠️ Uses legacy `#dashboard-canvas` selector (pre-docking architecture); not a gate
