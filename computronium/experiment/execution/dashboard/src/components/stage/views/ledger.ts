@@ -267,6 +267,7 @@ export function createLedgerView(context: StageViewContext): StageViewInstance {
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

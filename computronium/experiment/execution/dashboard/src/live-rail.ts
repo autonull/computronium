@@ -5,6 +5,7 @@ import { panels, registerDisplayPanel } from "./panels.js";
 import { createPanelShell } from "./shell.js";
 import { wsClient } from "./ws-client.js";
 import { PALETTE } from "./colors.js";
+import { dockviewHost } from "./layout/dockview-host.js";
 import type { Component } from "./components/registry.js";
 
 type EventLevel = "ok" | "warn" | "error";
@@ -28,6 +29,9 @@ export function createRailBody(): string {
       .rail-msg { color: var(--text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .rail-event.warn .rail-msg { color: var(--warn); }
       .rail-event.error .rail-msg { color: var(--error); }
+      /* Collapsed state - only header visible */
+      .rail-collapsed .rail-log { display: none; }
+      .rail-collapsed .rail-header { margin-bottom: 0; }
     </style>
     <div class="rail-header">
       <span class="rail-conn"><span class="rail-dot"></span><span class="rail-label">Disconnected</span></span>
@@ -44,17 +48,27 @@ export class LiveRailView {
   private readonly dot: HTMLElement;
   private readonly label: HTMLElement;
   private readonly queue: HTMLElement;
+  private readonly header: HTMLElement;
   private events: Event[] = [];
   private readonly disposers: (() => void)[] = [];
+  private instanceId: string | null = null;
 
   constructor(private readonly root: HTMLElement) {
     this.log = this.query(".rail-log");
+    this.header = this.query(".rail-header");
     this.dot = this.query(".rail-dot");
     this.label = this.query(".rail-label");
     this.queue = this.query(".rail-queue");
     this.disposers.push(
       wsClient.onStateChange((state) => this.setConn(state === "connected")),
     );
+    // Start collapsed (no events)
+    this.updateCollapsedState();
+  }
+
+  /** Set the Dockview instance ID for collapse/expand operations. */
+  setInstanceId(instanceId: string): void {
+    this.instanceId = instanceId;
   }
 
   dispose(): void {
@@ -64,6 +78,7 @@ export class LiveRailView {
   }
 
   add(stage: string, message: string, level: EventLevel = "ok"): void {
+    const wasEmpty = this.events.length === 0;
     this.events.unshift({
       stage,
       message,
@@ -72,6 +87,7 @@ export class LiveRailView {
     });
     if (this.events.length > 100) this.events.pop();
     this.render();
+    if (wasEmpty) this.updateCollapsedState();
   }
 
   setQueue(running: number, queued: number): void {
@@ -99,6 +115,17 @@ export class LiveRailView {
       })
       .join("");
     this.log.scrollTop = 0;
+  }
+
+  /** Collapse or expand the rail based on whether it has events. */
+  private updateCollapsedState(): void {
+    const isEmpty = this.events.length === 0;
+    if (isEmpty) {
+      this.root.classList.add("rail-collapsed");
+    } else {
+      this.root.classList.remove("rail-collapsed");
+    }
+    // The CSS handles the collapsed state; Dockview will respect the minSize on next layout
   }
 }
 

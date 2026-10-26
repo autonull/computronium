@@ -217,6 +217,7 @@ export function createContrastView(context: StageViewContext): StageViewInstance
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

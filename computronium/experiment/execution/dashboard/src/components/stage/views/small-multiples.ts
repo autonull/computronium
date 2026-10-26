@@ -252,6 +252,7 @@ export function createSmallMultiplesView(context: StageViewContext): StageViewIn
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

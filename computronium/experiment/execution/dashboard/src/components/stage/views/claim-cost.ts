@@ -257,6 +257,7 @@ export function createClaimCostView(context: StageViewContext): StageViewInstanc
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

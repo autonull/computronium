@@ -400,6 +400,7 @@ export function createTerrainView(context: StageViewContext): StageViewInstance 
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

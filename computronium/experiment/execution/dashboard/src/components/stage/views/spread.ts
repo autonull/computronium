@@ -101,6 +101,7 @@ export function createSpreadView(context: StageViewContext): StageViewInstance {
     const extents = arms.map((arm) => {
       const h = bandwidth(arm.values);
       return {
+    init,
         high: arm.values[arm.values.length - 1] + 1.5 * h,
         low: arm.values[0] - 1.5 * h,
       };
@@ -281,6 +282,7 @@ export function createSpreadView(context: StageViewContext): StageViewInstance {
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

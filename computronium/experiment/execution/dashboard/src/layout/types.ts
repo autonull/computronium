@@ -214,10 +214,13 @@ export interface StageChange {
 
 export interface StageViewInstance {
   mount(): void;
+  init(): Promise<void>;
   resize(size: Size): void;
   refresh(change: StageChange): void;
   ready(): boolean;
   dispose(): void;
+  /** Get the number of measured cells in this view (for debug/capture). */
+  getMeasuredCells?(): number;
 }
 
 export interface StageViewDefinition {

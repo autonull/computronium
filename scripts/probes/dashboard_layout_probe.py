@@ -79,20 +79,25 @@ def _dashboard_state(page) -> dict[str, object]:
             if (!dbg) return {ready: false};
             const canvas = document.getElementById('dashboard-canvas');
             const rect = canvas ? canvas.getBoundingClientRect() : null;
-            const cells = dbg.discoveryMap?.cellDataMap;
-            const measured = cells
-                ? [...cells.values()].filter(c => c.status === 'measured').length
-                : 0;
+            let measured = 0;
+            let known = 0;
+            const debug = dbg.debug;
+            if (debug && typeof debug.measuredCells === 'function') {
+                measured = debug.measuredCells();
+                // Count all stage instances as known
+                const instances = debug.instances ? debug.instances() : [];
+                known = instances.filter(i => i.type === 'stage').length;
+            }
             return {
                 ready: true,
-                hasLayoutHost: Boolean(dbg.layout?.open || dbg.layoutHost),
+                hasLayoutHost: Boolean(dbg.layoutHost),
                 hasCommands: Boolean(dbg.commands),
                 canvas: rect && {
                     x: rect.x, y: rect.y,
                     width: rect.width, height: rect.height,
                 },
                 measuredCells: measured,
-                knownCells: cells ? cells.size : 0,
+                knownCells: known,
                 wsState: dbg.wsClient?.state ?? null,
                 hiddenPanels: dbg.panels
                     ? dbg.panels.list()

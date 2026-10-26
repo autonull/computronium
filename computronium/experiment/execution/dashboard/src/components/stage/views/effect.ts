@@ -207,6 +207,7 @@ export function createEffectView(context: StageViewContext): StageViewInstance {
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

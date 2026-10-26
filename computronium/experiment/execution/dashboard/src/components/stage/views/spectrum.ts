@@ -168,6 +168,7 @@ export function createSpectrumView(context: StageViewContext): StageViewInstance
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

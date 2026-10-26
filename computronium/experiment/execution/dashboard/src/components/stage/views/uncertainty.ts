@@ -192,6 +192,7 @@ export function createUncertaintyView(context: StageViewContext): StageViewInsta
         const error = n > 1 ? Math.sqrt(variance / n) : 0;
         const margin = sigma * error;
         return {
+    init,
           cell,
           label: cellLabel(cell, axes, varying),
           color: ARM_COLORS[cell.coordinate.credit] ?? PALETTE.gradient,
@@ -253,6 +254,7 @@ export function createUncertaintyView(context: StageViewContext): StageViewInsta
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

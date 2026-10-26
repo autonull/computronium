@@ -20,7 +20,8 @@ import { applyPreset, reset, applyWorkspace } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { initHints } from "./hints.js";
 import { menubar } from "./menubar.js";
-import { dockviewHost } from "./layout/dockview-host.js";
+import { dockviewHost, DockviewHost } from "./layout/dockview-host.js";
+import { spaceStore } from "./stores/space.js";
 import { commands, registerLayoutCommands } from "./layout/commands.js";
 import { listDefinitions } from "./layout/definitions.js";
 import "./layout/components/hud.js";
@@ -319,13 +320,9 @@ window.addEventListener("keydown", (event) => {
   debug: {
     instances: () => dockviewHost.list(),
     measuredCells: (instanceId?: string) => {
-      const instances = dockviewHost.list();
-      if (instanceId) {
-        const inst = instances.find((i) => i.id === instanceId);
-        return inst ? 1 : 0;
-      }
-      return instances.length;
+      return DockviewHost.getMeasuredCells(instanceId);
     },
+    spaceStore: () => spaceStore,
     stageRect: (instanceId?: string) => {
       const api = dockviewHost.getApi();
       if (!api) return null;

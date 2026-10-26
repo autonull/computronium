@@ -859,10 +859,18 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
 
   return {
     mount,
+    init,
     resize,
     refresh,
     ready,
     dispose,
+    getMeasuredCells(): number {
+      let count = 0;
+      cellDataMap.forEach((data) => {
+        if (data.status === "measured" && data.metrics?.n_seeds) count++;
+      });
+      return count;
+    },
   };
 }
 

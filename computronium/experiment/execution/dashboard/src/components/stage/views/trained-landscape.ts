@@ -201,6 +201,7 @@ export function createTrainedLandscapeView(context: StageViewContext): StageView
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

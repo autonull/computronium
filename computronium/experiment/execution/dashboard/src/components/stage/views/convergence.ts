@@ -213,6 +213,7 @@ export function createConvergenceView(context: StageViewContext): StageViewInsta
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

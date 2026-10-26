@@ -171,6 +171,7 @@ export function createBasinView(context: StageViewContext): StageViewInstance {
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

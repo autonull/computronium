@@ -185,6 +185,7 @@ export function createMultirunView(context: StageViewContext): StageViewInstance
       const total = totals.get(key) ?? 1;
       const offset = (index - (total - 1) / 2) * (CELL * 0.5);
       return {
+    init,
         x: (placement.xi - (xValues.length - 1) / 2) * SPACING + offset,
         y: placement.yi * SPACING,
         z: (placement.zi - (zValues.length - 1) / 2) * SPACING,
@@ -456,6 +457,7 @@ export function createMultirunView(context: StageViewContext): StageViewInstance
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

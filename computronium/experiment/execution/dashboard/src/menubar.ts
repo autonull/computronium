@@ -10,15 +10,13 @@
 
 import { registry } from "./components/registry.js";
 import { panels } from "./panels.js";
-import { layoutManager, registerLayoutComponent } from "./layout-manager.js";
 import { listStageViews } from "./components/stage/registry.js";
 import { wsClient } from "./ws-client.js";
 import { applyPreset, getCurrentPreset } from "./layout.js";
 import { openPalette } from "./palette.js";
 import { helpOverlay } from "./help-overlay.js";
-import { runSelection } from "./run-selection.js";
 import { dockviewHost } from "./layout/dockview-host.js";
-import { commands } from "./layout/commands.js";
+import { commands, layoutCommands } from "./layout/commands.js";
 import type { Component } from "./components/registry.js";
 
 function getLegacyControlPanel(): any {
@@ -375,6 +373,34 @@ function createMenubarBody(): string {
         <button>Window ▾</button>
         <div class="menubar-dropdown" id="dropdown-window">
           <div class="menubar-section-title">Layout</div>
+          <div class="menubar-item" data-action="layout-undo">
+            <span>Undo</span>
+            <kbd class="shortcut">⌘Z</kbd>
+          </div>
+          <div class="menubar-item" data-action="layout-redo">
+            <span>Redo</span>
+            <kbd class="shortcut">⌘⇧Z</kbd>
+          </div>
+          <div class="menubar-separator"></div>
+          <div class="menubar-item" data-action="layout-save">
+            <span>Save Layout…</span>
+            <kbd class="shortcut">⌘S</kbd>
+          </div>
+          <div class="menubar-item" data-action="layout-load">
+            <span>Load Layout…</span>
+            <kbd class="shortcut">⌘O</kbd>
+          </div>
+          <div class="menubar-item" data-action="layout-export">
+            <span>Export Layout…</span>
+          </div>
+          <div class="menubar-item" data-action="layout-import">
+            <span>Import Layout…</span>
+          </div>
+          <div class="menubar-separator"></div>
+          <div class="menubar-item" data-action="layout-reset">
+            <span>Reset to Watch Preset</span>
+          </div>
+          <div class="menubar-separator"></div>
           <div class="menubar-item" data-action="minimize-all">
             <span>Minimize All Panels</span>
           </div>
@@ -552,10 +578,10 @@ export class Menubar implements Component {
         helpOverlay.toggle();
         break;
       case "reset-layout":
-        layoutManager.reset();
+        layoutCommands.applyPreset("watch");
         break;
       case "save-layout":
-        localStorage.setItem("computronium-dashboard-layout", JSON.stringify(layoutManager.getConfig()));
+        layoutCommands.save();
         break;
       case "minimize-all":
         for (const p of panels.list()) { if (p.isOpen()) p.toggle(); }
@@ -586,6 +612,27 @@ export class Menubar implements Component {
         break;
       case "import-db":
         this.importDatabase();
+        break;
+      case "layout-undo":
+        layoutCommands.undo();
+        break;
+      case "layout-redo":
+        layoutCommands.redo();
+        break;
+      case "layout-save":
+        this.saveLayoutToFile();
+        break;
+      case "layout-load":
+        this.loadLayoutFromFile();
+        break;
+      case "layout-export":
+        this.exportLayoutToFile();
+        break;
+      case "layout-import":
+        this.importLayoutFromFile();
+        break;
+      case "layout-reset":
+        layoutCommands.applyPreset("watch");
         break;
     }
   }
@@ -848,6 +895,66 @@ export class Menubar implements Component {
         this.renderDatabaseList();
       } catch (e) {
         alert(`Failed to import database: ${(e as Error).message}`);
+      }
+    });
+    input.click();
+  }
+
+  private saveLayoutToFile(): void {
+    const doc = layoutCommands.save();
+    if (!doc) return;
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `computronium-layout-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private loadLayoutFromFile(): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const doc = JSON.parse(text);
+        await layoutCommands.load(doc);
+      } catch (e) {
+        alert(`Failed to load layout: ${(e as Error).message}`);
+      }
+    });
+    input.click();
+  }
+
+  private exportLayoutToFile(): void {
+    const doc = layoutCommands.save();
+    if (!doc) return;
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `computronium-layout-export-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private importLayoutFromFile(): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const doc = JSON.parse(text);
+        await layoutCommands.load(doc);
+      } catch (e) {
+        alert(`Failed to import layout: ${(e as Error).message}`);
       }
     });
     input.click();

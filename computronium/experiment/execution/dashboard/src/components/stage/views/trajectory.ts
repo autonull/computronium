@@ -203,6 +203,7 @@ export function createTrajectoryView(context: StageViewContext): StageViewInstan
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

@@ -15,13 +15,15 @@ export const liveRailDefinition: ComponentDefinition =
     title: "Live Rail",
     icon: "≡",
     defaultSize: { width: 320, height: 240 },
+    minSize: { width: 200, height: 40 }, // Minimal height when collapsed
     create(
       host: HTMLElement,
       _state: JsonValue,
-      _ctx: ComponentContext,
+      ctx: ComponentContext,
     ): ComponentHandle<JsonValue> {
       host.innerHTML = createRailBody();
       const view = new LiveRailView(host);
+      view.setInstanceId(ctx.instanceId);
       return {
         element: host,
         dispose(): void {

@@ -244,6 +244,7 @@ export function createFlowView(context: StageViewContext): StageViewInstance {
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

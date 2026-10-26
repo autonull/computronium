@@ -190,3 +190,74 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
+
+/* Responsive: prevent overlap at 1024px and below */
+@media (max-width: 1024px) {
+  :root {
+    --panel-min-width: 200px;
+    --panel-min-height: 150px;
+  }
+
+  /* Ensure stage panels have minimum usable size */
+  .dv-container .dv-group .dv-content .dv-panel[data-component="stage"] {
+    min-width: 300px;
+    min-height: 200px;
+  }
+
+  /* Floating groups stay within viewport */
+  .dv-floating-group {
+    max-width: 90vw !important;
+    max-height: 85vh !important;
+  }
+
+  /* Tab overflow handling */
+  .dv-tabs-container {
+    flex-wrap: wrap;
+  }
+
+  /* Reduce padding on small screens */
+  .panel-header { padding: 8px 10px; }
+  .panel-body { padding: 8px; }
+
+  /* Chart panels */
+  .chart-header { padding: 6px 10px; }
+
+  /* Control bar */
+  #control-bar { padding: 6px 10px; gap: 6px; }
+  .ctrl .verb { width: 32px; height: 28px; font-size: 14px; }
+  .ctrl .slider { width: 80px; }
+
+  /* Control panel */
+  #control-panel { padding: 8px; }
+
+  /* Cell drawer */
+  #drawer-header { padding: 10px 12px; }
+  #drawer-content { padding: 12px; }
+
+  /* Legend */
+  #discovery-legend { min-width: 180px; max-width: 280px; padding: 8px; font-size: 10px; }
+
+  /* HUD */
+  #hud .meter-row { gap: 3px; }
+  #hud .meter-bar { height: 5px; }
+}
+
+/* Very small screens */
+@media (max-width: 768px) {
+  :root {
+    --panel-min-width: 180px;
+    --panel-min-height: 120px;
+  }
+
+  .dv-container .dv-group .dv-content .dv-panel[data-component="stage"] {
+    min-width: 250px;
+    min-height: 180px;
+  }
+
+  .dv-tab { min-width: 80px; max-width: 180px; padding: 3px 8px; font-size: 10px; }
+  .dv-tab dv-stage-tab { min-width: 100px; max-width: 220px; }
+
+  /* Stack menubar items if needed */
+  .menubar { flex-wrap: wrap; height: auto; min-height: 28px; padding: 2px 4px; }
+  .menubar-menu > button { padding: 0 8px; font-size: 11px; }
+}

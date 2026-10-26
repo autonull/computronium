@@ -3,6 +3,7 @@
 import { StageSurfaceImpl } from "../../components/stage/Surface.js";
 import { createStageViewInstance, listStageViews, getDefaultStageView } from "../../components/stage/registry.js";
 import { registerDefinition } from "../definitions.js";
+import { DockviewHost } from "../dockview-host.js";
 
 // Import stage views so they self-register
 import "../../components/stage/views/index.js";
@@ -56,11 +57,20 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
       state: viewState,
     });
 
+    let initPromise: Promise<void> | null = null;
     if (viewInstance) {
-      viewInstance.mount();
+      initPromise = viewInstance.init().then(() => {
+        viewInstance?.mount();
+      });
     }
 
     surface.start();
+
+    // Register with DockviewHost for measured cells query
+    const instanceId = ctx.instanceId;
+    if (viewInstance) {
+      DockviewHost.registerStageInstance(instanceId, viewInstance);
+    }
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
@@ -87,14 +97,20 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
         // View switch
         if (nextState.view !== stageState.view) {
           viewInstance?.dispose();
-          viewInstance = createStageViewInstance(nextState.view, {
+          const newViewInstance = createStageViewInstance(nextState.view, {
             surface: surface as StageSurface,
             flat: surface.flat,
             workspace: ctx.workspace,
             state: { ...nextState, runId: nextState.runId ?? ctx.workspace.getSelectedRunId() },
           });
-          viewInstance?.mount();
-          viewInstance?.resize(surface.size());
+          viewInstance = newViewInstance;
+          if (newViewInstance) {
+            newViewInstance.init().then(() => {
+              newViewInstance.mount();
+              newViewInstance.resize(surface.size());
+              DockviewHost.registerStageInstance(instanceId, newViewInstance);
+            });
+          }
         }
         // Run/axes change — refresh the view
         else if (nextState.runId !== stageState.runId || nextState.axes !== stageState.axes) {
@@ -105,6 +121,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
         resizeObserver.disconnect();
         workspaceUnsub();
         viewInstance?.dispose();
+        DockviewHost.unregisterStageInstance(instanceId);
         surface.dispose();
       },
     };

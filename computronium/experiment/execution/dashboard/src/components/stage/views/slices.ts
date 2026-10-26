@@ -358,6 +358,7 @@ export function createSlicesView(context: StageViewContext): StageViewInstance {
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

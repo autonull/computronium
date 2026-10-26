@@ -292,6 +292,7 @@ export function createLayersView(context: StageViewContext): StageViewInstance {
         });
       });
       return {
+    init,
         value: z,
         height: (zi - (zValues.length - 1) / 2) * LAYER_GAP,
         cells,
@@ -482,6 +483,7 @@ export function createLayersView(context: StageViewContext): StageViewInstance {
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,

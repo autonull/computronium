@@ -204,6 +204,7 @@ export function createTrainedTrajectoryView(context: StageViewContext): StageVie
   init();
 
   return {
+    init,
     mount,
     resize,
     refresh,
