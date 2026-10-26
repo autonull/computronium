@@ -160,7 +160,7 @@ def probe_viewport(port: int, viewport: dict) -> dict:
             """() => {
                 const dv = document.querySelector('.dv-dockview');
                 const tabs = document.querySelectorAll('.dv-tab');
-                const groups = document.querySelectorAll('.dv-group');
+                const groups = document.querySelectorAll('.dv-groupview');
                 const tab = tabs[0];
                 const group = groups[0];
                 return {
@@ -233,19 +233,11 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                 const workspace = document.getElementById('workspace');
                 const wsRect = workspace ? workspace.getBoundingClientRect() : null;
 
-                let leftWidth = 0, rightWidth = 0, bottomHeight = 0;
-                for (const p of leftPanels) {
-                    const r = getRect(p.id);
-                    if (r) leftWidth += r.width;
-                }
-                for (const p of rightPanels) {
-                    const r = getRect(p.id);
-                    if (r) rightWidth += r.width;
-                }
-                for (const p of bottomPanels) {
-                    const r = getRect(p.id);
-                    if (r) bottomHeight += r.height;
-                }
+                // Left/right panels are stacked vertically - column width = first panel's width
+                // Bottom panels are stacked horizontally - row height = first panel's height
+                const leftWidth = leftPanels.length > 0 ? (getRect(leftPanels[0].id)?.width ?? 0) : 0;
+                const rightWidth = rightPanels.length > 0 ? (getRect(rightPanels[0].id)?.width ?? 0) : 0;
+                const bottomHeight = bottomPanels.length > 0 ? (getRect(bottomPanels[0].id)?.height ?? 0) : 0;
 
                 return {
                     stage: stageRect,
@@ -288,8 +280,8 @@ def probe_viewport(port: int, viewport: dict) -> dict:
         if stage_instance:
             instance_id = stage_instance["id"]
 
-            # Wait for stage ready with measured cells (up to 3s)
-            deadline = time.time() + 3.0
+            # Wait for stage ready with measured cells (up to 10s)
+            deadline = time.time() + 10.0
             stage_debug = None
             while time.time() < deadline:
                 stage_debug = page.evaluate(
@@ -370,7 +362,7 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                 if (!dbg || !dbg.layoutHost || !dbg.layoutHost.open) return {distinct: false};
                 const id1 = await dbg.layoutHost.open("stage", {view: "space"});
                 const id2 = await dbg.layoutHost.open("stage", {view: "ledger"});
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 2000));
                 const d1 = dbg.debug.getStageDebug ? dbg.debug.getStageDebug(id1) : null;
                 const d2 = dbg.debug.getStageDebug ? dbg.debug.getStageDebug(id2) : null;
                 const distinct = d1 && d2 && d1.view !== d2.view;

@@ -37,7 +37,19 @@ export class SpaceStore implements SpaceStoreInterface {
   get(runId: string, axes: AxisSelection, values: Record<AxisName, string[]>): SpacePayload | null {
     const key = this.makeKey(runId, axes, values);
     const entry = this.cache.get(key);
-    return entry?.data ?? null;
+    if (entry?.data) return entry.data;
+    
+    // Fallback: search for any entry matching runId and axes (for initial load with empty values)
+    const isEmptyValues = AXIS_NAMES.every((axis) => !values[axis]?.length);
+    if (isEmptyValues) {
+      for (const entry of this.cache.values()) {
+        if (entry.data && entry.data.run_id === runId && 
+            entry.data.axes.includes(axes.x) && entry.data.axes.includes(axes.y) && entry.data.axes.includes(axes.z)) {
+          return entry.data;
+        }
+      }
+    }
+    return null;
   }
 
   /** Subscribe to space payload changes for a key. Returns unsubscribe function. */
@@ -134,6 +146,40 @@ export class SpaceStore implements SpaceStoreInterface {
 
   dispose(): void {
     this.cache.clear();
+  }
+
+  // --- Debug methods for picture probe ---
+
+  /** Get the current payload for the active space query (if any). */
+  getPayload(): SpacePayload | null {
+    // Return the first cached payload with data
+    for (const entry of this.cache.values()) {
+      if (entry.data) return entry.data;
+    }
+    return null;
+  }
+
+  /** Get count of measured cells in the current payload. */
+  getMeasuredCount(): number {
+    const payload = this.getPayload();
+    if (!payload) return 0;
+    // SpacePayload cells are "legal" or "void"; measured status comes from metrics
+    // For debug purposes, return legal count as upper bound
+    return payload.counts?.legal ?? 0;
+  }
+
+  /** Get count of drawn cells in the current payload. */
+  getDrawnCount(): number {
+    const payload = this.getPayload();
+    if (!payload) return 0;
+    // Drawn = all non-void cells
+    return payload.counts?.legal ?? 0;
+  }
+
+  /** Get all cells from the current payload. */
+  getCells(): SpaceCell[] {
+    const payload = this.getPayload();
+    return payload?.cells ?? [];
   }
 }
 

@@ -766,7 +766,7 @@ export class DockviewHost implements LayoutHost {
     this.api.fromJSON(doc.data as unknown as SerializedDockview);
   }
 
-  async applySpec(spec: LayoutSpec): Promise<void> {
+    async applySpec(spec: LayoutSpec): Promise<void> {
     if (!this.api) throw new Error("DockviewHost not mounted");
     this.api.closeAllGroups();
     // Assert clean state
@@ -798,25 +798,33 @@ export class DockviewHost implements LayoutHost {
       return `group-${++groupCounter}`;
     }
 
+    // Get current container size for proportional calculations
+    const container = document.querySelector(".dv-container") as HTMLElement | null;
+    const containerWidth = container?.clientWidth ?? window.innerWidth;
+    const containerHeight = container?.clientHeight ?? window.innerHeight;
+
     // Create a panel and return its ID
     function createPanel(node: Extract<LayoutNode, { kind: "panel" }>): string {
       const id = newPanelId();
       const definition = getDefinition(node.type);
       const resolvedState = definition ? resolveState(definition, node.state ?? {}) : node.state ?? {};
-      const containerWidth = 1920;
-      const containerHeight = 1080;
-      const initialSize = self.computeInitialSizeForSpec(node.size, containerWidth, containerHeight);
 
-      panels[id] = {
+      const panel: GroupviewPanelState = {
         id,
         contentComponent: node.type,
         title: node.title ?? definition?.title ?? node.type,
         params: jsonToParams(resolvedState),
-        minimumWidth: initialSize.width,
-        minimumHeight: initialSize.height,
-        maximumWidth: initialSize.width,
-        maximumHeight: initialSize.height,
       };
+      // Only set min/max from explicit Size constraints
+      if (node.size?.minPx !== undefined) {
+        panel.minimumWidth = node.size.minPx;
+        panel.minimumHeight = node.size.minPx;
+      }
+      if (node.size?.maxPx !== undefined) {
+        panel.maximumWidth = node.size.maxPx;
+        panel.maximumHeight = node.size.maxPx;
+      }
+      panels[id] = panel;
       return id;
     }
 
@@ -838,13 +846,15 @@ export class DockviewHost implements LayoutHost {
     }
 
     // Recursively build the grid tree
-    // Returns SerializedGridObject<GroupPanelViewState>
     function buildGrid(node: LayoutNode): SerializedGridObject<GroupPanelViewState> | null {
       switch (node.kind) {
         case "panel": {
           const panelId = createPanel(node);
           const group = createGroup([panelId]);
-          return { type: "leaf", data: group, size: 1, visible: true };
+          // Compute size proportion based on container and ratio
+          const hasSize = "size" in node;
+          const ratio = hasSize && node.size?.ratio !== undefined ? node.size.ratio : 1;
+          return { type: "leaf", data: group, size: ratio, visible: true };
         }
         case "tabs": {
           const panelIds = node.panels.map((child) => {
@@ -859,10 +869,19 @@ export class DockviewHost implements LayoutHost {
           const children = node.children.map((child) => buildGrid(child)).filter(Boolean) as SerializedGridObject<GroupPanelViewState>[];
           if (children.length === 0) return null;
           if (children.length === 1) return children[0];
+          
+          // Calculate sizes from ratios
+          const hasSize = (n: LayoutNode): n is LayoutNode & { size?: Size } => "size" in n;
+          const totalRatio = node.children.reduce((sum, child) => sum + (hasSize(child) ? child.size?.ratio ?? 1 : 1), 0);
+          const sizedChildren = children.map((child, idx) => ({
+            ...child,
+            size: totalRatio > 0 ? (hasSize(node.children[idx]) ? node.children[idx].size?.ratio ?? 1 : 1) / totalRatio : 1 / children.length,
+          }));
+          
           return {
             type: "branch",
-            data: children,
-            size: 1,
+            data: sizedChildren,
+            size: hasSize(node) ? (node.size?.ratio ?? 1) : 1,
             visible: true,
           };
         }
@@ -870,8 +889,6 @@ export class DockviewHost implements LayoutHost {
           // Floating panels are handled separately in floatingGroups
           const panelNode = node.panel as Extract<LayoutNode, { kind: "panel" }>;
           const panelId = createPanel(panelNode);
-          panels[panelId].minimumWidth = node.rect.width;
-          panels[panelId].minimumHeight = node.rect.height;
           // For floating, we don't add to grid tree
           return null;
         }
@@ -881,12 +898,22 @@ export class DockviewHost implements LayoutHost {
     // Build all top-level nodes
     const topLevelNodes = spec.nodes.map((node) => buildGrid(node)).filter(Boolean) as SerializedGridObject<GroupPanelViewState>[];
 
-    // Build grid root - implicit vertical stack
+    // Build grid root - if multiple top-level nodes, they stack vertically (column)
     let root: SerializedGridObject<GroupPanelViewState>;
     if (topLevelNodes.length === 1) {
       root = topLevelNodes[0];
     } else {
-      root = { type: "branch", data: topLevelNodes, size: 1, visible: true };
+      // Stack top-level nodes vertically
+      const totalRatio = topLevelNodes.length;
+      root = {
+        type: "branch",
+        data: topLevelNodes.map((node, idx) => ({
+          ...node,
+          size: 1 / totalRatio,
+        })),
+        size: 1,
+        visible: true,
+      };
     }
 
     // Collect floating panels
@@ -930,8 +957,8 @@ export class DockviewHost implements LayoutHost {
     return {
       grid: {
         root,
-        width: 1920,
-        height: 1080,
+        width: containerWidth,
+        height: containerHeight,
         orientation: Orientation.VERTICAL,
       },
       panels,
@@ -941,35 +968,6 @@ export class DockviewHost implements LayoutHost {
       edgeGroups: {},
     };
   }
-
-  /** Compute initial size from Size spec for serialization. */
-  private computeInitialSizeForSpec(size: Size | undefined, containerWidth: number, containerHeight: number): Size {
-    if (!size) return { width: 320, height: 240 };
-    if (size.px !== undefined) {
-      return { width: size.px, height: size.px };
-    }
-    if (size.ratio !== undefined) {
-      const ratio = Math.max(0, Math.min(1, size.ratio));
-      let width = containerWidth * ratio;
-      let height = containerHeight * ratio;
-      if (size.minPx !== undefined) {
-        width = Math.max(width, size.minPx);
-        height = Math.max(height, size.minPx);
-      }
-      if (size.maxPx !== undefined) {
-        width = Math.min(width, size.maxPx);
-        height = Math.min(height, size.maxPx);
-      }
-      return { width: Math.round(width), height: Math.round(height) };
-    }
-    return { width: size.width ?? 320, height: size.height ?? 240 };
-  }
-
-  onChange(cb: (doc: LayoutDocument) => void): () => void {
-    this.listeners.add(cb);
-    return () => this.listeners.delete(cb);
-  }
-
   /** Get the rect of a panel instance relative to the workspace container. */
   rect(instanceId: string): Rect | null {
     if (!this.api) return null;
@@ -1036,6 +1034,11 @@ export class DockviewHost implements LayoutHost {
   /** Expose API for advanced operations (picker, tab actions, maximize, undo/redo). */
   getApi(): DockviewApi | null {
     return this.api;
+  }
+
+  onChange(cb: (doc: LayoutDocument) => void): () => void {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
   }
 
   private emit(): void {

@@ -11,15 +11,17 @@ const stage = (view = "space"): LayoutNode => ({
   type: "stage",
   title: "3D Stage",
   state: { view },
-  // No absolute size — stage claims remaining space via flex
-  size: { ratio: 1, width: 1280, height: 720 },
+  // At 1920px: 1300px = 67.7% (leaving 300+320 for sides)
+  // At 1080px main row (86%): stage height = 55% of 1080 = 594px = 64% of main row
+  size: { ratio: 0.677, width: 1280, height: 720 },
 });
 
 /** Left column: legend + control-panel (clamped 300–360px). */
 const leftColumn = (): LayoutNode => ({
   kind: "split",
   direction: "column",
-  size: { ratio: 0.175, minPx: 300, maxPx: 360, width: 300, height: 1080 },
+  // At 1920px: 300px = 15.6%
+  size: { ratio: 0.15625, minPx: 300, maxPx: 360, width: 300, height: 1080 },
   children: [
     { kind: "panel", type: "discovery-legend", title: "Discovery Map", size: { ratio: 0.5, width: 300, height: 540 } },
     { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 300, height: 540 } },
@@ -30,7 +32,8 @@ const leftColumn = (): LayoutNode => ({
 const rightColumn = (): LayoutNode => ({
   kind: "split",
   direction: "column",
-  size: { ratio: 0.18, minPx: 320, maxPx: 400, width: 320, height: 1080 },
+  // At 1920px: 320px = 16.7%
+  size: { ratio: 0.1667, minPx: 320, maxPx: 400, width: 320, height: 1080 },
   children: [
     { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 270 } },
     { kind: "panel", type: "pareto-chart", title: "Pareto", size: { ratio: 0.25, width: 320, height: 270 } },
@@ -43,11 +46,12 @@ const rightColumn = (): LayoutNode => ({
 const bottomRow = (): LayoutNode => ({
   kind: "split",
   direction: "row",
-  size: { ratio: 0.14, minPx: 120, maxPx: 160, width: 1920, height: 120 },
+  // At 1080px: 140px = 13%
+  size: { ratio: 0.13, minPx: 120, maxPx: 160, width: 1920, height: 140 },
   children: [
-    { kind: "panel", type: "control-bar", title: "Control Bar", size: { ratio: 0.33, width: 640, height: 120 } },
-    { kind: "panel", type: "caption", title: "Caption", size: { ratio: 0.34, width: 640, height: 120 } },
-    { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.33, width: 640, height: 120 } },
+    { kind: "panel", type: "control-bar", title: "Control Bar", size: { ratio: 0.33, width: 640, height: 140 } },
+    { kind: "panel", type: "caption", title: "Caption", size: { ratio: 0.34, width: 640, height: 140 } },
+    { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.33, width: 640, height: 140 } },
   ],
 });
 
@@ -57,15 +61,22 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
     nodes: [
       {
         kind: "split",
-        direction: "row",
+        direction: "column",
         size: { ratio: 1, width: 1920, height: 1080 },
         children: [
-          leftColumn(),
-          stage(),
-          rightColumn(),
+          {
+            kind: "split",
+            direction: "row",
+            size: { ratio: 0.87, width: 1920, height: 940 },
+            children: [
+              leftColumn(),
+              stage(),
+              rightColumn(),
+            ],
+          },
+          bottomRow(),
         ],
       },
-      bottomRow(),
     ],
   },
   audit: {
@@ -73,15 +84,22 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
     nodes: [
       {
         kind: "split",
-        direction: "row",
+        direction: "column",
         size: { ratio: 1, width: 1920, height: 1080 },
         children: [
-          leftColumn(),
-          stage(),
-          rightColumn(),
+          {
+            kind: "split",
+            direction: "row",
+            size: { ratio: 0.87, width: 1920, height: 940 },
+            children: [
+              leftColumn(),
+              stage(),
+              rightColumn(),
+            ],
+          },
+          bottomRow(),
         ],
       },
-      bottomRow(),
     ],
   },
   drive: {
@@ -89,24 +107,31 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
     nodes: [
       {
         kind: "split",
-        direction: "row",
+        direction: "column",
         size: { ratio: 1, width: 1920, height: 1080 },
         children: [
-          leftColumn(),
-          stage(),
           {
             kind: "split",
-            direction: "column",
-            size: { ratio: 0.18, minPx: 320, maxPx: 400, width: 320, height: 1080 },
+            direction: "row",
+            size: { ratio: 0.87, width: 1920, height: 940 },
             children: [
-              { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 320, height: 540 } },
-              { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 270 } },
-              { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.25, width: 320, height: 270 } },
+              leftColumn(),
+              stage(),
+              {
+                kind: "split",
+                direction: "column",
+                size: { ratio: 0.1667, minPx: 320, maxPx: 400, width: 320, height: 940 },
+                children: [
+                  { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 320, height: 470 } },
+                  { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 235 } },
+                  { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.25, width: 320, height: 235 } },
+                ],
+              },
             ],
           },
+          bottomRow(),
         ],
       },
-      bottomRow(),
     ],
   },
   free: {
@@ -114,15 +139,22 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
     nodes: [
       {
         kind: "split",
-        direction: "row",
+        direction: "column",
         size: { ratio: 1, width: 1920, height: 1080 },
         children: [
-          leftColumn(),
-          stage(),
-          rightColumn(),
+          {
+            kind: "split",
+            direction: "row",
+            size: { ratio: 0.87, width: 1920, height: 940 },
+            children: [
+              leftColumn(),
+              stage(),
+              rightColumn(),
+            ],
+          },
+          bottomRow(),
         ],
       },
-      bottomRow(),
       {
         kind: "float",
         panel: { kind: "panel", type: "discovery-legend", title: "Discovery Map" },

@@ -1,14 +1,551 @@
 [
   {
     "viewport": "1920x1080",
-    "error": "Page.wait_for_function: Timeout 10000ms exceeded."
+    "width": 1920,
+    "height": 1080,
+    "css": {
+      "dvPosition": "relative",
+      "tabHeight": "26px",
+      "tabCount": 10,
+      "groupCount": 10,
+      "groupHeight": "458px"
+    },
+    "chrome": {
+      "menubarExists": true,
+      "menuCount": 5,
+      "canvasCount": 5,
+      "stagePanelCount": 1,
+      "legacyCanvas": false,
+      "legacyStage2d": false,
+      "duplicateIds": []
+    },
+    "geometry": {
+      "stage": {
+        "x": 300,
+        "y": 28,
+        "width": 1300,
+        "height": 915,
+        "top": 28,
+        "right": 1600,
+        "bottom": 943,
+        "left": 300
+      },
+      "workspace": {
+        "x": 0,
+        "y": 28,
+        "width": 1920,
+        "height": 1052,
+        "top": 28,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 0
+      },
+      "leftWidth": 300,
+      "rightWidth": 320,
+      "bottomHeight": 137,
+      "leftCount": 2,
+      "rightCount": 4,
+      "bottomCount": 3,
+      "stage_pct_w": 67.70833333333334,
+      "stage_pct_h": 86.97718631178707,
+      "stage_ge_60x55": true,
+      "left_in_range": true,
+      "right_in_range": true,
+      "bottom_in_range": true
+    },
+    "stage": {
+      "two_stages_distinct": {
+        "distinct": false,
+        "view1": null,
+        "view2": null
+      }
+    },
+    "grid": {
+      "hasPayload": true,
+      "measuredCells": 78,
+      "drawnCells": 78,
+      "declaredCells": 512,
+      "payloadKeys": [
+        "axes",
+        "values",
+        "held",
+        "held_source",
+        "declared",
+        "available",
+        "cells",
+        "counts",
+        "void_rules",
+        "run_id"
+      ]
+    },
+    "idempotence": {
+      "watch": {
+        "rect1": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "rect2": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "idempotent": true
+      },
+      "audit": {
+        "rect1": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "rect2": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "idempotent": true
+      },
+      "drive": {
+        "rect1": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "rect2": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "idempotent": true
+      },
+      "free": {
+        "rect1": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "rect2": {
+          "x": 300,
+          "y": 28,
+          "width": 1300,
+          "height": 915,
+          "top": 28,
+          "right": 1600,
+          "bottom": 943,
+          "left": 300
+        },
+        "idempotent": true
+      }
+    },
+    "errors": {
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "page": []
+    }
   },
   {
     "viewport": "1440x900",
-    "error": "Page.wait_for_function: Timeout 10000ms exceeded."
+    "width": 1440,
+    "height": 900,
+    "css": {
+      "dvPosition": "relative",
+      "tabHeight": "26px",
+      "tabCount": 10,
+      "groupCount": 10,
+      "groupHeight": "380px"
+    },
+    "chrome": {
+      "menubarExists": true,
+      "menuCount": 5,
+      "canvasCount": 5,
+      "stagePanelCount": 1,
+      "legacyCanvas": false,
+      "legacyStage2d": false,
+      "duplicateIds": []
+    },
+    "geometry": {
+      "stage": {
+        "x": 225,
+        "y": 28,
+        "width": 975,
+        "height": 759,
+        "top": 28,
+        "right": 1200,
+        "bottom": 787,
+        "left": 225
+      },
+      "workspace": {
+        "x": 0,
+        "y": 28,
+        "width": 1440,
+        "height": 872,
+        "top": 28,
+        "right": 1440,
+        "bottom": 900,
+        "left": 0
+      },
+      "leftWidth": 225,
+      "rightWidth": 240,
+      "bottomHeight": 113,
+      "leftCount": 2,
+      "rightCount": 4,
+      "bottomCount": 3,
+      "stage_pct_w": 67.70833333333334,
+      "stage_pct_h": 87.04128440366972,
+      "stage_ge_60x55": true,
+      "left_in_range": false,
+      "right_in_range": false,
+      "bottom_in_range": true
+    },
+    "stage": {
+      "two_stages_distinct": {
+        "distinct": false,
+        "view1": null,
+        "view2": null
+      }
+    },
+    "grid": {
+      "hasPayload": true,
+      "measuredCells": 78,
+      "drawnCells": 78,
+      "declaredCells": 512,
+      "payloadKeys": [
+        "axes",
+        "values",
+        "held",
+        "held_source",
+        "declared",
+        "available",
+        "cells",
+        "counts",
+        "void_rules",
+        "run_id"
+      ]
+    },
+    "idempotence": {
+      "watch": {
+        "rect1": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "rect2": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "idempotent": true
+      },
+      "audit": {
+        "rect1": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "rect2": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "idempotent": true
+      },
+      "drive": {
+        "rect1": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "rect2": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "idempotent": true
+      },
+      "free": {
+        "rect1": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "rect2": {
+          "x": 225,
+          "y": 28,
+          "width": 975,
+          "height": 759,
+          "top": 28,
+          "right": 1200,
+          "bottom": 787,
+          "left": 225
+        },
+        "idempotent": true
+      }
+    },
+    "errors": {
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "page": []
+    }
   },
   {
     "viewport": "1024x768",
-    "error": "Page.wait_for_function: Timeout 10000ms exceeded."
+    "width": 1024,
+    "height": 768,
+    "css": {
+      "dvPosition": "relative",
+      "tabHeight": "27px",
+      "tabCount": 10,
+      "groupCount": 10,
+      "groupHeight": "320px"
+    },
+    "chrome": {
+      "menubarExists": true,
+      "menuCount": 5,
+      "canvasCount": 5,
+      "stagePanelCount": 1,
+      "legacyCanvas": false,
+      "legacyStage2d": false,
+      "duplicateIds": []
+    },
+    "geometry": {
+      "stage": {
+        "x": 160,
+        "y": 28,
+        "width": 693,
+        "height": 640,
+        "top": 28,
+        "right": 853,
+        "bottom": 668,
+        "left": 160
+      },
+      "workspace": {
+        "x": 0,
+        "y": 28,
+        "width": 1024,
+        "height": 740,
+        "top": 28,
+        "right": 1024,
+        "bottom": 768,
+        "left": 0
+      },
+      "leftWidth": 160,
+      "rightWidth": 171,
+      "bottomHeight": 100,
+      "leftCount": 2,
+      "rightCount": 4,
+      "bottomCount": 3,
+      "stage_pct_w": 67.67578125,
+      "stage_pct_h": 86.48648648648648,
+      "stage_ge_60x55": true,
+      "left_in_range": false,
+      "right_in_range": false,
+      "bottom_in_range": false
+    },
+    "stage": {
+      "two_stages_distinct": {
+        "distinct": false,
+        "view1": null,
+        "view2": null
+      }
+    },
+    "grid": {
+      "hasPayload": true,
+      "measuredCells": 78,
+      "drawnCells": 78,
+      "declaredCells": 512,
+      "payloadKeys": [
+        "axes",
+        "values",
+        "held",
+        "held_source",
+        "declared",
+        "available",
+        "cells",
+        "counts",
+        "void_rules",
+        "run_id"
+      ]
+    },
+    "idempotence": {
+      "watch": {
+        "rect1": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "rect2": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "idempotent": true
+      },
+      "audit": {
+        "rect1": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "rect2": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "idempotent": true
+      },
+      "drive": {
+        "rect1": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "rect2": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "idempotent": true
+      },
+      "free": {
+        "rect1": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "rect2": {
+          "x": 160,
+          "y": 28,
+          "width": 693,
+          "height": 640,
+          "top": 28,
+          "right": 853,
+          "bottom": 668,
+          "left": 160
+        },
+        "idempotent": true
+      }
+    },
+    "errors": {
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "page": []
+    }
   }
 ]

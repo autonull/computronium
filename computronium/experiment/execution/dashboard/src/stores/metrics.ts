@@ -64,8 +64,11 @@ export class MetricsStore implements MetricsStoreInterface {
       this.cache.set(runId, entry);
     }
     entry.listeners.add(listener);
-    // Trigger fetch if we don't have data yet
-    if (!entry.data && !entry.promise) {
+    // If we already have data, notify the new subscriber immediately
+    if (entry.data) {
+      listener();
+    } else if (!entry.promise) {
+      // Trigger fetch if we don't have data yet
       void this.fetch(runId);
     }
     return () => {
