@@ -1,4 +1,4 @@
-/** Three.js Dashboard Main Entry Point (TODO72 P5 — StageSurface). */
+/** Three.js Dashboard Main Entry Point (TODO72 P5/P7 — StageSurface, Multi-instance). */
 
 import "./palette.css";
 import "./dashboard.css";
@@ -21,7 +21,7 @@ import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { initHints } from "./hints.js";
 import { menubar } from "./menubar.js";
 import { dockviewHost } from "./layout/dockview-host.js";
-import { commands } from "./layout/commands.js";
+import { commands, registerLayoutCommands } from "./layout/commands.js";
 import { listDefinitions } from "./layout/definitions.js";
 import "./layout/components/hud.js";
 import "./layout/components/caption.js";
@@ -149,6 +149,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.body.appendChild(workspace);
   await dockviewHost.mount(workspace);
 
+  // Register layout commands (panel opens, chart opens, layout verbs)
+  registerLayoutCommands();
+
   // Apply default watch preset via LayoutSpec
   applyPreset("watch");
 
@@ -159,15 +162,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   initHints();
 
   // Wire binding actions to the command bus
+  // Chart commands
   setAction("chart-pareto", () => commands.execute("chart-pareto"));
   setAction("chart-ablation", () => commands.execute("chart-ablation"));
   setAction("chart-variability", () => commands.execute("chart-variability"));
 
+  // Control bar verbs
   setAction("control-play", () => commands.execute("control-play"));
   setAction("control-step", () => commands.execute("control-step"));
   setAction("control-stop", () => commands.execute("control-stop"));
   setAction("control-panel", () => commands.execute("control-panel"));
 
+  // Panel commands
   setAction("panel-hud", () => commands.execute("panel-hud"));
   setAction("panel-rail", () => commands.execute("panel-rail"));
   setAction("panel-caption", () => commands.execute("panel-caption"));

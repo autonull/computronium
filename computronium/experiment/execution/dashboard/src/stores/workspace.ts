@@ -6,6 +6,7 @@ Components subscribe to the parts they need.
 
 import { metricsStore } from "./metrics.js";
 import type { AxisSelection } from "../layout/types.js";
+import type { WorkspaceStore as WorkspaceStoreInterface } from "../layout/types.js";
 
 export interface RunSummary {
   run_id: string;
@@ -26,7 +27,7 @@ export interface WorkspaceState {
 
 type Listener = () => void;
 
-export class WorkspaceStore {
+export class WorkspaceStore implements WorkspaceStoreInterface {
   private state: WorkspaceState = {
     runs: [],
     selectedRunId: null,

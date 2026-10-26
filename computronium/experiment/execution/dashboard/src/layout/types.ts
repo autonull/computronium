@@ -117,9 +117,13 @@ export interface WorkspaceStore {
   readonly axes: AxisSelection;
   getSelectedRunId(): string | null;
   getAxes(): AxisSelection;
+  setAxes(axes: AxisSelection): void;
   onSelectionChange(listener: () => void): () => void;
   onAxesChange(listener: () => void): () => void;
   onChange(listener: () => void): () => void;
+  getCellSelection(): string | null;
+  setCellSelection(key: string | null): void;
+  onCellSelectionChange(listener: () => void): () => void;
 }
 
 export interface MetricsStore {

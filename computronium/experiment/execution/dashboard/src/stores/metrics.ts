@@ -6,6 +6,7 @@ promises by key so simultaneous components don't trigger parallel fetches.
 
 import { router } from "../ws-client.js";
 import { runSelection } from "../run-selection.js";
+import type { MetricsStore as MetricsStoreInterface } from "../layout/types.js";
 
 export interface RunMetrics {
   records?: any[];
@@ -25,7 +26,7 @@ interface CacheEntry {
   listeners: Set<() => void>;
 }
 
-export class MetricsStore {
+export class MetricsStore implements MetricsStoreInterface {
   private cache = new Map<string, CacheEntry>();
   private wsUnsubscribe: (() => void) | null = null;
   private runsSummaryUnsubscribe: (() => void) | null = null;

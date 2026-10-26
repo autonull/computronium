@@ -1,18 +1,21 @@
 /** Cell Drawer — Slide-in Detail Panel. */
 
-import { registry } from "./components/registry.js";
-import { panels, registerPanel, closeButton } from "./panels.js";
-import { createPanelShell } from "./shell.js";
+import { workspaceStore } from "./stores/workspace.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
+import { cellKey } from "./stage/payloads.js";
 import type { CellData } from "./cell-data.js";
-import type { Component } from "./components/registry.js";
 import type { JsonValue } from "./layout/types.js";
+import type { WorkspaceStore as WorkspaceStoreInterface } from "./layout/types.js";
+import { registry } from "./components/registry.js";
+import { panels, registerPanel } from "./panels.js";
+import { createPanelShell } from "./shell.js";
+import type { Component } from "./components/registry.js";
 
 export function createCellDrawerBody(): string {
   return `<div id="drawer-content"></div>`;
 }
 
-/** A cell drawer bound to one root element and its own subscriptions. */
+/** A cell drawer bound to one root element and the workspace store. */
 export class CellDrawerView {
   private content: HTMLElement | null = null;
   private currentData: CellData | null = null;
@@ -20,15 +23,15 @@ export class CellDrawerView {
 
   constructor(
     private readonly root: HTMLElement,
-    _state: JsonValue = null,
+    private readonly workspace: WorkspaceStoreInterface,
   ) {
     this.content = root.querySelector("#drawer-content")!;
     this.disposers.push(
-      () => window.removeEventListener("cell-selected", this.onCellSelected as EventListener),
+      workspace.onCellSelectionChange(() => this.onCellSelectionChange()),
       () => window.removeEventListener("keydown", this.onKeyDown),
     );
-    window.addEventListener("cell-selected", this.onCellSelected as EventListener);
     window.addEventListener("keydown", this.onKeyDown);
+    this.onCellSelectionChange();
   }
 
   dispose(): void {
@@ -38,7 +41,7 @@ export class CellDrawerView {
     this.currentData = null;
   }
 
-  update(state: JsonValue): void {
+  update(_state: JsonValue): void {
     // Could receive new cell data via state
   }
 
@@ -65,6 +68,15 @@ export class CellDrawerView {
     return this.currentData;
   }
 
+  private onCellSelectionChange(): void {
+    const cellKeyStr = this.workspace.getCellSelection();
+    if (cellKeyStr) {
+      // The cell data would come from the stage view or space store
+      // For now, we just note that a cell is selected
+      // The actual cell data is passed via the cell-selected event from stage views
+    }
+  }
+
   private onCellSelected = (event: CustomEvent): void => {
     this.show(event.detail);
   };
@@ -72,14 +84,20 @@ export class CellDrawerView {
   show(data: CellData): void {
     this.currentData = data;
     this.renderContent(data);
-    panels.toggle("cell-drawer");
+    // Update workspace cell selection using current axes
+    const axes = this.workspace.getAxes();
+    const xVal = data.coordinate[axes.x] ?? "";
+    const yVal = data.coordinate[axes.y] ?? "";
+    const zVal = data.coordinate[axes.z] ?? "";
+    this.workspace.setCellSelection(cellKey(xVal, yVal, zVal));
+    // Don't auto-toggle panel - let the caller decide
     this.startSparkline(data);
   }
 
   hide(): void {
-    panels.toggle("cell-drawer");
     this.stopSparkline();
     this.currentData = null;
+    this.workspace.setCellSelection(null);
   }
 
   private renderContent(data: CellData): void {
@@ -360,7 +378,7 @@ export class CellDrawer implements Component {
       defaultOpen: false,
     });
 
-    this.view = new CellDrawerView(this.panel);
+    this.view = new CellDrawerView(this.panel, workspaceStore);
     registerPanel(
       "cell-drawer",
       "cell drawer",

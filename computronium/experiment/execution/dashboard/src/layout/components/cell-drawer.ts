@@ -1,4 +1,4 @@
-/** Cell-drawer definition: every instance owns its nodes and subscriptions. */
+/** Cell-drawer definition: every instance owns its nodes and subscriptions, reads from WorkspaceStore. */
 
 import { CellDrawerView, createCellDrawerBody } from "../../cell-drawer.js";
 import { registerDefinition } from "../definitions.js";
@@ -18,10 +18,10 @@ export const cellDrawerDefinition: ComponentDefinition =
     create(
       host: HTMLElement,
       _state: JsonValue,
-      _ctx: ComponentContext,
+      ctx: ComponentContext,
     ): ComponentHandle<JsonValue> {
       host.innerHTML = createCellDrawerBody();
-      const view = new CellDrawerView(host);
+      const view = new CellDrawerView(host, ctx.workspace);
       return {
         element: host,
         dispose(): void {

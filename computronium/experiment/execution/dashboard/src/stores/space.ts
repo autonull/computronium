@@ -6,6 +6,7 @@ Deduplicates in-flight promises so simultaneous views don't trigger parallel fet
 
 import { AXIS_NAMES, type AxisName, type SpaceCell, type SpacePayload as CellDataSpacePayload } from "../cell-data.js";
 import type { AxisSelection } from "../stage/payloads.js";
+import type { SpaceStore as SpaceStoreInterface } from "../layout/types.js";
 
 export type SpacePayload = CellDataSpacePayload;
 
@@ -17,7 +18,7 @@ interface CacheEntry {
   listeners: Set<() => void>;
 }
 
-export class SpaceStore {
+export class SpaceStore implements SpaceStoreInterface {
   private cache = new Map<SpaceKey, CacheEntry>();
 
   constructor() {}

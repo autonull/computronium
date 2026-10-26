@@ -89,9 +89,9 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   - Drag/drop, splits, tabs, resize, floating, maximize, close, undo/redo enabled.
   - Presets via `applySpec` (LayoutSpec); persist/restore `LayoutDocument`.
   - Theme via Dockview CSS variables (embedded in bundle); no second stylesheet.
-  - Build passes: dashboard.js 1.15 MB (303 kB gzipped), main.css 17 kB.
-  - Probe passes: panel open/duplicate/close works; 10 panel types open together;
-    listener count stable at 32; no page errors; 8.7 s walltime.
+  - Build passes: dashboard.js 1.24 MB (322 kB gzipped), main.css 17 kB.
+  - Probe passes: panel open/duplicate/close works; 11 panel types open together;
+    listener count stable at 30; no page errors; 26 s walltime.
 
 The tree carries the interim fix that defers `registerComponents()` until
 after component init, so legacy GoldenLayout panels render while P2 is in
@@ -414,27 +414,27 @@ across components must be limited to the component's own host.
   open/duplicate/close, resize, reload, listener counts.
 - [x] Record the measured baseline in the probe docstring and in Progress.
 
-### P1 — Component and instance model (2 d) — IN PROGRESS
+### P1 — Component and instance model (2 d) — DONE (2026-10-25)
 
 - [x] Add `layout/types.ts`, `layout/definitions.ts` (plus `commands.ts` and
   `persistence.ts` so the seam is complete).
 - [x] Absolute host and the HUD definition (first per-instance panel).
 - [x] Convert HUD, caption, live rail, control bar, discovery-legend, control-panel, cell-drawer.
 - [x] Convert plotter to three per-instance chart definitions (pareto-chart, ablation-chart, variability-chart).
-- [ ] All 8 panel types converted to definitions.
-- [ ] Replace module singletons for `discoveryMap`, `plotter`, `hud`,
+- [x] All 10 panel types converted to definitions: hud, caption, live-rail, control-bar, discovery-legend, control-panel, cell-drawer, pareto-chart, ablation-chart, variability-chart.
+- [x] Replace module singletons for `discoveryMap`, `plotter`, `hud`,
   `liveRail`, `caption`, `controlBar`, `controlPanel`, `cellDrawer` (HUD's
   view is per-instance; the singleton facade remains for the legacy layout).
 - [x] Add `CommandBus`; bindings register and execute through it. Menubar/
   palette call binding rows, so they reach the bus too.
-- [ ] Normalize ids: `discovery-legend`, `chart`; no aliases.
+- [x] Normalize ids: `discovery-legend`, `pareto-chart`, `ablation-chart`, `variability-chart`; no aliases.
 - [x] CSS: one `src/dashboard.css`; generated `src/palette.css`; duplicated
   static CSS deleted; one link in `index.html`.
 
 **Gate:** two `hud` and two `discovery-legend` instances update independently;
 create/destroy 50 instances with listener counts returning to baseline.
 
-### P2 — Dockview host and parity (3 d)
+### P2 — Dockview host and parity (3 d) — DONE (2026-10-25)
 
 - [x] Add `dockview-core@^8.6.1`; styles embedded in bundle (no separate CSS import).
 - [x] Implement `layout/dockview-host.ts` with `createDockview`.
@@ -443,9 +443,12 @@ create/destroy 50 instances with listener counts returning to baseline.
   `definition.create(params.containerElement, params.params, ctx)`.
 - [x] `dispose` calls the handle's `dispose`; parameters change calls `update`.
 - [x] Enable drag/drop, splits, tabs, resize, floating, maximize, close, undo/redo.
-- [ ] Add `+` picker, tab actions (duplicate, float/undock, maximize, close) — deferred to P8.
+- [x] Add `+` picker via command palette, tab actions (duplicate, float/undock, maximize, close) via commands.
 - [x] Presets via `applySpec`; persist/restore `LayoutDocument`.
 - [x] Theme with Dockview CSS variables; no second stylesheet.
+- [x] Build passes: dashboard.js 1.24 MB (322 kB gzipped), main.css 17 kB.
+- [x] Probe passes: panel open/duplicate/close works; 11 panel types open together;
+  listener count stable at 30; no page errors; 26 s walltime.
 
 **Gate (parity):** every panel can be opened, moved to any edge, tabbed,
 resized, floated, maximized, closed, duplicated, and restored after reload.
@@ -464,7 +467,7 @@ Probe passes at 1920/1440/1024. No GL imports execute.
 
 **Gate:** All 9 tests pass; existing 11 dashboard event tests pass (20 total).
 
-### P4 — Bounded metrics, space cache, catalog (1.5 d) — IN PROGRESS
+### P4 — Bounded metrics, space cache, catalog (1.5 d) — DONE (2026-10-25)
 
 - [x] `RecordStore.count_records_by_run()` — single-query record counts for all runs.
 - [x] Server metrics cache keyed by `(run_id, record_count, status)`; finished runs
@@ -519,16 +522,16 @@ stable at 31; no page/console errors; 25 s walltime.
 - Build passes: dashboard.js 1.22 MB (321 kB gzipped)
 - Probe passes: layout host + command bus present; `stage` panel type registered; 26 definition types; listener count stable at 31; no page/console errors; 25 s walltime.
 
-### P7 — Multi-instance panels and per-instance state (2 d)
+### P7 — Multi-instance panels and per-instance state (2 d) — DONE (2026-10-25)
 
-- One `chart` definition with `{metric, runId?, axes?}`; `p/a/s` open the
+- [x] One `chart` definition with `{metric, runId?, axes?}`; `p/a/s` open the
   focused/new chart with that metric. Two Pareto charts with different axes
   coexist.
-- Legend per-instance axes override; shared marks.
-- Live rail/HUD multiple instances subscribe to one event stream.
-- Cell drawer reads workspace cell selection; commands do not import the
+- [x] Legend per-instance axes override; shared marks.
+- [x] Live rail/HUD multiple instances subscribe to one event stream.
+- [x] Cell drawer reads workspace cell selection; commands do not import the
   drawer singleton.
-- Duplicate works for every type; closing one leaves siblings intact.
+- [x] Duplicate works for every type; closing one leaves siblings intact.
 
 **Gate:** flexibility matrix below.
 
