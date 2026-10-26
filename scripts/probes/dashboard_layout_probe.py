@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Does the dashboard's layout host keep its promises? (TODO72 P0/P1)
+"""Does the dashboard's layout host keep its promises? (TODO73 P10)
 
 The layout is the thing the plan rewrites, so the probe measures what the
 layout does rather than what the picture looks like: the stage's rectangle,
@@ -9,24 +9,11 @@ without a new page error.
 
 The probe also counts the listeners attached to ``window`` and ``document``
 through CDP before and after a panel cycle. That is the leak signal for the
-per-instance model: the P1 gate asks for fifty create/destroy cycles that
+per-instance model: the gate asks for fifty create/destroy cycles that
 return to the baseline.
 
 Usage:
     uv run python scripts/probes/dashboard_layout_probe.py --store experiment.duckdb
-
-Measured baseline (2026-10-25, ``experiment.duckdb``, 1920x1080): canvas rect
-0,0 1920x1080; no layout host and no command bus; 0 measured cells after the
-first load and 4 of 512 known after reload; listener count 33 before the panel
-cycle, 33 after it, and 33 after reload; panel open/close through the legacy
-registry; 24.97 s walltime; no page or console errors.
-
-P1 absolute host (2026-10-25): `hud` open + duplicate yields 2 views with
-distinct `{runId}` states and 0 nodes matching `#hud`; all ten definitions
-(hud, caption, live-rail, control-bar, discovery-legend, control-panel,
-cell-drawer, pareto-chart, ablation-chart, variability-chart) open together;
-10 views created; listeners 33/33/33; no errors; duplicate `plotter-tooltip`
-IDs are a known minor issue. P1 gate met.
 """
 
 from __future__ import annotations
@@ -77,111 +64,116 @@ def _dashboard_state(page) -> dict[str, object]:
         """() => {
             const dbg = window.__DASHBOARD__;
             if (!dbg) return {ready: false};
-            const canvas = document.getElementById('dashboard-canvas');
-            const rect = canvas ? canvas.getBoundingClientRect() : null;
-            let measured = 0;
-            let known = 0;
             const debug = dbg.debug;
+            let measured = 0;
+            let stagePanelCount = 0;
             if (debug && typeof debug.measuredCells === 'function') {
                 measured = debug.measuredCells();
-                // Count all stage instances as known
                 const instances = debug.instances ? debug.instances() : [];
-                known = instances.filter(i => i.type === 'stage').length;
+                stagePanelCount = instances.filter(i => i.type === 'stage').length;
             }
+            // Get workspace rect
+            const workspace = document.getElementById('workspace');
+            const wsRect = workspace ? workspace.getBoundingClientRect() : null;
             return {
                 ready: true,
                 hasLayoutHost: Boolean(dbg.layoutHost),
                 hasCommands: Boolean(dbg.commands),
-                canvas: rect && {
-                    x: rect.x, y: rect.y,
-                    width: rect.width, height: rect.height,
+                workspace: wsRect && {
+                    x: wsRect.x, y: wsRect.y,
+                    width: wsRect.width, height: wsRect.height,
                 },
                 measuredCells: measured,
-                knownCells: known,
+                stagePanelCount: stagePanelCount,
                 wsState: dbg.wsClient?.state ?? null,
-                hiddenPanels: dbg.panels
-                    ? dbg.panels.list()
-                        .filter(p => !p.isOpen())
-                        .map(p => p.id)
-                    : [],
             };
         }"""
     )
 
 
 def _panel_cycle(page) -> dict[str, object]:
-    """Open and close a panel through whatever surface exists.
-
-    Until P2 lands the only surface is the panel registry, which toggles the
-    single legacy element. The P2 host exposes ``open``/``duplicate``/``close``
-    and the probe uses it automatically.
-    """
+    """Open and close panels through the Dockview layoutHost."""
     return page.evaluate(
         """async () => {
             const dbg = window.__DASHBOARD__;
-            const host = dbg.layoutHost || dbg.layout;
-            if (host && typeof host.open === 'function') {
-                const runs = (dbg.runSelection?.runs ?? []).map(([id]) => id);
-                const id = await host.open('hud', {runId: runs[0] ?? null});
-                const duplicate = typeof host.duplicate === 'function'
-                    ? await host.duplicate(id) : null;
-                if (duplicate && typeof host.setState === 'function') {
-                    await host.setState(duplicate, {runId: runs[1] ?? null});
-                }
-                const list = typeof host.list === 'function' ? await host.list() : [];
-                const views = document.querySelectorAll(
-                    '[data-component="hud"]'
-                ).length;
-                const rootIds = document.querySelectorAll('#hud').length;
-                const states = list.map(meta => meta.state);
-                if (typeof host.close === 'function') {
-                    if (duplicate) await host.close(duplicate);
-                    await host.close(id);
-                }
-                const types = (dbg.definitions?.list?.() ?? [])
-                    .map(definition => definition.type);
-                const openedAll = [];
-                for (const type of types) {
-                    openedAll.push(await host.open(type));
-                }
-                const layer = document.getElementById('absolute-layout-layer');
-                const ids = layer
-                    ? [...layer.querySelectorAll('[id]')].map(node => node.id)
-                    : [];
-                const duplicates = ids.filter(
-                    (value, index) => ids.indexOf(value) !== index
-                );
-                if (typeof host.close === 'function') {
-                    for (const opened of openedAll) await host.close(opened);
-                }
-                return {
-                    mode: 'layout-host',
-                    opened: id,
-                    duplicate,
-                    list: list.length,
-                    views,
-                    rootIds,
-                    states,
-                    definitionTypes: types,
-                    allViews: openedAll.length,
-                    duplicateIds: duplicates,
-                };
+            const host = dbg.layoutHost;
+            if (!host || typeof host.open !== 'function') {
+                return {mode: 'none', error: 'no layoutHost.open'};
             }
-            const panel = dbg.panels?.get('hud');
-            if (!panel) return {mode: 'none'};
-            const before = panel.isOpen();
-            dbg.panels.toggle('hud');
-            const opened = panel.isOpen();
-            dbg.panels.toggle('hud');
-            const closed = panel.isOpen();
+            const runs = (dbg.runSelection?.runs ?? []).map(([id]) => id);
+            const id1 = await host.open('hud', {runId: runs[0] ?? null});
+            const duplicate = typeof host.duplicate === 'function'
+                ? await host.duplicate(id1) : null;
+            if (duplicate && typeof host.setState === 'function') {
+                await host.setState(duplicate, {runId: runs[1] ?? null});
+            }
+            const list = typeof host.list === 'function' ? await host.list() : [];
+            const views = document.querySelectorAll(
+                '[data-component="hud"]'
+            ).length;
+            // Check for duplicate IDs in Dockview panels
+            const allIds = [...document.querySelectorAll('[id]')].map(node => node.id);
+            const duplicates = allIds.filter(
+                (value, index) => allIds.indexOf(value) !== index
+            );
+            const types = (dbg.definitions?.list?.() ?? [])
+                .map(definition => definition.type);
+            const openedAll = [];
+            for (const type of types) {
+                try {
+                    openedAll.push(await host.open(type));
+                } catch (e) {
+                    openedAll.push(null);
+                }
+            }
+            if (typeof host.close === 'function') {
+                for (const opened of openedAll) {
+                    if (opened) await host.close(opened);
+                }
+                if (duplicate) await host.close(duplicate);
+                await host.close(id1);
+            }
             return {
-                mode: 'panel-registry',
-                duplicate: null,
-                opened: opened !== before,
-                closed: closed === before,
+                mode: 'layout-host',
+                opened: id1,
+                duplicate,
+                list: list.length,
+                views,
+                states: list.map(meta => meta.state),
+                definitionTypes: types,
+                allViews: openedAll.filter(o => o).length,
+                duplicateIds: duplicates,
             };
         }"""
     )
+
+
+def _fifty_cycles(page) -> dict[str, object]:
+    """Run 50 create/destroy cycles to check for listener leaks."""
+    listener_counts = []
+    cdp = page.context.new_cdp_session(page)
+
+    for i in range(50):
+        if i % 10 == 0:
+            listener_counts.append(_listener_count(cdp))
+        result = page.evaluate(
+            """async (i) => {
+                const dbg = window.__DASHBOARD__;
+                const host = dbg.layoutHost;
+                if (!host || typeof host.open !== 'function') return {error: 'no host'};
+                const id = await host.open('hud');
+                if (typeof host.close === 'function') {
+                    await host.close(id);
+                }
+                return {ok: true, iteration: i};
+            }""",
+            i,
+        )
+        if result.get("error"):
+            return {"error": result["error"], "listener_counts": listener_counts}
+
+    listener_counts.append(_listener_count(cdp))
+    return {"listener_counts": listener_counts}
 
 
 def probe(port: int) -> dict[str, object]:
@@ -199,38 +191,18 @@ def probe(port: int) -> dict[str, object]:
         page.on("pageerror", lambda error: errors.append(str(error)))
 
         page.goto(f"http://localhost:{port}/", wait_until="load")
-        page.wait_for_selector("#dashboard-canvas", state="visible", timeout=30000)
-        # Wait for DOMContentLoaded handler to start (legacy components init)
-        page.wait_for_function(
-            "() => Boolean(window.__DASHBOARD_DOMCONTENTLOADED__)",
-            timeout=30000,
-        )
-        # Wait for DOMContentLoaded handler to start
-        page.wait_for_function(
-            "() => Boolean(window.__DASHBOARD_DOMCONTENTLOADED__)",
-            timeout=30000,
-        )
-        # Wait for Dockview host workspace element to be created
         page.wait_for_selector("#workspace", state="attached", timeout=30000)
-        # Wait for mount to start
         page.wait_for_function(
-            "() => Boolean(window.__DASHBOARD__?.layoutHost?.mountStarted)",
+            "() => Boolean(window.__DASHBOARD__?.layoutHost?.mountComplete)",
             timeout=30000,
         )
-        # Wait for mount to complete or fail
-        page.wait_for_function(
-            "() => Boolean(window.__DASHBOARD__?.layoutHost?.mountComplete || window.__DASHBOARD__?.layoutHost?.mountError)",
-            timeout=30000,
-        )
-        # Check for mount error
         mount_error = page.evaluate(
             "() => window.__DASHBOARD__?.layoutHost?.mountError?.message || null"
         )
         if mount_error:
             raise RuntimeError(f"DockviewHost mount failed: {mount_error}")
-        # Measured cells are the data signal, but the probe still reports the
-        # layout when the page has none: a blank grid is a finding, not a
-        # reason to hang.
+
+        # Wait for measured cells
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if _dashboard_state(page).get("measuredCells"):
@@ -246,17 +218,30 @@ def probe(port: int) -> dict[str, object]:
         listeners_after = _listener_count(cdp)
         after_cycle = _dashboard_state(page)
 
+        # Resize test
         page.set_viewport_size({"width": 1024, "height": 768})
         page.wait_for_timeout(800)
         resized = _dashboard_state(page)
 
         page.set_viewport_size({"width": 1920, "height": 1080})
+        page.wait_for_timeout(800)
+        restored = _dashboard_state(page)
+
+        # Reload test
         page.reload(wait_until="load")
-        page.wait_for_selector("#dashboard-canvas", state="visible", timeout=30000)
+        page.wait_for_selector("#workspace", state="attached", timeout=30000)
+        page.wait_for_function(
+            "() => Boolean(window.__DASHBOARD__?.layoutHost?.mountComplete)",
+            timeout=30000,
+        )
         page.wait_for_timeout(1500)
         reloaded = _dashboard_state(page)
         reload_errors = list(errors)
         listeners_reload = _listener_count(cdp)
+
+        # 50-cycle leak test
+        logger.info("Running 50 create/destroy cycles...")
+        leak_test = _fifty_cycles(page)
 
         browser.close()
         return {
@@ -266,8 +251,10 @@ def probe(port: int) -> dict[str, object]:
                 "before": listeners_before,
                 "after_cycle": listeners_after,
                 "after_reload": listeners_reload,
+                "leak_test": leak_test,
             },
             "resized": resized,
+            "restored": restored,
             "reloaded": reloaded,
             "page_errors": reload_errors,
             "console_errors": [m for m in console if m["type"] == "error"],

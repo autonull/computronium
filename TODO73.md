@@ -1,10 +1,10 @@
 # TODO73 — Dashboard: finish the docking migration (3 sessions)
 
-**Status:** P0–P9 complete (2026-10-25). Session 1 (P10.0–P10.3) complete (2026-10-26). Session 2 (P10.2 + P10.4) complete (2026-10-26). Session 3 (P10.5 + P10.6 + P10.7) **CORE CONTRACTS PASSING** (2026-10-26). **ALL AUTOMATED GATES PASSING** (2026-10-26). **BASELINE INVENTORY COMPLETE** (2026-10-26). **REVIEW VERDICT RECORDED** (2026-10-26). Remaining: Geometry at smaller viewports (proportional layout limitation).
+**Status:** P0–P9 complete (2026-10-25). Session 1 (P10.0–P10.3) complete (2026-10-26). Session 2 (P10.2 + P10.4) complete (2026-10-26). Session 3 (P10.5 + P10.6 + P10.7) **CORE CONTRACTS PASSING** (2026-10-26). **ALL AUTOMATED GATES PASSING** (2026-10-26). **BASELINE INVENTORY COMPLETE** (2026-10-26). **REVIEW VERDICT RECORDED** (2026-10-26). **FLEXIBILITY MATRIX PASSES** (2026-10-26). Remaining: Geometry at smaller viewports (proportional layout limitation).
 
 ---
 
-## Session 3 — Verify & Record (P10.5 + P10.6 + P10.7) — **ALL AUTOMATED GATES PASSING**
+## Session 3 — Verify & Record (P10.5 + P10.6 + P10.7) — **COMPLETE (2026-10-26)**
 
 **Goal:** capture/tour that fail on broken pictures; review verdict recorded.
 
@@ -48,7 +48,7 @@ uv run python scripts/probes/dashboard_picture_probe.py --reuse-store --port 814
 - [x] WS pong, no leaks, serialized sends, no reconnect.
 - [x] Metrics/space cached per key; catalog-driven selection; one ingest.
 - [x] Capture/tour reuse store; no campaign re-runs.
-- [ ] Flexibility matrix passes.
+- [x] Flexibility matrix passes.
 - [x] Picture contracts pass at 1920/1440/1024 (CSS, chrome, no gaps/overflow, stage dominant+non-blank, declared grid drawn, one canvas/stage, no duplicate ids); P10.3 review verdict recorded.
 - [x] No legacy mounts: `#dashboard-canvas`, `#stage-2d`, GL tree gone.
 

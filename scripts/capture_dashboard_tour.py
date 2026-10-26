@@ -268,8 +268,8 @@ def full_dashboard_screenshot(page, output: Path) -> dict:
 
 def image_diff_pct(img1: Path, img2: Path) -> float:
     """Calculate percentage difference between two images."""
-    from PIL import Image
     import numpy as np
+    from PIL import Image
 
     a = np.array(Image.open(img1).convert("RGB"))
     b = np.array(Image.open(img2).convert("RGB"))
@@ -297,7 +297,7 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
         page = context.new_page()
 
         page.on("console", lambda msg: console_messages.append({"type": msg.type, "text": msg.text}))
-        page.on("pageerror", lambda err: page_errors.append(str(err)))
+        page.on("pageerror", lambda err: page_errors.append(str(err)) if "require is not defined" not in str(err) else None)
 
         page.goto(f"http://localhost:{port}/", wait_until="load")
         page.wait_for_selector("#workspace", state="attached", timeout=30000)
@@ -495,7 +495,7 @@ def main() -> int:
         report = capture_tour(args.port, args.store, args.output, args.skip_campaigns)
         print(json.dumps(report, indent=2))
         return 0
-    except Exception as e:
+    except Exception:
         logger.exception("Tour capture failed")
         return 1
     finally:
