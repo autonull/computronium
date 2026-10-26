@@ -18,14 +18,14 @@ const stage = (view = "space"): LayoutNode => ({
 
 /** Left column: legend + control-panel (clamped 280–420px).
  * Ratio 0.293 gives ~300px at 1024, ~422px at 1440, ~562px at 1920.
- * Split minPx/maxPx constrains the branch size in Dockview's grid. */
+ * Panel minPx constrains the column width in Dockview's grid. */
 const leftColumn = (): LayoutNode => ({
   kind: "split",
   direction: "column",
   size: { ratio: 0.293, minPx: 280, maxPx: 420, width: 1920, height: 1080 },
   children: [
-    { kind: "panel", type: "discovery-legend", title: "Discovery Map", size: { ratio: 0.5, width: 300, height: 540 } },
-    { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 300, height: 540 } },
+    { kind: "panel", type: "discovery-legend", title: "Discovery Map", size: { ratio: 0.5, minPx: 280, width: 300, height: 540 } },
+    { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, minPx: 280, width: 300, height: 540 } },
   ],
 });
 
@@ -36,7 +36,7 @@ const rightColumnAudit = (): LayoutNode => ({
   direction: "column",
   size: { ratio: 0.195, minPx: 280, maxPx: 420, width: 1920, height: 1080 },
   children: [
-    { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 1, width: 320, height: 1080 } },
+    { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 1, minPx: 280, width: 320, height: 1080 } },
   ],
 });
 
@@ -46,10 +46,10 @@ const rightColumnDrive = (): LayoutNode => ({
   direction: "column",
   size: { ratio: 0.195, minPx: 280, maxPx: 420, width: 1920, height: 1080 },
   children: [
-    { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 270 } },
-    { kind: "panel", type: "pareto-chart", title: "Pareto", size: { ratio: 0.25, width: 320, height: 270 } },
-    { kind: "panel", type: "ablation-chart", title: "Ablation", size: { ratio: 0.25, width: 320, height: 270 } },
-    { kind: "panel", type: "variability-chart", title: "Variability", size: { ratio: 0.25, width: 320, height: 270 } },
+    { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, minPx: 280, width: 320, height: 270 } },
+    { kind: "panel", type: "pareto-chart", title: "Pareto", size: { ratio: 0.25, minPx: 280, width: 320, height: 270 } },
+    { kind: "panel", type: "ablation-chart", title: "Ablation", size: { ratio: 0.25, minPx: 280, width: 320, height: 270 } },
+    { kind: "panel", type: "variability-chart", title: "Variability", size: { ratio: 0.25, minPx: 280, width: 320, height: 270 } },
   ],
 });
 
@@ -62,9 +62,9 @@ const bottomRow = (): LayoutNode => ({
   direction: "row",
   size: { ratio: 0.135, minPx: 110, maxPx: 180, width: 1920, height: 1080 },
   children: [
-    { kind: "panel", type: "control-bar", title: "Control Bar", size: { ratio: 0.33, width: 640, height: 140 } },
-    { kind: "panel", type: "caption", title: "Caption", size: { ratio: 0.34, width: 640, height: 140 } },
-    { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.33, width: 640, height: 140 } },
+    { kind: "panel", type: "control-bar", title: "Control Bar", size: { ratio: 0.33, minPx: 110, width: 640, height: 140 } },
+    { kind: "panel", type: "caption", title: "Caption", size: { ratio: 0.34, minPx: 110, width: 640, height: 140 } },
+    { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.33, minPx: 110, width: 640, height: 140 } },
   ],
 });
 

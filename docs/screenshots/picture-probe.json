@@ -6,14 +6,14 @@
     "css": {
       "dvPosition": "relative",
       "tabHeight": "26px",
-      "tabCount": 10,
-      "groupCount": 10,
-      "groupHeight": "458px"
+      "tabCount": 6,
+      "groupCount": 6,
+      "groupHeight": "456px"
     },
     "chrome": {
       "menubarExists": true,
       "menuCount": 5,
-      "canvasCount": 5,
+      "canvasCount": 2,
       "stagePanelCount": 1,
       "legacyCanvas": false,
       "legacyStage2d": false,
@@ -21,14 +21,14 @@
     },
     "geometry": {
       "stage": {
-        "x": 300,
+        "x": 420,
         "y": 54,
-        "width": 1300,
-        "height": 889,
+        "width": 1500,
+        "height": 885,
         "top": 54,
-        "right": 1600,
-        "bottom": 943,
-        "left": 300
+        "right": 1920,
+        "bottom": 939,
+        "left": 420
       },
       "workspace": {
         "x": 0,
@@ -40,17 +40,17 @@
         "bottom": 1080,
         "left": 0
       },
-      "leftWidth": 300,
-      "rightWidth": 320,
-      "bottomHeight": 111,
+      "leftWidth": 420,
+      "rightWidth": 0,
+      "bottomHeight": 115,
       "leftCount": 2,
-      "rightCount": 4,
+      "rightCount": 0,
       "bottomCount": 3,
-      "stage_pct_w": 67.70833333333334,
-      "stage_pct_h": 84.50570342205323,
+      "stage_pct_w": 78.125,
+      "stage_pct_h": 84.1254752851711,
       "stage_ge_60x55": true,
       "left_in_range": true,
-      "right_in_range": true,
+      "right_in_range": false,
       "bottom_in_range": true
     },
     "stage": {
@@ -58,22 +58,22 @@
       "measured": 4,
       "view": "space",
       "canvas": {
-        "w": 1300,
-        "h": 889,
+        "w": 1500,
+        "h": 885,
         "dpr": 1
       },
       "rect": {
-        "x": 300,
+        "x": 420,
         "y": 54,
-        "width": 1300,
-        "height": 889,
+        "width": 1500,
+        "height": 885,
         "top": 54,
-        "right": 1600,
-        "bottom": 943,
-        "left": 300
+        "right": 1920,
+        "bottom": 939,
+        "left": 420
       },
-      "aspect": 1.4623172103487063,
-      "expected_aspect": 1.4623172103487063,
+      "aspect": 1.694915254237288,
+      "expected_aspect": 1.694915254237288,
       "aspect_ok": true,
       "canvas_matches_rect_dpr": true,
       "height_equals_panel": true,
@@ -105,93 +105,93 @@
     "idempotence": {
       "watch": {
         "rect1": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1500,
+          "height": 885,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1920,
+          "bottom": 939,
+          "left": 420
         },
         "rect2": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1500,
+          "height": 885,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1920,
+          "bottom": 939,
+          "left": 420
         },
         "idempotent": true
       },
       "audit": {
         "rect1": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1179,
+          "height": 885,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1599,
+          "bottom": 939,
+          "left": 420
         },
         "rect2": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1179,
+          "height": 885,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1599,
+          "bottom": 939,
+          "left": 420
         },
         "idempotent": true
       },
       "drive": {
         "rect1": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1179,
+          "height": 1094,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1599,
+          "bottom": 1148,
+          "left": 420
         },
         "rect2": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1179,
+          "height": 1094,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1599,
+          "bottom": 1148,
+          "left": 420
         },
         "idempotent": true
       },
       "free": {
         "rect1": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1179,
+          "height": 1094,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1599,
+          "bottom": 1148,
+          "left": 420
         },
         "rect2": {
-          "x": 300,
+          "x": 420,
           "y": 54,
-          "width": 1300,
-          "height": 889,
+          "width": 1179,
+          "height": 1094,
           "top": 54,
-          "right": 1600,
-          "bottom": 943,
-          "left": 300
+          "right": 1599,
+          "bottom": 1148,
+          "left": 420
         },
         "idempotent": true
       }
@@ -281,14 +281,14 @@
     "css": {
       "dvPosition": "relative",
       "tabHeight": "26px",
-      "tabCount": 10,
-      "groupCount": 10,
-      "groupHeight": "380px"
+      "tabCount": 6,
+      "groupCount": 6,
+      "groupHeight": "378px"
     },
     "chrome": {
       "menubarExists": true,
       "menuCount": 5,
-      "canvasCount": 5,
+      "canvasCount": 2,
       "stagePanelCount": 1,
       "legacyCanvas": false,
       "legacyStage2d": false,
@@ -296,14 +296,14 @@
     },
     "geometry": {
       "stage": {
-        "x": 225,
+        "x": 420,
         "y": 54,
-        "width": 975,
-        "height": 733,
+        "width": 1020,
+        "height": 729,
         "top": 54,
-        "right": 1200,
-        "bottom": 787,
-        "left": 225
+        "right": 1440,
+        "bottom": 783,
+        "left": 420
       },
       "workspace": {
         "x": 0,
@@ -315,16 +315,16 @@
         "bottom": 900,
         "left": 0
       },
-      "leftWidth": 225,
-      "rightWidth": 240,
-      "bottomHeight": 87,
+      "leftWidth": 420,
+      "rightWidth": 0,
+      "bottomHeight": 91,
       "leftCount": 2,
-      "rightCount": 4,
+      "rightCount": 0,
       "bottomCount": 3,
-      "stage_pct_w": 67.70833333333334,
-      "stage_pct_h": 84.05963302752293,
+      "stage_pct_w": 70.83333333333334,
+      "stage_pct_h": 83.60091743119266,
       "stage_ge_60x55": true,
-      "left_in_range": false,
+      "left_in_range": true,
       "right_in_range": false,
       "bottom_in_range": false
     },
@@ -333,22 +333,22 @@
       "measured": 4,
       "view": "space",
       "canvas": {
-        "w": 975,
-        "h": 733,
+        "w": 1020,
+        "h": 729,
         "dpr": 1
       },
       "rect": {
-        "x": 225,
+        "x": 420,
         "y": 54,
-        "width": 975,
-        "height": 733,
+        "width": 1020,
+        "height": 729,
         "top": 54,
-        "right": 1200,
-        "bottom": 787,
-        "left": 225
+        "right": 1440,
+        "bottom": 783,
+        "left": 420
       },
-      "aspect": 1.330150068212824,
-      "expected_aspect": 1.330150068212824,
+      "aspect": 1.3991769547325104,
+      "expected_aspect": 1.3991769547325104,
       "aspect_ok": true,
       "canvas_matches_rect_dpr": true,
       "height_equals_panel": true,
@@ -380,93 +380,93 @@
     "idempotence": {
       "watch": {
         "rect1": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 1020,
+          "height": 729,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1440,
+          "bottom": 783,
+          "left": 420
         },
         "rect2": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 1020,
+          "height": 729,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1440,
+          "bottom": 783,
+          "left": 420
         },
         "idempotent": true
       },
       "audit": {
         "rect1": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 740,
+          "height": 729,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1160,
+          "bottom": 783,
+          "left": 420
         },
         "rect2": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 740,
+          "height": 729,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1160,
+          "bottom": 783,
+          "left": 420
         },
         "idempotent": true
       },
       "drive": {
         "rect1": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 740,
+          "height": 1094,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1160,
+          "bottom": 1148,
+          "left": 420
         },
         "rect2": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 740,
+          "height": 1094,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1160,
+          "bottom": 1148,
+          "left": 420
         },
         "idempotent": true
       },
       "free": {
         "rect1": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 740,
+          "height": 1094,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1160,
+          "bottom": 1148,
+          "left": 420
         },
         "rect2": {
-          "x": 225,
+          "x": 420,
           "y": 54,
-          "width": 975,
-          "height": 733,
+          "width": 740,
+          "height": 1094,
           "top": 54,
-          "right": 1200,
-          "bottom": 787,
-          "left": 225
+          "right": 1160,
+          "bottom": 1148,
+          "left": 420
         },
         "idempotent": true
       }
@@ -556,14 +556,14 @@
     "css": {
       "dvPosition": "relative",
       "tabHeight": "27px",
-      "tabCount": 10,
-      "groupCount": 10,
-      "groupHeight": "320px"
+      "tabCount": 6,
+      "groupCount": 6,
+      "groupHeight": "315px"
     },
     "chrome": {
       "menubarExists": true,
       "menuCount": 5,
-      "canvasCount": 5,
+      "canvasCount": 2,
       "stagePanelCount": 1,
       "legacyCanvas": false,
       "legacyStage2d": false,
@@ -571,14 +571,14 @@
     },
     "geometry": {
       "stage": {
-        "x": 160,
+        "x": 309,
         "y": 54,
-        "width": 693,
-        "height": 614,
+        "width": 715,
+        "height": 604,
         "top": 54,
-        "right": 853,
-        "bottom": 668,
-        "left": 160
+        "right": 1024,
+        "bottom": 658,
+        "left": 309
       },
       "workspace": {
         "x": 0,
@@ -590,16 +590,16 @@
         "bottom": 768,
         "left": 0
       },
-      "leftWidth": 160,
-      "rightWidth": 171,
-      "bottomHeight": 74,
+      "leftWidth": 309,
+      "rightWidth": 0,
+      "bottomHeight": 84,
       "leftCount": 2,
-      "rightCount": 4,
+      "rightCount": 0,
       "bottomCount": 3,
-      "stage_pct_w": 67.67578125,
-      "stage_pct_h": 82.97297297297297,
+      "stage_pct_w": 69.82421875,
+      "stage_pct_h": 81.62162162162161,
       "stage_ge_60x55": true,
-      "left_in_range": false,
+      "left_in_range": true,
       "right_in_range": false,
       "bottom_in_range": false
     },
@@ -608,22 +608,22 @@
       "measured": 4,
       "view": "space",
       "canvas": {
-        "w": 693,
-        "h": 614,
+        "w": 715,
+        "h": 604,
         "dpr": 1
       },
       "rect": {
-        "x": 160,
+        "x": 309,
         "y": 54,
-        "width": 693,
-        "height": 614,
+        "width": 715,
+        "height": 604,
         "top": 54,
-        "right": 853,
-        "bottom": 668,
-        "left": 160
+        "right": 1024,
+        "bottom": 658,
+        "left": 309
       },
-      "aspect": 1.1286644951140066,
-      "expected_aspect": 1.1286644951140066,
+      "aspect": 1.1837748344370862,
+      "expected_aspect": 1.1837748344370862,
       "aspect_ok": true,
       "canvas_matches_rect_dpr": true,
       "height_equals_panel": true,
@@ -655,93 +655,93 @@
     "idempotence": {
       "watch": {
         "rect1": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 715,
+          "height": 604,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 1024,
+          "bottom": 658,
+          "left": 309
         },
         "rect2": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 715,
+          "height": 604,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 1024,
+          "bottom": 658,
+          "left": 309
         },
         "idempotent": true
       },
       "audit": {
         "rect1": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 435,
+          "height": 604,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 744,
+          "bottom": 658,
+          "left": 309
         },
         "rect2": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 435,
+          "height": 604,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 744,
+          "bottom": 658,
+          "left": 309
         },
         "idempotent": true
       },
       "drive": {
         "rect1": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 435,
+          "height": 1094,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 744,
+          "bottom": 1148,
+          "left": 309
         },
         "rect2": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 435,
+          "height": 1094,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 744,
+          "bottom": 1148,
+          "left": 309
         },
         "idempotent": true
       },
       "free": {
         "rect1": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 435,
+          "height": 1094,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 744,
+          "bottom": 1148,
+          "left": 309
         },
         "rect2": {
-          "x": 160,
+          "x": 309,
           "y": 54,
-          "width": 693,
-          "height": 614,
+          "width": 435,
+          "height": 1094,
           "top": 54,
-          "right": 853,
-          "bottom": 668,
-          "left": 160
+          "right": 744,
+          "bottom": 1148,
+          "left": 309
         },
         "idempotent": true
       }

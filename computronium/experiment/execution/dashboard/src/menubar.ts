@@ -162,22 +162,57 @@ function injectMenubarStyles(): void {
       color: var(--text-muted);
       font-weight: 600;
     }
-    .menubar-db-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding: 8px 12px;
+    .menubar-panel-group {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin: 4px 8px;
+      background: var(--bg-secondary);
+      overflow: hidden;
     }
-    .menubar-db-name {
+    .menubar-panel-group.active {
+      border-color: var(--border-bright);
+    }
+    .menubar-group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      user-select: none;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+    .menubar-group-header:hover {
+      background: var(--bg-primary);
+    }
+    .menubar-group-chevron {
+      font-size: 9px;
+      color: var(--text-secondary);
+      width: 12px;
+      text-align: center;
+    }
+    .menubar-group-icon {
+      font-size: 12px;
+    }
+    .menubar-group-name {
+      flex: 1;
+      font-size: 11px;
       font-weight: 500;
       color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
-    .menubar-db-meta {
-      font-size: 9px;
+    .menubar-group-count {
+      font-size: 10px;
       color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
     }
-    .menubar-db-item.active .menubar-db-name {
-      color: var(--gradient);
+    .menubar-group-body {
+      padding: 4px 0;
+    }
+    .menubar-group-body .menubar-item {
+      margin: 2px 8px;
+      border-radius: 3px;
     }
     .menubar-input {
       width: 100%;
@@ -720,21 +755,90 @@ export class Menubar implements Component {
     dockviewHost.onChange(() => this.renderPanelToggles());
   }
 
+  private readonly panelGroups: ReadonlyArray<{
+    name: string;
+    types: string[];
+    icon: string;
+  }> = [
+    { name: "Charts", types: ["pareto-chart", "ablation-chart", "variability-chart"], icon: "📊" },
+    { name: "Inspect", types: ["discovery-legend", "hud", "cell-drawer"], icon: "🔍" },
+    { name: "Control", types: ["control-panel", "control-bar", "caption", "live-rail"], icon: "⚙️" },
+  ];
+
   private renderPanelToggles(): void {
     if (!this.panelToggles) return;
 
     const openTypes = new Set(dockviewHost.list().map((instance) => instance.type));
-    this.panelToggles.innerHTML = listDefinitions()
-      .map((definition) => {
-        const open = openTypes.has(definition.type);
-        return `
-          <div class="menubar-item${open ? " active" : ""}" data-panel="${definition.type}">
+    const allPanelTypes = new Set(listDefinitions().map((d) => d.type));
+
+    // Persist group collapse state in localStorage
+    const getCollapsed = (groupName: string): boolean => {
+      try {
+        const stored = localStorage.getItem("dashboard-panel-groups");
+        if (stored) return JSON.parse(stored)[groupName] ?? false;
+      } catch {}
+      return false;
+    };
+    const setCollapsed = (groupName: string, collapsed: boolean): void => {
+      try {
+        const stored = localStorage.getItem("dashboard-panel-groups");
+        const state = stored ? JSON.parse(stored) : {};
+        state[groupName] = collapsed;
+        localStorage.setItem("dashboard-panel-groups", JSON.stringify(state));
+      } catch {}
+    };
+
+    let html = "";
+    for (const group of this.panelGroups) {
+      const collapsed = getCollapsed(group.name);
+      const groupTypes = group.types.filter((t) => allPanelTypes.has(t));
+      if (groupTypes.length === 0) continue;
+
+      const anyOpen = groupTypes.some((t) => openTypes.has(t));
+      const activeClass = anyOpen ? " active" : "";
+      const chevron = collapsed ? "▸" : "▾";
+
+      html += `
+        <div class="menubar-panel-group${activeClass}" data-group="${group.name}">
+          <div class="menubar-group-header" data-group="${group.name}">
+            <span class="menubar-group-chevron">${chevron}</span>
+            <span class="menubar-group-icon">${group.icon}</span>
+            <span class="menubar-group-name">${group.name}</span>
+            <span class="menubar-group-count">${groupTypes.filter((t) => openTypes.has(t)).length}/${groupTypes.length}</span>
+          </div>
+          <div class="menubar-group-body" style="display: ${collapsed ? "none" : "flex"}; flex-direction: column;">
+      `;
+
+      for (const type of groupTypes) {
+        const definition = listDefinitions().find((d) => d.type === type);
+        if (!definition) continue;
+        const open = openTypes.has(type);
+        html += `
+          <div class="menubar-item${open ? " active" : ""}" data-panel="${type}">
             <input type="checkbox" class="menubar-checkbox" ${open ? "checked" : ""}>
             <span>${definition.icon ?? ""} ${definition.title}</span>
           </div>
         `;
-      })
-      .join("");
+      }
+
+      html += `</div></div>`;
+    }
+
+    this.panelToggles.innerHTML = html;
+
+    // Bind click handlers for group headers
+    this.panelToggles.querySelectorAll(".menubar-group-header").forEach((header) => {
+      header.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const groupName = (header as HTMLElement).dataset.group!;
+        const body = header.nextElementSibling as HTMLElement;
+        const chevron = header.querySelector(".menubar-group-chevron") as HTMLElement;
+        const collapsed = body.style.display === "none";
+        body.style.display = collapsed ? "flex" : "none";
+        chevron.textContent = collapsed ? "▾" : "▸";
+        setCollapsed(groupName, !collapsed);
+      });
+    });
   }
 
   private bindViewToggles(): void {

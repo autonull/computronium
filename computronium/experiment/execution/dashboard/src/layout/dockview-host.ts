@@ -781,6 +781,81 @@ export class DockviewHost implements LayoutHost {
     // Convert LayoutSpec to Dockview serialized format and load via fromJSON
     const serialized = this.specToDockviewJson(spec);
     this.api.fromJSON(serialized);
+
+    // Wait for layout to settle, then enforce size constraints (min/max on splits)
+    await new Promise((r) => setTimeout(r, 0));
+    this.enforceLayoutConstraints(spec);
+  }
+
+  /** Enforce min/max size constraints on layout branches after Dockview initializes. */
+  private enforceLayoutConstraints(spec: LayoutSpec): void {
+    if (!this.api) return;
+    const container = document.querySelector(".dv-container") as HTMLElement | null;
+    const containerWidth = container?.clientWidth ?? window.innerWidth;
+    const containerHeight = container?.clientHeight ?? window.innerHeight;
+
+    // Compute workspace dimensions (exclude menubar)
+    const menubar = document.getElementById("menubar-container");
+    const menubarHeight = menubar?.clientHeight ?? 28;
+    const workspaceWidth = containerWidth;
+    const workspaceHeight = containerHeight - menubarHeight;
+
+    // Main row is 87% of workspace height, bottom row 13%
+    const mainRowHeight = Math.round(workspaceHeight * 0.87);
+    const bottomRowHeight = workspaceHeight - mainRowHeight;
+
+    // Main row width = workspace width
+    const mainRowWidth = workspaceWidth;
+
+    // Desired left column width: clamp(mainRowWidth * 0.302, 280, 420)
+    // 0.302 = 0.293 / (0.293 + 0.677) = left ratio / (left + stage)
+    const leftRatio = 0.293 / (0.293 + 0.677);
+    const desiredLeftWidth = Math.max(280, Math.min(420, Math.round(mainRowWidth * leftRatio)));
+
+    // Desired right column width (for audit/drive/free): same clamping
+    const rightRatio = 0.195 / (0.293 + 0.677 + 0.195);
+    const desiredRightWidth = Math.max(280, Math.min(420, Math.round(mainRowWidth * rightRatio)));
+
+    // Desired bottom row height: clamp(110, 180) - already set by spec ratio but may need enforcement
+    const desiredBottomHeight = Math.max(110, Math.min(180, bottomRowHeight));
+
+    // Find panel instances by type and adjust sizes
+    const leftPanelTypes = ["discovery-legend", "control-panel"];
+    const rightPanelTypes = ["hud", "pareto-chart", "ablation-chart", "variability-chart"];
+    const bottomPanelTypes = ["control-bar", "caption", "live-rail"];
+
+    // Adjust left column panels (they share column width)
+    for (const [id, instance] of this.instances) {
+      if (leftPanelTypes.includes(instance.meta.type)) {
+        const panel = this.api.getPanel(id);
+        if (panel) {
+          const currentRect = panel.api.group.element.getBoundingClientRect();
+          if (Math.abs(currentRect.width - desiredLeftWidth) > 5) {
+            panel.api.setSize({ width: desiredLeftWidth, height: currentRect.height });
+          }
+        }
+      }
+      // Adjust right column panels
+      if (rightPanelTypes.includes(instance.meta.type)) {
+        const panel = this.api.getPanel(id);
+        if (panel) {
+          const currentRect = panel.api.group.element.getBoundingClientRect();
+          if (Math.abs(currentRect.width - desiredRightWidth) > 5) {
+            panel.api.setSize({ width: desiredRightWidth, height: currentRect.height });
+          }
+        }
+      }
+      // Adjust bottom row panels (they share row height)
+      if (bottomPanelTypes.includes(instance.meta.type)) {
+        const panel = this.api.getPanel(id);
+        if (panel) {
+          const currentRect = panel.api.group.element.getBoundingClientRect();
+          if (Math.abs(currentRect.height - desiredBottomHeight) > 5) {
+            panel.api.setSize({ width: currentRect.width, height: desiredBottomHeight });
+          }
+        }
+      }
+    }
   }
 
   /** Convert engine-neutral LayoutSpec to Dockview's SerializedDockview format. */
@@ -815,7 +890,7 @@ export class DockviewHost implements LayoutHost {
         title: node.title ?? definition?.title ?? node.type,
         params: jsonToParams(resolvedState),
       };
-      // Only set min/max from explicit Size constraints
+      // Set min/max from explicit Size constraints on the layout node
       if (node.size?.minPx !== undefined) {
         panel.minimumWidth = node.size.minPx;
         panel.minimumHeight = node.size.minPx;
@@ -823,6 +898,11 @@ export class DockviewHost implements LayoutHost {
       if (node.size?.maxPx !== undefined) {
         panel.maximumWidth = node.size.maxPx;
         panel.maximumHeight = node.size.maxPx;
+      }
+      // Also apply definition's minSize if present (allows separate width/height constraints)
+      if (definition?.minSize) {
+        panel.minimumWidth = Math.max(panel.minimumWidth ?? 0, definition.minSize.width);
+        panel.minimumHeight = Math.max(panel.minimumHeight ?? 0, definition.minSize.height);
       }
       panels[id] = panel;
       return id;

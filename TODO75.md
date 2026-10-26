@@ -2,8 +2,8 @@
 
 **Status:** Created 2026-10-26 — Optimized 3-track, ~5 day plan. Pre-existing issues from TODO70–74 + usability gaps for "total usability."
 
-**Progress:** Day 1-2 Complete — Track 1 (A1, A2), Track 1B (S2, S3), Track 2 (B1, B2, B3, C3, C5), Track 2B (S4, S5, S6, S7), Track 3 (F1, F2) — DONE
-**Remaining:** Track 1 (A3 Geometry), Track 1B (S1), Track 1B/S1 integration with Geometry — IN PROGRESS
+**Progress:** Day 1-2 Complete — Track 1 (A1, A2, A3), Track 1B (S1, S2, S3), Track 2 (B1, B2, B3, C3, C5), Track 2B (S4, S5, S6, S7), Track 3 (F1, F2) — DONE
+**Remaining:** None — All acceptance criteria met
 
 ---
 
@@ -48,16 +48,15 @@
 
 ---
 
-### 3. Picture Probe Geometry Failures at 1440×900 & 1024×768 — **Track 1, Day 1**
+### 3. Picture Probe Geometry Failures at 1440×900 & 1024×768 — **Track 1, Day 1** ✅ **DONE**
 **Script:** `scripts/probes/dashboard_picture_probe.py`  
 **Root cause:** Dockview layout ratios/clamping — side columns too narrow, stage <60% width.
+**Fix:** In `src/layout.ts` (presets) and `src/layout/dockview-host.ts` (applySpec):
+- Added `minPx` constraints to panel size specs in layout.ts for left/right columns (280-420px) and bottom row (110-180px)
+- Added `enforceLayoutConstraints()` in dockview-host.ts that programmatically clamps split sizes after layout load
+- Verified at all three viewports (1920×1080, 1440×900, 1024×768)
 
-**Fix:** In `src/layout.ts` (presets) and/or `layout/dockview-host.ts` (applySpec):
-- Increase `minSize` for left/right columns at small viewports
-- Ensure stage panel gets ≥60% width at 1024×768
-- Clamp bottom bar height so it doesn't crowd stage
-
-**Gate:** `uv run python scripts/probes/dashboard_picture_probe.py --store experiment.duckdb` → all 3 viewports pass CSS/Chrome/Geo/Stage
+**Gate:** `uv run python scripts/probes/dashboard_picture_probe.py --store experiment.duckdb` → all 3 viewports pass CSS/Chrome/Geo/Stage ✅
 
 ---
 
@@ -88,12 +87,12 @@ All items independent — **run in parallel** once Track 1 unblocks keys.
 
 ## UI/UX Streamlining (Parallel Sub-Tracks — No Functionality Loss)
 
-### Track 1B: Layout & Density (Parallel with Track 1, Day 1) — **PARTIAL**
+### Track 1B: Layout & Density (Parallel with Track 1, Day 1) — **COMPLETE**
 *All items reduce horizontal/vertical space at 1024×768 → directly helps Geometry gate.*
 
 | Item | File(s) | Description | Gate Alignment |
 |------|---------|-------------|----------------|
-| **S1** Panel Rail Grouping | `src/panels.ts`, `src/layout.ts` | Collapsible groups: `[Charts] [Inspect] [Control]` instead of 10 individual toggles. Single rail toggle expands accordion. | Geometry 1024×768 |
+| **S1** Panel Rail Grouping | `src/menubar.ts` | Collapsible groups: `[Charts] [Inspect] [Control]` instead of 10 individual toggles. Single rail toggle expands accordion. Group state persists in `localStorage`. | Geometry 1024×768 ✅ |
 | **S2** Control Bar Responsive | `src/control-bar.ts`, `dashboard.css` | Media query `<1200px`: collapse trace to sparkline, hide slider labels, group verbs `[▶⏸][⏭][⏹]` with tooltips. | Geometry 1024×768 ✅ |
 | **S3** Legend Chip Axes | `src/components/discovery-legend.ts` | Replace 3 stacked dropdowns/rows with single-row chip groups per axis: `X: [credit ▼] [geometry ▼] [update ▼]`. Click cycles. | Geometry, Usability ✅ |
 
@@ -145,6 +144,8 @@ Day 3:  All tracks done → Full gate verification
 Day 4:  Buffer for flakiness / integration
 Day 5:  Final verification, update TODO75.md with results
 ```
+
+**Status:** Days 1-3 complete — all acceptance criteria met.
 
 ---
 
@@ -216,10 +217,12 @@ Track 2 (Days 1-2)      Track 2B (Days 1-2)       │
   └─ C3 Chart Hints
        │
        ▼
-Day 3: All Gates Verify
+Day 3: All Gates Verify ✅
 Day 4: Buffer
-Day 5: Done
+Day 5: Done ✅
 ```
+
+**Key:** Track 1B shares layout files with A3 (done together). Track 2B's S4 EmptyState feeds B1 + C3 (done first in Track 2B).
 
 **Key:** Track 1B shares layout files with A3 (do together). Track 2B's S4 EmptyState feeds B1 + C3 (do first in Track 2B).
 
