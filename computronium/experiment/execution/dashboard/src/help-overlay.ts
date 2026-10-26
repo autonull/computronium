@@ -1,7 +1,6 @@
 /** Simple help overlay — keyboard shortcuts from bindings. */
 
 import { registry } from "./components/registry.js";
-import { registerDisplayPanel } from "./panels.js";
 import { allBindings } from "./bindings.js";
 import type { Component } from "./components/registry.js";
 
@@ -20,7 +19,7 @@ function buildGroups() {
 
 const GROUPS = buildGroups();
 
-export class HelpOverlay implements Component {
+export class HelpOverlay {
   name = "HelpOverlay";
   private container: HTMLElement | null = null;
   private open = false;
@@ -56,7 +55,6 @@ export class HelpOverlay implements Component {
     `;
     overlay.appendChild(this.container);
     this.container.addEventListener("click", (e) => { if (e.target === this.container) this.hide(); });
-    registerDisplayPanel("help-overlay", "help", "?", () => this.container);
     console.log("[HelpOverlay] Ready");
   }
 

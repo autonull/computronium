@@ -1,8 +1,8 @@
 /** Trajectory stage view — the state's own path through the state space (TODO72 P6). */
 
 import { PALETTE } from "../../../colors.js";
-import { rampColor } from "../../../stage/ramp.js";
-import { drawFrame, drawNote, formatTick, niceTicks, scaleX, scaleY, type PlotFrame } from "../../../stage/plot2d.js";
+import { rampColor } from "../../../stores/ramp.js";
+import { drawFrame, drawNote, formatTick, niceTicks, scaleX, scaleY, type PlotFrame } from "../../../stores/plot2d.js";
 import { dynamicsStore } from "../../../stores/dynamics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
 import type {

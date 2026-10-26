@@ -95,6 +95,19 @@ export interface LayoutHost {
   load(doc: LayoutDocument): Promise<void>;
   applySpec(spec: LayoutSpec): Promise<void>;
   onChange(cb: (doc: LayoutDocument) => void): () => void;
+  /** Get the rect of a panel instance relative to the workspace container. */
+  rect(instanceId: string): Rect | null;
+  /** Get debug info for a stage panel instance. */
+  getStageDebug(instanceId: string): StageDebugInfo | null;
+}
+
+export interface StageDebugInfo {
+  ready: boolean;
+  measured: number;
+  view: string | null;
+  drawnGrid?: number;
+  canvas: { w: number; h: number; dpr: number };
+  cameraAspect: number;
 }
 
 /** The three axes the stage shows, and the three it holds. */
@@ -118,6 +131,7 @@ export interface WorkspaceStore {
   getSelectedRunId(): string | null;
   getAxes(): AxisSelection;
   setAxes(axes: AxisSelection): void;
+  selectRun(runId: string | null): void;
   getRuns(): Array<{ run_id: string }>;
   onSelectionChange(listener: () => void): () => void;
   onAxesChange(listener: () => void): () => void;

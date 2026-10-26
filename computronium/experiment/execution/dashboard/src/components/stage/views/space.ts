@@ -2,13 +2,13 @@
 
 import * as THREE from "three";
 import { AXIS_NAMES, type AxisName, type CellData } from "../../../cell-data.js";
-import { frameBox } from "../../../stage/framing.js";
-import { createTextSprite } from "../../../stage/sprites.js";
+import { frameBox } from "../../../stores/framing.js";
+import { createTextSprite } from "../../../stores/sprites.js";
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
 import { workspaceStore } from "../../../stores/workspace.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { spaceStore } from "../../../stores/space.js";
-import { cellKey, type AxisSelection } from "../../../stage/payloads.js";
+import { cellKey, type AxisSelection } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,

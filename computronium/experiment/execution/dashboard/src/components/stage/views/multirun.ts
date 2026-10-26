@@ -2,11 +2,11 @@
 
 import * as THREE from "three";
 import { PALETTE } from "../../../colors.js";
-import { frameBox } from "../../../stage/framing.js"
+import { frameBox } from "../../../stores/framing.js"
 import { multiRunStore } from "../../../stores/multirun.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { cellKey, type AxisSelection } from "../../../stage/payloads.js";
-import { createTextSprite } from "../../../stage/sprites.js";
+import { cellKey, type AxisSelection } from "../../../stores/payloads.js";
+import { createTextSprite } from "../../../stores/sprites.js";
 import type {
   StageViewDefinition,
   StageViewInstance,
@@ -14,7 +14,7 @@ import type {
   StageChange,
   Size,
 } from "../../../layout/types.js";
-import type { MultiRunSpace } from "../../../stage/payloads.js";
+import type { MultiRunSpace } from "../../../stores/payloads.js";
 
 /** The colours the runs are told apart by. */
 const RUN_COLORS = ["#58a6ff", "#d4a843", "#3fb950", "#f78166"];

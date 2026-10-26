@@ -1,10 +1,6 @@
 /** Simple control bar — play/step/stop, ceiling slider, status. */
 
-import { registry } from "./components/registry.js";
-import { panels, registerDisplayPanel } from "./panels.js";
-import { createPanelShell } from "./shell.js";
 import { controlStore, type ControlPayload } from "./stores/control.js";
-import type { Component } from "./components/registry.js";
 
 export function createControlBarBody(): string {
   return `
@@ -64,7 +60,7 @@ export class ControlBarView {
 
   constructor(
     private readonly root: HTMLElement,
-    openControlPanel: () => void = () => panels.toggle("control-panel"),
+    openControlPanel: () => void = () => {},
   ) {
     this.playBtn = this.query("[data-act=play]");
     this.stepBtn = this.query("[data-act=step]");
@@ -155,44 +151,5 @@ export class ControlBarView {
         ? `${s.stage.replace("s", "S")} · ${s.cells_done} cells`
         : "no run";
     }
-  }
-}
-
-/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
-export class ControlBar implements Component {
-  name = "ControlBar";
-  private container: HTMLElement | null = null;
-  private view: ControlBarView | null = null;
-
-  async init(): Promise<void> {
-    this.container = createPanelShell({
-      id: "control-bar",
-      title: "Control Bar",
-      glyph: "⏯",
-      body: createControlBarBody(),
-      dock: "bottom",
-      defaultOpen: true,
-      className: "control-bar-panel",
-    });
-    this.view = new ControlBarView(this.container);
-    registerDisplayPanel("control-bar", "control bar", "⏯", () => this.container);
-  }
-
-  async destroy(): Promise<void> {
-    this.view?.dispose();
-    this.view = null;
-    this.container?.remove();
-  }
-
-  togglePlay(): void {
-    controlStore.togglePlay();
-  }
-
-  step(): void {
-    controlStore.step();
-  }
-
-  stop(): void {
-    controlStore.stop();
   }
 }

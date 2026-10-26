@@ -1,10 +1,10 @@
 /** Claim cost stage view — the seeds measured against the seeds a claim needs (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawNote, drawRowFrame, type RowFrame } from "../../../stage/plot2d.js";
+import { drawNote, drawRowFrame, type RowFrame } from "../../../stores/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { cellLabel, measuredCells, varyingAxes, type CellAggregate } from "../../../stage/payloads.js";
+import { cellLabel, measuredCells, varyingAxes, type CellAggregate } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,
@@ -210,7 +210,7 @@ export function createClaimCostView(context: StageViewContext): StageViewInstanc
 
   function measuredCellsFromMetrics(metrics: any, axes: any): CellAggregate[] {
     if (!metrics) return [];
-    const { aggregateRecords, measuredCells: mc, varyingAxes: va } = require("../../../stage/payloads.js") as any;
+    const { aggregateRecords, measuredCells: mc, varyingAxes: va } = require("../../../stores/payloads.js") as any;
     const aggregates = aggregateRecords(metrics, axes);
     const cells = mc(aggregates, axes);
     const varying = va(cells, axes);

@@ -18,6 +18,7 @@ export interface RunMetrics {
   resources?: Record<string, number | string | undefined>;
   store?: { source?: string; published_at?: string };
   run?: any;
+  primitives?: Record<string, string[]>;
 }
 
 interface CacheEntry {

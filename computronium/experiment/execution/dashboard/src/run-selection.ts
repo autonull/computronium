@@ -1,12 +1,8 @@
-/** Which run the dashboard shows (TODO68).
+/** Run selection compatibility layer using WorkspaceStore and MetricsStore. */
 
-A store holds several runs — the run, and the runs its own answers spawned —
-and every one of them reports its own metrics. A picture can only show one at
-a time, so the choice is made once, here: the run that started last until the
-reader picks another, and every component that draws a run's evidence reads
-the same answer. Without it, the map, the charts and the panel each showed
-whichever run reported last, and the reader was never told which.
-*/
+import { workspaceStore } from "./stores/workspace.js";
+import { metricsStore } from "./stores/metrics.js";
+import type { RunMetrics as MetricsRunMetrics } from "./stores/metrics.js";
 
 export interface RunSummary {
   run_id?: string;
@@ -17,24 +13,9 @@ export interface RunSummary {
   started_at?: string;
 }
 
-export interface RunMetrics {
-  records?: any[];
-  pareto?: boolean[];
-  ablation_groups?: any[];
-  chance?: number;
-  required_seeds?: number;
-  /** The gate's own thresholds: the rules a claim is measured against. */
-  gate?: GateThresholds;
-  resources?: Record<string, number | string | undefined>;
-  store?: { source?: string; published_at?: string };
-  run?: RunSummary;
-}
+export type RunMetrics = MetricsRunMetrics;
 
-/** The statistical gate's thresholds, as the server holds them.
-
-    The browser never invents a margin or a seed count: the rules a claim is
-    measured against belong to the gate, and the gate is on the server.
-*/
+/** The statistical gate's thresholds, as the server holds them. */
 export interface GateThresholds {
   superiority_margin: number;
   superiority_margin_sigma: number;
@@ -55,77 +36,60 @@ export type RunListener = (
 ) => void;
 
 class RunSelection {
-  private metricsByRun: Map<string, RunMetrics> = new Map();
-  private selectedRunId: string | null = null;
-  /** Whether the reader has chosen, or the newest run still leads. */
-  private chosenByReader = false;
   private listeners: RunListener[] = [];
+  private chosenByReader = false;
 
-  /** A run reported its metrics. */
-  observe(runId: string, metrics: RunMetrics): void {
-    this.metricsByRun.set(runId, metrics);
-    if (!this.chosenByReader) {
-      this.selectedRunId = this.newestRunId();
-    }
-    this.notify();
+  get selectedId(): string | null {
+    return workspaceStore.getSelectedRunId();
+  }
+
+  get selected(): RunMetrics | null {
+    const runId = this.selectedId;
+    if (!runId) return null;
+    return metricsStore.get(runId) ?? null;
   }
 
   /** The reader chose the run the dashboard shows. */
   select(runId: string | null): void {
-    this.chosenByReader = true;
-    this.selectedRunId = runId;
+    workspaceStore.selectRun(runId);
+  }
+
+  /** Observe metrics for a run (for backward compatibility with MetricsStore). */
+  observe(runId: string, metrics: RunMetrics): void {
+    metricsStore.setMetrics(runId, metrics);
+    if (!this.chosenByReader) {
+      workspaceStore.selectRun(runId);
+    }
     this.notify();
-  }
-
-  get selectedId(): string | null {
-    return this.selectedRunId;
-  }
-
-  get selected(): RunMetrics | null {
-    if (!this.selectedRunId) return null;
-    return this.metricsByRun.get(this.selectedRunId) ?? null;
-  }
-
-  /** Every run the dashboard has heard about, with its metrics. */
-  get runs(): [string, RunMetrics][] {
-    return Array.from(this.metricsByRun.entries());
   }
 
   /** Get metrics for a specific run ID. */
   getMetrics(runId: string): RunMetrics | null {
-    return this.metricsByRun.get(runId) ?? null;
+    return metricsStore.get(runId) ?? null;
+  }
+
+  /** Every run the dashboard has heard about, with its metrics. */
+  get runs(): [string, RunMetrics][] {
+    const summary = metricsStore.getRunsSummary?.() ?? [];
+    return summary.map((r: any) => [r.run_id, metricsStore.get(r.run_id)]).filter(([, m]) => m != null) as [string, RunMetrics][];
   }
 
   onChange(listener: RunListener): () => void {
     this.listeners.push(listener);
+    const unsubWorkspace = workspaceStore.onSelectionChange(() => this.notify());
+    const unsubMetrics = metricsStore.subscribe(this.selectedId ?? "", () => this.notify());
     return () => {
-      const index = this.listeners.indexOf(listener);
-      if (index >= 0) this.listeners.splice(index, 1);
+      const idx = this.listeners.indexOf(listener);
+      if (idx >= 0) this.listeners.splice(idx, 1);
+      unsubWorkspace();
+      unsubMetrics();
     };
   }
 
   private notify(): void {
-    this.listeners.forEach((listener) =>
-      listener(this.selectedRunId, this.selected),
-    );
-  }
-
-  /** The run that started last: the one in progress, when there is one. */
-  private newestRunId(): string | null {
-    let newest: string | null = null;
-    let newestAt = -Infinity;
-    this.metricsByRun.forEach((metrics, runId) => {
-      const started = metrics.run?.started_at;
-      const at = started ? Date.parse(started) : Number.NaN;
-      if (Number.isNaN(at)) return;
-      if (at >= newestAt) {
-        newestAt = at;
-        newest = runId;
-      }
-    });
-    if (newest) return newest;
-    const first = this.metricsByRun.keys().next();
-    return first.done ? null : first.value;
+    const runId = this.selectedId;
+    const metrics = this.selected;
+    this.listeners.forEach((listener) => listener(runId, metrics));
   }
 }
 

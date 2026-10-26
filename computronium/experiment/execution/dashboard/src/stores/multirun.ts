@@ -4,7 +4,7 @@
  * Deduplicates in-flight promises so simultaneous views don't trigger parallel fetches.
  */
 
-import { fetchMultirun, type MultiRunSpace } from "../stage/sources.js";
+import { fetchMultirun, type MultiRunSpace } from "./sources.js";
 import type { AxisSelection } from "../layout/types.js";
 import { AXIS_NAMES } from "../cell-data.js";
 

@@ -2,17 +2,13 @@
 
 import { workspaceStore } from "./stores/workspace.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
-import { cellKey } from "./stage/payloads.js";
+import { cellKey } from "./stores/payloads.js";
 import type { CellData } from "./cell-data.js";
 import type { JsonValue } from "./layout/types.js";
 import type { WorkspaceStore as WorkspaceStoreInterface } from "./layout/types.js";
-import { registry } from "./components/registry.js";
-import { panels, registerPanel } from "./panels.js";
-import { createPanelShell } from "./shell.js";
-import type { Component } from "./components/registry.js";
 
 export function createCellDrawerBody(): string {
-  return `<div id="drawer-content"></div>`;
+  return `<div class="drawer-content"></div>`;
 }
 
 /** A cell drawer bound to one root element and the workspace store. */
@@ -25,7 +21,7 @@ export class CellDrawerView {
     private readonly root: HTMLElement,
     private readonly workspace: WorkspaceStoreInterface,
   ) {
-    this.content = root.querySelector("#drawer-content")!;
+    this.content = root.querySelector(".drawer-content")!;
     this.disposers.push(
       workspace.onCellSelectionChange(() => this.onCellSelectionChange()),
       () => window.removeEventListener("keydown", this.onKeyDown),
@@ -317,7 +313,7 @@ export class CellDrawerView {
   }
 
   private setStatus(message: string, isError = false): void {
-    const status = this.content?.querySelector("#drawer-status");
+    const status = this.content?.querySelector(".drawer-status");
     if (!status) return;
     status.textContent = message;
     (status as HTMLElement).style.color = isError ? PALETTE.rejected : PALETTE.text_secondary;
@@ -340,7 +336,7 @@ export class CellDrawerView {
   }
 
   private startSparkline(data: CellData): void {
-    const container = this.content?.querySelector("#sparkline-container");
+    const container = this.content?.querySelector(".sparkline-container");
     if (!container || !(data.metrics as any)?.history) return;
     // Sparkline rendering would go here - simplified for now
   }
@@ -359,78 +355,5 @@ export class CellDrawerView {
 
   adoptQuestSelected(): void {
     if (this.currentData) this.runAction("quest", this.currentData);
-  }
-}
-
-/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
-export class CellDrawer implements Component {
-  name = "CellDrawer";
-
-  private panel: HTMLElement | null = null;
-  private view: CellDrawerView | null = null;
-
-  async init(): Promise<void> {
-    this.panel = createPanelShell({
-      id: "cell-drawer",
-      title: "Cell Details",
-      glyph: "◧",
-      key: "d",
-      body: createCellDrawerBody(),
-      dock: "floating",
-      defaultOpen: false,
-    });
-
-    this.view = new CellDrawerView(this.panel, workspaceStore);
-    registerPanel(
-      "cell-drawer",
-      "cell drawer",
-      "◧",
-      () => this.hide(),
-      () => this.isOpen(),
-      "d",
-    );
-  }
-
-  async destroy(): Promise<void> {
-    this.view?.dispose();
-    this.view = null;
-    this.panel?.remove();
-  }
-
-  isOpen(): boolean {
-    return this.panel ? !this.panel.classList.contains("panel-hidden") : false;
-  }
-
-  hasCellSelected(): boolean {
-    return this.view?.hasCellSelected() ?? false;
-  }
-
-  get currentCell(): CellData | null {
-    return this.view?.currentCell ?? null;
-  }
-
-  onChange(listener: () => void): () => void {
-    // Legacy compatibility
-    return () => {};
-  }
-
-  replicateSelected(): void {
-    this.view?.replicateSelected();
-  }
-
-  preregisterSelected(): void {
-    this.view?.preregisterSelected();
-  }
-
-  adoptQuestSelected(): void {
-    this.view?.adoptQuestSelected();
-  }
-
-  hide(): void {
-    this.view?.hide();
-  }
-
-  private show(data: CellData): void {
-    this.view?.show(data);
   }
 }

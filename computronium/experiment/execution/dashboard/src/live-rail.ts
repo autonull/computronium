@@ -1,12 +1,7 @@
 /** Live rail — scrolling event log, one view per instance. */
 
-import { registry } from "./components/registry.js";
-import { panels, registerDisplayPanel } from "./panels.js";
-import { createPanelShell } from "./shell.js";
 import { wsClient } from "./ws-client.js";
 import { PALETTE } from "./colors.js";
-import { dockviewHost } from "./layout/dockview-host.js";
-import type { Component } from "./components/registry.js";
 
 type EventLevel = "ok" | "warn" | "error";
 
@@ -126,40 +121,5 @@ export class LiveRailView {
       this.root.classList.remove("rail-collapsed");
     }
     // The CSS handles the collapsed state; Dockview will respect the minSize on next layout
-  }
-}
-
-/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
-export class LiveRail implements Component {
-  name = "LiveRail";
-  private container: HTMLElement | null = null;
-  private view: LiveRailView | null = null;
-
-  async init(): Promise<void> {
-    this.container = createPanelShell({
-      id: "live-rail",
-      title: "Live Rail",
-      glyph: "≡",
-      body: createRailBody(),
-      dock: "right",
-      defaultOpen: true,
-      className: "live-rail-panel",
-    });
-    this.view = new LiveRailView(this.container);
-    registerDisplayPanel("live-rail", "live rail", "≡", () => this.container);
-  }
-
-  async destroy(): Promise<void> {
-    this.view?.dispose();
-    this.view = null;
-    this.container?.remove();
-  }
-
-  add(stage: string, message: string, level: EventLevel = "ok"): void {
-    this.view?.add(stage, message, level);
-  }
-
-  setQueue(running: number, queued: number): void {
-    this.view?.setQueue(running, queued);
   }
 }

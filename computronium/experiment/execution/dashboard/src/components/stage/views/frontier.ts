@@ -2,8 +2,8 @@
 
 import * as THREE from "three";
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { frameBox } from "../../../stage/framing.js";
-import { createDotTexture, createRingSprite, createTextSprite } from "../../../stage/sprites.js";
+import { frameBox } from "../../../stores/framing.js";
+import { createDotTexture, createRingSprite, createTextSprite } from "../../../stores/sprites.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
 import type {

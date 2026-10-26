@@ -1,6 +1,8 @@
 /** Dockview layout host — the only file that imports Dockview (TODO72 P2). */
 
-import { createDockview, type DockviewApi, type IDockviewPanel, type IContentRenderer, type ITabRenderer, type IWatermarkRenderer, type AddPanelOptions, type AddPanelPositionOptions, type DockviewComponentOptions, type SerializedDockview, type Parameters, type DockviewPanelApi, type GroupPanelPartInitParameters, type TabPartInitParameters, type WatermarkRendererInitParameters, themeDark } from "dockview-core";
+import { createDockview, type DockviewApi, type IDockviewPanel, type IContentRenderer, type ITabRenderer, type IWatermarkRenderer, type AddPanelOptions, type AddPanelPositionOptions, type DockviewComponentOptions, type SerializedDockview, type Parameters, type DockviewPanelApi, type GroupPanelPartInitParameters, type TabPartInitParameters, type WatermarkRendererInitParameters, themeDark } from "dockview";
+
+import * as THREE from "three";
 
 import { getDefinition, resolveState, listDefinitions, definitionTypes } from "./definitions.js";
 import { commands } from "./commands.js";
@@ -21,6 +23,7 @@ import type {
   Rect,
   Size,
   StageViewInstance,
+  StageDebugInfo,
 } from "./types.js";
 
 function context(instanceId: string, host: DockviewHost): ComponentContext {
@@ -795,6 +798,69 @@ export class DockviewHost implements LayoutHost {
   onChange(cb: (doc: LayoutDocument) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /** Get the rect of a panel instance relative to the workspace container. */
+  rect(instanceId: string): Rect | null {
+    if (!this.api) return null;
+    const panel = this.api.getPanel(instanceId);
+    if (!panel) return null;
+    const element = panel.api.group.element;
+    const rect = element.getBoundingClientRect();
+    const container = element.closest(".dv-container") as HTMLElement | null;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      return {
+        x: rect.left - containerRect.left,
+        y: rect.top - containerRect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+    }
+    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+  }
+
+  /** Get debug info for a stage panel instance. */
+  getStageDebug(instanceId: string): StageDebugInfo | null {
+    if (!this.api) return null;
+    const panel = this.api.getPanel(instanceId);
+    if (!panel) return null;
+    if (panel.view.contentComponent !== "stage") return null;
+
+    const params = (panel.api.getParameters() ?? {}) as Record<string, unknown>;
+    const instance = this.instances.get(instanceId);
+    const view = instance?.stageHandle
+      ? stageInstances.get(instanceId)
+      : null;
+
+    const groupElement = panel.api.group.element;
+    const canvas = groupElement.querySelector("canvas") as HTMLCanvasElement | null;
+    const canvasWithRefs = canvas as HTMLCanvasElement & { __three_renderer?: THREE.WebGLRenderer; __three_camera?: THREE.PerspectiveCamera };
+    const renderer = canvasWithRefs.__three_renderer;
+    const camera = canvasWithRefs.__three_camera;
+
+    let canvasInfo = { w: 0, h: 0, dpr: 1 };
+    let cameraAspect = 1;
+
+    if (canvas && renderer) {
+      canvasInfo = {
+        w: canvas.width,
+        h: canvas.height,
+        dpr: renderer.getPixelRatio(),
+      };
+    }
+    if (camera) {
+      cameraAspect = camera.aspect;
+    }
+
+    return {
+      ready: view?.ready() ?? false,
+      measured: view?.getMeasuredCells?.() ?? 0,
+      view: params.view as string | null,
+      drawnGrid: undefined,
+      canvas: canvasInfo,
+      cameraAspect,
+    };
   }
 
   /** Expose API for advanced operations (picker, tab actions, maximize, undo/redo). */

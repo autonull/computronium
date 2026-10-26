@@ -10,13 +10,6 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { registry } from "./components/registry.js";
 import { TAB_KEYS } from "./keys.js";
-import {
-  panels,
-  registerDisplayPanel,
-  setPanelHidden,
-  getPanelElement,
-} from "./panels.js";
-import { createPanelShell } from "./shell.js";
 import { router } from "./ws-client.js";
 import { PALETTE, ARM_COLORS } from "./colors.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
@@ -969,130 +962,7 @@ export class PlotterVariabilityView extends PlotterChartView {
   }
 }
 
-/** The legacy singleton panel used by GoldenLayout until P2. */
-export class Plotter implements Component {
-  name = "Plotter";
-
-  private container: HTMLElement | null = null;
-  private chartPanels = new Map<string, HTMLElement>();
-  private paretoView: PlotterParetoView | null = null;
-  private ablationView: PlotterAblationView | null = null;
-  private variabilityView: PlotterVariabilityView | null = null;
-
-  constructor() {
-    // Register WebSocket handlers IMMEDIATELY in constructor
-    router.register("campaign_metrics", this.onCampaignMetrics);
-    runSelection.onChange(this.onRunChanged);
-  }
-
-  async init(): Promise<void> {
-    this.createUI();
-    console.log("[Plotter] Initialized");
-  }
-
-  async destroy(): Promise<void> {
-    router.unregister("campaign_metrics", this.onCampaignMetrics);
-    this.paretoView?.dispose();
-    this.ablationView?.dispose();
-    this.variabilityView?.dispose();
-    // Chart panels are managed by layout manager; they'll be cleaned up by panel registry
-  }
-
-  private createUI(): void {
-    const overlay = document.getElementById("ui-overlay");
-    if (!overlay) return;
-
-    for (const chart of CHARTS) {
-      const panel = createPanelShell({
-        id: chart.panelId,
-        title: chart.title,
-        glyph: chart.glyph,
-        key: chart.key,
-        body: createChartPanelBody(chart),
-        dock: "right",
-        defaultOpen: false,
-        className: "chart-panel",
-        onToggle: (open) => {
-          if (open) this.initPlot(chart.id);
-        },
-      });
-      this.chartPanels.set(chart.id, panel);
-
-      registerDisplayPanel(
-        chart.panelId,
-        chart.title.toLowerCase(),
-        chart.glyph,
-        () => this.chartPanels.get(chart.id) ?? null,
-        chart.key,
-      );
-    }
-  }
-
-  /** Show one of the charts: "pareto", "ablation" or "variability". */
-  showTab(tab: string): void {
-    const chart = CHARTS.find((candidate) => candidate.id === tab);
-    if (!chart) return;
-    panels.toggle(chart.panelId);
-    this.chartPanels.get(chart.id)?.scrollIntoView({ block: "nearest" });
-  }
-
-  /** Draw a chart the first time its panel is opened. */
-  private initPlot(id: string): void {
-    if (id === "pareto" && !this.paretoView) {
-      const panel = this.chartPanels.get("pareto");
-      if (panel) this.paretoView = new PlotterParetoView(panel);
-    }
-    if (id === "ablation" && !this.ablationView) {
-      const panel = this.chartPanels.get("ablation");
-      if (panel) this.ablationView = new PlotterAblationView(panel);
-    }
-    if (id === "variability" && !this.variabilityView) {
-      const panel = this.chartPanels.get("variability");
-      if (panel) this.variabilityView = new PlotterVariabilityView(panel);
-    }
-    this.updatePlots();
-  }
-
-  private onCampaignMetrics = (data: any): void => {
-    const { data: metricsData } = data;
-    if (!metricsData?.records) return;
-    runSelection.observe(data?.campaign_id, metricsData);
-  };
-
-  /** The run the reader picked, or the newest one. */
-  private onRunChanged = (
-    _runId: string | null,
-    metrics: RunMetrics | null,
-  ): void => {
-    if (!metrics) return;
-    // Update each view if it exists
-    this.paretoView?.refresh();
-    this.ablationView?.refresh();
-    this.variabilityView?.refresh();
-  };
-
-  private updatePlots(): void {
-    const hasData = runSelection.selected?.records?.length ?? 0 > 0;
-    for (const panel of this.chartPanels.values()) {
-      const emptyState = panel.querySelector<HTMLElement>(".chart-empty-state");
-      if (emptyState) emptyState.style.display = hasData ? "none" : "flex";
-    }
-    this.paretoView?.refresh();
-    this.ablationView?.refresh();
-    this.variabilityView?.refresh();
-  }
-
-  private download(id: string): void {
-    const viewMap: Record<string, PlotterChartView | null> = {
-      pareto: this.paretoView,
-      ablation: this.ablationView,
-      variability: this.variabilityView,
-    };
-    viewMap[id]?.download();
-  }
-}
-
-/** Per-instance chart view options. */
+/** Options for per-instance chart views. */
 export interface PerInstanceChartViewOptions {
   runId: string | null;
   axes: AxisSelection;

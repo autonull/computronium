@@ -1,11 +1,11 @@
 /** Uncertainty stage view — each cell's interval against the level a claim needs (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawNote, drawRowFrame, type RowFrame } from "../../../stage/plot2d.js";
+import { drawNote, drawRowFrame, type RowFrame } from "../../../stores/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import * as payloads from "../../../stage/payloads.js";
-import { aggregateRecords, cellKey, mean, measuredCells, varyingAxes, type CellAggregate } from "../../../stage/payloads.js";
+import * as payloads from "../../../stores/payloads.js";
+import { aggregateRecords, cellKey, mean, measuredCells, varyingAxes, type CellAggregate } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,

@@ -1,11 +1,11 @@
 /** Timeline stage view — the run's stages, and the time each of them held it (TODO72 P6). */
 
 import { PALETTE } from "../../../colors.js";
-import { drawNote, drawRowFrame, type RowFrame } from "../../../stage/plot2d.js";
+import { drawNote, drawRowFrame, type RowFrame } from "../../../stores/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { timelineStore } from "../../../stores/timeline.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import type { StageSpan } from "../../../stage/payloads.js";
+import type { StageSpan } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,

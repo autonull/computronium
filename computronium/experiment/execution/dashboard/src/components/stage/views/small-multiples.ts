@@ -1,10 +1,10 @@
 /** Small multiples stage view — one panel per cell, every seed's curve (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawNote, drawTitle, type Area } from "../../../stage/plot2d.js";
+import { drawNote, drawTitle, type Area } from "../../../stores/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { cellLabel, measuredCells, varyingAxes, type CellAggregate } from "../../../stage/payloads.js";
+import { cellLabel, measuredCells, varyingAxes, type CellAggregate } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,
@@ -205,7 +205,7 @@ export function createSmallMultiplesView(context: StageViewContext): StageViewIn
     if (!metrics) return [];
 
     // We need to reconstruct aggregates from metrics
-    const { aggregateRecords } = require("../../../stage/payloads.js") as any;
+    const { aggregateRecords } = require("../../../stores/payloads.js") as any;
     const aggregates = aggregateRecords(metrics, axes);
     const cells = measuredCells(aggregates, axes);
     const varying = varyingAxes(cells, axes);

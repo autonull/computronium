@@ -1,21 +1,12 @@
-/** Three.js Dashboard Main Entry Point (TODO72 P5/P7 — StageSurface, Multi-instance). */
+/** Three.js Dashboard Main Entry Point (TODO73 P10 — Dockview migration). */
 
 import "./palette.css";
 import "./dashboard.css";
+import "dockview/dist/styles/dockview.css";
 import { router, wsClient } from "./ws-client.js";
 import { registry } from "./components/registry.js";
-import { ControlBar } from "./control-bar.js";
-import { ControlPanel } from "./control-panel.js";
-import { CellDrawer } from "./cell-drawer.js";
-import { Plotter } from "./plotter.js";
-import { LiveRail } from "./live-rail.js";
-import { Caption } from "./caption.js";
-import { HUD } from "./hud.js";
-import { viewSwitcher } from "./stage/switcher.js";
-import { runSelection } from "./run-selection.js";
 import { helpOverlay } from "./help-overlay.js";
 import { initPalette, openPalette } from "./palette.js";
-import { panels, getPanelElement } from "./panels.js";
 import { applyPreset, reset, applyWorkspace } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { initHints } from "./hints.js";
@@ -40,15 +31,6 @@ import "./layout/components/variability-chart.js";
 import "./layout/components/stage.js";
 import type { Binding } from "./bindings.js";
 import type { LayoutHost } from "./layout/types.js";
-
-// Legacy component instances kept for keyboard bindings and __DASHBOARD__ debug
-const legacyHud = new HUD();
-const legacyPlotter = new Plotter();
-const legacyLiveRail = new LiveRail();
-const legacyCaption = new Caption();
-const legacyControlBar = new ControlBar();
-const legacyControlPanel = new ControlPanel();
-const legacyCellDrawer = new CellDrawer();
 
 // Global error handler
 window.addEventListener("error", (event) => {
@@ -120,30 +102,20 @@ wsClient.waitForConnection(15000).then((connected) => {
   }
 });
 
-// Initialize the registry (which initializes all registered components including
-// menubar), then wire up bindings and mount the Dockview host.
 // Synchronous flag to track DOMContentLoaded handler execution
 (window as any).__DASHBOARD_DOMCONTENTLOADED__ = false;
 document.addEventListener("DOMContentLoaded", async () => {
   (window as any).__DASHBOARD_DOMCONTENTLOADED__ = true;
-  // Initialize legacy components (needed for bindings and debug)
-  await legacyHud.init();
-  await legacyPlotter.init();
-  await legacyLiveRail.init();
-  await legacyCaption.init();
-  await legacyControlBar.init();
-  await legacyControlPanel.init();
-  await legacyCellDrawer.init();
 
   // Initialize all registered components via the registry (menubar, etc.)
   await registry.initAll();
 
-  // Mount the Dockview layout host below the 28px menubar
+  // Mount the Dockview layout host below the menubar
   const workspace = document.createElement("div");
   workspace.id = "workspace";
   workspace.style.cssText = `
     position: fixed;
-    top: 28px;
+    top: var(--menubar-height, 28px);
     left: 0;
     right: 0;
     bottom: 0;
@@ -234,10 +206,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setAction("collapse-all", () => {
     for (const instance of dockviewHost.list()) dockviewHost.close(instance.id);
   });
-  setAction("escape", () => {
-    if (legacyCellDrawer.hasCellSelected()) legacyCellDrawer.hide();
-    else helpOverlay.hide();
-  });
+  setAction("escape", () => helpOverlay.hide());
 });
 
 // Keyboard shortcuts: the binding layer is the single source of truth.
@@ -265,8 +234,6 @@ window.addEventListener("keydown", (event) => {
     const chord = `shift+${key}`;
     const binding = bindingsByChord.get(chord);
     if (binding) {
-      if (binding.when === "cell-selected" && !legacyCellDrawer.hasCellSelected())
-        return;
       binding.run();
       return;
     }
@@ -275,8 +242,6 @@ window.addEventListener("keydown", (event) => {
   // Direct key match
   const binding = bindingsByKey.get(key);
   if (binding) {
-    if (binding.when === "cell-selected" && !legacyCellDrawer.hasCellSelected())
-      return;
     binding.run();
     return;
   }
@@ -284,18 +249,7 @@ window.addEventListener("keydown", (event) => {
 
 // Expose for debugging
 (window as any).__DASHBOARD__ = {
-  // Legacy scene removed — each stage panel owns its own StageSurface
-  cellDrawer: legacyCellDrawer,
-  plotter: legacyPlotter,
-  liveRail: legacyLiveRail,
-  caption: legacyCaption,
-  hud: legacyHud,
   helpOverlay,
-  viewSwitcher,
-  controlBar: legacyControlBar,
-  controlPanel: legacyControlPanel,
-  panels,
-  layout: { reset, applyWorkspace },
   layoutHost: dockviewHost,
   commands,
   definitions: {
@@ -308,7 +262,6 @@ window.addEventListener("keydown", (event) => {
   },
   wsClient,
   router,
-  runSelection,
   bindings: {
     list: () =>
       allBindings().map((b) => ({

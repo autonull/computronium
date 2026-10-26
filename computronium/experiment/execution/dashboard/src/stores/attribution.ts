@@ -4,7 +4,7 @@
  * Deduplicates in-flight promises so simultaneous views don't trigger parallel fetches.
  */
 
-import { fetchAttribution, type RunAttribution } from "../stage/sources.js";
+import { fetchAttribution, type RunAttribution } from "./sources.js";
 
 type AttributionKey = string; // "runId|measured"
 

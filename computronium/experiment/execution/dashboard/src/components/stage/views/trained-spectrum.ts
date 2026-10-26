@@ -1,7 +1,7 @@
 /** Trained spectrum stage view — the Lyapunov exponents after training (TODO72 P6). */
 
 import { PALETTE } from "../../../colors.js";
-import { drawFrame, drawNote, formatTick, niceTicks, scaleX, scaleY, type PlotFrame } from "../../../stage/plot2d.js";
+import { drawFrame, drawNote, formatTick, niceTicks, scaleX, scaleY, type PlotFrame } from "../../../stores/plot2d.js";
 import { dynamicsStore } from "../../../stores/dynamics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
 import type {

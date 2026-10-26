@@ -1,13 +1,13 @@
 /** Slices stage view — the space, cut three ways, side by side (TODO72 P6). */
 
 import { PALETTE } from "../../../colors.js";
-import { rampColor } from "../../../stage/ramp.js";
-import { drawNote, type Area } from "../../../stage/plot2d.js";
+import { rampColor } from "../../../stores/ramp.js";
+import { drawNote, type Area } from "../../../stores/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { spaceStore } from "../../../stores/space.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { aggregateRecords, cellKey, mean, type AxisSelection } from "../../../stage/payloads.js";
-import { wrapLabel } from "../../../stage/sprites.js";
+import { aggregateRecords, cellKey, mean, type AxisSelection } from "../../../stores/payloads.js";
+import { wrapLabel } from "../../../stores/sprites.js";
 import type {
   StageViewDefinition,
   StageViewInstance,

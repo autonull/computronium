@@ -1,13 +1,8 @@
 /** HUD — Mission Control Panel, one view per instance. */
 
-import { registry } from "./components/registry.js";
-import { PANEL_KEYS } from "./keys.js";
-import { panels, registerDisplayPanel } from "./panels.js";
-import { createPanelShell } from "./shell.js";
 import { router, wsClient } from "./ws-client.js";
 import { PALETTE } from "./colors.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
-import type { Component } from "./components/registry.js";
 import type { JsonValue } from "./layout/types.js";
 
 interface StatusData {
@@ -232,7 +227,7 @@ export class HudView {
     const mode = run?.mode ?? "NO RUN";
     const color =
       mode === "PREREGISTERED"
-        ? PALETTE.passed
+        ? PALETTE.promoted
         : mode === "EXPLORATORY"
           ? PALETTE.insufficient
           : PALETTE.text_muted;
@@ -328,42 +323,5 @@ export class HudView {
     row.fraction = fraction;
     el.value.textContent = value;
     el.fill.style.width = `${fraction * 100}%`;
-  }
-}
-
-/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
-export class HUD implements Component {
-  name = "HUD";
-  private panel: HTMLElement | null = null;
-  private view: HudView | null = null;
-
-  async init(): Promise<void> {
-    this.panel = createPanelShell({
-      id: "hud",
-      title: "MISSION CONTROL",
-      glyph: "◱",
-      key: PANEL_KEYS.hud,
-      body: createHudBody(),
-      dock: "top",
-      defaultOpen: true,
-    });
-    this.view = new HudView(this.panel);
-    registerDisplayPanel(
-      "hud",
-      "mission control",
-      "◱",
-      () => this.panel,
-      PANEL_KEYS.hud,
-    );
-  }
-
-  async destroy(): Promise<void> {
-    this.view?.dispose();
-    this.view = null;
-    this.panel?.remove();
-  }
-
-  setMeasuredSeeds(n: number): void {
-    this.view?.setMeasuredSeeds(n);
   }
 }

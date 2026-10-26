@@ -1,7 +1,6 @@
 /** Simple command palette — fuzzy search, enter to run, esc to close. */
 
 import { BINDINGS, allBindings } from "./bindings.js";
-import { panels } from "./panels.js";
 import { listStageViews } from "./components/stage/registry.js";
 import { helpOverlay } from "./help-overlay.js";
 import { wsClient } from "./ws-client.js";
@@ -41,14 +40,12 @@ class CommandPalette {
   private open = false;
   private prevFocus: HTMLElement | null = null;
   private unsubLayout: (() => void) | null = null;
-  private unsubPanels: (() => void) | null = null;
   private unsubDrawer: (() => void) | null = null;
 
   async init(): Promise<void> {
     this.build();
     document.body.appendChild(this.container!);
     this.unsubLayout = () => {}; // no-op, rebuild on open
-    this.unsubPanels = panels.onChange(() => { if (this.open) this.rebuild(); });
     const drawer = getLegacyCellDrawer();
     this.unsubDrawer = drawer?.onChange?.(() => { if (this.open) this.rebuild(); });
     this.rebuild();
@@ -98,11 +95,11 @@ class CommandPalette {
     const hasCell = drawer?.hasCellSelected?.() ?? false;
 
     // The next question
-    e.push({ id: "start-run", label: hasRun ? "Start a new run" : "Start a run", group: "the next question", hint: "z", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("new-run"); panels.toggle("control-panel"); } });
+    e.push({ id: "start-run", label: hasRun ? "Start a new run" : "Start a run", group: "the next question", hint: "z", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("new-run"); commands.execute("panel-control-panel"); } });
     e.push({ id: "replicate-cell", label: "Replicate selected cell", group: "the next question", hint: "⇧R", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.replicateSelected?.(); } });
     e.push({ id: "preregister-claim", label: "Preregister claim", group: "the next question", hint: "⇧P", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.preregisterSelected?.(); } });
     e.push({ id: "adopt-quest", label: "Adopt as quest (new run)", group: "the next question", hint: "⇧Q", enabled: hasCell, reason: hasCell ? undefined : "No cell selected", sortOrder: order++, run: () => { this.close(); drawer?.adoptQuestSelected?.(); } });
-    e.push({ id: "show-queue", label: "Show run queue", group: "the next question", hint: "z → Queue", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("queue"); panels.toggle("control-panel"); } });
+    e.push({ id: "show-queue", label: "Show run queue", group: "the next question", hint: "z → Queue", enabled: true, sortOrder: order++, run: () => { this.close(); getLegacyControlPanel()?.showSection("queue"); commands.execute("panel-control-panel"); } });
 
     // Workspaces
     for (const [id, label] of [["watch", "Watch — campaigns"], ["audit", "Audit — evidence"], ["drive", "Drive — instrument"], ["reset", "Reset to Watch"]] as const) {
@@ -117,9 +114,10 @@ class CommandPalette {
     }
 
     // Panels
-    for (const p of panels.list()) {
-      const b = BINDINGS.find((x) => x.id === `panel-${p.id}`);
-      e.push({ id: `panel-${p.id}`, label: p.label, group: "panels", hint: b?.key ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); panels.toggle(p.id); } });
+    const panelCommands = commands.list().filter((c) => c.id.startsWith("panel-"));
+    for (const cmd of panelCommands) {
+      const b = BINDINGS.find((x) => x.id === cmd.id);
+      e.push({ id: cmd.id, label: cmd.title, group: "panels", hint: b?.key ?? "", enabled: true, sortOrder: order++, run: () => { this.close(); commands.execute(cmd.id); } });
     }
 
     // Verbs

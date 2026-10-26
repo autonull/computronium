@@ -1,12 +1,12 @@
 /** Flow stage view — the run's cells, from the space to the evidence (TODO72 P6). */
 
 import { PALETTE } from "../../../colors.js";
-import { drawNote, drawTitle, wrapText } from "../../../stage/plot2d.js";
+import { drawNote, drawTitle, wrapText } from "../../../stores/plot2d.js";
 import { timelineStore } from "../../../stores/timeline.js";
 import { spaceStore } from "../../../stores/space.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import type { AxisSelection } from "../../../stage/payloads.js";
-import type { FlowStage } from "../../../stage/payloads.js";
+import type { AxisSelection } from "../../../stores/payloads.js";
+import type { FlowStage } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,

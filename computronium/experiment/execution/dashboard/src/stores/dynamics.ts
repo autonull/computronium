@@ -4,7 +4,7 @@
  * Deduplicates in-flight promises so simultaneous views don't trigger parallel fetches.
  */
 
-import { fetchDynamics, fetchTrainedDynamics, type CellDynamics } from "../stage/sources.js";
+import { fetchDynamics, fetchTrainedDynamics, type CellDynamics } from "./sources.js";
 
 type DynamicsKey = string; // "runId" or "runId|trained"
 

@@ -4,7 +4,7 @@
  * Deduplicates in-flight promises so simultaneous views don't trigger parallel fetches.
  */
 
-import { fetchAccount, type RunAccount } from "../stage/sources.js";
+import { fetchAccount, type RunAccount } from "./sources.js";
 
 type AccountKey = string; // "runId|measured"
 

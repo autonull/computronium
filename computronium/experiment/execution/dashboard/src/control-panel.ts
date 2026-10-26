@@ -1,13 +1,10 @@
-/** The control panel: the options that do not belong on a bar. */
+/** Control Panel — the dashboard's command center, one view per instance. */
 
-import { registry } from "./components/registry.js";
-import { CONTROL_KEYS } from "./keys.js";
-import { panels, registerDisplayPanel } from "./panels.js";
-import { createPanelShell } from "./shell.js";
+import { wsClient } from "./ws-client.js";
 import { runSelection } from "./run-selection.js";
-import { stageState } from "./stage/store.js";
 import { PALETTE } from "./colors.js";
-import type { Component } from "./components/registry.js";
+import { workspaceStore } from "./stores/workspace.js";
+import { metricsStore } from "./stores/metrics.js";
 import type { JsonValue } from "./layout/types.js";
 
 /** One profile, as the server offers it. */
@@ -55,37 +52,37 @@ const SECTIONS = [
 export function createControlPanelBody(): string {
   return `
     <style>
-      #control-panel h4 { margin: 14px 0 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--text-secondary); text-transform: uppercase; }
-      #control-panel table.kv, #control-panel table.list { width: 100%; border-collapse: collapse; font-size: 11px; }
-      #control-panel table.kv th, #control-panel table.list th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 2px 6px 2px 0; vertical-align: top; }
-      #control-panel table.kv td, #control-panel table.list td { color: var(--text-primary); padding: 2px 6px 2px 0; vertical-align: top; }
-      #control-panel .note { color: var(--text-secondary); margin: 4px 0 8px; line-height: 1.4; font-size: 11px; }
-      #control-panel .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
-      #control-panel input, #control-panel select { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; padding: 2px 4px; min-width: 0; }
-      #control-panel button.mini { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 2px 8px; cursor: pointer; }
-      #control-panel button.action { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 6px 12px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; }
-      #control-panel button.action:hover:not(:disabled) { background: var(--bg-primary); border-color: var(--border-bright); }
-      #control-panel button.action:disabled { opacity: 0.4; cursor: not-allowed; }
-      #control-panel button.action.primary { background: var(--gradient)22; border-color: var(--gradient)66; color: var(--gradient); }
-      #control-panel button.action.primary:hover:not(:disabled) { background: var(--gradient)33; border-color: var(--gradient); }
-      #control-panel button.action.danger { background: var(--error)22; border-color: var(--error)66; color: var(--error); }
-      #control-panel button.action.danger:hover:not(:disabled) { background: var(--error)33; border-color: var(--error); }
-      #control-panel .cell-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-      #control-panel .cell-row label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
-      #control-panel .cell-row select { font-size: 10px; padding: 2px 6px; }
-      #control-panel .section-tabs { display: flex; gap: 2px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-      #control-panel .tab { padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px 4px 0 0; color: var(--text-secondary); font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; position: relative; margin-bottom: -1px; }
-      #control-panel .tab:hover { background: var(--border); color: var(--text-primary); }
-      #control-panel .tab.active { background: var(--bg-secondary); border-color: var(--border-bright); color: var(--text-primary); }
-      #control-panel .tab .kbd { font-family: monospace; font-size: 9px; padding: 1px 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); margin-left: 4px; }
-      #control-panel .tab-content { display: none; }
-      #control-panel .tab-content.active { display: block; animation: fadeIn 0.1s ease; }
+      .control-panel h4 { margin: 14px 0 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--text-secondary); text-transform: uppercase; }
+      .control-panel table.kv, .control-panel table.list { width: 100%; border-collapse: collapse; font-size: 11px; }
+      .control-panel table.kv th, .control-panel table.list th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 2px 6px 2px 0; vertical-align: top; }
+      .control-panel table.kv td, .control-panel table.list td { color: var(--text-primary); padding: 2px 6px 2px 0; vertical-align: top; }
+      .control-panel .note { color: var(--text-secondary); margin: 4px 0 8px; line-height: 1.4; font-size: 11px; }
+      .control-panel .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+      .control-panel input, .control-panel select { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; padding: 2px 4px; min-width: 0; }
+      .control-panel button.mini { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 2px 8px; cursor: pointer; }
+      .control-panel button.action { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 6px 12px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+      .control-panel button.action:hover:not(:disabled) { background: var(--bg-primary); border-color: var(--border-bright); }
+      .control-panel button.action:disabled { opacity: 0.4; cursor: not-allowed; }
+      .control-panel button.action.primary { background: var(--gradient)22; border-color: var(--gradient)66; color: var(--gradient); }
+      .control-panel button.action.primary:hover:not(:disabled) { background: var(--gradient)33; border-color: var(--gradient); }
+      .control-panel button.action.danger { background: var(--error)22; border-color: var(--error)66; color: var(--error); }
+      .control-panel button.action.danger:hover:not(:disabled) { background: var(--error)33; border-color: var(--error); }
+      .control-panel .cell-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .control-panel .cell-row label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+      .control-panel .cell-row select { font-size: 10px; padding: 2px 6px; }
+      .control-panel .section-tabs { display: flex; gap: 2px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      .control-panel .tab { padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px 4px 0 0; color: var(--text-secondary); font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; position: relative; margin-bottom: -1px; }
+      .control-panel .tab:hover { background: var(--border); color: var(--text-primary); }
+      .control-panel .tab.active { background: var(--bg-secondary); border-color: var(--border-bright); color: var(--text-primary); }
+      .control-panel .tab .kbd { font-family: monospace; font-size: 9px; padding: 1px 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); margin-left: 4px; }
+      .control-panel .tab-content { display: none; }
+      .control-panel .tab-content.active { display: block; animation: fadeIn 0.1s ease; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-      #control-panel .kbd-hint { font-family: monospace; font-size: 9px; padding: 1px 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); margin-left: 6px; }
+      .control-panel .kbd-hint { font-family: monospace; font-size: 9px; padding: 1px 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); margin-left: 6px; }
       .empty-state { text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 11px; }
       .empty-state .icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
     </style>
-    <div id="control-panel-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+    <div class="control-panel-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
       <span style="font-weight: 600; color: var(--text-primary); letter-spacing: 0.08em;">CONTROL</span>
       <div style="flex: 1;"></div>
     </div>
@@ -98,7 +95,7 @@ export function createControlPanelBody(): string {
       `).join("")}
     </div>
 
-    <div class="tab-content active" id="tab-new-run">
+    <div class="tab-content active" data-tab="new-run">
       <h4>NEW RUN</h4>
       <div class="row">
         <select class="profile" style="flex: 1;"></select>
@@ -125,7 +122,7 @@ export function createControlPanelBody(): string {
       <div class="note new-run-note"></div>
     </div>
 
-    <div class="tab-content" id="tab-this-run">
+    <div class="tab-content" data-tab="this-run">
       <h4>THIS RUN</h4>
       <div class="run-section empty-state">
         <div class="icon">📋</div>
@@ -134,7 +131,7 @@ export function createControlPanelBody(): string {
       </div>
     </div>
 
-    <div class="tab-content" id="tab-queue">
+    <div class="tab-content" data-tab="queue">
       <h4>THE QUEUE</h4>
       <div class="queue-section empty-state">
         <div class="icon">📦</div>
@@ -143,7 +140,7 @@ export function createControlPanelBody(): string {
       </div>
     </div>
 
-    <div class="tab-content" id="tab-cells">
+    <div class="tab-content" data-tab="cells">
       <h4>CELLS</h4>
       <div class="row cell-row"></div>
       <div class="row">
@@ -154,7 +151,7 @@ export function createControlPanelBody(): string {
       <div class="note cell-note">Select a cell on the map or in the drawer to enable actions.</div>
     </div>
 
-    <div class="tab-content" id="tab-exports">
+    <div class="tab-content" data-tab="exports">
       <h4>EXPORTS</h4>
       <div class="row">
         <button class="action export-script">Narration script <span class="kbd">E S</span></button>
@@ -247,7 +244,7 @@ export class ControlPanelView {
 
   private switchTab(id: string): void {
     for (const tab of this.root.querySelectorAll<HTMLButtonElement>(".tab")) tab.classList.toggle("active", tab.dataset.section === id);
-    for (const content of this.root.querySelectorAll<HTMLElement>(".tab-content")) content.classList.toggle("active", content.id === `tab-${id}`);
+    for (const content of this.root.querySelectorAll<HTMLElement>(".tab-content")) content.classList.toggle("active", content.dataset.tab === id);
     this.activeTab = id;
   }
 
@@ -350,128 +347,69 @@ export class ControlPanelView {
         </table>
       `;
       for (const btn of this.queueSection.querySelectorAll<HTMLButtonElement>("[data-cancel]")) {
-        btn.addEventListener("click", () => this.cancelCampaign(btn.dataset.cancel!));
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          await fetch(`/api/campaign/${btn.dataset.cancel}`, { method: "DELETE" });
+          this.renderQueue();
+        });
       }
-    } catch { this.queueSection.innerHTML = `<div class="empty-state"><div class="icon">⚠</div><div>Cannot load queue</div></div>`; }
+    } catch {
+      this.queueSection.innerHTML = `<div class="empty-state"><div class="icon">📦</div><div>Queue unavailable</div></div>`;
+    }
   }
 
   private renderAxes(): void {
     if (!this.cellNote) return;
-    for (const [axis, select] of this.cellSelects) {
-      const options = this.axes.find((a) => a.axis === axis)?.primitives ?? [];
-      const current = select.value;
-      select.innerHTML = `<option value="">—</option>` + options.map((o) => `<option value="${o.name}" ${!o.available ? "disabled" : ""}>${o.name}${!o.available ? " (unavailable)" : ""}</option>`).join("");
-      if (options.some((o) => o.name === current)) select.value = current;
+    const metrics = runSelection.selected;
+    if (!metrics) return;
+    // Update cell axis dropdowns from run metrics
+    const records = metrics.records ?? [];
+    if (!records.length) return;
+    for (const axis of CELL_AXES) {
+      const select = this.cellSelects.get(axis);
+      if (!select) continue;
+      const values = [...new Set(records.map((r: any) => r.coordinate?.[axis]).filter(Boolean))].sort();
+      select.innerHTML = values.map((v) => `<option value="${v}">${v}</option>`).join("");
     }
-    this.cellNote.textContent = "Pick axes for the cell, then use the action buttons. Shift+R/P/Q also work from anywhere.";
   }
 
   private async startRun(): Promise<void> {
-    const btn = this.root.querySelector<HTMLButtonElement>(".start")!;
-    btn.disabled = true;
-    btn.textContent = "Starting…";
+    if (!this.profileSelect) return;
+    const profile = this.profileSelect.value;
+    const seeds = Number(this.seedsInput?.value ?? 1);
+    const epochs = Number(this.epochsInput?.value ?? 1);
+    const budget = this.budgetInput?.value ? Number(this.budgetInput.value) : null;
+    const fidelity = this.fidelitySelect?.value ?? "L0";
+    const device = this.deviceSelect?.value ?? "auto";
+
+    this.setStatus("Starting run…");
     try {
-      const res = await fetch("/api/run/start", {
+      const res = await fetch("/api/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile: this.profileSelect!.value,
-          device: this.deviceSelect!.value,
-          n_seeds: Number(this.seedsInput!.value),
-          epochs: Number(this.epochsInput!.value),
-          budget_seconds: this.budgetInput!.value ? Number(this.budgetInput!.value) : null,
-          fidelity: this.fidelitySelect!.value,
-        }),
+        body: JSON.stringify({ profile, seeds, epochs, budget_seconds: budget, fidelity, device }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Failed");
-      if (this.newRunNote) this.newRunNote.textContent = body.message || "Run started";
+      if (!res.ok) throw new Error(body.error || "Failed to start run");
+      this.setStatus(body.message || "Run started");
       runSelection.select(body.run_id ?? null);
     } catch (e) {
-      if (this.newRunNote) this.newRunNote.textContent = (e as Error).message;
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = 'Start run <span class="kbd">Z</span>';
+      this.setStatus(e instanceof Error ? e.message : "Failed to start run", true);
     }
   }
 
-  private async cellAction(action: string): Promise<void> {
-    const coordinate: Record<string, string> = {};
-    for (const [axis, select] of this.cellSelects) {
-      if (select.value) coordinate[axis] = select.value;
+  private cellAction(action: "replicate" | "preregister" | "quest"): void {
+    window.dispatchEvent(new CustomEvent(`cell-action-${action}`));
+  }
+
+  private export(type: "script" | "report" | "records"): void {
+    window.dispatchEvent(new CustomEvent(`export-${type}`));
+  }
+
+  private setStatus(message: string, isError = false): void {
+    if (this.newRunNote) {
+      this.newRunNote.textContent = message;
+      this.newRunNote.style.color = isError ? "var(--error)" : "var(--text-secondary)";
     }
-    if (!Object.keys(coordinate).length) { this.cellNote!.textContent = "Select at least one axis"; return; }
-    this.cellNote!.textContent = "Sending…";
-    try {
-      const res = await fetch("/api/cell/action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ run_id: runSelection.selectedId, coordinate, action }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Failed");
-      this.cellNote!.textContent = body.message || "Done";
-    } catch (e) { this.cellNote!.textContent = (e as Error).message; }
-  }
-
-  private async cancelCampaign(campaignId: string): Promise<void> {
-    if (!confirm(`Cancel campaign ${campaignId}?`)) return;
-    try {
-      await fetch(`/api/queue/${campaignId}`, { method: "DELETE" });
-      this.renderQueue();
-    } catch { /* ignore */ }
-  }
-
-  private async export(type: string): Promise<void> {
-    const runId = runSelection.selectedId;
-    if (!runId) { this.exportNote!.textContent = "No run selected"; return; }
-    this.exportNote!.textContent = "Preparing…";
-    try {
-      const res = await fetch(`/api/export/${type}?run_id=${runId}`);
-      if (!res.ok) throw new Error("Failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${type}-${runId.slice(0, 8)}.${type === "records" ? "json" : "txt"}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      this.exportNote!.textContent = "Downloaded";
-    } catch { this.exportNote!.textContent = "Export failed"; }
-  }
-}
-
-/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
-export class ControlPanel implements Component {
-  name = "ControlPanel";
-
-  private container: HTMLElement | null = null;
-  private view: ControlPanelView | null = null;
-
-  showSection(sectionId: string): void {
-    if (!this.container) return;
-    const tab = this.container.querySelector(`.tab[data-section="${sectionId}"]`) as HTMLElement;
-    if (tab) tab.click();
-  }
-
-  async init(): Promise<void> {
-    this.container = createPanelShell({
-      id: "control-panel",
-      title: "Control Panel",
-      glyph: "⚙",
-      key: CONTROL_KEYS.panel,
-      body: createControlPanelBody(),
-      dock: "floating",
-      defaultOpen: false,
-    });
-
-    this.view = new ControlPanelView(this.container);
-    registerDisplayPanel("control-panel", "control panel", "⚙", () => this.container, CONTROL_KEYS.panel);
-  }
-
-  async destroy(): Promise<void> {
-    this.view?.dispose();
-    this.view = null;
-    this.container?.remove();
   }
 }

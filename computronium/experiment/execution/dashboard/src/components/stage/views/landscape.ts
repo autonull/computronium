@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { PALETTE } from "../../../colors.js";
-import { rampColor } from "../../../stage/ramp.js";
+import { rampColor } from "../../../stores/ramp.js";
 import { dynamicsStore } from "../../../stores/dynamics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
 import type {

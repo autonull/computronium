@@ -4,7 +4,7 @@
  * Deduplicates in-flight promises so simultaneous views don't trigger parallel fetches.
  */
 
-import { fetchTimeline, fetchFlow, type RunTimeline, type RunFlow } from "../stage/sources.js";
+import { fetchTimeline, fetchFlow, type RunTimeline, type RunFlow } from "./sources.js";
 
 type TimelineKey = string; // "runId"
 type FlowKey = string; // "runId|events"

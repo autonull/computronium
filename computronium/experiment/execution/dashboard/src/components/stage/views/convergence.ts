@@ -1,7 +1,7 @@
 /** Convergence stage view — accuracy against epoch (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawFrame, drawNote, scaleX, scaleY, type PlotFrame } from "../../../stage/plot2d.js";
+import { drawFrame, drawNote, scaleX, scaleY, type PlotFrame } from "../../../stores/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
 import type {

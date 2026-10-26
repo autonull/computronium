@@ -1,11 +1,11 @@
 /** Contrast stage view — the arms against one another, and the test (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawNote, drawRowFrame, type RowFrame } from "../../../stage/plot2d.js";
+import { drawNote, drawRowFrame, type RowFrame } from "../../../stores/plot2d.js";
 import { accountStore } from "../../../stores/account.js";
 import { metricsStore } from "../../../stores/metrics.js"
 import { workspaceStore } from "../../../stores/workspace.js";
-import type { ContrastArm, ContrastPair } from "../../../stage/payloads.js";
+import type { ContrastArm, ContrastPair } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,

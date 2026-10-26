@@ -8,7 +8,8 @@ This plan keeps a real docking engine and fixes the model underneath it.
 
 **Final decisions:**
 
-- **Engine:** `dockview-core@^8.6.1` (MIT, verified from npm on 2026-10-25).
+- **Engine:** `dockview@^8.6.1` (MIT, verified from npm on 2026-10-25;
+  re-exports `dockview-core` and ships its stylesheet — see P10).
   Latest is 8.6.1, not 5.x. Use the recommended `createDockview` API.
 - **Instance model:** `ComponentDefinition` (type) / `PanelInstance` (live
   occurrence) / `StageViewInstance` (what one stage panel shows).
@@ -80,7 +81,8 @@ floating, initialWidth, initialHeight})`; `panel.api.updateParameters`;
   all 10 definitions open together; 10 views created; listeners 33/33/33;
   no errors; duplicate `plotter-tooltip` IDs known minor issue. P1 gate met.
 - [x] **P2 — Dockview host and parity (3 d)** — DONE (2026-10-25).
-  - Added `dockview-core@^8.6.1` (zero-dep, MIT); styles embedded in bundle.
+  - Added `dockview-core@^8.6.1` (zero-dep, MIT); "styles embedded in bundle"
+    was **false** — see P10.0.
   - Implemented `layout/dockview-host.ts` with `createDockview`.
   - `#workspace` mounted below the 28 px menubar with explicit height.
   - `createComponent` maps `options.name` to definition; `init(params)` calls
@@ -146,7 +148,9 @@ flight.
 - **R4** A stage view renders into its own host: no module-level canvas,
   renderer, scene, camera, or controls.
 - **R5** Versioned persistence with validation and migration.
-- **R6** No `dockview` import outside `layout/dockview-host.ts`.
+- **R6** No API import from `dockview` outside `layout/dockview-host.ts`.
+  The stylesheet (`dockview/dist/styles/dockview.css`) is imported exactly once,
+  in `main.ts`, ahead of the palette and dashboard CSS.
 - **R7** Detailed metrics and space payloads are computed once per key and
   shared by instances.
 - **R8** Dashboard development never re-runs a campaign for a screenshot.
@@ -436,7 +440,8 @@ create/destroy 50 instances with listener counts returning to baseline.
 
 ### P2 — Dockview host and parity (3 d) — DONE (2026-10-25)
 
-- [x] Add `dockview-core@^8.6.1`; styles embedded in bundle (no separate CSS import).
+- [x] Add `dockview-core@^8.6.1`; styles were assumed embedded in the bundle
+  (false — P10.0 switches to `dockview` plus its stylesheet).
 - [x] Implement `layout/dockview-host.ts` with `createDockview`.
 - [x] `#workspace` below the 28 px menubar with explicit height.
 - [x] `createComponent` maps `options.name` to definition; `init(params)` calls
@@ -566,54 +571,337 @@ stable at 31; no page/console errors; 25 s walltime.
 
 **Gate:** hero < 60 s with `--reuse-store`; tour all frames; >2% view diffs.
 
+- [ ] **P10 — Make the picture true** (planned 2026-10-25, 5.75 d). The P9
+  hero passed its gate while the dashboard was unusable: the Dockview
+  stylesheet was never shipped, the menubar was tree-shaken, presets lost
+  their nesting, and two UIs were mounted. See P10 for the measured evidence,
+  the picture contracts that replace the proxy gates, and P10.7 for the
+  recovery intent (`0dee1206`, 2026-10-22).
+
 ---
 
-## Fresh Session Plan: Conclusive Dashboard Fix
+## P10 — Make the picture true (planned 2026-10-25, 3 sessions)
 
-The screenshots are malformed because the **watch preset layout is broken** — panels don't fill the viewport, the stage isn't full-screen, and the 3D scene isn't rendering correctly. Root causes identified:
+The earlier plan blamed presets alone. A probe run against
+`experiment.duckdb` (bundle 2026-10-25 23:13, 1920×1080) shows **8 defects**;
+the gates passed because they measured proxies (legacy canvas, summed cells)
+not the picture.
 
-### Immediate Fixes (do these first in fresh session)
+Recovery target: `0dee1206` (2026-10-22, TODO70 complete), 245 KB hero in git.
+P10.3 (Session 1) restores the working UI on Dockview; P10.4 (Session 2) fixes
+geometry and stage; P10.5 (Session 3) verifies and records the review verdict.
 
-1. **Watch preset layout** (`src/layout.ts`) — the `split`/`tabs` structure doesn't produce a full-screen stage with side panels. Current watch spec creates nested splits but Dockview doesn't size them to fill the viewport. Fix: use a single row split with stage on left (flex: 1) and tabset on right (fixed width), or use `floating: false` with explicit sizes that sum to viewport.
+### Measured defects (all addressed below)
 
-2. **Stage panel default size** — `defaultSize: {width: 800, height: 600}` is too small. The stage should fill available space. Remove defaultSize or make it responsive.
+| # | Defect | Fixed in |
+|---|---|---|
+| 1 | No Dockview stylesheet (`dockview-core` internal, no CSS) | **S1: P10.0** |
+| 2 | Menubar tree-shaken (unused import dropped by Rollup) | **S1: P10.1** |
+| 3 | `applySpec` flattens nesting (depth-first add) | **S2: P10.2** |
+| 4 | Stage canvas no height chain (legacy canvas + no CSS) | **S1: P10.3** + **S2: P10.4** |
+| 5 | Two UIs mounted (legacy + Dockview) | **S1: P10.3** |
+| 6 | Params never observed (custom tabs vs native) | **S1: P10.0** (native tabs) |
+| 7 | Duplicate DOM ids (`id` in `create*Body()`) | **S1: P10.3** (ids→classes) |
+| 8 | Gates measure proxies (legacy canvas, summed cells) | **S3: P10.5** |
 
-3. **Stage header** — the new 30px header inside the stage panel steals vertical space from the Three.js canvas. Move view/run selectors to Dockview tab badges (already implemented in `StageTabRenderer`) and remove the internal header.
+---
 
-4. **Camera/renderer init timing** — `StageSurface` creates camera at fixed aspect (1) before first resize. The `frameBox` calls in views use stale camera aspect. Fix: defer `frameBox` until after first `resize()` completes, or make views listen for `surface.size()` change.
+### Session 1 — Unblock (P10.0 + P10.1 + P10.3) — 1 d
 
-5. **Tour wait conditions** — `wait_for_measured` / `wait_for_view` use `debug.measuredCells()` which sums ALL stage instances. The tour opens one stage but debug API may report cells from a different instance. Fix: tour should open stage via `layoutHost.open('stage', {view, runId})`, capture its instanceId, then poll `debug.stage(instanceId)`.
+**Goal:** static flow → working dashboard with menubar, native tabs, one UI.
 
-### Visual Quality Gates (must pass before tour)
+- [ ] `npm uninstall dockview-core && npm install dockview@^8.6.1`; update
+      `layout/dockview-host.ts` import to `dockview`.
+- [ ] `main.ts`: `import "dockview/dist/styles/dockview.css";` before palette.
+- [ ] `dashboard.css`: one `.dockview-theme-dark` block mapping `--dv-*` to
+      palette tokens (table in original P10.0).
+- [ ] Delete `StageTabRenderer`/`DefaultTabRenderer`; use native tabs.
+- [ ] `main.ts`: side-effect `import "./menubar.js";` + expose in `__DASHBOARD__`.
+- [ ] `#menubar-container` publishes `--menubar-height`; `#ui-overlay` and
+      `#workspace` use `top: var(--menubar-height)`.
+- [ ] **Delete legacy code** (let `tsc` enumerate broken imports):
+      `layout-manager.ts`, `golden-layout.d.ts`, `panels.ts`, `shell.ts`,
+      `layout/absolute-host.ts`, `stage/switcher.ts`, `run-selection.ts`.
+      Move `stage/framing.ts`, `stage/payloads.ts`, `stage/plot2d.ts`,
+      `stage/sprites.ts`, `stage/sources.ts` → `stores/`; delete rest of
+      legacy `stage/` tree.
+- [ ] `npm uninstall golden-layout`.
+- [ ] Delete `#dashboard-canvas` from `templates/index.html` and
+      `stage/canvas2d.ts` (module singleton appends `#stage-2d`).
+- [ ] Convert `create*Body()` ids → classes; scope queries to host; CSS
+      `#hud` `#live-rail` `#caption` `#control-bar` `#discovery-legend`
+      → classes.
+- [ ] Rebuild `__DASHBOARD__.debug` on instances/stores only.
+- [ ] `LayoutHost` gains `rect(id)` and `getStageDebug(id)` for probes
+      (add to `layout/types.ts`; implement in `dockview-host.ts`).
 
-- [ ] **Full-screen watch layout**: stage fills viewport minus menubar (28px), side panels docked right at 360px width
-- [ ] **No internal stage header**: view/run shown only in Dockview tab badges
-- [ ] **Space view renders pillars immediately**: measured cells visible within 3s of stage open
-- [ ] **All 25 views draw distinct frames**: pixel diff >2% between any two views
-- [ ] **Probe passes at 1920/1440/1024**: responsive layout at all breakpoints
+**Gate (S1 probe):** CSS present (`.dv-dockview` position=relative, tab
+height 24–30, groupHeight>0, tabs=instances); menubar exists (5 menus);
+single UI (canvas count = stages, zero duplicate ids, no legacy refs).
 
-### Remaining P9 Work
-
-- [ ] Fix watch preset → full-screen stage + right tabset
-- [ ] Remove internal stage header, use Dockview tab badges only
-- [ ] Fix camera aspect initialization in StageSurface + views
-- [ ] Update tour script wait conditions to use instance-specific debug API
-- [ ] Run full tour, verify all frames distinct
-- [ ] Delete GoldenLayout code (layout-manager.ts, golden-layout.d.ts, panels.ts, shell.ts legacy)
-
-### Commands for Fresh Session
-
+**Commands:**
 ```bash
-# Build & probe
-cd computronium/experiment/execution/dashboard && npm run build
-uv run python scripts/probes/dashboard_layout_probe.py --store experiment.duckdb
+cd computronium/experiment/execution/dashboard
+npm uninstall dockview-core && npm install dockview@^8.6.1
+# edit main.ts, dashboard.css, layout/dockview-host.ts, layout/types.ts
+# delete legacy files, move helpers, convert ids→classes
+npm run build && npx tsc --noEmit
+uv run python scripts/probes/dashboard_picture_probe.py --store experiment.duckdb
+```
 
-# Hero shot
+---
+
+### Session 2 — Geometry & Stage (P10.2 + P10.4) — 1 d
+
+**Goal:** correct layout geometry + stage that fills its panel and frames.
+
+- [ ] `applySpec` level-order builder (one leaf per direct child, then recurse);
+      `api.clear()` first; assert `instances.size===0` after.
+- [ ] `LayoutNode.panel.size` = `Size & {ratio?: number; px?: number}`.
+- [ ] Presets as ratios: `left=0.175`, `right=0.18`, `bottom=0.14` with clamps
+      `[300,360]`, `[320,400]`, `[120,160]`; delete `stageDefinition.defaultSize`.
+- [ ] Recovery composition (watch): left `[legend, control-panel]`, centre
+      `stage`, right `[hud, pareto, ablation, variability]`, bottom
+      `[control-bar, caption, live-rail]`.
+- [ ] Stage panel: remove 30 px header → overlay toolbar
+      (`position:absolute; top:8px; right:8px; h:24px` with view/run selects,
+      badges, maximize; fades to 40%).
+- [ ] `StageSurfaceImpl.root` = `position:absolute; inset:0`; `ResizeObserver`
+      on root; `resize()` before first `frameBox`.
+- [ ] `StageCanvasImpl.area()` = `{x:0,y:0,w,h}` from surface; delete
+      `FREE_WIDTH/FREE_HEIGHT`; fix `space.ts` tooltip and `multirun.ts`
+      legend host to use surface size.
+- [ ] Views receive `resize` before data; `ready()` after first draw.
+
+**Gate (S2 probe):** composition contract (branch sums = parent, stage
+≥60%×55%, side cols 280–420, bottom 110–180, presets idempotent); stage
+contract (canvas≈rect·dpr, |aspect−w/h|<0.01, height=panel, measured>0 in 3s,
+crop differs from bg, two stages distinct).
+
+**Commands:**
+```bash
+cd computronium/experiment/execution/dashboard
+# edit layout.ts, dockview-host.ts, stage/Surface.ts, components/stage/views/*.ts
+npm run build && npx tsc --noEmit
+uv run python scripts/probes/dashboard_picture_probe.py --store experiment.duckdb
+```
+
+---
+
+### Session 3 — Verify & Record (P10.5 + P10.6 + P10.7) — 0.5 d
+
+**Goal:** capture/tour that fail on broken pictures; review verdict recorded.
+
+- [ ] `capture_dashboard_screenshot.py`: open stage via `layoutHost.open`,
+      keep returned `instanceId`; wait for `debug.getStageDebug(id)`
+      `{ready:true, measured>0, view:"space", canvas.w>0}` + two equal
+      `rect` samples + `document.fonts.ready`; fail on console/page errors,
+      `duplicateIds>0`, `measured==0`, canvas<box.
+- [ ] `capture_dashboard_tour.py`: drive from `definitions.list()` +
+      `layout.presets`; per-view `instanceId`, wait for `getStageDebug(id)`
+      matching view+ready, crop stage rect, diff >2% vs prior; report
+      `{id, rect, ready, diff}`.
+- [ ] `dashboard_picture_probe.py` (single probe, not two) carries all
+      contracts (CSS, chrome, geometry, single UI, stage, duplicate ids)
+      at 1920/1440/1024; writes one table.
+- [ ] **Extract baseline refs** (never commit):
+      `for f in dashboard-hero dashboard-watch dashboard-audit dashboard-drive dashboard-free dashboard-map dashboard-cell panel-hud panel-legend panel-live-rail panel-view-toolbar; do git show 0dee1206:docs/readme/assets/$f.png > /tmp/opencode/baseline/$f.png; done`
+- [ ] Picture probe asserts baseline inventory covered (table in original
+      P10.7); declared grid drawn (512 cells via `spaceStore` payload,
+      measured+drawn reported separately); no silent losses (dropped
+      features listed explicitly — table below).
+- [ ] **Review pass:** hero + 1 shot/preset + 4 views inspected against
+      baseline + P10.6 rubric; accept if: stage dominant, sides readable
+      no scroll, no clipped text, one accent hue, reads as one instrument.
+      Record verdict + date in this doc.
+
+**Dropped in TODO72 (explicit for probe):**
+
+| Feature | Replaced by | Reason |
+|---|---|---|
+| GoldenLayout overlay | Dockview docked | Multi-instance, in-app floating, undo/redo |
+| `stage/switcher.ts` | Stage overlay + palette | Singleton toolbar → per-instance |
+| `panels.ts`/`shell.ts` | `LayoutHost`+`ComponentDefinition` | Incompatible with multi-instance |
+| `layout-manager.ts` | `dockview-host.ts` | GL unmaintained; no in-app floating |
+| `run-selection.ts` | `WorkspaceStore.selection` | Shared mutable singleton |
+| `stage/store.ts` | `MetricsStore`/`SpaceStore`/`WorkspaceStore` | Monolithic, duplicated ingestion |
+| `absolute-host.ts` | `dockview-host.ts` floating | Fallback only; Dockview superior |
+| `#dashboard-canvas`/`#stage-2d` | Per-instance `StageSurface` | Architecture: one canvas/stage |
+| `create*Body()` returning `id` | `class` scoped to host | Ids collide with instances |
+| Commands calling singletons | Verbs via `LayoutHost` + stores | Singletons removed |
+
+**Gate:** hero < 60s `--reuse-store`, hero PNG ≥ 120 KB (smoke; broken=40KB,
+baseline=245KB); picture probe green at 3 viewports; tour 26 views + 6
+panels with pairwise diffs; zero console/page errors; review verdict
+recorded; `docs/screenshots/` mirrored.
+
+**Commands:**
+```bash
 uv run python scripts/capture_dashboard_screenshot.py --reuse-store --port 8084
-
-# Full tour (after fixes)
 uv run python scripts/capture_dashboard_tour.py --skip-campaigns --port 8085
 ```
+
+---
+
+### Risks (condensed)
+
+| Risk | Mitigation |
+|---|---|
+| `dockview` CSS after overrides | Import order in `main.ts`; probe asserts effective tab height |
+| Theme fights `themeDark` | Override only `--dv-*` in one block; no inline engine styles |
+| Level-order mis-nests | Composition contract catches; fallback `api.fromJSON` in `dockview-host.ts` |
+| Headless WebGL 300×150 | Canvas contract asserts buffer==box·dpr before screenshot |
+| Legacy deletion breaks binding | Delete first, `tsc` enumerates callers; bindings via `CommandBus` |
+| Tour flakiness | Per-view instance ids + named diffs; no summed counters |
+
+---
+
+### Definition of done (final)
+
+- [ ] Dockview API only in `layout/dockview-host.ts`; GL removed.
+- [ ] Factories for component/instance/stage-view; no UI singletons.
+- [ ] Multiple instances of any type/view with independent state.
+- [ ] Docking, resize, tabs, floating, maximize, duplicate, undo/redo.
+- [ ] One CSS source; palette in `src/`; Dockview CSS imported once.
+- [ ] WS pong, no leaks, serialized sends, no reconnect.
+- [ ] Metrics/space cached per key; catalog-driven selection; one ingest.
+- [ ] Capture/tour reuse store; no campaign re-runs.
+- [ ] Flexibility matrix passes.
+- [ ] Picture contracts pass at 1920/1440/1024 (CSS, chrome, no
+  gaps/overflow, stage dominant+non-blank, declared grid drawn, one
+  canvas/stage, no duplicate ids); P10.3 review verdict recorded.
+- [ ] No legacy mounts: `#dashboard-canvas`, `#stage-2d`, GL tree gone.
+      above (CSS, chrome, geometry, single UI, stage, duplicate ids) at
+      1920/1440/1024, writing one table; the layout probe keeps doing
+      drag/resize/float/listener/leak checks. Neither probe may read
+      `#dashboard-canvas`.
+
+**Gate:** hero < 60 s with `--reuse-store`; hero PNG ≥ 120 KB at 1920×1080
+(smoke floor only — the broken shot was 40 KB, the baseline 245 KB); picture
+probe green at three viewports; tour covers all 26 views with pairwise diffs;
+zero console/page errors; `docs/screenshots/` mirrored.
+
+### P10.6 — Legibility and beauty rubric (0.5 d)
+
+Review aids, checked by eye against the hero and one shot per preset; the
+acceptance decision is the P10.7 review pass. Numbers mark the floor, not the
+target:
+
+- Type: 11 px tab/header, 12 px body, 16 px caption headline; nothing below
+  10 px; tabular numerals for metrics (already used).
+- Spacing: 4/8/12 px scale; 1 px `--border`; 4 px sashes; 8 px panel padding.
+- Contrast: body text `--text-primary` on `--bg-secondary`; a checker asserts
+  ≥ 4.5:1 for `.panel-title`, tab labels, and rail messages.
+- Chrome: every panel has a visible tab strip with an active tab; the active
+  group is distinguishable by tab background, not by a border hack.
+- No clipping: for each panel content, `scrollWidth ≤ clientWidth + 1` unless
+  the component declares `overflow:auto`; no element rect extends outside its
+  group rect.
+- Composition: stage ≥ 60 % width, ≤ 3 docked columns, one accent hue
+  (`--gradient`) per shot; the empty watermark is never visible in a hero shot.
+
+### P10.7 — Recovery intent, judged as a picture (0.5 d)
+
+The last build whose screenshots were not malformed is `0dee1206`
+("TODO70 complete", 2026-10-22). Its 245 KB hero is the reference for *what
+working looked like*: demo-third, digits, L1 — `0 measured · 78 legal · 434
+void (of 512)` — legend with its view toolbar and axis pickers at the left,
+stage behind, HUD and Pareto right, caption and control bar bottom-centre,
+live rail across the bottom, icon rail at the edge.
+
+The target is that content and reading order. Not pixel parity, not the old
+overlay mechanism, not a fixed grid: **generally the same instrument, docked,
+legible and balanced.** Composition is judged by eye against the reference;
+the probe only enforces the things a picture cannot excuse (clipping, overflow,
+missing panels, an empty stage). Parity is not the bar: the shot must read as
+the same instrument — same story, same reading order — not as the same pixels.
+
+- [ ] Extract the references (never commit them):
+      `for f in dashboard-hero dashboard-watch dashboard-audit dashboard-drive
+      dashboard-free dashboard-map dashboard-cell panel-hud panel-legend
+      panel-live-rail panel-view-toolbar; do git show 0dee1206:docs/readme/assets/$f.png > /tmp/opencode/baseline/$f.png; done`
+- [ ] Freeze the baseline panel inventory in the picture probe and assert
+      `definitions.list()` covers it and every preset places it:
+
+      | Region | Panels |
+      |---|---|
+      | left | discovery-legend (view toolbar, 26 views, axes), control-panel |
+      | centre | stage/`space` (dominant) |
+      | right | hud; pareto-chart, ablation-chart, variability-chart |
+      | bottom centre | caption; control-bar (play/step/stop, speed, epoch) |
+      | bottom band | live-rail with event cards |
+      | right edge | icon rail (panel toggles) |
+
+- [ ] Restore the *stage content* check the baseline proves: with a run
+      selected, `space` draws the declared grid (512 cages: legal + void), not
+      only measured records. Assert the `spaceStore` payload cell count and
+      report measured cells and drawn grid size separately; a run with 0
+      measured cells must still draw the declared space.
+- [ ] The baseline offered every view at once from a toolbar; the new UI must
+      keep that reachability (stage overlay + palette is fine —
+      `panel-view-toolbar.png` produced from them, not from a legacy switcher).
+- [ ] No silent losses: every baseline panel and verb appears in the new UI or
+      is listed under "Dropped in TODO72" with a reason. The probe fails if an
+      entry is missing from both.
+- [ ] **Review pass (the real aesthetic gate):** hero + one shot per preset +
+      four representative views, inspected against the baseline and the P10.6
+      rubric. Accept only if: stage dominant, side panels readable without
+      scrolling for their primary content, no clipped/overlapping text, one
+      accent hue, and the whole frame reads as one instrument. Record the
+      verdict and date in this doc.
+
+**Gate:** inventory complete; declared grid drawn; P10.6 rubric passes; review
+verdict recorded; baseline shot list produced (26 views + 6 panels). No pixel
+or coordinate tolerance is required.
+
+### Dropped in TODO72 (explicit, so the probe can assert they're gone)
+
+| Feature | Replaced by | Reason |
+|---|---|---|
+| GoldenLayout overlay panels | Dockview docked panels | Required for multi-instance, in-app floating, undo/redo |
+| `stage/switcher.ts` (view toolbar) | Stage overlay + command palette | Toolbar was a singleton; overlay is per-instance |
+| `panels.ts` / `shell.ts` registry | `LayoutHost` + `ComponentDefinition` | Singleton registry incompatible with multi-instance |
+| `layout-manager.ts` | `dockview-host.ts` | GL unmaintained; no in-app floating |
+| `run-selection.ts` | `WorkspaceStore.selection` | Shared mutable singleton; store is keyed and deduplicated |
+| `stage/store.ts` (stageState) | `MetricsStore` / `SpaceStore` / `WorkspaceStore` | Monolithic, duplicated ingestion; split by concern |
+| `absolute-host.ts` | `dockview-host.ts` (floating groups) | Fallback only; Dockview floating is superior |
+| `#dashboard-canvas` / `#stage-2d` module singleton | Per-instance `StageSurface` | One canvas per stage instance is the architecture |
+| `create*Body()` returning `id` selectors | `class` selectors scoped to host | Ids collide with multiple instances |
+| `CommandBus` verbs calling singletons | Verbs executing via `LayoutHost` + stores | Singletons removed; commands reach instances via host |
+
+### Verification ladder (cheapest first)
+
+1. **First session start** — run the dependency swap and stylesheet import:
+   ```bash
+   cd computronium/experiment/execution/dashboard
+   npm uninstall dockview-core && npm install dockview@^8.6.1
+   # add `import "dockview/dist/styles/dockview.css";` to main.ts before palette.css
+   # add .dockview-theme-dark variable block to dashboard.css
+   npm run build && npx tsc --noEmit
+   ```
+2. `uv run python scripts/probes/dashboard_picture_probe.py --store experiment.duckdb`
+   (~40 s; fails on any contract above — CSS, chrome, geometry, single UI, stage, duplicate ids).
+3. `uv run python scripts/probes/dashboard_layout_probe.py --store experiment.duckdb`
+   (~30 s; drag/resize/float/leak).
+4. `uv run python scripts/capture_dashboard_screenshot.py --reuse-store --port 8084`.
+5. `uv run python scripts/capture_dashboard_tour.py --skip-campaigns --port 8085`.
+2. `uv run python scripts/probes/dashboard_picture_probe.py --store experiment.duckdb`
+   (~40 s; fails on any contract above).
+3. `uv run python scripts/probes/dashboard_layout_probe.py --store experiment.duckdb`
+   (~30 s; drag/resize/float/leak).
+4. `uv run python scripts/capture_dashboard_screenshot.py --reuse-store --port 8084`.
+5. `uv run python scripts/capture_dashboard_tour.py --skip-campaigns --port 8085`.
+
+### Risks in this plan
+
+| Risk | Mitigation |
+|---|---|
+| `dockview` CSS lands after our overrides | import order fixed in `main.ts`; probe asserts effective tab height and group background |
+| Theme overrides fight `themeDark` | override only `--dv-*` variables in one block; never inline-style engine nodes |
+| Level-order builder still mis-nests | geometry contract catches it; fallback is `api.fromJSON` with a hand-built grid, confined to `dockview-host.ts` |
+| Headless WebGL buffer stays 300×150 | canvas contract asserts buffer == box·dpr before any screenshot |
+| Legacy deletion breaks a binding | delete legacy code first, then let `tsc` enumerate the callers; bindings must resolve through `CommandBus` |
+| Tour flakiness | per-view instance ids and named diffs; no summed counters |
 
 ## Flexibility acceptance matrix
 
@@ -629,7 +917,7 @@ uv run python scripts/capture_dashboard_tour.py --skip-campaigns --port 8085
 | Close isolation | Closing one does not affect siblings |
 | Add component | One definition + one registry row; picker/menubar update |
 | Add view | One factory + one registry row; every stage offers it |
-| Engine isolation | No `dockview` import outside `layout/dockview-host.ts` |
+| Engine isolation | No `dockview` **API** import outside `layout/dockview-host.ts`; stylesheet imported once in `main.ts` |
 | Persistence | Round-trip; unknown types dropped with warning |
 | No singletons | No module-level UI renderer/scene/canvas/panel element |
 | Leak check | 50 create/destroy cycles; listeners return to baseline |
@@ -680,11 +968,19 @@ uv run python scripts/capture_dashboard_screenshot.py --reuse-store --port 8084
 - [ ] Metrics/space cached per key; catalog-driven selection; one ingest.
 - [ ] Capture/tour reuse an existing store; no campaign re-runs.
 - [ ] Flexibility acceptance matrix passes.
+- [ ] Picture contracts pass at 1920/1440/1024 (stylesheet present, chrome
+  mounted, no gaps/overflow, stage dominant and non-blank, declared grid drawn,
+  one canvas per stage, no duplicate ids); the P10.7 review verdict is recorded.
+- [ ] No legacy singleton mounts: `#dashboard-canvas`, `stage-2d`, and the
+  GoldenLayout tree are gone.
 
 ## Final verification notes
 
-- `dockview-core` latest verified at **8.6.1**, MIT, zero dependencies
-  (5.5 MB unpacked; bundle size must be measured, not assumed).
+- `dockview-core` 8.6.1 is an **internal package**: its ESM build ships no
+  stylesheet and the published tarball omits `dist/styles/dockview.css`, so a
+  `dockview-core`-only install renders unstyled (P10 evidence). Install
+  `dockview@8.6.1` instead — it re-exports core and ships
+  `dist/styles/dockview.css`.
 - GoldenLayout 2.6.0 is the last release (Sep 2022); in-app floating panels
   remain unsupported.
 - Dockview API confirmed for vanilla TypeScript: `createDockview`,

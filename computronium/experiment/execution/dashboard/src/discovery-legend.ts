@@ -1,17 +1,17 @@
-/** Discovery Legend — run picker, axis picker, arm legend, actions. */
+/** Discovery Legend — the map's key, one view per instance. */
 
 import { workspaceStore } from "./stores/workspace.js";
+import { metricsStore } from "./stores/metrics.js";
 import { runSelection, type RunMetrics } from "./run-selection.js";
-import { stageState } from "./stage/store.js";
 import { PALETTE } from "./colors.js";
-import type { JsonValue } from "./layout/types.js";
-import type { AxisSelection } from "./layout/types.js";
-import type { WorkspaceStore as WorkspaceStoreInterface } from "./layout/types.js";
-import { registry } from "./components/registry.js";
-import { panels, registerDisplayPanel } from "./panels.js";
-import { createPanelShell } from "./shell.js";
-import { PANEL_KEYS } from "./keys.js";
-import type { Component } from "./components/registry.js";
+import { cellKey } from "./stores/payloads.js";
+import type { AxisSelection, WorkspaceStore as WorkspaceStoreInterface } from "./layout/types.js";
+
+interface LegendOptions {
+  runId: string | null;
+  axes: AxisSelection;
+  workspace: WorkspaceStoreInterface;
+}
 
 export function createLegendBody(): string {
   return `
@@ -30,17 +30,17 @@ export function createLegendBody(): string {
       .legend-axis-btn:hover { background: var(--border); color: var(--text-primary); }
       .legend-axis-btn.active { background: var(--gradient)22; border-color: var(--gradient)66; color: var(--gradient); }
     </style>
-    <div id="legend-title" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+    <div class="legend-title" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
       <span style="font-weight: 600; color: var(--text-primary);">Discovery Map</span>
-      <span id="legend-cell-count" style="font-size: 11px; color: var(--text-muted);"></span>
+      <span class="legend-cell-count" style="font-size: 11px; color: var(--text-muted);"></span>
     </div>
-    <div id="legend-empty-state" class="empty-state" style="display: none; text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 11px;">
+    <div class="legend-empty-state empty-state" style="display: none; text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 11px;">
       <div class="empty-state-icon" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;">▦</div>
       <div class="empty-state-title">No run selected</div>
       <div class="empty-state-message">Pick a run from the dropdown below to see its declared space</div>
     </div>
-    <div id="legend-view" style="display: none;"></div>
-    <div id="legend-marks" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+    <div class="legend-view" style="display: none;"></div>
+    <div class="legend-marks" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
       <div class="legend-item" style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
         <div style="width: 14px; height: 14px; background: var(--measured); border-radius: 3px; box-shadow: 0 0 10px var(--measured);"></div>
         <span>Measured — glowing pillar</span>
@@ -58,20 +58,14 @@ export function createLegendBody(): string {
         <span>Unmeasured — wireframe</span>
       </div>
     </div>
-    <div id="legend-axes" class="legend-axes"></div>
-    <div id="legend-arms" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;"></div>
+    <div class="legend-axes"></div>
+    <div class="legend-arms" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;"></div>
     <div class="legend-actions">
       <button class="legend-btn primary" data-act="replicate" title="Replicate (Shift+R)">Replicate</button>
       <button class="legend-btn" data-act="preregister" title="Preregister (Shift+P)">Preregister</button>
       <button class="legend-btn" data-act="quest" title="Quest (Shift+Q)">Quest</button>
     </div>
   `;
-}
-
-interface LegendOptions {
-  runId: string | null;
-  axes: AxisSelection;
-  workspace: WorkspaceStoreInterface;
 }
 
 /** A legend bound to one root element and its own subscriptions. */
@@ -97,19 +91,18 @@ export class DiscoveryLegendView {
       axes: { x: "credit", y: "geometry", z: "dynamics" },
       workspace: workspaceStore,
     };
-    this.emptyState = this.query("#legend-empty-state");
-    this.view = this.query("#legend-view");
-    this.marks = this.query("#legend-marks");
-    this.arms = this.query("#legend-arms");
-    this.cellCount = this.query("#legend-cell-count");
-    this.axesContainer = this.query("#legend-axes");
+    this.emptyState = this.query(".legend-empty-state");
+    this.view = this.query(".legend-view");
+    this.marks = this.query(".legend-marks");
+    this.arms = this.query(".legend-arms");
+    this.cellCount = this.query(".legend-cell-count");
+    this.axesContainer = this.query(".legend-axes");
     this.replicanteBtn = this.query("[data-act=replicate]");
     this.preregisterBtn = this.query("[data-act=preregister]");
     this.questBtn = this.query("[data-act=quest]");
 
     this.disposers.push(
       this.options.workspace.onChange(() => this.render()),
-      stageState.onChange((_change) => this.render()),
     );
     this.renderAxesPicker();
     this.render();
@@ -153,125 +146,65 @@ export class DiscoveryLegendView {
 
     for (const btn of this.axesContainer.querySelectorAll<HTMLButtonElement>(".legend-axis-btn")) {
       btn.addEventListener("click", () => {
-        const axisKey = btn.dataset.axisKey as keyof AxisSelection;
-        const axisValue = btn.dataset.axisValue as AxisSelection[keyof AxisSelection];
-        if (axisKey && axisValue) {
-          this.options.workspace.setAxes({ ...this.options.axes, [axisKey]: axisValue });
-        }
+        const key = btn.dataset.axisKey as keyof AxisSelection;
+        const value = btn.dataset.axisValue as AxisSelection[keyof AxisSelection];
+        this.options.axes[key] = value;
+        this.renderAxesPicker();
+        this.options.workspace.setAxes(this.options.axes);
       });
     }
   }
 
-  /** Public render for external sync (e.g., DiscoveryMap). */
-  render(): void {
+  private render(): void {
     const runId = this.options.runId ?? this.options.workspace.getSelectedRunId();
-    const run = runSelection.selected;
-    const space = stageState.space;
-    const hasRun = run !== null;
-    const hasSpace = space !== null;
+    const axes = this.options.axes;
 
-    if (!hasRun || !hasSpace || !runId) {
-      this.emptyState.style.display = "block";
+    if (!runId) {
+      this.emptyState.style.display = "";
       this.view.style.display = "none";
       this.marks.style.display = "none";
-      this.arms.style.display = "none";
       this.cellCount.textContent = "";
+      this.arms.innerHTML = "";
       return;
     }
 
     this.emptyState.style.display = "none";
-    this.view.style.display = "block";
-    this.marks.style.display = "flex";
-    this.arms.style.display = "flex";
+    this.view.style.display = "";
+    this.marks.style.display = "";
 
-    const records = run.records ?? [];
-    const measured = records.filter((r) => r.status === "measured").length;
-    this.cellCount.textContent = `${measured} / ${records.length} cells measured`;
-
-    this.renderArms(space, run);
-    this.updateActionButtons(run);
-  }
-
-  private renderArms(space: any, run: RunMetrics): void {
-    const creditAxes = space.axes?.credit;
-    if (!creditAxes || !Array.isArray(creditAxes) || creditAxes.length === 0) {
-      this.arms.innerHTML = '<div style="font-size: 10px; color: var(--text-muted);">No credit arms</div>';
+    const metrics = runSelection.getMetrics(runId);
+    if (!metrics) {
+      this.cellCount.textContent = "Loading…";
       return;
     }
 
-    const records = run.records ?? [];
-    const armData = new Map<string, { measured: number; total: number; color: string }>();
+    const records = metrics.records ?? [];
+    const measured = records.filter((r: any) => r.status === "measured").length;
+    const insufficient = records.filter((r: any) => r.status === "insufficient").length;
+    const rejected = records.filter((r: any) => r.status === "rejected").length;
+    const voidCount = records.filter((r: any) => r.status === "void").length;
+    const total = measured + insufficient + rejected + voidCount;
 
-    creditAxes.forEach((arm: string) => {
-      const color = (PALETTE as any)[`credit_${arm}`] || PALETTE.gradient;
-      armData.set(arm, { measured: 0, total: 0, color });
-    });
+    this.cellCount.textContent = `${measured} measured · ${insufficient} insufficient · ${rejected} rejected · ${voidCount} void · ${total} total`;
 
-    records.forEach((r) => {
-      const arm = r.coordinate?.credit;
-      if (arm && armData.has(arm)) {
-        const data = armData.get(arm)!;
-        data.total++;
-        if (r.status === "measured") data.measured++;
-      }
-    });
-
-    this.arms.innerHTML = creditAxes
-      .map((arm: string) => {
-        const data = armData.get(arm)!;
-        return `
-          <div class="legend-chip">
-            <span class="dot" style="background: ${data.color};"></span>
-            <span>${arm}</span>
-            <span style="color: var(--text-muted);">${data.measured}/${data.total}</span>
-          </div>
-        `;
-      })
-      .join("");
-  }
-
-  private updateActionButtons(run: RunMetrics): void {
-    const hasSelection = runSelection.selected !== null;
-    this.replicanteBtn.disabled = !hasSelection;
-    this.preregisterBtn.disabled = !hasSelection;
-    this.questBtn.disabled = !hasSelection;
-  }
-}
-
-/** Legacy panel class for GoldenLayout (until P2). Not auto-registered. */
-export class DiscoveryLegend implements Component {
-  name = "DiscoveryLegend";
-  private container: HTMLElement | null = null;
-  private view: DiscoveryLegendView | null = null;
-
-  async init(): Promise<void> {
-    this.container = createPanelShell({
-      id: "discovery-legend",
-      title: "Discovery Map",
-      glyph: "▦",
-      key: PANEL_KEYS.legend,
-      body: createLegendBody(),
-      dock: "bottom",
-      defaultOpen: true,
-    });
-    this.view = new DiscoveryLegendView(this.container);
-    registerDisplayPanel(
-      "discovery-legend",
-      "Discovery Map",
-      "▦",
-      () => this.container,
-      PANEL_KEYS.legend,
-    );
-  }
-
-  async destroy(): Promise<void> {
-    this.view?.dispose();
-    this.view = null;
-    this.container?.remove();
-  }
-
-  /** Called by DiscoveryMap when the run changes. */
-  updateLegend(): void {
-    this.view?.render();
+    // Render arms
+    const armColors: Record<string, string> = {
+      credit: "#3b82f6",
+      geometry: "#22c55e",
+      dynamics: "#f59e0b",
+      substrate: "#a855f7",
+      plasticity: "#ec4899",
+      update: "#06b6d4",
+    };
+    this.arms.innerHTML = "";
+    for (const axis of ["credit", "geometry", "dynamics", "substrate", "plasticity", "update"] as const) {
+      const primitives = metrics.primitives?.[axis] ?? [];
+      if (!primitives.length) continue;
+      const chip = document.createElement("span");
+      chip.className = "legend-chip";
+      chip.style.borderColor = armColors[axis] + "88";
+      chip.innerHTML = `<span class="dot" style="background:${armColors[axis]}"></span>${axis}: ${primitives.join(", ")}`;
+      this.arms.appendChild(chip);
+    }
   }
 }

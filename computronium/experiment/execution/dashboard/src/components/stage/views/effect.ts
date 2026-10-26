@@ -1,11 +1,11 @@
 /** Effect stage view — which axis moved the objective (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawCategoryFrame, drawNote, type CategoryFrame } from "../../../stage/plot2d.js";
+import { drawCategoryFrame, drawNote, type CategoryFrame } from "../../../stores/plot2d.js";
 import { attributionStore } from "../../../stores/attribution.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import type { AttributionArm, AttributionAxis } from "../../../stage/payloads.js";
+import type { AttributionArm, AttributionAxis } from "../../../stores/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,

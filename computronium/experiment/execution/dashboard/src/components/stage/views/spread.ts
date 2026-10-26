@@ -1,7 +1,7 @@
 /** Spread stage view — one violin per arm, across its seeds (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawCategoryFrame, drawNote, type CategoryFrame } from "../../../stage/plot2d.js";
+import { drawCategoryFrame, drawNote, type CategoryFrame } from "../../../stores/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
 import type {

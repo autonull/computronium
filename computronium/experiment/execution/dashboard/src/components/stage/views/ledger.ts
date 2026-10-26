@@ -1,7 +1,7 @@
 /** Ledger stage view — every arm the run measured, and where it stands (TODO72 P6). */
 
 import { ARM_COLORS, PALETTE } from "../../../colors.js";
-import { drawTitle, drawFrame, drawNote, wrapText, type PlotFrame } from "../../../stage/plot2d.js";
+import { drawTitle, drawFrame, drawNote, wrapText, type PlotFrame } from "../../../stores/plot2d.js";
 import { accountStore } from "../../../stores/account.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";

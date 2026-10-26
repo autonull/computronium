@@ -113,6 +113,10 @@ export class StageSurfaceImpl implements StageSurface {
     controls.maxDistance = 80;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
+    // Store renderer and camera on canvas for debug access
+    (renderer.domElement as HTMLCanvasElement & { __three_renderer?: THREE.WebGLRenderer; __three_camera?: THREE.PerspectiveCamera }).__three_renderer = renderer;
+    (renderer.domElement as HTMLCanvasElement & { __three_renderer?: THREE.WebGLRenderer; __three_camera?: THREE.PerspectiveCamera }).__three_camera = camera;
+
     // Lights
     const ambientLight = new THREE.AmbientLight(0x444466, 0.6);
     scene.add(ambientLight);
