@@ -560,7 +560,7 @@ stable at 31; no page/console errors; 25 s walltime.
 - [x] Debug API exposes `spaceStore()` for cache inspection.
 - [x] All 25 stage views have `init()` method for async initialization.
 - [x] Space payload fetch working (20 records in store).
-- [ ] Fix space view async `init()` to populate cells before capture.
+- [x] Fix space view async `init()` to populate cells before capture (deferred view init until Dockview `init` callback provides params; `init()` awaits `spaceDataReady` promise).
 - [ ] Hero shot < 60s with `--reuse-store`.
 - [ ] Tour all frames; >2% view diffs.
 

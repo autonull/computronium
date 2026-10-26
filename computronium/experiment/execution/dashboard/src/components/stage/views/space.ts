@@ -85,6 +85,12 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     update: [],
   };
 
+  // Promise that resolves when space data is first loaded
+  let spaceDataLoaded: (() => void) | null = null;
+  const spaceDataReady = new Promise<void>((resolve) => {
+    spaceDataLoaded = resolve;
+  });
+
   async function init(): Promise<void> {
     // Create readout overlay
     createReadout();
@@ -116,14 +122,18 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     if (runId) {
       spaceUnsub = spaceStore.subscribe(runId, axes, spaceValues, () => {
         applyAxes();
+        spaceDataLoaded?.();
       });
     }
 
     // Register per-frame update
     frameUnsub = surface.onFrame(update);
 
-    // Initial draw
+    // Initial draw and wait for space data to load (if we have a runId)
     await applyAxes();
+    if (runId) {
+      await spaceDataReady;
+    }
   }
 
   function createReadout(): void {

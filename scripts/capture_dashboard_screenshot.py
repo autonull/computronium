@@ -52,17 +52,19 @@ def capture(port: int, run_id: str, output: Path, timeout_ms: int) -> int:
         page = open_dashboard(browser, port)
 
         # Open a stage panel if not already open
-        page.evaluate(
-            """(runId) => {
+        result = page.evaluate(
+            """async (runId) => {
                 const dbg = window.__DASHBOARD__;
                 if (dbg && dbg.layoutHost && typeof dbg.layoutHost.open === 'function') {
-                    // Check if any stage panel is already open
                     const instances = dbg.layoutHost.list?.() || [];
                     const hasStage = instances.some(i => i.type === 'stage');
                     if (!hasStage) {
-                        dbg.layoutHost.open('stage', { runId });
+                        const id = await dbg.layoutHost.open('stage', { runId });
+                        return { success: true, id, instances: instances.length };
                     }
+                    return { success: true, alreadyOpen: true, instances: instances.length };
                 }
+                return { success: false, reason: 'no layoutHost' };
             }""",
             arg=run_id,
         )
@@ -71,52 +73,17 @@ def capture(port: int, run_id: str, output: Path, timeout_ms: int) -> int:
         page.wait_for_timeout(10000)
 
         # Wait for the stage to show measured cells using the new debug API
-        # Poll with logging to see what's happening
         deadline = time.time() + timeout_ms / 1000
         while time.time() < deadline:
             try:
                 cells = page.evaluate("""() => window.__DASHBOARD__?.debug?.measuredCells?.() ?? 0""")
-                logger.info("Measured cells: %d", cells)
                 if cells > 0:
                     break
-            except Exception as exc:
-                logger.debug("measuredCells check failed: %s", exc)
+            except Exception:
+                pass
             time.sleep(2)
         else:
             logger.error("Timeout waiting for measured cells")
-            # Debug: check what stage instances exist
-            try:
-                instances = page.evaluate("""() => window.__DASHBOARD__?.debug?.instances?.() ?? []""")
-                logger.info("Stage instances: %s", json.dumps(instances))
-            except Exception as exc:
-                logger.debug("instances check failed: %s", exc)
-            # Debug: check space store
-            try:
-                spaceDebug = page.evaluate("""() => {
-                    const store = window.__DASHBOARD__?.spaceStore;
-                    if (!store) return 'no spaceStore';
-                    return { cacheSize: store.cache?.size ?? 0 };
-                }""")
-                logger.info("Space store debug: %s", spaceDebug)
-            except Exception as exc:
-                logger.debug("space store check failed: %s", exc)
-            # Debug: check space view state
-            try:
-                viewDebug = page.evaluate("""() => {
-                    const dbg = window.__DASHBOARD__;
-                    if (!dbg || !dbg.layoutHost) return 'no layoutHost';
-                    const api = dbg.layoutHost.getApi?.();
-                    if (!api) return 'no api';
-                    const panels = api.panels;
-                    const stagePanels = panels.filter(p => p.component === 'stage');
-                    return stagePanels.map(p => {
-                        const params = p.api.getParameters?.();
-                        return { id: p.id, component: p.component, params };
-                    });
-                }""")
-                logger.info("Stage panels debug: %s", viewDebug)
-            except Exception as exc:
-                logger.debug("stage panels debug failed: %s", exc)
             return 1
 
         logger.info("Stage shows measured cells")

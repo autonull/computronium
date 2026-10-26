@@ -47,30 +47,14 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
     const surface = new StageSurfaceImpl();
     host.appendChild(surface.root);
 
-    // Parse state
-    const stageState = state as unknown as StageState;
-    const viewState = { ...stageState, runId: stageState.runId ?? ctx.workspace.selectedRunId };
-    let viewInstance: StageViewInstance | null = createStageViewInstance(stageState.view, {
-      surface: surface as StageSurface,
-      flat: surface.flat,
-      workspace: ctx.workspace,
-      state: viewState,
-    });
-
-    let initPromise: Promise<void> | null = null;
-    if (viewInstance) {
-      initPromise = viewInstance.init().then(() => {
-        viewInstance?.mount();
-      });
-    }
+    const instanceId = ctx.instanceId;
+    let viewInstance: StageViewInstance | null = null;
+    let viewInitPromise: Promise<void> | null = null;
+    let currentView: string | null = null;
+    let currentRunId: string | null = null;
+    let currentAxes: { x: string; y: string; z: string } | null = null;
 
     surface.start();
-
-    // Register with DockviewHost for measured cells query
-    const instanceId = ctx.instanceId;
-    if (viewInstance) {
-      DockviewHost.registerStageInstance(instanceId, viewInstance);
-    }
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
@@ -84,38 +68,65 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
     // Subscribe to workspace changes for run/axes updates
     const workspaceUnsub = ctx.workspace.onChange(() => {
       if (viewInstance) {
-        const runId = stageState.runId ?? ctx.workspace.getSelectedRunId();
+        const runId = currentRunId ?? ctx.workspace.getSelectedRunId();
         const axes = ctx.workspace.getAxes();
         viewInstance.refresh({ kind: "data", runId: runId ?? undefined });
       }
     });
 
-    return {
+    const ensureViewInstance = (st: StageState): void => {
+      const view = st.view ?? "space";
+      const runId = st.runId ?? ctx.workspace.getSelectedRunId();
+      const axes = st.axes ?? ctx.workspace.getAxes();
+
+      const viewChanged = view !== currentView;
+      const runChanged = runId !== currentRunId;
+      const axesChanged = axes.x !== currentAxes?.x || axes.y !== currentAxes?.y || axes.z !== currentAxes?.z;
+
+      if (viewChanged || !viewInstance) {
+        // Dispose old view if switching
+        if (viewInstance) {
+          viewInstance.dispose();
+          DockviewHost.unregisterStageInstance(instanceId);
+        }
+
+        // Create new view instance
+        const viewState = { ...st, runId };
+        viewInstance = createStageViewInstance(view, {
+          surface: surface as StageSurface,
+          flat: surface.flat,
+          workspace: ctx.workspace,
+          state: viewState,
+        });
+
+        if (viewInstance) {
+          const vi = viewInstance;
+          viewInitPromise = vi.init().then(() => {
+            vi.mount();
+            vi.resize(surface.size());
+            DockviewHost.registerStageInstance(instanceId, vi);
+          });
+        }
+
+        currentView = view;
+        currentRunId = runId;
+        currentAxes = { ...axes };
+      } else if (runChanged || axesChanged) {
+        // Same view, different run/axes — just refresh
+        currentRunId = runId;
+        currentAxes = { ...axes };
+        viewInstance?.refresh({ kind: "data", runId: runId ?? undefined });
+      }
+    };
+
+    const handle: ComponentHandle<JsonValue> & { viewInitPromise?: Promise<void> } = {
       element: host,
+      get viewInitPromise() {
+        return viewInitPromise ?? undefined;
+      },
       update(next: JsonValue): void {
         const nextState = next as unknown as StageState;
-        // View switch
-        if (nextState.view !== stageState.view) {
-          viewInstance?.dispose();
-          const newViewInstance = createStageViewInstance(nextState.view, {
-            surface: surface as StageSurface,
-            flat: surface.flat,
-            workspace: ctx.workspace,
-            state: { ...nextState, runId: nextState.runId ?? ctx.workspace.getSelectedRunId() },
-          });
-          viewInstance = newViewInstance;
-          if (newViewInstance) {
-            newViewInstance.init().then(() => {
-              newViewInstance.mount();
-              newViewInstance.resize(surface.size());
-              DockviewHost.registerStageInstance(instanceId, newViewInstance);
-            });
-          }
-        }
-        // Run/axes change — refresh the view
-        else if (nextState.runId !== stageState.runId || nextState.axes !== stageState.axes) {
-          viewInstance?.refresh({ kind: "data", runId: nextState.runId ?? undefined });
-        }
+        ensureViewInstance(nextState);
       },
       dispose(): void {
         resizeObserver.disconnect();
@@ -125,5 +136,10 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
         surface.dispose();
       },
     };
+
+    // Initialize with initial state (which may be empty - update will be called again with real params)
+    ensureViewInstance(state as unknown as StageState);
+
+    return handle;
   },
 });

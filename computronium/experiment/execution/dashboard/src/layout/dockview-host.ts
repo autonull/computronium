@@ -487,7 +487,7 @@ export class DockviewHost implements LayoutHost {
       const element = document.createElement("div");
       element.style.cssText = "width:100%;height:100%;overflow:auto;";
 
-      const handle = definition.create(element, {} as JsonValue, context(options.id));
+      const handle = definition.create(element, jsonToParams((options as any).params) as JsonValue, context(options.id));
 
       let readyResolve: () => void;
       const readyPromise = new Promise<void>((resolve) => {
@@ -615,6 +615,13 @@ export class DockviewHost implements LayoutHost {
     const instance = this.instances.get(id);
     if (instance) {
       await instance.readyPromise;
+      // For stage panels, also wait for the view instance's init to complete
+      if (definition.type === "stage") {
+        const handle = instance.handle as ComponentHandle<JsonValue> & { viewInitPromise?: Promise<void> };
+        if (handle.viewInitPromise) {
+          await handle.viewInitPromise;
+        }
+      }
     }
 
     return id;

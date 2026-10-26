@@ -44,5 +44,8 @@ export function resolveState(
   definition: ComponentDefinition<JsonValue>,
   state: JsonValue | undefined,
 ): JsonValue {
-  return state ?? definition.defaultState ?? null;
+  if (!state) return definition.defaultState ?? null;
+  if (!definition.defaultState) return state;
+  // Merge provided state with default state
+  return { ...(definition.defaultState as Record<string, unknown>), ...(state as Record<string, unknown>) } as JsonValue;
 }
