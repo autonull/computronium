@@ -1331,8 +1331,27 @@ export class ParetoChartView extends PerInstanceChartView {
     this.updateStatus();
   }
 
+  /** Pareto is relevant when there are Pareto cells (non-dominated on accuracy + speed). */
+  protected isRelevant(): boolean {
+    return this.paretoFlags.some((f) => f);
+  }
+
+  protected override updateStatus(): void {
+    const hasData = this.isRelevant();
+    const counts = `${this.records.length} records | ${this.paretoFlags.filter((f) => f).length} Pareto`;
+    const statusEl = this.root.querySelector<HTMLElement>(".chart-status");
+    const emptyState = this.root.querySelector<HTMLElement>(".chart-empty-state");
+    if (statusEl) {
+      statusEl.textContent = hasData ? counts : "No Pareto cells yet";
+      statusEl.title = statusEl.textContent;
+    }
+    if (emptyState) {
+      emptyState.style.display = hasData ? "none" : "flex";
+    }
+  }
+
   refresh(): void {
-    if (!this.plot || this.records.length === 0) return;
+    if (!this.plot || !this.isRelevant()) return;
 
     const xData: number[] = [];
     const yData: number[] = [];
@@ -1526,8 +1545,31 @@ export class AblationChartView extends PerInstanceChartView {
     this.updateStatus();
   }
 
+  /** Ablation is relevant when there are credit-axis ablation groups. */
+  protected isRelevant(): boolean {
+    return this.ablationGroups.some((g) => g.axis === "credit");
+  }
+
+  protected override updateStatus(): void {
+    const hasData = this.isRelevant();
+    const group = this.ablationGroups.find((g) => g.axis === "credit");
+    const counts = group ? `${group.metrics[0]?.arms?.length ?? 0} arms` : "no data";
+    const fixed = this.ablationFixedAxes
+      ? ` | fixed: ${this.ablationFixedAxes}`
+      : "";
+    const statusEl = this.root.querySelector<HTMLElement>(".chart-status");
+    const emptyState = this.root.querySelector<HTMLElement>(".chart-empty-state");
+    if (statusEl) {
+      statusEl.textContent = hasData ? counts + fixed : "No ablation data yet";
+      statusEl.title = statusEl.textContent;
+    }
+    if (emptyState) {
+      emptyState.style.display = hasData ? "none" : "flex";
+    }
+  }
+
   refresh(): void {
-    if (!this.plot || !this.ablationGroups.length) return;
+    if (!this.plot || !this.isRelevant()) return;
 
     const group = this.ablationGroups.find((g) => g.axis === "credit");
     if (!group) return;
@@ -1705,8 +1747,45 @@ export class VariabilityChartView extends PerInstanceChartView {
     this.updateStatus();
   }
 
+  /** Variability is relevant when any credit arm has >1 seed (multi-seed spread). */
+  protected isRelevant(): boolean {
+    const byArm: Record<string, number> = {};
+    for (const r of this.records) {
+      const arm = r.coordinate.credit;
+      const acc = r.payload.val_acc;
+      if (acc !== undefined) {
+        byArm[arm] = (byArm[arm] ?? 0) + 1;
+      }
+    }
+    return Object.values(byArm).some((count) => count > 1);
+  }
+
+  protected override updateStatus(): void {
+    const hasData = this.isRelevant();
+    const byArm: Record<string, number> = {};
+    for (const r of this.records) {
+      const arm = r.coordinate.credit;
+      const acc = r.payload.val_acc;
+      if (acc !== undefined) {
+        byArm[arm] = (byArm[arm] ?? 0) + 1;
+      }
+    }
+    const counts = Object.entries(byArm)
+      .map(([arm, count]) => `${arm}:${count}`)
+      .join(", ");
+    const statusEl = this.root.querySelector<HTMLElement>(".chart-status");
+    const emptyState = this.root.querySelector<HTMLElement>(".chart-empty-state");
+    if (statusEl) {
+      statusEl.textContent = hasData ? `${counts} (multi-seed)` : "No multi-seed data yet";
+      statusEl.title = statusEl.textContent;
+    }
+    if (emptyState) {
+      emptyState.style.display = hasData ? "none" : "flex";
+    }
+  }
+
   refresh(): void {
-    if (!this.plot || !this.records.length) return;
+    if (!this.plot || !this.isRelevant()) return;
 
     // The boxes are drawn by the hook from this.records; the series only
     // carries the arm positions and the axis range.

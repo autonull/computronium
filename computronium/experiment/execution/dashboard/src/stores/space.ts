@@ -1,7 +1,8 @@
-/** SpaceStore — shared cache for space payloads (TODO72 P4).
+/** SpaceStore — shared cache for space payloads (TODO72 P4 / TODO74 P11.0).
 
-One fetch per (runId, axes, values) key; multiple subscribers per key.
+One fetch per (runId, xAxis, yAxis, zAxis) key; multiple subscribers per key.
 Deduplicates in-flight promises so simultaneous views don't trigger parallel fetches.
+Held-axis values are NOT part of the key — they come from the payload.
 */
 
 import { AXIS_NAMES, type AxisName, type SpaceCell, type SpacePayload as CellDataSpacePayload } from "../cell-data.js";
@@ -10,7 +11,7 @@ import type { SpaceStore as SpaceStoreInterface } from "../layout/types.js";
 
 export type SpacePayload = CellDataSpacePayload;
 
-type SpaceKey = string; // "runId|x|y|z|values..."
+type SpaceKey = string; // "runId|x|y|z"
 
 interface CacheEntry {
   data: SpacePayload | null;
@@ -23,32 +24,16 @@ export class SpaceStore implements SpaceStoreInterface {
 
   constructor() {}
 
-  /** Build a cache key from the request parameters. */
-  private makeKey(
-    runId: string,
-    axes: AxisSelection,
-    values: Record<AxisName, string[]>,
-  ): SpaceKey {
-    const valueStr = AXIS_NAMES.map((axis) => values[axis].join(",")).join("|");
-    return `${runId}|${axes.x}|${axes.y}|${axes.z}|${valueStr}`;
+  /** Build a cache key from runId and the three displayed axes only. */
+  private makeKey(runId: string, axes: AxisSelection): SpaceKey {
+    return `${runId}|${axes.x}|${axes.y}|${axes.z}`;
   }
 
   /** Get space payload for a key, returning cached data immediately if available. */
-  get(runId: string, axes: AxisSelection, values: Record<AxisName, string[]>): SpacePayload | null {
-    const key = this.makeKey(runId, axes, values);
+  get(runId: string, axes: AxisSelection, _values: Record<AxisName, string[]>): SpacePayload | null {
+    const key = this.makeKey(runId, axes);
     const entry = this.cache.get(key);
     if (entry?.data) return entry.data;
-    
-    // Fallback: search for any entry matching runId and axes (for initial load with empty values)
-    const isEmptyValues = AXIS_NAMES.every((axis) => !values[axis]?.length);
-    if (isEmptyValues) {
-      for (const entry of this.cache.values()) {
-        if (entry.data && entry.data.run_id === runId && 
-            entry.data.axes.includes(axes.x) && entry.data.axes.includes(axes.y) && entry.data.axes.includes(axes.z)) {
-          return entry.data;
-        }
-      }
-    }
     return null;
   }
 
@@ -56,10 +41,10 @@ export class SpaceStore implements SpaceStoreInterface {
   subscribe(
     runId: string,
     axes: AxisSelection,
-    values: Record<AxisName, string[]>,
+    _values: Record<AxisName, string[]>,
     listener: () => void,
   ): () => void {
-    const key = this.makeKey(runId, axes, values);
+    const key = this.makeKey(runId, axes);
     let entry = this.cache.get(key);
     if (!entry) {
       entry = { data: null, promise: null, listeners: new Set() };
@@ -68,7 +53,7 @@ export class SpaceStore implements SpaceStoreInterface {
     entry.listeners.add(listener);
     // Trigger fetch if we don't have data yet
     if (!entry.data && !entry.promise) {
-      void this.fetch(runId, axes, values);
+      void this.fetch(runId, axes);
     }
     return () => {
       entry!.listeners.delete(listener);
@@ -76,8 +61,8 @@ export class SpaceStore implements SpaceStoreInterface {
   }
 
   /** Set space payload directly (e.g., from WebSocket push if we add one). */
-  set(runId: string, axes: AxisSelection, values: Record<AxisName, string[]>, payload: SpacePayload): void {
-    const key = this.makeKey(runId, axes, values);
+  set(runId: string, axes: AxisSelection, _values: Record<AxisName, string[]>, payload: SpacePayload): void {
+    const key = this.makeKey(runId, axes);
     let entry = this.cache.get(key);
     if (!entry) {
       entry = { data: null, promise: null, listeners: new Set() };
@@ -92,9 +77,8 @@ export class SpaceStore implements SpaceStoreInterface {
   private async fetch(
     runId: string,
     axes: AxisSelection,
-    values: Record<AxisName, string[]>,
   ): Promise<SpacePayload | null> {
-    const key = this.makeKey(runId, axes, values);
+    const key = this.makeKey(runId, axes);
     let entry = this.cache.get(key);
     if (!entry) {
       entry = { data: null, promise: null, listeners: new Set() };
@@ -103,7 +87,7 @@ export class SpaceStore implements SpaceStoreInterface {
     if (entry.promise) {
       return entry.promise;
     }
-    entry.promise = this.doFetch(runId, axes, values);
+    entry.promise = this.doFetch(runId, axes);
     try {
       const data = await entry.promise;
       entry.data = data;
@@ -120,7 +104,6 @@ export class SpaceStore implements SpaceStoreInterface {
   private async doFetch(
     runId: string,
     axes: AxisSelection,
-    values: Record<AxisName, string[]>,
   ): Promise<SpacePayload | null> {
     try {
       const response = await fetch(`/api/cells/${encodeURIComponent(runId)}/space`, {
@@ -163,8 +146,6 @@ export class SpaceStore implements SpaceStoreInterface {
   getMeasuredCount(): number {
     const payload = this.getPayload();
     if (!payload) return 0;
-    // SpacePayload cells are "legal" or "void"; measured status comes from metrics
-    // For debug purposes, return legal count as upper bound
     return payload.counts?.legal ?? 0;
   }
 
@@ -172,7 +153,6 @@ export class SpaceStore implements SpaceStoreInterface {
   getDrawnCount(): number {
     const payload = this.getPayload();
     if (!payload) return 0;
-    // Drawn = all non-void cells
     return payload.counts?.legal ?? 0;
   }
 

@@ -191,6 +191,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, "Cycle Stage View");
   }
 
+  // Preset workspace commands
+  setAction("preset-watch", () => applyPreset("watch"));
+  setAction("preset-audit", () => applyPreset("audit"));
+  setAction("preset-drive", () => applyPreset("drive"));
+  setAction("preset-free", () => applyPreset("free"));
+
   setAction("cell-replicate", () =>
     window.dispatchEvent(new CustomEvent("cell-action-replicate")),
   );

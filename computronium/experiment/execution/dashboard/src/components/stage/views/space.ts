@@ -84,6 +84,14 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     plasticity: [],
     update: [],
   };
+  let heldValues: Record<AxisName, string> = {
+    credit: "",
+    geometry: "",
+    dynamics: "",
+    substrate: "",
+    plasticity: "",
+    update: "",
+  };
 
   function resubscribe(): void {
     metricsUnsub?.();
@@ -261,8 +269,10 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
       return;
     }
 
-    // Update spaceValues from payload for correct cache key on subsequent fetches
+    // spaceValues no longer used for cache key (fixed in SpaceStore), but keep for compatibility
     spaceValues = { ...spaceValues, ...space.values };
+    // Cache held values for coordinateFor()
+    heldValues = { ...space.held ?? {} };
 
     xValues = space.values[axes.x] ?? [];
     yValues = space.values[axes.y] ?? [];
@@ -278,17 +288,21 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
 
     createAxisLabels();
 
+    const space = spaceStore.get(runId!, axes, spaceValues);
+    const cellsByCoord = new Map<string, any>();
+    space?.cells.forEach((c) => {
+      const coordKey = `${c.coordinate[axes.x]}|${c.coordinate[axes.y]}|${c.coordinate[axes.z]}`;
+      cellsByCoord.set(coordKey, c);
+    });
+
     const voidMarkers: number[] = [];
 
     yValues.forEach((yVal: string, yIdx: number) => {
       zValues.forEach((zVal: string, zIdx: number) => {
         xValues.forEach((xVal: string, xIdx: number) => {
           const key = cellKey(xVal, yVal, zVal);
-          const space = spaceStore.get(runId!, axes, spaceValues);
-          const spaceCell = space?.cells.find((c) => {
-            const coord = c.coordinate;
-            return coord[axes.x] === xVal && coord[axes.y] === yVal && coord[axes.z] === zVal;
-          });
+          const coordKey = `${xVal}|${yVal}|${zVal}`;
+          const spaceCell = cellsByCoord.get(coordKey);
           const status = spaceCell?.status ?? "legal";
           const cellData: CellData = {
             coordinate: coordinateFor(xVal, yVal, zVal),
@@ -327,8 +341,7 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     coordinate[axes.z] = zVal;
     AXIS_NAMES.forEach((axis: AxisName) => {
       if (coordinate[axis]) return;
-      const space = spaceStore.get(runId!, axes, spaceValues);
-      const held = space?.held?.[axis];
+      const held = heldValues[axis];
       if (held) coordinate[axis] = held;
     });
     return coordinate;

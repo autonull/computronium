@@ -1,4 +1,4 @@
-/** Layout presets as LayoutSpec (TODO72 P2). */
+/** Layout presets as LayoutSpec (TODO72 P2 / TODO74 P11.1). */
 
 import { dockviewHost } from "./layout/dockview-host.js";
 import type { LayoutNode, LayoutSpec, Size } from "./layout/types.js";
@@ -28,11 +28,20 @@ const leftColumn = (): LayoutNode => ({
   ],
 });
 
-/** Right column: hud + pareto + ablation + variability (clamped 320–400px). */
-const rightColumn = (): LayoutNode => ({
+/** Right column for Audit: HUD only (clamped 320–400px). */
+const rightColumnAudit = (): LayoutNode => ({
   kind: "split",
   direction: "column",
-  // At 1920px: 320px = 16.7%
+  size: { ratio: 0.1667, minPx: 320, maxPx: 400, width: 320, height: 1080 },
+  children: [
+    { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 1, width: 320, height: 1080 } },
+  ],
+});
+
+/** Right column for Drive: HUD + Charts (clamped 320–400px). */
+const rightColumnDrive = (): LayoutNode => ({
+  kind: "split",
+  direction: "column",
   size: { ratio: 0.1667, minPx: 320, maxPx: 400, width: 320, height: 1080 },
   children: [
     { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 270 } },
@@ -41,6 +50,9 @@ const rightColumn = (): LayoutNode => ({
     { kind: "panel", type: "variability-chart", title: "Variability", size: { ratio: 0.25, width: 320, height: 270 } },
   ],
 });
+
+/** Right column for Free: HUD + Charts (same as Drive). */
+const rightColumn = (): LayoutNode => rightColumnDrive();
 
 /** Bottom row: control-bar + caption + live-rail (clamped 120–160px). */
 const bottomRow = (): LayoutNode => ({
@@ -55,9 +67,27 @@ const bottomRow = (): LayoutNode => ({
   ],
 });
 
+const mainRow = (rightCol: LayoutNode): LayoutNode => ({
+  kind: "split",
+  direction: "row",
+  size: { ratio: 0.87, width: 1920, height: 940 },
+  children: [leftColumn(), stage(), rightCol],
+});
+
+const fullLayout = (rightCol: LayoutNode): LayoutNode[] => [
+  {
+    kind: "split",
+    direction: "column",
+    size: { ratio: 1, width: 1920, height: 1080 },
+    children: [mainRow(rightCol), bottomRow()],
+  },
+];
+
 const PRESET_SPECS: Record<Preset, LayoutSpec> = {
   watch: {
     version: 1,
+    // Stage + Legend + Control Panel (left), NO right column
+    // Control Bar + Caption + Live Rail (bottom)
     nodes: [
       {
         kind: "split",
@@ -71,7 +101,6 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
             children: [
               leftColumn(),
               stage(),
-              rightColumn(),
             ],
           },
           bottomRow(),
@@ -81,80 +110,19 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
   },
   audit: {
     version: 1,
-    nodes: [
-      {
-        kind: "split",
-        direction: "column",
-        size: { ratio: 1, width: 1920, height: 1080 },
-        children: [
-          {
-            kind: "split",
-            direction: "row",
-            size: { ratio: 0.87, width: 1920, height: 940 },
-            children: [
-              leftColumn(),
-              stage(),
-              rightColumn(),
-            ],
-          },
-          bottomRow(),
-        ],
-      },
-    ],
+    // Watch + HUD (right column)
+    nodes: fullLayout(rightColumnAudit()),
   },
   drive: {
     version: 1,
-    nodes: [
-      {
-        kind: "split",
-        direction: "column",
-        size: { ratio: 1, width: 1920, height: 1080 },
-        children: [
-          {
-            kind: "split",
-            direction: "row",
-            size: { ratio: 0.87, width: 1920, height: 940 },
-            children: [
-              leftColumn(),
-              stage(),
-              {
-                kind: "split",
-                direction: "column",
-                size: { ratio: 0.1667, minPx: 320, maxPx: 400, width: 320, height: 940 },
-                children: [
-                  { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 320, height: 470 } },
-                  { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 235 } },
-                  { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.25, width: 320, height: 235 } },
-                ],
-              },
-            ],
-          },
-          bottomRow(),
-        ],
-      },
-    ],
+    // Audit + Charts (Pareto, Ablation, Variability) in right column
+    nodes: fullLayout(rightColumnDrive()),
   },
   free: {
     version: 1,
+    // Everything: left + stage + right (HUD + charts) + bottom + floating legend
     nodes: [
-      {
-        kind: "split",
-        direction: "column",
-        size: { ratio: 1, width: 1920, height: 1080 },
-        children: [
-          {
-            kind: "split",
-            direction: "row",
-            size: { ratio: 0.87, width: 1920, height: 940 },
-            children: [
-              leftColumn(),
-              stage(),
-              rightColumn(),
-            ],
-          },
-          bottomRow(),
-        ],
-      },
+      ...fullLayout(rightColumn()),
       {
         kind: "float",
         panel: { kind: "panel", type: "discovery-legend", title: "Discovery Map" },

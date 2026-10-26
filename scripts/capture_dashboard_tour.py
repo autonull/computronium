@@ -289,6 +289,9 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
     page_errors: list[str] = []
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    # Also ensure assets dir exists for preset screenshots referenced by README
+    assets_dir = REPO_ROOT / "docs" / "screenshots" / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
     report = []
 
     with sync_playwright() as playwright:
@@ -328,6 +331,11 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
             # Full dashboard shot
             output_path = output_dir / f"dashboard-{preset}.png"
             full_dashboard_screenshot(page, output_path)
+
+            # Also copy to assets dir for README
+            assets_path = assets_dir / f"dashboard-{preset}.png"
+            import shutil
+            shutil.copy2(output_path, assets_path)
 
             diff = 0.0
             if previous_crop:

@@ -253,6 +253,58 @@ RUN_PROFILES: dict[str, RunProfile] = {
         hyperparameters={"geometry.hidden_dim": Domain(members=(32,))},
         checkpoint_every_n=0,
     ),
+    "quick-run": RunProfile(
+        name="quick-run",
+        description="Dashboard quick-start: diverse cells in ~30s for Pareto/ablation/variability",
+        stages=[
+            "s1_frame",
+            "s2_space",
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+        ],
+        fidelity="L0",
+        n_seeds=1,
+        epochs=1,
+        batch_limit=0,
+        budget_seconds=60.0,
+        task="digits",
+        policy="round_robin_grid",
+        param_budget=MEASURED_PARAM_BUDGET,
+        objectives=("validation_accuracy", "walltime_total"),
+        promotion_threshold=0.5,
+        maturation=False,
+        deep_tier=False,
+        axes=(
+            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
+            AxisSelection(
+                axis=StructuralAxis.GEOMETRY, primitives=("feedforward", "recurrent", "tile")
+            ),
+            AxisSelection(
+                axis=StructuralAxis.DYNAMICS,
+                primitives=("instantaneous", "energy_minimization", "lazy"),
+            ),
+            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null",)),
+            AxisSelection(
+                axis=StructuralAxis.CREDIT,
+                primitives=(
+                    "gradient",
+                    "thermodynamic_contrast",
+                    "random_projections",
+                    "pepita",
+                    "local_goodness",
+                ),
+            ),
+            AxisSelection(
+                axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam", "muon")
+            ),
+        ),
+        hyperparameters={"geometry.hidden_dim": Domain(members=(32,))},
+        checkpoint_every_n=0,
+    ),
 }
 
 

@@ -1,4 +1,4 @@
-/** Simple control bar — play/step/stop, ceiling slider, status. */
+/** Simple control bar — play/step/stop, ceiling slider, status, quick run. */
 
 import { controlStore, type ControlPayload } from "./stores/control.js";
 
@@ -21,6 +21,9 @@ export function createControlBarBody(): string {
       .ctrl .status { min-width: 100px; color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 12px; }
       .ctrl .door { width: 30px; height: 30px; font-size: 14px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; }
       .ctrl .door:hover { background: var(--border); }
+      .ctrl .quick-run { padding: 6px 12px; font-size: 11px; background: var(--gradient)22; border: 1px solid var(--gradient)66; border-radius: 4px; color: var(--gradient); cursor: pointer; }
+      .ctrl .quick-run:hover { background: var(--gradient)33; }
+      .ctrl .quick-run:disabled { opacity: 0.4; cursor: not-allowed; }
     </style>
     <div class="ctrl" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
       <button class="verb primary" data-act="play" title="Play">▶</button>
@@ -39,6 +42,7 @@ export function createControlBarBody(): string {
       </div>
       <div class="sep"></div>
       <span class="status">no run</span>
+      <button class="quick-run" data-act="quick-run" title="Start quick run (diverse cells in ~30s)" disabled>Quick Run</button>
       <button class="door" data-act="panel" title="Control panel">⚙</button>
     </div>
   `;
@@ -56,6 +60,7 @@ export class ControlBarView {
   private readonly cpuFill: HTMLElement;
   private readonly cpuEl: HTMLElement;
   private readonly statusEl: HTMLElement;
+  private readonly quickRunBtn: HTMLButtonElement;
   private readonly unsubscribe: () => void;
 
   constructor(
@@ -72,6 +77,7 @@ export class ControlBarView {
     this.cpuFill = this.query(".cpu-fill");
     this.cpuEl = this.query(".cpu");
     this.statusEl = this.query(".status");
+    this.quickRunBtn = this.query("[data-act=quick-run]");
 
     this.playBtn.addEventListener("click", () => controlStore.togglePlay());
     this.stepBtn.addEventListener("click", () => controlStore.step());
@@ -81,6 +87,7 @@ export class ControlBarView {
     this.slider.addEventListener("change", () =>
       controlStore.setCeiling(Number(this.slider.value)),
     );
+    this.quickRunBtn.addEventListener("click", () => this.startQuickRun());
     this.query("[data-act=panel]").addEventListener("click", openControlPanel);
     this.unsubscribe = controlStore.subscribe((payload) => this.render(payload));
   }
@@ -93,6 +100,39 @@ export class ControlBarView {
     const el = this.root.querySelector<T>(selector);
     if (!el) throw new Error(`[ControlBar] missing element: ${selector}`);
     return el;
+  }
+
+  private async startQuickRun(): Promise<void> {
+    this.quickRunBtn.disabled = true;
+    this.quickRunBtn.textContent = "Starting...";
+    try {
+      const response = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: "quick-run" }),
+      });
+      const result = await response.json();
+      if (result.started) {
+        this.quickRunBtn.textContent = "Started";
+        setTimeout(() => {
+          this.quickRunBtn.textContent = "Quick Run";
+          this.quickRunBtn.disabled = false;
+        }, 2000);
+      } else {
+        this.quickRunBtn.textContent = "No Queue";
+        this.quickRunBtn.title = result.error || "No campaign queue attached";
+        setTimeout(() => {
+          this.quickRunBtn.textContent = "Quick Run";
+          this.quickRunBtn.disabled = false;
+        }, 3000);
+      }
+    } catch {
+      this.quickRunBtn.textContent = "Error";
+      setTimeout(() => {
+        this.quickRunBtn.textContent = "Quick Run";
+        this.quickRunBtn.disabled = false;
+      }, 2000);
+    }
   }
 
   private render(p: ControlPayload | null): void {
@@ -114,8 +154,8 @@ export class ControlBarView {
     this.stepBtn.title = canStep
       ? "Step"
       : c.paused
-        ? "Control plane not readable"
-        : "Run not paused";
+      ? "Control plane not readable"
+      : "Run not paused";
     this.stopBtn.disabled = !p.readable;
     this.playBtn.disabled = !p.readable;
     if (!p.readable) this.playBtn.title = p.error || "control plane unreadable";
@@ -151,5 +191,12 @@ export class ControlBarView {
         ? `${s.stage.replace("s", "S")} · ${s.cells_done} cells`
         : "no run";
     }
+
+    // Enable quick-run button when no run is active or when run is paused
+    const hasActiveRun = p.readable && !!s && !s.stage.includes("idle");
+    this.quickRunBtn.disabled = hasActiveRun && !c.paused;
+    this.quickRunBtn.title = hasActiveRun && !c.paused
+      ? "Pause current run first"
+      : "Start quick run (diverse cells in ~30s)";
   }
 }
