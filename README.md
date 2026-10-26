@@ -2,7 +2,7 @@
 
 # 🌌 Computronium: A Composable Laboratory for Learning Mechanisms
 
-![Computronium Dashboard](docs/readme/assets/dashboard-hero.png)
+![Computronium Dashboard](docs/screenshots/assets/dashboard-hero.png)
 
 *Computronium is a composable laboratory for learning mechanisms. Watch algorithms battle it out under a neutral, pre-registered evaluation protocol.*
 
@@ -819,11 +819,11 @@ uv run comp run demo --store experiment.duckdb     # a campaign to watch
 
 | The whole system | The space, alone | One cell's evidence |
 |---|---|---|
-| ![The dashboard](docs/readme/assets/dashboard-hero.png) | ![The discovery map](docs/readme/assets/dashboard-map.png) | ![A measured cell](docs/readme/assets/panel-legend.png) |
+| ![The dashboard](docs/screenshots/assets/dashboard-hero.png) | ![The discovery map](docs/screenshots/assets/dashboard-map.png) | ![A measured cell](docs/screenshots/assets/panel-legend.png) |
 
 | What the system refuses | The charts | The caption |
 |---|---|---|
-| ![A void cell](docs/readme/assets/panel-legend.png) | ![The Pareto chart](docs/readme/assets/panel-pareto.png) | ![The caption](docs/readme/assets/panel-caption.png) |
+| ![A void cell](docs/screenshots/assets/panel-legend.png) | ![The Pareto chart](docs/screenshots/assets/panel-pareto.png) | ![The caption](docs/screenshots/assets/panel-caption.png) |
 
 And the dashboard is an instrument, not a picture: the verbs at the bottom of
 the screen reach the run itself, through a control plane the run in another
@@ -832,11 +832,11 @@ the legend's toolbar holds every view of the stage at once:
 
 | The control bar | The control panel | Mission Control | Discovery Legend |
 |---|---|---|---|
-| ![The control bar](docs/readme/assets/panel-control-bar.png) | ![The control panel](docs/readme/assets/panel-control-panel.png) | ![Mission Control](docs/readme/assets/panel-hud.png) | ![Discovery Legend](docs/readme/assets/panel-legend.png) |
+| ![The control bar](docs/screenshots/assets/panel-control-bar.png) | ![The control panel](docs/screenshots/assets/panel-control-panel.png) | ![Mission Control](docs/screenshots/assets/panel-hud.png) | ![Discovery Legend](docs/screenshots/assets/panel-legend.png) |
 
 | Pareto | Ablation | Variability | Live Rail | Caption |
 |---|---|---|---|---|
-| ![Pareto](docs/readme/assets/panel-pareto.png) | ![Ablation](docs/readme/assets/panel-ablation.png) | ![Variability](docs/readme/assets/panel-variability.png) | ![Live Rail](docs/readme/assets/panel-live-rail.png) | ![Caption](docs/readme/assets/panel-caption.png) |
+| ![Pareto](docs/screenshots/assets/panel-pareto.png) | ![Ablation](docs/screenshots/assets/panel-ablation.png) | ![Variability](docs/screenshots/assets/panel-variability.png) | ![Live Rail](docs/screenshots/assets/panel-live-rail.png) | ![Caption](docs/screenshots/assets/panel-caption.png) |
 
 Play and pause the run, step it one batch at a time, move the ceiling on the
 cells in flight at once, and start a run from nothing — all of it from the
@@ -845,7 +845,7 @@ browser, and all of it reaching the run rather than a picture of it.
 **Workspaces** — four named arrangements, one switch:
 | Watch | Audit | Drive | Free |
 |---|---|---|---|
-| ![Watch](docs/readme/assets/dashboard-watch.png) | ![Audit](docs/readme/assets/dashboard-audit.png) | ![Drive](docs/readme/assets/dashboard-drive.png) | ![Free](docs/readme/assets/dashboard-free.png) |
+| ![Watch](docs/screenshots/assets/dashboard-watch.png) | ![Audit](docs/screenshots/assets/dashboard-audit.png) | ![Drive](docs/screenshots/assets/dashboard-drive.png) | ![Free](docs/screenshots/assets/dashboard-free.png) |
 
 The canvas is a stage, and the view is a choice: `V` cycles the views, the
 number keys pick one — and a view that does not fit in the numbers has a
