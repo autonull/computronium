@@ -1,6 +1,6 @@
 ## The dashboard, in pictures
 
-The live dashboard is a three.js application that watches a campaign and shows
+The live dashboard is a Dockview-powered application that watches a campaign and shows
 what it is doing: the space it is searching, the cells it has measured, the
 cells the system refuses, and the charts the evidence draws. Its canvas is a
 stage: the same run can be seen as a space, a terrain, a frontier, a matrix, a
@@ -15,11 +15,11 @@ uv run comp run demo --store experiment.duckdb     # a campaign to watch
 
 | The whole system | The space, alone | One cell's evidence |
 |---|---|---|
-| ![The dashboard](docs/readme/assets/dashboard-hero.png) | ![The discovery map](docs/readme/assets/dashboard-map.png) | ![A measured cell](docs/screenshots/tour/stage-space.png) |
+| ![The dashboard](docs/readme/assets/dashboard-hero.png) | ![The discovery map](docs/readme/assets/dashboard-map.png) | ![A measured cell](docs/readme/assets/panel-legend.png) |
 
 | What the system refuses | The charts | The caption |
 |---|---|---|
-| ![A void cell](docs/screenshots/tour/stage-space.png) | ![The Pareto chart](docs/readme/assets/panel-pareto.png) | ![The caption](docs/readme/assets/panel-caption.png) |
+| ![A void cell](docs/readme/assets/panel-legend.png) | ![The Pareto chart](docs/readme/assets/panel-pareto.png) | ![The caption](docs/readme/assets/panel-caption.png) |
 
 And the dashboard is an instrument, not a picture: the verbs at the bottom of
 the screen reach the run itself, through a control plane the run in another
@@ -78,17 +78,6 @@ letter of its own — and the legend names the view that is on.
 ---
 
 *All stage view images above are live captures from the Dockview-migrated dashboard (TODO73), cropped to the stage panel. Full dashboard workspace shots are the four presets above (Watch, Audit, Drive, Free).*
-
----
-
-**Legacy system captures** (not yet re-captured after Dockview migration):
-
-- Report views: `report-run.png`, `console-dashboard.png`, `narration-script.png`
-- Figure gallery: `figure-seed-violins.png`, `figure-gallery-swap-credit.png`, `figure-gallery-epc-settle.png`, `figure-gallery-coverage.png`, `figure-gallery-failures.png`
-- Report plots: `report-pareto.png`, `report-seed-stability.png`
-- Coverage/catalogue: `coverage-report.png`, `catalog.png`, `method-cards.png`, `power-analysis.png`
-
-These will be regenerated in a follow-up capture pass.
 
 See [the dashboard guide](docs/DASHBOARD.md) for the endpoints, the keyboard
 shortcuts, and how the pictures are made.
