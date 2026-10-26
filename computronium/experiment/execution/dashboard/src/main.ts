@@ -1,8 +1,8 @@
 /** Three.js Dashboard Main Entry Point (TODO73 P10 — Dockview migration). */
 
+import "dockview/dist/styles/dockview.css";
 import "./palette.css";
 import "./dashboard.css";
-import "dockview/dist/styles/dockview.css";
 import { router, wsClient } from "./ws-client.js";
 import { registry } from "./components/registry.js";
 import { helpOverlay } from "./help-overlay.js";

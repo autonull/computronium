@@ -374,8 +374,12 @@ export class Menubar implements Component {
   async init(): Promise<void> {
     injectMenubarStyles();
 
-    this.container = document.createElement("div");
-    this.container.id = "menubar-container";
+    // Use the existing placeholder from index.html
+    this.container = document.getElementById("menubar-container");
+    if (!this.container) {
+      console.error("[Menubar] #menubar-container not found in HTML");
+      return;
+    }
     this.container.style.cssText = `
       position: fixed;
       top: 0;
@@ -450,8 +454,6 @@ export class Menubar implements Component {
     this.dialogRoot = document.createElement("div");
     this.dialogRoot.id = "menubar-dialog-root";
     this.container.appendChild(this.dialogRoot);
-
-    document.body.appendChild(this.container);
 
     // Cache elements
     this.dbLabel = this.container.querySelector("#menubar-db-label");

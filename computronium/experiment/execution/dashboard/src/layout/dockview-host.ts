@@ -1,6 +1,7 @@
 /** Dockview layout host — the only file that imports Dockview (TODO72 P2). */
 
-import { createDockview, type DockviewApi, type IDockviewPanel, type IContentRenderer, type ITabRenderer, type IWatermarkRenderer, type AddPanelOptions, type AddPanelPositionOptions, type DockviewComponentOptions, type SerializedDockview, type Parameters, type DockviewPanelApi, type GroupPanelPartInitParameters, type TabPartInitParameters, type WatermarkRendererInitParameters, themeDark } from "dockview";
+import { createDockview, type DockviewApi, type IDockviewPanel, type IContentRenderer, type ITabRenderer, type IWatermarkRenderer, type AddPanelOptions, type AddPanelPositionOptions, type DockviewComponentOptions, type SerializedDockview, type Parameters, type DockviewPanelApi, type GroupPanelPartInitParameters, type TabPartInitParameters, type WatermarkRendererInitParameters, type GroupviewPanelState, type SerializedGridObject, type SerializedFloatingGroup, Orientation, themeDark } from "dockview";
+import type { GroupPanelViewState } from "dockview-core/dist/cjs/dockview/dockviewGroupPanelModel.js";
 
 import * as THREE from "three";
 
@@ -611,8 +612,8 @@ export class DockviewHost implements LayoutHost {
   }
 
   /** Compute initial pixel size from Size spec (ratio/px/minPx/maxPx). */
-  private computeInitialSize(size: Size | undefined, containerWidth: number, containerHeight: number): { width?: number; height?: number } {
-    if (!size) return {};
+  private computeInitialSize(size: Size | undefined, containerWidth: number, containerHeight: number): Size {
+    if (!size) return { width: 320, height: 240 };
     if (size.px !== undefined) {
       return { width: size.px, height: size.px };
     }
@@ -630,7 +631,7 @@ export class DockviewHost implements LayoutHost {
       }
       return { width: Math.round(width), height: Math.round(height) };
     }
-    return { width: size.width, height: size.height };
+    return { width: size.width ?? 320, height: size.height ?? 240 };
   }
 
   async open(
@@ -777,88 +778,191 @@ export class DockviewHost implements LayoutHost {
       }
       this.instances.clear();
     }
-    // Level-order: build all leaf panels first, then recurse into splits
-    await this.buildLevelOrder(spec.nodes);
+    // Convert LayoutSpec to Dockview serialized format and load via fromJSON
+    const serialized = this.specToDockviewJson(spec);
+    this.api.fromJSON(serialized);
   }
 
-  /** Build layout using level-order traversal to preserve nesting. */
-  private async buildLevelOrder(nodes: LayoutNode[]): Promise<void> {
-    // First pass: create all panels at the current level (leaves and tabs)
-    const leafPanels: Array<{ node: LayoutNode; position?: AddPanelPositionOptions }> = [];
-    const splits: Extract<LayoutNode, { kind: "split" }>[] = [];
+  /** Convert engine-neutral LayoutSpec to Dockview's SerializedDockview format. */
+  private specToDockviewJson(spec: LayoutSpec): SerializedDockview {
+    const self = this;
+    const panels: Record<string, GroupviewPanelState> = {};
+    const groups: GroupPanelViewState[] = [];
+    let panelCounter = 0;
+    let groupCounter = 0;
 
-    for (const node of nodes) {
-      if (node.kind === "panel") {
-        leafPanels.push({ node, position: undefined });
-      } else if (node.kind === "tabs") {
-        // Tabs are leaves at this level — create all panels in the tab group
-        leafPanels.push({ node, position: undefined });
-      } else if (node.kind === "float") {
-        leafPanels.push({ node, position: undefined });
+    function newPanelId(): string {
+      return `panel-${++panelCounter}`;
+    }
+    function newGroupId(): string {
+      return `group-${++groupCounter}`;
+    }
+
+    // Create a panel and return its ID
+    function createPanel(node: Extract<LayoutNode, { kind: "panel" }>): string {
+      const id = newPanelId();
+      const definition = getDefinition(node.type);
+      const resolvedState = definition ? resolveState(definition, node.state ?? {}) : node.state ?? {};
+      const containerWidth = 1920;
+      const containerHeight = 1080;
+      const initialSize = self.computeInitialSizeForSpec(node.size, containerWidth, containerHeight);
+
+      panels[id] = {
+        id,
+        contentComponent: node.type,
+        title: node.title ?? definition?.title ?? node.type,
+        params: jsonToParams(resolvedState),
+        minimumWidth: initialSize.width,
+        minimumHeight: initialSize.height,
+        maximumWidth: initialSize.width,
+        maximumHeight: initialSize.height,
+      };
+      return id;
+    }
+
+    // Create a group (tab group) from panel IDs
+    function createGroup(panelIds: string[], activeIndex = 0): GroupPanelViewState {
+      const id = newGroupId();
+      const group: GroupPanelViewState = {
+        id,
+        views: panelIds,
+        activeView: panelIds[activeIndex],
+        locked: false,
+        hideHeader: false,
+        headerPosition: "top",
+        skipSetActive: false,
+        constraints: {},
+      };
+      groups.push(group);
+      return group;
+    }
+
+    // Recursively build the grid tree
+    // Returns SerializedGridObject<GroupPanelViewState>
+    function buildGrid(node: LayoutNode): SerializedGridObject<GroupPanelViewState> | null {
+      switch (node.kind) {
+        case "panel": {
+          const panelId = createPanel(node);
+          const group = createGroup([panelId]);
+          return { type: "leaf", data: group, size: 1, visible: true };
+        }
+        case "tabs": {
+          const panelIds = node.panels.map((child) => {
+            if (child.kind !== "panel") return null;
+            return createPanel(child);
+          }).filter(Boolean) as string[];
+          if (panelIds.length === 0) return null;
+          const group = createGroup(panelIds, node.active ?? 0);
+          return { type: "leaf", data: group, size: 1, visible: true };
+        }
+        case "split": {
+          const children = node.children.map((child) => buildGrid(child)).filter(Boolean) as SerializedGridObject<GroupPanelViewState>[];
+          if (children.length === 0) return null;
+          if (children.length === 1) return children[0];
+          return {
+            type: "branch",
+            data: children,
+            size: 1,
+            visible: true,
+          };
+        }
+        case "float": {
+          // Floating panels are handled separately in floatingGroups
+          const panelNode = node.panel as Extract<LayoutNode, { kind: "panel" }>;
+          const panelId = createPanel(panelNode);
+          panels[panelId].minimumWidth = node.rect.width;
+          panels[panelId].minimumHeight = node.rect.height;
+          // For floating, we don't add to grid tree
+          return null;
+        }
+      }
+    }
+
+    // Build all top-level nodes
+    const topLevelNodes = spec.nodes.map((node) => buildGrid(node)).filter(Boolean) as SerializedGridObject<GroupPanelViewState>[];
+
+    // Build grid root - implicit vertical stack
+    let root: SerializedGridObject<GroupPanelViewState>;
+    if (topLevelNodes.length === 1) {
+      root = topLevelNodes[0];
+    } else {
+      root = { type: "branch", data: topLevelNodes, size: 1, visible: true };
+    }
+
+    // Collect floating panels
+    const floatingGroups: SerializedFloatingGroup[] = [];
+    for (const node of spec.nodes) {
+      collectFloats(node);
+    }
+
+    function collectFloats(node: LayoutNode): void {
+      if (node.kind === "float") {
+        const panelNode = node.panel as Extract<LayoutNode, { kind: "panel" }>;
+        // Find the panel we created for this float
+        const panelId = Object.entries(panels).find(([, p]) => p.contentComponent === panelNode.type && p.title === (panelNode.title ?? panelNode.type))?.[0];
+        if (panelId) {
+          floatingGroups.push({
+            data: {
+              id: newGroupId(),
+              views: [panelId],
+              activeView: panelId,
+              locked: false,
+              hideHeader: false,
+              headerPosition: "top",
+              skipSetActive: false,
+              constraints: {},
+            },
+            position: {
+              top: node.rect.y,
+              left: node.rect.x,
+              width: node.rect.width,
+              height: node.rect.height,
+            },
+          });
+        }
       } else if (node.kind === "split") {
-        splits.push(node);
+        node.children.forEach(collectFloats);
+      } else if (node.kind === "tabs") {
+        node.panels.forEach(collectFloats);
       }
     }
 
-    // Create leaf panels and tabs
-    let anchor: string | undefined;
-    for (const { node, position } of leafPanels) {
-      const id = await this.addNode(node, anchor ? { referencePanel: anchor, direction: "within" } : position);
-      anchor ??= id;
-    }
-
-    // Recurse into splits
-    for (const split of splits) {
-      await this.buildLevelOrder(split.children);
-    }
+    return {
+      grid: {
+        root,
+        width: 1920,
+        height: 1080,
+        orientation: Orientation.VERTICAL,
+      },
+      panels,
+      activeGroup: groups[0]?.id,
+      floatingGroups,
+      popoutGroups: [],
+      edgeGroups: {},
+    };
   }
 
-  private async addNode(
-    node: LayoutNode,
-    position?: AddPanelPositionOptions,
-  ): Promise<string> {
-    switch (node.kind) {
-      case "float": {
-        const panel = node.panel;
-        if (panel.kind !== "panel") return this.addNode(panel, position);
-        return this.open(panel.type, panel.state, {
-          title: panel.title,
-          size: { width: node.rect.width, height: node.rect.height },
-          float: true,
-        });
-      }
-      case "tabs": {
-        let anchor: string | undefined;
-        for (const child of node.panels) {
-          const id = await this.addNode(
-            child,
-            anchor ? { referencePanel: anchor, direction: "within" } : position,
-          );
-          anchor ??= id;
-        }
-        return anchor!;
-      }
-      case "split": {
-        // Splits are handled by buildLevelOrder recursion
-        // This case should not be reached directly
-        let anchor: string | undefined;
-        for (const child of node.children) {
-          const id = await this.addNode(
-            child,
-            anchor
-              ? {
-                  referencePanel: anchor,
-                  direction: node.direction === "row" ? "right" : "below",
-                }
-              : position,
-          );
-          anchor ??= id;
-        }
-        return anchor!;
-      }
-      case "panel":
-        return this.open(node.type, node.state, { title: node.title, size: node.size }, position);
+  /** Compute initial size from Size spec for serialization. */
+  private computeInitialSizeForSpec(size: Size | undefined, containerWidth: number, containerHeight: number): Size {
+    if (!size) return { width: 320, height: 240 };
+    if (size.px !== undefined) {
+      return { width: size.px, height: size.px };
     }
+    if (size.ratio !== undefined) {
+      const ratio = Math.max(0, Math.min(1, size.ratio));
+      let width = containerWidth * ratio;
+      let height = containerHeight * ratio;
+      if (size.minPx !== undefined) {
+        width = Math.max(width, size.minPx);
+        height = Math.max(height, size.minPx);
+      }
+      if (size.maxPx !== undefined) {
+        width = Math.min(width, size.maxPx);
+        height = Math.min(height, size.maxPx);
+      }
+      return { width: Math.round(width), height: Math.round(height) };
+    }
+    return { width: size.width ?? 320, height: size.height ?? 240 };
   }
 
   onChange(cb: (doc: LayoutDocument) => void): () => void {
