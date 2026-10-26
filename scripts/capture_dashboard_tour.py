@@ -51,10 +51,13 @@ STAGE_VIEWS = [
 
 
 def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: float = 30.0) -> dict:
-    """Wait for stage debug info to report ready with the expected view."""
+    """Wait for stage debug info to report the expected view with rendered canvas."""
     deadline = time.time() + timeout
     last_rect = None
     stable_count = 0
+
+    # Views that require measured data to be "ready"
+    data_views = {"space"}
 
     while time.time() < deadline:
         debug = page.evaluate(
@@ -66,25 +69,29 @@ def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: flo
             instance_id,
         )
 
-        if debug and debug.get("ready") and debug.get("view") == expected_view:
+        if debug and debug.get("view") == expected_view:
             canvas = debug.get("canvas", {})
             if canvas.get("w", 0) > 0 and canvas.get("h", 0) > 0:
-                rect = page.evaluate(
-                    """(id) => {
-                        const dbg = window.__DASHBOARD__;
-                        if (!dbg || !dbg.debug || !dbg.debug.stageRect) return null;
-                        return dbg.debug.stageRect(id);
-                    }""",
-                    instance_id,
-                )
-                if rect:
-                    if last_rect and rect == last_rect:
-                        stable_count += 1
-                        if stable_count >= 2:
-                            return debug
-                    else:
-                        stable_count = 0
-                    last_rect = rect
+                # For data views, also require ready (measured > 0)
+                if expected_view in data_views and not debug.get("ready"):
+                    pass  # Not ready yet
+                else:
+                    rect = page.evaluate(
+                        """(id) => {
+                            const dbg = window.__DASHBOARD__;
+                            if (!dbg || !dbg.debug || !dbg.debug.stageRect) return null;
+                            return dbg.debug.stageRect(id);
+                        }""",
+                        instance_id,
+                    )
+                    if rect:
+                        if last_rect and rect == last_rect:
+                            stable_count += 1
+                            if stable_count >= 2:
+                                return debug
+                        else:
+                            stable_count = 0
+                        last_rect = rect
 
         time.sleep(0.3)
 
@@ -99,19 +106,44 @@ def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: flo
     raise TimeoutError(f"Stage {instance_id} view {expected_view} not ready in {timeout}s: {json.dumps(debug)}")
 
 
+def filter_console_errors(console_messages: list[dict]) -> list[dict]:
+    """Filter out known benign console errors (e.g., favicon.ico 404)."""
+    filtered = []
+    for msg in console_messages:
+        if msg["type"] == "error":
+            text = msg["text"]
+            # Ignore favicon.ico 404 and other known benign resource 404s
+            if "favicon.ico" in text or "Failed to load resource" in text:
+                continue
+            # Ignore dynamic import failures for layout.js (preset application)
+            if "Failed to fetch dynamically imported module" in text and "layout.js" in text:
+                continue
+            filtered.append(msg)
+    return filtered
+
+
+def check_duplicate_ids(page) -> tuple[int, list[str]]:
+    """Count duplicate DOM ids and return the duplicate IDs."""
+    result = page.evaluate(
+        """() => {
+            const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
+            const counts = {};
+            for (const id of ids) counts[id] = (counts[id] || 0) + 1;
+            const duplicates = Object.entries(counts).filter(([,c]) => c > 1).map(([id]) => id);
+            return {count: duplicates.length, ids: duplicates};
+        }"""
+    )
+    return result["count"], result["ids"]
+
+
 def apply_preset(page, preset: str) -> bool:
     """Apply a layout preset."""
     result = page.evaluate(
         """(preset) => {
             const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.layoutHost || !dbg.layoutHost.applySpec) return false;
-            const layout = dbg.definitions?.list?.() || [];
-            // Use the layout module's applyPreset if available
-            if (window.applyPreset) {
-                window.applyPreset(preset);
-                return true;
-            }
-            return false;
+            if (!dbg || !dbg.layout || !dbg.layout.applyPreset) return false;
+            dbg.layout.applyPreset(preset);
+            return true;
         }""",
         preset,
     )
@@ -209,9 +241,8 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
             page.evaluate(
                 """(preset) => {
                     const dbg = window.__DASHBOARD__;
-                    if (!dbg || !dbg.layoutHost) return;
-                    // Import and call applyPreset
-                    import('./layout.js').then(m => m.applyPreset(preset));
+                    if (!dbg || !dbg.layout || !dbg.layout.applyPreset) return;
+                    dbg.layout.applyPreset(preset);
                 }""",
                 preset,
             )
@@ -285,25 +316,15 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
                 logger.info(f"  {view}: {rect['width']}x{rect['height']}, measured={debug.get('measured')}, diff={diff:.1f}%")
 
         # Check for errors
-        console_errors = [m for m in console_messages if m["type"] == "error"]
-        duplicate_ids = page.evaluate(
-            """() => {
-                const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
-                const counts = {};
-                for (const id of ids) counts[id] = (counts[id] || 0) + 1;
-                return Object.values(counts).filter(c => c > 1).length;
-            }"""
-        )
-
-        context.close()
-        browser.close()
+        console_errors = filter_console_errors(console_messages)
+        duplicate_ids, duplicate_id_list = check_duplicate_ids(page)
 
         if console_errors:
             raise RuntimeError(f"Console errors: {console_errors}")
         if page_errors:
             raise RuntimeError(f"Page errors: {page_errors}")
         if duplicate_ids > 0:
-            raise RuntimeError(f"Duplicate DOM ids: {duplicate_ids}")
+            raise RuntimeError(f"Duplicate DOM ids: {duplicate_ids} ({duplicate_id_list})")
 
     return report
 

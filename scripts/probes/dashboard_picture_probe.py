@@ -333,19 +333,58 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                     """(id) => {
                         const dbg = window.__DASHBOARD__;
                         if (!dbg || !dbg.debug) return false;
-                        const rect = dbg.debug.stageRect ? dbg.debug.stageRect(id) : null;
-                        if (!rect) return false;
-                        const canvas = document.querySelector(`[data-instance-id="${id}"] canvas`);
+                        const api = dbg.layoutHost?.getApi?.();
+                        if (!api) return false;
+                        const panel = api.getPanel(id);
+                        if (!panel) return false;
+                        const contentEl = panel.view.content.element;
+                        const canvas = contentEl.querySelector("canvas");
                         if (!canvas) return false;
-                        const ctx = canvas.getContext('2d');
-                        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                        // Check if all pixels are background color (0x0a0e14 = 10,14,20)
-                        let nonBg = 0;
-                        for (let i = 0; i < data.length; i += 4) {
-                            if (data[i] !== 10 || data[i+1] !== 14 || data[i+2] !== 20) {
-                                nonBg++;
-                                if (nonBg > 100) return true;
+                        // Try to get Three.js renderer from canvas
+                        const canvasWithRefs = canvas;
+                        const renderer = canvasWithRefs.__three_renderer;
+                        if (renderer) {
+                            const gl = renderer.getContext();
+                            if (gl) {
+                                const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+                                gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                                // Check if all pixels are background color (0x0a0e14 = 10,14,20)
+                                let nonBg = 0;
+                                for (let i = 0; i < pixels.length; i += 4) {
+                                    if (pixels[i] !== 10 || pixels[i+1] !== 14 || pixels[i+2] !== 20) {
+                                        nonBg++;
+                                        if (nonBg > 100) return true;
+                                    }
+                                }
+                                return false;
                             }
+                        }
+                        // Fallback to WebGL context
+                        const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
+                        if (gl) {
+                            const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+                            gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                            let nonBg = 0;
+                            for (let i = 0; i < pixels.length; i += 4) {
+                                if (pixels[i] !== 10 || pixels[i+1] !== 14 || pixels[i+2] !== 20) {
+                                    nonBg++;
+                                    if (nonBg > 100) return true;
+                                }
+                            }
+                            return false;
+                        }
+                        // Fallback to 2D context
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                            let nonBg = 0;
+                            for (let i = 0; i < data.length; i += 4) {
+                                if (data[i] !== 10 || data[i+1] !== 14 || data[i+2] !== 20) {
+                                    nonBg++;
+                                    if (nonBg > 100) return true;
+                                }
+                            }
+                            return false;
                         }
                         return false;
                     }""",

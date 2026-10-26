@@ -22,10 +22,10 @@
     "geometry": {
       "stage": {
         "x": 300,
-        "y": 28,
+        "y": 54,
         "width": 1300,
-        "height": 915,
-        "top": 28,
+        "height": 889,
+        "top": 54,
         "right": 1600,
         "bottom": 943,
         "left": 300
@@ -42,22 +42,46 @@
       },
       "leftWidth": 300,
       "rightWidth": 320,
-      "bottomHeight": 137,
+      "bottomHeight": 111,
       "leftCount": 2,
       "rightCount": 4,
       "bottomCount": 3,
       "stage_pct_w": 67.70833333333334,
-      "stage_pct_h": 86.97718631178707,
+      "stage_pct_h": 84.50570342205323,
       "stage_ge_60x55": true,
       "left_in_range": true,
       "right_in_range": true,
       "bottom_in_range": true
     },
     "stage": {
+      "ready": true,
+      "measured": 4,
+      "view": "space",
+      "canvas": {
+        "w": 1300,
+        "h": 889,
+        "dpr": 1
+      },
+      "rect": {
+        "x": 300,
+        "y": 54,
+        "width": 1300,
+        "height": 889,
+        "top": 54,
+        "right": 1600,
+        "bottom": 943,
+        "left": 300
+      },
+      "aspect": 1.4623172103487063,
+      "expected_aspect": 1.4623172103487063,
+      "aspect_ok": true,
+      "canvas_matches_rect_dpr": true,
+      "height_equals_panel": true,
+      "crop_differs_bg": true,
       "two_stages_distinct": {
-        "distinct": false,
-        "view1": null,
-        "view2": null
+        "distinct": true,
+        "view1": "space",
+        "view2": "ledger"
       }
     },
     "grid": {
@@ -82,20 +106,20 @@
       "watch": {
         "rect1": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
         },
         "rect2": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
@@ -105,20 +129,20 @@
       "audit": {
         "rect1": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
         },
         "rect2": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
@@ -128,20 +152,20 @@
       "drive": {
         "rect1": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
         },
         "rect2": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
@@ -151,20 +175,20 @@
       "free": {
         "rect1": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
         },
         "rect2": {
           "x": 300,
-          "y": 28,
+          "y": 54,
           "width": 1300,
-          "height": 915,
-          "top": 28,
+          "height": 889,
+          "top": 54,
           "right": 1600,
           "bottom": 943,
           "left": 300
@@ -205,10 +229,10 @@
     "geometry": {
       "stage": {
         "x": 225,
-        "y": 28,
+        "y": 54,
         "width": 975,
-        "height": 759,
-        "top": 28,
+        "height": 733,
+        "top": 54,
         "right": 1200,
         "bottom": 787,
         "left": 225
@@ -225,22 +249,46 @@
       },
       "leftWidth": 225,
       "rightWidth": 240,
-      "bottomHeight": 113,
+      "bottomHeight": 87,
       "leftCount": 2,
       "rightCount": 4,
       "bottomCount": 3,
       "stage_pct_w": 67.70833333333334,
-      "stage_pct_h": 87.04128440366972,
+      "stage_pct_h": 84.05963302752293,
       "stage_ge_60x55": true,
       "left_in_range": false,
       "right_in_range": false,
-      "bottom_in_range": true
+      "bottom_in_range": false
     },
     "stage": {
+      "ready": true,
+      "measured": 4,
+      "view": "space",
+      "canvas": {
+        "w": 975,
+        "h": 733,
+        "dpr": 1
+      },
+      "rect": {
+        "x": 225,
+        "y": 54,
+        "width": 975,
+        "height": 733,
+        "top": 54,
+        "right": 1200,
+        "bottom": 787,
+        "left": 225
+      },
+      "aspect": 1.330150068212824,
+      "expected_aspect": 1.330150068212824,
+      "aspect_ok": true,
+      "canvas_matches_rect_dpr": true,
+      "height_equals_panel": true,
+      "crop_differs_bg": true,
       "two_stages_distinct": {
-        "distinct": false,
-        "view1": null,
-        "view2": null
+        "distinct": true,
+        "view1": "space",
+        "view2": "ledger"
       }
     },
     "grid": {
@@ -265,20 +313,20 @@
       "watch": {
         "rect1": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
         },
         "rect2": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
@@ -288,20 +336,20 @@
       "audit": {
         "rect1": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
         },
         "rect2": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
@@ -311,20 +359,20 @@
       "drive": {
         "rect1": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
         },
         "rect2": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
@@ -334,20 +382,20 @@
       "free": {
         "rect1": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
         },
         "rect2": {
           "x": 225,
-          "y": 28,
+          "y": 54,
           "width": 975,
-          "height": 759,
-          "top": 28,
+          "height": 733,
+          "top": 54,
           "right": 1200,
           "bottom": 787,
           "left": 225
@@ -388,10 +436,10 @@
     "geometry": {
       "stage": {
         "x": 160,
-        "y": 28,
+        "y": 54,
         "width": 693,
-        "height": 640,
-        "top": 28,
+        "height": 614,
+        "top": 54,
         "right": 853,
         "bottom": 668,
         "left": 160
@@ -408,22 +456,46 @@
       },
       "leftWidth": 160,
       "rightWidth": 171,
-      "bottomHeight": 100,
+      "bottomHeight": 74,
       "leftCount": 2,
       "rightCount": 4,
       "bottomCount": 3,
       "stage_pct_w": 67.67578125,
-      "stage_pct_h": 86.48648648648648,
+      "stage_pct_h": 82.97297297297297,
       "stage_ge_60x55": true,
       "left_in_range": false,
       "right_in_range": false,
       "bottom_in_range": false
     },
     "stage": {
+      "ready": true,
+      "measured": 4,
+      "view": "space",
+      "canvas": {
+        "w": 693,
+        "h": 614,
+        "dpr": 1
+      },
+      "rect": {
+        "x": 160,
+        "y": 54,
+        "width": 693,
+        "height": 614,
+        "top": 54,
+        "right": 853,
+        "bottom": 668,
+        "left": 160
+      },
+      "aspect": 1.1286644951140066,
+      "expected_aspect": 1.1286644951140066,
+      "aspect_ok": true,
+      "canvas_matches_rect_dpr": true,
+      "height_equals_panel": true,
+      "crop_differs_bg": true,
       "two_stages_distinct": {
-        "distinct": false,
-        "view1": null,
-        "view2": null
+        "distinct": true,
+        "view1": "space",
+        "view2": "ledger"
       }
     },
     "grid": {
@@ -448,20 +520,20 @@
       "watch": {
         "rect1": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160
         },
         "rect2": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160
@@ -471,20 +543,20 @@
       "audit": {
         "rect1": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160
         },
         "rect2": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160
@@ -494,20 +566,20 @@
       "drive": {
         "rect1": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160
         },
         "rect2": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160
@@ -517,20 +589,20 @@
       "free": {
         "rect1": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160
         },
         "rect2": {
           "x": 160,
-          "y": 28,
+          "y": 54,
           "width": 693,
-          "height": 640,
-          "top": 28,
+          "height": 614,
+          "top": 54,
           "right": 853,
           "bottom": 668,
           "left": 160

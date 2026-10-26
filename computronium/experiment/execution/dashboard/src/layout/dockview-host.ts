@@ -995,14 +995,14 @@ export class DockviewHost implements LayoutHost {
     if (!panel) return null;
     if (panel.view.contentComponent !== "stage") return null;
 
-    const params = (panel.api.getParameters() ?? {}) as Record<string, unknown>;
     const instance = this.instances.get(instanceId);
     const view = instance?.stageHandle
       ? stageInstances.get(instanceId)
       : null;
 
-    const groupElement = panel.api.group.element;
-    const canvas = groupElement.querySelector("canvas") as HTMLCanvasElement | null;
+    // Use the panel's content element (excludes tab bar)
+    const contentElement = panel.view.content.element;
+    const canvas = contentElement.querySelector("canvas") as HTMLCanvasElement | null;
     const canvasWithRefs = canvas as HTMLCanvasElement & { __three_renderer?: THREE.WebGLRenderer; __three_camera?: THREE.PerspectiveCamera };
     const renderer = canvasWithRefs.__three_renderer;
     const camera = canvasWithRefs.__three_camera;
@@ -1021,10 +1021,13 @@ export class DockviewHost implements LayoutHost {
       cameraAspect = camera.aspect;
     }
 
+    // Get view from instance meta state (updated via onDidParametersChange)
+    const viewFromState = (instance?.meta.state as Record<string, unknown>)?.view as string | null;
+
     return {
       ready: view?.ready() ?? false,
       measured: view?.getMeasuredCells?.() ?? 0,
-      view: params.view as string | null,
+      view: viewFromState,
       drawnGrid: undefined,
       canvas: canvasInfo,
       cameraAspect,

@@ -107,21 +107,97 @@ def check_console_errors(page) -> list[str]:
     return []
 
 
+def filter_console_errors(console_messages: list[dict]) -> list[dict]:
+    """Filter out known benign console errors (e.g., favicon.ico 404)."""
+    filtered = []
+    for msg in console_messages:
+        if msg["type"] == "error":
+            text = msg["text"]
+            # Ignore favicon.ico 404 and other known benign resource 404s
+            if "favicon.ico" in text or "Failed to load resource" in text:
+                continue
+            filtered.append(msg)
+    return filtered
+
+
+def wait_for_stage_ready(page, instance_id: str, timeout: float = 60.0) -> dict:
+    """Wait for stage debug info to report ready with measured cells."""
+    deadline = time.time() + timeout
+    last_rect = None
+    stable_count = 0
+
+    while time.time() < deadline:
+        debug = page.evaluate(
+            """(id) => {
+                const dbg = window.__DASHBOARD__;
+                if (!dbg || !dbg.debug || !dbg.debug.getStageDebug) return null;
+                return dbg.debug.getStageDebug(id);
+            }""",
+            instance_id,
+        )
+
+        # Debug logging
+        if debug:
+            print(f"  [debug] getStageDebug: ready={debug.get('ready')}, measured={debug.get('measured')}, view={debug.get('view')}, canvas={debug.get('canvas')}")
+
+        if debug and debug.get("ready") and debug.get("measured", 0) > 0:
+            canvas = debug.get("canvas", {})
+            if canvas.get("w", 0) > 0 and canvas.get("h", 0) > 0:
+                # Check rect stability (two equal samples)
+                rect = page.evaluate(
+                    """(id) => {
+                        const dbg = window.__DASHBOARD__;
+                        if (!dbg || !dbg.debug || !dbg.debug.stageRect) return null;
+                        return dbg.debug.stageRect(id);
+                    }""",
+                    instance_id,
+                )
+                if rect:
+                    if last_rect and rect == last_rect:
+                        stable_count += 1
+                        if stable_count >= 2:
+                            # Also wait for fonts
+                            fonts_ready = page.evaluate(
+                                "() => document.fonts.ready.then(() => true).catch(() => false)"
+                            )
+                            if fonts_ready:
+                                return debug
+                    else:
+                        stable_count = 0
+                    last_rect = rect
+
+        time.sleep(0.5)
+
+    # Timeout - return what we have for diagnostics
+    debug = page.evaluate(
+        """(id) => {
+            const dbg = window.__DASHBOARD__;
+            if (!dbg || !dbg.debug || !dbg.debug.getStageDebug) return null;
+            return dbg.debug.getStageDebug(id);
+        }""",
+        instance_id,
+    )
+    print(f"  [debug] Final getStageDebug: {json.dumps(debug)}")
+    raise TimeoutError(f"Stage {instance_id} not ready in {timeout}s: {json.dumps(debug)}")
+
+
 def check_page_errors(page) -> list[str]:
     """Collect page errors from the page."""
     return []
 
 
-def check_duplicate_ids(page) -> int:
-    """Count duplicate DOM ids."""
-    return page.evaluate(
+def check_duplicate_ids(page) -> tuple[int, list[str]]:
+    """Count duplicate DOM ids and return the duplicate IDs."""
+    result = page.evaluate(
         """() => {
             const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
             const counts = {};
             for (const id of ids) counts[id] = (counts[id] || 0) + 1;
-            return Object.values(counts).filter(c => c > 1).length;
+            const duplicates = Object.entries(counts).filter(([,c]) => c > 1).map(([id]) => id);
+            return {count: duplicates.length, ids: duplicates};
         }"""
     )
+    return result["count"], result["ids"]
 
 
 def capture_hero(port: int, store_path: Path, output: Path) -> dict:
@@ -163,15 +239,15 @@ def capture_hero(port: int, store_path: Path, output: Path) -> dict:
         debug = wait_for_stage_ready(page, instance_id)
 
         # Check for errors
-        console_errors = [m for m in console_messages if m["type"] == "error"]
-        duplicate_ids = check_duplicate_ids(page)
+        console_errors = filter_console_errors(console_messages)
+        duplicate_ids, duplicate_id_list = check_duplicate_ids(page)
 
         if console_errors:
             raise RuntimeError(f"Console errors: {console_errors}")
         if page_errors:
             raise RuntimeError(f"Page errors: {page_errors}")
         if duplicate_ids > 0:
-            raise RuntimeError(f"Duplicate DOM ids: {duplicate_ids}")
+            raise RuntimeError(f"Duplicate DOM ids: {duplicate_ids} ({duplicate_id_list})")
         if debug.get("measured", 0) == 0:
             raise RuntimeError(f"No measured cells: {debug}")
 

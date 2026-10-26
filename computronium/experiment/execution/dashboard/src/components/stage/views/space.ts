@@ -31,7 +31,7 @@ const STATUS_LABELS: Record<CellData["status"], string> = {
 
 /** Create a StageViewInstance for the "space" view. */
 export function createSpaceView(context: StageViewContext): StageViewInstance {
-  const { surface, flat, workspace, state } = context;
+  const { surface, flat, workspace, state, instanceId } = context;
 
   // Per-instance state derived from state + workspace
   let runId = (state as any).runId ?? workspace.getSelectedRunId();
@@ -132,7 +132,7 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     if (!overlay) return;
 
     readoutElement = document.createElement("div");
-    readoutElement.id = `cell-readout-${surface.root.id || "stage"}`;
+    readoutElement.id = `cell-readout-${instanceId}`;
     readoutElement.style.cssText = `
       position: fixed;
       pointer-events: none;

@@ -312,6 +312,9 @@ window.addEventListener("keydown", (event) => {
       dockviewHost.setState(panel.id, { view });
       return panel.id;
     },
+    getStageDebug: (instanceId: string) => {
+      return dockviewHost.getStageDebug(instanceId);
+    },
     maximize: (instanceId: string) => {
       const panel = dockviewHost.getApi()?.getPanel(instanceId);
       if (panel) dockviewHost.getApi()?.maximizeGroup(panel);
@@ -324,8 +327,8 @@ window.addEventListener("keydown", (event) => {
       if (!api) return null;
       const panel = instanceId ? api.getPanel(instanceId) : api.activePanel;
       if (!panel) return null;
-      const groupEl = panel.api.group.element;
-      const rect = groupEl.getBoundingClientRect();
+      const contentEl = panel.view.content.element;
+      const rect = contentEl.getBoundingClientRect();
       // Find the workspace container for relative positioning
       const workspace = document.getElementById("workspace");
       if (workspace) {
@@ -345,7 +348,7 @@ window.addEventListener("keydown", (event) => {
         return {
           id: panel.id,
           type: panel.view.contentComponent,
-          rect: panel.api.group.element.getBoundingClientRect(),
+          rect: panel.view.content.element.getBoundingClientRect(),
         };
       });
     },

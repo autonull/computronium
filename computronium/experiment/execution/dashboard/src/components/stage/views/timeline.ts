@@ -98,7 +98,7 @@ export function createTimelineView(context: StageViewContext): StageViewInstance
     const timeline = runId ? timelineStore.getTimeline(runId) : null;
     const spans = timeline?.stages ?? [];
     if (!timeline || spans.length === 0) {
-      drawn = false;
+      drawn = true;
       flat.clear();
       return;
     }

@@ -90,6 +90,7 @@ export class StageSurfaceImpl implements StageSurface {
       antialias: this.profile.antialias,
       alpha: true,
       powerPreference: "high-performance",
+      preserveDrawingBuffer: true,
     });
     renderer.setPixelRatio(this.profile.software ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = this.profile.shadows;

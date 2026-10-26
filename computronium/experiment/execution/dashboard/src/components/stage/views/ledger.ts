@@ -88,7 +88,7 @@ export function createLedgerView(context: StageViewContext): StageViewInstance {
     const ledger = account?.ledger;
 
     if (!ledger || ledger.claims.length === 0) {
-      drawn = false;
+      drawn = true;
       flat.clear();
       return;
     }

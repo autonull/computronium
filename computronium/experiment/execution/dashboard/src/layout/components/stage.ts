@@ -201,6 +201,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
           flat: surface.flat,
           workspace: ctx.workspace,
           state: viewState,
+          instanceId,
         });
 
         if (viewInstance) {

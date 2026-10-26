@@ -231,6 +231,7 @@ export interface StageViewContext {
   flat: StageCanvas;
   workspace: WorkspaceStore;
   state: JsonValue;
+  instanceId: string;
 }
 
 export interface StageChange {
