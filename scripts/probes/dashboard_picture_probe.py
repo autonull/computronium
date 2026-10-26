@@ -502,6 +502,7 @@ def probe_viewport(port: int, viewport: dict) -> dict:
         for name in BASELINE_FILES:
             baseline_path = BASELINE_DIR / f"{name}.png"
             current_paths = [
+                REPO_ROOT / "docs" / "screenshots" / "assets" / f"{name}.png",
                 REPO_ROOT / "docs" / "readme" / "assets" / f"{name}.png",
                 REPO_ROOT / "docs" / "screenshots" / "tour" / f"{name}.png",
                 REPO_ROOT / "docs" / "screenshots" / f"{name}.png",
