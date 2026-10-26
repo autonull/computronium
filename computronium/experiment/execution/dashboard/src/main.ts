@@ -10,7 +10,7 @@ import { initPalette, openPalette } from "./palette.js";
 import { applyPreset, reset, applyWorkspace } from "./layout.js";
 import { BINDINGS, allBindings, setAction } from "./bindings.js";
 import { initHints } from "./hints.js";
-import { menubar } from "./menubar.js";
+import "./menubar.js";
 import { dockviewHost, DockviewHost } from "./layout/dockview-host.js";
 import { spaceStore } from "./stores/space.js";
 import { controlStore } from "./stores/control.js";
@@ -68,7 +68,7 @@ function showError(message: string): void {
   const overlay = document.getElementById("ui-overlay");
   if (!overlay) return;
   const errorElement = document.createElement("div");
-  errorElement.id = "global-error";
+  errorElement.id = "global-error-unique";
   errorElement.className = "global-error";
   errorElement.innerHTML = `
     <span>✗</span>
@@ -251,6 +251,7 @@ window.addEventListener("keydown", (event) => {
 (window as any).__DASHBOARD__ = {
   helpOverlay,
   layoutHost: dockviewHost,
+  registry,
   commands,
   definitions: {
     list: () =>
@@ -259,7 +260,7 @@ window.addEventListener("keydown", (event) => {
         title: definition.title,
         icon: definition.icon,
       })),
-  },
+    },
   wsClient,
   router,
   bindings: {
@@ -270,6 +271,12 @@ window.addEventListener("keydown", (event) => {
         group: b.group,
         key: b.key,
       })),
+  },
+  layout: {
+    applyPreset,
+    reset,
+    applyWorkspace,
+    presets: ["watch", "audit", "drive", "free"],
   },
   debug: {
     controlStore,
@@ -317,11 +324,13 @@ window.addEventListener("keydown", (event) => {
       if (!api) return null;
       const panel = instanceId ? api.getPanel(instanceId) : api.activePanel;
       if (!panel) return null;
-      const rect = panel.api.group.element.getBoundingClientRect();
-      const container = panel.api.group.element.closest(".dv-container") as HTMLElement | null;
-      if (container) {
-        const containerRect = container.getBoundingClientRect();
-        return { x: rect.left - containerRect.left, y: rect.top - containerRect.top, width: rect.width, height: rect.height };
+      const groupEl = panel.api.group.element;
+      const rect = groupEl.getBoundingClientRect();
+      // Find the workspace container for relative positioning
+      const workspace = document.getElementById("workspace");
+      if (workspace) {
+        const wsRect = workspace.getBoundingClientRect();
+        return { x: rect.left - wsRect.left, y: rect.top - wsRect.top, width: rect.width, height: rect.height };
       }
       return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
     },

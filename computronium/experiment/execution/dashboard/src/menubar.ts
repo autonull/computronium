@@ -34,394 +34,318 @@ interface DatabaseInfo {
   runs: number;
 }
 
-function createMenubarBody(): string {
-  return `
-    <style>
-      .menubar {
-        display: flex;
-        align-items: center;
-        gap: 0;
-        height: 28px;
-        background: var(--bg-tertiary);
-        border-bottom: 1px solid var(--border);
-        font-size: 12px;
-        color: var(--text-primary);
-        user-select: none;
-        -webkit-app-region: drag;
-      }
-      .menubar-menu {
-        position: relative;
-      }
-      .menubar-menu > button {
-        padding: 0 12px;
-        height: 100%;
-        background: transparent;
-        border: none;
-        color: var(--text-primary);
-        font-size: 12px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        -webkit-app-region: no-drag;
-      }
-      .menubar-menu > button:hover,
-      .menubar-menu > button:focus {
-        background: var(--bg-primary);
-      }
-      .menubar-menu.open > button {
-        background: var(--bg-primary);
-        color: var(--gradient);
-      }
-      .menubar-divider {
-        width: 1px;
-        height: 16px;
-        background: var(--border);
-        margin: 0 4px;
-      }
-      .menubar-dropdown {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        min-width: 220px;
-        background: var(--bg-secondary);
-        border: 1px solid var(--border);
-        border-radius: 0 0 6px 6px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        z-index: 1000;
-        display: none;
-        flex-direction: column;
-        padding: 4px 0;
-      }
-      .menubar-menu.open .menubar-dropdown {
-        display: flex;
-      }
-      .menubar-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 12px;
-        color: var(--text-primary);
-        font-size: 11px;
-        cursor: pointer;
-        white-space: nowrap;
-        -webkit-app-region: no-drag;
-      }
-      .menubar-item:hover,
-      .menubar-item:focus {
-        background: var(--bg-tertiary);
-        color: var(--gradient);
-      }
-      .menubar-item.disabled {
-        color: var(--text-muted);
-        cursor: not-allowed;
-      }
-      .menubar-item.disabled:hover {
-        background: transparent;
-        color: var(--text-muted);
-      }
-      .menubar-item .shortcut {
-        margin-left: auto;
-        font-family: monospace;
-        font-size: 9px;
-        padding: 1px 4px;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        color: var(--text-muted);
-      }
-      .menubar-separator {
-        height: 1px;
-        background: var(--border);
-        margin: 4px 8px;
-      }
-      .menubar-submenu {
-        position: relative;
-      }
-      .menubar-submenu > .menubar-dropdown {
-        left: 100%;
-        top: 0;
-        border-radius: 0 6px 6px 6px;
-      }
-      .menubar-submenu.open > .menubar-dropdown {
-        display: flex;
-      }
-      .menubar-checkbox {
-        width: 14px;
-        height: 14px;
-        accent-color: var(--gradient);
-      }
-      .menubar-section-title {
-        padding: 6px 12px 2px;
-        font-size: 9px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--text-muted);
-        font-weight: 600;
-      }
-      .menubar-db-item {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        padding: 8px 12px;
-      }
-      .menubar-db-name {
-        font-weight: 500;
-        color: var(--text-primary);
-      }
-      .menubar-db-meta {
-        font-size: 9px;
-        color: var(--text-muted);
-      }
-      .menubar-db-item.active .menubar-db-name {
-        color: var(--gradient);
-      }
-      .menubar-input {
-        width: 100%;
-        padding: 4px 8px;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        color: var(--text-primary);
-        font-size: 11px;
-        font-family: monospace;
-      }
-      .menubar-input:focus {
-        outline: none;
-        border-color: var(--gradient);
-      }
-      .menubar-dialog {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-bright);
-        border-radius: 8px;
-        padding: 16px;
-        min-width: 360px;
-        box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-        z-index: 2000;
-      }
-      .menubar-dialog-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.5);
-        backdrop-filter: blur(2px);
-        z-index: 1999;
-      }
-      .menubar-dialog-title {
-        font-size: 13px;
-        font-weight: 600;
-        margin-bottom: 12px;
-      }
-      .menubar-dialog-buttons {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-        margin-top: 16px;
-      }
-      .menubar-btn {
-        padding: 6px 12px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        color: var(--text-primary);
-        font-size: 11px;
-        cursor: pointer;
-      }
-      .menubar-btn:hover {
-        background: var(--border);
-      }
-      .menubar-btn.primary {
-        background: var(--gradient)22;
-        border-color: var(--gradient)66;
-        color: var(--gradient);
-      }
-      .menubar-btn.primary:hover {
-        background: var(--gradient)33;
-        border-color: var(--gradient);
-      }
-      .menubar-btn.danger {
-        background: var(--error)22;
-        border-color: var(--error)66;
-        color: var(--error);
-      }
-      .menubar-btn.danger:hover {
-        background: var(--error)33;
-        border-color: var(--error);
-      }
-    </style>
-    <div class="menubar" id="menubar">
-      <!-- File Menu -->
-      <div class="menubar-menu" id="menu-file">
-        <button>File ▾</button>
-        <div class="menubar-dropdown" id="dropdown-file">
-          <div class="menubar-section-title">Database</div>
-          <div id="db-list" class="menubar-db-list"></div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-item" data-action="new-db">
-            <span>New Database…</span>
-            <kbd class="shortcut">⌘N</kbd>
-          </div>
-          <div class="menubar-item" data-action="open-db">
-            <span>Open Database…</span>
-            <kbd class="shortcut">⌘O</kbd>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-item" data-action="export-db">
-            <span>Export Database…</span>
-          </div>
-          <div class="menubar-item" data-action="import-db">
-            <span>Import Database…</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- View Menu -->
-      <div class="menubar-menu" id="menu-view">
-        <button>View ▾</button>
-        <div class="menubar-dropdown" id="dropdown-view">
-          <div class="menubar-section-title">Workspaces</div>
-          <div class="menubar-item" data-preset="watch">
-            <span>Watch — Campaigns</span>
-            <kbd class="shortcut">1</kbd>
-          </div>
-          <div class="menubar-item" data-preset="audit">
-            <span>Audit — Evidence</span>
-            <kbd class="shortcut">2</kbd>
-          </div>
-          <div class="menubar-item" data-preset="drive">
-            <span>Drive — Instrument</span>
-            <kbd class="shortcut">3</kbd>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-section-title">Panels</div>
-          <div id="panel-toggles"></div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-item" data-action="reset-layout">
-            <span>Reset Layout</span>
-          </div>
-          <div class="menubar-item" data-action="save-layout">
-            <span>Save Layout</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Run Menu -->
-      <div class="menubar-menu" id="menu-run">
-        <button>Run ▾</button>
-        <div class="menubar-dropdown" id="dropdown-run">
-          <div class="menubar-section-title">Control</div>
-          <div class="menubar-item" data-action="start-run">
-            <span>Start Run…</span>
-            <kbd class="shortcut">Z</kbd>
-          </div>
-          <div class="menubar-item" data-action="pause-run">
-            <span>Pause</span>
-            <kbd class="shortcut">Space</kbd>
-          </div>
-          <div class="menubar-item" data-action="step-run">
-            <span>Step</span>
-            <kbd class="shortcut">⏭</kbd>
-          </div>
-          <div class="menubar-item" data-action="stop-run">
-            <span>Stop</span>
-            <kbd class="shortcut">⏹</kbd>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-section-title">Cell Actions</div>
-          <div class="menubar-item" data-action="replicate-cell">
-            <span>Replicate Cell</span>
-            <kbd class="shortcut">⇧R</kbd>
-          </div>
-          <div class="menubar-item" data-action="preregister-cell">
-            <span>Preregister Claim</span>
-            <kbd class="shortcut">⇧P</kbd>
-          </div>
-          <div class="menubar-item" data-action="adopt-quest">
-            <span>Adopt as Quest</span>
-            <kbd class="shortcut">⇧Q</kbd>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tools Menu -->
-      <div class="menubar-menu" id="menu-tools">
-        <button>Tools ▾</button>
-        <div class="menubar-dropdown" id="dropdown-tools">
-          <div class="menubar-section-title">Utilities</div>
-          <div class="menubar-item" data-action="palette">
-            <span>Command Palette…</span>
-            <kbd class="shortcut">⇧;</kbd>
-          </div>
-          <div class="menubar-item" data-action="help">
-            <span>Keyboard Shortcuts</span>
-            <kbd class="shortcut">?</kbd>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-section-title">Views</div>
-          <div id="view-toggles"></div>
-        </div>
-      </div>
-
-      <!-- Window Menu -->
-      <div class="menubar-menu" id="menu-window">
-        <button>Window ▾</button>
-        <div class="menubar-dropdown" id="dropdown-window">
-          <div class="menubar-section-title">Layout</div>
-          <div class="menubar-item" data-action="layout-undo">
-            <span>Undo</span>
-            <kbd class="shortcut">⌘Z</kbd>
-          </div>
-          <div class="menubar-item" data-action="layout-redo">
-            <span>Redo</span>
-            <kbd class="shortcut">⌘⇧Z</kbd>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-item" data-action="layout-save">
-            <span>Save Layout…</span>
-            <kbd class="shortcut">⌘S</kbd>
-          </div>
-          <div class="menubar-item" data-action="layout-load">
-            <span>Load Layout…</span>
-            <kbd class="shortcut">⌘O</kbd>
-          </div>
-          <div class="menubar-item" data-action="layout-export">
-            <span>Export Layout…</span>
-          </div>
-          <div class="menubar-item" data-action="layout-import">
-            <span>Import Layout…</span>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-item" data-action="layout-reset">
-            <span>Reset to Watch Preset</span>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-item" data-action="minimize-all">
-            <span>Minimize All Panels</span>
-          </div>
-          <div class="menubar-item" data-action="restore-all">
-            <span>Restore All Panels</span>
-          </div>
-          <div class="menubar-separator"></div>
-          <div class="menubar-item" data-action="toggle-fullscreen">
-            <span>Toggle Fullscreen</span>
-            <kbd class="shortcut">F11</kbd>
-          </div>
-        </div>
-      </div>
-
-      <!-- Connection Status (right side) -->
-      <div style="flex: 1;"></div>
-      <div class="menubar-connection" style="display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 10px; color: var(--text-secondary);">
-        <span class="dot" id="menubar-conn-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--error);"></span>
-        <span id="menubar-conn-label">Disconnected</span>
-        <span id="menubar-db-label" style="margin-left: 12px; font-family: monospace; color: var(--text-muted);"></span>
-      </div>
-    </div>
-    <div id="menubar-dialog-root"></div>
+/** Inject menubar styles once. */
+function injectMenubarStyles(): void {
+  if (document.getElementById("menubar-styles")) return;
+  const style = document.createElement("style");
+  style.id = "menubar-styles";
+  style.textContent = `
+    .menubar {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      height: 28px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-primary);
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+    .menubar-menu {
+      position: relative;
+    }
+    .menubar-menu > button {
+      padding: 0 12px;
+      height: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      -webkit-app-region: no-drag;
+    }
+    .menubar-menu > button:hover,
+    .menubar-menu > button:focus {
+      background: var(--bg-primary);
+    }
+    .menubar-menu.open > button {
+      background: var(--bg-primary);
+      color: var(--gradient);
+    }
+    .menubar-divider {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+    .menubar-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 220px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 0 0 6px 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      padding: 4px 0;
+    }
+    .menubar-menu.open .menubar-dropdown {
+      display: flex;
+    }
+    .menubar-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      color: var(--text-primary);
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      -webkit-app-region: no-drag;
+    }
+    .menubar-item:hover,
+    .menubar-item:focus {
+      background: var(--bg-tertiary);
+      color: var(--gradient);
+    }
+    .menubar-item.disabled {
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+    .menubar-item.disabled:hover {
+      background: transparent;
+      color: var(--text-muted);
+    }
+    .menubar-item .shortcut {
+      margin-left: auto;
+      font-family: monospace;
+      font-size: 9px;
+      padding: 1px 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text-muted);
+    }
+    .menubar-separator {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 8px;
+    }
+    .menubar-submenu {
+      position: relative;
+    }
+    .menubar-submenu > .menubar-dropdown {
+      left: 100%;
+      top: 0;
+      border-radius: 0 6px 6px 6px;
+    }
+    .menubar-submenu.open > .menubar-dropdown {
+      display: flex;
+    }
+    .menubar-checkbox {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--gradient);
+    }
+    .menubar-section-title {
+      padding: 6px 12px 2px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .menubar-db-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 8px 12px;
+    }
+    .menubar-db-name {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .menubar-db-meta {
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+    .menubar-db-item.active .menubar-db-name {
+      color: var(--gradient);
+    }
+    .menubar-input {
+      width: 100%;
+      padding: 4px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 11px;
+      font-family: monospace;
+    }
+    .menubar-input:focus {
+      outline: none;
+      border-color: var(--gradient);
+    }
+    .menubar-dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-bright);
+      border-radius: 8px;
+      padding: 16px;
+      min-width: 360px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+      z-index: 2000;
+    }
+    .menubar-dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(2px);
+      z-index: 1999;
+    }
+    .menubar-dialog-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .menubar-dialog-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .menubar-btn {
+      padding: 6px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .menubar-btn:hover {
+      background: var(--border);
+    }
+    .menubar-btn.primary {
+      background: var(--gradient)22;
+      border-color: var(--gradient)66;
+      color: var(--gradient);
+    }
+    .menubar-btn.primary:hover {
+      background: var(--gradient)33;
+      border-color: var(--gradient);
+    }
+    .menubar-btn.danger {
+      background: var(--error)22;
+      border-color: var(--error)66;
+      color: var(--error);
+    }
+    .menubar-btn.danger:hover {
+      background: var(--error)33;
+      border-color: var(--error);
+    }
   `;
+  document.head.appendChild(style);
+}
+
+/** Create a menu button with dropdown. */
+function createMenu(label: string, dropdownId: string, onToggle: (menu: HTMLElement) => void): HTMLElement {
+  const menu = document.createElement("div");
+  menu.className = "menubar-menu";
+  menu.id = `menu-${label.toLowerCase()}`;
+
+  const button = document.createElement("button");
+  button.textContent = `${label} ▾`;
+  menu.appendChild(button);
+
+  const dropdown = document.createElement("div");
+  dropdown.className = "menubar-dropdown";
+  dropdown.id = dropdownId;
+  menu.appendChild(dropdown);
+
+  button.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onToggle(menu);
+  });
+
+  return menu;
+}
+
+/** Create a menu item. */
+function createMenuItem(
+  label: string,
+  options: {
+    action?: string;
+    preset?: string;
+    panel?: string;
+    view?: string;
+    shortcut?: string;
+    disabled?: boolean;
+    checkbox?: boolean;
+    checked?: boolean;
+  } = {},
+): HTMLElement {
+  const item = document.createElement("div");
+  item.className = "menubar-item";
+  if (options.disabled) item.classList.add("disabled");
+
+  if (options.checkbox) {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "menubar-checkbox";
+    checkbox.checked = options.checked ?? false;
+    item.appendChild(checkbox);
+  }
+
+  const span = document.createElement("span");
+  span.textContent = label;
+  item.appendChild(span);
+
+  if (options.shortcut) {
+    const kbd = document.createElement("kbd");
+    kbd.className = "shortcut";
+    kbd.textContent = options.shortcut;
+    item.appendChild(kbd);
+  }
+
+  if (options.action) item.dataset.action = options.action;
+  if (options.preset) item.dataset.preset = options.preset;
+  if (options.panel) item.dataset.panel = options.panel;
+  if (options.view) item.dataset.view = options.view;
+
+  return item;
+}
+
+/** Create a section title. */
+function createSectionTitle(text: string): HTMLElement {
+  const div = document.createElement("div");
+  div.className = "menubar-section-title";
+  div.textContent = text;
+  return div;
+}
+
+/** Create a separator. */
+function createSeparator(): HTMLElement {
+  const div = document.createElement("div");
+  div.className = "menubar-separator";
+  return div;
+}
+
+/** Create a divider. */
+function createDivider(): HTMLElement {
+  const div = document.createElement("div");
+  div.className = "menubar-divider";
+  return div;
 }
 
 export class Menubar implements Component {
@@ -434,12 +358,22 @@ export class Menubar implements Component {
   private currentDbPath: string | null = null;
   private databases: DatabaseInfo[] = [];
   private closeOnClickOutside = (e: MouseEvent) => this.handleClickOutside(e);
+  private dropdownFile: HTMLElement | null = null;
+  private dropdownView: HTMLElement | null = null;
+  private dropdownRun: HTMLElement | null = null;
+  private dropdownTools: HTMLElement | null = null;
+  private dropdownWindow: HTMLElement | null = null;
+  private panelToggles: HTMLElement | null = null;
+  private viewToggles: HTMLElement | null = null;
+  private dbList: HTMLElement | null = null;
 
   constructor() {
     wsClient.onStateChange((state) => this.updateConnection(state));
   }
 
   async init(): Promise<void> {
+    injectMenubarStyles();
+
     this.container = document.createElement("div");
     this.container.id = "menubar-container";
     this.container.style.cssText = `
@@ -452,17 +386,82 @@ export class Menubar implements Component {
       pointer-events: auto;
       -webkit-app-region: drag;
     `;
-    this.container.innerHTML = createMenubarBody();
+
+    // Build menubar structure
+    const menubar = document.createElement("div");
+    menubar.className = "menubar";
+    menubar.id = "menubar";
+
+    // File menu
+    const menuFile = createMenu("File", "dropdown-file", (m) => this.toggleMenu(m));
+    this.dropdownFile = menuFile.querySelector("#dropdown-file");
+    this.buildFileDropdown();
+    menubar.appendChild(menuFile);
+
+    menubar.appendChild(createDivider());
+
+    // View menu
+    const menuView = createMenu("View", "dropdown-view", (m) => this.toggleMenu(m));
+    this.dropdownView = menuView.querySelector("#dropdown-view");
+    this.buildViewDropdown();
+    menubar.appendChild(menuView);
+
+    menubar.appendChild(createDivider());
+
+    // Run menu
+    const menuRun = createMenu("Run", "dropdown-run", (m) => this.toggleMenu(m));
+    this.dropdownRun = menuRun.querySelector("#dropdown-run");
+    this.buildRunDropdown();
+    menubar.appendChild(menuRun);
+
+    menubar.appendChild(createDivider());
+
+    // Tools menu
+    const menuTools = createMenu("Tools", "dropdown-tools", (m) => this.toggleMenu(m));
+    this.dropdownTools = menuTools.querySelector("#dropdown-tools");
+    this.buildToolsDropdown();
+    menubar.appendChild(menuTools);
+
+    menubar.appendChild(createDivider());
+
+    // Window menu
+    const menuWindow = createMenu("Window", "dropdown-window", (m) => this.toggleMenu(m));
+    this.dropdownWindow = menuWindow.querySelector("#dropdown-window");
+    this.buildWindowDropdown();
+    menubar.appendChild(menuWindow);
+
+    // Connection status (right side)
+    const spacer = document.createElement("div");
+    spacer.style.flex = "1";
+    menubar.appendChild(spacer);
+
+    const connStatus = document.createElement("div");
+    connStatus.style.cssText = "display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 10px; color: var(--text-secondary);";
+    connStatus.innerHTML = `
+      <span class="dot" id="menubar-conn-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--error);"></span>
+      <span id="menubar-conn-label">Disconnected</span>
+      <span id="menubar-db-label" style="margin-left: 12px; font-family: monospace; color: var(--text-muted);"></span>
+    `;
+    menubar.appendChild(connStatus);
+
+    this.container.appendChild(menubar);
+
+    // Dialog root
+    this.dialogRoot = document.createElement("div");
+    this.dialogRoot.id = "menubar-dialog-root";
+    this.container.appendChild(this.dialogRoot);
+
     document.body.appendChild(this.container);
 
-    this.dialogRoot = document.getElementById("menubar-dialog-root");
+    // Cache elements
     this.dbLabel = this.container.querySelector("#menubar-db-label");
     this.connDot = this.container.querySelector("#menubar-conn-dot");
     this.connLabel = this.container.querySelector("#menubar-conn-label");
+    this.panelToggles = this.container.querySelector("#panel-toggles");
+    this.viewToggles = this.container.querySelector("#view-toggles");
+    this.dbList = this.container.querySelector("#db-list");
 
     this.bindMenuEvents();
-    this.bindPanelToggles();
-    this.bindViewToggles();
     await this.loadDatabases();
     this.renderDatabaseList();
     this.renderPanelToggles();
@@ -470,6 +469,87 @@ export class Menubar implements Component {
 
     document.addEventListener("click", this.closeOnClickOutside);
     console.log("[Menubar] Initialized");
+  }
+
+  private buildFileDropdown(): void {
+    if (!this.dropdownFile) return;
+    this.dropdownFile.innerHTML = "";
+    this.dropdownFile.appendChild(createSectionTitle("Database"));
+    this.dbList = document.createElement("div");
+    this.dbList.id = "db-list";
+    this.dbList.className = "menubar-db-list";
+    this.dropdownFile.appendChild(this.dbList);
+    this.dropdownFile.appendChild(createSeparator());
+    this.dropdownFile.appendChild(createMenuItem("New Database…", { action: "new-db", shortcut: "⌘N" }));
+    this.dropdownFile.appendChild(createMenuItem("Open Database…", { action: "open-db", shortcut: "⌘O" }));
+    this.dropdownFile.appendChild(createSeparator());
+    this.dropdownFile.appendChild(createMenuItem("Export Database…", { action: "export-db" }));
+    this.dropdownFile.appendChild(createMenuItem("Import Database…", { action: "import-db" }));
+  }
+
+  private buildViewDropdown(): void {
+    if (!this.dropdownView) return;
+    this.dropdownView.innerHTML = "";
+    this.dropdownView.appendChild(createSectionTitle("Workspaces"));
+    this.dropdownView.appendChild(createMenuItem("Watch — Campaigns", { preset: "watch", shortcut: "1" }));
+    this.dropdownView.appendChild(createMenuItem("Audit — Evidence", { preset: "audit", shortcut: "2" }));
+    this.dropdownView.appendChild(createMenuItem("Drive — Instrument", { preset: "drive", shortcut: "3" }));
+    this.dropdownView.appendChild(createSeparator());
+    this.dropdownView.appendChild(createSectionTitle("Panels"));
+    this.panelToggles = document.createElement("div");
+    this.panelToggles.id = "panel-toggles";
+    this.dropdownView.appendChild(this.panelToggles);
+    this.dropdownView.appendChild(createSeparator());
+    this.dropdownView.appendChild(createMenuItem("Reset Layout", { action: "reset-layout" }));
+    this.dropdownView.appendChild(createMenuItem("Save Layout", { action: "save-layout" }));
+  }
+
+  private buildRunDropdown(): void {
+    if (!this.dropdownRun) return;
+    this.dropdownRun.innerHTML = "";
+    this.dropdownRun.appendChild(createSectionTitle("Control"));
+    this.dropdownRun.appendChild(createMenuItem("Start Run…", { action: "start-run", shortcut: "Z" }));
+    this.dropdownRun.appendChild(createMenuItem("Pause", { action: "pause-run", shortcut: "Space" }));
+    this.dropdownRun.appendChild(createMenuItem("Step", { action: "step-run", shortcut: "⏭" }));
+    this.dropdownRun.appendChild(createMenuItem("Stop", { action: "stop-run", shortcut: "⏹" }));
+    this.dropdownRun.appendChild(createSeparator());
+    this.dropdownRun.appendChild(createSectionTitle("Cell Actions"));
+    this.dropdownRun.appendChild(createMenuItem("Replicate Cell", { action: "replicate-cell", shortcut: "⇧R" }));
+    this.dropdownRun.appendChild(createMenuItem("Preregister Claim", { action: "preregister-cell", shortcut: "⇧P" }));
+    this.dropdownRun.appendChild(createMenuItem("Adopt as Quest", { action: "adopt-quest", shortcut: "⇧Q" }));
+  }
+
+  private buildToolsDropdown(): void {
+    if (!this.dropdownTools) return;
+    this.dropdownTools.innerHTML = "";
+    this.dropdownTools.appendChild(createSectionTitle("Utilities"));
+    this.dropdownTools.appendChild(createMenuItem("Command Palette…", { action: "palette", shortcut: "⇧;" }));
+    this.dropdownTools.appendChild(createMenuItem("Keyboard Shortcuts", { action: "help", shortcut: "?" }));
+    this.dropdownTools.appendChild(createSeparator());
+    this.dropdownTools.appendChild(createSectionTitle("Views"));
+    this.viewToggles = document.createElement("div");
+    this.viewToggles.id = "view-toggles";
+    this.dropdownTools.appendChild(this.viewToggles);
+  }
+
+  private buildWindowDropdown(): void {
+    if (!this.dropdownWindow) return;
+    this.dropdownWindow.innerHTML = "";
+    this.dropdownWindow.appendChild(createSectionTitle("Layout"));
+    this.dropdownWindow.appendChild(createMenuItem("Undo", { action: "layout-undo", shortcut: "⌘Z" }));
+    this.dropdownWindow.appendChild(createMenuItem("Redo", { action: "layout-redo", shortcut: "⌘⇧Z" }));
+    this.dropdownWindow.appendChild(createSeparator());
+    this.dropdownWindow.appendChild(createMenuItem("Save Layout…", { action: "layout-save", shortcut: "⌘S" }));
+    this.dropdownWindow.appendChild(createMenuItem("Load Layout…", { action: "layout-load", shortcut: "⌘O" }));
+    this.dropdownWindow.appendChild(createMenuItem("Export Layout…", { action: "layout-export" }));
+    this.dropdownWindow.appendChild(createMenuItem("Import Layout…", { action: "layout-import" }));
+    this.dropdownWindow.appendChild(createSeparator());
+    this.dropdownWindow.appendChild(createMenuItem("Reset to Watch Preset", { action: "layout-reset" }));
+    this.dropdownWindow.appendChild(createSeparator());
+    this.dropdownWindow.appendChild(createMenuItem("Minimize All Panels", { action: "minimize-all" }));
+    this.dropdownWindow.appendChild(createMenuItem("Restore All Panels", { action: "restore-all" }));
+    this.dropdownWindow.appendChild(createSeparator());
+    this.dropdownWindow.appendChild(createMenuItem("Toggle Fullscreen", { action: "toggle-fullscreen", shortcut: "F11" }));
   }
 
   async destroy(): Promise<void> {
@@ -481,21 +561,12 @@ export class Menubar implements Component {
   private bindMenuEvents(): void {
     if (!this.container) return;
 
-    // Menu open/close on click
-    for (const menu of this.container.querySelectorAll<HTMLElement>(".menubar-menu")) {
-      const button = menu.querySelector("button");
-      button?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.toggleMenu(menu);
-      });
-    }
-
     // Close menus on escape
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") this.closeAllMenus();
     });
 
-    // Menu item actions
+    // Menu item actions (delegated)
     this.container.addEventListener("click", async (e) => {
       const item = (e.target as HTMLElement).closest(".menubar-item") as HTMLElement;
       if (!item || item.classList.contains("disabled")) return;
@@ -648,11 +719,10 @@ export class Menubar implements Component {
   }
 
   private renderPanelToggles(): void {
-    const container = this.container?.querySelector("#panel-toggles");
-    if (!container) return;
+    if (!this.panelToggles) return;
 
     const openTypes = new Set(dockviewHost.list().map((instance) => instance.type));
-    container.innerHTML = listDefinitions()
+    this.panelToggles.innerHTML = listDefinitions()
       .map((definition) => {
         const open = openTypes.has(definition.type);
         return `
@@ -666,20 +736,18 @@ export class Menubar implements Component {
   }
 
   private bindViewToggles(): void {
-    // Views don't have a change event, but we can rebuild on layout change
     dockviewHost.onChange(() => this.renderViewToggles());
   }
 
   private renderViewToggles(): void {
-    const container = this.container?.querySelector("#view-toggles");
-    if (!container) return;
+    if (!this.viewToggles) return;
 
     const views = listStageViews();
     const api = dockviewHost.getApi();
     const panel = api?.activePanel;
     const activeView = panel && panel.view.contentComponent === "stage" ? (panel.api.getParameters()?.view as string) : null;
 
-    container.innerHTML = views
+    this.viewToggles.innerHTML = views
       .map((v) => {
         const active = v.view === activeView;
         const key = v.key ? `<kbd class="shortcut">${v.key.toUpperCase()}</kbd>` : "";
@@ -710,7 +778,6 @@ export class Menubar implements Component {
         this.currentDbPath = data.current ?? null;
       }
     } catch {
-      // Fallback to default
       this.databases = [{
         path: "experiment.duckdb",
         name: "experiment.duckdb",
@@ -723,16 +790,14 @@ export class Menubar implements Component {
   }
 
   private renderDatabaseList(): void {
-    const container = this.container?.querySelector("#db-list");
-    const label = this.dbLabel;
-    if (!container) return;
+    if (!this.dbList) return;
 
     if (this.databases.length === 0) {
-      container.innerHTML = '<div class="menubar-item disabled">No databases found</div>';
+      this.dbList.innerHTML = '<div class="menubar-item disabled">No databases found</div>';
       return;
     }
 
-    container.innerHTML = this.databases.map((db) => {
+    this.dbList.innerHTML = this.databases.map((db) => {
       const active = db.path === this.currentDbPath;
       const sizeMb = (db.size / 1024 / 1024).toFixed(1);
       return `
@@ -743,9 +808,9 @@ export class Menubar implements Component {
       `;
     }).join("");
 
-    if (label && this.currentDbPath) {
+    if (this.dbLabel && this.currentDbPath) {
       const current = this.databases.find((d) => d.path === this.currentDbPath);
-      label.textContent = current ? current.name : this.currentDbPath;
+      this.dbLabel.textContent = current ? current.name : this.currentDbPath;
     }
   }
 
@@ -867,8 +932,6 @@ export class Menubar implements Component {
       this.currentDbPath = path;
       await this.loadDatabases();
       this.renderDatabaseList();
-
-      // Reload the dashboard's store
       location.reload();
     } catch (e) {
       alert(`Failed to switch database: ${(e as Error).message}`);

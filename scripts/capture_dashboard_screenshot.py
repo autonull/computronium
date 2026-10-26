@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
-"""Capture the dashboard hero screenshot (TODO68 Phase 5).
+"""Capture the hero screenshot of the dashboard (TODO73 P10.5).
 
-The dashboard, the campaign and the capture run in ONE process on purpose: the
-campaign holds the store, and the capture wants the records the campaign has
-just written. (A dashboard in another process would see them too, through the
-mirror the writer publishes — but one process has no such gap to fall
-through.)
+Opens the stage via layoutHost.open, keeps the returned instanceId, and waits
+for debug.getStageDebug(id) to report {ready:true, measured>0, view:"space",
+canvas.w>0} + two equal rect samples + document.fonts.ready. Fails on
+console/page errors, duplicateIds>0, measured==0, canvas<box.
 
-The machinery — the server on a thread, the campaign, the Chromium that
-renders without a GPU — lives in ``scripts/dashboard_capture.py``, which the
-tour and the recording share.
-
-Usage:
-    uv run python scripts/capture_dashboard_screenshot.py
-    uv run python scripts/capture_dashboard_screenshot.py --reuse-store --port 8084
+No fixed 10 s sleep as the only wait — all waits are condition-driven.
 """
 
 from __future__ import annotations
@@ -21,16 +14,20 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import threading
+import sys
+import tempfile
 import time
+import threading
 from pathlib import Path
+
+# Add scripts to path
+SCRIPTS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS_DIR))
 
 from dashboard_capture import (
     REPO_ROOT,
     clear_store,
     launch_browser,
-    mirror_shot,
-    open_dashboard,
     run_demo_campaign,
     start_dashboard,
     wait_for_http,
@@ -42,66 +39,167 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+VIEWPORT = {"width": 1920, "height": 1080}
 
-def capture(port: int, run_id: str, output: Path, timeout_ms: int) -> int:
-    """Drive Chromium, wait for the scene to show measured cells, screenshot."""
-    from playwright.sync_api import sync_playwright
+# Where the hero shot goes (mirrored to docs/readme/assets/)
+HERO_OUTPUT = REPO_ROOT / "docs" / "readme" / "assets" / "dashboard-hero.png"
 
-    with sync_playwright() as p:
-        browser = launch_browser(p)
-        page = open_dashboard(browser, port)
 
-        # Open a stage panel if not already open
-        result = page.evaluate(
-            """async (runId) => {
+def wait_for_stage_ready(page, instance_id: str, timeout: float = 60.0) -> dict:
+    """Wait for stage debug info to report ready with measured cells."""
+    deadline = time.time() + timeout
+    last_rect = None
+    stable_count = 0
+
+    while time.time() < deadline:
+        debug = page.evaluate(
+            """(id) => {
                 const dbg = window.__DASHBOARD__;
-                if (dbg && dbg.layoutHost && typeof dbg.layoutHost.open === 'function') {
-                    const instances = dbg.layoutHost.list?.() || [];
-                    const hasStage = instances.some(i => i.type === 'stage');
-                    if (!hasStage) {
-                        const id = await dbg.layoutHost.open('stage', { runId });
-                        return { success: true, id, instances: instances.length };
-                    }
-                    return { success: true, alreadyOpen: true, instances: instances.length };
-                }
-                return { success: false, reason: 'no layoutHost' };
+                if (!dbg || !dbg.debug || !dbg.debug.getStageDebug) return null;
+                return dbg.debug.getStageDebug(id);
             }""",
-            arg=run_id,
+            instance_id,
         )
 
-        # Give the stage panel time to load and fetch space data
-        page.wait_for_timeout(10000)
+        if debug and debug.get("ready") and debug.get("measured", 0) > 0:
+            canvas = debug.get("canvas", {})
+            if canvas.get("w", 0) > 0 and canvas.get("h", 0) > 0:
+                # Check rect stability (two equal samples)
+                rect = page.evaluate(
+                    """(id) => {
+                        const dbg = window.__DASHBOARD__;
+                        if (!dbg || !dbg.debug || !dbg.debug.stageRect) return null;
+                        return dbg.debug.stageRect(id);
+                    }""",
+                    instance_id,
+                )
+                if rect:
+                    if last_rect and rect == last_rect:
+                        stable_count += 1
+                        if stable_count >= 2:
+                            # Also wait for fonts
+                            fonts_ready = page.evaluate(
+                                "() => document.fonts.ready.then(() => true).catch(() => false)"
+                            )
+                            if fonts_ready:
+                                return debug
+                    else:
+                        stable_count = 0
+                    last_rect = rect
 
-        # Wait for the stage to show measured cells using the new debug API
-        deadline = time.time() + timeout_ms / 1000
-        while time.time() < deadline:
-            try:
-                cells = page.evaluate("""() => window.__DASHBOARD__?.debug?.measuredCells?.() ?? 0""")
-                if cells > 0:
-                    break
-            except Exception:
-                pass
-            time.sleep(2)
-        else:
-            logger.error("Timeout waiting for measured cells")
-            return 1
+        time.sleep(0.5)
 
-        logger.info("Stage shows measured cells")
+    # Timeout - return what we have for diagnostics
+    debug = page.evaluate(
+        """(id) => {
+            const dbg = window.__DASHBOARD__;
+            if (!dbg || !dbg.debug || !dbg.debug.getStageDebug) return null;
+            return dbg.debug.getStageDebug(id);
+        }""",
+        instance_id,
+    )
+    raise TimeoutError(f"Stage {instance_id} not ready in {timeout}s: {json.dumps(debug)}")
 
-        # Let the plotter and the live rail fill in.
-        page.wait_for_timeout(4000)
 
+def check_console_errors(page) -> list[str]:
+    """Collect console errors from the page."""
+    # Errors are collected via page.on("console") in the main function
+    return []
+
+
+def check_page_errors(page) -> list[str]:
+    """Collect page errors from the page."""
+    return []
+
+
+def check_duplicate_ids(page) -> int:
+    """Count duplicate DOM ids."""
+    return page.evaluate(
+        """() => {
+            const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
+            const counts = {};
+            for (const id of ids) counts[id] = (counts[id] || 0) + 1;
+            return Object.values(counts).filter(c => c > 1).length;
+        }"""
+    )
+
+
+def capture_hero(port: int, store_path: Path, output: Path) -> dict:
+    """Capture the hero screenshot."""
+    from playwright.sync_api import sync_playwright
+
+    console_messages: list[dict] = []
+    page_errors: list[str] = []
+
+    with sync_playwright() as playwright:
+        browser = launch_browser(playwright)
+        context = browser.new_context(viewport=VIEWPORT)
+        page = context.new_page()
+
+        page.on("console", lambda msg: console_messages.append({"type": msg.type, "text": msg.text}))
+        page.on("pageerror", lambda err: page_errors.append(str(err)))
+
+        page.goto(f"http://localhost:{port}/", wait_until="load")
+        page.wait_for_selector("#workspace", state="attached", timeout=30000)
+
+        # Wait for Dockview to mount
+        page.wait_for_function(
+            "() => Boolean(window.__DASHBOARD__?.layoutHost?.mountComplete)",
+            timeout=30000,
+        )
+
+        # Open stage panel via layoutHost.open and get instanceId
+        instance_id = page.evaluate(
+            """async () => {
+                const host = window.__DASHBOARD__?.layoutHost;
+                if (!host || !host.open) throw new Error("No layoutHost");
+                return await host.open("stage", {view: "space"});
+            }"""
+        )
+
+        logger.info(f"Opened stage panel: {instance_id}")
+
+        # Wait for stage to be ready with measured cells
+        debug = wait_for_stage_ready(page, instance_id)
+
+        # Check for errors
+        console_errors = [m for m in console_messages if m["type"] == "error"]
+        duplicate_ids = check_duplicate_ids(page)
+
+        if console_errors:
+            raise RuntimeError(f"Console errors: {console_errors}")
+        if page_errors:
+            raise RuntimeError(f"Page errors: {page_errors}")
+        if duplicate_ids > 0:
+            raise RuntimeError(f"Duplicate DOM ids: {duplicate_ids}")
+        if debug.get("measured", 0) == 0:
+            raise RuntimeError(f"No measured cells: {debug}")
+
+        # Take the screenshot
         output.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output))
+
+        # Verify file size (smoke test: broken=40KB, baseline=245KB)
+        size_kb = output.stat().st_size / 1024
+        if size_kb < 60:
+            raise RuntimeError(f"Screenshot too small ({size_kb:.0f} KB), likely blank")
+
+        logger.info(f"Hero shot saved: {output} ({size_kb:.0f} KB)")
+
+        context.close()
         browser.close()
 
-    logger.info("Screenshot written to %s", output)
-    return 0
+        return {
+            "output": str(output),
+            "instance_id": instance_id,
+            "debug": debug,
+            "size_kb": size_kb,
+        }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=8084)
     parser.add_argument(
         "--store",
         type=Path,
@@ -111,83 +209,47 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=REPO_ROOT / "docs" / "readme" / "assets" / "dashboard-hero.png",
+        default=HERO_OUTPUT,
+        help="Where the hero shot is written.",
     )
-    parser.add_argument(
-        "--mirror",
-        type=Path,
-        default=REPO_ROOT / "docs" / "screenshots" / "dashboard-hero.png",
-    )
-    parser.add_argument(
-        "--min-records",
-        type=int,
-        default=20,
-        help="Records to wait for before the shot: the demo campaign's full set.",
-    )
-    parser.add_argument("--timeout", type=int, default=90000)
     parser.add_argument(
         "--reuse-store",
         action="store_true",
-        help="Reuse existing store; do not clear or run a campaign.",
+        help="Reuse existing store (skip campaign run).",
     )
     args = parser.parse_args()
 
-    store_path = args.store
     if not args.reuse_store:
-        clear_store(store_path)
-        store_path.parent.mkdir(parents=True, exist_ok=True)
+        clear_store(args.store)
+        logger.info("Running demo campaign...")
+        exit_code = run_demo_campaign(args.store)
+        if exit_code != 0:
+            logger.error(f"Demo campaign failed with exit code {exit_code}")
+            return 1
     else:
-        logger.info("Reusing existing store at %s", store_path)
+        logger.info("Reusing existing store")
 
-    _dashboard, _thread, server_error = start_dashboard(args.port, store_path)
+    _dashboard, _thread, server_error = start_dashboard(args.port, args.store)
     if not wait_for_http(args.port):
         logger.error("Dashboard server did not start")
         return 1
-    logger.info("Dashboard serving on port %d", args.port)
+    logger.info(f"Dashboard serving on port {args.port}")
 
-    capture_result: list[int] = []
-    capture_error: list[BaseException] = []
+    # Wait for a run with measured records
+    run_id = wait_for_records(args.port, min_records=5, timeout=180.0)
+    logger.info(f"Run {run_id} has measured records")
 
-    def run_capture() -> None:
-        try:
-            if args.reuse_store:
-                # Find the newest run with records
-                run_id = wait_for_records(args.port, 1)
-            else:
-                run_id = wait_for_records(args.port, args.min_records)
-            capture_result.append(capture(args.port, run_id, args.output, args.timeout))
-        except BaseException as exc:  # ruff: ignore[blind-except] - reported to the main thread
-            logger.exception("Capture failed")
-            capture_error.append(exc)
-
-    capture_thread = threading.Thread(target=run_capture, daemon=True)
-    capture_thread.start()
-
-    if not args.reuse_store:
-        logger.info("Running the demo campaign in-process...")
-        exit_code = run_demo_campaign(store_path)
-    else:
-        logger.info("Skipping campaign (--reuse-store)")
-        exit_code = 0
-
-    capture_thread.join(timeout=180)
-    if capture_error:
+    try:
+        result = capture_hero(args.port, args.store, args.output)
+        print(json.dumps(result, indent=2))
+        return 0
+    except Exception as e:
+        logger.exception("Capture failed")
         return 1
-    if server_error:
-        logger.error("The dashboard failed: %s", server_error[0])
-        return 1
-    if not capture_result:
-        logger.error("Capture produced no image")
-        return 1
-
-    if capture_result[0] != 0:
-        return 1
-
-    mirror_shot(args.output, args.mirror)
-
-    print(json.dumps({"screenshot": str(args.output), "campaign_exit": exit_code}))
-    return 0
+    finally:
+        if server_error:
+            logger.error(f"Dashboard failed: {server_error[0]}")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

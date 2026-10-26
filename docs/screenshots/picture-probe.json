@@ -1,0 +1,14 @@
+[
+  {
+    "viewport": "1920x1080",
+    "error": "Page.wait_for_function: Timeout 10000ms exceeded."
+  },
+  {
+    "viewport": "1440x900",
+    "error": "Page.wait_for_function: Timeout 10000ms exceeded."
+  },
+  {
+    "viewport": "1024x768",
+    "error": "Page.wait_for_function: Timeout 10000ms exceeded."
+  }
+]

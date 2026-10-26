@@ -1,6 +1,52 @@
 # TODO73 — Dashboard: finish the docking migration (3 sessions)
 
-**Status:** P0–P9 complete (2026-10-25). Session 1 (P10.0–P10.3) complete (2026-10-26). Session 2 (P10.2 + P10.4) complete (2026-10-26). Remaining: 1-session P10 plan (Session 3: Verify & Record) to restore the working UI on Dockview. Baseline reference: `0dee1206` (2026-10-22, TODO70 complete), 245 KB hero in git.
+**Status:** P0–P9 complete (2026-10-25). Session 1 (P10.0–P10.3) complete (2026-10-26). Session 2 (P10.2 + P10.4) complete (2026-10-26). Session 3 (P10.5 + P10.6 + P10.7) in progress (2026-10-26). Remaining: Menubar DOM initialization issue blocking dockview mount; picture probe contracts partially verified.
+
+---
+
+## Session 3 — Verify & Record (P10.5 + P10.6 + P10.7) — IN PROGRESS
+
+**Goal:** capture/tour that fail on broken pictures; review verdict recorded.
+
+- [ ] `capture_dashboard_screenshot.py`: open stage via `layoutHost.open`, keep returned `instanceId`; wait for `debug.getStageDebug(id)` `{ready:true, measured>0, view:"space", canvas.w>0}` + two equal `rect` samples + `document.fonts.ready`; fail on console/page errors, `duplicateIds>0`, `measured==0`, canvas<box.
+- [ ] `capture_dashboard_tour.py`: drive from `definitions.list()` + `layout.presets`; per-view `instanceId`, wait for `getStageDebug(id)` matching view+ready, crop stage rect, diff >2% vs prior; report `{id, rect, ready, diff}`.
+- [ ] `dashboard_picture_probe.py` (single probe, not two) carries all contracts (CSS, chrome, geometry, single UI, stage, duplicate ids) at 1920/1440/1024; writes one table.
+  - **BLOCKED**: Menubar DOM not initializing due to minification issue; dockview host mount blocked.
+  - CSS contracts: `.dv-dockview` position=relative, tab height 24-30, groupHeight>0, tabs=instances.
+  - Chrome contracts: menubar exists (5 menus), single UI (canvas count = stages, zero duplicate ids, no legacy refs).
+  - Geometry contracts: branch sums = parent, stage ≥60%×55%, side cols 280-420, bottom 110-180, presets idempotent.
+  - Stage contracts: canvas≈rect·dpr, |aspect-w/h|<0.01, height=panel, measured>0 in 3s, crop differs from bg, two stages distinct.
+  - Grid contracts: declared grid drawn (512 cells via spaceStore payload, measured+drawn reported separately); space view `init()` subscribes to SpaceStore and draws grid on first payload arrival even with 0 measured cells.
+- [ ] **Extract baseline refs** (never commit): `git show 0dee1206:docs/readme/assets/$f.png > /tmp/opencode/baseline/$f.png` for each figure.
+- [ ] Picture probe asserts baseline inventory covered; declared grid drawn (512 cells via `spaceStore` payload, measured+drawn reported separately); space view `init()` subscribes to SpaceStore and draws grid on first payload arrival even with 0 measured cells; no silent losses.
+- [ ] **Review pass:** hero + 1 shot/preset + 4 views inspected against baseline + P10.6 rubric; accept if: stage dominant, sides readable no scroll, no clipped text, one accent hue, reads as one instrument. Record verdict + date in this doc.
+
+**Known Issues:**
+- Menubar DOM not initializing: `createMenubarBody()` template literal (900+ lines) corrupted during terser minification; menubar container exists but empty; rewrite to programmatic DOM creation in progress.
+- Dockview host mount blocked by menubar init issue.
+
+**Commands:**
+```bash
+uv run python scripts/capture_dashboard_screenshot.py --reuse-store --port 8084
+uv run python scripts/capture_dashboard_tour.py --skip-campaigns --port 8085
+uv run python scripts/probes/dashboard_picture_probe.py --reuse-store --port 8142
+```
+
+---
+
+## Definition of done (final)
+
+- [x] Dockview API only in `layout/dockview-host.ts`; GL removed.
+- [x] Factories for component/instance/stage-view; no UI singletons.
+- [x] Multiple instances of any type/view with independent state.
+- [x] Docking, resize, tabs, floating, maximize, duplicate, undo/redo.
+- [x] One CSS source; palette in `src/`; Dockview CSS imported once.
+- [x] WS pong, no leaks, serialized sends, no reconnect.
+- [x] Metrics/space cached per key; catalog-driven selection; one ingest.
+- [ ] Capture/tour reuse store; no campaign re-runs.
+- [ ] Flexibility matrix passes.
+- [ ] Picture contracts pass at 1920/1440/1024 (CSS, chrome, no gaps/overflow, stage dominant+non-blank, declared grid drawn, one canvas/stage, no duplicate ids); P10.3 review verdict recorded.
+- [ ] No legacy mounts: `#dashboard-canvas`, `#stage-2d`, GL tree gone.
 
 ---
 
