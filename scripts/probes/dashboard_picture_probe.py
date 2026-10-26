@@ -18,12 +18,7 @@ import argparse
 import json
 import logging
 import sys
-import tempfile
 import time
-import threading
-from pathlib import Path
-
-import sys
 from pathlib import Path
 
 # Add scripts to path
@@ -122,14 +117,14 @@ def probe_viewport(port: int, viewport: dict) -> dict:
             }"""
         )
         logger.info(f"Init debug: {init_debug}")
-        
+
         # Check console for menubar errors
         console_msgs = page.evaluate("() => window.__CONSOLE_MSGS__ || []")
         logger.info(f"Console messages: {console_msgs}")
-        
+
         # Wait longer for menubar to fully render
         page.wait_for_timeout(3000)
-        
+
         # Check menubar state at multiple time points
         for wait_time in [1000, 2000, 3000]:
             page.wait_for_timeout(wait_time)
@@ -144,9 +139,9 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                 }}"""
             )
             logger.info(f"Menubar state after {wait_time}ms: {menubar_debug}")
-            if menubar_debug.get('hasMenubarDiv') and menubar_debug.get('menuCount', 0) >= 5:
+            if menubar_debug.get("hasMenubarDiv") and menubar_debug.get("menuCount", 0) >= 5:
                 break
-        
+
         try:
             page.wait_for_function(
                 "() => document.getElementById('menubar-container')?.querySelectorAll('.menubar-menu').length >= 5",
@@ -512,21 +507,21 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                 REPO_ROOT / "docs" / "screenshots" / f"{name}.png",
             ]
             current_path = next((p for p in current_paths if p.exists()), None)
-            
+
             baseline_exists = baseline_path.exists()
             current_exists = current_path is not None
-            
+
             comparison = None
             if baseline_exists and current_exists:
                 comparison = image_diff_pct(baseline_path, current_path)
-            
+
             baseline_inventory[name] = {
                 "baseline_exists": baseline_exists,
                 "current_exists": current_exists,
                 "current_path": str(current_path) if current_path else None,
                 "diff_pct": comparison,
             }
-        
+
         result["baseline_inventory"] = baseline_inventory
 
         context.close()
@@ -537,8 +532,8 @@ def probe_viewport(port: int, viewport: dict) -> dict:
 
 def image_diff_pct(img1: Path, img2: Path) -> float:
     """Calculate percentage difference between two images."""
-    from PIL import Image
     import numpy as np
+    from PIL import Image
 
     a = np.array(Image.open(img1).convert("RGB"))
     b = np.array(Image.open(img2).convert("RGB"))

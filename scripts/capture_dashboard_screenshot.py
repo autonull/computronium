@@ -15,9 +15,7 @@ import argparse
 import json
 import logging
 import sys
-import tempfile
 import time
-import threading
 from pathlib import Path
 
 # Add scripts to path
@@ -319,7 +317,7 @@ def main() -> int:
         result = capture_hero(args.port, args.store, args.output)
         print(json.dumps(result, indent=2))
         return 0
-    except Exception as e:
+    except Exception:
         logger.exception("Capture failed")
         return 1
     finally:

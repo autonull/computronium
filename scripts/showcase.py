@@ -142,7 +142,6 @@ async def run_showcase(
     from computronium.experiment.execution.adaptive_budget import (
         BudgetStrategy,
         _build_component_sets,
-        _discover_components,
     )
     from computronium.experiment.execution.deadline import Deadline
 
