@@ -4,7 +4,8 @@ import { ARM_COLORS, PALETTE } from "../../../colors.js";
 import { drawNote, drawRowFrame, type RowFrame } from "../../../stage/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { cellKey, mean, measuredCells, varyingAxes, type CellAggregate } from "../../../stage/payloads.js";
+import * as payloads from "../../../stage/payloads.js";
+import { aggregateRecords, cellKey, mean, measuredCells, varyingAxes, type CellAggregate } from "../../../stage/payloads.js";
 import type {
   StageViewDefinition,
   StageViewInstance,
@@ -214,12 +215,8 @@ export function createUncertaintyView(context: StageViewContext): StageViewInsta
   function measuredCells(runId: string, axes: any): CellAggregate[] {
     const metrics = metricsStore.get(runId);
     if (!metrics) return [];
-    // We need to reconstruct the aggregates from metrics
-    // For simplicity, we'll use the existing utility
-    const { aggregateRecords } = require("../../../stage/payloads.js") as any;
     const aggregates = aggregateRecords(metrics, axes);
-    const { measuredCells: mc } = require("../../../stage/payloads.js") as any;
-    return mc(aggregates, axes);
+    return payloads.measuredCells(aggregates, axes);
   }
 
   // Mount

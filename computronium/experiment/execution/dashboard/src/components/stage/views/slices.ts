@@ -6,7 +6,7 @@ import { drawNote, type Area } from "../../../stage/plot2d.js";
 import { metricsStore } from "../../../stores/metrics.js";
 import { spaceStore } from "../../../stores/space.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { cellKey, mean, type AxisSelection } from "../../../stage/payloads.js";
+import { aggregateRecords, cellKey, mean, type AxisSelection } from "../../../stage/payloads.js";
 import { wrapLabel } from "../../../stage/sprites.js";
 import type {
   StageViewDefinition,
@@ -270,7 +270,6 @@ export function createSlicesView(context: StageViewContext): StageViewInstance {
     // We need aggregates from metrics
     let aggregates = new Map<string, any>();
     if (metrics) {
-      const { aggregateRecords } = require("../../../stage/payloads.js") as any;
       aggregates = aggregateRecords(metrics, axesData);
     }
 

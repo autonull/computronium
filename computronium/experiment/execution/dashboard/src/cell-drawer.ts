@@ -29,8 +29,10 @@ export class CellDrawerView {
     this.disposers.push(
       workspace.onCellSelectionChange(() => this.onCellSelectionChange()),
       () => window.removeEventListener("keydown", this.onKeyDown),
+      () => window.removeEventListener("cell-selected", this.onCellSelected as EventListener),
     );
     window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("cell-selected", this.onCellSelected as EventListener);
     this.onCellSelectionChange();
   }
 

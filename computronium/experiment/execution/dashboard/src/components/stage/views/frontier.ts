@@ -307,7 +307,7 @@ export function createFrontierView(context: StageViewContext): StageViewInstance
 
   function frame(): void {
     frameBox(
-      { controls } as any,
+      { camera, controls } as any,
       new THREE.Vector3(-WIDTH / 2 - 0.6, -0.2, -DEPTH / 2 - 0.6),
       new THREE.Vector3(WIDTH / 2 + 0.6, HEIGHT + 0.6, DEPTH / 2 + 0.6),
       new THREE.Vector3(0, HEIGHT / 2, 0),

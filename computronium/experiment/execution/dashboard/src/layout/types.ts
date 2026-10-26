@@ -118,6 +118,7 @@ export interface WorkspaceStore {
   getSelectedRunId(): string | null;
   getAxes(): AxisSelection;
   setAxes(axes: AxisSelection): void;
+  getRuns(): Array<{ run_id: string }>;
   onSelectionChange(listener: () => void): () => void;
   onAxesChange(listener: () => void): () => void;
   onChange(listener: () => void): () => void;
@@ -149,6 +150,8 @@ export interface ComponentContext {
   metrics: MetricsStore;
   spaces: SpaceStore;
   commands: CommandBus;
+  /** Replace this instance's serializable state; the host persists it. */
+  setState(next: JsonValue): void;
 }
 
 export interface ComponentHandle<S extends JsonValue = JsonValue> {
@@ -221,6 +224,8 @@ export interface StageViewInstance {
   dispose(): void;
   /** Get the number of measured cells in this view (for debug/capture). */
   getMeasuredCells?(): number;
+  /** The cells a stage view holds, if it holds cells (for debug/capture). */
+  cells?(): unknown[];
 }
 
 export interface StageViewDefinition {

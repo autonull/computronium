@@ -22,6 +22,9 @@ import { initHints } from "./hints.js";
 import { menubar } from "./menubar.js";
 import { dockviewHost, DockviewHost } from "./layout/dockview-host.js";
 import { spaceStore } from "./stores/space.js";
+import { controlStore } from "./stores/control.js";
+import { metricsStore } from "./stores/metrics.js";
+import { workspaceStore } from "./stores/workspace.js";
 import { commands, registerLayoutCommands } from "./layout/commands.js";
 import { listDefinitions } from "./layout/definitions.js";
 import "./layout/components/hud.js";
@@ -169,10 +172,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   setAction("chart-variability", () => commands.execute("chart-variability"));
 
   // Control bar verbs
-  setAction("control-play", () => commands.execute("control-play"));
-  setAction("control-step", () => commands.execute("control-step"));
-  setAction("control-stop", () => commands.execute("control-stop"));
-  setAction("control-panel", () => commands.execute("control-panel"));
+  setAction("control-play", () => { const cs = (window as any).__DASHBOARD__?.controlStore; cs?.togglePlay?.(); });
+  setAction("control-step", () => { const cs = (window as any).__DASHBOARD__?.controlStore; cs?.step?.(); });
+  setAction("control-stop", () => { const cs = (window as any).__DASHBOARD__?.controlStore; cs?.stop?.(); });
+  setAction("control-panel", () => commands.execute("panel-control-bar"));
 
   // Panel commands
   setAction("panel-hud", () => commands.execute("panel-hud"));
@@ -197,7 +200,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const panel = api.activePanel;
       if (!panel) return;
       // Check if it's a stage panel (use type assertion for dockview panel)
-      if ((panel as any).component === "stage") {
+      if (panel.view.contentComponent === "stage") {
         dockviewHost.setState(panel.id, { view });
       }
     }, `View: ${view}`);
@@ -207,7 +210,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const api = dockviewHost.getApi();
       if (!api) return;
       const panel = api.activePanel;
-      if (!panel || (panel as any).component !== "stage") return;
+      if (!panel || panel.view.contentComponent !== "stage") return;
       const views = stageViews;
       const currentView = (panel.api.getParameters()?.view as string) || "space";
       const currentIndex = views.indexOf(currentView);
@@ -229,9 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setAction("help", () => helpOverlay.toggle());
   setAction("palette", () => openPalette());
   setAction("collapse-all", () => {
-    for (const panel of panels.list()) {
-      if (panel.isOpen()) panel.toggle();
-    }
+    for (const instance of dockviewHost.list()) dockviewHost.close(instance.id);
   });
   setAction("escape", () => {
     if (legacyCellDrawer.hasCellSelected()) legacyCellDrawer.hide();
@@ -318,10 +319,45 @@ window.addEventListener("keydown", (event) => {
       })),
   },
   debug: {
+    controlStore,
     instances: () => dockviewHost.list(),
     measuredCells: (instanceId?: string) => {
       return DockviewHost.getMeasuredCells(instanceId);
     },
+    stage: (instanceId?: string) => {
+      const api = dockviewHost.getApi();
+      if (!api) return null;
+      const panel = instanceId
+        ? api.getPanel(instanceId)
+        : api.panels.find((candidate) => candidate.view.contentComponent === "stage");
+      if (!panel) return null;
+      const params = (panel.api.getParameters() ?? {}) as Record<string, unknown>;
+      return {
+        id: panel.id,
+        view: params.view ?? null,
+        runId: params.runId ?? null,
+        axes: params.axes ?? null,
+        ready: DockviewHost.isStageReady(panel.id),
+        measured: DockviewHost.getMeasuredCells(panel.id),
+        cells: DockviewHost.getStageCells(panel.id),
+      };
+    },
+    setStageView: (view: string, instanceId?: string) => {
+      const api = dockviewHost.getApi();
+      if (!api) return null;
+      const panel = instanceId
+        ? api.getPanel(instanceId)
+        : api.panels.find((candidate) => candidate.view.contentComponent === "stage");
+      if (!panel) return null;
+      dockviewHost.setState(panel.id, { view });
+      return panel.id;
+    },
+    maximize: (instanceId: string) => {
+      const panel = dockviewHost.getApi()?.getPanel(instanceId);
+      if (panel) dockviewHost.getApi()?.maximizeGroup(panel);
+    },
+    metricsStore: () => metricsStore,
+    workspaceStore: () => workspaceStore,
     spaceStore: () => spaceStore,
     stageRect: (instanceId?: string) => {
       const api = dockviewHost.getApi();
@@ -346,7 +382,7 @@ window.addEventListener("keydown", (event) => {
         const handle = panel?.api?.contentRenderer?.init?.toString();
         return {
           id: panel.id,
-          type: panel.component,
+          type: panel.view.contentComponent,
           rect: panel.api.group.element.getBoundingClientRect(),
         };
       });

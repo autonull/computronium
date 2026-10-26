@@ -85,11 +85,17 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     update: [],
   };
 
-  // Promise that resolves when space data is first loaded
-  let spaceDataLoaded: (() => void) | null = null;
-  const spaceDataReady = new Promise<void>((resolve) => {
-    spaceDataLoaded = resolve;
-  });
+  function resubscribe(): void {
+    metricsUnsub?.();
+    spaceUnsub?.();
+    if (!runId) return;
+    metricsUnsub = metricsStore.subscribe(runId, () => {
+      applyAggregates();
+    });
+    spaceUnsub = spaceStore.subscribe(runId, axes, spaceValues, () => {
+      applyAxes();
+    });
+  }
 
   async function init(): Promise<void> {
     // Create readout overlay
@@ -107,33 +113,18 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
       if (newRunId !== runId || newAxes.x !== axes.x || newAxes.y !== axes.y || newAxes.z !== axes.z) {
         runId = newRunId;
         axes = newAxes;
+        resubscribe();
         applyAxes();
       }
     });
 
-    // Subscribe to metrics for this run
-    if (runId) {
-      metricsUnsub = metricsStore.subscribe(runId, () => {
-        applyAggregates();
-      });
-    }
-
-    // Subscribe to space payload for this run+axes
-    if (runId) {
-      spaceUnsub = spaceStore.subscribe(runId, axes, spaceValues, () => {
-        applyAxes();
-        spaceDataLoaded?.();
-      });
-    }
+    resubscribe();
 
     // Register per-frame update
     frameUnsub = surface.onFrame(update);
 
-    // Initial draw and wait for space data to load (if we have a runId)
-    await applyAxes();
-    if (runId) {
-      await spaceDataReady;
-    }
+    // Initial draw; space data may still be in flight
+    applyAxes();
   }
 
   function createReadout(): void {
@@ -275,6 +266,7 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     zValues = space.values[axes.z] ?? [];
     visible = true;
     buildGrid();
+    applyAggregates();
   }
 
   function buildGrid(): void {
@@ -497,7 +489,7 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
     const floor = -0.8;
 
     frameBox(
-      { controls } as any,
+      { camera, controls } as any,
       new THREE.Vector3(-halfX, floor, -halfZ),
       new THREE.Vector3(halfX, top, front),
       new THREE.Vector3(0, top / 2, 0),
@@ -842,6 +834,10 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
 
   // Refresh: handle data/view/resize changes
   function refresh(change: StageChange): void {
+    if (change.runId && change.runId !== runId) {
+      runId = change.runId;
+      resubscribe();
+    }
     if (change.kind === "data" || change.kind === "resize") {
       applyAxes();
     }
@@ -880,6 +876,9 @@ export function createSpaceView(context: StageViewContext): StageViewInstance {
         if (data.status === "measured" && data.metrics?.n_seeds) count++;
       });
       return count;
+    },
+    cells(): unknown[] {
+      return Array.from(cellDataMap.values());
     },
   };
 }

@@ -9,7 +9,7 @@
  */
 
 import { registry } from "./components/registry.js";
-import { panels } from "./panels.js";
+import { listDefinitions } from "./layout/definitions.js";
 import { listStageViews } from "./components/stage/registry.js";
 import { wsClient } from "./ws-client.js";
 import { applyPreset, getCurrentPreset } from "./layout.js";
@@ -19,9 +19,6 @@ import { dockviewHost } from "./layout/dockview-host.js";
 import { commands, layoutCommands } from "./layout/commands.js";
 import type { Component } from "./components/registry.js";
 
-function getLegacyControlPanel(): any {
-  return (window as any).__DASHBOARD__?.controlPanel ?? null;
-}
 function getLegacyControlBar(): any {
   return (window as any).__DASHBOARD__?.controlBar ?? null;
 }
@@ -513,13 +510,23 @@ export class Menubar implements Component {
       if (preset) {
         applyPreset(preset as any);
       } else if (panelId) {
-        panels.toggle(panelId);
+        this.togglePanel(panelId);
       } else if (viewId) {
         commands.execute(`view-${viewId}`);
       } else if (action) {
         await this.handleAction(action, item as HTMLElement);
       }
     });
+  }
+
+  /** Open a panel type, or close every instance of it. */
+  private togglePanel(type: string): void {
+    const open = dockviewHost.list().filter((instance) => instance.type === type);
+    if (open.length > 0) {
+      for (const instance of open) dockviewHost.close(instance.id);
+      return;
+    }
+    void dockviewHost.open(type);
   }
 
   private toggleMenu(menu: HTMLElement): void {
@@ -550,8 +557,7 @@ export class Menubar implements Component {
   private async handleAction(action: string, item: HTMLElement): Promise<void> {
     switch (action) {
       case "start-run":
-        panels.toggle("control-panel");
-        getLegacyControlPanel()?.showSection("new-run");
+        void dockviewHost.open("control-panel");
         break;
       case "pause-run":
         getLegacyControlBar()?.togglePlay();
@@ -584,10 +590,10 @@ export class Menubar implements Component {
         layoutCommands.save();
         break;
       case "minimize-all":
-        for (const p of panels.list()) { if (p.isOpen()) p.toggle(); }
+        for (const instance of dockviewHost.list()) dockviewHost.close(instance.id);
         break;
       case "restore-all":
-        for (const p of panels.list()) { if (!p.isOpen()) p.toggle(); }
+        layoutCommands.applyPreset("watch");
         break;
       case "toggle-fullscreen":
         if (!document.fullscreenElement) {
@@ -638,25 +644,21 @@ export class Menubar implements Component {
   }
 
   private bindPanelToggles(): void {
-    panels.onChange(() => this.renderPanelToggles());
+    dockviewHost.onChange(() => this.renderPanelToggles());
   }
 
   private renderPanelToggles(): void {
     const container = this.container?.querySelector("#panel-toggles");
     if (!container) return;
 
-    const panelOrder = ["control-bar", "live-rail", "caption", "discovery-legend", "hud", "control-panel", "cell-drawer", "pareto-chart", "ablation-chart", "variability-chart", "help-overlay"];
-    container.innerHTML = panelOrder
-      .map((id) => {
-        const panel = panels.get(id);
-        if (!panel) return "";
-        const open = panel.isOpen();
-        const key = panel.key ? `<kbd class="shortcut">${panel.key.toUpperCase()}</kbd>` : "";
+    const openTypes = new Set(dockviewHost.list().map((instance) => instance.type));
+    container.innerHTML = listDefinitions()
+      .map((definition) => {
+        const open = openTypes.has(definition.type);
         return `
-          <div class="menubar-item${open ? " active" : ""}" data-panel="${id}">
+          <div class="menubar-item${open ? " active" : ""}" data-panel="${definition.type}">
             <input type="checkbox" class="menubar-checkbox" ${open ? "checked" : ""}>
-            <span>${panel.label}</span>
-            ${key}
+            <span>${definition.icon ?? ""} ${definition.title}</span>
           </div>
         `;
       })
@@ -675,7 +677,7 @@ export class Menubar implements Component {
     const views = listStageViews();
     const api = dockviewHost.getApi();
     const panel = api?.activePanel;
-    const activeView = panel && (panel as any).component === "stage" ? (panel.api.getParameters()?.view as string) : null;
+    const activeView = panel && panel.view.contentComponent === "stage" ? (panel.api.getParameters()?.view as string) : null;
 
     container.innerHTML = views
       .map((v) => {

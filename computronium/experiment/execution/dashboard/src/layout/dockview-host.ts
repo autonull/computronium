@@ -1,6 +1,6 @@
 /** Dockview layout host — the only file that imports Dockview (TODO72 P2). */
 
-import { createDockview, type DockviewApi, type IDockviewPanel, type IContentRenderer, type ITabRenderer, type IWatermarkRenderer, type AddPanelOptions, type DockviewComponentOptions, type SerializedDockview, type Parameters, type DockviewPanelApi, type GroupPanelPartInitParameters, type TabPartInitParameters, type WatermarkRendererInitParameters, themeDark, type DockviewOptions } from "dockview-core";
+import { createDockview, type DockviewApi, type IDockviewPanel, type IContentRenderer, type ITabRenderer, type IWatermarkRenderer, type AddPanelOptions, type AddPanelPositionOptions, type DockviewComponentOptions, type SerializedDockview, type Parameters, type DockviewPanelApi, type GroupPanelPartInitParameters, type TabPartInitParameters, type WatermarkRendererInitParameters, themeDark } from "dockview-core";
 
 import { getDefinition, resolveState, listDefinitions, definitionTypes } from "./definitions.js";
 import { commands } from "./commands.js";
@@ -23,7 +23,7 @@ import type {
   StageViewInstance,
 } from "./types.js";
 
-function context(instanceId: string): ComponentContext {
+function context(instanceId: string, host: DockviewHost): ComponentContext {
   return {
     instanceId,
     workspace: workspaceStore,
@@ -33,6 +33,7 @@ function context(instanceId: string): ComponentContext {
       register: (id, run, title) => commands.register(id, run, title),
       execute: (id) => commands.execute(id),
     },
+    setState: (next) => host.setState(instanceId, next),
   };
 }
 
@@ -435,6 +436,25 @@ export class DockviewHost implements LayoutHost {
     return total;
   }
 
+  /** The cells a stage view holds (for the tour's cell shots). */
+  static getStageCells(instanceId?: string): unknown[] {
+    if (instanceId) return stageInstances.get(instanceId)?.cells?.() ?? [];
+    for (const view of stageInstances.values()) {
+      const cells = view.cells?.() ?? [];
+      if (cells.length > 0) return cells;
+    }
+    return [];
+  }
+
+  /** Whether a stage instance's view has drawn. */
+  static isStageReady(instanceId?: string): boolean {
+    if (instanceId) return stageInstances.get(instanceId)?.ready() ?? false;
+    for (const view of stageInstances.values()) {
+      if (view.ready()) return true;
+    }
+    return false;
+  }
+
   /** Returns a promise that resolves when the host is mounted. */
   ready(): Promise<void> {
     if (this.mounted) return Promise.resolve();
@@ -487,7 +507,7 @@ export class DockviewHost implements LayoutHost {
       const element = document.createElement("div");
       element.style.cssText = "width:100%;height:100%;overflow:auto;";
 
-      const handle = definition.create(element, jsonToParams((options as any).params) as JsonValue, context(options.id));
+      const handle = definition.create(element, jsonToParams((options as any).params) as JsonValue, context(options.id, this));
 
       let readyResolve: () => void;
       const readyPromise = new Promise<void>((resolve) => {
@@ -535,6 +555,14 @@ export class DockviewHost implements LayoutHost {
             this.emit();
           });
 
+          instance.panelApi.onDidParametersChange((params) => {
+            instance.meta.state = resolveState(definition, paramsToJson(params));
+            handle.update?.(instance.meta.state);
+            this.emit();
+          });
+
+          handle.update?.(instance.meta.state);
+
           // Try to get the panel for other operations (resize, etc.)
           const containerApi = params.containerApi ?? apiRef;
           if (containerApi) {
@@ -579,7 +607,12 @@ export class DockviewHost implements LayoutHost {
     this.mounted = true;
   }
 
-  async open(type: string, state?: JsonValue, opts: OpenOptions = {}): Promise<string> {
+  async open(
+    type: string,
+    state?: JsonValue,
+    opts: OpenOptions = {},
+    position?: AddPanelPositionOptions,
+  ): Promise<string> {
     if (!this.api) throw new Error("DockviewHost not mounted");
     const definition = getDefinition(type);
     if (!definition) throw new Error(`unknown component type: ${type}`);
@@ -598,6 +631,8 @@ export class DockviewHost implements LayoutHost {
 
     if (opts.float) {
       panelOptions.floating = true;
+    } else if (position) {
+      panelOptions.position = position;
     } else if (opts.location?.kind === "tab") {
       panelOptions.position = {
         referencePanel: opts.location.instanceId,
@@ -662,8 +697,9 @@ export class DockviewHost implements LayoutHost {
     if (!this.api) return;
     const instance = this.instances.get(instanceId);
     if (!instance) return;
-    instance.meta.state = state;
-    instance.panelApi?.updateParameters(jsonToParams(state));
+    const merged = { ...(instance.meta.state as Record<string, unknown>), ...(state as Record<string, unknown>) };
+    instance.meta.state = merged as JsonValue;
+    instance.panelApi?.updateParameters(jsonToParams(instance.meta.state));
   }
 
   list(): PanelInstanceMeta[] {
@@ -700,16 +736,59 @@ export class DockviewHost implements LayoutHost {
   async applySpec(spec: LayoutSpec): Promise<void> {
     if (!this.api) throw new Error("DockviewHost not mounted");
     this.api.closeAllGroups();
+    let anchor: string | undefined;
     for (const node of spec.nodes) {
-      if (node.kind === "panel") {
-        await this.open(node.type, node.state, { title: node.title, size: node.size });
-      } else if (node.kind === "float") {
-        await this.openAt(
-          node.panel.kind === "panel" ? node.panel.type : "hud",
-          { kind: "float", rect: node.rect },
-          node.panel.kind === "panel" ? node.panel.state : undefined,
-        );
+      const id = await this.addNode(
+        node,
+        anchor ? { referencePanel: anchor, direction: "within" } : undefined,
+      );
+      anchor ??= id;
+    }
+  }
+
+  private async addNode(
+    node: LayoutNode,
+    position?: AddPanelPositionOptions,
+  ): Promise<string> {
+    switch (node.kind) {
+      case "float": {
+        const panel = node.panel;
+        if (panel.kind !== "panel") return this.addNode(panel, position);
+        return this.open(panel.type, panel.state, {
+          title: panel.title,
+          size: { width: node.rect.width, height: node.rect.height },
+          float: true,
+        });
       }
+      case "tabs": {
+        let anchor: string | undefined;
+        for (const child of node.panels) {
+          const id = await this.addNode(
+            child,
+            anchor ? { referencePanel: anchor, direction: "within" } : position,
+          );
+          anchor ??= id;
+        }
+        return anchor!;
+      }
+      case "split": {
+        let anchor: string | undefined;
+        for (const child of node.children) {
+          const id = await this.addNode(
+            child,
+            anchor
+              ? {
+                  referencePanel: anchor,
+                  direction: node.direction === "row" ? "right" : "below",
+                }
+              : position,
+          );
+          anchor ??= id;
+        }
+        return anchor!;
+      }
+      case "panel":
+        return this.open(node.type, node.state, { title: node.title, size: node.size }, position);
     }
   }
 

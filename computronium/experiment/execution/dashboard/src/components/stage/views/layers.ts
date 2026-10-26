@@ -6,7 +6,7 @@ import { frameBox } from "../../../stage/framing.js"
 import { metricsStore } from "../../../stores/metrics.js";
 import { spaceStore } from "../../../stores/space.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { cellKey, mean, type AxisSelection } from "../../../stage/payloads.js";
+import { aggregateRecords, cellKey, mean, type AxisSelection } from "../../../stage/payloads.js";
 import { wrapLabel } from "../../../stage/sprites.js";
 import { createTextSprite } from "../../../stage/sprites.js";
 import type {
@@ -244,7 +244,6 @@ export function createLayersView(context: StageViewContext): StageViewInstance {
     // We need aggregates from metrics
     let aggregates = new Map<string, any>();
     if (metrics) {
-      const { aggregateRecords } = require("../../../stage/payloads.js") as any;
       aggregates = aggregateRecords(metrics, axesData);
     }
 
@@ -426,7 +425,7 @@ export function createLayersView(context: StageViewContext): StageViewInstance {
     const halfStack = (sheets.length * LAYER_GAP) / 2;
 
     frameBox(
-      { controls } as any,
+      { camera, controls } as any,
       new THREE.Vector3(-halfX - 1.4, -halfStack - 0.4, -halfY - 0.6),
       new THREE.Vector3(halfX + 1.4, halfStack + 0.4, halfY + 0.6),
       new THREE.Vector3(0, 0, 0),

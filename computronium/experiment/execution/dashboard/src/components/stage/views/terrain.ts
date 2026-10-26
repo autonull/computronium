@@ -6,7 +6,7 @@ import { frameBox } from "../../../stage/framing.js"
 import { metricsStore } from "../../../stores/metrics.js";
 import { spaceStore } from "../../../stores/space.js";
 import { workspaceStore } from "../../../stores/workspace.js";
-import { cellKey, mean, type AxisSelection } from "../../../stage/payloads.js";
+import { aggregateRecords, cellKey, mean, type AxisSelection } from "../../../stage/payloads.js";
 import { createTextSprite } from "../../../stage/sprites.js";
 import type {
   StageViewDefinition,
@@ -223,7 +223,6 @@ export function createTerrainView(context: StageViewContext): StageViewInstance 
     // We need aggregates from metrics
     let aggregates = new Map<string, any>();
     if (metrics) {
-      const { aggregateRecords } = require("../../../stage/payloads.js") as any;
       aggregates = aggregateRecords(metrics, axesData);
     }
 
@@ -356,7 +355,7 @@ export function createTerrainView(context: StageViewContext): StageViewInstance 
     const halfZ = ((yValues.length - 1) * SPACING) / 2;
 
     frameBox(
-      { controls } as any,
+      { camera, controls } as any,
       new THREE.Vector3(-halfX - 1.2, -PIT_DEPTH - 0.3, -halfZ),
       new THREE.Vector3(halfX + 1.2, MAX_HEIGHT, halfZ + 1.4),
       new THREE.Vector3(0, MAX_HEIGHT / 3, 0),

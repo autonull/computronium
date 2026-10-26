@@ -410,7 +410,7 @@ export function createMultirunView(context: StageViewContext): StageViewInstance
     const top = (yCount - 1) * SPACING + 0.8;
 
     frameBox(
-      { controls } as any,
+      { camera, controls } as any,
       new THREE.Vector3(-halfX, -0.8, -halfZ),
       new THREE.Vector3(halfX, top, halfZ + 1.8),
       new THREE.Vector3(0, top / 3, 0),

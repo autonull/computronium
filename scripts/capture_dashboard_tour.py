@@ -322,10 +322,13 @@ def open_cell(page: Page, status: str) -> dict[str, Any] | None:
     return page.evaluate(
         """(status) => {
             const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.discoveryMap) return null;
+            if (!dbg || !dbg.debug) return null;
+            const stageCells = dbg.debug.stage?.();
+            if (!stageCells) return null;
+            const cells = stageCells.cells ?? [];
             let best = null;
             let fallback = null;
-            for (const cell of dbg.discoveryMap.cellDataMap.values()) {
+            for (const cell of cells) {
                 if (cell.status !== status) continue;
                 if (!fallback) fallback = cell;
                 const acc = cell.metrics ? cell.metrics.val_acc : null;
@@ -351,8 +354,10 @@ def open_void_cell(page: Page) -> dict[str, Any] | None:
     return page.evaluate(
         """() => {
             const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.discoveryMap) return null;
-            const cells = Array.from(dbg.discoveryMap.cellDataMap.values());
+            if (!dbg || !dbg.debug) return null;
+            const stageCells = dbg.debug.stage?.();
+            if (!stageCells) return null;
+            const cells = stageCells.cells ?? [];
             const arms = new Set();
             for (const cell of cells) {
                 if (cell.status === 'measured') arms.add(cell.coordinate.credit);
@@ -439,7 +444,6 @@ def enlarge_plotter(page: Page, tab: str) -> None:
     """
     page.evaluate(
         """(tab) => {
-            const dbg = window.__DASHBOARD__;
             const panel = document.getElementById('plotter-' + tab);
             if (!panel) return;
             panel.style.position = 'fixed';
@@ -448,10 +452,10 @@ def enlarge_plotter(page: Page, tab: str) -> None:
             panel.style.right = '70px';
             panel.style.bottom = '70px';
             panel.style.zIndex = '400';
-            const plot = dbg.plotter[tab + 'Plot'];
-            const host = document.getElementById('plotter-' + tab + '-chart');
-            if (plot && host) {
-                plot.setSize({ width: host.clientWidth, height: host.clientHeight });
+            const canvas = panel.querySelector('canvas');
+            if (canvas) {
+                canvas.style.width = '100%';
+                canvas.style.height = '100%';
             }
         }""",
         tab,
@@ -465,32 +469,28 @@ def read_control(port: int) -> dict[str, Any]:
 
 
 def wait_for_measured(page: Page, timeout_ms: int) -> None:
-    """Wait for the map to show a cell the run measured."""
+    """Wait for the stage to show a cell the run measured."""
     page.wait_for_function(
-        """() => {
+        """(timeout) => {
             const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.discoveryMap) return false;
-            for (const cell of dbg.discoveryMap.cellDataMap.values()) {
-                if (cell.status === 'measured') {
-                    return true;
-                }
-            }
-            return false;
+            if (!dbg || !dbg.debug) return false;
+            const cells = dbg.debug.measuredCells?.();
+            return cells > 0;
         }""",
         timeout=timeout_ms,
     )
 
 
 def wait_for_void(page: Page, timeout_ms: int) -> None:
-    """Wait for the map to show a cell the system refuses."""
+    """Wait for the stage to show a cell the system refuses."""
     page.wait_for_function(
-        """() => {
+        """(timeout) => {
             const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.discoveryMap) return false;
-            for (const cell of dbg.discoveryMap.cellDataMap.values()) {
-                if (cell.status === 'void') return true;
-            }
-            return false;
+            if (!dbg || !dbg.debug) return false;
+            const stageCells = dbg.debug.stage?.();
+            if (!stageCells) return false;
+            const cells = stageCells.cells ?? [];
+            return cells.some((cell: any) => cell.status === 'void');
         }""",
         timeout=timeout_ms,
     )
@@ -501,10 +501,12 @@ def wait_for_chart(page: Page, tab: str, timeout_ms: int) -> None:
     page.wait_for_function(
         """(tab) => {
             const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.plotter) return false;
-            if (!dbg.plotter.records || dbg.plotter.records.length === 0) return false;
-            const plot = dbg.plotter[tab + 'Plot'];
-            return !!plot && plot.width > 0 && plot.height > 0;
+            if (!dbg || !dbg.debug) return false;
+            const panel = document.getElementById('plotter-' + tab);
+            if (!panel) return false;
+            // Check if the chart canvas has content
+            const canvas = panel.querySelector('canvas');
+            return !!canvas && canvas.width > 0 && canvas.height > 0;
         }""",
         arg=tab,
         timeout=timeout_ms,
@@ -515,8 +517,6 @@ def wait_for_caption(page: Page, timeout_ms: int) -> None:
     """Wait for the caption to have something to say."""
     page.wait_for_function(
         """() => {
-            const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.caption) return false;
             const headline = document.getElementById('caption-headline');
             if (!headline) return false;
             const text = (headline.textContent || '').trim();
@@ -531,9 +531,9 @@ def wait_for_view(page: Page, view_id: str, timeout_ms: int) -> None:
     page.wait_for_function(
         """(viewId) => {
             const dbg = window.__DASHBOARD__;
-            if (!dbg || !dbg.viewSwitcher) return false;
-            if (dbg.viewSwitcher.activeId !== viewId) return false;
-            return dbg.viewSwitcher.isReady(viewId);
+            if (!dbg || !dbg.debug) return false;
+            const stageInfo = dbg.debug.stage?.();
+            return stageInfo && stageInfo.view === viewId && stageInfo.ready;
         }""",
         arg=view_id,
         timeout=timeout_ms,
@@ -867,7 +867,7 @@ class Tour:
 
         # The round trip: pause the run, and read the plane.
         before = read_control(self.port)["control"]
-        self.page.evaluate("() => window.__DASHBOARD__.controlBar.togglePlay()")
+        self.page.evaluate("() => window.__DASHBOARD__.debug.controlStore.togglePlay()")
         self.page.wait_for_timeout(1200)
         after = read_control(self.port)["control"]
         if after["paused"] == before["paused"]:
@@ -876,7 +876,7 @@ class Tour:
                 "the control bar pressed a verb and the plane did not move",
             )
         # And back again: the run must not be left paused by a photograph.
-        self.page.evaluate("() => window.__DASHBOARD__.controlBar.togglePlay()")
+        self.page.evaluate("() => window.__DASHBOARD__.debug.controlStore.togglePlay()")
         self.page.wait_for_timeout(1200)
         restored = read_control(self.port)["control"]
         if restored["paused"] != before["paused"]:
@@ -1468,50 +1468,51 @@ def main() -> int:
         demo_run_id = latest_run(args.port)
         logger.info("Demo run %s has %d+ records", demo_run_id, args.min_records)
 
-        # Run the tour NOW (before third campaign) — no WebSocket conflicts
-        logger.info("Running the dashboard tour...")
-        outcomes: list[Outcome] = []
-        capture_error: list[BaseException] = []
+    # Run the tour NOW (before third campaign) — no WebSocket conflicts
+    logger.info("Running the dashboard tour...")
+    outcomes: list[Outcome] = []
+    capture_error: list[BaseException] = []
 
-        def run_capture() -> None:
-            try:
-                outcomes.extend(
-                    capture(
-                        args.port,
-                        store_path,
-                        args.output,
-                        args.mirror,
-                        args.timeout,
-                        args.min_records,
-                        demo_run_id,
-                    )
+    def run_capture() -> None:
+        try:
+            outcomes.extend(
+                capture(
+                    args.port,
+                    store_path,
+                    args.output,
+                    args.mirror,
+                    args.timeout,
+                    args.min_records,
+                    demo_run_id,
                 )
-            except BaseException as exc:  # ruff: ignore[blind-except]
-                logger.exception("The tour failed")
-                capture_error.append(exc)
+            )
+        except BaseException as exc:  # ruff: ignore[blind-except]
+            logger.exception("The tour failed")
+            capture_error.append(exc)
 
-        capture_thread = threading.Thread(target=run_capture, daemon=True)
-        capture_thread.start()
-        capture_thread.join(timeout=600)
+    capture_thread = threading.Thread(target=run_capture, daemon=True)
+    capture_thread.start()
+    capture_thread.join(timeout=600)
 
-        if capture_error:
-            return 1
-        if server_error:
-            logger.error("The dashboard failed: %s", server_error[0])
-            return 1
-        if not outcomes:
-            logger.error("The tour produced no shots")
-            return 1
+    if capture_error:
+        return 1
+    if server_error:
+        logger.error("The dashboard failed: %s", server_error[0])
+        return 1
+    if not outcomes:
+        logger.error("The tour produced no shots")
+        return 1
 
+    if not args.skip_campaigns:
         # NOW run the third campaign (re-measure demo cells) for the comp diff
         logger.info("Running the third campaign (re-measure demo cells) in-process...")
         run_third_campaign(store_path)
 
-        for outcome in outcomes:
-            if outcome.failed:
-                logger.warning("%s: %s", outcome.shot.name, outcome.detail)
-            else:
-                logger.info("%s: %s", outcome.shot.name, outcome.detail)
+    for outcome in outcomes:
+        if outcome.failed:
+            logger.warning("%s: %s", outcome.shot.name, outcome.detail)
+        else:
+            logger.info("%s: %s", outcome.shot.name, outcome.detail)
 
     failed = [outcome.shot.name for outcome in outcomes if outcome.failed]
     print(

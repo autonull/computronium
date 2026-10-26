@@ -1,41 +1,110 @@
 /** Layout presets as LayoutSpec (TODO72 P2). */
 
 import { dockviewHost } from "./layout/dockview-host.js";
-import type { LayoutSpec } from "./layout/types.js";
+import type { LayoutNode, LayoutSpec } from "./layout/types.js";
 
-export type Preset = "watch" | "audit" | "drive";
+export type Preset = "watch" | "audit" | "drive" | "free";
+
+const stage = (view = "space"): LayoutNode => ({
+  kind: "panel",
+  type: "stage",
+  title: "3D Stage",
+  state: { view },
+  size: { width: 1280, height: 720 },
+});
 
 const PRESET_SPECS: Record<Preset, LayoutSpec> = {
   watch: {
     version: 1,
     nodes: [
-      { kind: "panel", type: "control-bar", title: "Control Bar" },
-      { kind: "panel", type: "live-rail", title: "Live Rail" },
-      { kind: "panel", type: "caption", title: "Caption" },
-      { kind: "panel", type: "discovery-legend", title: "Discovery Legend" },
-      { kind: "panel", type: "hud", title: "Mission Control" },
+      {
+        kind: "split",
+        direction: "row",
+        children: [
+          {
+            kind: "split",
+            direction: "column",
+            children: [stage(), { kind: "panel", type: "caption", title: "Caption" }],
+          },
+          {
+            kind: "tabs",
+            panels: [
+              { kind: "panel", type: "hud", title: "Mission Control" },
+              { kind: "panel", type: "discovery-legend", title: "Discovery Map" },
+              { kind: "panel", type: "live-rail", title: "Live Rail" },
+            ],
+          },
+        ],
+      },
     ],
   },
   audit: {
     version: 1,
     nodes: [
-      { kind: "panel", type: "control-bar", title: "Control Bar" },
-      { kind: "panel", type: "live-rail", title: "Live Rail" },
-      { kind: "panel", type: "caption", title: "Caption" },
-      { kind: "panel", type: "discovery-legend", title: "Discovery Legend" },
-      { kind: "panel", type: "pareto-chart", title: "Pareto" },
-      { kind: "panel", type: "ablation-chart", title: "Ablation" },
-      { kind: "panel", type: "variability-chart", title: "Variability" },
+      {
+        kind: "split",
+        direction: "row",
+        children: [
+          stage(),
+          {
+            kind: "tabs",
+            panels: [
+              { kind: "panel", type: "pareto-chart", title: "Pareto" },
+              { kind: "panel", type: "ablation-chart", title: "Ablation" },
+              { kind: "panel", type: "variability-chart", title: "Variability" },
+              { kind: "panel", type: "discovery-legend", title: "Discovery Map" },
+            ],
+          },
+        ],
+      },
     ],
   },
   drive: {
     version: 1,
     nodes: [
-      { kind: "panel", type: "control-bar", title: "Control Bar" },
-      { kind: "panel", type: "live-rail", title: "Live Rail" },
-      { kind: "panel", type: "caption", title: "Caption" },
-      { kind: "panel", type: "discovery-legend", title: "Discovery Legend" },
-      { kind: "panel", type: "control-panel", title: "Control Panel" },
+      {
+        kind: "split",
+        direction: "row",
+        children: [
+          {
+            kind: "split",
+            direction: "column",
+            children: [stage(), { kind: "panel", type: "control-bar", title: "Control Bar" }],
+          },
+          {
+            kind: "tabs",
+            panels: [
+              { kind: "panel", type: "control-panel", title: "Control Panel" },
+              { kind: "panel", type: "hud", title: "Mission Control" },
+              { kind: "panel", type: "live-rail", title: "Live Rail" },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  free: {
+    version: 1,
+    nodes: [
+      {
+        kind: "split",
+        direction: "row",
+        children: [
+          stage(),
+          {
+            kind: "tabs",
+            panels: [
+              { kind: "panel", type: "hud", title: "Mission Control" },
+              { kind: "panel", type: "live-rail", title: "Live Rail" },
+            ],
+          },
+        ],
+      },
+      {
+        kind: "float",
+        panel: { kind: "panel", type: "discovery-legend", title: "Discovery Map" },
+        rect: { x: 1200, y: 120, width: 420, height: 360 },
+      },
     ],
   },
 };
@@ -54,7 +123,7 @@ export function getCurrentPreset(): Preset {
 }
 
 export function cyclePreset(): void {
-  const presets: Preset[] = ["watch", "audit", "drive"];
+  const presets: Preset[] = ["watch", "audit", "drive", "free"];
   const idx = presets.findIndex((p) => p === currentPreset);
   applyPreset(presets[(idx + 1) % presets.length]);
 }

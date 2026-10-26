@@ -34,7 +34,7 @@ interface Instance {
 
 const CASCADE = 26;
 
-function context(instanceId: string): ComponentContext {
+function context(instanceId: string, host: AbsoluteHost): ComponentContext {
   return {
     instanceId,
     workspace: workspaceStore,
@@ -44,6 +44,7 @@ function context(instanceId: string): ComponentContext {
       register: (id, run, title) => commands.register(id, run, title),
       execute: (id) => commands.execute(id),
     },
+    setState: (next) => host.setState(instanceId, next),
   };
 }
 
@@ -124,7 +125,7 @@ export class AbsoluteHost implements LayoutHost {
     this.makeDraggable(element, header);
     layer.appendChild(element);
 
-    const handle = definition.create(body, resolved, context(id));
+    const handle = definition.create(body, resolved, context(id, this));
     this.instances.set(id, {
       meta: {
         id,

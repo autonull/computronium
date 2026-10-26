@@ -553,7 +553,7 @@ stable at 31; no page/console errors; 25 s walltime.
 
 **Gate:** hero-quality layout; persistence round-trip; unknown-type pruning.
 
-### P9 — Capture, tour, close-out (1 d) — IN PROGRESS (2026-10-25)
+### P9 — Capture, tour, close-out (1 d) — PARTIAL (2026-10-25)
 
 - [x] `capture_dashboard_screenshot.py`: `--reuse-store` flag, auto-opens stage panel, polls for measured cells.
 - [x] Updated probe + capture to use `__DASHBOARD__.debug` API.
@@ -561,8 +561,8 @@ stable at 31; no page/console errors; 25 s walltime.
 - [x] All 25 stage views have `init()` method for async initialization.
 - [x] Space payload fetch working (20 records in store).
 - [x] Fix space view async `init()` to populate cells before capture (deferred view init until Dockview `init` callback provides params; `init()` awaits `spaceDataReady` promise).
-- [ ] Hero shot < 60s with `--reuse-store`.
-- [ ] Tour all frames; >2% view diffs.
+- [x] Hero shot < 60s with `--reuse-store` (40KB, 1920x1080).
+- [ ] Tour all frames; >2% view diffs (partial: watch/audit/drive/free/map done).
 
 **Gate:** hero < 60 s with `--reuse-store`; tour all frames; >2% view diffs.
 

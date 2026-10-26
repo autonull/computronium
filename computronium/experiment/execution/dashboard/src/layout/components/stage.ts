@@ -43,9 +43,15 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
     state: JsonValue,
     ctx: ComponentContext,
   ): ComponentHandle<JsonValue> {
+    host.style.display = "flex";
+    host.style.flexDirection = "column";
+    host.style.overflow = "hidden";
+
     // Create the surface
     const surface = new StageSurfaceImpl();
     host.appendChild(surface.root);
+    surface.root.style.flex = "1 1 auto";
+    surface.root.style.minHeight = "0";
 
     const instanceId = ctx.instanceId;
     let viewInstance: StageViewInstance | null = null;
@@ -53,8 +59,72 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
     let currentView: string | null = null;
     let currentRunId: string | null = null;
     let currentAxes: { x: string; y: string; z: string } | null = null;
+    let panelState: StageState = { ...defaultStageState, ...(state as unknown as StageState) };
 
     surface.start();
+
+    const header = document.createElement("div");
+    header.className = "stage-header";
+    header.style.cssText = `
+      display: flex; align-items: center; gap: 8px;
+      flex: 0 0 auto; height: 30px; padding: 0 8px;
+      background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+      font-size: 11px; color: var(--text-secondary);
+    `;
+
+    const viewSelect = document.createElement("select");
+    viewSelect.className = "stage-view-select";
+    viewSelect.title = "Stage view";
+    for (const definition of listStageViews()) {
+      const option = document.createElement("option");
+      option.value = definition.view;
+      option.textContent = definition.title;
+      viewSelect.appendChild(option);
+    }
+    viewSelect.style.cssText = "background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; padding: 2px 6px;";
+    viewSelect.addEventListener("change", () => ctx.setState({ view: viewSelect.value }));
+
+    const runSelect = document.createElement("select");
+    runSelect.className = "stage-run-select";
+    runSelect.title = "Run";
+    runSelect.style.cssText = viewSelect.style.cssText;
+    runSelect.addEventListener("change", () =>
+      ctx.setState({ runId: runSelect.value || null }),
+    );
+
+    header.append(viewSelect, runSelect);
+    host.insertBefore(header, surface.root);
+
+    const renderRuns = (): void => {
+      const runs = ctx.workspace.getRuns();
+      const selected = effectiveRunId();
+      runSelect.innerHTML = "";
+      const workspaceOption = document.createElement("option");
+      workspaceOption.value = "";
+      workspaceOption.textContent = "Workspace run";
+      runSelect.appendChild(workspaceOption);
+      for (const run of runs) {
+        const option = document.createElement("option");
+        option.value = run.run_id;
+        option.textContent = run.run_id.slice(0, 8);
+        runSelect.appendChild(option);
+      }
+      runSelect.value = panelState.runId ?? "";
+      runSelect.title = selected ?? "No run selected";
+    };
+
+    const effectiveRunId = (): string | null =>
+      panelState.runId ?? ctx.workspace.getSelectedRunId();
+
+    const effectiveAxes = (): { x: string; y: string; z: string } => {
+      const axes = panelState.axes ?? ctx.workspace.getAxes();
+      return { x: axes.x, y: axes.y, z: axes.z };
+    };
+
+    const syncHeader = (): void => {
+      viewSelect.value = panelState.view ?? getDefaultStageView();
+      renderRuns();
+    };
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
@@ -67,15 +137,12 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
 
     // Subscribe to workspace changes for run/axes updates
     const workspaceUnsub = ctx.workspace.onChange(() => {
-      if (viewInstance) {
-        const runId = currentRunId ?? ctx.workspace.getSelectedRunId();
-        const axes = ctx.workspace.getAxes();
-        viewInstance.refresh({ kind: "data", runId: runId ?? undefined });
-      }
+      syncHeader();
+      ensureViewInstance(panelState);
     });
 
     const ensureViewInstance = (st: StageState): void => {
-      const view = st.view ?? "space";
+      const view = st.view ?? getDefaultStageView();
       const runId = st.runId ?? ctx.workspace.getSelectedRunId();
       const axes = st.axes ?? ctx.workspace.getAxes();
 
@@ -83,7 +150,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
       const runChanged = runId !== currentRunId;
       const axesChanged = axes.x !== currentAxes?.x || axes.y !== currentAxes?.y || axes.z !== currentAxes?.z;
 
-      if (viewChanged || !viewInstance) {
+      if (viewChanged || runChanged || axesChanged || !viewInstance) {
         // Dispose old view if switching
         if (viewInstance) {
           viewInstance.dispose();
@@ -91,7 +158,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
         }
 
         // Create new view instance
-        const viewState = { ...st, runId };
+        const viewState = { ...st, runId, axes };
         viewInstance = createStageViewInstance(view, {
           surface: surface as StageSurface,
           flat: surface.flat,
@@ -111,11 +178,6 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
         currentView = view;
         currentRunId = runId;
         currentAxes = { ...axes };
-      } else if (runChanged || axesChanged) {
-        // Same view, different run/axes — just refresh
-        currentRunId = runId;
-        currentAxes = { ...axes };
-        viewInstance?.refresh({ kind: "data", runId: runId ?? undefined });
       }
     };
 
@@ -125,8 +187,9 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
         return viewInitPromise ?? undefined;
       },
       update(next: JsonValue): void {
-        const nextState = next as unknown as StageState;
-        ensureViewInstance(nextState);
+        panelState = { ...panelState, ...(next as unknown as StageState) };
+        syncHeader();
+        ensureViewInstance(panelState);
       },
       dispose(): void {
         resizeObserver.disconnect();
@@ -138,7 +201,8 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
     };
 
     // Initialize with initial state (which may be empty - update will be called again with real params)
-    ensureViewInstance(state as unknown as StageState);
+    syncHeader();
+    ensureViewInstance(panelState);
 
     return handle;
   },
