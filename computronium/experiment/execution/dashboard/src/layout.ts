@@ -1,16 +1,54 @@
 /** Layout presets as LayoutSpec (TODO72 P2). */
 
 import { dockviewHost } from "./layout/dockview-host.js";
-import type { LayoutNode, LayoutSpec } from "./layout/types.js";
+import type { LayoutNode, LayoutSpec, Size } from "./layout/types.js";
 
 export type Preset = "watch" | "audit" | "drive" | "free";
 
+/** Stage panel with ratio-based sizing (centre pane ≥ 55% × 55%). */
 const stage = (view = "space"): LayoutNode => ({
   kind: "panel",
   type: "stage",
   title: "3D Stage",
   state: { view },
-  size: { width: 1280, height: 720 },
+  // No absolute size — stage claims remaining space via flex
+  size: { ratio: 1, width: 1280, height: 720 },
+});
+
+/** Left column: legend + control-panel (clamped 300–360px). */
+const leftColumn = (): LayoutNode => ({
+  kind: "split",
+  direction: "column",
+  size: { ratio: 0.175, minPx: 300, maxPx: 360, width: 300, height: 1080 },
+  children: [
+    { kind: "panel", type: "discovery-legend", title: "Discovery Map", size: { ratio: 0.5, width: 300, height: 540 } },
+    { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 300, height: 540 } },
+  ],
+});
+
+/** Right column: hud + pareto + ablation + variability (clamped 320–400px). */
+const rightColumn = (): LayoutNode => ({
+  kind: "split",
+  direction: "column",
+  size: { ratio: 0.18, minPx: 320, maxPx: 400, width: 320, height: 1080 },
+  children: [
+    { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 270 } },
+    { kind: "panel", type: "pareto-chart", title: "Pareto", size: { ratio: 0.25, width: 320, height: 270 } },
+    { kind: "panel", type: "ablation-chart", title: "Ablation", size: { ratio: 0.25, width: 320, height: 270 } },
+    { kind: "panel", type: "variability-chart", title: "Variability", size: { ratio: 0.25, width: 320, height: 270 } },
+  ],
+});
+
+/** Bottom row: control-bar + caption + live-rail (clamped 120–160px). */
+const bottomRow = (): LayoutNode => ({
+  kind: "split",
+  direction: "row",
+  size: { ratio: 0.14, minPx: 120, maxPx: 160, width: 1920, height: 120 },
+  children: [
+    { kind: "panel", type: "control-bar", title: "Control Bar", size: { ratio: 0.33, width: 640, height: 120 } },
+    { kind: "panel", type: "caption", title: "Caption", size: { ratio: 0.34, width: 640, height: 120 } },
+    { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.33, width: 640, height: 120 } },
+  ],
 });
 
 const PRESET_SPECS: Record<Preset, LayoutSpec> = {
@@ -20,22 +58,14 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
       {
         kind: "split",
         direction: "row",
+        size: { ratio: 1, width: 1920, height: 1080 },
         children: [
-          {
-            kind: "split",
-            direction: "column",
-            children: [stage(), { kind: "panel", type: "caption", title: "Caption" }],
-          },
-          {
-            kind: "tabs",
-            panels: [
-              { kind: "panel", type: "hud", title: "Mission Control" },
-              { kind: "panel", type: "discovery-legend", title: "Discovery Map" },
-              { kind: "panel", type: "live-rail", title: "Live Rail" },
-            ],
-          },
+          leftColumn(),
+          stage(),
+          rightColumn(),
         ],
       },
+      bottomRow(),
     ],
   },
   audit: {
@@ -44,19 +74,14 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
       {
         kind: "split",
         direction: "row",
+        size: { ratio: 1, width: 1920, height: 1080 },
         children: [
+          leftColumn(),
           stage(),
-          {
-            kind: "tabs",
-            panels: [
-              { kind: "panel", type: "pareto-chart", title: "Pareto" },
-              { kind: "panel", type: "ablation-chart", title: "Ablation" },
-              { kind: "panel", type: "variability-chart", title: "Variability" },
-              { kind: "panel", type: "discovery-legend", title: "Discovery Map" },
-            ],
-          },
+          rightColumn(),
         ],
       },
+      bottomRow(),
     ],
   },
   drive: {
@@ -65,22 +90,23 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
       {
         kind: "split",
         direction: "row",
+        size: { ratio: 1, width: 1920, height: 1080 },
         children: [
+          leftColumn(),
+          stage(),
           {
             kind: "split",
             direction: "column",
-            children: [stage(), { kind: "panel", type: "control-bar", title: "Control Bar" }],
-          },
-          {
-            kind: "tabs",
-            panels: [
-              { kind: "panel", type: "control-panel", title: "Control Panel" },
-              { kind: "panel", type: "hud", title: "Mission Control" },
-              { kind: "panel", type: "live-rail", title: "Live Rail" },
+            size: { ratio: 0.18, minPx: 320, maxPx: 400, width: 320, height: 1080 },
+            children: [
+              { kind: "panel", type: "control-panel", title: "Control Panel", size: { ratio: 0.5, width: 320, height: 540 } },
+              { kind: "panel", type: "hud", title: "Mission Control", size: { ratio: 0.25, width: 320, height: 270 } },
+              { kind: "panel", type: "live-rail", title: "Live Rail", size: { ratio: 0.25, width: 320, height: 270 } },
             ],
           },
         ],
       },
+      bottomRow(),
     ],
   },
   free: {
@@ -89,17 +115,14 @@ const PRESET_SPECS: Record<Preset, LayoutSpec> = {
       {
         kind: "split",
         direction: "row",
+        size: { ratio: 1, width: 1920, height: 1080 },
         children: [
+          leftColumn(),
           stage(),
-          {
-            kind: "tabs",
-            panels: [
-              { kind: "panel", type: "hud", title: "Mission Control" },
-              { kind: "panel", type: "live-rail", title: "Live Rail" },
-            ],
-          },
+          rightColumn(),
         ],
       },
+      bottomRow(),
       {
         kind: "float",
         panel: { kind: "panel", type: "discovery-legend", title: "Discovery Map" },

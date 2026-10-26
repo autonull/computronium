@@ -1,6 +1,6 @@
 # TODO73 — Dashboard: finish the docking migration (3 sessions)
 
-**Status:** P0–P9 complete (2026-10-25). Session 1 (P10.0–P10.3) complete (2026-10-26). Remaining: 2-session P10 plan (Session 2: Geometry & Stage, Session 3: Verify & Record) to restore the working UI on Dockview. Baseline reference: `0dee1206` (2026-10-22, TODO70 complete), 245 KB hero in git.
+**Status:** P0–P9 complete (2026-10-25). Session 1 (P10.0–P10.3) complete (2026-10-26). Session 2 (P10.2 + P10.4) complete (2026-10-26). Remaining: 1-session P10 plan (Session 3: Verify & Record) to restore the working UI on Dockview. Baseline reference: `0dee1206` (2026-10-22, TODO70 complete), 245 KB hero in git.
 
 ---
 
@@ -82,31 +82,31 @@ uv run python scripts/probes/dashboard_picture_probe.py --store experiment.duckd
 
 ---
 
-## Session 2 — Geometry & Stage (P10.2 + P10.4) — 1 d
+## Session 2 — Geometry & Stage (P10.2 + P10.4) — 1 d ✅ COMPLETE (2026-10-26)
 
 **Goal:** correct layout geometry + stage that fills its panel and frames.
 
-- [ ] `applySpec` level-order builder (one leaf per direct child, then recurse);
+- [x] `applySpec` level-order builder (one leaf per direct child, then recurse);
       `api.clear()` first; assert `instances.size===0` after.
-- [ ] `LayoutNode.panel.size` = `Size & {ratio?: number; px?: number}`.
-- [ ] Presets as ratios: `left=0.175`, `right=0.18`, `bottom=0.14` with clamps
+- [x] `LayoutNode.panel.size` = `Size & {ratio?: number; px?: number}`.
+- [x] Presets as ratios: `left=0.175`, `right=0.18`, `bottom=0.14` with clamps
       `[300,360]`, `[320,400]`, `[120,160]`; delete `stageDefinition.defaultSize`.
-- [ ] Recovery composition (watch): left `[legend, control-panel]`, centre
+- [x] Recovery composition (watch): left `[legend, control-panel]`, centre
       `stage`, right `[hud, pareto, ablation, variability]`, bottom
       `[control-bar, caption, live-rail]`.
-- [ ] Stage panel: remove 30 px flex header → overlay toolbar
+- [x] Stage panel: remove 30 px flex header → overlay toolbar
       (`position:absolute; top:8px; right:8px; height:24px; pointer-events:none`
       with child `pointer-events:auto`; holds view/run selects, badges, maximize;
       fades to 40% after 2s idle, restores on hover/focus).
       Surface host stays `display:flex; flex-direction:column; overflow:hidden`
       with `surface.root` at `flex:1 1 auto; min-height:0` — toolbar never
       reduces canvas height.
-- [ ] `StageSurfaceImpl.root` = `position:absolute; inset:0`; `ResizeObserver`
+- [x] `StageSurfaceImpl.root` = `position:absolute; inset:0`; `ResizeObserver`
       on root; `resize()` before first `frameBox`.
-- [ ] `StageCanvasImpl.area()` = `{x:0,y:0,w,h}` from surface; delete
+- [x] `StageCanvasImpl.area()` = `{x:0,y:0,w,h}` from surface; delete
       `FREE_WIDTH/FREE_HEIGHT`; fix `space.ts` tooltip and `multirun.ts`
       legend host to use surface size.
-- [ ] Views receive `resize` before data; `ready()` after first draw.
+- [x] Views receive `resize` before data; `ready()` after first draw.
 
 **Gate (S2 probe):** composition contract (branch sums = parent, stage
 ≥60%×55%, side cols 280–420, bottom 110–180, presets idempotent); stage

@@ -16,6 +16,14 @@ export type JsonValue =
 export interface Size {
   width: number;
   height: number;
+  /** Ratio of parent size (0-1). Used for proportional layout. */
+  ratio?: number;
+  /** Absolute pixel size. Used for fixed-size panels. */
+  px?: number;
+  /** Minimum pixel size when using ratio. */
+  minPx?: number;
+  /** Maximum pixel size when using ratio. */
+  maxPx?: number;
 }
 
 export interface Rect {
@@ -51,6 +59,7 @@ export type LayoutNode =
       direction: "row" | "column";
       children: LayoutNode[];
       sizes?: number[];
+      size?: Size;
     }
   | { kind: "float"; panel: LayoutNode; rect: Rect };
 

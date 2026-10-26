@@ -41,18 +41,9 @@ export class StageCanvasImpl implements StageCanvas {
     return ctx;
   }
 
-  /** The part of the window the picture may use: the panels leave it free. */
+  /** The drawable area: the entire surface (no more FREE_WIDTH/FREE_HEIGHT). */
   area(): Area {
-    const legend = document.getElementById("discovery-legend");
-    const legendRight = legend ? legend.getBoundingClientRect().right : 0;
-    const x = Math.max(40, legendRight + 24);
-    const width = Math.max(200, window.innerWidth * 0.85 - x);
-    return {
-      x,
-      y: 70,
-      width,
-      height: Math.max(200, window.innerHeight * 0.85 - 70),
-    };
+    return { x: 0, y: 0, width: this.canvas.clientWidth, height: this.canvas.clientHeight };
   }
 }
 
@@ -70,9 +61,12 @@ export class StageSurfaceImpl implements StageSurface {
   private animationId: number | null = null;
   private lastTime = 0;
   private frameCallbacks = new Set<(delta: number) => void>();
+  private resizeObserver: ResizeObserver | null = null;
+  private hasResized = false;
 
   constructor() {
     this.root = document.createElement("div");
+    // Root is positioned absolute inset:0 by the stage component
     this.root.style.cssText = "width:100%;height:100%;position:relative;overflow:hidden;";
 
     this.profile = detectRenderProfile();
@@ -82,6 +76,13 @@ export class StageSurfaceImpl implements StageSurface {
     this.three = this.createThreeContext();
     this.root.appendChild(this.three.renderer.domElement);
     this.root.appendChild(this.flat.canvas);
+
+    // ResizeObserver on root — ensures resize() fires before first frameBox
+    this.resizeObserver = new ResizeObserver(() => {
+      this.resize();
+      this.hasResized = true;
+    });
+    this.resizeObserver.observe(this.root);
   }
 
   private createThreeContext() {
@@ -179,6 +180,8 @@ export class StageSurfaceImpl implements StageSurface {
   /** Start the render loop. */
   start(): void {
     if (this.animationId) return;
+    // Ensure initial resize before first frame
+    if (!this.hasResized) this.resize();
     this.lastTime = performance.now();
     const animate = (time: number) => {
       this.animationId = requestAnimationFrame(animate);
@@ -204,6 +207,7 @@ export class StageSurfaceImpl implements StageSurface {
   /** Dispose all resources. */
   dispose(): void {
     this.stop();
+    this.resizeObserver?.disconnect();
     this.three.controls.dispose();
     this.three.renderer.dispose();
     this.three.scene.clear();

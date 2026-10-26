@@ -610,6 +610,29 @@ export class DockviewHost implements LayoutHost {
     this.mounted = true;
   }
 
+  /** Compute initial pixel size from Size spec (ratio/px/minPx/maxPx). */
+  private computeInitialSize(size: Size | undefined, containerWidth: number, containerHeight: number): { width?: number; height?: number } {
+    if (!size) return {};
+    if (size.px !== undefined) {
+      return { width: size.px, height: size.px };
+    }
+    if (size.ratio !== undefined) {
+      const ratio = Math.max(0, Math.min(1, size.ratio));
+      let width = containerWidth * ratio;
+      let height = containerHeight * ratio;
+      if (size.minPx !== undefined) {
+        width = Math.max(width, size.minPx);
+        height = Math.max(height, size.minPx);
+      }
+      if (size.maxPx !== undefined) {
+        width = Math.min(width, size.maxPx);
+        height = Math.min(height, size.maxPx);
+      }
+      return { width: Math.round(width), height: Math.round(height) };
+    }
+    return { width: size.width, height: size.height };
+  }
+
   async open(
     type: string,
     state?: JsonValue,
@@ -623,13 +646,19 @@ export class DockviewHost implements LayoutHost {
     const id = `${type}-${++this.sequence}`;
     const resolved = resolveState(definition, state);
 
+    // Compute initial size from ratio/px/minPx/maxPx
+    const container = document.querySelector(".dv-container") as HTMLElement | null;
+    const containerWidth = container?.clientWidth ?? window.innerWidth;
+    const containerHeight = container?.clientHeight ?? window.innerHeight;
+    const initialSize = this.computeInitialSize(opts.size, containerWidth, containerHeight);
+
     const panelOptions: AddPanelOptions<Parameters> = {
       id,
       component: type,
       params: jsonToParams(resolved),
       title: opts.title ?? definition.title,
-      initialWidth: opts.size?.width ?? definition.defaultSize?.width,
-      initialHeight: opts.size?.height ?? definition.defaultSize?.height,
+      initialWidth: initialSize.width ?? definition.defaultSize?.width,
+      initialHeight: initialSize.height ?? definition.defaultSize?.height,
     };
 
     if (opts.float) {
@@ -739,13 +768,48 @@ export class DockviewHost implements LayoutHost {
   async applySpec(spec: LayoutSpec): Promise<void> {
     if (!this.api) throw new Error("DockviewHost not mounted");
     this.api.closeAllGroups();
+    // Assert clean state
+    if (this.instances.size !== 0) {
+      console.warn("[dockview-host] applySpec: instances not empty after closeAllGroups, forcing clear");
+      for (const id of this.instances.keys()) {
+        const panel = this.api.getPanel(id);
+        if (panel) panel.api.close();
+      }
+      this.instances.clear();
+    }
+    // Level-order: build all leaf panels first, then recurse into splits
+    await this.buildLevelOrder(spec.nodes);
+  }
+
+  /** Build layout using level-order traversal to preserve nesting. */
+  private async buildLevelOrder(nodes: LayoutNode[]): Promise<void> {
+    // First pass: create all panels at the current level (leaves and tabs)
+    const leafPanels: Array<{ node: LayoutNode; position?: AddPanelPositionOptions }> = [];
+    const splits: Extract<LayoutNode, { kind: "split" }>[] = [];
+
+    for (const node of nodes) {
+      if (node.kind === "panel") {
+        leafPanels.push({ node, position: undefined });
+      } else if (node.kind === "tabs") {
+        // Tabs are leaves at this level — create all panels in the tab group
+        leafPanels.push({ node, position: undefined });
+      } else if (node.kind === "float") {
+        leafPanels.push({ node, position: undefined });
+      } else if (node.kind === "split") {
+        splits.push(node);
+      }
+    }
+
+    // Create leaf panels and tabs
     let anchor: string | undefined;
-    for (const node of spec.nodes) {
-      const id = await this.addNode(
-        node,
-        anchor ? { referencePanel: anchor, direction: "within" } : undefined,
-      );
+    for (const { node, position } of leafPanels) {
+      const id = await this.addNode(node, anchor ? { referencePanel: anchor, direction: "within" } : position);
       anchor ??= id;
+    }
+
+    // Recurse into splits
+    for (const split of splits) {
+      await this.buildLevelOrder(split.children);
     }
   }
 
@@ -775,6 +839,8 @@ export class DockviewHost implements LayoutHost {
         return anchor!;
       }
       case "split": {
+        // Splits are handled by buildLevelOrder recursion
+        // This case should not be reached directly
         let anchor: string | undefined;
         for (const child of node.children) {
           const id = await this.addNode(

@@ -3,7 +3,7 @@
 import { StageSurfaceImpl } from "../../components/stage/Surface.js";
 import { createStageViewInstance, listStageViews, getDefaultStageView } from "../../components/stage/registry.js";
 import { registerDefinition } from "../definitions.js";
-import { DockviewHost } from "../dockview-host.js";
+import { dockviewHost, DockviewHost } from "../dockview-host.js";
 
 // Import stage views so they self-register
 import "../../components/stage/views/index.js";
@@ -35,7 +35,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
   type: "stage",
   title: "3D Stage",
   icon: "⬢",
-  defaultSize: { width: 800, height: 600 },
+  // No defaultSize — stage fills its panel via flex
   minSize: { width: 400, height: 300 },
   defaultState: defaultStageState as unknown as JsonValue,
   create(
@@ -46,12 +46,14 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
     host.style.display = "flex";
     host.style.flexDirection = "column";
     host.style.overflow = "hidden";
+    host.style.position = "relative"; // For absolute-positioned toolbar
 
     // Create the surface
     const surface = new StageSurfaceImpl();
     host.appendChild(surface.root);
-    surface.root.style.flex = "1 1 auto";
-    surface.root.style.minHeight = "0";
+    // Surface root fills the host (toolbar is overlay, not flex child)
+    surface.root.style.position = "absolute";
+    surface.root.style.inset = "0";
 
     const instanceId = ctx.instanceId;
     let viewInstance: StageViewInstance | null = null;
@@ -63,14 +65,37 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
 
     surface.start();
 
-    const header = document.createElement("div");
-    header.className = "stage-header";
-    header.style.cssText = `
-      display: flex; align-items: center; gap: 8px;
-      flex: 0 0 auto; height: 30px; padding: 0 8px;
-      background: var(--bg-secondary); border-bottom: 1px solid var(--border);
-      font-size: 11px; color: var(--text-secondary);
+    // Overlay toolbar — never reduces canvas height
+    const toolbar = document.createElement("div");
+    toolbar.className = "stage-toolbar";
+    toolbar.style.cssText = `
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      height: 24px;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      opacity: 0.4;
+      transition: opacity 0.2s ease;
+      z-index: 10;
     `;
+    // Restore opacity on hover/focus of host
+    host.addEventListener("mouseenter", () => { toolbar.style.opacity = "1"; });
+    host.addEventListener("mouseleave", () => { toolbar.style.opacity = "0.4"; });
+    host.addEventListener("focusin", () => { toolbar.style.opacity = "1"; });
+    host.addEventListener("focusout", () => { toolbar.style.opacity = "0.4"; });
+
+    // Toolbar content (pointer-events: auto so children are interactive)
+    const toolbarContent = document.createElement("div");
+    toolbarContent.style.cssText = `
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    `;
+    toolbar.appendChild(toolbarContent);
 
     const viewSelect = document.createElement("select");
     viewSelect.className = "stage-view-select";
@@ -81,7 +106,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
       option.textContent = definition.title;
       viewSelect.appendChild(option);
     }
-    viewSelect.style.cssText = "background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; padding: 2px 6px;";
+    viewSelect.style.cssText = "background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; padding: 2px 6px; height: 24px;";
     viewSelect.addEventListener("change", () => ctx.setState({ view: viewSelect.value }));
 
     const runSelect = document.createElement("select");
@@ -92,8 +117,20 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
       ctx.setState({ runId: runSelect.value || null }),
     );
 
-    header.append(viewSelect, runSelect);
-    host.insertBefore(header, surface.root);
+    const maximizeBtn = document.createElement("button");
+    maximizeBtn.title = "Maximize";
+    maximizeBtn.textContent = "⛶";
+    maximizeBtn.style.cssText = "width: 24px; height: 24px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;";
+    maximizeBtn.addEventListener("click", () => {
+      const api = dockviewHost.getApi();
+      if (api) {
+        const panel = api.getPanel(instanceId);
+        if (panel) api.maximizeGroup(panel);
+      }
+    });
+
+    toolbarContent.append(viewSelect, runSelect, maximizeBtn);
+    host.appendChild(toolbar);
 
     const renderRuns = (): void => {
       const runs = ctx.workspace.getRuns();
@@ -126,7 +163,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
       renderRuns();
     };
 
-    // Handle resize
+    // Handle resize via ResizeObserver on host
     const resizeObserver = new ResizeObserver(() => {
       surface.resize();
       if (viewInstance) {
@@ -197,6 +234,7 @@ export const stageDefinition: ComponentDefinition = registerDefinition<JsonValue
         viewInstance?.dispose();
         DockviewHost.unregisterStageInstance(instanceId);
         surface.dispose();
+        toolbar.remove();
       },
     };
 
