@@ -125,6 +125,9 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ("tests/property/test_axis_certifications.py::TestCAxisLocalGoodnessCredit", 600),
     ("tests/property/test_axis_certifications.py::TestCAxisTargetInversionCredit", 600),
     ("tests/property/test_ontology_parity.py", 300),
+    ("tests/property/test_readme_build_lock.py::TestReadmeBuildLock", 300),
+    ("tests/property/test_site_build_lock.py::TestSiteBuildLock", 300),
+    ("tests/unit/experiment/test_control_plane.py", 300),
     (
         "tests/property/test_runner_transparency_lock.py::test_run_loop_prints_cell_count",
         300,

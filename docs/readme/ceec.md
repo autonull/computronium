@@ -4,7 +4,7 @@
 **Standalone** epistemic governance ledger (TODO19 Epistemic Foundry) — not integrated into the experiment kernel. The kernel records a `ceec_link` field on claims (always `None` currently) for future integration.
 
 `Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision`.
-**Full reference: [`CEEC.md`](CEEC.md)** — policies in `docs/ceec/`.
+**Full reference: [`CEEC.md`](packages/ceec-core/CEEC.md)** — policies in `docs/ceec/`.
 
 | Module (`ceec.*`) | Purpose |
 |--------|---------|
@@ -33,7 +33,7 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 
 | Package | Import | What it is |
 |---|---|---|
-| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
+| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](packages/ceec-core/CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
 | `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
 | `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
 | `packages/computronium-lab` | `computronium_lab` | Standalone high-level Lab API (used in probe scripts): compose/train/compare/report ontology coordinates + mechanism recipes; synthesis layer (`Lab.specify/synthesize/explore`), task tiers, validation campaigns, research layer (budgeted evolution, certified corpus, continual benchmark), instrument layer (ledger report renderer, one-shot research report) |

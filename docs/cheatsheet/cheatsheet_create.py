@@ -30,6 +30,7 @@ import ast
 import dataclasses
 import datetime
 import inspect
+import json
 import re
 import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import] — only `git rev-parse`, local read-only call
@@ -45,6 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 HERE = Path(__file__).resolve().parent
 OUT_SVG = HERE / "cheatsheet.svg"
 OUT_TXT = HERE / "cheatsheet.txt"
+OUT_MANIFEST = HERE / "panels.json"
 
 # ---------------------------------------------------------------------------
 # 1. Reflection: pull the architecture facts out of the live codebase
@@ -976,6 +978,20 @@ _TITLES: dict[str, str] = {
     "train": "⚡ Training Loop — SystemTrainer.fit()",
     "evidence": "💾 Evidence Store — one DuckDB, single writer",
     "surface": "📊 Surface & Governance",
+}
+
+
+# Panel -> documentation section. The viewer uses this as the map's menu into
+# the Documentation set; a panel without a section is a panel with no claim.
+PANEL_DOCS: dict[str, str] = {
+    "entry": "start-here",
+    "tasks": "quickstart",
+    "kernel": "kernel",
+    "ontology": "ontology",
+    "system": "core-architecture",
+    "train": "ml-library",
+    "evidence": "evidence",
+    "surface": "validation",
 }
 
 
@@ -2186,7 +2202,12 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
             )
         )
     for key, p in ly.pos.items():
-        parts.append(f'<g filter="url(#sh)">{draw_panel(pmap[key], p)}</g>')
+        panel = pmap[key]
+        parts.append(
+            f'<g id="panel-{key}" data-panel="{key}" filter="url(#sh)" '
+            f'role="button" tabindex="0" aria-label="{esc(panel.title)}">'
+            f"<title>{esc(panel.title)}</title>{draw_panel(panel, p)}</g>"
+        )
     for e in build_edges():
         rx, ry, ew, eh, anchor = edge_label_placement(e, ly)
         parts.append(svg_rect(rx, ry, ew, eh, 4.0, "white", "#e2e8f0", 0.8))
@@ -2215,6 +2236,32 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
     )
     parts.append("</svg>")
     return "".join(parts)
+
+
+def render_manifest(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
+    """The viewer's index: canvas size, panel boxes, and the docs each opens."""
+    data = {
+        "generated": datetime.date.today().isoformat(),
+        "commit": b.commit,
+        "canvas": {
+            "width": round(ly.canvas_w, 1),
+            "height": round(ly.canvas_h, 1),
+        },
+        "panels": [
+            {
+                "key": panel.key,
+                "id": f"panel-{panel.key}",
+                "title": panel.title,
+                "doc": PANEL_DOCS[panel.key],
+                "x": round(ly.pos[panel.key].x, 1),
+                "y": round(ly.pos[panel.key].y, 1),
+                "w": round(ly.pos[panel.key].w, 1),
+                "h": round(ly.pos[panel.key].h, 1),
+            }
+            for panel in panels
+        ],
+    }
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -2374,9 +2421,11 @@ def main(argv: list[str] | None = None) -> int:
     ly = layout(pmap)
     svg = render_svg(panels, ly, b)
     txt = render_txt(b, panels)
+    manifest = render_manifest(panels, ly, b)
 
     OUT_SVG.write_text(svg, encoding="utf-8")
     OUT_TXT.write_text(txt, encoding="utf-8")
+    OUT_MANIFEST.write_text(manifest, encoding="utf-8")
 
     def _row_chips(r: Row) -> int:
         if isinstance(r, (Section, Columns)):
@@ -2394,6 +2443,7 @@ def main(argv: list[str] | None = None) -> int:
         f"wrote {OUT_SVG.relative_to(ROOT)} ({len(svg) // 1024} KiB, {ly.canvas_h:.0f}px tall × {ly.canvas_w:.0f}px wide)"
     )
     print(f"wrote {OUT_TXT.relative_to(ROOT)} ({len(txt) // 1024} KiB)")
+    print(f"wrote {OUT_MANIFEST.relative_to(ROOT)} ({len(panels)} panels)")
     print(
         f"reflected: {n_prims} primitives · {len(b.cli)} cli · {len(b.stages)} stages · "
         f"{len(b.policies)} policies · ~{n_chips} inner chips"

@@ -1,3 +1,5 @@
+> **Historical brief.** The script that implements this brief is now `docs/build_site.py`; the deck is `docs/index.html`. This file is not part of the site.
+
 Implement the following presentation.
 - Integrate with docs/readme/ rebuild system
 - Write the slideshow as .md snippets in docs/slides

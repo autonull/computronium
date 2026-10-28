@@ -81,6 +81,20 @@ A six-minute shot list — every command and the sentence to say over it — is 
 [`docs/DEMO.md`](docs/DEMO.md); `tests/acceptance/test_demo_script.py` runs the
 same commands, so the recording cannot drift from the software.
 
+### Documentation site
+
+`docs/index.html` is one self-contained site with three sets: the **About**
+slides, the full **Documentation** reference, and the **Cheatsheet** as a
+zoomable architecture map whose panels open their documentation. Serve it from
+`docs/` so its relative links resolve:
+
+```bash
+uv run python docs/serve.py
+```
+
+Then open <http://127.0.0.1:8000/>. The plain-Markdown twin is
+[`docs/index.md`](docs/index.md).
+
 ## What is Computronium
 
 Computronium ships three layers, each usable independently. This is the single
@@ -173,7 +187,7 @@ Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 t
 
 ![Computronium Architecture Cheatsheet](docs/cheatsheet/cheatsheet.svg)
 
-Computronium at a glance — a live reflection of the codebase architecture, regenerated from source on every build.
+Computronium at a glance — a live reflection of the codebase architecture, regenerated from source on every build. The same diagram is a zoomable, panel-linked map in the documentation site's **Cheatsheet** set (`docs/index.html`).
 
 ### Outer Flow
 
@@ -1332,7 +1346,7 @@ list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 **Standalone** epistemic governance ledger (TODO19 Epistemic Foundry) — not integrated into the experiment kernel. The kernel records a `ceec_link` field on claims (always `None` currently) for future integration.
 
 `Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision`.
-**Full reference: [`CEEC.md`](CEEC.md)** — policies in `docs/ceec/`.
+**Full reference: [`CEEC.md`](packages/ceec-core/CEEC.md)** — policies in `docs/ceec/`.
 
 | Module (`ceec.*`) | Purpose |
 |--------|---------|
@@ -1361,7 +1375,7 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 
 | Package | Import | What it is |
 |---|---|---|
-| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
+| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](packages/ceec-core/CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
 | `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
 | `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
 | `packages/computronium-lab` | `computronium_lab` | Standalone high-level Lab API (used in probe scripts): compose/train/compare/report ontology coordinates + mechanism recipes; synthesis layer (`Lab.specify/synthesize/explore`), task tiers, validation campaigns, research layer (budgeted evolution, certified corpus, continual benchmark), instrument layer (ledger report renderer, one-shot research report) |

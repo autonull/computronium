@@ -2,7 +2,7 @@
 
 ![Computronium Architecture Cheatsheet](docs/cheatsheet/cheatsheet.svg)
 
-Computronium at a glance — a live reflection of the codebase architecture, regenerated from source on every build.
+Computronium at a glance — a live reflection of the codebase architecture, regenerated from source on every build. The same diagram is a zoomable, panel-linked map in the documentation site's **Cheatsheet** set (`docs/index.html`).
 
 ### Outer Flow
 

@@ -47,3 +47,17 @@ The Python library is separate and usable on its own — see
 A six-minute shot list — every command and the sentence to say over it — is in
 [`docs/DEMO.md`](docs/DEMO.md); `tests/acceptance/test_demo_script.py` runs the
 same commands, so the recording cannot drift from the software.
+
+### Documentation site
+
+`docs/index.html` is one self-contained site with three sets: the **About**
+slides, the full **Documentation** reference, and the **Cheatsheet** as a
+zoomable architecture map whose panels open their documentation. Serve it from
+`docs/` so its relative links resolve:
+
+```bash
+uv run python docs/serve.py
+```
+
+Then open <http://127.0.0.1:8000/>. The plain-Markdown twin is
+[`docs/index.md`](docs/index.md).

@@ -1,0 +1,90 @@
+{
+  "generated": "2026-10-28",
+  "commit": "8497b853",
+  "canvas": {
+    "width": 2129.5,
+    "height": 3527.0
+  },
+  "panels": [
+    {
+      "key": "entry",
+      "id": "panel-entry",
+      "title": "🚪 Entry Points",
+      "doc": "start-here",
+      "x": 330.8,
+      "y": 96.0,
+      "w": 1468.0,
+      "h": 450.0
+    },
+    {
+      "key": "tasks",
+      "id": "panel-tasks",
+      "title": "🎯 Tasks & Data",
+      "doc": "quickstart",
+      "x": 60.0,
+      "y": 618.0,
+      "w": 541.3,
+      "h": 515.0
+    },
+    {
+      "key": "kernel",
+      "id": "panel-kernel",
+      "title": "🧪 Experiment Kernel — question → governed evidence",
+      "doc": "kernel",
+      "x": 673.3,
+      "y": 618.0,
+      "w": 1396.2,
+      "h": 943.0
+    },
+    {
+      "key": "ontology",
+      "id": "panel-ontology",
+      "title": "🧬 6-Axis Ontology — System = Substrate × Geometry × StateDynamics × Plasticity × Credit × Update",
+      "doc": "ontology",
+      "x": 330.8,
+      "y": 1633.0,
+      "w": 1468.0,
+      "h": 500.0
+    },
+    {
+      "key": "system",
+      "id": "panel-system",
+      "title": "🏗️ System & Composition",
+      "doc": "core-architecture",
+      "x": 306.2,
+      "y": 2205.0,
+      "w": 624.3,
+      "h": 656.0
+    },
+    {
+      "key": "train",
+      "id": "panel-train",
+      "title": "⚡ Training Loop — SystemTrainer.fit()",
+      "doc": "ml-library",
+      "x": 1002.5,
+      "y": 2205.0,
+      "w": 820.9,
+      "h": 305.0
+    },
+    {
+      "key": "evidence",
+      "id": "panel-evidence",
+      "title": "💾 Evidence Store — one DuckDB, single writer",
+      "doc": "evidence",
+      "x": 942.8,
+      "y": 2933.0,
+      "w": 1078.5,
+      "h": 538.0
+    },
+    {
+      "key": "surface",
+      "id": "panel-surface",
+      "title": "📊 Surface & Governance",
+      "doc": "validation",
+      "x": 108.2,
+      "y": 2933.0,
+      "w": 762.6,
+      "h": 376.0
+    }
+  ]
+}

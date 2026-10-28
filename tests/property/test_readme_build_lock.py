@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from tests.property._readme import SNIPPETS, load_readme_builder
 
 REPO = Path(__file__).resolve().parents[2]
@@ -31,6 +33,7 @@ def _data_rows(table: str) -> list[str]:
     return [r for r in table.splitlines() if r.startswith("|") and "---" not in r][1:]
 
 
+@pytest.mark.timeout(300)
 class TestReadmeBuildLock:
     def test_readme_matches_the_build(self) -> None:
         rendered = build_readme.build_readme()
