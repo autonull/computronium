@@ -1,0 +1,44 @@
+<svg class="d" viewBox="0 0 960 240" role="img" aria-label="Ad-hoc experiments on the left become governed records on the right">
+  <g>
+    <circle class="node" cx="52" cy="44" r="5"/>
+    <circle class="node" cx="104" cy="118" r="5"/>
+    <circle class="node" cx="86" cy="188" r="5"/>
+    <circle class="node" cx="158" cy="62" r="5"/>
+    <circle class="node" cx="196" cy="132" r="5"/>
+    <circle class="node" cx="150" cy="196" r="5"/>
+    <circle class="node" cx="238" cy="88" r="5"/>
+    <circle class="node" cx="252" cy="172" r="5"/>
+    <path class="edge" d="M52 44 L104 118 M104 118 L86 188 M104 118 L158 62 M158 62 L196 132 M196 132 L150 196 M196 132 L238 88 M238 88 L252 172 M104 118 L196 132"/>
+    <text class="tiny muted" x="52" y="222">ad-hoc experiments</text>
+  </g>
+
+  <g class="flow">
+    <path class="flow" d="M330 128 L400 128"/>
+    <path class="flow" d="M392 123 L401 128 L392 133"/>
+  </g>
+  <text class="tiny muted" x="330" y="118">one coordinate</text>
+
+  <g>
+    <rect class="node" x="440" y="58" width="150" height="44" rx="7"/>
+    <text x="452" y="78">RunSpec</text>
+    <text class="tiny muted" x="452" y="92">question + operating point</text>
+
+    <rect class="hot" x="440" y="118" width="150" height="44" rx="7"/>
+    <text x="452" y="138">Evidence</text>
+    <text class="tiny muted" x="452" y="152">append-only record</text>
+
+    <rect class="node" x="440" y="178" width="150" height="44" rx="7"/>
+    <text x="452" y="198">Belief</text>
+    <text class="tiny muted" x="452" y="212">gated claim</text>
+
+    <path class="edge" d="M515 102 L515 118 M515 162 L515 178"/>
+  </g>
+
+  <g>
+    <rect class="node" x="660" y="88" width="260" height="104" rx="10"/>
+    <text class="muted tiny" x="676" y="112">SAME QUESTION, EVERY SYSTEM</text>
+    <text x="676" y="136">change one axis,</text>
+    <text x="676" y="154">hold five constant</text>
+    <text class="muted tiny" x="676" y="176">comparable, reproducible, auditable</text>
+  </g>
+</svg>

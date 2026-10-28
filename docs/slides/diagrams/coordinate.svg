@@ -1,0 +1,36 @@
+<svg class="d" viewBox="0 0 960 320" role="img" aria-label="Six-axis coordinate with a sample system highlighted">
+  <polygon class="edge" points="480,40 575,95 575,205 480,260 385,205 385,95"/>
+  <polygon class="edge" points="480,95 527,122 527,177 480,205 433,177 433,122" stroke-dasharray="3 4"/>
+
+  <g class="edge">
+    <path d="M480 160 L480 40 M480 160 L575 95 M480 160 L575 205 M480 160 L480 260 M480 160 L385 205 M480 160 L385 95"/>
+  </g>
+
+  <polygon class="hot" points="480,42 566,100 557,198 480,255 402,196 398,101"/>
+
+  <circle class="node" cx="480" cy="160" r="16"/>
+  <text x="472" y="164">θ</text>
+
+  <g class="accent">
+    <circle cx="480" cy="42" r="4"/>
+    <circle cx="566" cy="100" r="4"/>
+    <circle cx="557" cy="198" r="4"/>
+    <circle cx="480" cy="255" r="4"/>
+    <circle cx="402" cy="196" r="4"/>
+    <circle cx="398" cy="101" r="4"/>
+  </g>
+
+  <g>
+    <text x="466" y="26">S · substrate</text>
+    <text x="586" y="90">G · geometry</text>
+    <text x="586" y="214">D · dynamics</text>
+    <text x="462" y="286">P · plasticity</text>
+    <text class="muted" x="298" y="214" text-anchor="end">C · credit</text>
+    <text class="muted" x="298" y="90" text-anchor="end">U · update</text>
+  </g>
+
+  <g>
+    <text class="muted tiny" x="708" y="112">ONE EXPERIMENT =</text>
+    <text class="muted tiny" x="708" y="128">ONE COORDINATE</text>
+  </g>
+</svg>

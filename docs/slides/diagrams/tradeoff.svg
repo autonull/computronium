@@ -1,0 +1,30 @@
+<svg class="d" viewBox="0 0 960 340" role="img" aria-label="Stability-plasticity frontier with candidate systems plotted">
+  <g class="edge">
+    <path d="M70 40 V292 H910"/>
+    <path d="M70 40 l-4 9 M70 40 l4 9"/>
+    <path d="M910 292 l-9 -4 M910 292 l-9 4"/>
+  </g>
+
+  <text class="tiny muted" x="20" y="30">STABILITY  ρ, λ</text>
+  <text class="tiny muted" x="756" y="326">PLASTICITY  ·  adaptation speed</text>
+
+  <path class="hot" d="M110 80 C 330 104, 560 170, 830 250 L 830 292 L 110 292 Z" opacity="0.4"/>
+  <path class="flow" d="M110 80 C 330 104, 560 170, 830 250"/>
+
+  <text class="tiny muted" x="118" y="62">STABLE · SLOW</text>
+  <text class="tiny muted" x="636" y="286">FAST · UNSTABLE</text>
+  <text class="tiny muted" x="240" y="232">DOMINATED</text>
+  <text class="tiny muted" x="676" y="56">fast and stable:</text>
+  <text class="tiny muted" x="676" y="70">not reachable today</text>
+
+  <g class="accent">
+    <circle cx="150" cy="87" r="5"/>
+    <circle cx="320" cy="103" r="5"/>
+    <circle cx="505" cy="147" r="5"/>
+    <circle cx="690" cy="209" r="5"/>
+  </g>
+  <g class="node">
+    <circle cx="390" cy="216" r="5"/>
+    <circle cx="570" cy="254" r="5"/>
+  </g>
+</svg>

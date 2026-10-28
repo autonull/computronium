@@ -1,0 +1,63 @@
+<svg class="d" viewBox="0 0 960 300" role="img" aria-label="Eleven-stage pipeline from question to append-only evidence store">
+  <g>
+    <rect class="warm" x="30" y="56" width="72" height="58" rx="6"/>
+    <text x="40" y="78">S1</text><text class="tiny muted" x="40" y="94">FRAME</text>
+
+    <rect class="warm" x="111" y="56" width="72" height="58" rx="6"/>
+    <text x="121" y="78">S2</text><text class="tiny muted" x="121" y="94">SPACE</text>
+
+    <rect class="warm" x="192" y="56" width="72" height="58" rx="6"/>
+    <text x="202" y="78">S3</text><text class="tiny muted" x="202" y="94">SCHEDULE</text>
+
+    <rect class="warm" x="273" y="56" width="72" height="58" rx="6"/>
+    <text x="283" y="78">S4</text><text class="tiny muted" x="283" y="94">GATE</text>
+
+    <rect class="hot" x="354" y="56" width="72" height="58" rx="6"/>
+    <text x="364" y="78">S5</text><text class="tiny muted" x="364" y="94">COMPOSE</text>
+
+    <rect class="hot" x="435" y="56" width="72" height="58" rx="6"/>
+    <text x="445" y="78">S6</text><text class="tiny muted" x="445" y="94">TRAIN</text>
+
+    <rect class="hot" x="516" y="56" width="72" height="58" rx="6"/>
+    <text x="526" y="78">S7</text><text class="tiny muted" x="526" y="94">MEASURE</text>
+
+    <rect class="hot" x="597" y="56" width="72" height="58" rx="6"/>
+    <text x="607" y="78">S8</text><text class="tiny muted" x="607" y="94">RECORD</text>
+
+    <rect class="node" x="678" y="56" width="72" height="58" rx="6"/>
+    <text x="688" y="78">S9</text><text class="tiny muted" x="688" y="94">ATTRIBUTE</text>
+
+    <rect class="node" x="759" y="56" width="72" height="58" rx="6"/>
+    <text x="769" y="78">S10</text><text class="tiny muted" x="769" y="94">DECIDE</text>
+
+    <rect class="node" x="840" y="56" width="72" height="58" rx="6"/>
+    <text x="850" y="78">S11</text><text class="tiny muted" x="850" y="94">REPORT</text>
+  </g>
+
+  <g class="edge">
+    <path d="M102 85 h6 M183 85 h6 M264 85 h6 M345 85 h6 M426 85 h6 M507 85 h6 M588 85 h6 M669 85 h6 M750 85 h6 M831 85 h6"/>
+    <path d="M105 82 l4 3 -4 3 M186 82 l4 3 -4 3 M267 82 l4 3 -4 3 M348 82 l4 3 -4 3 M429 82 l4 3 -4 3 M510 82 l4 3 -4 3 M591 82 l4 3 -4 3 M672 82 l4 3 -4 3 M753 82 l4 3 -4 3 M834 82 l4 3 -4 3"/>
+  </g>
+
+  <g class="tiny muted">
+    <text x="30" y="140">DEFINE</text>
+    <text x="354" y="140">EXECUTE</text>
+    <text x="678" y="140">JUDGE</text>
+    <path class="edge" d="M30 148 H328 M354 148 H652 M678 148 H912"/>
+  </g>
+
+  <g class="flow">
+    <path class="flow" d="M633 114 V180"/>
+    <path class="flow" d="M628 174 l5 7 5 -7"/>
+    <path class="flow" d="M912 232 H934 V85 H920"/>
+    <path class="flow" d="M926 82 l-7 3 7 3"/>
+  </g>
+
+  <g>
+    <rect class="node" x="470" y="186" width="442" height="92" rx="8"/>
+    <text x="486" y="210">Append-only evidence store</text>
+    <text class="tiny muted" x="486" y="228">DuckDB ledger · one record per measurement</text>
+    <text class="tiny muted" x="486" y="246">every seed, every failure, every artifact</text>
+    <text class="tiny accent" x="486" y="264">no silent drops</text>
+  </g>
+</svg>

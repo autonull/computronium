@@ -1,0 +1,49 @@
+<svg class="d" viewBox="0 0 960 180" role="img" aria-label="CEEC chain from experiment to decision">
+  <g>
+    <rect class="node" x="20" y="52" width="116" height="60" rx="7"/>
+    <text x="32" y="78">Experiment</text>
+    <text class="tiny muted" x="32" y="94">run + config</text>
+
+    <rect class="node" x="158" y="52" width="116" height="60" rx="7"/>
+    <text x="170" y="78">Artifact</text>
+    <text class="tiny muted" x="170" y="94">weights, plots</text>
+
+    <rect class="node" x="296" y="52" width="116" height="60" rx="7"/>
+    <text x="308" y="78">Evidence</text>
+    <text class="tiny muted" x="308" y="94">measurement</text>
+
+    <rect class="node" x="434" y="52" width="116" height="60" rx="7"/>
+    <text x="446" y="78">Derived</text>
+    <text class="tiny muted" x="446" y="94">statistic</text>
+
+    <rect class="hot" x="572" y="52" width="116" height="60" rx="7"/>
+    <text x="584" y="78">Belief</text>
+    <text class="tiny muted" x="584" y="94">claim + scope</text>
+
+    <rect class="warm" x="710" y="52" width="116" height="60" rx="7"/>
+    <text x="722" y="78">Gated</text>
+    <text class="tiny muted" x="722" y="94">status</text>
+
+    <rect class="node" x="848" y="52" width="92" height="60" rx="7"/>
+    <text x="860" y="78">Decision</text>
+    <text class="tiny muted" x="860" y="94">act / retest</text>
+  </g>
+
+  <g class="edge">
+    <path d="M136 82 h18 M274 82 h18 M412 82 h18 M550 82 h18 M688 82 h18 M826 82 h18"/>
+    <path d="M154 79 l4 3 -4 3 M292 79 l4 3 -4 3 M430 79 l4 3 -4 3 M568 79 l4 3 -4 3 M706 79 l4 3 -4 3 M844 79 l4 3 -4 3"/>
+  </g>
+
+  <g class="tiny muted">
+    <text x="20" y="40">OBSERVE</text>
+    <text x="434" y="40">INFER</text>
+    <text x="848" y="40">ACT</text>
+    <path class="edge" d="M20 44 H400 M434 44 H812 M848 44 H940"/>
+  </g>
+
+  <g class="edge">
+    <path class="edge" d="M630 112 V150 H336 V112" stroke-dasharray="4 4"/>
+    <path class="edge" d="M333 118 l3 -7 3 7"/>
+  </g>
+  <text class="tiny muted" x="392" y="168">a belief that loses its gate re-enters as evidence</text>
+</svg>
