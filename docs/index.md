@@ -9,7 +9,6 @@
 # Computronium: An Epistemic Laboratory for Learning
 
 <div class="hero-intro">
-  <h1 class="hero-title">Computation with less time, energy, and uncertainty</h1>
   <p class="hero-subtitle">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
 </div>
 

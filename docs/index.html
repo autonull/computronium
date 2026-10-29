@@ -107,27 +107,21 @@ body[data-set="cheatsheet"] #set-cheatsheet{display:block}
   padding:clamp(2.9rem,5vh,3.6rem) clamp(1.4rem,7vw,7rem) clamp(1.4rem,3.5vh,2.2rem);
 }
 
-/* ---------- research deck ---------- */
-#set-research{height:calc(100dvh - var(--bar-h))}
+/* ---------- research deck (continuous reading mode) ---------- */
+#set-research{min-height:calc(100dvh - var(--bar-h))}
 #research-deck{
-  height:100%; overflow-y:auto; overflow-x:hidden;
-  scroll-snap-type:y mandatory; scrollbar-width:thin; scroll-behavior:smooth;
-}
-#research-deck .slide{
-  height:100%; scroll-snap-align:start; scroll-snap-stop:always;
-  display:grid; place-items:center;
-  padding:clamp(2.9rem,5vh,3.6rem) clamp(1.4rem,7vw,7rem) clamp(1.4rem,3.5vh,2.2rem);
-}
-
-body.reading #set-research{height:auto;min-height:calc(100dvh - var(--bar-h))}
-body.reading #research-deck{
   height:auto;overflow:visible;scroll-snap-type:none;scroll-behavior:auto;
   max-width:60rem;margin:0 auto;padding:4.2rem 1.5rem 7rem;
 }
-body.reading #research-deck .slide{
+#research-deck .slide{
   height:auto;display:block;scroll-snap-align:none;scroll-snap-stop:normal;
   padding:0 0 3.2rem;margin:0 0 3.2rem;border-bottom:1px solid var(--rule);
 }
+#research-deck .stage{max-width:none}
+#research-deck .kicker::after{display:none}
+#research-deck .notes-btn{display:none}
+body.reading #set-research{min-height:calc(100dvh - var(--bar-h))}
+body.reading #research-deck{max-width:60rem;margin:0 auto;padding:4.2rem 1.5rem 7rem;}
 
 body.reading #set-about{height:auto;min-height:calc(100dvh - var(--bar-h))}
 body.reading #deck{
@@ -618,7 +612,6 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
 <p class="kicker" aria-hidden="true">01</p>
 <h1>Computronium: An Epistemic Laboratory for Learning</h1>
 <div class="hero-intro">
-  <h1 class="hero-title">Computation with less time, energy, and uncertainty</h1>
   <p class="hero-subtitle">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
 </div>
 <div class="hero-claims">
@@ -4801,7 +4794,7 @@ uv run python -m computronium.acceleration.matrix \
   }
 
   function fit() {
-    $$(".stage").forEach((stage) => {
+    $$("#deck .stage").forEach((stage) => {
       if (!stage) return;
       if (reading) { stage.style.zoom = ""; return; }
       fitStage(stage);
@@ -4996,7 +4989,7 @@ uv run python -m computronium.acceleration.matrix \
       tab.setAttribute("aria-selected", String(selected));
       tab.tabIndex = selected ? 0 : -1;
     });
-    const isSlideDeck = set === "about" || set === "research";
+    const isSlideDeck = set === "about";
     presentBtn.disabled = !isSlideDeck;
     readBtn.disabled = !isSlideDeck;
     if (isSlideDeck) {
