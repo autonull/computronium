@@ -78,13 +78,17 @@ _SLIDES: tuple[str, ...] = (
     "dashboard.md",
     "epistemic-ledger.md",
     "research-horizon.md",
+    "invitation.md",
+)
+
+# Research deck — detailed research path slides
+_RESEARCH_SLIDES: tuple[str, ...] = (
     "proof-research.md",
     "consortium-research.md",
     "z3-research.md",
     "metadynamics-research.md",
     "substrate-research.md",
     "learning-theory-research.md",
-    "invitation.md",
 )
 
 # Files in docs/slides/ that are not slides.
@@ -103,6 +107,7 @@ class SetSpec:
 
 SETS: tuple[SetSpec, ...] = (
     SetSpec("about", "About", "sparkles", "epistemic-laboratory"),
+    SetSpec("research", "Research", "flask-conical", "proof-research"),
     SetSpec("docs-about", "About", "book", "title"),
     SetSpec("docs-howto", "HowTo", "wrench", "install"),
     SetSpec("cheatsheet", "Cheatsheet", "map", ""),
@@ -320,6 +325,55 @@ def _slide_markdown(path: Path) -> str:
     text = _NOTES_RE.sub("", path.read_text(encoding="utf-8"))
     text = _INCLUDE_RE.sub(lambda m: f"\n_[diagram: `{m.group(1)}`]_\n", text)
     return _GEN_RE.sub(lambda m: _generators()[m.group(1)](), text).strip()
+
+
+# ---------------------------------------------------------------------------
+# Research set
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=1)
+def _research_slides() -> tuple[Slide, ...]:
+    files = [SLIDES_DIR / name for name in _RESEARCH_SLIDES]
+    missing = [path.name for path in files if not path.is_file()]
+    if missing:
+        msg = f"research manifest names snippets that do not exist: {missing}"
+        raise FileNotFoundError(msg)
+    _check_slide_names(files)
+    slides: list[Slide] = []
+    for ordinal, path in enumerate(files, start=1):
+        raw = path.read_text(encoding="utf-8")
+        expanded_raw = _expand_slide(raw, source=path.name)
+        notes = [note.strip() for note in _NOTES_RE.findall(expanded_raw)]
+        expanded = _NOTES_RE.sub("", expanded_raw)
+        title = _plain_title(_NOTES_RE.sub("", raw))
+        rendered = _renderer().render(expanded)
+        parts = [
+            f'<section class="slide" id="{path.stem}" aria-label="{title}" '
+            f'data-title="{title}">',
+            '<div class="stage">',
+            f'<p class="kicker" aria-hidden="true">{ordinal:02d}</p>',
+            rendered,
+        ]
+        if notes:
+            note_id = f"notes-{path.stem}"
+            parts.append(
+                f'<button class="notes-btn" type="button" popovertarget="{note_id}">'
+                "Speaker notes</button>"
+            )
+        parts.append("</div>")
+        if notes:
+            parts.append(
+                f'<div id="{note_id}" popover="auto">'
+                f"{_renderer().render(chr(10).join(notes))}</div>"
+            )
+        parts.append("</section>")
+        slides.append(Slide(path.stem, title, ordinal, "\n".join(parts)))
+    return tuple(slides)
+
+
+def _research_slides_html() -> str:
+    return "\n\n".join(slide.html for slide in _research_slides())
 
 
 @dataclass(frozen=True, slots=True)
@@ -583,6 +637,7 @@ def _cheatsheet() -> MapBundle:
 
 def _site_index(
     slides: tuple[Slide, ...],
+    research_slides: tuple[Slide, ...],
     sections_about: tuple[DocSection, ...],
     sections_howto: tuple[DocSection, ...],
     map_bundle: MapBundle,
@@ -591,6 +646,13 @@ def _site_index(
     for slide in slides:
         items.append({
             "set": "about",
+            "id": slide.key,
+            "title": slide.title,
+            "kind": "slide",
+        })
+    for slide in research_slides:
+        items.append({
+            "set": "research",
             "id": slide.key,
             "title": slide.title,
             "kind": "slide",
@@ -642,15 +704,18 @@ def _site_index(
 def build_site() -> str:
     """Render the single-file site."""
     slides = _slides()
+    research_slides = _research_slides()
     sections_about = _doc_sections_about()
     sections_howto = _doc_sections_howto()
     map_bundle = _cheatsheet()
     replacements = {
         "title": "Computronium — Documentation",
         "first_id": slides[0].key,
+        "first_research": research_slides[0].key if research_slides else "",
         "first_doc_about": sections_about[0].key,
         "first_doc_howto": sections_howto[0].key,
         "about_slides": "\n\n".join(slide.html for slide in slides),
+        "research_slides": _research_slides_html(),
         "doc_toc_about": _doc_toc(sections_about),
         "doc_toc_howto": _doc_toc_howto(sections_howto),
         "doc_sections_about": _doc_body(sections_about, "about"),
@@ -659,7 +724,7 @@ def build_site() -> str:
         "cheatsheet_svg": map_bundle.svg,
         "canvas_w": f"{map_bundle.canvas_w:g}",
         "canvas_h": f"{map_bundle.canvas_h:g}",
-        "site_index": _site_index(slides, sections_about, sections_howto, map_bundle),
+        "site_index": _site_index(slides, research_slides, sections_about, sections_howto, map_bundle),
         "map_manifest": json.dumps(map_bundle.manifest, ensure_ascii=False).replace(
             "<", "\\u003c"
         ),

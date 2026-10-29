@@ -89,6 +89,7 @@ body.reading .count{display:none}
 main{padding-top:var(--bar-h)}
 .set{display:none}
 body[data-set="about"] #set-about,
+body[data-set="research"] #set-research,
 body[data-set="docs-about"] #set-docs-about,
 body[data-set="docs-howto"] #set-docs-howto,
 body[data-set="cheatsheet"] #set-cheatsheet{display:block}
@@ -104,30 +105,28 @@ body[data-set="cheatsheet"] #set-cheatsheet{display:block}
   display:grid; place-items:center;
   padding:clamp(2.9rem,5vh,3.6rem) clamp(1.4rem,7vw,7rem) clamp(1.4rem,3.5vh,2.2rem);
 }
-.stage{width:100%;max-width:76rem;display:flex;flex-direction:column;gap:.85rem}
-.stage > *{width:100%;margin:0}
-.stage > .notes-btn{width:auto}
-.kicker{
-  font:600 .74rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;
-  color:var(--accent);display:flex;align-items:center;gap:.7rem;
+
+/* ---------- research deck ---------- */
+#set-research{height:calc(100dvh - var(--bar-h))}
+#research-deck{
+  height:100%; overflow-y:auto; overflow-x:hidden;
+  scroll-snap-type:y mandatory; scrollbar-width:thin; scroll-behavior:smooth;
 }
-.kicker::after{content:"";flex:1;height:1px;background:var(--rule);max-width:10rem}
-.notes-btn{
-  align-self:flex-start;font:500 .72rem/1 var(--mono);letter-spacing:.08em;
-  text-transform:uppercase;color:var(--muted);background:transparent;
-  border:1px solid var(--rule);border-radius:6px;padding:.36rem .62rem;cursor:pointer;
+#research-deck .slide{
+  height:100%; scroll-snap-align:start; scroll-snap-stop:always;
+  display:grid; place-items:center;
+  padding:clamp(2.9rem,5vh,3.6rem) clamp(1.4rem,7vw,7rem) clamp(1.4rem,3.5vh,2.2rem);
 }
-.notes-btn:hover{color:var(--text);border-color:var(--accent)}
-[popover]{
-  position:fixed;inset:0;margin:auto;width:min(46rem,92vw);max-height:82vh;
-  overflow:auto;padding:1.6rem 1.8rem;border-radius:14px;
-  background:var(--panel);color:var(--text);border:1px solid var(--rule);
-  font-size:1rem;box-shadow:var(--shadow);
+
+body.reading #set-research{height:auto;min-height:calc(100dvh - var(--bar-h))}
+body.reading #research-deck{
+  height:auto;overflow:visible;scroll-snap-type:none;scroll-behavior:auto;
+  max-width:60rem;margin:0 auto;padding:4.2rem 1.5rem 7rem;
 }
-[popover]::backdrop{background:#0008;backdrop-filter:blur(3px)}
-[popover] > :first-child{margin-top:0}
-[popover] > :last-child{margin-bottom:0}
-[popover] h2{font-size:1.15rem}
+body.reading #research-deck .slide{
+  height:auto;display:block;scroll-snap-align:none;scroll-snap-stop:normal;
+  padding:0 0 3.2rem;margin:0 0 3.2rem;border-bottom:1px solid var(--rule);
+}
 
 body.reading #set-about{height:auto;min-height:calc(100dvh - var(--bar-h))}
 body.reading #deck{
@@ -511,13 +510,17 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   main{padding-top:0}
   .set{display:none !important}
   body[data-set="about"] #set-about,
+  body[data-set="research"] #set-research,
   body[data-set="docs-about"] #set-docs-about,
   body[data-set="docs-howto"] #set-docs-howto,
   body[data-set="cheatsheet"] #set-cheatsheet{display:block !important}
-  #set-about,#set-docs-about,#set-docs-howto,#set-cheatsheet{height:auto}
+  #set-about,#set-research,#set-docs-about,#set-docs-howto,#set-cheatsheet{height:auto}
   #deck{height:auto;overflow:visible;scroll-snap-type:none;max-width:none;padding:0;margin:0}
   #deck .slide{height:auto;display:block;page-break-after:always;break-after:page;padding:0 0 6mm;margin:0;border:0}
   #deck .slide:last-child{page-break-after:auto;break-after:auto}
+  #research-deck{height:auto;overflow:visible;scroll-snap-type:none;max-width:none;padding:0;margin:0}
+  #research-deck .slide{height:auto;display:block;page-break-after:always;break-after:page;padding:0 0 6mm;margin:0;border:0}
+  #research-deck .slide:last-child{page-break-after:auto;break-after:auto}
   .stage{max-width:none;zoom:1 !important}
   .docs-layout{display:block;max-width:none;padding:0;margin:0}
   .doc{max-width:none}
@@ -556,6 +559,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M4 5.5v16M8 7h8M8 10.5h6"/></symbol>
   <symbol id="i-map" viewBox="0 0 24 24"><path d="m3.5 6.5 5-2 7 2 5-2v13l-5 2-7-2-5 2Z"/><path d="M8.5 4.5v13M15.5 6.5v13"/></symbol>
   <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-flask-conical" viewBox="0 0 24 24"><path d="M12 2L3 7v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-9-5Z"/><path d="M12 2v6M7 9h10"/></symbol>
 </svg>
 
 <nav class="bar" aria-label="Site controls">
@@ -566,6 +570,9 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   <div class="tabs" role="tablist" aria-label="Document sets">
     <a class="tab" role="tab" data-set="about" aria-selected="true" aria-controls="set-about" href="#/about/{{first_id}}">
       <svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg><span>About</span>
+    </a>
+    <a class="tab" role="tab" data-set="research" aria-selected="false" aria-controls="set-research" href="#/research/{{first_research}}">
+      <svg class="icon" aria-hidden="true"><use href="#i-flask-conical"/></svg><span>Research</span>
     </a>
     <a class="tab" role="tab" data-set="docs-about" aria-selected="false" aria-controls="set-docs-about" href="#/docs-about/{{first_doc_about}}">
       <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>About</span>
@@ -606,6 +613,12 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   <section class="set" id="set-about" data-set="about" aria-label="About — slides">
     <div id="deck">
 {{about_slides}}
+    </div>
+  </section>
+
+  <section class="set" id="set-research" data-set="research" aria-label="Research — slides">
+    <div id="research-deck">
+{{research_slides}}
     </div>
   </section>
 
@@ -699,7 +712,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   const canvas = $("#map-canvas");
   const zoomLevel = $("#zoom-level");
 
-  const sets = new Set(["about", "docs-about", "docs-howto", "cheatsheet"]);
+  const sets = new Set(["about", "research", "docs-about", "docs-howto", "cheatsheet"]);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const pad = (value) => String(value).padStart(2, "0");
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
@@ -999,10 +1012,10 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
       tab.setAttribute("aria-selected", String(selected));
       tab.tabIndex = selected ? 0 : -1;
     });
-    const about = set === "about";
-    presentBtn.disabled = !about;
-    readBtn.disabled = !about;
-    if (about) {
+    const isSlideDeck = set === "about" || set === "research";
+    presentBtn.disabled = !isSlideDeck;
+    readBtn.disabled = !isSlideDeck;
+    if (isSlideDeck) {
       notesBtn.disabled = reading || !slides[current]?.querySelector("[popover]");
     } else {
       notesBtn.disabled = true;
@@ -1021,7 +1034,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
         return;
       }
     }
-    if (route.set === "about") {
+    if (route.set === "about" || route.set === "research") {
       const index = slides.findIndex((slide) => slide.id === route.item);
       goSlide(index >= 0 ? index : 0, { smooth: !instant, hash: false });
     } else if (route.set.startsWith("docs-")) {
@@ -1058,6 +1071,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
     paletteResults.innerHTML = filtered.map((item, index) => {
       let set = "Map";
       if (item.set === "about") set = "About";
+      else if (item.set === "research") set = "Research";
       else if (item.set === "docs-about") set = "About";
       else if (item.set === "docs-howto") set = "HowTo";
       const meta = [set, item.kind, item.context].filter(Boolean).join(" · ");

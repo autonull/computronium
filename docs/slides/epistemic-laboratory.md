@@ -1,28 +1,8 @@
 # Computronium: An Epistemic Laboratory for Learning
 
 <div class="hero-intro">
-  <div class="hero-badge">🧪 Epistemic Laboratory</div>
   <h1 class="hero-title">Computation with less time, energy, and uncertainty</h1>
   <p class="hero-subtitle">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
-</div>
-
-<div class="hero-stats">
-  <div class="stat">
-    <span class="stat-value"><!-- gen:primitive_total --></span>
-    <span class="stat-label">Primitives</span>
-  </div>
-  <div class="stat">
-    <span class="stat-value"><!-- gen:algorithm_count --></span>
-    <span class="stat-label">Algorithms</span>
-  </div>
-  <div class="stat">
-    <span class="stat-value"><!-- gen:kernel_verified_count --></span>
-    <span class="stat-label">Verified Kernels</span>
-  </div>
-  <div class="stat">
-    <span class="stat-value"><!-- gen:domain_count --></span>
-    <span class="stat-label">Domains</span>
-  </div>
 </div>
 
 <div class="hero-claims">
@@ -42,12 +22,6 @@
     <span class="claim-icon">📐</span>
     <div class="claim-text">
       <strong>Evidence, not assertions.</strong> Lyapunov descent, gradient equivalence, finite-state invariants — property-tested claims with gates.
-    </div>
-  </div>
-  <div class="claim">
-    <span class="claim-icon">🧠</span>
-    <div class="claim-text">
-      <strong>Z3-inspired plasticity.</strong> Frozen weights (θ), evolving fast state (ψ) — algorithm as trajectory, not parameter update.
     </div>
   </div>
 </div>
