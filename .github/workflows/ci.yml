@@ -33,6 +33,8 @@ jobs:
         run: uv run python -m pytest tests/integration/ -m demo -q
       - name: Vertical Slice Gate (C.2: energy descent, gradient sign, J2 invariance, baseline digest)
         run: uv run python -m pytest tests/integration/test_vertical_slice_gate.py tests/property/test_vertical_slice.py -q
+      - name: Version Consistency
+        run: uv run python -m pytest tests/unit/test_version_consistency.py -q
       - name: Drift Locks (README snippets, root exports)
         run: |
           uv run python -m pytest tests/unit/core/test_readme_snippet_lock.py \

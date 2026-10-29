@@ -22,8 +22,16 @@ import sys
 import warnings
 from typing import TYPE_CHECKING
 
-# Suppress informational UserWarnings (geometry/substrate hints, etc.)
-warnings.filterwarnings("ignore", category=UserWarning)
+# Surface hints from SystemConfig validation are advisory: they describe a
+# legal-but-suboptimal combination and are repeated on every construction. Only
+# those three messages are muted; every other warning stays visible.
+_INFORMATIONAL_WARNING_PATTERNS = (
+    r"^PC-ALM beta mismatch:",
+    r"^Diffusion dynamics \(Langevin\) with substrate",
+    r"^update_type=.* per-element-displacement",
+)
+for _pattern in _INFORMATIONAL_WARNING_PATTERNS:
+    warnings.filterwarnings("ignore", message=_pattern, category=UserWarning)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

@@ -13,8 +13,22 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SCAN_ROOTS = [REPO / "computronium", REPO / "packages"]
-WRITER_MODULE = "computronium/experiment/evidence/store.py"
+WRITER_PACKAGE = Path("computronium/experiment/evidence/store")
 WRITE_LOCK_ATTR = "_write_lock"
+
+
+def _is_writer(path: Path) -> bool:
+    """True for the store package, the one place DuckDB may be opened/written."""
+    return (REPO / WRITER_PACKAGE) in path.parents or path.as_posix().endswith(
+        "computronium/experiment/evidence/store.py"
+    )
+
+
+def _writer_source() -> str:
+    return "\n".join(
+        p.read_text(encoding="utf-8")
+        for p in sorted((REPO / WRITER_PACKAGE).glob("*.py"))
+    )
 
 
 def _py_files() -> list[Path]:
@@ -61,7 +75,7 @@ class TestSingleWriterEnforcement:
         """No module other than the store's connects to DuckDB."""
         offenders: list[Path] = []
         for path in _py_files():
-            if path.as_posix().endswith(WRITER_MODULE):
+            if _is_writer(path):
                 continue
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             if _has_unguarded_duckdb_import(tree):
@@ -70,7 +84,7 @@ class TestSingleWriterEnforcement:
 
     def test_store_guards_writes_with_lock(self) -> None:
         """The writer owns a threading lock and initializes it before use."""
-        source = (REPO / WRITER_MODULE).read_text(encoding="utf-8")
+        source = _writer_source()
         assert "import threading" in source
         assert "threading.RLock()" in source
         assert WRITE_LOCK_ATTR in source
@@ -78,12 +92,12 @@ class TestSingleWriterEnforcement:
     def test_store_has_no_raw_sql_writes_outside_append_paths(self) -> None:
         """INSERT/UPDATE/DELETE statements only exist inside the store module."""
         writer_statements = sum(
-            (REPO / WRITER_MODULE).read_text(encoding="utf-8").count(kw)
+            _writer_source().count(kw)
             for kw in ("INSERT INTO", "UPDATE ", "DELETE FROM")
         )
         assert writer_statements > 0
         for path in _py_files():
-            if path.as_posix().endswith(WRITER_MODULE):
+            if _is_writer(path):
                 continue
             text = path.read_text(encoding="utf-8")
             for kw in ("INSERT INTO records", "UPDATE records", "DELETE FROM records"):

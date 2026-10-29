@@ -22,7 +22,7 @@ include = ["computronium*"]
 
 [project]
 name = "computronium"
-version = "3.0.0"
+version = "1.0.0"
 description = "Unified platform for exploring the full spectrum of bio-plausible learning rules across machine intelligence"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -46,8 +46,6 @@ dependencies = [
     "pydantic>=2.0",
     "omegaconf>=2.3",
     "pyyaml",
-    "kademlia>=2.2.3",
-    "torch-geometric>=2.8.0.post1",
     # Platform packages (TODO20 Rule 6: one copy, adapters on legacy paths)
     "ceec-core",
     "psi-peft",
@@ -56,13 +54,7 @@ dependencies = [
     "computronium-lab",
     "pandas>=3.0.5",
     "optuna>=4.9.0",
-    "torchvision>=0.29.0",
-    "pytorch-lightning>=2.6.6",
     "duckdb>=1.5.6",
-    "fvcore>=0.1.5.post20221221",
-    "plotly>=7.1.0",
-    "nvidia-ml-py>=13.615.71",
-    "python-multipart>=0.0.32",
 ]
 
 [tool.uv.workspace]
@@ -117,12 +109,26 @@ dev = [
     "cryptography==50.0.0",
 ]
 
+# --- Install profiles ---
+# `core` is the base install (training + experiment kernel); the extras below
+# add one capability each. `full` is the union for development.
+core = []  # training + experiment kernel: torch, numpy, duckdb, optuna, ...
+search = ["optuna>=4.9.0", "duckdb>=1.5.6", "tabulate>=0.9"]
+gpu = ["nvidia-ml-py>=13.615.71"]
+dashboard = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart>=0.0.32",
+    "plotly>=7.1.0",
+    "rich",
+]
+
 # --- Core feature groups ---
 nn = []  # ComputroniumLinear, pluggable credit rules — zero extra deps
 stability-guard = []  # alias for the stability workspace dep (extras name must not shadow it)
 
 # --- Domain / data ---
-vision = ["torchvision"]
+vision = ["torchvision>=0.29.0"]
 lm = ["transformers", "datasets", "tokenizers"]
 rl = ["gymnasium"]
 spiking = ["snnTorch>=0.8", "cupy-cuda13x>=14.1.1"]
@@ -132,37 +138,37 @@ lightning = ["pytorch-lightning>=2.6.6"]
 analysis = ["optuna", "tabulate>=0.9"]
 
 # --- ML/data utilities ---
-ml = ["scikit-learn", "pandas", "scipy"]
+ml = ["scikit-learn", "pandas", "scipy", "fvcore>=0.1.5.post20221221"]
 
 # --- Terminal rendering (renderer layer; not a core import, see TODO35 §1.4) ---
 console = ["rich"]
 
 # --- Plotting & visualization ---
-plot = ["matplotlib", "seaborn", "plotly>=6.9.0"]
+plot = ["matplotlib", "seaborn", "plotly>=7.1.0"]
 
 # --- Deployment & serving ---
 deploy = ["fastapi", "uvicorn"]
 export = ["onnx", "onnxscript", "onnxruntime"]
 
 # --- Networking ---
-p2p = ["kademlia", "grpcio>=1.62", "grpcio-tools>=1.62"]
+p2p = ["kademlia>=2.2.3", "grpcio>=1.62", "grpcio-tools>=1.62"]
 
 # --- System monitoring ---
 monitoring = ["psutil"]
 
 # --- Existing optional groups ---
 knowledgebase = ["gpytorch", "botorch", "sympy"]
-graphs = ["torch-geometric>=2.5", "networkx"]
+graphs = ["torch-geometric>=2.8.0.post1", "networkx"]
 llm = ["openai>=1.0"]
 
 # --- Full install ---
 full = [
-    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,console,deploy,export,p2p,monitoring,knowledgebase,graphs,llm,nn]",
+    "computronium[core,search,gpu,dashboard,vision,lm,rl,spiking,lightning,analysis,ml,plot,console,deploy,export,p2p,monitoring,knowledgebase,graphs,llm,nn]",
 ]
 
 [project.urls]
-homepage = "https://github.com/computronium/computronium"
-repository = "https://github.com/computronium/computronium"
+homepage = "https://github.com/autonull/computronium"
+repository = "https://github.com/autonull/computronium"
 documentation = "https://computronium.readthedocs.io"
 
 [project.scripts]
@@ -189,6 +195,15 @@ dev = [
     "pytest-timeout>=2.4.0",
     "selenium>=4.0",
     "websockets>=17.3",
+    # Optional runtime deps exercised by the test suite. They are not part of
+    # the minimal `core` install, so CI's `uv sync --dev` names them here.
+    "torchvision>=0.29.0",
+    "pytorch-lightning>=2.6.6",
+    "torch-geometric>=2.8.0.post1",
+    "kademlia>=2.2.3",
+    "fvcore>=0.1.5.post20221221",
+    "nvidia-ml-py>=13.615.71",
+    "python-multipart>=0.0.32",
 ]
 
 [tool.pytest.ini_options]
@@ -310,6 +325,9 @@ ignore = [
 "scripts/probes/shoot_one_view.py" = [
     "hardcoded-temp-file",    # hardcoded-temp-file — the probe writes to a known path under /tmp/opencode
 ]
+"computronium/data/transforms.py" = [
+    "undefined-export",  # undefined-export — canonical transforms resolve through module __getattr__ (torchvision stays optional)
+]
 "computronium/__init__.py" = [
     "star-arg-unpacking-after-keyword-arg",  # invalid-all-format — undefined-export — __all__ names resolve through the _LAZY import map
 ]
@@ -366,9 +384,10 @@ ignore = [
     "too-many-return-statements", # too-many-positional-arguments — ditto
     "assert",    # assert — internal invariant guard
 ]
-"computronium/experiment/evidence/store.py" = [
+"computronium/experiment/evidence/store/*.py" = [
     "unused-noqa",
     "hardcoded-sql-expression",    # hardcoded-sql-expression — parameterized queries by design
+    "too-many-public-methods",     # the public API is split across concern mixins
 ]
 "computronium/experiment/evidence/mirror.py" = [
     "hardcoded-sql-expression",    # hardcoded-sql-expression — the identifiers are the catalog's own
@@ -376,6 +395,11 @@ ignore = [
 "computronium/experiment/execution/search_space.py" = [
     "unused-noqa", "module-import-not-at-top-of-file", "typing-only-first-party-import", "typing-only-third-party-import", "typing-only-standard-library-import",
     "too-many-branches", "too-many-statements", "too-many-locals", "too-many-nested-blocks", "unnecessary-generator-set", "unused-variable",
+]
+"computronium/experiment/execution/pipeline/*.py" = [
+    "too-many-statements-in-try-clause",
+    "complex-structure",        # _execute_batch_with_isolation is one failure-isolation state machine
+    "raise-within-try",
 ]
 "computronium/experiment/execution/stages_impl.py" = [
     "unused-noqa", "module-import-not-at-top-of-file", "typing-only-first-party-import", "typing-only-standard-library-import",

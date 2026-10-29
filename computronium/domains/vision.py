@@ -8,7 +8,6 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision import datasets
 
 from computronium.data.transforms import build_transform, normalization
 from computronium.data.vision import get_vision_dataset
@@ -68,6 +67,8 @@ class VisionTask(DomainTask):
 
     def setup(self) -> None:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
         """Load vision datasets."""
+        from torchvision import datasets
+
         key = self.dataset_name.lower()
         default_transform = build_transform(key) if key in normalization else None
         if self.train_transform is None:

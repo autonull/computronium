@@ -11,10 +11,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from torch.utils.data import DataLoader, Dataset
-from torchvision import transforms
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from torchvision import transforms
 
 __all__ = [
     "CIFAR10_TRANSFORM",
@@ -40,30 +41,29 @@ normalization: Mapping[str, tuple[tuple[float, ...], tuple[float, ...]]] = {
     "usps": ((0.5,), (0.5,)),
 }
 
-MNIST_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(*normalization["mnist"]),
-])
-FASHION_MNIST_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(*normalization["fashion_mnist"]),
-])
-KMNIST_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(*normalization["kmnist"]),
-])
-CIFAR10_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(*normalization["cifar10"]),
-])
-CIFAR100_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(*normalization["cifar100"]),
-])
-SVHN_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(*normalization["svhn"]),
-])
+_CANONICAL_TRANSFORMS = {
+    "MNIST_TRANSFORM": "mnist",
+    "FASHION_MNIST_TRANSFORM": "fashion_mnist",
+    "KMNIST_TRANSFORM": "kmnist",
+    "CIFAR10_TRANSFORM": "cifar10",
+    "CIFAR100_TRANSFORM": "cifar100",
+    "SVHN_TRANSFORM": "svhn",
+}
+
+
+def __getattr__(name: str) -> object:
+    """Build a canonical transform on first access (torchvision stays optional)."""
+    dataset = _CANONICAL_TRANSFORMS.get(name)
+    if dataset is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from torchvision import transforms
+
+    value = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(*normalization[dataset]),
+    ])
+    globals()[name] = value
+    return value
 
 
 def build_transform(
@@ -94,6 +94,8 @@ def build_transform(
             f"Unknown dataset {name!r} for canonical transforms: "
             f"{sorted(normalization)}"
         )
+    from torchvision import transforms
+
     steps: list[object] = []
     if augment:
         if name in {"cifar10", "cifar100", "svhn"}:

@@ -531,14 +531,19 @@ class TestTheRunReachesThePolicy:
 
         source = (
             Path(__file__).resolve().parents[2]
-            / "computronium/experiment/execution/pipeline.py"
+            / "computronium/experiment/execution/pipeline"
         )
-        tree = ast.parse(source.read_text())
-        observer = next(
+        bodies = [ast.parse(p.read_text()).body for p in source.glob("*.py")]
+        functions = [
             node
-            for cls in tree.body
+            for body in bodies
+            for cls in body
             if isinstance(cls, ast.ClassDef)
             for node in cls.body
+        ]
+        observer = next(
+            node
+            for node in functions
             if isinstance(node, ast.FunctionDef) and node.name == "_observe"
         )
         assert any(
@@ -548,9 +553,7 @@ class TestTheRunReachesThePolicy:
 
         executor = next(
             node
-            for cls in tree.body
-            if isinstance(cls, ast.ClassDef)
-            for node in cls.body
+            for node in functions
             if isinstance(node, ast.AsyncFunctionDef)
             and node.name == "_execute_batch_with_isolation"
         )
