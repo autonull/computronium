@@ -89,7 +89,8 @@ body.reading .count{display:none}
 main{padding-top:var(--bar-h)}
 .set{display:none}
 body[data-set="about"] #set-about,
-body[data-set="docs"] #set-docs,
+body[data-set="docs-about"] #set-docs-about,
+body[data-set="docs-howto"] #set-docs-howto,
 body[data-set="cheatsheet"] #set-cheatsheet{display:block}
 
 /* ---------- about deck ---------- */
@@ -197,8 +198,185 @@ summary::marker{color:var(--accent)}
 .d .accent{fill:var(--accent)}
 .d .tiny{font-size:9px;letter-spacing:.1em}
 
+/* ---------- hero intro (first slide) ---------- */
+.hero-intro {
+  text-align: center;
+  margin-bottom: 2rem;
+  animation: hero-fade-in 1.2s cubic-bezier(.22,.61,.36,1) forwards;
+  opacity: 0;
+  transform: translateY(1.5rem);
+}
+@keyframes hero-fade-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-badge {
+  display: inline-block;
+  font: 500 .7rem/1 var(--mono);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--rule));
+  border-radius: 999px;
+  padding: .35rem .85rem;
+  margin-bottom: 1rem;
+  animation: badge-pulse 3s ease-in-out infinite;
+}
+@keyframes badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 25%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.hero-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.05;
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent) 50%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 .75rem;
+}
+.hero-subtitle {
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  color: var(--muted);
+  max-width: 56ch;
+  margin: 0 auto 1.5rem;
+  line-height: 1.6;
+}
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: clamp(1.5rem, 3vw, 3rem);
+  flex-wrap: wrap;
+  margin: 1.5rem 0 2rem;
+  animation: stats-slide-up 0.8s cubic-bezier(.22,.61,.36,1) 0.3s both;
+  opacity: 0;
+  transform: translateY(1rem);
+}
+@keyframes stats-slide-up {
+  to { opacity: 1; transform: translateY(0); }
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .25rem;
+  min-width: 5rem;
+}
+.stat-value {
+  font: 700 clamp(1.8rem, 3vw, 2.5rem)/1 var(--mono);
+  color: var(--accent);
+  letter-spacing: -.02em;
+}
+.stat-label {
+  font: 500 .7rem/1 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.hero-claims {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  animation: claims-fade-in 1s cubic-bezier(.22,.61,.36,1) 0.5s both;
+  opacity: 0;
+  transform: translateY(1rem);
+}
+@keyframes claims-fade-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+.claim {
+  display: flex;
+  gap: .75rem;
+  padding: 1rem 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.claim:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.claim-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.claim-text {
+  font-size: .9rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.claim-text strong {
+  color: var(--text);
+}
+
+/* ---------- research grid ---------- */
+.research-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  max-width: 76rem;
+  margin: 1.5rem auto 0;
+}
+.research-card {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.research-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+.research-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+.research-card h3 {
+  font-size: 1.1rem;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+}
+.research-card p {
+  font-size: .88rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0;
+  max-width: none;
+}
+.research-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  margin-top: .5rem;
+  font: 500 .78rem/1 var(--mono);
+  letter-spacing: .05em;
+  color: var(--accent);
+  opacity: 0.7;
+  transition: opacity .2s, transform .2s;
+}
+.research-card:hover .research-link {
+  opacity: 1;
+  transform: translateX(4px);
+}
+
 /* ---------- documentation ---------- */
-#set-docs{min-height:calc(100dvh - var(--bar-h))}
+#set-docs-about,
+#set-docs-howto{min-height:calc(100dvh - var(--bar-h))}
 .docs-layout{
   display:grid;grid-template-columns:260px minmax(0,1fr);gap:clamp(1.5rem,4vw,4rem);
   max-width:1280px;margin:0 auto;padding:2rem clamp(1rem,3vw,2rem) 8rem;
@@ -333,9 +511,10 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   main{padding-top:0}
   .set{display:none !important}
   body[data-set="about"] #set-about,
-  body[data-set="docs"] #set-docs,
+  body[data-set="docs-about"] #set-docs-about,
+  body[data-set="docs-howto"] #set-docs-howto,
   body[data-set="cheatsheet"] #set-cheatsheet{display:block !important}
-  #set-about,#set-docs,#set-cheatsheet{height:auto}
+  #set-about,#set-docs-about,#set-docs-howto,#set-cheatsheet{height:auto}
   #deck{height:auto;overflow:visible;scroll-snap-type:none;max-width:none;padding:0;margin:0}
   #deck .slide{height:auto;display:block;page-break-after:always;break-after:page;padding:0 0 6mm;margin:0;border:0}
   #deck .slide:last-child{page-break-after:auto;break-after:auto}
@@ -376,6 +555,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3.5 13.6 9l5.4 1.6L13.6 12 12 17.5 10.4 12 5 10.6 10.4 9Z"/><path d="M18.5 4v3M17 5.5h3M5.5 16v3M4 17.5h3"/></symbol>
   <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M4 5.5v16M8 7h8M8 10.5h6"/></symbol>
   <symbol id="i-map" viewBox="0 0 24 24"><path d="m3.5 6.5 5-2 7 2 5-2v13l-5 2-7-2-5 2Z"/><path d="M8.5 4.5v13M15.5 6.5v13"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
 </svg>
 
 <nav class="bar" aria-label="Site controls">
@@ -387,8 +567,11 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
     <a class="tab" role="tab" data-set="about" aria-selected="true" aria-controls="set-about" href="#/about/{{first_id}}">
       <svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg><span>About</span>
     </a>
-    <a class="tab" role="tab" data-set="docs" aria-selected="false" aria-controls="set-docs" href="#/docs/{{first_doc}}">
-      <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>Documentation</span>
+    <a class="tab" role="tab" data-set="docs-about" aria-selected="false" aria-controls="set-docs-about" href="#/docs-about/{{first_doc_about}}">
+      <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>About</span>
+    </a>
+    <a class="tab" role="tab" data-set="docs-howto" aria-selected="false" aria-controls="set-docs-howto" href="#/docs-howto/{{first_doc_howto}}">
+      <svg class="icon" aria-hidden="true"><use href="#i-wrench"/></svg><span>HowTo</span>
     </a>
     <a class="tab" role="tab" data-set="cheatsheet" aria-selected="false" aria-controls="set-cheatsheet" href="#/cheatsheet">
       <svg class="icon" aria-hidden="true"><use href="#i-map"/></svg><span>Cheatsheet</span>
@@ -426,15 +609,28 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
     </div>
   </section>
 
-  <section class="set" id="set-docs" data-set="docs" aria-label="Documentation">
+  <section class="set" id="set-docs-about" data-set="docs-about" aria-label="Documentation — About">
     <div class="docs-layout">
       <aside class="toc-rail">
         <p class="rail-title">Reference</p>
-{{doc_toc}}
+{{doc_toc_about}}
         <a class="rail-link" href="#/cheatsheet">Architecture cheatsheet →</a>
       </aside>
       <article class="doc">
-{{doc_sections}}
+{{doc_sections_about}}
+      </article>
+    </div>
+  </section>
+
+  <section class="set" id="set-docs-howto" data-set="docs-howto" aria-label="Documentation — HowTo">
+    <div class="docs-layout">
+      <aside class="toc-rail">
+        <p class="rail-title">Reference</p>
+{{doc_toc_howto}}
+        <a class="rail-link" href="#/cheatsheet">Architecture cheatsheet →</a>
+      </aside>
+      <article class="doc">
+{{doc_sections_howto}}
       </article>
     </div>
   </section>
@@ -503,7 +699,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   const canvas = $("#map-canvas");
   const zoomLevel = $("#zoom-level");
 
-  const sets = new Set(["about", "docs", "cheatsheet"]);
+  const sets = new Set(["about", "docs-about", "docs-howto", "cheatsheet"]);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const pad = (value) => String(value).padStart(2, "0");
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
@@ -618,15 +814,18 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   /* ---------------- documentation ---------------- */
 
   function updateTocActive() {
-    if (body.dataset.set !== "docs") return;
+    if (!body.dataset.set?.startsWith("docs-")) return;
     const offset = bar.offsetHeight + 48;
     let best = "";
     $$(".doc-section").forEach((section) => {
       if (section.getBoundingClientRect().top <= offset) {
-        best = section.id.replace(/^docs-/, "");
+        best = section.id.replace(/^docs-(about|howto)-/, "");
       }
     });
-    if (!best) best = $(".doc-section")?.id.replace(/^docs-/, "") || "";
+    if (!best) {
+      const first = $(".doc-section");
+      if (first) best = first.id.replace(/^docs-(about|howto)-/, "");
+    }
     $$(".toc a").forEach((link) => {
       link.classList.toggle("active", link.dataset.doc === best);
       if (link.dataset.doc === best) link.setAttribute("aria-current", "true");
@@ -634,10 +833,10 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
     });
   }
 
-  function scrollDoc(key, heading, { smooth = true } = {}) {
+  function scrollDoc(setKey, key, heading, { smooth = true } = {}) {
     const target = heading
       ? document.getElementById(`docs-h-${heading}`)
-      : document.getElementById(`docs-${key}`);
+      : document.getElementById(`docs-${setKey}-${key}`);
     if (!target) return;
     target.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
     updateTocActive();
@@ -808,7 +1007,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
     } else {
       notesBtn.disabled = true;
     }
-    if (set === "docs") updateTocActive();
+    if (set.startsWith("docs-")) updateTocActive();
     if (set === "cheatsheet") requestAnimationFrame(refitMap);
   }
 
@@ -825,10 +1024,11 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
     if (route.set === "about") {
       const index = slides.findIndex((slide) => slide.id === route.item);
       goSlide(index >= 0 ? index : 0, { smooth: !instant, hash: false });
-    } else if (route.set === "docs") {
+    } else if (route.set.startsWith("docs-")) {
       const [key, heading] = route.item.split("/");
-      const target = key || $(".doc-section")?.id.replace(/^docs-/, "");
-      scrollDoc(target, heading, { smooth: !instant });
+      const firstSection = $(".doc-section");
+      const target = key || (firstSection ? firstSection.id.replace(/^docs-(about|howto)-/, "") : "");
+      scrollDoc(route.set, target, heading, { smooth: !instant });
     } else {
       requestAnimationFrame(() => zoomPanel(route.item || null, { instant }));
     }
@@ -856,7 +1056,10 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
       return;
     }
     paletteResults.innerHTML = filtered.map((item, index) => {
-      const set = item.set === "about" ? "About" : item.set === "docs" ? "Docs" : "Map";
+      let set = "Map";
+      if (item.set === "about") set = "About";
+      else if (item.set === "docs-about") set = "About";
+      else if (item.set === "docs-howto") set = "HowTo";
       const meta = [set, item.kind, item.context].filter(Boolean).join(" · ");
       return `<button type="button" class="palette-item${index === selected ? " is-selected" : ""}" data-index="${index}" role="option" aria-selected="${index === selected}"><span class="pi-title">${escapeHtml(item.title)}</span><span class="pi-meta">${escapeHtml(meta)}</span></button>`;
     }).join("");

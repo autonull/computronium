@@ -8,11 +8,57 @@
 
 # Computronium: An Epistemic Laboratory for Learning
 
-<p class="lead">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
+<div class="hero-intro">
+  <div class="hero-badge">🧪 Epistemic Laboratory</div>
+  <h1 class="hero-title">Computation with less time, energy, and uncertainty</h1>
+  <p class="hero-subtitle">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
+</div>
 
-- **The algorithm zoo is the problem.** Hundreds of learning rules exist; almost none have been compared under equal budgets, equal architectures, and verified code.
-- **A laboratory, not a library.** Each experiment is one coordinate in a fixed ontology, run through a fixed pipeline, written to one ledger.
-- **The bet.** Learning mechanisms interact. The combinations that survive physical constraints are discoverable — if the instrument is honest.
+<div class="hero-stats">
+  <div class="stat">
+    <span class="stat-value">57</span>
+    <span class="stat-label">Primitives</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">21</span>
+    <span class="stat-label">Algorithms</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">5</span>
+    <span class="stat-label">Verified Kernels</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">7</span>
+    <span class="stat-label">Domains</span>
+  </div>
+</div>
+
+<div class="hero-claims">
+  <div class="claim">
+    <span class="claim-icon">⚡</span>
+    <div class="claim-text">
+      <strong>Energy-first ontology.</strong> Every axis — substrate, geometry, dynamics, plasticity, credit, update — exposes physical cost.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">🔬</span>
+    <div class="claim-text">
+      <strong>Governed comparison.</strong> The fairness contract makes a comparison legal before it runs. No hidden defaults.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">📐</span>
+    <div class="claim-text">
+      <strong>Evidence, not assertions.</strong> Lyapunov descent, gradient equivalence, finite-state invariants — property-tested claims with gates.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">🧠</span>
+    <div class="claim-text">
+      <strong>Z3-inspired plasticity.</strong> Frozen weights (θ), evolving fast state (ψ) — algorithm as trajectory, not parameter update.
+    </div>
+  </div>
+</div>
 
 
 _[diagram: `diagrams/zoo.svg`]_
@@ -157,6 +203,621 @@ Local credit, explicit settling, and energy terms are ontology-level constraints
 
 > No physical-hardware superiority is claimed. Neuromorphic, memristive, and photonic paths are validated in simulation until they run on silicon.
 
+## Research paths — a grid of open directions
+
+Each path below is a self-contained research program with its own slides, specifications, and progress tracking.
+
+<div class="research-grid">
+  <a class="research-card" href="#/about/proof-research" data-research="proof">
+    <span class="research-icon">📐</span>
+    <h3>Formal Proof Research</h3>
+    <p>Rocq-verified theorems for Computronium's ontology, plasticity mechanisms, and Z3-inspired universality. Machine-checked computational guarantees.</p>
+    <span class="research-link">Open →</span>
+  </a>
+
+  <a class="research-card" href="#/about/consortium-research" data-research="consortium">
+    <span class="research-icon">🤝</span>
+    <h3>Evaluation Consortium</h3>
+    <p>A community-led effort to make evidence about learning mechanisms easier to inspect, compare, reproduce, and improve. Fairness contracts, identity cards, corrections log.</p>
+    <span class="research-link">Open →</span>
+  </a>
+
+  <a class="research-card" href="#/about/z3-research" data-research="z3">
+    <span class="research-icon">🎯</span>
+    <h3>Z3 Benchmark & Plasticity</h3>
+    <p>The Z3-inspired benchmark: frozen weights (θ), evolving fast state (ψ). Can a network achieve universal multi-task behavior purely through plastic-state dynamics?</p>
+    <span class="research-link">Open →</span>
+  </a>
+
+  <a class="research-card" href="#/about/metadynamics-research" data-research="metadynamics">
+    <span class="research-icon">🌀</span>
+    <h3>Metadynamics & Credit</h3>
+    <p>State-dependent credit assignment, coupled dynamics stability, and the expressive hierarchy of plasticity primitives — routing, fast weights, rule-state, temporal.</p>
+    <span class="research-link">Open →</span>
+  </a>
+
+  <a class="research-card" href="#/about/substrate-research" data-research="substrate">
+    <span class="research-icon">⚡</span>
+    <h3>Substrate & Hardware</h3>
+    <p>Quantization error bounds, neuromorphic/photonic/memristive refinement, noise robustness, and resource-aware complexity for physical deployment.</p>
+    <span class="research-link">Open →</span>
+  </a>
+
+  <a class="research-card" href="#/about/learning-theory-research" data-research="learning-theory">
+    <span class="research-icon">📈</span>
+    <h3>Learning Theory & Guarantees</h3>
+    <p>Online adaptation bounds, distribution-shift response, task interference, and plasticity-vs-no-plasticity separation under declared resource budgets.</p>
+    <span class="research-link">Open →</span>
+  </a>
+</div>
+
+# Formal Proof Research
+
+<div class="research-header">
+  <span class="research-badge">📐 Formal Verification</span>
+  <h2>Machine-checked theorems for Computronium's architecture</h2>
+  <p class="research-lead">Rocq proof assistant · Computational theory · Architecture and plasticity</p>
+</div>
+
+## Mission
+
+Develop a machine-checked mathematical foundation that establishes:
+1. What the six-axis architecture means mathematically
+2. What computational capabilities arise from each axis and their interactions
+3. Whether RuleStatePlasticity supports universal computation under explicit assumptions
+4. What the separation between persistent parameters (θ) and evolving plastic state (ψ) actually guarantees
+5. Which capabilities require plasticity, which can be implemented without it, and which require additional resources
+6. Whether useful guarantees can be proved for adaptation, retention, stability, precision, and learning
+7. Which claims are false, underspecified, redundant, or dependent on unrealistic assumptions
+
+> The objective is a reusable Rocq development, not merely a collection of isolated proofs.
+
+## Research Phases
+
+### Phase A — Establish the Proof Baseline (F0–F2)
+- **F0**: Inventory existing Rocq proofs, admitted lemmas, and dependencies
+- **F1**: Formal semantics of the six-axis ontology — compositional model with totality, composition correctness, interface compatibility
+- **F2**: Frozen-θ, evolving-ψ semantics — parameter invariance, state-update correctness, lifecycle separation, reset isolation
+
+### Phase B — Prove the Central Computational Claim (F3–F6)
+- **F3**: Reconstruct and formalize the Z3 simulation argument (Rojas 1998)
+- **F4**: Formalize RuleStatePlasticity — rule selection, state representation, frozen-machinery invariant
+- **F5**: Prove or refute universality of RuleStatePlasticity — direct simulation or transfer via Z3
+- **F6**: State-capacity and impossibility theorems — finite-state limitations, external memory dependency, precision dependency
+
+### Phase C — Determine What Plasticity Contributes (F7–F9, F14–F15)
+- **F7**: Expressiveness hierarchy across plasticity primitives
+- **F8**: Plastic-state lifecycle guarantees — episode isolation, exact reset, bounded retention, consolidation separation
+- **F9**: Stability–plasticity tradeoffs — contractive dynamics, perturbation bounds, retention–adaptation incompatibility
+- **F14**: Formal compositionality of the six axes
+- **F15**: Distinguish architectural novelty from new computational power
+
+### Phase D — Learning & Dynamical Guarantees (F10–F13)
+- **F10**: Correctness of plasticity update rules — closed-form ridge, temporal trace-decay, fast weights
+- **F11**: Formal learning guarantees under changing environments
+- **F12**: Stability and convergence of coupled dynamics
+- **F13**: Precision, noise, and substrate refinement
+
+### Phase E — Resource Costs & Infrastructure (F16–F17)
+- **F16**: Complexity of simulation and execution
+- **F17**: Verify the ontology and experiment specifications
+
+## Key Distinctions
+
+| Claim Type | What It Means | Status |
+|------------|---------------|--------|
+| **Computability** | Can the architecture compute a specified function? | Open |
+| **Expressiveness** | What family of functions/state transitions can it represent? | Open |
+| **Efficiency** | How many operations, memory cells, bits, or updates? | Open |
+| **Learnability** | Can a learning process discover a useful configuration within budget? | Open |
+
+> Proving one does not establish the others.
+
+## Current Status
+
+- **Repository**: <https://github.com/autonull/computronium>
+- **Proof Assistant**: Rocq (Coq)
+- **Full Specification**: `docs/PROOF.md` — complete research program with 17 formal projects (F0–F17)
+- **Prioritization**: Phased gates (A→B→C→D→E) with explicit acceptance criteria
+
+## Next Steps
+
+1. **Inventory** existing `.v` files and admitted lemmas (F0)
+2. **Build** clean Rocq environment with CI gate
+3. **Formalize** the six-axis ontology semantics (F1)
+4. **Formalize** frozen-θ, evolving-ψ semantics (F2)
+5. **Reconstruct** Z3 simulation argument in Rocq (F3)
+
+# Evaluation Consortium Research
+
+<div class="research-header">
+  <span class="research-badge">🤝 Community Collaboration</span>
+  <h2>A consortium for governed, reproducible comparison of learning mechanisms</h2>
+  <p class="research-lead">Fairness contracts · Identity cards · Corrections log · Independent review</p>
+</div>
+
+## The Problem
+
+Research on learning mechanisms is difficult to compare across papers, implementations, tasks, and labs. A reported result reflects more than the learning rule itself:
+- Dataset choices, preprocessing, implementation details
+- Compute, hyperparameter search, stopping criteria
+- Random seeds, metrics, and reporting decisions
+
+These differences are not necessarily mistakes. Different studies may answer different questions. The problem arises when:
+1. Conditions behind a result are difficult to inspect
+2. Unlike results are treated as direct comparisons
+3. The cost of careful replication is too high for any one group to bear
+
+## Why a Consortium?
+
+No single lab can reasonably carry every implementation, benchmark, replication, and audit. Nor should one team decide unilaterally what counts as a meaningful comparison for every research question.
+
+A consortium could:
+- Bring together people with different methods, expertise, resources, and incentives
+- Coordinate work that is hard to sustain alone
+- Make assumptions and disagreements visible
+- Create a public record that improves as more people examine it
+
+> The aim is **not** to declare one universally best algorithm, force every experiment into one protocol, or centralize independent research. It is to make claims easier to assess and comparisons more useful when comparison is the goal.
+
+## Three Shared Artifacts
+
+### 1. Fairness Contract
+6 clauses that make a comparison legal before it is run.
+**`docs/FAIRNESS_CONTRACT.md`**
+
+Declares budget, fidelity, seed count, and operating point before a number exists. The operating point is the fairness contract made executable.
+
+### 2. Identity Cards
+31 cards declaring reference, deviations, objective, pseudo-gradient, and symmetry.
+**`docs/IDENTITY_CARDS.md`**
+
+The admission ticket for a new algorithm. Every experiment is a coordinate in the ontology.
+
+### 3. Corrections Log
+5 public entries recording what failed, why, and what changed.
+**`docs/CORRECTIONS.md`**
+
+A gate is not a one-way promotion. When a later campaign contradicts a belief, the belief is revoked and the evidence stays.
+
+## Provisional Mission
+
+**Help the research community produce evidence about learning mechanisms that is easier to inspect, compare where appropriate, reproduce, correct, and build on.**
+
+### Working Principles
+- **Transparency** — Describe method, implementation, task, metric, resources, tuning, limitations
+- **Pluralism** — Different questions call for different tasks, metrics, budgets
+- **Proportionate rigor** — Match claim strength to evidence strength
+- **Faithful representation** — Document implementation choices and departures
+- **Correction as normal practice** — Visible history of material corrections
+- **Open criticism and shared governance** — Reviewable decisions, appeal paths
+- **Useful negative findings** — Publish informative null/inconclusive results
+
+## First Phase: Bounded Pilot
+
+1. **Convene participants and draft a charter** — purpose, scope, decision-making, conflicts of interest
+2. **Choose one bounded pilot** — important enough to matter, narrow enough to complete
+3. **Agree on reporting requirements** — claim, implementation provenance, data, metrics, compute, randomization, uncertainty, exclusions, limitations
+4. **Invite independent scrutiny** — review protocol or reproduce a defined part
+5. **Publish result and lessons** — including inconclusive findings and process shortcomings
+
+> The pilot should test the consortium's working process as well as the scientific question.
+
+## Relationship to Computronium
+
+**Computronium is a codebase and experimental framework. The Computronium Consortium is a proposed collaboration. They are related, but they are not the same thing.**
+
+- Anyone may use Computronium independently of a consortium
+- Using Computronium does not make a result independently verified or endorsed by the consortium
+- The consortium may choose to use Computronium, other tools, or a combination
+
+## Current Infrastructure (Starting Points)
+
+- Algorithm Identity Cards: `docs/IDENTITY_CARDS.md`
+- Corrections Log: `docs/CORRECTIONS.md`
+- Preregistration Tooling: `computronium/validation/preregistration.py`
+- HPO Protocol: `docs/hpo_protocol.md`
+- Fairness Contract: `docs/FAIRNESS_CONTRACT.md`
+
+## Decisions for Participants
+
+- **Scope**: Which mechanisms, claims, tasks, communities first?
+- **Governance**: Who proposes/changes standards? How are decisions made and appealed?
+- **Participation**: What contributions are useful? What commitments are reasonable?
+- **Evidence & Review**: What info for different claims? How to handle disputes, failed replications, corrections?
+- **Services**: Core process vs. optional specialist services (HPO, implementation audits)?
+- **Resources**: Costs, infrastructure, funding, credit, maintenance without exclusion?
+- **Expansion**: What should a successful pilot demonstrate before widening scope?
+
+## Existing Models to Consider
+
+- **MLCommons** — Industry–academic consortium for shared benchmarks, reproducibility, measurement. AlgoPerf benchmark for training algorithms.
+- **METR** — Independent evaluation research with public-interest mission (focused on advanced AI capabilities/risks).
+- **Cochrane** — Distributed international community synthesizing evidence using shared methods, independent review, continual updating.
+
+## The Invitation
+
+Bring an algorithm, a research question, a benchmark concern, a critique, expertise in methodology or statistics, implementation work, data, compute, funding, or simply time to help shape the first steps.
+
+> The first task is not to agree with every sentence. It is to identify the people, questions, and modest first experiment that could make a consortium worth having.
+
+# Z3 Benchmark & Plasticity Research
+
+<div class="research-header">
+  <span class="research-badge">🎯 Z3-Inspired</span>
+  <h2>Frozen weights (θ), evolving fast state (ψ) — algorithm as trajectory</h2>
+  <p class="research-lead">Konrad Zuse's Z3 (1941) · No conditional branching · Turing completeness via meta-dynamics</p>
+</div>
+
+## The Historical Analogy
+
+The naming of the "Z3 Benchmark" is a precise mathematical analogy for what Computronium achieves with the Joint Architecture.
+
+### 1. The "No Conditional Branching" Constraint
+
+Zuse's Z3 had no conditional branching — the punched tape executed sequentially. To perform conditional logic, programmers computed **both paths and masked** the unwanted one:
+
+```
+Result = (Condition × Path_A) + ((1 − Condition) × Path_B)
+```
+
+**Computronium Parallel:** Standard deep learning uses hard `argmax` routing (Mixture of Experts), breaking gradients. The Z3 benchmark forces the network to achieve task switching via **continuous, differentiable arithmetic masking** mediated by the fast state ψ:
+
+$$T_t = \sum_k g_k(\psi_t) T_k$$
+
+The network computes a soft mixture of operators without altering the underlying physical substrate (θ).
+
+### 2. Hardware vs. Tape (The θ vs. ψ Divide)
+
+| Z3 Component | Computronium Parallel |
+|--------------|----------------------|
+| Physical relays (~2,600), arithmetic unit | Persistent weights **θ** (frozen, slow, energetically expensive) |
+| Punched celluloid tape | Fast plasticity state **ψ** (dynamic, intra-episode memory that routes computation) |
+
+The "algorithm" lives in ψ; the hardware (θ) is a fixed, stable attractor manifold.
+
+### 3. Turing Completeness via Meta-Dynamics
+
+For decades, computer scientists debated whether the Z3 was Turing-complete without conditional branches. In 1998, Raúl Rojas proved it **was** — by writing a clever looping program on the tape that simulated a Turing machine's state transitions. The "algorithm" was emergent from the tape, not the hardware.
+
+**Computronium Parallel:** The Z3 Benchmark asks the exact same fundamental question:
+
+> *Can a network with strictly frozen parameters (θ) achieve universal, multi-task algorithmic behavior purely through the dynamics of its fast plastic state (ψ)?*
+
+## Why This Matters
+
+In biological brains and neuromorphic/analog hardware:
+- **Changing persistent weights (θ)** is slow, noisy, and energetically expensive (like physically rewiring relays or burning out memristors)
+- **Evolving internal activation states (ψ)** is fast, cheap, and local (like reading a tape or letting an energy landscape settle)
+
+By naming this benchmark "Z3", we explicitly state that true computational power shouldn't require constantly overwriting the hardware. The hardware should be a fixed, stable attractor manifold, and the "algorithm" should be the trajectory through that manifold.
+
+## Research Questions
+
+### Q1: Universality of RuleStatePlasticity
+Can a fixed-θ, evolving-ψ system simulate a universal machine? Two routes:
+- **Route A**: Direct simulation — encode TM tape, head, control state, transition table in ψ
+- **Route B**: Transfer via Z3 — prove RuleStatePlasticity simulates the Z3 arithmetic machine, transfer universality
+
+### Q2: Expressiveness Hierarchy
+How do the plasticity primitives compare under the same resource constraints?
+- `NullPlasticity` (baseline)
+- `RoutingPlasticity`
+- `FastWeightPlasticity`
+- `SubstrateCoupledPlasticity`
+- `RuleStatePlasticity` (Z3-inspired)
+- `ClosedFormRidgePlasticity`
+- `TemporalPsiPlasticity`
+
+### Q3: State-Capacity Limits
+- Finite ψ: eventual periodicity, memory lower bounds
+- External memory: what capabilities does writable memory add?
+- Precision dependency: exact arithmetic vs. finite-precision hardware
+
+### Q4: Stability–Plasticity Tradeoffs
+- Contractive dynamics → fixed points, convergence
+- Perturbation bounds under plastic updates
+- Retention–adaptation incompatibility in bounded memory
+
+## Current Status
+
+- **Formal Specification**: `docs/PROOF.md` — Projects F3–F6, F15 focus on Z3/RuleStatePlasticity
+- **Implementation**: `RuleStatePlasticity` primitive in `computronium/ontology/plasticity/`
+- **Z3 Analogy Document**: `docs/Z3.md` — detailed historical parallel
+- **Benchmark**: Z3 Benchmark as a first-class evaluation target in the pipeline
+
+## Connection to Other Research Paths
+
+| Path | Connection |
+|------|------------|
+| **Formal Proof** | F3–F6: Z3 formalization, RuleStatePlasticity semantics, universality theorem |
+| **Metadynamics** | Plasticity expressiveness hierarchy (F7), lifecycle guarantees (F8) |
+| **Substrate** | Precision/noise refinement (F13), hardware deployment |
+| **Learning Theory** | Online adaptation guarantees (F11), plasticity vs. no-plasticity separation |
+
+## Next Steps
+
+1. **Formalize** the Z3 arithmetic machine model in Rocq (F3)
+2. **Specify** RuleStatePlasticity transition semantics matching implementation (F4)
+3. **Attempt** universality proof or construct rigorous limitation result (F5)
+4. **Characterize** finite-state limitations and external memory dependency (F6)
+5. **Build** Z3 Benchmark evaluation into the governed pipeline
+
+> This is an incredibly elegant conceptual anchor. The Z3 metaphor perfectly encapsulates the core philosophy of Computronium: the hardware should be a fixed, stable attractor manifold, and the "algorithm" should be the trajectory through that manifold.
+
+# Metadynamics & Credit Research
+
+<div class="research-header">
+  <span class="research-badge">🌀 Metadynamics</span>
+  <h2>State-dependent credit, coupled dynamics, plasticity expressiveness</h2>
+  <p class="research-lead">Routing · Fast weights · Rule-state · Temporal plasticity · Credit assignment</p>
+</div>
+
+## Scope
+
+This research path covers the **plasticity axis (P)** and **credit axis (C)** of the ontology — the mechanisms that determine *what changes during an episode* and *how error is routed*.
+
+## Plasticity Primitives (Expressiveness Hierarchy — F7)
+
+| Primitive | Mechanism | Key Question |
+|-----------|-----------|--------------|
+| `NullPlasticity` | No within-episode state change | Baseline embedding (F7.1) |
+| `RoutingPlasticity` | State-dependent routing/gating | What routing behaviors can fixed architecture + explicit routing state represent? (F7.2) |
+| `FastWeightPlasticity` | Episode-local fast weights | Equivalence to explicit memory? Parameterization restrictions? (F7.3) |
+| `SubstrateCoupledPlasticity` | Substrate-mediated plasticity | Coupling effects on stability (F12.5) |
+| `RuleStatePlasticity` | Rule selection via ψ (Z3-inspired) | Separation from restricted routing/memory? (F7.4) |
+| `ClosedFormRidgePlasticity` | Analytic ridge regression update | Exact solution correctness (F10.1) |
+| `TemporalPsiPlasticity` | Trace-decayed plasticity | Retention/forgetting bounds (F8.3, F10.3) |
+
+> Do not assume these form a simple linear hierarchy. Different mechanisms may be incomparable.
+
+## Credit Assignment Primitives
+
+| Primitive | Pseudo-Gradient | Symmetry |
+|-----------|-----------------|----------|
+| `EquilibriumPropagation` | Free/nudged phase difference | Symmetric |
+| `BackpropThroughTime` | Autograd through settle | Asymmetric |
+| `ForwardForward` | Local goodness objectives | Layer-wise |
+| `DirectFeedbackAlignment` | Random feedback weights | Asymmetric |
+| `SignSymmetry` | Sign-preserving feedback | Partial symmetry |
+
+## Key Research Projects
+
+### F7: Expressiveness Hierarchy
+- Pairwise simulation matrix across primitives
+- Zero-plasticity embedding (F7.1)
+- Routing simulation (F7.2)
+- Fast-weight equivalence/separation (F7.3)
+- Rule-state separation (F7.4)
+- Temporal plasticity characterization (F7.5)
+
+### F8: Plastic-State Lifecycle Guarantees
+- Episode isolation (F8.1)
+- Exact reset (F8.2)
+- Bounded retention (F8.3)
+- Forgetting bounds (F8.4)
+- Persistence conditions (F8.5)
+- Consolidation separation (F8.6)
+
+### F9: Stability–Plasticity Tradeoffs
+- Contractive dynamics (F9.1)
+- Perturbation bounds (F9.2)
+- Stability under plastic updates (F9.3)
+- Instability counterexamples (F9.4)
+- Retention–adaptation incompatibility (F9.5)
+- Stability–expressiveness frontier (F9.6)
+
+### F10: Update Rule Correctness
+- Closed-form ridge solution (F10.1)
+- Uniqueness (F10.2)
+- Temporal recurrence (F10.3)
+- Decay bounds (F10.4)
+- Update invariants (F10.5)
+- Objective descent (F10.6)
+
+### F12: Coupled Dynamics Stability
+- Lyapunov decrease (F12.1)
+- Equilibrium convergence (F12.2)
+- Discrete-time stability (F12.3)
+- Jacobian bounds (F12.4)
+- Coupling effects (F12.5)
+- Noise robustness (F12.6)
+
+## Connection to Other Paths
+
+| Path | Connection |
+|------|------------|
+| **Formal Proof** | F7–F10, F12: Formal semantics, theorems, guarantees |
+| **Z3 Research** | RuleStatePlasticity expressiveness (F7.4), universality (F5) |
+| **Substrate** | Substrate-coupled plasticity, noise robustness (F12.6, F13) |
+| **Learning Theory** | Online adaptation (F11), plasticity vs. no-plasticity (F11.5) |
+
+## Current Status
+
+- **Implementation**: All primitives in `computronium/ontology/plasticity/` and `computronium/ontology/credit/`
+- **Validation**: `SystemConfig.validate()` whitelists legal P×C combinations
+- **Experiments**: Plasticity expressiveness probes in `scripts/probes/`
+- **Documentation**: `docs/eqprop_deep_limitation.md`, `docs/metric_provenance.md`
+
+# Substrate & Hardware Research
+
+<div class="research-header">
+  <span class="research-badge">⚡ Substrate</span>
+  <h2>Quantization, noise, neuromorphic, photonic, memristive refinement</h2>
+  <p class="research-lead">Precision bounds · Error accumulation · Resource-aware complexity · Physical deployment</p>
+</div>
+
+## Scope
+
+The **substrate axis (S)** defines the physical state space: precision, noise, sparsity, and device physics. This research path connects abstract computation to constrained implementations.
+
+## Substrate Primitives (9 available)
+
+| Primitive | Precision | Noise Model | Sparsity | Target Hardware |
+|-----------|-----------|-------------|----------|-----------------|
+| `Float32` | 32-bit FP | None | Dense | CPU/GPU (reference) |
+| `Float16` | 16-bit FP | None | Dense | GPU Tensor Cores |
+| `BFloat16` | 16-bit BF | None | Dense | TPU/GPU |
+| `Int8` | 8-bit int | Quantization | Structured | Edge accelerators |
+| `Int4` | 4-bit int | Quantization | Structured | Ultra-low-power |
+| `Ternary` | {-1,0,1} | None | High | Neuromorphic |
+| `Binary` | {-1,1} | None | High | In-memory compute |
+| `Stochastic` | Analog | Gaussian/Poisson | Configurable | Memristive/photonic |
+| `Spiking` | Event-based | Shot noise | Sparse | Neuromorphic (Loihi, SpiNNaker) |
+
+> Substrates available today: digital, analog, memristive, neuromorphic, optical, quantum, complex, sparse, ternary.
+
+## Key Research Projects
+
+### F13: Precision, Noise, and Substrate Refinement
+- **F13.1**: Quantization error bounds — discrepancy between ideal and quantized transition
+- **F13.2**: Error accumulation — propagation of local numerical errors over repeated transitions
+- **F13.3**: Robustness margins — bounded perturbations cannot change discrete decisions with sufficient margin
+- **F13.4**: Noisy-state probability bounds — deviation from ideal behavior under stochastic model
+- **F13.5**: Resource-aware refinement — abstract machine cost vs. concrete implementation cost model
+
+### F12: Coupled Dynamics Stability (Substrate-Aware)
+- **F12.5**: Coupling effects — when adding plasticity preserves/invalidates stability
+- **F13.6**: Substrate-specific stability — Lyapunov analysis under quantization/noise
+
+### F16: Complexity of Simulation & Execution
+- **F16.1**: Step simulation bounds — target transitions per simulated source transition
+- **F16.2**: Space bounds — source-machine space vs. target-machine state/memory
+- **F16.3**: Encoding overhead — representation size of source program/configuration
+- **F16.4**: Restricted-access overhead — cost of indirect addressing/conditional selection with available ops
+- **F16.5**: Lower bounds — under explicitly defined machine models
+
+## Substrate-Specific Research Questions
+
+### Digital Finite-Precision (Int8, Int4, Float16)
+- Quantization-aware training vs. post-training quantization
+- Accumulator precision requirements for credit computation
+- Kernel parity verification at each precision level
+
+### Neuromorphic / Spiking
+- Event-driven settle vs. frame-based settle
+- Spike-based credit assignment (surrogate gradients)
+- Latency-energy-accuracy Pareto frontiers
+
+### Memristive / Analog In-Memory Compute
+- Conductance drift and programming noise models
+- Analog settling dynamics as StateDynamics primitive
+- Endurance-aware plasticity (write cycling in ψ vs. θ)
+
+### Photonic
+- Phase/amplitude noise models
+- Thermal crosstalk as structured noise
+- Latency advantages for specific StateDynamics (e.g., energy minimization)
+
+## Connection to Other Paths
+
+| Path | Connection |
+|------|------------|
+| **Formal Proof** | F13: Refinement theorems, error bounds, resource-aware complexity |
+| **Z3 Research** | Finite-precision universality (F5 variant 4), hardware Z3 benchmark |
+| **Metadynamics** | Substrate-coupled plasticity, noise robustness (F12.5, F12.6) |
+| **Learning Theory** | Quantization-aware adaptation, noisy credit guarantees |
+
+## Current Status
+
+- **Kernel Ladder**: Verified kernels at each rung (`reference_only`, `kernel_unverified`, `kernel_verified`)
+- **Implementation Matrix**: 5 verified, 20 unverified, 39 reference-only
+- **Export Targets**: Loihi (neuromorphic), FPGA (digital), ONNX (portable)
+- **Documentation**: `docs/kernel_backend_guide.md`, `docs/tutorials/export_loihi.md`, `docs/tutorials/export_fpga.md`, `docs/hardware_targets.md`
+
+## Next Steps
+
+1. **Formalize** quantization error model for a reference StateDynamics (F13.1)
+2. **Verify** kernel parity for Int8/Int4 substrates (move to `kernel_verified`)
+3. **Characterize** neuromorphic settle dynamics as StateDynamics primitive
+4. **Build** resource-aware cost model linking abstract transitions to hardware cycles/energy
+5. **Extend** Z3 benchmark to run on physical neuromorphic hardware
+
+> No physical-hardware superiority is claimed. Neuromorphic, memristive, and photonic paths are validated in simulation until they run on silicon.
+
+# Learning Theory & Guarantees Research
+
+<div class="research-header">
+  <span class="research-badge">📈 Learning Theory</span>
+  <h2>Online adaptation, distribution shift, plasticity vs. no-plasticity separation</h2>
+  <p class="research-lead">Regret bounds · Task interference · Memory-assisted adaptation · Resource-bounded guarantees</p>
+</div>
+
+## Scope
+
+This research path asks: **Under what conditions does plasticity provide provable benefits for learning?** It connects the metadynamics (plasticity mechanisms) to formal learning guarantees under declared resource budgets.
+
+> A theorem about an online predictor does not automatically transfer to a reinforcement-learning policy. The latter requires additional assumptions about environment dynamics, exploration, reward, and the relationship between policy changes and observed data.
+
+## Key Research Projects
+
+### F11: Formal Learning Guarantees Under Changing Environments
+
+| Project | Question | Approach |
+|---------|----------|----------|
+| **F11.1** Finite-horizon online adaptation | Regret/prediction-error bound for a plasticity mechanism on a bounded task family | Define task family, prove bound |
+| **F11.2** Distribution-shift response | Bound adaptation time/error after a declared shift model | Change model + adaptation bound |
+| **F11.3** Task interference | When do updates for one task alter behavior on another? | Characterize interference conditions |
+| **F11.4** Memory-assisted adaptation | Benefit from explicit memory for a defined task class, or lower bound showing memory requirement | Compare with/without memory |
+| **F11.5** Plasticity vs. no plasticity | Separation: one learner achieves a guarantee the other cannot under same assumptions | Formal comparison on same task class |
+
+### F10: Update Rule Correctness (Foundation)
+- Closed-form ridge solution correctness (F10.1)
+- Temporal recurrence exactness (F10.3)
+- Decay bounds (F10.4)
+- Update invariants (F10.5)
+- Objective descent under explicit assumptions (F10.6)
+
+> Do not assume that an arbitrary local learning rule decreases global training loss.
+
+## Plasticity Mechanisms Under Study
+
+| Mechanism | Theoretical Angle | Target Guarantee |
+|-----------|-------------------|------------------|
+| `ClosedFormRidgePlasticity` | Convex optimization, exact solution | Ridge objective minimization, uniqueness |
+| `TemporalPsiPlasticity` | Linear dynamical systems, trace decay | Bounded retention, forgetting rates |
+| `FastWeightPlasticity` | Episode-local memory, outer products | Memory capacity, interference bounds |
+| `RoutingPlasticity` | Mixture-of-experts, gating dynamics | Specialization, load balancing |
+| `RuleStatePlasticity` | Z3-inspired, program-as-data | Universality, expressiveness separation |
+| `SubstrateCoupledPlasticity` | Physical dynamics, noise | Robustness margins, noise-aware bounds |
+
+## Resource-Bounded Guarantees (Critical)
+
+All learning guarantees must specify:
+- **Memory budget**: Bits of ψ, external memory capacity
+- **Compute budget**: Transitions per adaptation step, total episode length
+- **Precision**: Finite-precision effects on guarantee
+- **Task class**: Exact definition of the family of tasks/environments
+- **Comparison baseline**: What "no plasticity" means in the same resource model
+
+## Connection to Other Paths
+
+| Path | Connection |
+|------|------------|
+| **Formal Proof** | F10–F11: Machine-checked update correctness, learning guarantees |
+| **Metadynamics** | F7–F9: Expressiveness hierarchy informs what can be learned; lifecycle guarantees enable retention analysis |
+| **Z3 Research** | F5/F15: Does RuleStatePlasticity's universality translate to learnability advantages? |
+| **Substrate** | F13: Finite-precision and noise effects on learning guarantees |
+
+## Current Status
+
+- **Measured Objectives**: 41 of 48 registered objectives actually measured
+- **Experiment Pipeline**: Governed pipeline with fidelity ladder (L0→L1→L2→L3) and budget declarations
+- **Fairness Contract**: 6 clauses making comparisons legal before they run
+- **Corrections Log**: 5 public entries — failed beliefs are revoked, evidence stays
+- **Documentation**: `docs/hpo_protocol.md`, `docs/evaluation_fairness_contract.md`, `docs/FAIRNESS_CONTRACT.md`
+
+## Next Steps
+
+1. **Select** a minimal online prediction task family (e.g., linear regression with changing coefficients)
+2. **Formalize** `ClosedFormRidgePlasticity` update as a dynamical system with exact solution
+3. **Prove** finite-horizon regret bound for ridge plasticity vs. no-plasticity baseline (F11.1 + F11.5)
+4. **Characterize** task interference for fast-weight plasticity (F11.3)
+5. **Extend** to distribution-shift model with declared change budget (F11.2)
+6. **Machine-check** key lemmas in Rocq (F10 → F11 pipeline)
+
+> The objective is not to prove that more plasticity is always beneficial. It is to establish conditions under which a specified mechanism is stable, adapts, or loses previous information — with explicit resource assumptions.
+
 # The Invitation: an Evaluation Consortium
 
 A consortium needs three shared artifacts, and none of them is a model.
@@ -169,7 +830,7 @@ A consortium needs three shared artifacts, and none of them is a model.
 
 > The goal is not simply to build another model. It is to build the scientific instrument required to discover what makes learning systems work.
 
-## Documentation
+## Documentation — About
 
 # 🌌 Computronium: A Composable Laboratory for Learning Mechanisms
 
@@ -280,79 +941,6 @@ built lives in [Status and scope](#status-and-scope).
 | **Scientific program** (hypotheses + governance) | Motivating hypotheses on locality, plasticity, stability and physical constraints; standalone CEEC governance ledger | Labeled empirical investigation — every claim carries a verification level; a fairness contract, pre-registered thresholds, generated identity cards, a corrections log, and three findings that survived audit ([findings this project owns](docs/FINDINGS.md)). The motivating hypothesis is an *agenda*, not a result |
 
 **Claim-strength discipline.** Every claim in this README is labeled by its verification level: (1) analytical, (2) machine-checked, (3) certified numerical, (4) sampled numerical, (5) empirical. Levels are defined in `computronium.verification` and enforced against banned overclaim phrases.
-
-## Install
-
-```bash
-git clone <repository-url> && cd computronium
-uv sync --dev --all-extras
-```
-
-Requirements: Python 3.14+, [uv](https://docs.astral.sh/uv/). GPU (CUDA/Triton) is optional — the CPU path is fully functional.
-
-Dev-environment smoke (run this before any gate; a stripped env fails here in seconds):
-
-```bash
-uv run python -c "import optuna, scipy, torchvision, pytest"
-```
-
-## 60-second quickstart
-
-Compose a 6-axis system and train it on MNIST. This block is locked verbatim against its source demo test ([`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py)):
-
-<!-- lock: composition_6axis -->
-```python
-import torch
-
-from computronium import (
-    DigitalSubstrate,
-    EnergyMinimizationDynamics,
-    EuclideanUpdate,
-    GeometryConfig,
-    NullPlasticity,
-    RecurrentGeometry,
-    StateDynamicsConfig,
-    SubstrateConfig,
-    SystemTrainer,
-    SystemTrainerConfig,
-    ThermodynamicContrast,
-    compose_joint_system,
-    create_task,
-)
-
-
-def _flatten(loader):
-    for x, y in loader:
-        yield x.view(x.size(0), -1), y
-
-
-task = create_task("mnist", device="cpu", quick_mode=True)
-task.setup()
-train_loader = task.get_dataloader("train")
-
-torch.manual_seed(0)
-six_axis = compose_joint_system(
-    substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
-    geometry=RecurrentGeometry(
-        GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
-    ),
-    dynamics=EnergyMinimizationDynamics(
-        StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5)
-    ),
-    plasticity=NullPlasticity(),
-    credit=ThermodynamicContrast(),
-    update=EuclideanUpdate(),
-)
-trainer = SystemTrainer(
-    system=six_axis,
-    config=SystemTrainerConfig(max_epochs=1, device="cpu", seed=42),
-    train_data=_flatten(train_loader),
-)
-history = trainer.fit()
-print(f"train accuracy: {history[-1]['train_acc']:.1%}")
-```
-
-Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 train accuracy (chance 0.1).
 
 ## 📋 Architecture Cheatsheet
 
@@ -918,74 +1506,6 @@ six-axis systems and assert real accuracies.
 
 **ContrastDesign.** WP18 adds design-of-experiments (OFAT/factorial) with explicit `DataOrigin` labels, so contrasted arms carry known structure rather than incidental variation.
 
-## CLI reference
-
-`comp <command>` — every subcommand either works end-to-end or does not exist in the dispatcher:
-
-| Command | Purpose |
-|---|---|
-| `demo` | Run the seven-beat demonstration: space, run, ledger, report, coverage |
-| `run` | Execute a run profile (dry-run with --dry-run) |
-| `report` | Generate report from store |
-| `export` | Export store data for round-trip |
-| `import` | Import store data from export (round-trip) |
-| `conformance` | Check capability conformance |
-| `status` | Show run/store status |
-| `gallery` | Render gallery figures from demo records |
-| `hypothesis-campaign` | Run hypothesis templates over campaign records |
-| `stability-plasticity` | Generate and run stability-plasticity frontier campaign |
-| `frozen-theta-psi` | Run frozen-θ ψ benchmarks at scale (multi-substrate, multi-plasticity) |
-| `parity` | Check library-vs-kernel parity for an axis |
-| `repro` | Replay a recorded run and diff it |
-| `validate` | Validate a config or record against the schema |
-| `joint-validate` | Validate a composed multi-axis system |
-| `benchmark` | Run kernel benchmarks and emit a verdict |
-| `stats` | Compute summary statistics for run metrics (machine-readable) |
-| `pareto` | Export Pareto frontier for plotting (machine-readable) |
-| `diff` | Statistical run comparison with effect sizes |
-| `campaign` | Run declarative multi-run YAML campaigns |
-| `loop` | Continuous engine-driven experiment loop (explore/exploit cycles) |
-| `baseline` | Online baseline discovery and registry |
-| `coverage` | Task/domain coverage: what has and has not been measured |
-| `defect` | Defect constraint registry: list, cluster, and revoke constraints |
-| `schema` | Dump JSON schemas for RunSpec/Coordinate/Objectives |
-| `power-analysis` | Compute statistical power for experiment design (machine-readable) |
-| `stability-analysis` | Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories) |
-| `dashboard` | Launch live monitoring web dashboard for campaigns (Phase E5) |
-| `dataset` | Dataset registry: versioned datasets with hash-verified splits (Phase E6) |
-| `environment` | Environment snapshots: capture uv lockfiles, container images (Phase E7) |
-| `quality` | Automated quality gates for reports and data (Phase F1) |
-| `catalog` | Experiment catalog: query runs/records with axis filters (Phase F2) |
-| `method-card` | Method cards: auto-generated docs for ontology primitives (Phase F2) |
-| `faq` | FAQ/Troubleshooting: curated from CI/CD failures (Phase F2) |
-| `plugin` | Plugin management: custom objectives, substrates, dynamics (Phase F3) |
-| `benchmark-contrib` | Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3) |
-
-This table is locked against the dispatcher by `tests/property/test_cli_readme_lock.py` — set and purpose lines must match exactly, and every fenced `bash` block in this README is executed by that lock, so a documented invocation that errors fails CI.
-
-Kernel operations:
-
-```bash
-uv run comp --help-all                # every command above
-uv run comp run quick-verify --dry-run   # resolve the plan; writes nothing
-uv run comp run quick-verify --store experiment.duckdb
-uv run comp status --store experiment.duckdb
-uv run comp report --run-id <id> --store experiment.duckdb
-```
-
-## Demonstrations
-
-Programmatic demos built on the same kernel APIs as the acceptance suite live in `scripts/demos/`:
-
-| Demo | Shows |
-|---|---|
-| `demo_contrast_design.py` | WP18 ContrastDesign — OFAT DOE + DataOrigin, known effect recovered. |
-| `demo_cross_policy_reuse.py` | U5 cross-policy evidence reuse — one store, no migration. |
-| `demo_multi_objective.py` | multi-objective Pareto discovery via the OBJECTIVES registry. |
-| `demo_pause_resume.py` | U3 multi-round pause/resume by run_id. |
-| `demo_policy_swap.py` | U4 policy interchangeability — 4 policies, same RunSpec/Space/Store. |
-| `demo_unified_pipeline.py` | U1 end-to-end (question → RunSpec → Synthesis → pipeline → store → report). |
-
 ## The dashboard, in pictures
 
 The live dashboard is a Dockview-powered application that watches a campaign and shows
@@ -1362,6 +1882,271 @@ The motivating hypothesis: learning systems native to physical constraints — a
 
 Open questions: when does the plasticity axis (writable ψ on frozen θ) beat standard recurrent memory; how far do local credit rules scale on digital substrates; which substrate constraints actually bind. Historical campaign records and research notes live in `docs/archive/`; methodology and Z3 material in `docs/reference/`.
 
+## 🧭 CEEC Epistemic Operating System (`packages/ceec-core`)
+
+**Standalone** epistemic governance ledger (TODO19 Epistemic Foundry) — not integrated into the experiment kernel. The kernel records a `ceec_link` field on claims (always `None` currently) for future integration.
+
+`Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision`.
+**Full reference: [`CEEC.md`](packages/ceec-core/CEEC.md)** — policies in `docs/ceec/`.
+
+| Module (`ceec.*`) | Purpose |
+|--------|---------|
+| `store.py` | Append-only SQLite ledger; content-addressed artifacts; DB-trigger immutability |
+| `gates.py` | Promotion/boundary gate engine, quarantine propagation, effective-status resolution |
+| `selection.py` | EV/cost experiment selection with pre-scoring hard-constraint filter and audited decisions |
+| `calibration.py` | Brier/log-score calibration, drift cadence, review flags |
+| `builders.py` | Payload builders: `experiment`, `gate_evidence`/`quality_flags`, `chance_verdict` |
+| `run.py` | Closed-loop runner `run_experiment`: pre-register → decide → probe → calibrate → optional gate |
+| `audit.py` | Ledger integrity audit + decision-quality audit |
+| `bootstrap.py` | Seeds instruments, hypotheses, goals, pre-registered experiments from `configs/ceec/` |
+| `schemas.py` | Mechanism-schema emission from gated evidence |
+| `probe_adapter.py` / `constraints.py` / `migrate/` / `cli.py` | Probe ingestion, constraint validators, migration, CLI |
+
+CLI: `ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status-history|quarantine-report|emit-schema|export`
+(or `uv run python -m ceec.cli`; `computronium/ceec/` is a legacy re-export
+shim of this package). Main ledger at `ceec/ceec.sqlite3`; campaign
+ledgers under `scratch/`.
+
+
+## 📦 Standalone Platform Packages (`packages/`)
+
+Extracted, framework-free packages the repo depends on (uv workspace
+members, TODO20 Rule 6 — one implementation copy each; legacy
+`computronium.*` import paths are thin adapters):
+
+| Package | Import | What it is |
+|---|---|---|
+| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](packages/ceec-core/CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
+| `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
+| `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
+| `packages/computronium-lab` | `computronium_lab` | Standalone high-level Lab API (used in probe scripts): compose/train/compare/report ontology coordinates + mechanism recipes; synthesis layer (`Lab.specify/synthesize/explore`), task tiers, validation campaigns, research layer (budgeted evolution, certified corpus, continual benchmark), instrument layer (ledger report renderer, one-shot research report) |
+| `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
+
+Platform docs (recipe book, edge blueprint, external summary, release
+notes/manifest): `docs/platform/`. X-STA-002 validated the
+stable-amplification family: 4×–2600× transient retention over matched
+contractive controls at ρ=0.85, noise amplified at the same rate (retention
+gain, not SNR gain); shipped as the Lab `stable_amplification` recipe.
+
+`uv sync` installs them as editable workspace members automatically.
+
+## Status and scope
+
+`v1.0.0` is a laboratory, not a completed research programme. Three lists say
+exactly what that means; the durable ledger is `TODO66.md` §8, and retired
+experiments are recorded with the findings that ended them in
+[`docs/CORRECTIONS.md`](docs/CORRECTIONS.md).
+
+- **Live.** loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
+  statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
+  claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
+  (text/JSON/HTML) · `comp` core commands.
+- **Designed, not built.** M1 gate calibration · M2 drift detection · M3 metric
+  coverage warnings · `capabilities` command · repo-wide effect lock · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
+  compatibility sampling · `SystemConfig.validate` codegen.
+- **Planned.** **fair-HPO recovery study — for each zoo algorithm, re-tune under
+  equal effort and publish the delta from its published number** (the "these algorithms may be better than
+  commonly believed" programme; needs the equal-effort HPO gap closed and real compute) · 7-domain task
+  expansion (cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes,
+  california_housing, ett_h1, PDE suites) · physical-hardware validation
+  (memristive/neuromorphic/optical/quantum) · Ray/SLURM · DDP at scale · `campaign_queue` as loop driver ·
+  full CEEC integration · `question_first` literature store · a real TUI · **an evaluation consortium**:
+  the fairness contract as a shared constitution, identity cards as the admission ticket, the corrections
+  log as the shared memory.
+
+The comparison stack has five named gaps: rules are independent
+re-implementations with disclosed deviations rather than verified upstream
+code; equal-effort HPO is a protocol, not a kernel invariant; there is no
+blinding; an unregistered claim is labelled rather than refused; and coverage is
+one task family. They are stated in full under [Neutral
+evaluation](#neutral-evaluation--why-a-referee-and-how-this-one-works), and the
+invitation that follows from them is [`docs/CONSORTIUM.md`](docs/CONSORTIUM.md).
+
+## FAQ / Troubleshooting + Glossary
+
+**FAQ**
+
+- *`ModuleNotFoundError` after a sync* — run `uv sync --dev --all-extras` (bare `uv sync` strips dev extras) and the dev-env smoke command.
+- *DuckDB store is locked* — the evidence store is **single-writer**: all writes flow through `RecordStore.append()` under a threading lock, enforced by `tests/property/test_single_writer_enforcement.py`. Do not open a second writer process against the same file; readers are fine, cross-process writers are not supported.
+- *`UnsupportedSchemaVersionError`* — a record was written by a newer kernel than the reader. Upgrade the reader; unknown-field tolerance is fail-closed by design.
+- *GPU* — optional. `uv run comp benchmark` runs on CPU.
+
+**Glossary**
+
+- **Coordinate** — a point in the 6-axis space; the unit of comparison.
+- **RunSpec** — the serialized specification of a run: question, space, stages, budget.
+- **SearchSpace** — the legality-checked subspace a policy proposes within.
+- **Policy** — the proposal strategy; the only varying part between kernel experiments.
+- **Stage** — one step S1–S11 of the pipeline.
+- **Record** — one measured row in the evidence store (identity, provenance, status, payload).
+- **Claim** — a governed statement derived from records, with a verification level.
+
+## License
+
+See [`LICENSE`](LICENSE).
+
+## Documentation — HowTo
+
+## Install
+
+```bash
+git clone https://github.com/autonull/computronium && cd computronium
+uv sync --dev --all-extras
+```
+
+Requirements: Python **3.14+** (PEP 695 generics, `TypeIs`, free-threaded-CPython
+readiness), [uv](https://docs.astral.sh/uv/). The base install (`core`) carries
+training and the experiment kernel; every other capability is an extra, so an
+install pulls only what it uses.
+
+| Profile | Install | Adds |
+|---------|---------|------|
+| `core` | `uv sync` | Training, ontology, experiment kernel (torch, duckdb, optuna, pydantic) |
+| `search` | `uv sync --extra search` | Campaign search and tabular reporting |
+| `vision` | `uv sync --extra vision` | torchvision datasets and transforms |
+| `gpu` | `uv sync --extra gpu` | NVIDIA telemetry (`nvidia-ml-py`) |
+| `dashboard` | `uv sync --extra dashboard` | FastAPI/uvicorn live dashboard (with `rich`) |
+
+Optional heavy dependencies are imported lazily: `torchvision` is only touched
+when a vision dataset or transform is requested, the dashboard stack when the
+dashboard is launched. Combining profiles works as expected, e.g.
+`uv sync --extra vision --extra dashboard`; `--all-extras` is the development
+union.
+
+GPU (CUDA/Triton) is optional — the CPU path is fully functional.
+
+Dev-environment smoke (run this before any gate; a stripped env fails here in seconds):
+
+```bash
+uv run python -c "import optuna, scipy, torchvision, pytest"
+```
+
+## 60-second quickstart
+
+Compose a 6-axis system and train it on MNIST. This block is locked verbatim against its source demo test ([`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py)):
+
+<!-- lock: composition_6axis -->
+```python
+import torch
+
+from computronium import (
+    DigitalSubstrate,
+    EnergyMinimizationDynamics,
+    EuclideanUpdate,
+    GeometryConfig,
+    NullPlasticity,
+    RecurrentGeometry,
+    StateDynamicsConfig,
+    SubstrateConfig,
+    SystemTrainer,
+    SystemTrainerConfig,
+    ThermodynamicContrast,
+    compose_joint_system,
+    create_task,
+)
+
+
+def _flatten(loader):
+    for x, y in loader:
+        yield x.view(x.size(0), -1), y
+
+
+task = create_task("mnist", device="cpu", quick_mode=True)
+task.setup()
+train_loader = task.get_dataloader("train")
+
+torch.manual_seed(0)
+six_axis = compose_joint_system(
+    substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
+    geometry=RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
+    ),
+    dynamics=EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5)
+    ),
+    plasticity=NullPlasticity(),
+    credit=ThermodynamicContrast(),
+    update=EuclideanUpdate(),
+)
+trainer = SystemTrainer(
+    system=six_axis,
+    config=SystemTrainerConfig(max_epochs=1, device="cpu", seed=42),
+    train_data=_flatten(train_loader),
+)
+history = trainer.fit()
+print(f"train accuracy: {history[-1]['train_acc']:.1%}")
+```
+
+Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 train accuracy (chance 0.1).
+
+## CLI reference
+
+`comp <command>` — every subcommand either works end-to-end or does not exist in the dispatcher:
+
+| Command | Purpose |
+|---|---|
+| `demo` | Run the seven-beat demonstration: space, run, ledger, report, coverage |
+| `run` | Execute a run profile (dry-run with --dry-run) |
+| `report` | Generate report from store |
+| `export` | Export store data for round-trip |
+| `import` | Import store data from export (round-trip) |
+| `conformance` | Check capability conformance |
+| `status` | Show run/store status |
+| `gallery` | Render gallery figures from demo records |
+| `hypothesis-campaign` | Run hypothesis templates over campaign records |
+| `stability-plasticity` | Generate and run stability-plasticity frontier campaign |
+| `frozen-theta-psi` | Run frozen-θ ψ benchmarks at scale (multi-substrate, multi-plasticity) |
+| `parity` | Check library-vs-kernel parity for an axis |
+| `repro` | Replay a recorded run and diff it |
+| `validate` | Validate a config or record against the schema |
+| `joint-validate` | Validate a composed multi-axis system |
+| `benchmark` | Run kernel benchmarks and emit a verdict |
+| `stats` | Compute summary statistics for run metrics (machine-readable) |
+| `pareto` | Export Pareto frontier for plotting (machine-readable) |
+| `diff` | Statistical run comparison with effect sizes |
+| `campaign` | Run declarative multi-run YAML campaigns |
+| `loop` | Continuous engine-driven experiment loop (explore/exploit cycles) |
+| `baseline` | Online baseline discovery and registry |
+| `coverage` | Task/domain coverage: what has and has not been measured |
+| `defect` | Defect constraint registry: list, cluster, and revoke constraints |
+| `schema` | Dump JSON schemas for RunSpec/Coordinate/Objectives |
+| `power-analysis` | Compute statistical power for experiment design (machine-readable) |
+| `stability-analysis` | Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories) |
+| `dashboard` | Launch live monitoring web dashboard for campaigns (Phase E5) |
+| `dataset` | Dataset registry: versioned datasets with hash-verified splits (Phase E6) |
+| `environment` | Environment snapshots: capture uv lockfiles, container images (Phase E7) |
+| `quality` | Automated quality gates for reports and data (Phase F1) |
+| `catalog` | Experiment catalog: query runs/records with axis filters (Phase F2) |
+| `method-card` | Method cards: auto-generated docs for ontology primitives (Phase F2) |
+| `faq` | FAQ/Troubleshooting: curated from CI/CD failures (Phase F2) |
+| `plugin` | Plugin management: custom objectives, substrates, dynamics (Phase F3) |
+| `benchmark-contrib` | Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3) |
+
+This table is locked against the dispatcher by `tests/property/test_cli_readme_lock.py` — set and purpose lines must match exactly, and every fenced `bash` block in this README is executed by that lock, so a documented invocation that errors fails CI.
+
+Kernel operations:
+
+```bash
+uv run comp --help-all                # every command above
+uv run comp run quick-verify --dry-run   # resolve the plan; writes nothing
+uv run comp run quick-verify --store experiment.duckdb
+uv run comp status --store experiment.duckdb
+uv run comp report --run-id <id> --store experiment.duckdb
+```
+
+## Demonstrations
+
+Programmatic demos built on the same kernel APIs as the acceptance suite live in `scripts/demos/`:
+
+| Demo | Shows |
+|---|---|
+| `demo_contrast_design.py` | WP18 ContrastDesign — OFAT DOE + DataOrigin, known effect recovered. |
+| `demo_cross_policy_reuse.py` | U5 cross-policy evidence reuse — one store, no migration. |
+| `demo_multi_objective.py` | multi-objective Pareto discovery via the OBJECTIVES registry. |
+| `demo_pause_resume.py` | U3 multi-round pause/resume by run_id. |
+| `demo_policy_swap.py` | U4 policy interchangeability — 4 policies, same RunSpec/Space/Store. |
+| `demo_unified_pipeline.py` | U1 end-to-end (question → RunSpec → Synthesis → pipeline → store → report). |
+
 ## 🌐 Distributed Training & P2P
 
 ### Multi-GPU Training
@@ -1505,54 +2290,6 @@ primitives()  # → 43 primitive specs
 get("primitive.credit_assignment.random_projections")
 list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 ```
-
-## 🧭 CEEC Epistemic Operating System (`packages/ceec-core`)
-
-**Standalone** epistemic governance ledger (TODO19 Epistemic Foundry) — not integrated into the experiment kernel. The kernel records a `ceec_link` field on claims (always `None` currently) for future integration.
-
-`Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision`.
-**Full reference: [`CEEC.md`](packages/ceec-core/CEEC.md)** — policies in `docs/ceec/`.
-
-| Module (`ceec.*`) | Purpose |
-|--------|---------|
-| `store.py` | Append-only SQLite ledger; content-addressed artifacts; DB-trigger immutability |
-| `gates.py` | Promotion/boundary gate engine, quarantine propagation, effective-status resolution |
-| `selection.py` | EV/cost experiment selection with pre-scoring hard-constraint filter and audited decisions |
-| `calibration.py` | Brier/log-score calibration, drift cadence, review flags |
-| `builders.py` | Payload builders: `experiment`, `gate_evidence`/`quality_flags`, `chance_verdict` |
-| `run.py` | Closed-loop runner `run_experiment`: pre-register → decide → probe → calibrate → optional gate |
-| `audit.py` | Ledger integrity audit + decision-quality audit |
-| `bootstrap.py` | Seeds instruments, hypotheses, goals, pre-registered experiments from `configs/ceec/` |
-| `schemas.py` | Mechanism-schema emission from gated evidence |
-| `probe_adapter.py` / `constraints.py` / `migrate/` / `cli.py` | Probe ingestion, constraint validators, migration, CLI |
-
-CLI: `ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status-history|quarantine-report|emit-schema|export`
-(or `uv run python -m ceec.cli`; `computronium/ceec/` is a legacy re-export
-shim of this package). Main ledger at `ceec/ceec.sqlite3`; campaign
-ledgers under `scratch/`.
-
-
-## 📦 Standalone Platform Packages (`packages/`)
-
-Extracted, framework-free packages the repo depends on (uv workspace
-members, TODO20 Rule 6 — one implementation copy each; legacy
-`computronium.*` import paths are thin adapters):
-
-| Package | Import | What it is |
-|---|---|---|
-| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](packages/ceec-core/CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
-| `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
-| `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
-| `packages/computronium-lab` | `computronium_lab` | Standalone high-level Lab API (used in probe scripts): compose/train/compare/report ontology coordinates + mechanism recipes; synthesis layer (`Lab.specify/synthesize/explore`), task tiers, validation campaigns, research layer (budgeted evolution, certified corpus, continual benchmark), instrument layer (ledger report renderer, one-shot research report) |
-| `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
-
-Platform docs (recipe book, edge blueprint, external summary, release
-notes/manifest): `docs/platform/`. X-STA-002 validated the
-stable-amplification family: 4×–2600× transient retention over matched
-contractive controls at ρ=0.85, noise amplified at the same rate (retention
-gain, not SNR gain); shipped as the Lab `stable_amplification` recipe.
-
-`uv sync` installs them as editable workspace members automatically.
 
 ## For developers
 
@@ -1756,61 +2493,6 @@ These locks protect the 64-spec registry from silent drift — extending TODO32'
 | **Structural equivalence** | Geometry/Substrate primitives | Factory determinism: same config → bitwise-equal state tensors; spec round-trip |
 | **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (25 tests) |
 
-## Status and scope
-
-`v1.0.0` is a laboratory, not a completed research programme. Three lists say
-exactly what that means; the durable ledger is `TODO66.md` §8, and retired
-experiments are recorded with the findings that ended them in
-[`docs/CORRECTIONS.md`](docs/CORRECTIONS.md).
-
-- **Live.** loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
-  statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
-  claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
-  (text/JSON/HTML) · `comp` core commands.
-- **Designed, not built.** M1 gate calibration · M2 drift detection · M3 metric
-  coverage warnings · `capabilities` command · repo-wide effect lock · C12 ruler-geometry fallback · `defect revoke` re-probe · policy-aware
-  compatibility sampling · `SystemConfig.validate` codegen.
-- **Planned.** **fair-HPO recovery study — for each zoo algorithm, re-tune under
-  equal effort and publish the delta from its published number** (the "these algorithms may be better than
-  commonly believed" programme; needs the equal-effort HPO gap closed and real compute) · 7-domain task
-  expansion (cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes,
-  california_housing, ett_h1, PDE suites) · physical-hardware validation
-  (memristive/neuromorphic/optical/quantum) · Ray/SLURM · DDP at scale · `campaign_queue` as loop driver ·
-  full CEEC integration · `question_first` literature store · a real TUI · **an evaluation consortium**:
-  the fairness contract as a shared constitution, identity cards as the admission ticket, the corrections
-  log as the shared memory.
-
-The comparison stack has five named gaps: rules are independent
-re-implementations with disclosed deviations rather than verified upstream
-code; equal-effort HPO is a protocol, not a kernel invariant; there is no
-blinding; an unregistered claim is labelled rather than refused; and coverage is
-one task family. They are stated in full under [Neutral
-evaluation](#neutral-evaluation--why-a-referee-and-how-this-one-works), and the
-invitation that follows from them is [`docs/CONSORTIUM.md`](docs/CONSORTIUM.md).
-
-## FAQ / Troubleshooting + Glossary
-
-**FAQ**
-
-- *`ModuleNotFoundError` after a sync* — run `uv sync --dev --all-extras` (bare `uv sync` strips dev extras) and the dev-env smoke command.
-- *DuckDB store is locked* — the evidence store is **single-writer**: all writes flow through `RecordStore.append()` under a threading lock, enforced by `tests/property/test_single_writer_enforcement.py`. Do not open a second writer process against the same file; readers are fine, cross-process writers are not supported.
-- *`UnsupportedSchemaVersionError`* — a record was written by a newer kernel than the reader. Upgrade the reader; unknown-field tolerance is fail-closed by design.
-- *GPU* — optional. `uv run comp benchmark` runs on CPU.
-
-**Glossary**
-
-- **Coordinate** — a point in the 6-axis space; the unit of comparison.
-- **RunSpec** — the serialized specification of a run: question, space, stages, budget.
-- **SearchSpace** — the legality-checked subspace a policy proposes within.
-- **Policy** — the proposal strategy; the only varying part between kernel experiments.
-- **Stage** — one step S1–S11 of the pipeline.
-- **Record** — one measured row in the evidence store (identity, provenance, status, payload).
-- **Claim** — a governed statement derived from records, with a verification level.
-
-## License
-
-See [`LICENSE`](LICENSE).
-
 ## Cheatsheet
 
 ![Computronium architecture cheatsheet](cheatsheet/cheatsheet.svg)
@@ -1819,18 +2501,18 @@ See [`LICENSE`](LICENSE).
 
 |---|---|
 
-| 🚪 Entry Points | [`start-here`](index.html#/docs/start-here) |
+| 🚪 Entry Points | [`start-here`](index.html#/docs-about/start-here) |
 
-| 🎯 Tasks & Data | [`quickstart`](index.html#/docs/quickstart) |
+| 🎯 Tasks & Data | [`quickstart`](index.html#/docs-about/quickstart) |
 
-| 🧪 Experiment Kernel | [`kernel`](index.html#/docs/kernel) |
+| 🧪 Experiment Kernel | [`kernel`](index.html#/docs-about/kernel) |
 
-| 🧬 6-Axis Ontology | [`ontology`](index.html#/docs/ontology) |
+| 🧬 6-Axis Ontology | [`ontology`](index.html#/docs-about/ontology) |
 
-| 🏗️ System & Composition | [`core-architecture`](index.html#/docs/core-architecture) |
+| 🏗️ System & Composition | [`core-architecture`](index.html#/docs-about/core-architecture) |
 
-| ⚡ Training Loop | [`ml-library`](index.html#/docs/ml-library) |
+| ⚡ Training Loop | [`ml-library`](index.html#/docs-about/ml-library) |
 
-| 💾 Evidence Store | [`evidence`](index.html#/docs/evidence) |
+| 💾 Evidence Store | [`evidence`](index.html#/docs-about/evidence) |
 
-| 📊 Surface & Governance | [`validation`](index.html#/docs/validation) |
+| 📊 Surface & Governance | [`validation`](index.html#/docs-about/validation) |

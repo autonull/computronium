@@ -90,7 +90,8 @@ body.reading .count{display:none}
 main{padding-top:var(--bar-h)}
 .set{display:none}
 body[data-set="about"] #set-about,
-body[data-set="docs"] #set-docs,
+body[data-set="docs-about"] #set-docs-about,
+body[data-set="docs-howto"] #set-docs-howto,
 body[data-set="cheatsheet"] #set-cheatsheet{display:block}
 
 /* ---------- about deck ---------- */
@@ -198,8 +199,185 @@ summary::marker{color:var(--accent)}
 .d .accent{fill:var(--accent)}
 .d .tiny{font-size:9px;letter-spacing:.1em}
 
+/* ---------- hero intro (first slide) ---------- */
+.hero-intro {
+  text-align: center;
+  margin-bottom: 2rem;
+  animation: hero-fade-in 1.2s cubic-bezier(.22,.61,.36,1) forwards;
+  opacity: 0;
+  transform: translateY(1.5rem);
+}
+@keyframes hero-fade-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-badge {
+  display: inline-block;
+  font: 500 .7rem/1 var(--mono);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--rule));
+  border-radius: 999px;
+  padding: .35rem .85rem;
+  margin-bottom: 1rem;
+  animation: badge-pulse 3s ease-in-out infinite;
+}
+@keyframes badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 25%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.hero-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.05;
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent) 50%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 .75rem;
+}
+.hero-subtitle {
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  color: var(--muted);
+  max-width: 56ch;
+  margin: 0 auto 1.5rem;
+  line-height: 1.6;
+}
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: clamp(1.5rem, 3vw, 3rem);
+  flex-wrap: wrap;
+  margin: 1.5rem 0 2rem;
+  animation: stats-slide-up 0.8s cubic-bezier(.22,.61,.36,1) 0.3s both;
+  opacity: 0;
+  transform: translateY(1rem);
+}
+@keyframes stats-slide-up {
+  to { opacity: 1; transform: translateY(0); }
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .25rem;
+  min-width: 5rem;
+}
+.stat-value {
+  font: 700 clamp(1.8rem, 3vw, 2.5rem)/1 var(--mono);
+  color: var(--accent);
+  letter-spacing: -.02em;
+}
+.stat-label {
+  font: 500 .7rem/1 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.hero-claims {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  animation: claims-fade-in 1s cubic-bezier(.22,.61,.36,1) 0.5s both;
+  opacity: 0;
+  transform: translateY(1rem);
+}
+@keyframes claims-fade-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+.claim {
+  display: flex;
+  gap: .75rem;
+  padding: 1rem 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.claim:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.claim-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.claim-text {
+  font-size: .9rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.claim-text strong {
+  color: var(--text);
+}
+
+/* ---------- research grid ---------- */
+.research-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  max-width: 76rem;
+  margin: 1.5rem auto 0;
+}
+.research-card {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.research-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+.research-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+.research-card h3 {
+  font-size: 1.1rem;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+}
+.research-card p {
+  font-size: .88rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0;
+  max-width: none;
+}
+.research-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  margin-top: .5rem;
+  font: 500 .78rem/1 var(--mono);
+  letter-spacing: .05em;
+  color: var(--accent);
+  opacity: 0.7;
+  transition: opacity .2s, transform .2s;
+}
+.research-card:hover .research-link {
+  opacity: 1;
+  transform: translateX(4px);
+}
+
 /* ---------- documentation ---------- */
-#set-docs{min-height:calc(100dvh - var(--bar-h))}
+#set-docs-about,
+#set-docs-howto{min-height:calc(100dvh - var(--bar-h))}
 .docs-layout{
   display:grid;grid-template-columns:260px minmax(0,1fr);gap:clamp(1.5rem,4vw,4rem);
   max-width:1280px;margin:0 auto;padding:2rem clamp(1rem,3vw,2rem) 8rem;
@@ -334,9 +512,10 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   main{padding-top:0}
   .set{display:none !important}
   body[data-set="about"] #set-about,
-  body[data-set="docs"] #set-docs,
+  body[data-set="docs-about"] #set-docs-about,
+  body[data-set="docs-howto"] #set-docs-howto,
   body[data-set="cheatsheet"] #set-cheatsheet{display:block !important}
-  #set-about,#set-docs,#set-cheatsheet{height:auto}
+  #set-about,#set-docs-about,#set-docs-howto,#set-cheatsheet{height:auto}
   #deck{height:auto;overflow:visible;scroll-snap-type:none;max-width:none;padding:0;margin:0}
   #deck .slide{height:auto;display:block;page-break-after:always;break-after:page;padding:0 0 6mm;margin:0;border:0}
   #deck .slide:last-child{page-break-after:auto;break-after:auto}
@@ -377,6 +556,7 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
   <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3.5 13.6 9l5.4 1.6L13.6 12 12 17.5 10.4 12 5 10.6 10.4 9Z"/><path d="M18.5 4v3M17 5.5h3M5.5 16v3M4 17.5h3"/></symbol>
   <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M4 5.5v16M8 7h8M8 10.5h6"/></symbol>
   <symbol id="i-map" viewBox="0 0 24 24"><path d="m3.5 6.5 5-2 7 2 5-2v13l-5 2-7-2-5 2Z"/><path d="M8.5 4.5v13M15.5 6.5v13"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
 </svg>
 
 <nav class="bar" aria-label="Site controls">
@@ -388,8 +568,11 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
     <a class="tab" role="tab" data-set="about" aria-selected="true" aria-controls="set-about" href="#/about/epistemic-laboratory">
       <svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg><span>About</span>
     </a>
-    <a class="tab" role="tab" data-set="docs" aria-selected="false" aria-controls="set-docs" href="#/docs/title">
-      <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>Documentation</span>
+    <a class="tab" role="tab" data-set="docs-about" aria-selected="false" aria-controls="set-docs-about" href="#/docs-about/title">
+      <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>About</span>
+    </a>
+    <a class="tab" role="tab" data-set="docs-howto" aria-selected="false" aria-controls="set-docs-howto" href="#/docs-howto/install">
+      <svg class="icon" aria-hidden="true"><use href="#i-wrench"/></svg><span>HowTo</span>
     </a>
     <a class="tab" role="tab" data-set="cheatsheet" aria-selected="false" aria-controls="set-cheatsheet" href="#/cheatsheet">
       <svg class="icon" aria-hidden="true"><use href="#i-map"/></svg><span>Cheatsheet</span>
@@ -427,12 +610,55 @@ kbd{font:500 .66rem/1 var(--mono);color:var(--faint);border:1px solid var(--rule
 <div class="stage">
 <p class="kicker" aria-hidden="true">01</p>
 <h1>Computronium: An Epistemic Laboratory for Learning</h1>
-<p class="lead">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
-<ul>
-<li><strong>The algorithm zoo is the problem.</strong> Hundreds of learning rules exist; almost none have been compared under equal budgets, equal architectures, and verified code.</li>
-<li><strong>A laboratory, not a library.</strong> Each experiment is one coordinate in a fixed ontology, run through a fixed pipeline, written to one ledger.</li>
-<li><strong>The bet.</strong> Learning mechanisms interact. The combinations that survive physical constraints are discoverable — if the instrument is honest.</li>
-</ul>
+<div class="hero-intro">
+  <div class="hero-badge">🧪 Epistemic Laboratory</div>
+  <h1 class="hero-title">Computation with less time, energy, and uncertainty</h1>
+  <p class="hero-subtitle">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
+</div>
+<div class="hero-stats">
+  <div class="stat">
+    <span class="stat-value">57</span>
+    <span class="stat-label">Primitives</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">21</span>
+    <span class="stat-label">Algorithms</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">5</span>
+    <span class="stat-label">Verified Kernels</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">7</span>
+    <span class="stat-label">Domains</span>
+  </div>
+</div>
+<div class="hero-claims">
+  <div class="claim">
+    <span class="claim-icon">⚡</span>
+    <div class="claim-text">
+      <strong>Energy-first ontology.</strong> Every axis — substrate, geometry, dynamics, plasticity, credit, update — exposes physical cost.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">🔬</span>
+    <div class="claim-text">
+      <strong>Governed comparison.</strong> The fairness contract makes a comparison legal before it runs. No hidden defaults.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">📐</span>
+    <div class="claim-text">
+      <strong>Evidence, not assertions.</strong> Lyapunov descent, gradient equivalence, finite-state invariants — property-tested claims with gates.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">🧠</span>
+    <div class="claim-text">
+      <strong>Z3-inspired plasticity.</strong> Frozen weights (θ), evolving fast state (ψ) — algorithm as trajectory, not parameter update.
+    </div>
+  </div>
+</div>
 <svg class="d" viewBox="0 0 960 240" role="img" aria-label="Ad-hoc experiments on the left become governed records on the right">
   <g>
     <circle class="node" cx="52" cy="44" r="5"/>
@@ -895,17 +1121,961 @@ spec = question_first(
 <blockquote>
 <p>No physical-hardware superiority is claimed. Neuromorphic, memristive, and photonic paths are validated in simulation until they run on silicon.</p>
 </blockquote>
+<h2>Research paths — a grid of open directions</h2>
+<p>Each path below is a self-contained research program with its own slides, specifications, and progress tracking.</p>
+<div class="research-grid">
+  <a class="research-card" href="#/about/proof-research" data-research="proof">
+    <span class="research-icon">📐</span>
+    <h3>Formal Proof Research</h3>
+    <p>Rocq-verified theorems for Computronium's ontology, plasticity mechanisms, and Z3-inspired universality. Machine-checked computational guarantees.</p>
+    <span class="research-link">Open →</span>
+  </a>
+  <a class="research-card" href="#/about/consortium-research" data-research="consortium">
+    <span class="research-icon">🤝</span>
+    <h3>Evaluation Consortium</h3>
+    <p>A community-led effort to make evidence about learning mechanisms easier to inspect, compare, reproduce, and improve. Fairness contracts, identity cards, corrections log.</p>
+    <span class="research-link">Open →</span>
+  </a>
+  <a class="research-card" href="#/about/z3-research" data-research="z3">
+    <span class="research-icon">🎯</span>
+    <h3>Z3 Benchmark & Plasticity</h3>
+    <p>The Z3-inspired benchmark: frozen weights (θ), evolving fast state (ψ). Can a network achieve universal multi-task behavior purely through plastic-state dynamics?</p>
+    <span class="research-link">Open →</span>
+  </a>
+  <a class="research-card" href="#/about/metadynamics-research" data-research="metadynamics">
+    <span class="research-icon">🌀</span>
+    <h3>Metadynamics & Credit</h3>
+    <p>State-dependent credit assignment, coupled dynamics stability, and the expressive hierarchy of plasticity primitives — routing, fast weights, rule-state, temporal.</p>
+    <span class="research-link">Open →</span>
+  </a>
+  <a class="research-card" href="#/about/substrate-research" data-research="substrate">
+    <span class="research-icon">⚡</span>
+    <h3>Substrate & Hardware</h3>
+    <p>Quantization error bounds, neuromorphic/photonic/memristive refinement, noise robustness, and resource-aware complexity for physical deployment.</p>
+    <span class="research-link">Open →</span>
+  </a>
+  <a class="research-card" href="#/about/learning-theory-research" data-research="learning-theory">
+    <span class="research-icon">📈</span>
+    <h3>Learning Theory & Guarantees</h3>
+    <p>Online adaptation bounds, distribution-shift response, task interference, and plasticity-vs-no-plasticity separation under declared resource budgets.</p>
+    <span class="research-link">Open →</span>
+  </a>
+</div>
 
 <button class="notes-btn" type="button" popovertarget="notes-research-horizon">Speaker notes</button>
 </div>
 <div id="notes-research-horizon" popover="auto"><p>The trade-off is the deep question: stability without adaptation is a frozen model, adaptation without stability is a system that forgets. The instrument's job is to place each system on the frontier with error bars.</p>
 <p>Be explicit about the simulation caveat. The substrate axis exists so that locality and energy are first-class from the start; it does not yet prove anything about a device.</p>
+<p>The research grid is a living map — each card links to a dedicated slide deck with specifications, milestones, and current progress. We expect this set to grow.</p>
+</div>
+</section>
+
+<section class="slide" id="proof-research" aria-label="Formal Proof Research" data-title="Formal Proof Research">
+<div class="stage">
+<p class="kicker" aria-hidden="true">09</p>
+<h1>Formal Proof Research</h1>
+<div class="research-header">
+  <span class="research-badge">📐 Formal Verification</span>
+  <h2>Machine-checked theorems for Computronium's architecture</h2>
+  <p class="research-lead">Rocq proof assistant · Computational theory · Architecture and plasticity</p>
+</div>
+<h2>Mission</h2>
+<p>Develop a machine-checked mathematical foundation that establishes:</p>
+<ol>
+<li>What the six-axis architecture means mathematically</li>
+<li>What computational capabilities arise from each axis and their interactions</li>
+<li>Whether RuleStatePlasticity supports universal computation under explicit assumptions</li>
+<li>What the separation between persistent parameters (θ) and evolving plastic state (ψ) actually guarantees</li>
+<li>Which capabilities require plasticity, which can be implemented without it, and which require additional resources</li>
+<li>Whether useful guarantees can be proved for adaptation, retention, stability, precision, and learning</li>
+<li>Which claims are false, underspecified, redundant, or dependent on unrealistic assumptions</li>
+</ol>
+<blockquote>
+<p>The objective is a reusable Rocq development, not merely a collection of isolated proofs.</p>
+</blockquote>
+<h2>Research Phases</h2>
+<h3>Phase A — Establish the Proof Baseline (F0–F2)</h3>
+<ul>
+<li><strong>F0</strong>: Inventory existing Rocq proofs, admitted lemmas, and dependencies</li>
+<li><strong>F1</strong>: Formal semantics of the six-axis ontology — compositional model with totality, composition correctness, interface compatibility</li>
+<li><strong>F2</strong>: Frozen-θ, evolving-ψ semantics — parameter invariance, state-update correctness, lifecycle separation, reset isolation</li>
+</ul>
+<h3>Phase B — Prove the Central Computational Claim (F3–F6)</h3>
+<ul>
+<li><strong>F3</strong>: Reconstruct and formalize the Z3 simulation argument (Rojas 1998)</li>
+<li><strong>F4</strong>: Formalize RuleStatePlasticity — rule selection, state representation, frozen-machinery invariant</li>
+<li><strong>F5</strong>: Prove or refute universality of RuleStatePlasticity — direct simulation or transfer via Z3</li>
+<li><strong>F6</strong>: State-capacity and impossibility theorems — finite-state limitations, external memory dependency, precision dependency</li>
+</ul>
+<h3>Phase C — Determine What Plasticity Contributes (F7–F9, F14–F15)</h3>
+<ul>
+<li><strong>F7</strong>: Expressiveness hierarchy across plasticity primitives</li>
+<li><strong>F8</strong>: Plastic-state lifecycle guarantees — episode isolation, exact reset, bounded retention, consolidation separation</li>
+<li><strong>F9</strong>: Stability–plasticity tradeoffs — contractive dynamics, perturbation bounds, retention–adaptation incompatibility</li>
+<li><strong>F14</strong>: Formal compositionality of the six axes</li>
+<li><strong>F15</strong>: Distinguish architectural novelty from new computational power</li>
+</ul>
+<h3>Phase D — Learning &amp; Dynamical Guarantees (F10–F13)</h3>
+<ul>
+<li><strong>F10</strong>: Correctness of plasticity update rules — closed-form ridge, temporal trace-decay, fast weights</li>
+<li><strong>F11</strong>: Formal learning guarantees under changing environments</li>
+<li><strong>F12</strong>: Stability and convergence of coupled dynamics</li>
+<li><strong>F13</strong>: Precision, noise, and substrate refinement</li>
+</ul>
+<h3>Phase E — Resource Costs &amp; Infrastructure (F16–F17)</h3>
+<ul>
+<li><strong>F16</strong>: Complexity of simulation and execution</li>
+<li><strong>F17</strong>: Verify the ontology and experiment specifications</li>
+</ul>
+<h2>Key Distinctions</h2>
+<table>
+<thead>
+<tr>
+<th>Claim Type</th>
+<th>What It Means</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Computability</strong></td>
+<td>Can the architecture compute a specified function?</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><strong>Expressiveness</strong></td>
+<td>What family of functions/state transitions can it represent?</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><strong>Efficiency</strong></td>
+<td>How many operations, memory cells, bits, or updates?</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><strong>Learnability</strong></td>
+<td>Can a learning process discover a useful configuration within budget?</td>
+<td>Open</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Proving one does not establish the others.</p>
+</blockquote>
+<h2>Current Status</h2>
+<ul>
+<li><strong>Repository</strong>: <a href="https://github.com/autonull/computronium">https://github.com/autonull/computronium</a></li>
+<li><strong>Proof Assistant</strong>: Rocq (Coq)</li>
+<li><strong>Full Specification</strong>: <code>docs/PROOF.md</code> — complete research program with 17 formal projects (F0–F17)</li>
+<li><strong>Prioritization</strong>: Phased gates (A→B→C→D→E) with explicit acceptance criteria</li>
+</ul>
+<h2>Next Steps</h2>
+<ol>
+<li><strong>Inventory</strong> existing <code>.v</code> files and admitted lemmas (F0)</li>
+<li><strong>Build</strong> clean Rocq environment with CI gate</li>
+<li><strong>Formalize</strong> the six-axis ontology semantics (F1)</li>
+<li><strong>Formalize</strong> frozen-θ, evolving-ψ semantics (F2)</li>
+<li><strong>Reconstruct</strong> Z3 simulation argument in Rocq (F3)</li>
+</ol>
+
+<button class="notes-btn" type="button" popovertarget="notes-proof-research">Speaker notes</button>
+</div>
+<div id="notes-proof-research" popover="auto"><p>This slide summarizes the full PROOF.md specification. The research program is designed to be usable as a standalone document. Each phase has a gate — do not proceed on the assumption that universality must hold. Negative results (impossibility theorems) are successful outcomes.</p>
+</div>
+</section>
+
+<section class="slide" id="consortium-research" aria-label="Evaluation Consortium Research" data-title="Evaluation Consortium Research">
+<div class="stage">
+<p class="kicker" aria-hidden="true">10</p>
+<h1>Evaluation Consortium Research</h1>
+<div class="research-header">
+  <span class="research-badge">🤝 Community Collaboration</span>
+  <h2>A consortium for governed, reproducible comparison of learning mechanisms</h2>
+  <p class="research-lead">Fairness contracts · Identity cards · Corrections log · Independent review</p>
+</div>
+<h2>The Problem</h2>
+<p>Research on learning mechanisms is difficult to compare across papers, implementations, tasks, and labs. A reported result reflects more than the learning rule itself:</p>
+<ul>
+<li>Dataset choices, preprocessing, implementation details</li>
+<li>Compute, hyperparameter search, stopping criteria</li>
+<li>Random seeds, metrics, and reporting decisions</li>
+</ul>
+<p>These differences are not necessarily mistakes. Different studies may answer different questions. The problem arises when:</p>
+<ol>
+<li>Conditions behind a result are difficult to inspect</li>
+<li>Unlike results are treated as direct comparisons</li>
+<li>The cost of careful replication is too high for any one group to bear</li>
+</ol>
+<h2>Why a Consortium?</h2>
+<p>No single lab can reasonably carry every implementation, benchmark, replication, and audit. Nor should one team decide unilaterally what counts as a meaningful comparison for every research question.</p>
+<p>A consortium could:</p>
+<ul>
+<li>Bring together people with different methods, expertise, resources, and incentives</li>
+<li>Coordinate work that is hard to sustain alone</li>
+<li>Make assumptions and disagreements visible</li>
+<li>Create a public record that improves as more people examine it</li>
+</ul>
+<blockquote>
+<p>The aim is <strong>not</strong> to declare one universally best algorithm, force every experiment into one protocol, or centralize independent research. It is to make claims easier to assess and comparisons more useful when comparison is the goal.</p>
+</blockquote>
+<h2>Three Shared Artifacts</h2>
+<h3>1. Fairness Contract</h3>
+<p>6 clauses that make a comparison legal before it is run.
+<strong><code>docs/FAIRNESS_CONTRACT.md</code></strong></p>
+<p>Declares budget, fidelity, seed count, and operating point before a number exists. The operating point is the fairness contract made executable.</p>
+<h3>2. Identity Cards</h3>
+<p>31 cards declaring reference, deviations, objective, pseudo-gradient, and symmetry.
+<strong><code>docs/IDENTITY_CARDS.md</code></strong></p>
+<p>The admission ticket for a new algorithm. Every experiment is a coordinate in the ontology.</p>
+<h3>3. Corrections Log</h3>
+<p>5 public entries recording what failed, why, and what changed.
+<strong><code>docs/CORRECTIONS.md</code></strong></p>
+<p>A gate is not a one-way promotion. When a later campaign contradicts a belief, the belief is revoked and the evidence stays.</p>
+<h2>Provisional Mission</h2>
+<p><strong>Help the research community produce evidence about learning mechanisms that is easier to inspect, compare where appropriate, reproduce, correct, and build on.</strong></p>
+<h3>Working Principles</h3>
+<ul>
+<li><strong>Transparency</strong> — Describe method, implementation, task, metric, resources, tuning, limitations</li>
+<li><strong>Pluralism</strong> — Different questions call for different tasks, metrics, budgets</li>
+<li><strong>Proportionate rigor</strong> — Match claim strength to evidence strength</li>
+<li><strong>Faithful representation</strong> — Document implementation choices and departures</li>
+<li><strong>Correction as normal practice</strong> — Visible history of material corrections</li>
+<li><strong>Open criticism and shared governance</strong> — Reviewable decisions, appeal paths</li>
+<li><strong>Useful negative findings</strong> — Publish informative null/inconclusive results</li>
+</ul>
+<h2>First Phase: Bounded Pilot</h2>
+<ol>
+<li><strong>Convene participants and draft a charter</strong> — purpose, scope, decision-making, conflicts of interest</li>
+<li><strong>Choose one bounded pilot</strong> — important enough to matter, narrow enough to complete</li>
+<li><strong>Agree on reporting requirements</strong> — claim, implementation provenance, data, metrics, compute, randomization, uncertainty, exclusions, limitations</li>
+<li><strong>Invite independent scrutiny</strong> — review protocol or reproduce a defined part</li>
+<li><strong>Publish result and lessons</strong> — including inconclusive findings and process shortcomings</li>
+</ol>
+<blockquote>
+<p>The pilot should test the consortium's working process as well as the scientific question.</p>
+</blockquote>
+<h2>Relationship to Computronium</h2>
+<p><strong>Computronium is a codebase and experimental framework. The Computronium Consortium is a proposed collaboration. They are related, but they are not the same thing.</strong></p>
+<ul>
+<li>Anyone may use Computronium independently of a consortium</li>
+<li>Using Computronium does not make a result independently verified or endorsed by the consortium</li>
+<li>The consortium may choose to use Computronium, other tools, or a combination</li>
+</ul>
+<h2>Current Infrastructure (Starting Points)</h2>
+<ul>
+<li>Algorithm Identity Cards: <code>docs/IDENTITY_CARDS.md</code></li>
+<li>Corrections Log: <code>docs/CORRECTIONS.md</code></li>
+<li>Preregistration Tooling: <code>computronium/validation/preregistration.py</code></li>
+<li>HPO Protocol: <code>docs/hpo_protocol.md</code></li>
+<li>Fairness Contract: <code>docs/FAIRNESS_CONTRACT.md</code></li>
+</ul>
+<h2>Decisions for Participants</h2>
+<ul>
+<li><strong>Scope</strong>: Which mechanisms, claims, tasks, communities first?</li>
+<li><strong>Governance</strong>: Who proposes/changes standards? How are decisions made and appealed?</li>
+<li><strong>Participation</strong>: What contributions are useful? What commitments are reasonable?</li>
+<li><strong>Evidence &amp; Review</strong>: What info for different claims? How to handle disputes, failed replications, corrections?</li>
+<li><strong>Services</strong>: Core process vs. optional specialist services (HPO, implementation audits)?</li>
+<li><strong>Resources</strong>: Costs, infrastructure, funding, credit, maintenance without exclusion?</li>
+<li><strong>Expansion</strong>: What should a successful pilot demonstrate before widening scope?</li>
+</ul>
+<h2>Existing Models to Consider</h2>
+<ul>
+<li><strong>MLCommons</strong> — Industry–academic consortium for shared benchmarks, reproducibility, measurement. AlgoPerf benchmark for training algorithms.</li>
+<li><strong>METR</strong> — Independent evaluation research with public-interest mission (focused on advanced AI capabilities/risks).</li>
+<li><strong>Cochrane</strong> — Distributed international community synthesizing evidence using shared methods, independent review, continual updating.</li>
+</ul>
+<h2>The Invitation</h2>
+<p>Bring an algorithm, a research question, a benchmark concern, a critique, expertise in methodology or statistics, implementation work, data, compute, funding, or simply time to help shape the first steps.</p>
+<blockquote>
+<p>The first task is not to agree with every sentence. It is to identify the people, questions, and modest first experiment that could make a consortium worth having.</p>
+</blockquote>
+
+<button class="notes-btn" type="button" popovertarget="notes-consortium-research">Speaker notes</button>
+</div>
+<div id="notes-consortium-research" popover="auto"><p>This slide summarizes CONSORTIUM.md. The consortium is a proposal, not a settled charter. Its scope, governance, services, and standards should be shaped through participation. A strong objection paired with a better alternative is a useful contribution.</p>
+</div>
+</section>
+
+<section class="slide" id="z3-research" aria-label="Z3 Benchmark & Plasticity Research" data-title="Z3 Benchmark & Plasticity Research">
+<div class="stage">
+<p class="kicker" aria-hidden="true">11</p>
+<h1>Z3 Benchmark &amp; Plasticity Research</h1>
+<div class="research-header">
+  <span class="research-badge">🎯 Z3-Inspired</span>
+  <h2>Frozen weights (θ), evolving fast state (ψ) — algorithm as trajectory</h2>
+  <p class="research-lead">Konrad Zuse's Z3 (1941) · No conditional branching · Turing completeness via meta-dynamics</p>
+</div>
+<h2>The Historical Analogy</h2>
+<p>The naming of the &quot;Z3 Benchmark&quot; is a precise mathematical analogy for what Computronium achieves with the Joint Architecture.</p>
+<h3>1. The &quot;No Conditional Branching&quot; Constraint</h3>
+<p>Zuse's Z3 had no conditional branching — the punched tape executed sequentially. To perform conditional logic, programmers computed <strong>both paths and masked</strong> the unwanted one:</p>
+<pre><code>Result = (Condition × Path_A) + ((1 − Condition) × Path_B)
+</code></pre>
+<p><strong>Computronium Parallel:</strong> Standard deep learning uses hard <code>argmax</code> routing (Mixture of Experts), breaking gradients. The Z3 benchmark forces the network to achieve task switching via <strong>continuous, differentiable arithmetic masking</strong> mediated by the fast state ψ:</p>
+<p>$$T_t = \sum_k g_k(\psi_t) T_k$$</p>
+<p>The network computes a soft mixture of operators without altering the underlying physical substrate (θ).</p>
+<h3>2. Hardware vs. Tape (The θ vs. ψ Divide)</h3>
+<table>
+<thead>
+<tr>
+<th>Z3 Component</th>
+<th>Computronium Parallel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Physical relays (~2,600), arithmetic unit</td>
+<td>Persistent weights <strong>θ</strong> (frozen, slow, energetically expensive)</td>
+</tr>
+<tr>
+<td>Punched celluloid tape</td>
+<td>Fast plasticity state <strong>ψ</strong> (dynamic, intra-episode memory that routes computation)</td>
+</tr>
+</tbody>
+</table>
+<p>The &quot;algorithm&quot; lives in ψ; the hardware (θ) is a fixed, stable attractor manifold.</p>
+<h3>3. Turing Completeness via Meta-Dynamics</h3>
+<p>For decades, computer scientists debated whether the Z3 was Turing-complete without conditional branches. In 1998, Raúl Rojas proved it <strong>was</strong> — by writing a clever looping program on the tape that simulated a Turing machine's state transitions. The &quot;algorithm&quot; was emergent from the tape, not the hardware.</p>
+<p><strong>Computronium Parallel:</strong> The Z3 Benchmark asks the exact same fundamental question:</p>
+<blockquote>
+<p><em>Can a network with strictly frozen parameters (θ) achieve universal, multi-task algorithmic behavior purely through the dynamics of its fast plastic state (ψ)?</em></p>
+</blockquote>
+<h2>Why This Matters</h2>
+<p>In biological brains and neuromorphic/analog hardware:</p>
+<ul>
+<li><strong>Changing persistent weights (θ)</strong> is slow, noisy, and energetically expensive (like physically rewiring relays or burning out memristors)</li>
+<li><strong>Evolving internal activation states (ψ)</strong> is fast, cheap, and local (like reading a tape or letting an energy landscape settle)</li>
+</ul>
+<p>By naming this benchmark &quot;Z3&quot;, we explicitly state that true computational power shouldn't require constantly overwriting the hardware. The hardware should be a fixed, stable attractor manifold, and the &quot;algorithm&quot; should be the trajectory through that manifold.</p>
+<h2>Research Questions</h2>
+<h3>Q1: Universality of RuleStatePlasticity</h3>
+<p>Can a fixed-θ, evolving-ψ system simulate a universal machine? Two routes:</p>
+<ul>
+<li><strong>Route A</strong>: Direct simulation — encode TM tape, head, control state, transition table in ψ</li>
+<li><strong>Route B</strong>: Transfer via Z3 — prove RuleStatePlasticity simulates the Z3 arithmetic machine, transfer universality</li>
+</ul>
+<h3>Q2: Expressiveness Hierarchy</h3>
+<p>How do the plasticity primitives compare under the same resource constraints?</p>
+<ul>
+<li><code>NullPlasticity</code> (baseline)</li>
+<li><code>RoutingPlasticity</code></li>
+<li><code>FastWeightPlasticity</code></li>
+<li><code>SubstrateCoupledPlasticity</code></li>
+<li><code>RuleStatePlasticity</code> (Z3-inspired)</li>
+<li><code>ClosedFormRidgePlasticity</code></li>
+<li><code>TemporalPsiPlasticity</code></li>
+</ul>
+<h3>Q3: State-Capacity Limits</h3>
+<ul>
+<li>Finite ψ: eventual periodicity, memory lower bounds</li>
+<li>External memory: what capabilities does writable memory add?</li>
+<li>Precision dependency: exact arithmetic vs. finite-precision hardware</li>
+</ul>
+<h3>Q4: Stability–Plasticity Tradeoffs</h3>
+<ul>
+<li>Contractive dynamics → fixed points, convergence</li>
+<li>Perturbation bounds under plastic updates</li>
+<li>Retention–adaptation incompatibility in bounded memory</li>
+</ul>
+<h2>Current Status</h2>
+<ul>
+<li><strong>Formal Specification</strong>: <code>docs/PROOF.md</code> — Projects F3–F6, F15 focus on Z3/RuleStatePlasticity</li>
+<li><strong>Implementation</strong>: <code>RuleStatePlasticity</code> primitive in <code>computronium/ontology/plasticity/</code></li>
+<li><strong>Z3 Analogy Document</strong>: <code>docs/Z3.md</code> — detailed historical parallel</li>
+<li><strong>Benchmark</strong>: Z3 Benchmark as a first-class evaluation target in the pipeline</li>
+</ul>
+<h2>Connection to Other Research Paths</h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Connection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formal Proof</strong></td>
+<td>F3–F6: Z3 formalization, RuleStatePlasticity semantics, universality theorem</td>
+</tr>
+<tr>
+<td><strong>Metadynamics</strong></td>
+<td>Plasticity expressiveness hierarchy (F7), lifecycle guarantees (F8)</td>
+</tr>
+<tr>
+<td><strong>Substrate</strong></td>
+<td>Precision/noise refinement (F13), hardware deployment</td>
+</tr>
+<tr>
+<td><strong>Learning Theory</strong></td>
+<td>Online adaptation guarantees (F11), plasticity vs. no-plasticity separation</td>
+</tr>
+</tbody>
+</table>
+<h2>Next Steps</h2>
+<ol>
+<li><strong>Formalize</strong> the Z3 arithmetic machine model in Rocq (F3)</li>
+<li><strong>Specify</strong> RuleStatePlasticity transition semantics matching implementation (F4)</li>
+<li><strong>Attempt</strong> universality proof or construct rigorous limitation result (F5)</li>
+<li><strong>Characterize</strong> finite-state limitations and external memory dependency (F6)</li>
+<li><strong>Build</strong> Z3 Benchmark evaluation into the governed pipeline</li>
+</ol>
+<blockquote>
+<p>This is an incredibly elegant conceptual anchor. The Z3 metaphor perfectly encapsulates the core philosophy of Computronium: the hardware should be a fixed, stable attractor manifold, and the &quot;algorithm&quot; should be the trajectory through that manifold.</p>
+</blockquote>
+
+<button class="notes-btn" type="button" popovertarget="notes-z3-research">Speaker notes</button>
+</div>
+<div id="notes-z3-research" popover="auto"><p>The Z3 analogy is not just historical flavor — it's a precise mathematical framing. The key insight: universality without conditional branching requires the &quot;program&quot; to be data (ψ) that the fixed machinery (θ) interprets. This is exactly what RuleStatePlasticity does. The research program in PROOF.md treats this as the central computational claim (Phase B).</p>
+</div>
+</section>
+
+<section class="slide" id="metadynamics-research" aria-label="Metadynamics & Credit Research" data-title="Metadynamics & Credit Research">
+<div class="stage">
+<p class="kicker" aria-hidden="true">12</p>
+<h1>Metadynamics &amp; Credit Research</h1>
+<div class="research-header">
+  <span class="research-badge">🌀 Metadynamics</span>
+  <h2>State-dependent credit, coupled dynamics, plasticity expressiveness</h2>
+  <p class="research-lead">Routing · Fast weights · Rule-state · Temporal plasticity · Credit assignment</p>
+</div>
+<h2>Scope</h2>
+<p>This research path covers the <strong>plasticity axis (P)</strong> and <strong>credit axis (C)</strong> of the ontology — the mechanisms that determine <em>what changes during an episode</em> and <em>how error is routed</em>.</p>
+<h2>Plasticity Primitives (Expressiveness Hierarchy — F7)</h2>
+<table>
+<thead>
+<tr>
+<th>Primitive</th>
+<th>Mechanism</th>
+<th>Key Question</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NullPlasticity</code></td>
+<td>No within-episode state change</td>
+<td>Baseline embedding (F7.1)</td>
+</tr>
+<tr>
+<td><code>RoutingPlasticity</code></td>
+<td>State-dependent routing/gating</td>
+<td>What routing behaviors can fixed architecture + explicit routing state represent? (F7.2)</td>
+</tr>
+<tr>
+<td><code>FastWeightPlasticity</code></td>
+<td>Episode-local fast weights</td>
+<td>Equivalence to explicit memory? Parameterization restrictions? (F7.3)</td>
+</tr>
+<tr>
+<td><code>SubstrateCoupledPlasticity</code></td>
+<td>Substrate-mediated plasticity</td>
+<td>Coupling effects on stability (F12.5)</td>
+</tr>
+<tr>
+<td><code>RuleStatePlasticity</code></td>
+<td>Rule selection via ψ (Z3-inspired)</td>
+<td>Separation from restricted routing/memory? (F7.4)</td>
+</tr>
+<tr>
+<td><code>ClosedFormRidgePlasticity</code></td>
+<td>Analytic ridge regression update</td>
+<td>Exact solution correctness (F10.1)</td>
+</tr>
+<tr>
+<td><code>TemporalPsiPlasticity</code></td>
+<td>Trace-decayed plasticity</td>
+<td>Retention/forgetting bounds (F8.3, F10.3)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Do not assume these form a simple linear hierarchy. Different mechanisms may be incomparable.</p>
+</blockquote>
+<h2>Credit Assignment Primitives</h2>
+<table>
+<thead>
+<tr>
+<th>Primitive</th>
+<th>Pseudo-Gradient</th>
+<th>Symmetry</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>EquilibriumPropagation</code></td>
+<td>Free/nudged phase difference</td>
+<td>Symmetric</td>
+</tr>
+<tr>
+<td><code>BackpropThroughTime</code></td>
+<td>Autograd through settle</td>
+<td>Asymmetric</td>
+</tr>
+<tr>
+<td><code>ForwardForward</code></td>
+<td>Local goodness objectives</td>
+<td>Layer-wise</td>
+</tr>
+<tr>
+<td><code>DirectFeedbackAlignment</code></td>
+<td>Random feedback weights</td>
+<td>Asymmetric</td>
+</tr>
+<tr>
+<td><code>SignSymmetry</code></td>
+<td>Sign-preserving feedback</td>
+<td>Partial symmetry</td>
+</tr>
+</tbody>
+</table>
+<h2>Key Research Projects</h2>
+<h3>F7: Expressiveness Hierarchy</h3>
+<ul>
+<li>Pairwise simulation matrix across primitives</li>
+<li>Zero-plasticity embedding (F7.1)</li>
+<li>Routing simulation (F7.2)</li>
+<li>Fast-weight equivalence/separation (F7.3)</li>
+<li>Rule-state separation (F7.4)</li>
+<li>Temporal plasticity characterization (F7.5)</li>
+</ul>
+<h3>F8: Plastic-State Lifecycle Guarantees</h3>
+<ul>
+<li>Episode isolation (F8.1)</li>
+<li>Exact reset (F8.2)</li>
+<li>Bounded retention (F8.3)</li>
+<li>Forgetting bounds (F8.4)</li>
+<li>Persistence conditions (F8.5)</li>
+<li>Consolidation separation (F8.6)</li>
+</ul>
+<h3>F9: Stability–Plasticity Tradeoffs</h3>
+<ul>
+<li>Contractive dynamics (F9.1)</li>
+<li>Perturbation bounds (F9.2)</li>
+<li>Stability under plastic updates (F9.3)</li>
+<li>Instability counterexamples (F9.4)</li>
+<li>Retention–adaptation incompatibility (F9.5)</li>
+<li>Stability–expressiveness frontier (F9.6)</li>
+</ul>
+<h3>F10: Update Rule Correctness</h3>
+<ul>
+<li>Closed-form ridge solution (F10.1)</li>
+<li>Uniqueness (F10.2)</li>
+<li>Temporal recurrence (F10.3)</li>
+<li>Decay bounds (F10.4)</li>
+<li>Update invariants (F10.5)</li>
+<li>Objective descent (F10.6)</li>
+</ul>
+<h3>F12: Coupled Dynamics Stability</h3>
+<ul>
+<li>Lyapunov decrease (F12.1)</li>
+<li>Equilibrium convergence (F12.2)</li>
+<li>Discrete-time stability (F12.3)</li>
+<li>Jacobian bounds (F12.4)</li>
+<li>Coupling effects (F12.5)</li>
+<li>Noise robustness (F12.6)</li>
+</ul>
+<h2>Connection to Other Paths</h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Connection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formal Proof</strong></td>
+<td>F7–F10, F12: Formal semantics, theorems, guarantees</td>
+</tr>
+<tr>
+<td><strong>Z3 Research</strong></td>
+<td>RuleStatePlasticity expressiveness (F7.4), universality (F5)</td>
+</tr>
+<tr>
+<td><strong>Substrate</strong></td>
+<td>Substrate-coupled plasticity, noise robustness (F12.6, F13)</td>
+</tr>
+<tr>
+<td><strong>Learning Theory</strong></td>
+<td>Online adaptation (F11), plasticity vs. no-plasticity (F11.5)</td>
+</tr>
+</tbody>
+</table>
+<h2>Current Status</h2>
+<ul>
+<li><strong>Implementation</strong>: All primitives in <code>computronium/ontology/plasticity/</code> and <code>computronium/ontology/credit/</code></li>
+<li><strong>Validation</strong>: <code>SystemConfig.validate()</code> whitelists legal P×C combinations</li>
+<li><strong>Experiments</strong>: Plasticity expressiveness probes in <code>scripts/probes/</code></li>
+<li><strong>Documentation</strong>: <code>docs/eqprop_deep_limitation.md</code>, <code>docs/metric_provenance.md</code></li>
+</ul>
+
+<button class="notes-btn" type="button" popovertarget="notes-metadynamics-research">Speaker notes</button>
+</div>
+<div id="notes-metadynamics-research" popover="auto"><p>This slide covers the metadynamics (plasticity + credit) research surface. The expressiveness hierarchy (F7) is the central organizing question — not a linear ladder but a matrix of simulation/separation results. The lifecycle guarantees (F8) ensure the ψ machinery behaves as specified. The stability-plasticity tradeoffs (F9) are the deep theoretical question.</p>
+</div>
+</section>
+
+<section class="slide" id="substrate-research" aria-label="Substrate & Hardware Research" data-title="Substrate & Hardware Research">
+<div class="stage">
+<p class="kicker" aria-hidden="true">13</p>
+<h1>Substrate &amp; Hardware Research</h1>
+<div class="research-header">
+  <span class="research-badge">⚡ Substrate</span>
+  <h2>Quantization, noise, neuromorphic, photonic, memristive refinement</h2>
+  <p class="research-lead">Precision bounds · Error accumulation · Resource-aware complexity · Physical deployment</p>
+</div>
+<h2>Scope</h2>
+<p>The <strong>substrate axis (S)</strong> defines the physical state space: precision, noise, sparsity, and device physics. This research path connects abstract computation to constrained implementations.</p>
+<h2>Substrate Primitives (9 available)</h2>
+<table>
+<thead>
+<tr>
+<th>Primitive</th>
+<th>Precision</th>
+<th>Noise Model</th>
+<th>Sparsity</th>
+<th>Target Hardware</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Float32</code></td>
+<td>32-bit FP</td>
+<td>None</td>
+<td>Dense</td>
+<td>CPU/GPU (reference)</td>
+</tr>
+<tr>
+<td><code>Float16</code></td>
+<td>16-bit FP</td>
+<td>None</td>
+<td>Dense</td>
+<td>GPU Tensor Cores</td>
+</tr>
+<tr>
+<td><code>BFloat16</code></td>
+<td>16-bit BF</td>
+<td>None</td>
+<td>Dense</td>
+<td>TPU/GPU</td>
+</tr>
+<tr>
+<td><code>Int8</code></td>
+<td>8-bit int</td>
+<td>Quantization</td>
+<td>Structured</td>
+<td>Edge accelerators</td>
+</tr>
+<tr>
+<td><code>Int4</code></td>
+<td>4-bit int</td>
+<td>Quantization</td>
+<td>Structured</td>
+<td>Ultra-low-power</td>
+</tr>
+<tr>
+<td><code>Ternary</code></td>
+<td>{-1,0,1}</td>
+<td>None</td>
+<td>High</td>
+<td>Neuromorphic</td>
+</tr>
+<tr>
+<td><code>Binary</code></td>
+<td>{-1,1}</td>
+<td>None</td>
+<td>High</td>
+<td>In-memory compute</td>
+</tr>
+<tr>
+<td><code>Stochastic</code></td>
+<td>Analog</td>
+<td>Gaussian/Poisson</td>
+<td>Configurable</td>
+<td>Memristive/photonic</td>
+</tr>
+<tr>
+<td><code>Spiking</code></td>
+<td>Event-based</td>
+<td>Shot noise</td>
+<td>Sparse</td>
+<td>Neuromorphic (Loihi, SpiNNaker)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Substrates available today: digital, analog, memristive, neuromorphic, optical, quantum, complex, sparse, ternary.</p>
+</blockquote>
+<h2>Key Research Projects</h2>
+<h3>F13: Precision, Noise, and Substrate Refinement</h3>
+<ul>
+<li><strong>F13.1</strong>: Quantization error bounds — discrepancy between ideal and quantized transition</li>
+<li><strong>F13.2</strong>: Error accumulation — propagation of local numerical errors over repeated transitions</li>
+<li><strong>F13.3</strong>: Robustness margins — bounded perturbations cannot change discrete decisions with sufficient margin</li>
+<li><strong>F13.4</strong>: Noisy-state probability bounds — deviation from ideal behavior under stochastic model</li>
+<li><strong>F13.5</strong>: Resource-aware refinement — abstract machine cost vs. concrete implementation cost model</li>
+</ul>
+<h3>F12: Coupled Dynamics Stability (Substrate-Aware)</h3>
+<ul>
+<li><strong>F12.5</strong>: Coupling effects — when adding plasticity preserves/invalidates stability</li>
+<li><strong>F13.6</strong>: Substrate-specific stability — Lyapunov analysis under quantization/noise</li>
+</ul>
+<h3>F16: Complexity of Simulation &amp; Execution</h3>
+<ul>
+<li><strong>F16.1</strong>: Step simulation bounds — target transitions per simulated source transition</li>
+<li><strong>F16.2</strong>: Space bounds — source-machine space vs. target-machine state/memory</li>
+<li><strong>F16.3</strong>: Encoding overhead — representation size of source program/configuration</li>
+<li><strong>F16.4</strong>: Restricted-access overhead — cost of indirect addressing/conditional selection with available ops</li>
+<li><strong>F16.5</strong>: Lower bounds — under explicitly defined machine models</li>
+</ul>
+<h2>Substrate-Specific Research Questions</h2>
+<h3>Digital Finite-Precision (Int8, Int4, Float16)</h3>
+<ul>
+<li>Quantization-aware training vs. post-training quantization</li>
+<li>Accumulator precision requirements for credit computation</li>
+<li>Kernel parity verification at each precision level</li>
+</ul>
+<h3>Neuromorphic / Spiking</h3>
+<ul>
+<li>Event-driven settle vs. frame-based settle</li>
+<li>Spike-based credit assignment (surrogate gradients)</li>
+<li>Latency-energy-accuracy Pareto frontiers</li>
+</ul>
+<h3>Memristive / Analog In-Memory Compute</h3>
+<ul>
+<li>Conductance drift and programming noise models</li>
+<li>Analog settling dynamics as StateDynamics primitive</li>
+<li>Endurance-aware plasticity (write cycling in ψ vs. θ)</li>
+</ul>
+<h3>Photonic</h3>
+<ul>
+<li>Phase/amplitude noise models</li>
+<li>Thermal crosstalk as structured noise</li>
+<li>Latency advantages for specific StateDynamics (e.g., energy minimization)</li>
+</ul>
+<h2>Connection to Other Paths</h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Connection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formal Proof</strong></td>
+<td>F13: Refinement theorems, error bounds, resource-aware complexity</td>
+</tr>
+<tr>
+<td><strong>Z3 Research</strong></td>
+<td>Finite-precision universality (F5 variant 4), hardware Z3 benchmark</td>
+</tr>
+<tr>
+<td><strong>Metadynamics</strong></td>
+<td>Substrate-coupled plasticity, noise robustness (F12.5, F12.6)</td>
+</tr>
+<tr>
+<td><strong>Learning Theory</strong></td>
+<td>Quantization-aware adaptation, noisy credit guarantees</td>
+</tr>
+</tbody>
+</table>
+<h2>Current Status</h2>
+<ul>
+<li><strong>Kernel Ladder</strong>: Verified kernels at each rung (<code>reference_only</code>, <code>kernel_unverified</code>, <code>kernel_verified</code>)</li>
+<li><strong>Implementation Matrix</strong>: 5 verified, 20 unverified, 39 reference-only</li>
+<li><strong>Export Targets</strong>: Loihi (neuromorphic), FPGA (digital), ONNX (portable)</li>
+<li><strong>Documentation</strong>: <code>docs/kernel_backend_guide.md</code>, <code>docs/tutorials/export_loihi.md</code>, <code>docs/tutorials/export_fpga.md</code>, <code>docs/hardware_targets.md</code></li>
+</ul>
+<h2>Next Steps</h2>
+<ol>
+<li><strong>Formalize</strong> quantization error model for a reference StateDynamics (F13.1)</li>
+<li><strong>Verify</strong> kernel parity for Int8/Int4 substrates (move to <code>kernel_verified</code>)</li>
+<li><strong>Characterize</strong> neuromorphic settle dynamics as StateDynamics primitive</li>
+<li><strong>Build</strong> resource-aware cost model linking abstract transitions to hardware cycles/energy</li>
+<li><strong>Extend</strong> Z3 benchmark to run on physical neuromorphic hardware</li>
+</ol>
+<blockquote>
+<p>No physical-hardware superiority is claimed. Neuromorphic, memristive, and photonic paths are validated in simulation until they run on silicon.</p>
+</blockquote>
+
+<button class="notes-btn" type="button" popovertarget="notes-substrate-research">Speaker notes</button>
+</div>
+<div id="notes-substrate-research" popover="auto"><p>The substrate axis is where physical constraints become first-class. The kernel ladder ensures we don't claim acceleration without verification. The research here is about refinement theorems: connecting the abstract six-axis machine to concrete hardware with explicit error and cost bounds.</p>
+</div>
+</section>
+
+<section class="slide" id="learning-theory-research" aria-label="Learning Theory & Guarantees Research" data-title="Learning Theory & Guarantees Research">
+<div class="stage">
+<p class="kicker" aria-hidden="true">14</p>
+<h1>Learning Theory &amp; Guarantees Research</h1>
+<div class="research-header">
+  <span class="research-badge">📈 Learning Theory</span>
+  <h2>Online adaptation, distribution shift, plasticity vs. no-plasticity separation</h2>
+  <p class="research-lead">Regret bounds · Task interference · Memory-assisted adaptation · Resource-bounded guarantees</p>
+</div>
+<h2>Scope</h2>
+<p>This research path asks: <strong>Under what conditions does plasticity provide provable benefits for learning?</strong> It connects the metadynamics (plasticity mechanisms) to formal learning guarantees under declared resource budgets.</p>
+<blockquote>
+<p>A theorem about an online predictor does not automatically transfer to a reinforcement-learning policy. The latter requires additional assumptions about environment dynamics, exploration, reward, and the relationship between policy changes and observed data.</p>
+</blockquote>
+<h2>Key Research Projects</h2>
+<h3>F11: Formal Learning Guarantees Under Changing Environments</h3>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Question</th>
+<th>Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>F11.1</strong> Finite-horizon online adaptation</td>
+<td>Regret/prediction-error bound for a plasticity mechanism on a bounded task family</td>
+<td>Define task family, prove bound</td>
+</tr>
+<tr>
+<td><strong>F11.2</strong> Distribution-shift response</td>
+<td>Bound adaptation time/error after a declared shift model</td>
+<td>Change model + adaptation bound</td>
+</tr>
+<tr>
+<td><strong>F11.3</strong> Task interference</td>
+<td>When do updates for one task alter behavior on another?</td>
+<td>Characterize interference conditions</td>
+</tr>
+<tr>
+<td><strong>F11.4</strong> Memory-assisted adaptation</td>
+<td>Benefit from explicit memory for a defined task class, or lower bound showing memory requirement</td>
+<td>Compare with/without memory</td>
+</tr>
+<tr>
+<td><strong>F11.5</strong> Plasticity vs. no plasticity</td>
+<td>Separation: one learner achieves a guarantee the other cannot under same assumptions</td>
+<td>Formal comparison on same task class</td>
+</tr>
+</tbody>
+</table>
+<h3>F10: Update Rule Correctness (Foundation)</h3>
+<ul>
+<li>Closed-form ridge solution correctness (F10.1)</li>
+<li>Temporal recurrence exactness (F10.3)</li>
+<li>Decay bounds (F10.4)</li>
+<li>Update invariants (F10.5)</li>
+<li>Objective descent under explicit assumptions (F10.6)</li>
+</ul>
+<blockquote>
+<p>Do not assume that an arbitrary local learning rule decreases global training loss.</p>
+</blockquote>
+<h2>Plasticity Mechanisms Under Study</h2>
+<table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Theoretical Angle</th>
+<th>Target Guarantee</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ClosedFormRidgePlasticity</code></td>
+<td>Convex optimization, exact solution</td>
+<td>Ridge objective minimization, uniqueness</td>
+</tr>
+<tr>
+<td><code>TemporalPsiPlasticity</code></td>
+<td>Linear dynamical systems, trace decay</td>
+<td>Bounded retention, forgetting rates</td>
+</tr>
+<tr>
+<td><code>FastWeightPlasticity</code></td>
+<td>Episode-local memory, outer products</td>
+<td>Memory capacity, interference bounds</td>
+</tr>
+<tr>
+<td><code>RoutingPlasticity</code></td>
+<td>Mixture-of-experts, gating dynamics</td>
+<td>Specialization, load balancing</td>
+</tr>
+<tr>
+<td><code>RuleStatePlasticity</code></td>
+<td>Z3-inspired, program-as-data</td>
+<td>Universality, expressiveness separation</td>
+</tr>
+<tr>
+<td><code>SubstrateCoupledPlasticity</code></td>
+<td>Physical dynamics, noise</td>
+<td>Robustness margins, noise-aware bounds</td>
+</tr>
+</tbody>
+</table>
+<h2>Resource-Bounded Guarantees (Critical)</h2>
+<p>All learning guarantees must specify:</p>
+<ul>
+<li><strong>Memory budget</strong>: Bits of ψ, external memory capacity</li>
+<li><strong>Compute budget</strong>: Transitions per adaptation step, total episode length</li>
+<li><strong>Precision</strong>: Finite-precision effects on guarantee</li>
+<li><strong>Task class</strong>: Exact definition of the family of tasks/environments</li>
+<li><strong>Comparison baseline</strong>: What &quot;no plasticity&quot; means in the same resource model</li>
+</ul>
+<h2>Connection to Other Paths</h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Connection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formal Proof</strong></td>
+<td>F10–F11: Machine-checked update correctness, learning guarantees</td>
+</tr>
+<tr>
+<td><strong>Metadynamics</strong></td>
+<td>F7–F9: Expressiveness hierarchy informs what can be learned; lifecycle guarantees enable retention analysis</td>
+</tr>
+<tr>
+<td><strong>Z3 Research</strong></td>
+<td>F5/F15: Does RuleStatePlasticity's universality translate to learnability advantages?</td>
+</tr>
+<tr>
+<td><strong>Substrate</strong></td>
+<td>F13: Finite-precision and noise effects on learning guarantees</td>
+</tr>
+</tbody>
+</table>
+<h2>Current Status</h2>
+<ul>
+<li><strong>Measured Objectives</strong>: 41 of 48 registered objectives actually measured</li>
+<li><strong>Experiment Pipeline</strong>: Governed pipeline with fidelity ladder (L0→L1→L2→L3) and budget declarations</li>
+<li><strong>Fairness Contract</strong>: 6 clauses making comparisons legal before they run</li>
+<li><strong>Corrections Log</strong>: 5 public entries — failed beliefs are revoked, evidence stays</li>
+<li><strong>Documentation</strong>: <code>docs/hpo_protocol.md</code>, <code>docs/evaluation_fairness_contract.md</code>, <code>docs/FAIRNESS_CONTRACT.md</code></li>
+</ul>
+<h2>Next Steps</h2>
+<ol>
+<li><strong>Select</strong> a minimal online prediction task family (e.g., linear regression with changing coefficients)</li>
+<li><strong>Formalize</strong> <code>ClosedFormRidgePlasticity</code> update as a dynamical system with exact solution</li>
+<li><strong>Prove</strong> finite-horizon regret bound for ridge plasticity vs. no-plasticity baseline (F11.1 + F11.5)</li>
+<li><strong>Characterize</strong> task interference for fast-weight plasticity (F11.3)</li>
+<li><strong>Extend</strong> to distribution-shift model with declared change budget (F11.2)</li>
+<li><strong>Machine-check</strong> key lemmas in Rocq (F10 → F11 pipeline)</li>
+</ol>
+<blockquote>
+<p>The objective is not to prove that more plasticity is always beneficial. It is to establish conditions under which a specified mechanism is stable, adapts, or loses previous information — with explicit resource assumptions.</p>
+</blockquote>
+
+<button class="notes-btn" type="button" popovertarget="notes-learning-theory-research">Speaker notes</button>
+</div>
+<div id="notes-learning-theory-research" popover="auto"><p>Learning theory is where the rubber meets the road: we have plasticity mechanisms (metadynamics), we have substrate constraints (hardware), we have formal semantics (proofs). Learning theory asks: <em>so what?</em> — does this machinery actually help a system learn better under real constraints? The fairness contract and governed pipeline ensure claims are proportionate to evidence.</p>
 </div>
 </section>
 
 <section class="slide" id="invitation" aria-label="The Invitation: an Evaluation Consortium" data-title="The Invitation: an Evaluation Consortium">
 <div class="stage">
-<p class="kicker" aria-hidden="true">09</p>
+<p class="kicker" aria-hidden="true">15</p>
 <h1>The Invitation: an Evaluation Consortium</h1>
 <p>A consortium needs three shared artifacts, and none of them is a model.</p>
 <ul>
@@ -927,39 +2097,32 @@ spec = question_first(
     </div>
   </section>
 
-  <section class="set" id="set-docs" data-set="docs" aria-label="Documentation">
+  <section class="set" id="set-docs-about" data-set="docs-about" aria-label="Documentation — About">
     <div class="docs-layout">
       <aside class="toc-rail">
         <p class="rail-title">Reference</p>
-<nav class="toc" aria-label="Documentation sections"><a href="#/docs/title" data-doc="title"><span>01</span>Computronium: A Composable Laboratory for Learning Mechanisms</a>
-<a href="#/docs/start-here" data-doc="start-here"><span>02</span>Start here</a>
-<a href="#/docs/what-is" data-doc="what-is"><span>03</span>What is Computronium</a>
-<a href="#/docs/install" data-doc="install"><span>04</span>Install</a>
-<a href="#/docs/quickstart" data-doc="quickstart"><span>05</span>60-second quickstart</a>
-<a href="#/docs/cheatsheet" data-doc="cheatsheet"><span>06</span>Architecture Cheatsheet</a>
-<a href="#/docs/ontology" data-doc="ontology"><span>07</span>The 6-axis ontology</a>
-<a href="#/docs/ml-library" data-doc="ml-library"><span>08</span>Machine learning library</a>
-<a href="#/docs/core-architecture" data-doc="core-architecture"><span>09</span>Core Architecture</a>
-<a href="#/docs/kernel" data-doc="kernel"><span>10</span>The Experiment Kernel</a>
-<a href="#/docs/cli" data-doc="cli"><span>11</span>CLI reference</a>
-<a href="#/docs/demos" data-doc="demos"><span>12</span>Demonstrations</a>
-<a href="#/docs/dashboard" data-doc="dashboard"><span>13</span>The dashboard, in pictures</a>
-<a href="#/docs/evidence" data-doc="evidence"><span>14</span>Evidence & claims</a>
-<a href="#/docs/neutral-evaluation" data-doc="neutral-evaluation"><span>15</span>Neutral evaluation — why a referee, and how this one works</a>
-<a href="#/docs/validation" data-doc="validation"><span>16</span>Validation Framework: Property-Verified Hypercube</a>
-<a href="#/docs/stability-eval" data-doc="stability-eval"><span>17</span>Stability-Plasticity Trade-off Hypothesis</a>
-<a href="#/docs/research-program" data-doc="research-program"><span>18</span>Research program</a>
-<a href="#/docs/distributed-deployment" data-doc="distributed-deployment"><span>19</span>Distributed Training & P2P</a>
-<a href="#/docs/acceleration" data-doc="acceleration"><span>20</span>Hardware Acceleration (computronium/acceleration/)</a>
-<a href="#/docs/ceec" data-doc="ceec"><span>21</span>CEEC Epistemic Operating System (packages/ceec-core)</a>
-<a href="#/docs/developers" data-doc="developers"><span>22</span>For developers</a>
-<a href="#/docs/readiness" data-doc="readiness"><span>23</span>Status and scope</a>
-<a href="#/docs/faq" data-doc="faq"><span>24</span>FAQ / Troubleshooting + Glossary</a>
-<a href="#/docs/license" data-doc="license"><span>25</span>License</a></nav>
+<nav class="toc" aria-label="Documentation sections"><a href="#/docs-about/title" data-doc="title"><span>01</span>Computronium: A Composable Laboratory for Learning Mechanisms</a>
+<a href="#/docs-about/start-here" data-doc="start-here"><span>02</span>Start here</a>
+<a href="#/docs-about/what-is" data-doc="what-is"><span>03</span>What is Computronium</a>
+<a href="#/docs-about/cheatsheet" data-doc="cheatsheet"><span>04</span>Architecture Cheatsheet</a>
+<a href="#/docs-about/ontology" data-doc="ontology"><span>05</span>The 6-axis ontology</a>
+<a href="#/docs-about/ml-library" data-doc="ml-library"><span>06</span>Machine learning library</a>
+<a href="#/docs-about/core-architecture" data-doc="core-architecture"><span>07</span>Core Architecture</a>
+<a href="#/docs-about/kernel" data-doc="kernel"><span>08</span>The Experiment Kernel</a>
+<a href="#/docs-about/dashboard" data-doc="dashboard"><span>09</span>The dashboard, in pictures</a>
+<a href="#/docs-about/evidence" data-doc="evidence"><span>10</span>Evidence & claims</a>
+<a href="#/docs-about/neutral-evaluation" data-doc="neutral-evaluation"><span>11</span>Neutral evaluation — why a referee, and how this one works</a>
+<a href="#/docs-about/validation" data-doc="validation"><span>12</span>Validation Framework: Property-Verified Hypercube</a>
+<a href="#/docs-about/stability-eval" data-doc="stability-eval"><span>13</span>Stability-Plasticity Trade-off Hypothesis</a>
+<a href="#/docs-about/research-program" data-doc="research-program"><span>14</span>Research program</a>
+<a href="#/docs-about/ceec" data-doc="ceec"><span>15</span>CEEC Epistemic Operating System (packages/ceec-core)</a>
+<a href="#/docs-about/readiness" data-doc="readiness"><span>16</span>Status and scope</a>
+<a href="#/docs-about/faq" data-doc="faq"><span>17</span>FAQ / Troubleshooting + Glossary</a>
+<a href="#/docs-about/license" data-doc="license"><span>18</span>License</a></nav>
         <a class="rail-link" href="#/cheatsheet">Architecture cheatsheet →</a>
       </aside>
       <article class="doc">
-<section class="doc-section" id="docs-title" data-title="🌌 Computronium: A Composable Laboratory for Learning Mechanisms"><h1 id="docs-h--computronium-a-composable-laboratory-for-learning-mechanisms">🌌 Computronium: A Composable Laboratory for Learning Mechanisms</h1>
+<section class="doc-section" id="docs-about-title" data-title="🌌 Computronium: A Composable Laboratory for Learning Mechanisms"><h1 id="docs-h--computronium-a-composable-laboratory-for-learning-mechanisms">🌌 Computronium: A Composable Laboratory for Learning Mechanisms</h1>
 <p><img src="screenshots/assets/dashboard-hero.png" alt="Computronium Dashboard" /></p>
 <p><em>Computronium is a composable laboratory for learning mechanisms. Watch algorithms battle it out under a neutral, pre-registered evaluation protocol.</em></p>
 <blockquote>
@@ -972,7 +2135,7 @@ spec = question_first(
 <p>The <strong>search for computronium</strong> is the motivating hypothesis: investigate learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency — and determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This is the <em>research agenda</em>; the library is usable independently of it, and no claim below is a conclusion of the search.</p>
 </details>
 <blockquote>
-<p><strong>Status:</strong> <code>v1.0.0</code>. The library, ontology, experiment kernel, demo and verification locks are complete. What is proven, designed, planned and unbuilt is stated in <a href="#/docs/readiness/status-and-scope">Status and scope</a>, so nothing below has to be taken on trust.</p>
+<p><strong>Status:</strong> <code>v1.0.0</code>. The library, ontology, experiment kernel, demo and verification locks are complete. What is proven, designed, planned and unbuilt is stated in <a href="#/docs-about/readiness/status-and-scope">Status and scope</a>, so nothing below has to be taken on trust.</p>
 </blockquote>
 <p>The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.</p>
 <table>
@@ -1001,9 +2164,9 @@ spec = question_first(
 </tr>
 </tbody>
 </table>
-<p>The library provides the composable primitives; the experiment kernel provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities. <a href="#/docs/what-is/what-is-computronium">What is Computronium</a> states what each layer gives you.</p>
+<p>The library provides the composable primitives; the experiment kernel provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities. <a href="#/docs-about/what-is/what-is-computronium">What is Computronium</a> states what each layer gives you.</p>
 </section>
-<section class="doc-section" id="docs-start-here" data-title="Start here"><h2 id="docs-h-start-here">Start here</h2>
+<section class="doc-section" id="docs-about-start-here" data-title="Start here"><h2 id="docs-h-start-here">Start here</h2>
 <p>Six commands, no second document.</p>
 <pre><code class="language-bash">uv sync --dev --all-extras
 uv run comp run demo --dry-run          # the declared space, priced
@@ -1037,7 +2200,7 @@ every arm and every axis.</li>
 clear chance before a comparison is published, and an underpowered run says so
 instead of declaring &quot;no effect&quot;.</p>
 <p>The Python library is separate and usable on its own — see
-<a href="#/docs/ml-library/machine-learning-library">Machine learning library</a> below, or run the
+<a href="#/docs-about/ml-library/machine-learning-library">Machine learning library</a> below, or run the
 60-second snippet it contains.</p>
 <p>A six-minute shot list — every command and the sentence to say over it — is in
 <a href="DEMO.md"><code>docs/DEMO.md</code></a>; <code>tests/acceptance/test_demo_script.py</code> runs the
@@ -1052,11 +2215,11 @@ zoomable architecture map whose panels open their documentation. Serve it from
 <p>Then open <a href="http://127.0.0.1:8000/">http://127.0.0.1:8000/</a>. The plain-Markdown twin is
 <a href="index.md"><code>docs/index.md</code></a>.</p>
 </section>
-<section class="doc-section" id="docs-what-is" data-title="What is Computronium"><h2 id="docs-h-what-is-computronium">What is Computronium</h2>
+<section class="doc-section" id="docs-about-what-is" data-title="What is Computronium"><h2 id="docs-h-what-is-computronium">What is Computronium</h2>
 <p>Computronium ships three layers, each usable independently. This is the single
 capability inventory; the primitive lists live once under
-<a href="#/docs/ontology/the-6-axis-ontology">the 6-axis ontology</a>, and what is designed rather than
-built lives in <a href="#/docs/readiness/status-and-scope">Status and scope</a>.</p>
+<a href="#/docs-about/ontology/the-6-axis-ontology">the 6-axis ontology</a>, and what is designed rather than
+built lives in <a href="#/docs-about/readiness/status-and-scope">Status and scope</a>.</p>
 <table>
 <thead>
 <tr>
@@ -1085,70 +2248,7 @@ built lives in <a href="#/docs/readiness/status-and-scope">Status and scope</a>.
 </table>
 <p><strong>Claim-strength discipline.</strong> Every claim in this README is labeled by its verification level: (1) analytical, (2) machine-checked, (3) certified numerical, (4) sampled numerical, (5) empirical. Levels are defined in <code>computronium.verification</code> and enforced against banned overclaim phrases.</p>
 </section>
-<section class="doc-section" id="docs-install" data-title="Install"><h2 id="docs-h-install">Install</h2>
-<pre><code class="language-bash">git clone &lt;repository-url&gt; &amp;&amp; cd computronium
-uv sync --dev --all-extras
-</code></pre>
-<p>Requirements: Python 3.14+, <a href="https://docs.astral.sh/uv/">uv</a>. GPU (CUDA/Triton) is optional — the CPU path is fully functional.</p>
-<p>Dev-environment smoke (run this before any gate; a stripped env fails here in seconds):</p>
-<pre><code class="language-bash">uv run python -c &quot;import optuna, scipy, torchvision, pytest&quot;
-</code></pre>
-</section>
-<section class="doc-section" id="docs-quickstart" data-title="60-second quickstart"><h2 id="docs-h-60-second-quickstart">60-second quickstart</h2>
-<p>Compose a 6-axis system and train it on MNIST. This block is locked verbatim against its source demo test (<a href="https://github.com/autonull/computronium/blob/main/tests/integration/test_demo_compose_6axis.py"><code>tests/integration/test_demo_compose_6axis.py</code></a>):</p>
-<!-- lock: composition_6axis -->
-<pre><code class="language-python">import torch
-
-from computronium import (
-    DigitalSubstrate,
-    EnergyMinimizationDynamics,
-    EuclideanUpdate,
-    GeometryConfig,
-    NullPlasticity,
-    RecurrentGeometry,
-    StateDynamicsConfig,
-    SubstrateConfig,
-    SystemTrainer,
-    SystemTrainerConfig,
-    ThermodynamicContrast,
-    compose_joint_system,
-    create_task,
-)
-
-
-def _flatten(loader):
-    for x, y in loader:
-        yield x.view(x.size(0), -1), y
-
-
-task = create_task(&quot;mnist&quot;, device=&quot;cpu&quot;, quick_mode=True)
-task.setup()
-train_loader = task.get_dataloader(&quot;train&quot;)
-
-torch.manual_seed(0)
-six_axis = compose_joint_system(
-    substrate=DigitalSubstrate(SubstrateConfig.digital(device=&quot;cpu&quot;)),
-    geometry=RecurrentGeometry(
-        GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
-    ),
-    dynamics=EnergyMinimizationDynamics(
-        StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5)
-    ),
-    plasticity=NullPlasticity(),
-    credit=ThermodynamicContrast(),
-    update=EuclideanUpdate(),
-)
-trainer = SystemTrainer(
-    system=six_axis,
-    config=SystemTrainerConfig(max_epochs=1, device=&quot;cpu&quot;, seed=42),
-    train_data=_flatten(train_loader),
-)
-history = trainer.fit()
-print(f&quot;train accuracy: {history[-1]['train_acc']:.1%}&quot;)
-</code></pre>
-<p>Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 train accuracy (chance 0.1).</p>
-</section>
-<section class="doc-section" id="docs-cheatsheet" data-title="📋 Architecture Cheatsheet"><h2 id="docs-h--architecture-cheatsheet">📋 Architecture Cheatsheet</h2>
+<section class="doc-section" id="docs-about-cheatsheet" data-title="📋 Architecture Cheatsheet"><h2 id="docs-h--architecture-cheatsheet">📋 Architecture Cheatsheet</h2>
 <p><img src="cheatsheet/cheatsheet.svg" alt="Computronium Architecture Cheatsheet" /></p>
 <p>Computronium at a glance — a live reflection of the codebase architecture, regenerated from source on every build. The same diagram is a zoomable, panel-linked map in the documentation site's <strong>Cheatsheet</strong> set (<code>docs/index.html</code>).</p>
 <h3 id="docs-h-outer-flow">Outer Flow</h3>
@@ -1208,7 +2308,7 @@ print(f&quot;train accuracy: {history[-1]['train_acc']:.1%}&quot;)
 <p><strong>Regeneration</strong>: <code>uv run python docs/cheatsheet/cheatsheet_create.py</code> — pulls live facts from registries, configs, and catalogs.</p>
 </blockquote>
 </section>
-<section class="doc-section" id="docs-ontology" data-title="The 6-axis ontology"><h2 id="docs-h-the-6-axis-ontology">The 6-axis ontology</h2>
+<section class="doc-section" id="docs-about-ontology" data-title="The 6-axis ontology"><h2 id="docs-h-the-6-axis-ontology">The 6-axis ontology</h2>
 <p><strong>Computronium models learning systems using 6 composable axes:</strong></p>
 <pre><code>System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate
 </code></pre>
@@ -1306,12 +2406,12 @@ state, e.g. memristive conductance), not a strict sequential pipeline.</p>
 <summary><strong>Why U → S cyclic dependency?</strong> ⋯</summary>
 <p>The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.</p>
 </details></section>
-<section class="doc-section" id="docs-ml-library" data-title="Machine learning library"><h2 id="docs-h-machine-learning-library">Machine learning library</h2>
+<section class="doc-section" id="docs-about-ml-library" data-title="Machine learning library"><h2 id="docs-h-machine-learning-library">Machine learning library</h2>
 <p>Compose any 6-axis coordinate through the <code>System</code> generic or the <code>compose_*</code>
 factories, train it through one <code>SystemTrainer</code>, and change one axis at a time.
 The axes and their primitives are listed once, under
-<a href="#/docs/ontology/the-6-axis-ontology">the 6-axis ontology</a>; what exists versus what is
-designed is stated in <a href="#/docs/readiness/status-and-scope">Status and scope</a>.
+<a href="#/docs-about/ontology/the-6-axis-ontology">the 6-axis ontology</a>; what exists versus what is
+designed is stated in <a href="#/docs-about/readiness/status-and-scope">Status and scope</a>.
 Beyond the axes, the library carries these instruments:</p>
 <ul>
 <li><strong>EMA harvest</strong> (<code>SystemTrainerConfig.harvest_mode</code>) — probe-free streaming-weight harvest; resurrected depth-50 (0.784 → 0.917).</li>
@@ -1390,7 +2490,7 @@ for name, credit in CREDIT_ARMS:
 </details>
 <details>
 <summary><strong>P-axis swaps work the same way</strong> ⋯</summary>
-<p>Pass <code>RoutingPlasticity(...)</code> / <code>FastWeightPlasticity(...)</code> / <code>SubstrateCoupledPlasticity(...)</code> (see <a href="#/docs/ml-library">Plasticity</a> in the axis table) as the <code>plasticity</code> argument of <code>compose_joint_system</code> — the null swap that retains what <code>NullPlasticity</code> forgets is demonstrated in <code>test_demo_swap_plasticity.py</code>.</p>
+<p>Pass <code>RoutingPlasticity(...)</code> / <code>FastWeightPlasticity(...)</code> / <code>SubstrateCoupledPlasticity(...)</code> (see <a href="#/docs-about/ml-library">Plasticity</a> in the axis table) as the <code>plasticity</code> argument of <code>compose_joint_system</code> — the null swap that retains what <code>NullPlasticity</code> forgets is demonstrated in <code>test_demo_swap_plasticity.py</code>.</p>
 </details>
 <details>
 <summary><strong>Formerly hardcoded model families → coordinates</strong> ⋯</summary>
@@ -1576,7 +2676,7 @@ numerical) / Level 5 (empirical).</p>
 <summary><strong>Joint dynamics extension</strong> ⋯</summary>
 <p>The joint extension of these dynamics — composite state $z_t = (x_t, \psi_t, \sigma_t)$, lifecycle registry, episode-boundary consolidation — is specified once in <em>Core Architecture</em> below. Campaign tooling treats the <strong>stability-plasticity trade-off</strong> and resource constraints as explicit search constraints rather than afterthoughts; the <strong>experiment kernel</strong> searches the declared ontology space and records experiment results.</p>
 </details></section>
-<section class="doc-section" id="docs-core-architecture" data-title="🏗️ Core Architecture"><h2 id="docs-h--core-architecture">🏗️ Core Architecture</h2>
+<section class="doc-section" id="docs-about-core-architecture" data-title="🏗️ Core Architecture"><h2 id="docs-h--core-architecture">🏗️ Core Architecture</h2>
 <h3 id="docs-h-1-ontology-protocols-computroniumontology">1. Ontology Protocols (<code>computronium/ontology/</code>)</h3>
 <details>
 <summary><strong>Protocol details</strong> ⋯</summary>
@@ -1722,7 +2822,7 @@ joint = compose_joint_system(
 <summary><strong>Energy terminology precision</strong> ⋯</summary>
 <p><strong>Terminology:</strong> <em>simulated energy</em>, <em>estimated energy</em>, <em>hardware-measured energy</em>. Avoid generic &quot;energy efficiency&quot; unless measurement methodology is stated.</p>
 </details></section>
-<section class="doc-section" id="docs-kernel" data-title="The Experiment Kernel"><h2 id="docs-h-the-experiment-kernel">The Experiment Kernel</h2>
+<section class="doc-section" id="docs-about-kernel" data-title="The Experiment Kernel"><h2 id="docs-h-the-experiment-kernel">The Experiment Kernel</h2>
 <p><code>computronium.experiment</code> turns a question into governed evidence:</p>
 <pre><code class="language-text">Question ──► RunSpec ──► SearchSpace ──► ProposalPolicy ──► Stages S1–S11 ──► RecordStore ──► Claims
 </code></pre>
@@ -1865,209 +2965,7 @@ six-axis systems and assert real accuracies.</p>
 <p><strong>Measurement identity &amp; provenance.</strong> Every record carries a deterministic <code>measurement_key</code> (from coordinate + schedule), full provenance (code SHA, dataset, policy), a three-tier status (gate verdict / defect cause / maturity), and a schema version. Unsupported schema versions fail closed (<code>UnsupportedSchemaVersionError</code>); fields the current schema does not model survive bumps verbatim in the <code>unknown</code> column.</p>
 <p><strong>ContrastDesign.</strong> WP18 adds design-of-experiments (OFAT/factorial) with explicit <code>DataOrigin</code> labels, so contrasted arms carry known structure rather than incidental variation.</p>
 </section>
-<section class="doc-section" id="docs-cli" data-title="CLI reference"><h2 id="docs-h-cli-reference">CLI reference</h2>
-<p><code>comp &lt;command&gt;</code> — every subcommand either works end-to-end or does not exist in the dispatcher:</p>
-<table>
-<thead>
-<tr>
-<th>Command</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>demo</code></td>
-<td>Run the seven-beat demonstration: space, run, ledger, report, coverage</td>
-</tr>
-<tr>
-<td><code>run</code></td>
-<td>Execute a run profile (dry-run with --dry-run)</td>
-</tr>
-<tr>
-<td><code>report</code></td>
-<td>Generate report from store</td>
-</tr>
-<tr>
-<td><code>export</code></td>
-<td>Export store data for round-trip</td>
-</tr>
-<tr>
-<td><code>import</code></td>
-<td>Import store data from export (round-trip)</td>
-</tr>
-<tr>
-<td><code>conformance</code></td>
-<td>Check capability conformance</td>
-</tr>
-<tr>
-<td><code>status</code></td>
-<td>Show run/store status</td>
-</tr>
-<tr>
-<td><code>gallery</code></td>
-<td>Render gallery figures from demo records</td>
-</tr>
-<tr>
-<td><code>hypothesis-campaign</code></td>
-<td>Run hypothesis templates over campaign records</td>
-</tr>
-<tr>
-<td><code>stability-plasticity</code></td>
-<td>Generate and run stability-plasticity frontier campaign</td>
-</tr>
-<tr>
-<td><code>frozen-theta-psi</code></td>
-<td>Run frozen-θ ψ benchmarks at scale (multi-substrate, multi-plasticity)</td>
-</tr>
-<tr>
-<td><code>parity</code></td>
-<td>Check library-vs-kernel parity for an axis</td>
-</tr>
-<tr>
-<td><code>repro</code></td>
-<td>Replay a recorded run and diff it</td>
-</tr>
-<tr>
-<td><code>validate</code></td>
-<td>Validate a config or record against the schema</td>
-</tr>
-<tr>
-<td><code>joint-validate</code></td>
-<td>Validate a composed multi-axis system</td>
-</tr>
-<tr>
-<td><code>benchmark</code></td>
-<td>Run kernel benchmarks and emit a verdict</td>
-</tr>
-<tr>
-<td><code>stats</code></td>
-<td>Compute summary statistics for run metrics (machine-readable)</td>
-</tr>
-<tr>
-<td><code>pareto</code></td>
-<td>Export Pareto frontier for plotting (machine-readable)</td>
-</tr>
-<tr>
-<td><code>diff</code></td>
-<td>Statistical run comparison with effect sizes</td>
-</tr>
-<tr>
-<td><code>campaign</code></td>
-<td>Run declarative multi-run YAML campaigns</td>
-</tr>
-<tr>
-<td><code>loop</code></td>
-<td>Continuous engine-driven experiment loop (explore/exploit cycles)</td>
-</tr>
-<tr>
-<td><code>baseline</code></td>
-<td>Online baseline discovery and registry</td>
-</tr>
-<tr>
-<td><code>coverage</code></td>
-<td>Task/domain coverage: what has and has not been measured</td>
-</tr>
-<tr>
-<td><code>defect</code></td>
-<td>Defect constraint registry: list, cluster, and revoke constraints</td>
-</tr>
-<tr>
-<td><code>schema</code></td>
-<td>Dump JSON schemas for RunSpec/Coordinate/Objectives</td>
-</tr>
-<tr>
-<td><code>power-analysis</code></td>
-<td>Compute statistical power for experiment design (machine-readable)</td>
-</tr>
-<tr>
-<td><code>stability-analysis</code></td>
-<td>Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories)</td>
-</tr>
-<tr>
-<td><code>dashboard</code></td>
-<td>Launch live monitoring web dashboard for campaigns (Phase E5)</td>
-</tr>
-<tr>
-<td><code>dataset</code></td>
-<td>Dataset registry: versioned datasets with hash-verified splits (Phase E6)</td>
-</tr>
-<tr>
-<td><code>environment</code></td>
-<td>Environment snapshots: capture uv lockfiles, container images (Phase E7)</td>
-</tr>
-<tr>
-<td><code>quality</code></td>
-<td>Automated quality gates for reports and data (Phase F1)</td>
-</tr>
-<tr>
-<td><code>catalog</code></td>
-<td>Experiment catalog: query runs/records with axis filters (Phase F2)</td>
-</tr>
-<tr>
-<td><code>method-card</code></td>
-<td>Method cards: auto-generated docs for ontology primitives (Phase F2)</td>
-</tr>
-<tr>
-<td><code>faq</code></td>
-<td>FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)</td>
-</tr>
-<tr>
-<td><code>plugin</code></td>
-<td>Plugin management: custom objectives, substrates, dynamics (Phase F3)</td>
-</tr>
-<tr>
-<td><code>benchmark-contrib</code></td>
-<td>Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3)</td>
-</tr>
-</tbody>
-</table>
-<p>This table is locked against the dispatcher by <code>tests/property/test_cli_readme_lock.py</code> — set and purpose lines must match exactly, and every fenced <code>bash</code> block in this README is executed by that lock, so a documented invocation that errors fails CI.</p>
-<p>Kernel operations:</p>
-<pre><code class="language-bash">uv run comp --help-all                # every command above
-uv run comp run quick-verify --dry-run   # resolve the plan; writes nothing
-uv run comp run quick-verify --store experiment.duckdb
-uv run comp status --store experiment.duckdb
-uv run comp report --run-id &lt;id&gt; --store experiment.duckdb
-</code></pre>
-</section>
-<section class="doc-section" id="docs-demos" data-title="Demonstrations"><h2 id="docs-h-demonstrations">Demonstrations</h2>
-<p>Programmatic demos built on the same kernel APIs as the acceptance suite live in <code>scripts/demos/</code>:</p>
-<table>
-<thead>
-<tr>
-<th>Demo</th>
-<th>Shows</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>demo_contrast_design.py</code></td>
-<td>WP18 ContrastDesign — OFAT DOE + DataOrigin, known effect recovered.</td>
-</tr>
-<tr>
-<td><code>demo_cross_policy_reuse.py</code></td>
-<td>U5 cross-policy evidence reuse — one store, no migration.</td>
-</tr>
-<tr>
-<td><code>demo_multi_objective.py</code></td>
-<td>multi-objective Pareto discovery via the OBJECTIVES registry.</td>
-</tr>
-<tr>
-<td><code>demo_pause_resume.py</code></td>
-<td>U3 multi-round pause/resume by run_id.</td>
-</tr>
-<tr>
-<td><code>demo_policy_swap.py</code></td>
-<td>U4 policy interchangeability — 4 policies, same RunSpec/Space/Store.</td>
-</tr>
-<tr>
-<td><code>demo_unified_pipeline.py</code></td>
-<td>U1 end-to-end (question → RunSpec → Synthesis → pipeline → store → report).</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section class="doc-section" id="docs-dashboard" data-title="The dashboard, in pictures"><h2 id="docs-h-the-dashboard-in-pictures">The dashboard, in pictures</h2>
+<section class="doc-section" id="docs-about-dashboard" data-title="The dashboard, in pictures"><h2 id="docs-h-the-dashboard-in-pictures">The dashboard, in pictures</h2>
 <p>The live dashboard is a Dockview-powered application that watches a campaign and shows
 what it is doing: the space it is searching, the cells it has measured, the
 cells the system refuses, and the charts the evidence draws. Its canvas is a
@@ -2298,7 +3196,7 @@ letter of its own — and the legend names the view that is on.</p>
 <p>See <a href="DASHBOARD.md">the dashboard guide</a> for the endpoints, the keyboard
 shortcuts, and how the pictures are made.</p>
 </section>
-<section class="doc-section" id="docs-evidence" data-title="Evidence & claims"><h2 id="docs-h-evidence--claims">Evidence &amp; claims</h2>
+<section class="doc-section" id="docs-about-evidence" data-title="Evidence & claims"><h2 id="docs-h-evidence--claims">Evidence &amp; claims</h2>
 <p>Claims are labeled by verification level (see <em>What is Computronium</em>). CEEC (<a href="https://github.com/autonull/computronium/tree/main/packages/ceec-core"><code>packages/ceec-core</code></a>) is a standalone governance ledger (not integrated; kernel records a <code>ceec_link</code> field for future use).</p>
 <table>
 <thead>
@@ -2343,7 +3241,7 @@ shortcuts, and how the pictures are made.</p>
 </table>
 <p>The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.</p>
 </section>
-<section class="doc-section" id="docs-neutral-evaluation" data-title="Neutral evaluation — why a referee, and how this one works"><h2 id="docs-h-neutral-evaluation--why-a-referee-and-how-this-one-works">Neutral evaluation — why a referee, and how this one works</h2>
+<section class="doc-section" id="docs-about-neutral-evaluation" data-title="Neutral evaluation — why a referee, and how this one works"><h2 id="docs-h-neutral-evaluation--why-a-referee-and-how-this-one-works">Neutral evaluation — why a referee, and how this one works</h2>
 <p>A comparison of learning algorithms has a structural problem: the people best
 placed to run it are usually the people who invented the algorithms. Inventors
 carry publication, tenure and funding incentives; their hyperparameter search is
@@ -2394,7 +3292,7 @@ members contribute algorithms and implementations, and receive a comparison
 stack they can cite — pre-registered, unfiltered, and open to correction,
 including of the referee.</p>
 </section>
-<section class="doc-section" id="docs-validation" data-title="🔬 Validation Framework: Property-Verified Hypercube"><h2 id="docs-h--validation-framework-property-verified-hypercube">🔬 Validation Framework: Property-Verified Hypercube</h2>
+<section class="doc-section" id="docs-about-validation" data-title="🔬 Validation Framework: Property-Verified Hypercube"><h2 id="docs-h--validation-framework-property-verified-hypercube">🔬 Validation Framework: Property-Verified Hypercube</h2>
 <p>The framework enforces <strong>correctness by construction</strong> through a layered verification regime. The fast-CI gate validates the entire hypercube in seconds on CPU.</p>
 <h3 id="docs-h--notation-disambiguation">⚠️ Notation Disambiguation</h3>
 <p>This document uses three distinct &quot;L&quot; numbering schemes — <strong>do not confuse them</strong>:</p>
@@ -2693,11 +3591,11 @@ or Fidelity Levels FL0–FL2). This table uses PL1–PL7 for the core property l
 </table>
 <h3 id="docs-h-running-the-verification">Running the verification</h3>
 <p>The fast CI gate is <code>uv run python -m pytest tests/property/ -q</code>. The testing
-tiers, the never-bypassed lock list and the per-commit checklist are in <a href="#/docs/developers/for-developers">For
+tiers, the never-bypassed lock list and the per-commit checklist are in <a href="#/docs-about/validation">For
 developers</a>; <code>uv run comp conformance</code> runs the conformance
 audit.</p>
 </section>
-<section class="doc-section" id="docs-stability-eval" data-title="📐 Stability-Plasticity Trade-off Hypothesis"><h2 id="docs-h--stability-plasticity-trade-off-hypothesis">📐 Stability-Plasticity Trade-off Hypothesis</h2>
+<section class="doc-section" id="docs-about-stability-eval" data-title="📐 Stability-Plasticity Trade-off Hypothesis"><h2 id="docs-h--stability-plasticity-trade-off-hypothesis">📐 Stability-Plasticity Trade-off Hypothesis</h2>
 <p>v1 relied on strict Lyapunov descent and global contraction. In the joint architecture, we recognize that global contraction is a <em>sufficient</em> condition for a unique fixed point, but not a <em>necessary</em> condition for useful computation. Systems can exhibit local contraction, multiple attractors, limit cycles, or metastable states.</p>
 <h3 id="docs-h-the-hypothesis">The Hypothesis</h3>
 <p>We formulate the research object as:</p>
@@ -2837,11 +3735,497 @@ comp run quick-verify --store experiment.duckdb
 <p><strong>Tasks</strong>: <code>pendulum</code>, <code>lorenz</code> (ODE simulation); PDE suites (Heat/Wave/Burgers, Navier-Stokes) planned</p>
 <p><strong>Models</strong>: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.</p>
 </section>
-<section class="doc-section" id="docs-research-program" data-title="Research program"><h2 id="docs-h-research-program">Research program</h2>
+<section class="doc-section" id="docs-about-research-program" data-title="Research program"><h2 id="docs-h-research-program">Research program</h2>
 <p>The motivating hypothesis: learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, energy/resource efficiency — offer measurable benefits over global-clock, backprop-centric training under those constraints.</p>
 <p>Open questions: when does the plasticity axis (writable ψ on frozen θ) beat standard recurrent memory; how far do local credit rules scale on digital substrates; which substrate constraints actually bind. Historical campaign records and research notes live in <code>docs/archive/</code>; methodology and Z3 material in <code>docs/reference/</code>.</p>
 </section>
-<section class="doc-section" id="docs-distributed-deployment" data-title="🌐 Distributed Training & P2P"><h2 id="docs-h--distributed-training--p2p">🌐 Distributed Training &amp; P2P</h2>
+<section class="doc-section" id="docs-about-ceec" data-title="🧭 CEEC Epistemic Operating System (packages/ceec-core)"><h2 id="docs-h--ceec-epistemic-operating-system-packagesceec-core">🧭 CEEC Epistemic Operating System (<code>packages/ceec-core</code>)</h2>
+<p><strong>Standalone</strong> epistemic governance ledger (TODO19 Epistemic Foundry) — not integrated into the experiment kernel. The kernel records a <code>ceec_link</code> field on claims (always <code>None</code> currently) for future integration.</p>
+<p><code>Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision</code>.
+<strong>Full reference: <a href="https://github.com/autonull/computronium/blob/main/packages/ceec-core/CEEC.md"><code>CEEC.md</code></a></strong> — policies in <code>docs/ceec/</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Module (<code>ceec.*</code>)</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>store.py</code></td>
+<td>Append-only SQLite ledger; content-addressed artifacts; DB-trigger immutability</td>
+</tr>
+<tr>
+<td><code>gates.py</code></td>
+<td>Promotion/boundary gate engine, quarantine propagation, effective-status resolution</td>
+</tr>
+<tr>
+<td><code>selection.py</code></td>
+<td>EV/cost experiment selection with pre-scoring hard-constraint filter and audited decisions</td>
+</tr>
+<tr>
+<td><code>calibration.py</code></td>
+<td>Brier/log-score calibration, drift cadence, review flags</td>
+</tr>
+<tr>
+<td><code>builders.py</code></td>
+<td>Payload builders: <code>experiment</code>, <code>gate_evidence</code>/<code>quality_flags</code>, <code>chance_verdict</code></td>
+</tr>
+<tr>
+<td><code>run.py</code></td>
+<td>Closed-loop runner <code>run_experiment</code>: pre-register → decide → probe → calibrate → optional gate</td>
+</tr>
+<tr>
+<td><code>audit.py</code></td>
+<td>Ledger integrity audit + decision-quality audit</td>
+</tr>
+<tr>
+<td><code>bootstrap.py</code></td>
+<td>Seeds instruments, hypotheses, goals, pre-registered experiments from <code>configs/ceec/</code></td>
+</tr>
+<tr>
+<td><code>schemas.py</code></td>
+<td>Mechanism-schema emission from gated evidence</td>
+</tr>
+<tr>
+<td><code>probe_adapter.py</code> / <code>constraints.py</code> / <code>migrate/</code> / <code>cli.py</code></td>
+<td>Probe ingestion, constraint validators, migration, CLI</td>
+</tr>
+</tbody>
+</table>
+<p>CLI: <code>ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status-history|quarantine-report|emit-schema|export</code>
+(or <code>uv run python -m ceec.cli</code>; <code>computronium/ceec/</code> is a legacy re-export
+shim of this package). Main ledger at <code>ceec/ceec.sqlite3</code>; campaign
+ledgers under <code>scratch/</code>.</p>
+<h2 id="docs-h--standalone-platform-packages-packages">📦 Standalone Platform Packages (<code>packages/</code>)</h2>
+<p>Extracted, framework-free packages the repo depends on (uv workspace
+members, TODO20 Rule 6 — one implementation copy each; legacy
+<code>computronium.*</code> import paths are thin adapters):</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Import</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/ceec-core</code></td>
+<td><code>ceec</code></td>
+<td>Standalone epistemic governance ledger (evidence/beliefs/gates/audit — <strong>reference: <a href="https://github.com/autonull/computronium/blob/main/packages/ceec-core/CEEC.md"><code>CEEC.md</code></a></strong>); payload builders + closed-loop runner (<code>ceec.builders</code>/<code>ceec.run</code>); CLI <code>ceec</code></td>
+</tr>
+<tr>
+<td><code>packages/psi-peft</code></td>
+<td><code>psi_peft</code></td>
+<td>Frozen-backbone task switching via temporal-ψ ridge readouts</td>
+</tr>
+<tr>
+<td><code>packages/local-feedback</code></td>
+<td><code>local_feedback</code></td>
+<td>Adaptive local feedback projections for local credit (X-ALI-001/002 validated)</td>
+</tr>
+<tr>
+<td><code>packages/computronium-lab</code></td>
+<td><code>computronium_lab</code></td>
+<td>Standalone high-level Lab API (used in probe scripts): compose/train/compare/report ontology coordinates + mechanism recipes; synthesis layer (<code>Lab.specify/synthesize/explore</code>), task tiers, validation campaigns, research layer (budgeted evolution, certified corpus, continual benchmark), instrument layer (ledger report renderer, one-shot research report)</td>
+</tr>
+<tr>
+<td><code>packages/stability</code></td>
+<td><code>stability</code></td>
+<td>Calibrated stability guard (<code>attach</code>, ROC-calibrated τ=1.029); stable-matrix helpers; CLI <code>stability</code></td>
+</tr>
+</tbody>
+</table>
+<p>Platform docs (recipe book, edge blueprint, external summary, release
+notes/manifest): <code>docs/platform/</code>. X-STA-002 validated the
+stable-amplification family: 4×–2600× transient retention over matched
+contractive controls at ρ=0.85, noise amplified at the same rate (retention
+gain, not SNR gain); shipped as the Lab <code>stable_amplification</code> recipe.</p>
+<p><code>uv sync</code> installs them as editable workspace members automatically.</p>
+</section>
+<section class="doc-section" id="docs-about-readiness" data-title="Status and scope"><h2 id="docs-h-status-and-scope">Status and scope</h2>
+<p><code>v1.0.0</code> is a laboratory, not a completed research programme. Three lists say
+exactly what that means; the durable ledger is <code>TODO66.md</code> §8, and retired
+experiments are recorded with the findings that ended them in
+<a href="CORRECTIONS.md"><code>docs/CORRECTIONS.md</code></a>.</p>
+<ul>
+<li><strong>Live.</strong> loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
+statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
+claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
+(text/JSON/HTML) · <code>comp</code> core commands.</li>
+<li><strong>Designed, not built.</strong> M1 gate calibration · M2 drift detection · M3 metric
+coverage warnings · <code>capabilities</code> command · repo-wide effect lock · C12 ruler-geometry fallback · <code>defect revoke</code> re-probe · policy-aware
+compatibility sampling · <code>SystemConfig.validate</code> codegen.</li>
+<li><strong>Planned.</strong> <strong>fair-HPO recovery study — for each zoo algorithm, re-tune under
+equal effort and publish the delta from its published number</strong> (the &quot;these algorithms may be better than
+commonly believed&quot; programme; needs the equal-effort HPO gap closed and real compute) · 7-domain task
+expansion (cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes,
+california_housing, ett_h1, PDE suites) · physical-hardware validation
+(memristive/neuromorphic/optical/quantum) · Ray/SLURM · DDP at scale · <code>campaign_queue</code> as loop driver ·
+full CEEC integration · <code>question_first</code> literature store · a real TUI · <strong>an evaluation consortium</strong>:
+the fairness contract as a shared constitution, identity cards as the admission ticket, the corrections
+log as the shared memory.</li>
+</ul>
+<p>The comparison stack has five named gaps: rules are independent
+re-implementations with disclosed deviations rather than verified upstream
+code; equal-effort HPO is a protocol, not a kernel invariant; there is no
+blinding; an unregistered claim is labelled rather than refused; and coverage is
+one task family. They are stated in full under <a href="#/docs-about/neutral-evaluation/neutral-evaluation--why-a-referee-and-how-this-one-works">Neutral
+evaluation</a>, and the
+invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTIUM.md</code></a>.</p>
+</section>
+<section class="doc-section" id="docs-about-faq" data-title="FAQ / Troubleshooting + Glossary"><h2 id="docs-h-faq--troubleshooting--glossary">FAQ / Troubleshooting + Glossary</h2>
+<p><strong>FAQ</strong></p>
+<ul>
+<li><em><code>ModuleNotFoundError</code> after a sync</em> — run <code>uv sync --dev --all-extras</code> (bare <code>uv sync</code> strips dev extras) and the dev-env smoke command.</li>
+<li><em>DuckDB store is locked</em> — the evidence store is <strong>single-writer</strong>: all writes flow through <code>RecordStore.append()</code> under a threading lock, enforced by <code>tests/property/test_single_writer_enforcement.py</code>. Do not open a second writer process against the same file; readers are fine, cross-process writers are not supported.</li>
+<li><em><code>UnsupportedSchemaVersionError</code></em> — a record was written by a newer kernel than the reader. Upgrade the reader; unknown-field tolerance is fail-closed by design.</li>
+<li><em>GPU</em> — optional. <code>uv run comp benchmark</code> runs on CPU.</li>
+</ul>
+<p><strong>Glossary</strong></p>
+<ul>
+<li><strong>Coordinate</strong> — a point in the 6-axis space; the unit of comparison.</li>
+<li><strong>RunSpec</strong> — the serialized specification of a run: question, space, stages, budget.</li>
+<li><strong>SearchSpace</strong> — the legality-checked subspace a policy proposes within.</li>
+<li><strong>Policy</strong> — the proposal strategy; the only varying part between kernel experiments.</li>
+<li><strong>Stage</strong> — one step S1–S11 of the pipeline.</li>
+<li><strong>Record</strong> — one measured row in the evidence store (identity, provenance, status, payload).</li>
+<li><strong>Claim</strong> — a governed statement derived from records, with a verification level.</li>
+</ul>
+</section>
+<section class="doc-section" id="docs-about-license" data-title="License"><h2 id="docs-h-license">License</h2>
+<p>See <a href="https://github.com/autonull/computronium/blob/main/LICENSE"><code>LICENSE</code></a>.</p>
+</section>
+      </article>
+    </div>
+  </section>
+
+  <section class="set" id="set-docs-howto" data-set="docs-howto" aria-label="Documentation — HowTo">
+    <div class="docs-layout">
+      <aside class="toc-rail">
+        <p class="rail-title">Reference</p>
+<nav class="toc" aria-label="Documentation sections"><a href="#/docs-howto/install" data-doc="install"><span>01</span>Install</a>
+<a href="#/docs-howto/quickstart" data-doc="quickstart"><span>02</span>60-second quickstart</a>
+<a href="#/docs-howto/cli" data-doc="cli"><span>03</span>CLI reference</a>
+<a href="#/docs-howto/demos" data-doc="demos"><span>04</span>Demonstrations</a>
+<a href="#/docs-howto/distributed-deployment" data-doc="distributed-deployment"><span>05</span>Distributed Training & P2P</a>
+<a href="#/docs-howto/acceleration" data-doc="acceleration"><span>06</span>Hardware Acceleration (computronium/acceleration/)</a>
+<a href="#/docs-howto/developers" data-doc="developers"><span>07</span>For developers</a></nav>
+        <a class="rail-link" href="#/cheatsheet">Architecture cheatsheet →</a>
+      </aside>
+      <article class="doc">
+<section class="doc-section" id="docs-howto-install" data-title="Install"><h2 id="docs-h-install">Install</h2>
+<pre><code class="language-bash">git clone https://github.com/autonull/computronium &amp;&amp; cd computronium
+uv sync --dev --all-extras
+</code></pre>
+<p>Requirements: Python <strong>3.14+</strong> (PEP 695 generics, <code>TypeIs</code>, free-threaded-CPython
+readiness), <a href="https://docs.astral.sh/uv/">uv</a>. The base install (<code>core</code>) carries
+training and the experiment kernel; every other capability is an extra, so an
+install pulls only what it uses.</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Install</th>
+<th>Adds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>core</code></td>
+<td><code>uv sync</code></td>
+<td>Training, ontology, experiment kernel (torch, duckdb, optuna, pydantic)</td>
+</tr>
+<tr>
+<td><code>search</code></td>
+<td><code>uv sync --extra search</code></td>
+<td>Campaign search and tabular reporting</td>
+</tr>
+<tr>
+<td><code>vision</code></td>
+<td><code>uv sync --extra vision</code></td>
+<td>torchvision datasets and transforms</td>
+</tr>
+<tr>
+<td><code>gpu</code></td>
+<td><code>uv sync --extra gpu</code></td>
+<td>NVIDIA telemetry (<code>nvidia-ml-py</code>)</td>
+</tr>
+<tr>
+<td><code>dashboard</code></td>
+<td><code>uv sync --extra dashboard</code></td>
+<td>FastAPI/uvicorn live dashboard (with <code>rich</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Optional heavy dependencies are imported lazily: <code>torchvision</code> is only touched
+when a vision dataset or transform is requested, the dashboard stack when the
+dashboard is launched. Combining profiles works as expected, e.g.
+<code>uv sync --extra vision --extra dashboard</code>; <code>--all-extras</code> is the development
+union.</p>
+<p>GPU (CUDA/Triton) is optional — the CPU path is fully functional.</p>
+<p>Dev-environment smoke (run this before any gate; a stripped env fails here in seconds):</p>
+<pre><code class="language-bash">uv run python -c &quot;import optuna, scipy, torchvision, pytest&quot;
+</code></pre>
+</section>
+<section class="doc-section" id="docs-howto-quickstart" data-title="60-second quickstart"><h2 id="docs-h-60-second-quickstart">60-second quickstart</h2>
+<p>Compose a 6-axis system and train it on MNIST. This block is locked verbatim against its source demo test (<a href="https://github.com/autonull/computronium/blob/main/tests/integration/test_demo_compose_6axis.py"><code>tests/integration/test_demo_compose_6axis.py</code></a>):</p>
+<!-- lock: composition_6axis -->
+<pre><code class="language-python">import torch
+
+from computronium import (
+    DigitalSubstrate,
+    EnergyMinimizationDynamics,
+    EuclideanUpdate,
+    GeometryConfig,
+    NullPlasticity,
+    RecurrentGeometry,
+    StateDynamicsConfig,
+    SubstrateConfig,
+    SystemTrainer,
+    SystemTrainerConfig,
+    ThermodynamicContrast,
+    compose_joint_system,
+    create_task,
+)
+
+
+def _flatten(loader):
+    for x, y in loader:
+        yield x.view(x.size(0), -1), y
+
+
+task = create_task(&quot;mnist&quot;, device=&quot;cpu&quot;, quick_mode=True)
+task.setup()
+train_loader = task.get_dataloader(&quot;train&quot;)
+
+torch.manual_seed(0)
+six_axis = compose_joint_system(
+    substrate=DigitalSubstrate(SubstrateConfig.digital(device=&quot;cpu&quot;)),
+    geometry=RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
+    ),
+    dynamics=EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5)
+    ),
+    plasticity=NullPlasticity(),
+    credit=ThermodynamicContrast(),
+    update=EuclideanUpdate(),
+)
+trainer = SystemTrainer(
+    system=six_axis,
+    config=SystemTrainerConfig(max_epochs=1, device=&quot;cpu&quot;, seed=42),
+    train_data=_flatten(train_loader),
+)
+history = trainer.fit()
+print(f&quot;train accuracy: {history[-1]['train_acc']:.1%}&quot;)
+</code></pre>
+<p>Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 train accuracy (chance 0.1).</p>
+</section>
+<section class="doc-section" id="docs-howto-cli" data-title="CLI reference"><h2 id="docs-h-cli-reference">CLI reference</h2>
+<p><code>comp &lt;command&gt;</code> — every subcommand either works end-to-end or does not exist in the dispatcher:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>demo</code></td>
+<td>Run the seven-beat demonstration: space, run, ledger, report, coverage</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>Execute a run profile (dry-run with --dry-run)</td>
+</tr>
+<tr>
+<td><code>report</code></td>
+<td>Generate report from store</td>
+</tr>
+<tr>
+<td><code>export</code></td>
+<td>Export store data for round-trip</td>
+</tr>
+<tr>
+<td><code>import</code></td>
+<td>Import store data from export (round-trip)</td>
+</tr>
+<tr>
+<td><code>conformance</code></td>
+<td>Check capability conformance</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>Show run/store status</td>
+</tr>
+<tr>
+<td><code>gallery</code></td>
+<td>Render gallery figures from demo records</td>
+</tr>
+<tr>
+<td><code>hypothesis-campaign</code></td>
+<td>Run hypothesis templates over campaign records</td>
+</tr>
+<tr>
+<td><code>stability-plasticity</code></td>
+<td>Generate and run stability-plasticity frontier campaign</td>
+</tr>
+<tr>
+<td><code>frozen-theta-psi</code></td>
+<td>Run frozen-θ ψ benchmarks at scale (multi-substrate, multi-plasticity)</td>
+</tr>
+<tr>
+<td><code>parity</code></td>
+<td>Check library-vs-kernel parity for an axis</td>
+</tr>
+<tr>
+<td><code>repro</code></td>
+<td>Replay a recorded run and diff it</td>
+</tr>
+<tr>
+<td><code>validate</code></td>
+<td>Validate a config or record against the schema</td>
+</tr>
+<tr>
+<td><code>joint-validate</code></td>
+<td>Validate a composed multi-axis system</td>
+</tr>
+<tr>
+<td><code>benchmark</code></td>
+<td>Run kernel benchmarks and emit a verdict</td>
+</tr>
+<tr>
+<td><code>stats</code></td>
+<td>Compute summary statistics for run metrics (machine-readable)</td>
+</tr>
+<tr>
+<td><code>pareto</code></td>
+<td>Export Pareto frontier for plotting (machine-readable)</td>
+</tr>
+<tr>
+<td><code>diff</code></td>
+<td>Statistical run comparison with effect sizes</td>
+</tr>
+<tr>
+<td><code>campaign</code></td>
+<td>Run declarative multi-run YAML campaigns</td>
+</tr>
+<tr>
+<td><code>loop</code></td>
+<td>Continuous engine-driven experiment loop (explore/exploit cycles)</td>
+</tr>
+<tr>
+<td><code>baseline</code></td>
+<td>Online baseline discovery and registry</td>
+</tr>
+<tr>
+<td><code>coverage</code></td>
+<td>Task/domain coverage: what has and has not been measured</td>
+</tr>
+<tr>
+<td><code>defect</code></td>
+<td>Defect constraint registry: list, cluster, and revoke constraints</td>
+</tr>
+<tr>
+<td><code>schema</code></td>
+<td>Dump JSON schemas for RunSpec/Coordinate/Objectives</td>
+</tr>
+<tr>
+<td><code>power-analysis</code></td>
+<td>Compute statistical power for experiment design (machine-readable)</td>
+</tr>
+<tr>
+<td><code>stability-analysis</code></td>
+<td>Run dynamical stability analysis (Lyapunov spectra, basin stability, settling trajectories)</td>
+</tr>
+<tr>
+<td><code>dashboard</code></td>
+<td>Launch live monitoring web dashboard for campaigns (Phase E5)</td>
+</tr>
+<tr>
+<td><code>dataset</code></td>
+<td>Dataset registry: versioned datasets with hash-verified splits (Phase E6)</td>
+</tr>
+<tr>
+<td><code>environment</code></td>
+<td>Environment snapshots: capture uv lockfiles, container images (Phase E7)</td>
+</tr>
+<tr>
+<td><code>quality</code></td>
+<td>Automated quality gates for reports and data (Phase F1)</td>
+</tr>
+<tr>
+<td><code>catalog</code></td>
+<td>Experiment catalog: query runs/records with axis filters (Phase F2)</td>
+</tr>
+<tr>
+<td><code>method-card</code></td>
+<td>Method cards: auto-generated docs for ontology primitives (Phase F2)</td>
+</tr>
+<tr>
+<td><code>faq</code></td>
+<td>FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)</td>
+</tr>
+<tr>
+<td><code>plugin</code></td>
+<td>Plugin management: custom objectives, substrates, dynamics (Phase F3)</td>
+</tr>
+<tr>
+<td><code>benchmark-contrib</code></td>
+<td>Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3)</td>
+</tr>
+</tbody>
+</table>
+<p>This table is locked against the dispatcher by <code>tests/property/test_cli_readme_lock.py</code> — set and purpose lines must match exactly, and every fenced <code>bash</code> block in this README is executed by that lock, so a documented invocation that errors fails CI.</p>
+<p>Kernel operations:</p>
+<pre><code class="language-bash">uv run comp --help-all                # every command above
+uv run comp run quick-verify --dry-run   # resolve the plan; writes nothing
+uv run comp run quick-verify --store experiment.duckdb
+uv run comp status --store experiment.duckdb
+uv run comp report --run-id &lt;id&gt; --store experiment.duckdb
+</code></pre>
+</section>
+<section class="doc-section" id="docs-howto-demos" data-title="Demonstrations"><h2 id="docs-h-demonstrations">Demonstrations</h2>
+<p>Programmatic demos built on the same kernel APIs as the acceptance suite live in <code>scripts/demos/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Demo</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>demo_contrast_design.py</code></td>
+<td>WP18 ContrastDesign — OFAT DOE + DataOrigin, known effect recovered.</td>
+</tr>
+<tr>
+<td><code>demo_cross_policy_reuse.py</code></td>
+<td>U5 cross-policy evidence reuse — one store, no migration.</td>
+</tr>
+<tr>
+<td><code>demo_multi_objective.py</code></td>
+<td>multi-objective Pareto discovery via the OBJECTIVES registry.</td>
+</tr>
+<tr>
+<td><code>demo_pause_resume.py</code></td>
+<td>U3 multi-round pause/resume by run_id.</td>
+</tr>
+<tr>
+<td><code>demo_policy_swap.py</code></td>
+<td>U4 policy interchangeability — 4 policies, same RunSpec/Space/Store.</td>
+</tr>
+<tr>
+<td><code>demo_unified_pipeline.py</code></td>
+<td>U1 end-to-end (question → RunSpec → Synthesis → pipeline → store → report).</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="doc-section" id="docs-howto-distributed-deployment" data-title="🌐 Distributed Training & P2P"><h2 id="docs-h--distributed-training--p2p">🌐 Distributed Training &amp; P2P</h2>
 <h3 id="docs-h-multi-gpu-training">Multi-GPU Training</h3>
 <p>PyTorch Lightning with DDP, FSDP, DeepSpeed. <code>TileShardedBackend</code> with NCCL <code>all_reduce_gradients</code>/<code>broadcast_params</code> supports distributed TileNet sharding for large models.</p>
 <h3 id="docs-h-p2p-coordinator-system-grpc--kademlia">P2P Coordinator System (gRPC + Kademlia)</h3>
@@ -2926,7 +4310,7 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 </tbody>
 </table>
 </section>
-<section class="doc-section" id="docs-acceleration" data-title="⚡ Hardware Acceleration (computronium/acceleration/)"><h2 id="docs-h--hardware-acceleration-computroniumacceleration">⚡ Hardware Acceleration (<code>computronium/acceleration/</code>)</h2>
+<section class="doc-section" id="docs-howto-acceleration" data-title="⚡ Hardware Acceleration (computronium/acceleration/)"><h2 id="docs-h--hardware-acceleration-computroniumacceleration">⚡ Hardware Acceleration (<code>computronium/acceleration/</code>)</h2>
 <table>
 <thead>
 <tr>
@@ -3106,112 +4490,7 @@ get(&quot;primitive.credit_assignment.random_projections&quot;)
 list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 </code></pre>
 </section>
-<section class="doc-section" id="docs-ceec" data-title="🧭 CEEC Epistemic Operating System (packages/ceec-core)"><h2 id="docs-h--ceec-epistemic-operating-system-packagesceec-core">🧭 CEEC Epistemic Operating System (<code>packages/ceec-core</code>)</h2>
-<p><strong>Standalone</strong> epistemic governance ledger (TODO19 Epistemic Foundry) — not integrated into the experiment kernel. The kernel records a <code>ceec_link</code> field on claims (always <code>None</code> currently) for future integration.</p>
-<p><code>Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision</code>.
-<strong>Full reference: <a href="https://github.com/autonull/computronium/blob/main/packages/ceec-core/CEEC.md"><code>CEEC.md</code></a></strong> — policies in <code>docs/ceec/</code>.</p>
-<table>
-<thead>
-<tr>
-<th>Module (<code>ceec.*</code>)</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>store.py</code></td>
-<td>Append-only SQLite ledger; content-addressed artifacts; DB-trigger immutability</td>
-</tr>
-<tr>
-<td><code>gates.py</code></td>
-<td>Promotion/boundary gate engine, quarantine propagation, effective-status resolution</td>
-</tr>
-<tr>
-<td><code>selection.py</code></td>
-<td>EV/cost experiment selection with pre-scoring hard-constraint filter and audited decisions</td>
-</tr>
-<tr>
-<td><code>calibration.py</code></td>
-<td>Brier/log-score calibration, drift cadence, review flags</td>
-</tr>
-<tr>
-<td><code>builders.py</code></td>
-<td>Payload builders: <code>experiment</code>, <code>gate_evidence</code>/<code>quality_flags</code>, <code>chance_verdict</code></td>
-</tr>
-<tr>
-<td><code>run.py</code></td>
-<td>Closed-loop runner <code>run_experiment</code>: pre-register → decide → probe → calibrate → optional gate</td>
-</tr>
-<tr>
-<td><code>audit.py</code></td>
-<td>Ledger integrity audit + decision-quality audit</td>
-</tr>
-<tr>
-<td><code>bootstrap.py</code></td>
-<td>Seeds instruments, hypotheses, goals, pre-registered experiments from <code>configs/ceec/</code></td>
-</tr>
-<tr>
-<td><code>schemas.py</code></td>
-<td>Mechanism-schema emission from gated evidence</td>
-</tr>
-<tr>
-<td><code>probe_adapter.py</code> / <code>constraints.py</code> / <code>migrate/</code> / <code>cli.py</code></td>
-<td>Probe ingestion, constraint validators, migration, CLI</td>
-</tr>
-</tbody>
-</table>
-<p>CLI: <code>ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status-history|quarantine-report|emit-schema|export</code>
-(or <code>uv run python -m ceec.cli</code>; <code>computronium/ceec/</code> is a legacy re-export
-shim of this package). Main ledger at <code>ceec/ceec.sqlite3</code>; campaign
-ledgers under <code>scratch/</code>.</p>
-<h2 id="docs-h--standalone-platform-packages-packages">📦 Standalone Platform Packages (<code>packages/</code>)</h2>
-<p>Extracted, framework-free packages the repo depends on (uv workspace
-members, TODO20 Rule 6 — one implementation copy each; legacy
-<code>computronium.*</code> import paths are thin adapters):</p>
-<table>
-<thead>
-<tr>
-<th>Package</th>
-<th>Import</th>
-<th>What it is</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>packages/ceec-core</code></td>
-<td><code>ceec</code></td>
-<td>Standalone epistemic governance ledger (evidence/beliefs/gates/audit — <strong>reference: <a href="https://github.com/autonull/computronium/blob/main/packages/ceec-core/CEEC.md"><code>CEEC.md</code></a></strong>); payload builders + closed-loop runner (<code>ceec.builders</code>/<code>ceec.run</code>); CLI <code>ceec</code></td>
-</tr>
-<tr>
-<td><code>packages/psi-peft</code></td>
-<td><code>psi_peft</code></td>
-<td>Frozen-backbone task switching via temporal-ψ ridge readouts</td>
-</tr>
-<tr>
-<td><code>packages/local-feedback</code></td>
-<td><code>local_feedback</code></td>
-<td>Adaptive local feedback projections for local credit (X-ALI-001/002 validated)</td>
-</tr>
-<tr>
-<td><code>packages/computronium-lab</code></td>
-<td><code>computronium_lab</code></td>
-<td>Standalone high-level Lab API (used in probe scripts): compose/train/compare/report ontology coordinates + mechanism recipes; synthesis layer (<code>Lab.specify/synthesize/explore</code>), task tiers, validation campaigns, research layer (budgeted evolution, certified corpus, continual benchmark), instrument layer (ledger report renderer, one-shot research report)</td>
-</tr>
-<tr>
-<td><code>packages/stability</code></td>
-<td><code>stability</code></td>
-<td>Calibrated stability guard (<code>attach</code>, ROC-calibrated τ=1.029); stable-matrix helpers; CLI <code>stability</code></td>
-</tr>
-</tbody>
-</table>
-<p>Platform docs (recipe book, edge blueprint, external summary, release
-notes/manifest): <code>docs/platform/</code>. X-STA-002 validated the
-stable-amplification family: 4×–2600× transient retention over matched
-contractive controls at ρ=0.85, noise amplified at the same rate (retention
-gain, not SNR gain); shipped as the Lab <code>stable_amplification</code> recipe.</p>
-<p><code>uv sync</code> installs them as editable workspace members automatically.</p>
-</section>
-<section class="doc-section" id="docs-developers" data-title="For developers"><h2 id="docs-h-for-developers">For developers</h2>
+<section class="doc-section" id="docs-howto-developers" data-title="For developers"><h2 id="docs-h-for-developers">For developers</h2>
 <p><strong>Layout</strong> — see the tree at the top of <a href="https://github.com/autonull/computronium/blob/main/AGENTS.md"><code>AGENTS.md</code></a>: <code>computronium/</code> (library + <code>experiment/</code> kernel), <code>packages/</code> (standalone platforms), <code>scripts/</code> (quickstart, identity cards, probes, demos), <code>tests/</code> (property / acceptance / integration / unit / platform / ceec).</p>
 <p><strong>Toolchain</strong> — uv (single <code>uv.lock</code>), ruff (format always; lint changed files), pyright (strict on new modules), pre-commit, pytest. Config lives in <code>pyproject.toml</code>.</p>
 <p><strong>Testing tiers</strong> — run the cheapest tier that can catch your change:</p>
@@ -3239,7 +4518,7 @@ uv run python -m pytest                                     # round close only
 <li>if shipping a demo, add one <code>DEMOS</code> row in <code>computronium/visualization/gallery.py</code> and re-pin <code>docs/figures/manifest.json</code>.</li>
 </ol>
 <p><strong>Adding a kernel policy</strong> — subclass the <code>Policy</code> protocol in <code>computronium/experiment/execution/policy.py</code> and register it in <code>POLICY_CATALOG</code>; the interchangeability guarantees then apply for free.</p>
-<p><strong>Good first additions</strong> (designed, not built): <code>capabilities</code> command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · <code>defect revoke</code> re-probe · policy-aware compatibility sampling. Each is a named row in <a href="#/docs/readiness/status-and-scope">Status and scope</a>, not a silent absence.</p>
+<p><strong>Good first additions</strong> (designed, not built): <code>capabilities</code> command · per-stage timing fields · silent-drop detector · C12 ruler-geometry fallback · <code>defect revoke</code> re-probe · policy-aware compatibility sampling. Each is a named row in <a href="#/docs-about/developers">Status and scope</a>, not a silent absence.</p>
 <h3 id="docs-h-two-entry-points-one-config-surface">Two Entry Points, One Config Surface</h3>
 <p>The kernel exposes two entry points that share the <strong>same <code>ExperimentConfig</code></strong> (via <code>schema/unified_config.py</code>):</p>
 <table>
@@ -3409,59 +4688,6 @@ uv run python -m computronium.acceleration.matrix \
 </tbody>
 </table>
 </section>
-<section class="doc-section" id="docs-readiness" data-title="Status and scope"><h2 id="docs-h-status-and-scope">Status and scope</h2>
-<p><code>v1.0.0</code> is a laboratory, not a completed research programme. Three lists say
-exactly what that means; the durable ledger is <code>TODO66.md</code> §8, and retired
-experiments are recorded with the findings that ended them in
-<a href="CORRECTIONS.md"><code>docs/CORRECTIONS.md</code></a>.</p>
-<ul>
-<li><strong>Live.</strong> loop + 11 stages · 8 proposal policies · DoE · ICU metamodel · allocator ·
-statistical promotion · multi-objective/Pareto · baselines/ruler · evidence store, three-tier status,
-claims, limitations · CEEC export · provenance/seed/checkpoint · per-stage timings · reports
-(text/JSON/HTML) · <code>comp</code> core commands.</li>
-<li><strong>Designed, not built.</strong> M1 gate calibration · M2 drift detection · M3 metric
-coverage warnings · <code>capabilities</code> command · repo-wide effect lock · C12 ruler-geometry fallback · <code>defect revoke</code> re-probe · policy-aware
-compatibility sampling · <code>SystemConfig.validate</code> codegen.</li>
-<li><strong>Planned.</strong> <strong>fair-HPO recovery study — for each zoo algorithm, re-tune under
-equal effort and publish the delta from its published number</strong> (the &quot;these algorithms may be better than
-commonly believed&quot; programme; needs the equal-effort HPO gap closed and real compute) · 7-domain task
-expansion (cifar100, svhn, wikitext2, penn_treebank, mountain_car, lunar_lander, diabetes,
-california_housing, ett_h1, PDE suites) · physical-hardware validation
-(memristive/neuromorphic/optical/quantum) · Ray/SLURM · DDP at scale · <code>campaign_queue</code> as loop driver ·
-full CEEC integration · <code>question_first</code> literature store · a real TUI · <strong>an evaluation consortium</strong>:
-the fairness contract as a shared constitution, identity cards as the admission ticket, the corrections
-log as the shared memory.</li>
-</ul>
-<p>The comparison stack has five named gaps: rules are independent
-re-implementations with disclosed deviations rather than verified upstream
-code; equal-effort HPO is a protocol, not a kernel invariant; there is no
-blinding; an unregistered claim is labelled rather than refused; and coverage is
-one task family. They are stated in full under <a href="#/docs/neutral-evaluation/neutral-evaluation--why-a-referee-and-how-this-one-works">Neutral
-evaluation</a>, and the
-invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTIUM.md</code></a>.</p>
-</section>
-<section class="doc-section" id="docs-faq" data-title="FAQ / Troubleshooting + Glossary"><h2 id="docs-h-faq--troubleshooting--glossary">FAQ / Troubleshooting + Glossary</h2>
-<p><strong>FAQ</strong></p>
-<ul>
-<li><em><code>ModuleNotFoundError</code> after a sync</em> — run <code>uv sync --dev --all-extras</code> (bare <code>uv sync</code> strips dev extras) and the dev-env smoke command.</li>
-<li><em>DuckDB store is locked</em> — the evidence store is <strong>single-writer</strong>: all writes flow through <code>RecordStore.append()</code> under a threading lock, enforced by <code>tests/property/test_single_writer_enforcement.py</code>. Do not open a second writer process against the same file; readers are fine, cross-process writers are not supported.</li>
-<li><em><code>UnsupportedSchemaVersionError</code></em> — a record was written by a newer kernel than the reader. Upgrade the reader; unknown-field tolerance is fail-closed by design.</li>
-<li><em>GPU</em> — optional. <code>uv run comp benchmark</code> runs on CPU.</li>
-</ul>
-<p><strong>Glossary</strong></p>
-<ul>
-<li><strong>Coordinate</strong> — a point in the 6-axis space; the unit of comparison.</li>
-<li><strong>RunSpec</strong> — the serialized specification of a run: question, space, stages, budget.</li>
-<li><strong>SearchSpace</strong> — the legality-checked subspace a policy proposes within.</li>
-<li><strong>Policy</strong> — the proposal strategy; the only varying part between kernel experiments.</li>
-<li><strong>Stage</strong> — one step S1–S11 of the pipeline.</li>
-<li><strong>Record</strong> — one measured row in the evidence store (identity, provenance, status, payload).</li>
-<li><strong>Claim</strong> — a governed statement derived from records, with a verification level.</li>
-</ul>
-</section>
-<section class="doc-section" id="docs-license" data-title="License"><h2 id="docs-h-license">License</h2>
-<p>See <a href="https://github.com/autonull/computronium/blob/main/LICENSE"><code>LICENSE</code></a>.</p>
-</section>
       </article>
     </div>
   </section>
@@ -3470,7 +4696,7 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
     <div class="map-layout">
       <aside class="map-index">
         <p class="rail-title">Architecture map</p>
-<p class="map-hint">Click a panel to zoom. Every panel opens its documentation.</p><div class="map-list"><div class="map-item" data-map-key="entry"><button class="map-zoom" type="button" data-map-target="entry"><span class="map-item-title">🚪 Entry Points</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/start-here" title="Open start-here documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="tasks"><button class="map-zoom" type="button" data-map-target="tasks"><span class="map-item-title">🎯 Tasks & Data</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/quickstart" title="Open quickstart documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="kernel"><button class="map-zoom" type="button" data-map-target="kernel"><span class="map-item-title">🧪 Experiment Kernel</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/kernel" title="Open kernel documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="ontology"><button class="map-zoom" type="button" data-map-target="ontology"><span class="map-item-title">🧬 6-Axis Ontology</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/ontology" title="Open ontology documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="system"><button class="map-zoom" type="button" data-map-target="system"><span class="map-item-title">🏗️ System & Composition</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/core-architecture" title="Open core-architecture documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="train"><button class="map-zoom" type="button" data-map-target="train"><span class="map-item-title">⚡ Training Loop</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/ml-library" title="Open ml-library documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="evidence"><button class="map-zoom" type="button" data-map-target="evidence"><span class="map-item-title">💾 Evidence Store</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/evidence" title="Open evidence documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="surface"><button class="map-zoom" type="button" data-map-target="surface"><span class="map-item-title">📊 Surface & Governance</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs/validation" title="Open validation documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div></div>
+<p class="map-hint">Click a panel to zoom. Every panel opens its documentation.</p><div class="map-list"><div class="map-item" data-map-key="entry"><button class="map-zoom" type="button" data-map-target="entry"><span class="map-item-title">🚪 Entry Points</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/start-here" title="Open start-here documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="tasks"><button class="map-zoom" type="button" data-map-target="tasks"><span class="map-item-title">🎯 Tasks & Data</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/quickstart" title="Open quickstart documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="kernel"><button class="map-zoom" type="button" data-map-target="kernel"><span class="map-item-title">🧪 Experiment Kernel</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/kernel" title="Open kernel documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="ontology"><button class="map-zoom" type="button" data-map-target="ontology"><span class="map-item-title">🧬 6-Axis Ontology</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/ontology" title="Open ontology documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="system"><button class="map-zoom" type="button" data-map-target="system"><span class="map-item-title">🏗️ System & Composition</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/core-architecture" title="Open core-architecture documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="train"><button class="map-zoom" type="button" data-map-target="train"><span class="map-item-title">⚡ Training Loop</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/ml-library" title="Open ml-library documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="evidence"><button class="map-zoom" type="button" data-map-target="evidence"><span class="map-item-title">💾 Evidence Store</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/evidence" title="Open evidence documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="map-item" data-map-key="surface"><button class="map-zoom" type="button" data-map-target="surface"><span class="map-item-title">📊 Surface & Governance</span><span class="map-item-sub">Zoom to panel</span></button><a class="map-doc" href="#/docs-about/validation" title="Open validation documentation" aria-label="Open documentation"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div></div>
       </aside>
       <div class="map-main">
         <div class="map-viewport" id="map-viewport" data-canvas-w="2129.5" data-canvas-h="3527">
@@ -3508,7 +4734,7 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
   <div class="palette-foot"><kbd>↑</kbd><kbd>↓</kbd> navigate <kbd>↵</kbd> open <kbd>K</kbd> close</div>
 </dialog>
 
-<script type="application/json" id="site-index">[{"set": "about", "id": "epistemic-laboratory", "title": "Computronium: An Epistemic Laboratory for Learning", "kind": "slide"}, {"set": "about", "id": "crisis-of-comparison", "title": "The Crisis of Comparison", "kind": "slide"}, {"set": "about", "id": "six-axis-ontology", "title": "The 6-Axis Ontology", "kind": "slide"}, {"set": "about", "id": "implementation-matrix", "title": "Beyond Backpropagation", "kind": "slide"}, {"set": "about", "id": "pipeline", "title": "From Question to Governed Evidence", "kind": "slide"}, {"set": "about", "id": "dashboard", "title": "An Instrument, Not a Picture", "kind": "slide"}, {"set": "about", "id": "epistemic-ledger", "title": "Trustworthy Results: the Epistemic Ledger", "kind": "slide"}, {"set": "about", "id": "research-horizon", "title": "The Research Horizon", "kind": "slide"}, {"set": "about", "id": "invitation", "title": "The Invitation: an Evaluation Consortium", "kind": "slide"}, {"set": "docs", "id": "title", "title": "🌌 Computronium: A Composable Laboratory for Learning Mechanisms", "kind": "section"}, {"set": "docs", "id": "title/-computronium-a-composable-laboratory-for-learning-mechanisms", "title": "🌌 Computronium: A Composable Laboratory for Learning Mechanisms", "kind": "heading", "context": "🌌 Computronium: A Composable Laboratory for Learning Mechanisms"}, {"set": "docs", "id": "start-here", "title": "Start here", "kind": "section"}, {"set": "docs", "id": "start-here/start-here", "title": "Start here", "kind": "heading", "context": "Start here"}, {"set": "docs", "id": "start-here/documentation-site", "title": "Documentation site", "kind": "heading", "context": "Start here"}, {"set": "docs", "id": "what-is", "title": "What is Computronium", "kind": "section"}, {"set": "docs", "id": "what-is/what-is-computronium", "title": "What is Computronium", "kind": "heading", "context": "What is Computronium"}, {"set": "docs", "id": "install", "title": "Install", "kind": "section"}, {"set": "docs", "id": "install/install", "title": "Install", "kind": "heading", "context": "Install"}, {"set": "docs", "id": "quickstart", "title": "60-second quickstart", "kind": "section"}, {"set": "docs", "id": "quickstart/60-second-quickstart", "title": "60-second quickstart", "kind": "heading", "context": "60-second quickstart"}, {"set": "docs", "id": "cheatsheet", "title": "📋 Architecture Cheatsheet", "kind": "section"}, {"set": "docs", "id": "cheatsheet/-architecture-cheatsheet", "title": "📋 Architecture Cheatsheet", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs", "id": "cheatsheet/outer-flow", "title": "Outer Flow", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs", "id": "cheatsheet/panels-summary", "title": "Panels Summary", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs", "id": "cheatsheet/artifacts", "title": "Artifacts", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs", "id": "ontology", "title": "The 6-axis ontology", "kind": "section"}, {"set": "docs", "id": "ontology/the-6-axis-ontology", "title": "The 6-axis ontology", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs", "id": "ontology/substrate-specifications", "title": "Substrate Specifications", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs", "id": "ontology/geometry-primitives", "title": "Geometry Primitives", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs", "id": "ontology/creditassignment-primitives", "title": "CreditAssignment Primitives", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs", "id": "ontology/algorithm-identity-cards", "title": "Algorithm Identity Cards", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs", "id": "ontology/architecture-diagram", "title": "Architecture Diagram", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs", "id": "ml-library", "title": "Machine learning library", "kind": "section"}, {"set": "docs", "id": "ml-library/machine-learning-library", "title": "Machine learning library", "kind": "heading", "context": "Machine learning library"}, {"set": "docs", "id": "ml-library/algebraic-composition-api", "title": "Algebraic Composition (API)", "kind": "heading", "context": "Machine learning library"}, {"set": "docs", "id": "ml-library/research-direction-models-experimental-variants", "title": "Research Direction Models (Experimental Variants)", "kind": "heading", "context": "Machine learning library"}, {"set": "docs", "id": "ml-library/-coupled-dynamical-systems", "title": "🧬 Coupled Dynamical Systems", "kind": "heading", "context": "Machine learning library"}, {"set": "docs", "id": "ml-library/-energy-stability-and-dynamical-invariants", "title": "⚡ Energy, Stability, and Dynamical Invariants", "kind": "heading", "context": "Machine learning library"}, {"set": "docs", "id": "ml-library/verification-taxonomy", "title": "Verification Taxonomy", "kind": "heading", "context": "Machine learning library"}, {"set": "docs", "id": "core-architecture", "title": "🏗️ Core Architecture", "kind": "section"}, {"set": "docs", "id": "core-architecture/-core-architecture", "title": "🏗️ Core Architecture", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs", "id": "core-architecture/1-ontology-protocols-computroniumontology", "title": "1. Ontology Protocols (computronium/ontology/)", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs", "id": "core-architecture/2-joint-architecture-protocols-computroniumcorejoint", "title": "2. Joint Architecture Protocols (computronium/core/joint/)", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs", "id": "core-architecture/3-system--trainers", "title": "3. System & Trainers", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs", "id": "core-architecture/4-factories-computroniumcoresystem_trainer", "title": "4. Factories (computronium/core/system_trainer/)", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs", "id": "core-architecture/5-substrate-models-", "title": "5. Substrate Models ✅", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs", "id": "kernel", "title": "The Experiment Kernel", "kind": "section"}, {"set": "docs", "id": "kernel/the-experiment-kernel", "title": "The Experiment Kernel", "kind": "heading", "context": "The Experiment Kernel"}, {"set": "docs", "id": "cli", "title": "CLI reference", "kind": "section"}, {"set": "docs", "id": "cli/cli-reference", "title": "CLI reference", "kind": "heading", "context": "CLI reference"}, {"set": "docs", "id": "demos", "title": "Demonstrations", "kind": "section"}, {"set": "docs", "id": "demos/demonstrations", "title": "Demonstrations", "kind": "heading", "context": "Demonstrations"}, {"set": "docs", "id": "dashboard", "title": "The dashboard, in pictures", "kind": "section"}, {"set": "docs", "id": "dashboard/the-dashboard-in-pictures", "title": "The dashboard, in pictures", "kind": "heading", "context": "The dashboard, in pictures"}, {"set": "docs", "id": "dashboard/stage-views-captured-from-live-dashboard", "title": "Stage Views (captured from live dashboard)", "kind": "heading", "context": "The dashboard, in pictures"}, {"set": "docs", "id": "evidence", "title": "Evidence & claims", "kind": "section"}, {"set": "docs", "id": "evidence/evidence--claims", "title": "Evidence & claims", "kind": "heading", "context": "Evidence & claims"}, {"set": "docs", "id": "neutral-evaluation", "title": "Neutral evaluation — why a referee, and how this one works", "kind": "section"}, {"set": "docs", "id": "neutral-evaluation/neutral-evaluation--why-a-referee-and-how-this-one-works", "title": "Neutral evaluation — why a referee, and how this one works", "kind": "heading", "context": "Neutral evaluation — why a referee, and how this one works"}, {"set": "docs", "id": "validation", "title": "🔬 Validation Framework: Property-Verified Hypercube", "kind": "section"}, {"set": "docs", "id": "validation/-validation-framework-property-verified-hypercube", "title": "🔬 Validation Framework: Property-Verified Hypercube", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs", "id": "validation/-notation-disambiguation", "title": "⚠️ Notation Disambiguation", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs", "id": "validation/verification-status-markers", "title": "Verification Status Markers", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs", "id": "validation/-property-locks-pl1pl7--sgdcum-axes--j1j7", "title": "✅ Property Locks (PL1–PL7 + S/G/D/C/U/M Axes + J1–J7)", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs", "id": "validation/-biologically-motivated-property-tests-hypothesis-based", "title": "🧬 Biologically Motivated Property Tests (Hypothesis-based)", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs", "id": "validation/-integration-verification-gates-all-passing", "title": "✅ Integration Verification Gates (All Passing)", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs", "id": "validation/running-the-verification", "title": "Running the verification", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs", "id": "stability-eval", "title": "📐 Stability-Plasticity Trade-off Hypothesis", "kind": "section"}, {"set": "docs", "id": "stability-eval/-stability-plasticity-trade-off-hypothesis", "title": "📐 Stability-Plasticity Trade-off Hypothesis", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/the-hypothesis", "title": "The Hypothesis", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/monitoring-the-frontier", "title": "Monitoring the Frontier", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/resource-vector", "title": "Resource Vector", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/5-level-benchmark-hierarchy", "title": "5-Level Benchmark Hierarchy", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-evaluation-domains", "title": "🌐 Evaluation Domains", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-domain-overview", "title": "📊 Domain Overview", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-vision-domain", "title": "🖼️ Vision Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-language-modeling-domain", "title": "📝 Language Modeling Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-reinforcement-learning-domain", "title": "🎮 Reinforcement Learning Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-graph-domain", "title": "🕸️ Graph Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-tabular-domain", "title": "📋 Tabular Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-time-series-domain", "title": "📈 Time Series Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "stability-eval/-scientific-domain", "title": "🔬 Scientific Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs", "id": "research-program", "title": "Research program", "kind": "section"}, {"set": "docs", "id": "research-program/research-program", "title": "Research program", "kind": "heading", "context": "Research program"}, {"set": "docs", "id": "distributed-deployment", "title": "🌐 Distributed Training & P2P", "kind": "section"}, {"set": "docs", "id": "distributed-deployment/-distributed-training--p2p", "title": "🌐 Distributed Training & P2P", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs", "id": "distributed-deployment/multi-gpu-training", "title": "Multi-GPU Training", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs", "id": "distributed-deployment/p2p-coordinator-system-grpc--kademlia", "title": "P2P Coordinator System (gRPC + Kademlia)", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs", "id": "distributed-deployment/-deployment--inference", "title": "🚀 Deployment & Inference", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs", "id": "distributed-deployment/model-export-computroniumdeployment", "title": "Model Export (computronium/deployment/)", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs", "id": "distributed-deployment/inference-engine", "title": "Inference Engine", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs", "id": "distributed-deployment/-analysis--visualization-computroniumanalysis", "title": "📊 Analysis & Visualization (computronium/analysis/)", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs", "id": "acceleration", "title": "⚡ Hardware Acceleration (computronium/acceleration/)", "kind": "section"}, {"set": "docs", "id": "acceleration/-hardware-acceleration-computroniumacceleration", "title": "⚡ Hardware Acceleration (computronium/acceleration/)", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs", "id": "acceleration/-shared-acceleration-layer-computroniumacceleration--registry--dispatch", "title": "🚀 Shared Acceleration Layer (computronium/acceleration/ — Registry & Dispatch)", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs", "id": "acceleration/registry-structure", "title": "Registry Structure", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs", "id": "acceleration/auto-dispatch--status-ladder", "title": "Auto-Dispatch & Status Ladder", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs", "id": "acceleration/registry-api", "title": "Registry API", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs", "id": "ceec", "title": "🧭 CEEC Epistemic Operating System (packages/ceec-core)", "kind": "section"}, {"set": "docs", "id": "ceec/-ceec-epistemic-operating-system-packagesceec-core", "title": "🧭 CEEC Epistemic Operating System (packages/ceec-core)", "kind": "heading", "context": "🧭 CEEC Epistemic Operating System (packages/ceec-core)"}, {"set": "docs", "id": "ceec/-standalone-platform-packages-packages", "title": "📦 Standalone Platform Packages (packages/)", "kind": "heading", "context": "🧭 CEEC Epistemic Operating System (packages/ceec-core)"}, {"set": "docs", "id": "developers", "title": "For developers", "kind": "section"}, {"set": "docs", "id": "developers/for-developers", "title": "For developers", "kind": "heading", "context": "For developers"}, {"set": "docs", "id": "developers/two-entry-points-one-config-surface", "title": "Two Entry Points, One Config Surface", "kind": "heading", "context": "For developers"}, {"set": "docs", "id": "developers/-kernel-development-workflow", "title": "🛠️ Kernel Development Workflow", "kind": "heading", "context": "For developers"}, {"set": "docs", "id": "developers/-documentation--bench-tools-from-specs", "title": "📚 Documentation & Bench Tools from Specs", "kind": "heading", "context": "For developers"}, {"set": "docs", "id": "developers/-enhanced-cli-tools", "title": "🧪 Enhanced CLI Tools", "kind": "heading", "context": "For developers"}, {"set": "docs", "id": "developers/-registry-integrity-locks-extended-verification-framework", "title": "🧪 Registry Integrity Locks (Extended Verification Framework)", "kind": "heading", "context": "For developers"}, {"set": "docs", "id": "readiness", "title": "Status and scope", "kind": "section"}, {"set": "docs", "id": "readiness/status-and-scope", "title": "Status and scope", "kind": "heading", "context": "Status and scope"}, {"set": "docs", "id": "faq", "title": "FAQ / Troubleshooting + Glossary", "kind": "section"}, {"set": "docs", "id": "faq/faq--troubleshooting--glossary", "title": "FAQ / Troubleshooting + Glossary", "kind": "heading", "context": "FAQ / Troubleshooting + Glossary"}, {"set": "docs", "id": "license", "title": "License", "kind": "section"}, {"set": "docs", "id": "license/license", "title": "License", "kind": "heading", "context": "License"}, {"set": "cheatsheet", "id": "entry", "title": "🚪 Entry Points", "kind": "panel"}, {"set": "cheatsheet", "id": "tasks", "title": "🎯 Tasks & Data", "kind": "panel"}, {"set": "cheatsheet", "id": "kernel", "title": "🧪 Experiment Kernel", "kind": "panel"}, {"set": "cheatsheet", "id": "ontology", "title": "🧬 6-Axis Ontology", "kind": "panel"}, {"set": "cheatsheet", "id": "system", "title": "🏗️ System & Composition", "kind": "panel"}, {"set": "cheatsheet", "id": "train", "title": "⚡ Training Loop", "kind": "panel"}, {"set": "cheatsheet", "id": "evidence", "title": "💾 Evidence Store", "kind": "panel"}, {"set": "cheatsheet", "id": "surface", "title": "📊 Surface & Governance", "kind": "panel"}]</script>
+<script type="application/json" id="site-index">[{"set": "about", "id": "epistemic-laboratory", "title": "Computronium: An Epistemic Laboratory for Learning", "kind": "slide"}, {"set": "about", "id": "crisis-of-comparison", "title": "The Crisis of Comparison", "kind": "slide"}, {"set": "about", "id": "six-axis-ontology", "title": "The 6-Axis Ontology", "kind": "slide"}, {"set": "about", "id": "implementation-matrix", "title": "Beyond Backpropagation", "kind": "slide"}, {"set": "about", "id": "pipeline", "title": "From Question to Governed Evidence", "kind": "slide"}, {"set": "about", "id": "dashboard", "title": "An Instrument, Not a Picture", "kind": "slide"}, {"set": "about", "id": "epistemic-ledger", "title": "Trustworthy Results: the Epistemic Ledger", "kind": "slide"}, {"set": "about", "id": "research-horizon", "title": "The Research Horizon", "kind": "slide"}, {"set": "about", "id": "proof-research", "title": "Formal Proof Research", "kind": "slide"}, {"set": "about", "id": "consortium-research", "title": "Evaluation Consortium Research", "kind": "slide"}, {"set": "about", "id": "z3-research", "title": "Z3 Benchmark & Plasticity Research", "kind": "slide"}, {"set": "about", "id": "metadynamics-research", "title": "Metadynamics & Credit Research", "kind": "slide"}, {"set": "about", "id": "substrate-research", "title": "Substrate & Hardware Research", "kind": "slide"}, {"set": "about", "id": "learning-theory-research", "title": "Learning Theory & Guarantees Research", "kind": "slide"}, {"set": "about", "id": "invitation", "title": "The Invitation: an Evaluation Consortium", "kind": "slide"}, {"set": "docs-about", "id": "title", "title": "🌌 Computronium: A Composable Laboratory for Learning Mechanisms", "kind": "section"}, {"set": "docs-about", "id": "title/-computronium-a-composable-laboratory-for-learning-mechanisms", "title": "🌌 Computronium: A Composable Laboratory for Learning Mechanisms", "kind": "heading", "context": "🌌 Computronium: A Composable Laboratory for Learning Mechanisms"}, {"set": "docs-about", "id": "start-here", "title": "Start here", "kind": "section"}, {"set": "docs-about", "id": "start-here/start-here", "title": "Start here", "kind": "heading", "context": "Start here"}, {"set": "docs-about", "id": "start-here/documentation-site", "title": "Documentation site", "kind": "heading", "context": "Start here"}, {"set": "docs-about", "id": "what-is", "title": "What is Computronium", "kind": "section"}, {"set": "docs-about", "id": "what-is/what-is-computronium", "title": "What is Computronium", "kind": "heading", "context": "What is Computronium"}, {"set": "docs-about", "id": "cheatsheet", "title": "📋 Architecture Cheatsheet", "kind": "section"}, {"set": "docs-about", "id": "cheatsheet/-architecture-cheatsheet", "title": "📋 Architecture Cheatsheet", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs-about", "id": "cheatsheet/outer-flow", "title": "Outer Flow", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs-about", "id": "cheatsheet/panels-summary", "title": "Panels Summary", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs-about", "id": "cheatsheet/artifacts", "title": "Artifacts", "kind": "heading", "context": "📋 Architecture Cheatsheet"}, {"set": "docs-about", "id": "ontology", "title": "The 6-axis ontology", "kind": "section"}, {"set": "docs-about", "id": "ontology/the-6-axis-ontology", "title": "The 6-axis ontology", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs-about", "id": "ontology/substrate-specifications", "title": "Substrate Specifications", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs-about", "id": "ontology/geometry-primitives", "title": "Geometry Primitives", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs-about", "id": "ontology/creditassignment-primitives", "title": "CreditAssignment Primitives", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs-about", "id": "ontology/algorithm-identity-cards", "title": "Algorithm Identity Cards", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs-about", "id": "ontology/architecture-diagram", "title": "Architecture Diagram", "kind": "heading", "context": "The 6-axis ontology"}, {"set": "docs-about", "id": "ml-library", "title": "Machine learning library", "kind": "section"}, {"set": "docs-about", "id": "ml-library/machine-learning-library", "title": "Machine learning library", "kind": "heading", "context": "Machine learning library"}, {"set": "docs-about", "id": "ml-library/algebraic-composition-api", "title": "Algebraic Composition (API)", "kind": "heading", "context": "Machine learning library"}, {"set": "docs-about", "id": "ml-library/research-direction-models-experimental-variants", "title": "Research Direction Models (Experimental Variants)", "kind": "heading", "context": "Machine learning library"}, {"set": "docs-about", "id": "ml-library/-coupled-dynamical-systems", "title": "🧬 Coupled Dynamical Systems", "kind": "heading", "context": "Machine learning library"}, {"set": "docs-about", "id": "ml-library/-energy-stability-and-dynamical-invariants", "title": "⚡ Energy, Stability, and Dynamical Invariants", "kind": "heading", "context": "Machine learning library"}, {"set": "docs-about", "id": "ml-library/verification-taxonomy", "title": "Verification Taxonomy", "kind": "heading", "context": "Machine learning library"}, {"set": "docs-about", "id": "core-architecture", "title": "🏗️ Core Architecture", "kind": "section"}, {"set": "docs-about", "id": "core-architecture/-core-architecture", "title": "🏗️ Core Architecture", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs-about", "id": "core-architecture/1-ontology-protocols-computroniumontology", "title": "1. Ontology Protocols (computronium/ontology/)", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs-about", "id": "core-architecture/2-joint-architecture-protocols-computroniumcorejoint", "title": "2. Joint Architecture Protocols (computronium/core/joint/)", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs-about", "id": "core-architecture/3-system--trainers", "title": "3. System & Trainers", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs-about", "id": "core-architecture/4-factories-computroniumcoresystem_trainer", "title": "4. Factories (computronium/core/system_trainer/)", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs-about", "id": "core-architecture/5-substrate-models-", "title": "5. Substrate Models ✅", "kind": "heading", "context": "🏗️ Core Architecture"}, {"set": "docs-about", "id": "kernel", "title": "The Experiment Kernel", "kind": "section"}, {"set": "docs-about", "id": "kernel/the-experiment-kernel", "title": "The Experiment Kernel", "kind": "heading", "context": "The Experiment Kernel"}, {"set": "docs-about", "id": "dashboard", "title": "The dashboard, in pictures", "kind": "section"}, {"set": "docs-about", "id": "dashboard/the-dashboard-in-pictures", "title": "The dashboard, in pictures", "kind": "heading", "context": "The dashboard, in pictures"}, {"set": "docs-about", "id": "dashboard/stage-views-captured-from-live-dashboard", "title": "Stage Views (captured from live dashboard)", "kind": "heading", "context": "The dashboard, in pictures"}, {"set": "docs-about", "id": "evidence", "title": "Evidence & claims", "kind": "section"}, {"set": "docs-about", "id": "evidence/evidence--claims", "title": "Evidence & claims", "kind": "heading", "context": "Evidence & claims"}, {"set": "docs-about", "id": "neutral-evaluation", "title": "Neutral evaluation — why a referee, and how this one works", "kind": "section"}, {"set": "docs-about", "id": "neutral-evaluation/neutral-evaluation--why-a-referee-and-how-this-one-works", "title": "Neutral evaluation — why a referee, and how this one works", "kind": "heading", "context": "Neutral evaluation — why a referee, and how this one works"}, {"set": "docs-about", "id": "validation", "title": "🔬 Validation Framework: Property-Verified Hypercube", "kind": "section"}, {"set": "docs-about", "id": "validation/-validation-framework-property-verified-hypercube", "title": "🔬 Validation Framework: Property-Verified Hypercube", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs-about", "id": "validation/-notation-disambiguation", "title": "⚠️ Notation Disambiguation", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs-about", "id": "validation/verification-status-markers", "title": "Verification Status Markers", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs-about", "id": "validation/-property-locks-pl1pl7--sgdcum-axes--j1j7", "title": "✅ Property Locks (PL1–PL7 + S/G/D/C/U/M Axes + J1–J7)", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs-about", "id": "validation/-biologically-motivated-property-tests-hypothesis-based", "title": "🧬 Biologically Motivated Property Tests (Hypothesis-based)", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs-about", "id": "validation/-integration-verification-gates-all-passing", "title": "✅ Integration Verification Gates (All Passing)", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs-about", "id": "validation/running-the-verification", "title": "Running the verification", "kind": "heading", "context": "🔬 Validation Framework: Property-Verified Hypercube"}, {"set": "docs-about", "id": "stability-eval", "title": "📐 Stability-Plasticity Trade-off Hypothesis", "kind": "section"}, {"set": "docs-about", "id": "stability-eval/-stability-plasticity-trade-off-hypothesis", "title": "📐 Stability-Plasticity Trade-off Hypothesis", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/the-hypothesis", "title": "The Hypothesis", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/monitoring-the-frontier", "title": "Monitoring the Frontier", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/resource-vector", "title": "Resource Vector", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/5-level-benchmark-hierarchy", "title": "5-Level Benchmark Hierarchy", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-evaluation-domains", "title": "🌐 Evaluation Domains", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-domain-overview", "title": "📊 Domain Overview", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-vision-domain", "title": "🖼️ Vision Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-language-modeling-domain", "title": "📝 Language Modeling Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-reinforcement-learning-domain", "title": "🎮 Reinforcement Learning Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-graph-domain", "title": "🕸️ Graph Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-tabular-domain", "title": "📋 Tabular Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-time-series-domain", "title": "📈 Time Series Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "stability-eval/-scientific-domain", "title": "🔬 Scientific Domain", "kind": "heading", "context": "📐 Stability-Plasticity Trade-off Hypothesis"}, {"set": "docs-about", "id": "research-program", "title": "Research program", "kind": "section"}, {"set": "docs-about", "id": "research-program/research-program", "title": "Research program", "kind": "heading", "context": "Research program"}, {"set": "docs-about", "id": "ceec", "title": "🧭 CEEC Epistemic Operating System (packages/ceec-core)", "kind": "section"}, {"set": "docs-about", "id": "ceec/-ceec-epistemic-operating-system-packagesceec-core", "title": "🧭 CEEC Epistemic Operating System (packages/ceec-core)", "kind": "heading", "context": "🧭 CEEC Epistemic Operating System (packages/ceec-core)"}, {"set": "docs-about", "id": "ceec/-standalone-platform-packages-packages", "title": "📦 Standalone Platform Packages (packages/)", "kind": "heading", "context": "🧭 CEEC Epistemic Operating System (packages/ceec-core)"}, {"set": "docs-about", "id": "readiness", "title": "Status and scope", "kind": "section"}, {"set": "docs-about", "id": "readiness/status-and-scope", "title": "Status and scope", "kind": "heading", "context": "Status and scope"}, {"set": "docs-about", "id": "faq", "title": "FAQ / Troubleshooting + Glossary", "kind": "section"}, {"set": "docs-about", "id": "faq/faq--troubleshooting--glossary", "title": "FAQ / Troubleshooting + Glossary", "kind": "heading", "context": "FAQ / Troubleshooting + Glossary"}, {"set": "docs-about", "id": "license", "title": "License", "kind": "section"}, {"set": "docs-about", "id": "license/license", "title": "License", "kind": "heading", "context": "License"}, {"set": "docs-howto", "id": "install", "title": "Install", "kind": "section"}, {"set": "docs-howto", "id": "install/install", "title": "Install", "kind": "heading", "context": "Install"}, {"set": "docs-howto", "id": "quickstart", "title": "60-second quickstart", "kind": "section"}, {"set": "docs-howto", "id": "quickstart/60-second-quickstart", "title": "60-second quickstart", "kind": "heading", "context": "60-second quickstart"}, {"set": "docs-howto", "id": "cli", "title": "CLI reference", "kind": "section"}, {"set": "docs-howto", "id": "cli/cli-reference", "title": "CLI reference", "kind": "heading", "context": "CLI reference"}, {"set": "docs-howto", "id": "demos", "title": "Demonstrations", "kind": "section"}, {"set": "docs-howto", "id": "demos/demonstrations", "title": "Demonstrations", "kind": "heading", "context": "Demonstrations"}, {"set": "docs-howto", "id": "distributed-deployment", "title": "🌐 Distributed Training & P2P", "kind": "section"}, {"set": "docs-howto", "id": "distributed-deployment/-distributed-training--p2p", "title": "🌐 Distributed Training & P2P", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs-howto", "id": "distributed-deployment/multi-gpu-training", "title": "Multi-GPU Training", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs-howto", "id": "distributed-deployment/p2p-coordinator-system-grpc--kademlia", "title": "P2P Coordinator System (gRPC + Kademlia)", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs-howto", "id": "distributed-deployment/-deployment--inference", "title": "🚀 Deployment & Inference", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs-howto", "id": "distributed-deployment/model-export-computroniumdeployment", "title": "Model Export (computronium/deployment/)", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs-howto", "id": "distributed-deployment/inference-engine", "title": "Inference Engine", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs-howto", "id": "distributed-deployment/-analysis--visualization-computroniumanalysis", "title": "📊 Analysis & Visualization (computronium/analysis/)", "kind": "heading", "context": "🌐 Distributed Training & P2P"}, {"set": "docs-howto", "id": "acceleration", "title": "⚡ Hardware Acceleration (computronium/acceleration/)", "kind": "section"}, {"set": "docs-howto", "id": "acceleration/-hardware-acceleration-computroniumacceleration", "title": "⚡ Hardware Acceleration (computronium/acceleration/)", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs-howto", "id": "acceleration/-shared-acceleration-layer-computroniumacceleration--registry--dispatch", "title": "🚀 Shared Acceleration Layer (computronium/acceleration/ — Registry & Dispatch)", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs-howto", "id": "acceleration/registry-structure", "title": "Registry Structure", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs-howto", "id": "acceleration/auto-dispatch--status-ladder", "title": "Auto-Dispatch & Status Ladder", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs-howto", "id": "acceleration/registry-api", "title": "Registry API", "kind": "heading", "context": "⚡ Hardware Acceleration (computronium/acceleration/)"}, {"set": "docs-howto", "id": "developers", "title": "For developers", "kind": "section"}, {"set": "docs-howto", "id": "developers/for-developers", "title": "For developers", "kind": "heading", "context": "For developers"}, {"set": "docs-howto", "id": "developers/two-entry-points-one-config-surface", "title": "Two Entry Points, One Config Surface", "kind": "heading", "context": "For developers"}, {"set": "docs-howto", "id": "developers/-kernel-development-workflow", "title": "🛠️ Kernel Development Workflow", "kind": "heading", "context": "For developers"}, {"set": "docs-howto", "id": "developers/-documentation--bench-tools-from-specs", "title": "📚 Documentation & Bench Tools from Specs", "kind": "heading", "context": "For developers"}, {"set": "docs-howto", "id": "developers/-enhanced-cli-tools", "title": "🧪 Enhanced CLI Tools", "kind": "heading", "context": "For developers"}, {"set": "docs-howto", "id": "developers/-registry-integrity-locks-extended-verification-framework", "title": "🧪 Registry Integrity Locks (Extended Verification Framework)", "kind": "heading", "context": "For developers"}, {"set": "cheatsheet", "id": "entry", "title": "🚪 Entry Points", "kind": "panel"}, {"set": "cheatsheet", "id": "tasks", "title": "🎯 Tasks & Data", "kind": "panel"}, {"set": "cheatsheet", "id": "kernel", "title": "🧪 Experiment Kernel", "kind": "panel"}, {"set": "cheatsheet", "id": "ontology", "title": "🧬 6-Axis Ontology", "kind": "panel"}, {"set": "cheatsheet", "id": "system", "title": "🏗️ System & Composition", "kind": "panel"}, {"set": "cheatsheet", "id": "train", "title": "⚡ Training Loop", "kind": "panel"}, {"set": "cheatsheet", "id": "evidence", "title": "💾 Evidence Store", "kind": "panel"}, {"set": "cheatsheet", "id": "surface", "title": "📊 Surface & Governance", "kind": "panel"}]</script>
 <script type="application/json" id="map-manifest">{"generated": "2026-10-28", "commit": "8497b853", "canvas": {"width": 2129.5, "height": 3527.0}, "panels": [{"key": "entry", "id": "panel-entry", "title": "🚪 Entry Points", "doc": "start-here", "x": 330.8, "y": 96.0, "w": 1468.0, "h": 450.0}, {"key": "tasks", "id": "panel-tasks", "title": "🎯 Tasks & Data", "doc": "quickstart", "x": 60.0, "y": 618.0, "w": 541.3, "h": 515.0}, {"key": "kernel", "id": "panel-kernel", "title": "🧪 Experiment Kernel — question → governed evidence", "doc": "kernel", "x": 673.3, "y": 618.0, "w": 1396.2, "h": 943.0}, {"key": "ontology", "id": "panel-ontology", "title": "🧬 6-Axis Ontology — System = Substrate × Geometry × StateDynamics × Plasticity × Credit × Update", "doc": "ontology", "x": 330.8, "y": 1633.0, "w": 1468.0, "h": 500.0}, {"key": "system", "id": "panel-system", "title": "🏗️ System & Composition", "doc": "core-architecture", "x": 306.2, "y": 2205.0, "w": 624.3, "h": 656.0}, {"key": "train", "id": "panel-train", "title": "⚡ Training Loop — SystemTrainer.fit()", "doc": "ml-library", "x": 1002.5, "y": 2205.0, "w": 820.9, "h": 305.0}, {"key": "evidence", "id": "panel-evidence", "title": "💾 Evidence Store — one DuckDB, single writer", "doc": "evidence", "x": 942.8, "y": 2933.0, "w": 1078.5, "h": 538.0}, {"key": "surface", "id": "panel-surface", "title": "📊 Surface & Governance", "doc": "validation", "x": 108.2, "y": 2933.0, "w": 762.6, "h": 376.0}]}</script>
 <script>
 (() => {
@@ -3530,7 +4756,7 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
   const canvas = $("#map-canvas");
   const zoomLevel = $("#zoom-level");
 
-  const sets = new Set(["about", "docs", "cheatsheet"]);
+  const sets = new Set(["about", "docs-about", "docs-howto", "cheatsheet"]);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const pad = (value) => String(value).padStart(2, "0");
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
@@ -3645,15 +4871,18 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
   /* ---------------- documentation ---------------- */
 
   function updateTocActive() {
-    if (body.dataset.set !== "docs") return;
+    if (!body.dataset.set?.startsWith("docs-")) return;
     const offset = bar.offsetHeight + 48;
     let best = "";
     $$(".doc-section").forEach((section) => {
       if (section.getBoundingClientRect().top <= offset) {
-        best = section.id.replace(/^docs-/, "");
+        best = section.id.replace(/^docs-(about|howto)-/, "");
       }
     });
-    if (!best) best = $(".doc-section")?.id.replace(/^docs-/, "") || "";
+    if (!best) {
+      const first = $(".doc-section");
+      if (first) best = first.id.replace(/^docs-(about|howto)-/, "");
+    }
     $$(".toc a").forEach((link) => {
       link.classList.toggle("active", link.dataset.doc === best);
       if (link.dataset.doc === best) link.setAttribute("aria-current", "true");
@@ -3661,10 +4890,10 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
     });
   }
 
-  function scrollDoc(key, heading, { smooth = true } = {}) {
+  function scrollDoc(setKey, key, heading, { smooth = true } = {}) {
     const target = heading
       ? document.getElementById(`docs-h-${heading}`)
-      : document.getElementById(`docs-${key}`);
+      : document.getElementById(`docs-${setKey}-${key}`);
     if (!target) return;
     target.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
     updateTocActive();
@@ -3835,7 +5064,7 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
     } else {
       notesBtn.disabled = true;
     }
-    if (set === "docs") updateTocActive();
+    if (set.startsWith("docs-")) updateTocActive();
     if (set === "cheatsheet") requestAnimationFrame(refitMap);
   }
 
@@ -3852,10 +5081,11 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
     if (route.set === "about") {
       const index = slides.findIndex((slide) => slide.id === route.item);
       goSlide(index >= 0 ? index : 0, { smooth: !instant, hash: false });
-    } else if (route.set === "docs") {
+    } else if (route.set.startsWith("docs-")) {
       const [key, heading] = route.item.split("/");
-      const target = key || $(".doc-section")?.id.replace(/^docs-/, "");
-      scrollDoc(target, heading, { smooth: !instant });
+      const firstSection = $(".doc-section");
+      const target = key || (firstSection ? firstSection.id.replace(/^docs-(about|howto)-/, "") : "");
+      scrollDoc(route.set, target, heading, { smooth: !instant });
     } else {
       requestAnimationFrame(() => zoomPanel(route.item || null, { instant }));
     }
@@ -3883,7 +5113,10 @@ invitation that follows from them is <a href="CONSORTIUM.md"><code>docs/CONSORTI
       return;
     }
     paletteResults.innerHTML = filtered.map((item, index) => {
-      const set = item.set === "about" ? "About" : item.set === "docs" ? "Docs" : "Map";
+      let set = "Map";
+      if (item.set === "about") set = "About";
+      else if (item.set === "docs-about") set = "About";
+      else if (item.set === "docs-howto") set = "HowTo";
       const meta = [set, item.kind, item.context].filter(Boolean).join(" · ");
       return `<button type="button" class="palette-item${index === selected ? " is-selected" : ""}" data-index="${index}" role="option" aria-selected="${index === selected}"><span class="pi-title">${escapeHtml(item.title)}</span><span class="pi-meta">${escapeHtml(meta)}</span></button>`;
     }).join("");

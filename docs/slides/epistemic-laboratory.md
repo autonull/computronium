@@ -1,10 +1,56 @@
 # Computronium: An Epistemic Laboratory for Learning
 
-<p class="lead">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
+<div class="hero-intro">
+  <div class="hero-badge">🧪 Epistemic Laboratory</div>
+  <h1 class="hero-title">Computation with less time, energy, and uncertainty</h1>
+  <p class="hero-subtitle">An open research framework for a governed, reproducible science of learning systems — not another catalogue of models.</p>
+</div>
 
-- **The algorithm zoo is the problem.** Hundreds of learning rules exist; almost none have been compared under equal budgets, equal architectures, and verified code.
-- **A laboratory, not a library.** Each experiment is one coordinate in a fixed ontology, run through a fixed pipeline, written to one ledger.
-- **The bet.** Learning mechanisms interact. The combinations that survive physical constraints are discoverable — if the instrument is honest.
+<div class="hero-stats">
+  <div class="stat">
+    <span class="stat-value"><!-- gen:primitive_total --></span>
+    <span class="stat-label">Primitives</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value"><!-- gen:algorithm_count --></span>
+    <span class="stat-label">Algorithms</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value"><!-- gen:kernel_verified_count --></span>
+    <span class="stat-label">Verified Kernels</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value"><!-- gen:domain_count --></span>
+    <span class="stat-label">Domains</span>
+  </div>
+</div>
+
+<div class="hero-claims">
+  <div class="claim">
+    <span class="claim-icon">⚡</span>
+    <div class="claim-text">
+      <strong>Energy-first ontology.</strong> Every axis — substrate, geometry, dynamics, plasticity, credit, update — exposes physical cost.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">🔬</span>
+    <div class="claim-text">
+      <strong>Governed comparison.</strong> The fairness contract makes a comparison legal before it runs. No hidden defaults.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">📐</span>
+    <div class="claim-text">
+      <strong>Evidence, not assertions.</strong> Lyapunov descent, gradient equivalence, finite-state invariants — property-tested claims with gates.
+    </div>
+  </div>
+  <div class="claim">
+    <span class="claim-icon">🧠</span>
+    <div class="claim-text">
+      <strong>Z3-inspired plasticity.</strong> Frozen weights (θ), evolving fast state (ψ) — algorithm as trajectory, not parameter update.
+    </div>
+  </div>
+</div>
 
 <!-- include: diagrams/zoo.svg -->
 

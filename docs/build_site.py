@@ -78,6 +78,12 @@ _SLIDES: tuple[str, ...] = (
     "dashboard.md",
     "epistemic-ledger.md",
     "research-horizon.md",
+    "proof-research.md",
+    "consortium-research.md",
+    "z3-research.md",
+    "metadynamics-research.md",
+    "substrate-research.md",
+    "learning-theory-research.md",
     "invitation.md",
 )
 
@@ -97,7 +103,8 @@ class SetSpec:
 
 SETS: tuple[SetSpec, ...] = (
     SetSpec("about", "About", "sparkles", "epistemic-laboratory"),
-    SetSpec("docs", "Documentation", "book", "title"),
+    SetSpec("docs-about", "About", "book", "title"),
+    SetSpec("docs-howto", "HowTo", "wrench", "install"),
     SetSpec("cheatsheet", "Cheatsheet", "map", ""),
 )
 
@@ -315,17 +322,51 @@ def _slide_markdown(path: Path) -> str:
     return _GEN_RE.sub(lambda m: _generators()[m.group(1)](), text).strip()
 
 
-# ---------------------------------------------------------------------------
-# Documentation set
-# ---------------------------------------------------------------------------
-
-
 @dataclass(frozen=True, slots=True)
 class DocSection:
     key: str
     title: str
     html: str
     headings: tuple[tuple[int, str, str], ...]
+
+
+# ---------------------------------------------------------------------------
+# Documentation sets (split: About / HowTo)
+# ---------------------------------------------------------------------------
+
+# Split the README sections into two tab sets.
+# About: overviews, theory, concepts, evidence
+# HowTo: installation, usage, CLI, demos, deployment, acceleration, development
+_DOC_ABOUT_KEYS: tuple[str, ...] = (
+    "title",
+    "start-here",
+    "what-is",
+    "cheatsheet",
+    "ontology",
+    "ml-library",
+    "core-architecture",
+    "kernel",
+    "dashboard",
+    "evidence",
+    "neutral-evaluation",
+    "validation",
+    "stability-eval",
+    "research-program",
+    "ceec",
+    "readiness",
+    "faq",
+    "license",
+)
+
+_DOC_HOWTO_KEYS: tuple[str, ...] = (
+    "install",
+    "quickstart",
+    "cli",
+    "demos",
+    "distributed-deployment",
+    "acceleration",
+    "developers",
+)
 
 
 def _slug(text: str) -> str:
@@ -339,8 +380,9 @@ def _toc_label(title: str) -> str:
     return re.sub(r"^[^\w]+", "", title).strip() or title
 
 
-def _raw_doc_sections() -> list[tuple[str, str]]:
-    files = [README_DIR / name for name in _readme_builder()._SECTIONS]
+def _raw_doc_sections(keys: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Return (key, markdown) pairs for the given section keys."""
+    files = [README_DIR / f"{name}.md" for name in keys]
     missing = [path.name for path in files if not path.is_file()]
     if missing:
         msg = f"README manifest names snippets that do not exist: {missing}"
@@ -352,6 +394,77 @@ def _raw_doc_sections() -> list[tuple[str, str]]:
         )
         for path in files
     ]
+
+
+@lru_cache(maxsize=1)
+def _doc_sections_about() -> tuple[DocSection, ...]:
+    return _build_doc_sections(_raw_doc_sections(_DOC_ABOUT_KEYS))
+
+
+@lru_cache(maxsize=1)
+def _doc_sections_howto() -> tuple[DocSection, ...]:
+    return _build_doc_sections(_raw_doc_sections(_DOC_HOWTO_KEYS))
+
+
+def _build_doc_sections(raw: list[tuple[str, str]]) -> tuple[DocSection, ...]:
+    counts: dict[str, int] = {}
+    targets: dict[str, tuple[str, str]] = {}
+    sections: list[DocSection] = []
+
+    for key, markdown in raw:
+        headings: list[tuple[int, str, str]] = []
+
+        def inject(match: re.Match[str]) -> str:
+            level = int(match.group(1))
+            inner = match.group(2)
+            title = unescape(_TAG_RE.sub("", inner)).strip()
+            base = _slug(title) or "section"
+            count = counts.get(base, 0)
+            counts[base] = count + 1
+            unique = base if count == 0 else f"{base}-{count}"
+            targets.setdefault(base, (key, unique))
+            headings.append((level, title, unique))
+            return f'<h{level} id="docs-h-{unique}">{inner}</h{level}>'
+
+        html = _HEADING_RE.sub(inject, _renderer().render(markdown))
+        title = headings[0][1] if headings else key
+        sections.append(DocSection(key, title, html, tuple(headings)))
+
+    return tuple(
+        DocSection(
+            section.key,
+            section.title,
+            _rewrite_doc_links(section.html, targets, section.key),
+            section.headings,
+        )
+        for section in sections
+    )
+
+
+def _doc_toc(sections: tuple[DocSection, ...]) -> str:
+    links = "\n".join(
+        f'<a href="#/docs-about/{section.key}" data-doc="{section.key}">'
+        f"<span>{index:02d}</span>{_toc_label(section.title)}</a>"
+        for index, section in enumerate(sections, start=1)
+    )
+    return f'<nav class="toc" aria-label="Documentation sections">{links}</nav>'
+
+
+def _doc_toc_howto(sections: tuple[DocSection, ...]) -> str:
+    links = "\n".join(
+        f'<a href="#/docs-howto/{section.key}" data-doc="{section.key}">'
+        f"<span>{index:02d}</span>{_toc_label(section.title)}</a>"
+        for index, section in enumerate(sections, start=1)
+    )
+    return f'<nav class="toc" aria-label="Documentation sections">{links}</nav>'
+
+
+def _doc_body(sections: tuple[DocSection, ...], set_key: str) -> str:
+    return "\n".join(
+        f'<section class="doc-section" id="docs-{set_key}-{section.key}" '
+        f'data-title="{section.title}">{section.html}</section>'
+        for section in sections
+    )
 
 
 def _repo_url(attr: str, value: str) -> str:
@@ -386,68 +499,15 @@ def _rewrite_doc_links(
             slug = value[1:]
             target = targets.get(slug) or targets.get(slug.lstrip("-"))
             if target is None:
-                return f'{attr}="#/docs/{section_key}"'
+                return f'{attr}="#/docs-about/{section_key}"'
             section, heading = target
-            return f'{attr}="#/docs/{section}/{heading}"'
+            return f'{attr}="#/docs-about/{section}/{heading}"'
         value = _strip_docs_prefix(value)
         if value and not value.startswith(("/", "#", "mailto:", "data:")):
             value = _repo_url(attr, value)
         return f'{attr}="{value}"'
 
     return _ATTR_RE.sub(replace, html)
-
-
-@lru_cache(maxsize=1)
-def _doc_sections() -> tuple[DocSection, ...]:
-    counts: dict[str, int] = {}
-    targets: dict[str, tuple[str, str]] = {}
-    sections: list[DocSection] = []
-
-    for key, markdown in _raw_doc_sections():
-        headings: list[tuple[int, str, str]] = []
-
-        def inject(match: re.Match[str]) -> str:
-            level = int(match.group(1))
-            inner = match.group(2)
-            title = unescape(_TAG_RE.sub("", inner)).strip()
-            base = _slug(title) or "section"
-            count = counts.get(base, 0)
-            counts[base] = count + 1
-            unique = base if count == 0 else f"{base}-{count}"
-            targets.setdefault(base, (key, unique))
-            headings.append((level, title, unique))
-            return f'<h{level} id="docs-h-{unique}">{inner}</h{level}>'
-
-        html = _HEADING_RE.sub(inject, _renderer().render(markdown))
-        title = headings[0][1] if headings else key
-        sections.append(DocSection(key, title, html, tuple(headings)))
-
-    return tuple(
-        DocSection(
-            section.key,
-            section.title,
-            _rewrite_doc_links(section.html, targets, section.key),
-            section.headings,
-        )
-        for section in sections
-    )
-
-
-def _doc_toc(sections: tuple[DocSection, ...]) -> str:
-    links = "\n".join(
-        f'<a href="#/docs/{section.key}" data-doc="{section.key}">'
-        f"<span>{index:02d}</span>{_toc_label(section.title)}</a>"
-        for index, section in enumerate(sections, start=1)
-    )
-    return f'<nav class="toc" aria-label="Documentation sections">{links}</nav>'
-
-
-def _doc_body(sections: tuple[DocSection, ...]) -> str:
-    return "\n".join(
-        f'<section class="doc-section" id="docs-{section.key}" '
-        f'data-title="{section.title}">{section.html}</section>'
-        for section in sections
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +537,9 @@ def _cheatsheet() -> MapBundle:
         )
         raise FileNotFoundError(msg)
     manifest = json.loads(CHEATSHEET_MANIFEST.read_text(encoding="utf-8"))
-    doc_keys = {section.key for section in _doc_sections()}
+    doc_keys = {
+        section.key for section in _doc_sections_about()
+    } | {section.key for section in _doc_sections_howto()}
     panels = manifest["panels"]
     for panel in panels:
         if panel["doc"] not in doc_keys:
@@ -493,7 +555,7 @@ def _cheatsheet() -> MapBundle:
             f'<span class="map-item-title">{label}</span>'
             '<span class="map-item-sub">Zoom to panel</span>'
             "</button>"
-            f'<a class="map-doc" href="#/docs/{panel["doc"]}" '
+            f'<a class="map-doc" href="#/docs-about/{panel["doc"]}" '
             f'title="Open {panel["doc"]} documentation" aria-label="Open documentation">'
             '<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>'
             "</a>"
@@ -521,7 +583,8 @@ def _cheatsheet() -> MapBundle:
 
 def _site_index(
     slides: tuple[Slide, ...],
-    sections: tuple[DocSection, ...],
+    sections_about: tuple[DocSection, ...],
+    sections_howto: tuple[DocSection, ...],
     map_bundle: MapBundle,
 ) -> str:
     items: list[dict[str, str]] = []
@@ -532,9 +595,9 @@ def _site_index(
             "title": slide.title,
             "kind": "slide",
         })
-    for section in sections:
+    for section in sections_about:
         items.append({
-            "set": "docs",
+            "set": "docs-about",
             "id": section.key,
             "title": section.title,
             "kind": "section",
@@ -543,7 +606,24 @@ def _site_index(
             if level > 3:
                 continue
             items.append({
-                "set": "docs",
+                "set": "docs-about",
+                "id": f"{section.key}/{unique}",
+                "title": heading,
+                "kind": "heading",
+                "context": section.title,
+            })
+    for section in sections_howto:
+        items.append({
+            "set": "docs-howto",
+            "id": section.key,
+            "title": section.title,
+            "kind": "section",
+        })
+        for level, heading, unique in section.headings:
+            if level > 3:
+                continue
+            items.append({
+                "set": "docs-howto",
                 "id": f"{section.key}/{unique}",
                 "title": heading,
                 "kind": "heading",
@@ -562,20 +642,24 @@ def _site_index(
 def build_site() -> str:
     """Render the single-file site."""
     slides = _slides()
-    sections = _doc_sections()
+    sections_about = _doc_sections_about()
+    sections_howto = _doc_sections_howto()
     map_bundle = _cheatsheet()
     replacements = {
         "title": "Computronium — Documentation",
         "first_id": slides[0].key,
-        "first_doc": sections[0].key,
+        "first_doc_about": sections_about[0].key,
+        "first_doc_howto": sections_howto[0].key,
         "about_slides": "\n\n".join(slide.html for slide in slides),
-        "doc_toc": _doc_toc(sections),
-        "doc_sections": _doc_body(sections),
+        "doc_toc_about": _doc_toc(sections_about),
+        "doc_toc_howto": _doc_toc_howto(sections_howto),
+        "doc_sections_about": _doc_body(sections_about, "about"),
+        "doc_sections_howto": _doc_body(sections_howto, "howto"),
         "cheatsheet_index": map_bundle.index_html,
         "cheatsheet_svg": map_bundle.svg,
         "canvas_w": f"{map_bundle.canvas_w:g}",
         "canvas_h": f"{map_bundle.canvas_h:g}",
-        "site_index": _site_index(slides, sections, map_bundle),
+        "site_index": _site_index(slides, sections_about, sections_howto, map_bundle),
         "map_manifest": json.dumps(map_bundle.manifest, ensure_ascii=False).replace(
             "<", "\\u003c"
         ),
@@ -602,8 +686,10 @@ def build_index_md() -> str:
         "",
     ]
     parts.extend(_slide_markdown(path) for path in _slide_files())
-    parts.extend(["## Documentation", ""])
-    parts.extend(markdown for _, markdown in _raw_doc_sections())
+    parts.extend(["## Documentation — About", ""])
+    parts.extend(markdown for _, markdown in _raw_doc_sections(_DOC_ABOUT_KEYS))
+    parts.extend(["## Documentation — HowTo", ""])
+    parts.extend(markdown for _, markdown in _raw_doc_sections(_DOC_HOWTO_KEYS))
     map_bundle = _cheatsheet()
     parts.extend([
         "## Cheatsheet",
@@ -616,7 +702,7 @@ def build_index_md() -> str:
     for panel in map_bundle.manifest["panels"]:
         parts.append(
             f"| {_short_title(panel['title'])} "
-            f"| [`{panel['doc']}`](index.html#/docs/{panel['doc']}) |"
+            f"| [`{panel['doc']}`](index.html#/docs-about/{panel['doc']}) |"
         )
     return "\n\n".join(part.strip() for part in parts if part.strip()) + "\n"
 
