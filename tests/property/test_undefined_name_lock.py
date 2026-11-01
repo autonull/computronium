@@ -34,7 +34,7 @@ Two locks:
   method that does not exist, and therefore a block that had never run and
   never could. There are exactly two shapes, and no third:
 
-  * **13 table-driven lazy shims** -- every one resolves its names from a table
+  * **14 table-driven lazy shims** -- every one resolves its names from a table
     declared in the same file, so the population *is* statically derivable:
 
     - ``_LAZY`` (3): ``computronium/__init__.py``, ``cli``, ``core``.
@@ -42,6 +42,8 @@ Two locks:
     - ``_PRIMITIVES`` (3): ``primitives``, ``primitives/geometry``,
       ``primitives/substrate``.
     - ``_ALGORITHMS`` (1): ``algorithms``.
+    - ``_CANONICAL_TRANSFORMS`` (1): ``data/transforms.py``, whose dataset
+      transforms are built on first access so ``torchvision`` stays optional.
     - ``_symbol_to_module`` (6): the experiment kernel packages -- ``experiment``
       and its ``schema``, ``evidence``, ``execution``, ``surface`` subpackages
       -- and the ``harness`` package, whose case builders must stay off the
@@ -49,7 +51,7 @@ Two locks:
       submodule that defines it, so the package import stays off the
       ``torch``/``ontology`` path until a name is actually touched.
 
-    The last eight have no lock of their own, so they are named here.
+    The rest have no lock of their own, so they are named here.
   * **No hand-written single-name modules remain.** The two that once resolved
     ``DEFAULT_KB`` and nothing else are gone, and
     :func:`test_hand_written_getattr_modules_resolve_exactly_one_name` keeps
@@ -306,13 +308,20 @@ GETATTR_SHIMS: dict[str, str] = {
     "computronium/experiment/execution/__init__.py": "_symbol_to_module",
     "computronium/experiment/surface/__init__.py": "_symbol_to_module",
     "computronium/harness/__init__.py": "_symbol_to_module",
+    "computronium/data/transforms.py": "_CANONICAL_TRANSFORMS",
 }
 
 
 #: Table names a module-level ``__getattr__`` may resolve from. A module whose
 #: names come from a table in the same file is statically derivable, which is the
 #: whole difference between the first shape and the hand-written one.
-_LAZY_TABLES = ("_LAZY", "_PRIMITIVES", "_ALGORITHMS", "_symbol_to_module")
+_LAZY_TABLES = (
+    "_LAZY",
+    "_PRIMITIVES",
+    "_ALGORITHMS",
+    "_symbol_to_module",
+    "_CANONICAL_TRANSFORMS",
+)
 
 
 def _getattr_modules() -> dict[str, str]:
