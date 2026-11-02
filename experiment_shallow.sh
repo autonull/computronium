@@ -132,7 +132,7 @@ TMP_CHECK=$(mktemp --suffix=.py)
 echo "$ENV_CHECK" > "$TMP_CHECK"
 if ! uv run python "$TMP_CHECK"; then
     rm -f "$TMP_CHECK"
-    echo "❌ Environment check failed — see error above"
+    echo "❌ Environment check failed — see error output above from uv run"
     echo "   Fix: uv sync --dev --all-extras"
     exit 1
 fi
