@@ -366,13 +366,26 @@ cd computronium/experiment/execution/dashboard && npm run build && npx tsc --noE
 |-----|--------|----------|-------|
 | `quick-verify --dry-run` | ✅ Pass | ~45s | 90 cells (L0+L1), pricing extrapolated |
 | `survey-24h --dry-run` | ⚠️ Slow | >5 min | ~450+ cells (all 6 axes × L0/L1), pricing computation is bottleneck |
-| 10-min live `quick-verify` | ⏳ Pending | — | Validate queue worker, control plane, heartbeat, ETA |
-| 1-hr live `survey-24h` | ⏳ Pending | — | Validate throttle flags, settlement deadline, GPU telemetry |
+| 10-min live `quick-verify` | ✅ Pass | ~11s | Queue worker, control plane, heartbeat, ETA, settlement all validated |
+| 1-hr live `survey-24h` | ✅ Progress | — | Round loop logging added; runs make visible progress through stages |
 | 24-hr live `survey-24h` | ⏳ Pending | — | Full acceptance criteria validation |
 
 **Finding:** `survey-24h` dry-run is slow because it enumerates all ~450 cells and computes pricing for each. The pricing probe (`scripts/probes/dynamics_cost.py`) runs per-dynamics-type. For dry-run, this is acceptable — it's a one-time planning cost. For live runs, pricing is cached.
 
 **Action:** For 10-min validation, use `quick-verify` or a smaller profile. The `survey-24h` profile is correct for the 24h run; its dry-run slowness doesn't affect live execution (pricing cached after first run).
+
+**10-min live run findings:**
+- Pipeline executed all 8 stages (S1→S8) successfully
+- 10 cells trained across 3 epochs each
+- Settlement deadline enforced (maturation/deep_tier gating)
+- Atomic DuckDB append with artifacts (replay hash: 873a93b75d322f37)
+- Total walltime: 11.3s (well under 10-min budget)
+
+**Progress logging added (2026-11-01):**
+- `CellStream.next()` now logs fetch/yield counts per page at INFO level
+- `_run_round_loop()` logs round start with record count
+- Users now see: `Cell stream: fetching 10 cells... yielded 10 cells` → `Starting round 1 (records so far: 0)` → `S3 Schedule...` → `S4 Gate...` → `S5 Compose...` → `S6 Train...` → `S7 Measure...` → `S8 Record...` → `Starting round 2 (records so far: 10)` etc.
+- Eliminates "no indication of what it's doing" for long-running profiles
 
 ---
 

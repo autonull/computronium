@@ -402,6 +402,7 @@ class _LifecycleMixin(_PipelineBase):
             if self._should_stop_round_loop(deadline_enforcer, signal_handler):
                 break
 
+            logger.info("Starting round %d (records so far: %d)", self._state.current_round + 1, len(all_records))
             await self._await_control(consumes_step=False)
 
             before = len(all_records)
