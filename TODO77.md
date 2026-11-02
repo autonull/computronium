@@ -367,7 +367,7 @@ cd computronium/experiment/execution/dashboard && npm run build && npx tsc --noE
 | `quick-verify --dry-run` | ✅ Pass | ~45s | 90 cells (L0+L1), pricing extrapolated |
 | `survey-24h --dry-run` | ⚠️ Slow | >5 min | ~450+ cells (all 6 axes × L0/L1), pricing computation is bottleneck |
 | 10-min live `quick-verify` | ✅ Pass | ~11s | Queue worker, control plane, heartbeat, ETA, settlement all validated |
-| 1-hr live `survey-24h` | ✅ Progress | — | Round loop logging added; runs make visible progress through stages |
+| 10-min live `survey-24h` | ✅ Pass | ~10m | 216 records, 5 rounds, soft deadline enforced, throttle flags active |
 | 24-hr live `survey-24h` | ⏳ Pending | — | Full acceptance criteria validation |
 
 **Finding:** `survey-24h` dry-run is slow because it enumerates all ~450 cells and computes pricing for each. The pricing probe (`scripts/probes/dynamics_cost.py`) runs per-dynamics-type. For dry-run, this is acceptable — it's a one-time planning cost. For live runs, pricing is cached.
@@ -380,6 +380,15 @@ cd computronium/experiment/execution/dashboard && npm run build && npx tsc --noE
 - Settlement deadline enforced (maturation/deep_tier gating)
 - Atomic DuckDB append with artifacts (replay hash: 873a93b75d322f37)
 - Total walltime: 11.3s (well under 10-min budget)
+
+**10-min survey-24h run findings (2026-11-01):**
+- `--overrides '{"budget_seconds": 600}'` correctly limits walltime
+- 216 records collected across 5 rounds
+- Soft deadline enforcement: "Soft deadline reached after batch, stopping" → "Soft deadline reached after round, stopping" → "Soft deadline reached, stopping before new round"
+- Admission gate rejects invalid cells (14, 13, 14, 9 across rounds)
+- All 11 stages execute: S1→S2→S3→S4→S5→S6→S7→S8→S9→S10→S11
+- Task evaluation failures (shape mismatches) are logged but don't halt pipeline
+- Replay hash: 4e2856f9fe63bfed
 
 **Progress logging added (2026-11-01):**
 - `CellStream.next()` now logs fetch/yield counts per page at INFO level
