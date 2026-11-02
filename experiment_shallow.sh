@@ -107,19 +107,36 @@ echo ""
 
 # Environment check
 echo "🔍 Environment check..."
-if ! uv run python -c "
-import torch, optuna, scipy, torchvision, pytest
-print(f'  CUDA available: {torch.cuda.is_available()}')
+
+# Write check script to temp file (works in any POSIX shell)
+ENV_CHECK=$(cat << 'PYEOF'
+import sys
+try:
+    import torch, optuna, scipy, torchvision, pytest
+except ImportError as e:
+    print(f"  Missing dependency: {e}", file=sys.stderr)
+    sys.exit(1)
+
+print(f"  CUDA available: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
-    print(f'  GPU: {torch.cuda.get_device_name(0)}')
-    print(f'  GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB')
+    print(f"  GPU: {torch.cuda.get_device_name(0)}")
+    print(f"  GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 import os, psutil
-print(f'  CPU cores: {os.cpu_count()}')
-print(f'  System RAM: {psutil.virtual_memory().total / 1e9:.1f} GB')
-"; then
-    echo "❌ Environment check failed — is 'uv' installed and dependencies available?"
+print(f"  CPU cores: {os.cpu_count()}")
+print(f"  System RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
+PYEOF
+)
+
+# Execute via temp file to avoid heredoc shell compat issues
+TMP_CHECK=$(mktemp --suffix=.py)
+echo "$ENV_CHECK" > "$TMP_CHECK"
+if ! uv run python "$TMP_CHECK"; then
+    rm -f "$TMP_CHECK"
+    echo "❌ Environment check failed — see error above"
+    echo "   Fix: uv sync --dev --all-extras"
     exit 1
 fi
+rm -f "$TMP_CHECK"
 
 echo ""
 echo "🚀 Executing: ${CMD[*]}"
