@@ -185,6 +185,8 @@ class RunSpec(BaseModel):
     precision: str = "fp32"
     # Save checkpoint every N epochs (0 = disabled)
     checkpoint_every_n: _NONNEG = 0
+    maturation: bool = False
+    deep_tier: bool = False
     # Axis-aligned objective sets: mapping from axis name to tuple of objective names.
     # When set, the policy will use per-axis objective sets for multi-objective optimization.
     # Format: {"substrate": ("energy_efficiency", "latency_ms", "precision"), ...}

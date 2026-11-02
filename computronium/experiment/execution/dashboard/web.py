@@ -30,6 +30,10 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 
 from computronium.experiment.evidence.serializers import serializer
+from computronium.experiment.execution.campaign_queue import (
+    RunQueue,
+    run_queue_worker,
+)
 from computronium.experiment.execution.control import ControlPlane, control_plane_path
 from computronium.experiment.execution.dashboard.actions import (
     KIND_CONFIRMATION,
@@ -59,10 +63,6 @@ from computronium.experiment.execution.dashboard.runs import (
     DEFAULT_STORE,
     axes_payload,
     profiles_payload,
-)
-from computronium.experiment.execution.campaign_queue import (
-    RunQueue,
-    run_queue_worker,
 )
 from computronium.experiment.execution.events import (
     PipelineEvent,
@@ -927,9 +927,9 @@ class WebDashboard:
 
                 # Memory info
                 mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                memory_used_mb = mem_info.used / (1024**2)
-                memory_total_mb = mem_info.total / (1024**2)
-                memory_percent = (mem_info.used / mem_info.total) * 100
+                memory_used_mb = int(mem_info.used) / (1024**2)
+                memory_total_mb = int(mem_info.total) / (1024**2)
+                memory_percent = (int(mem_info.used) / int(mem_info.total)) * 100
 
                 # Utilization
                 utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
@@ -2026,8 +2026,8 @@ class WebDashboard:
                 await asyncio.sleep(5)
 
     async def _broadcast_campaign_metrics(self) -> None:
-        """Metrics for the campaigns the queue is running."""
-        if not self.config.campaign_queue:
+        """Metrics for the runs the queue is running."""
+        if not self.config.run_queue:
             return
 
         campaigns = await self._get_all_campaigns()

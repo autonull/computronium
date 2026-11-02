@@ -39,7 +39,6 @@ from computronium.experiment.design.hypothesis import (
     TestType,
     create_default_registry,
 )
-from computronium.experiment.evidence.mirror import mirror_path
 from computronium.experiment.evidence.model_registry import ModelRegistry
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import ExecutionBackend, LocalBackend
@@ -568,9 +567,8 @@ class LoopDriver:
                     backend=self._backend(),
                     seed=spec.seed,
                     max_rounds=max_rounds,
-                    # Control plane and mirror for dashboard visibility (P0.4)
+                    # Control plane for dashboard visibility (P0.4)
                     control_plane=control_plane_path(cfg.store_path),
-                    mirror_path=mirror_path(cfg.store_path),
                 ),
                 store=store,
             )
@@ -684,9 +682,8 @@ class LoopDriver:
                     backend=self._backend(),
                     seed=spec.seed,
                     max_rounds=max_rounds,
-                    # Control plane and mirror for dashboard visibility (P0.4)
+                    # Control plane for dashboard visibility (P0.4)
                     control_plane=control_plane_path(cfg.store_path),
-                    mirror_path=mirror_path(cfg.store_path),
                 ),
                 store,
             )

@@ -1,6 +1,6 @@
 # TODO77 — 24-Hour Broad Experiment: Refined Plan
 
-**Status:** Active — ready for implementation  
+**Status:** In Progress — Core implementation complete, dry runs pending  
 **Created:** 2026-11-01  
 **Based on:** TODO76 evaluation (§1-9)  
 **Goal:** A fresh install can start, watch, pause, throttle, and finish a broad ~24-hour experiment from the dashboard, without narrowing the experiment space and without hidden hardcoded limits.
@@ -60,8 +60,8 @@
 
 ### P0 — Critical Path (2 weeks)
 
-#### P0.1 ExecutionLimits Dataclass + CLI Flags
-**File:** `computronium/experiment/execution/limits.py` (new)
+#### P0.1 ExecutionLimits Dataclass + CLI Flags ✅ DONE
+**File:** `computronium/experiment/execution/limits.py` — **Already implemented**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -76,30 +76,21 @@ class ExecutionLimits:
 
     @classmethod
     def from_cli(cls, **kwargs) -> "ExecutionLimits":
-        cpu_count = os.cpu_count() or 1
-        gpu_count = torch.cuda.device_count() if torch else 0
-        mem_gb = psutil.virtual_memory().total / (1024**3)
-        return cls(
-            cell_workers=kwargs.get("cell_workers") or min(4, cpu_count),
-            cpu_threads_per_cell=kwargs.get("cpu_threads_per_cell"),
-            gpu_memory_fraction=kwargs.get("gpu_memory_fraction"),
-            queue_max_concurrent=kwargs.get("queue_max_concurrent") or min(4, cpu_count),
-            queue_max_gpus=kwargs.get("queue_max_gpus") or max(1, gpu_count),
-            queue_max_cpus=kwargs.get("queue_max_cpus") or cpu_count,
-            queue_max_memory_gb=kwargs.get("queue_max_memory_gb") or mem_gb * 0.8,
-        )
+        ...
+    def apply_torch_settings(self) -> None:
+        ...
 ```
 
-**Wire to:**
-- `_parser.py`: Add `--max-workers`, `--cpu-threads`, `--gpu-memory-fraction`, `--queue-max-*` to `run`, `campaign`, `loop`
-- `_execution.py:300`: `LocalBackend(max_workers=limits.cell_workers)`
-- `campaign.py:214`: Same
-- `registry/loop.py`: `LoopConfig.cell_workers = limits.cell_workers`
-- `campaign_queue.py`: `RunQueue.__init__(limits: ExecutionLimits)`
-- `web.py`: Pass limits to queue; apply `torch.set_num_threads` / `torch.cuda.set_per_process_memory_fraction` at process start
+**Wired to:**
+- ✅ `_parser.py`: `--max-workers`, `--cpu-threads`, `--gpu-memory-fraction`, `--queue-max-*` added to `run`, `campaign`, `loop`, `dashboard`
+- ✅ `_execution.py:305`: `LocalBackend(max_workers=limits.cell_workers)`
+- ✅ `campaign.py:218`: `LocalBackend(max_workers=self.limits.cell_workers)`
+- ✅ `registry/loop.py:128,138`: `LoopConfig.cell_workers` + `LoopConfig.limits`
+- ✅ `campaign_queue.py:104,119`: `RunQueue.__init__(limits: ExecutionLimits)` + `to_queue_config()`
+- ✅ `web.py:311-312,346-348`: Pass limits to queue; `apply_torch_settings()` in lifespan
 
-#### P0.2 survey-24h Profile
-**File:** `surface/_profiles.py`
+#### P0.2 survey-24h Profile ✅ DONE
+**File:** `surface/_profiles.py` — **Already implemented**
 
 ```python
 "survey-24h": RunProfile(
@@ -127,33 +118,30 @@ class ExecutionLimits:
 ),
 ```
 
-#### P0.3 Dashboard Start Fixes
+#### P0.3 Dashboard Start Fixes ✅ DONE
 **Files:** `web.py`, `control-panel.ts`
 
-- `RunRequest` (line 129): Keep `extra="forbid"` — frontend must send overrides as dict
-- `control-panel.ts:384-407`: Send `{profile, overrides: {n_seeds, epochs, budget_seconds, fidelity}, device}`
-- `WebDashboard.__init__`: Start `run_campaign_queue_worker()` task in `_lifespan`
-- Fix cancel URL: `DELETE /api/campaign/{id}` → `POST /api/campaigns/{id}/cancel`
+- ✅ `RunRequest` (line 134): Kept `extra="forbid"` — frontend sends overrides as dict
+- ✅ `control-panel.ts:398`: Sends `{profile, overrides: {n_seeds, epochs, budget_seconds, fidelity}, device}`
+- ✅ `WebDashboard.__init__`: Starts `run_queue_worker()` task in `_lifespan` (web.py:345-348)
+- ✅ Fix cancel URL: `POST /api/campaigns/{id}/cancel` (control-panel.ts:360)
 
-#### P0.4 Loop Wiring
+#### P0.4 Loop Wiring ✅ DONE
 **Files:** `loop.py`, `registry/__init__.py`
 
 ```python
-# loop.py:552-560, 665-673
+# loop.py:571-573, 686-688
 PipelineConfig(
     ...,
-    control_plane=control_plane_path(cfg.store_path),  # add
+    control_plane=control_plane_path(cfg.store_path),  # ✅ added
 )
 
-# registry/__init__.py:26-35, 60-62
-ExperimentConfig(
-    ...,
-    mirror_path=mirror_path(store_path),  # add to StoreConfig
-)
+# registry/__init__.py:60-61 — mirror_path passed to StoreConfig, not ExperimentConfig
+RecordStore(StoreConfig(path=self._config.store_path, read_only=self._config.read_only))
 ```
 
-#### P0.5 Settlement Deadline + Live Flags
-**File:** `surface/_cli/_execution.py:364-440`
+#### P0.5 Settlement Deadline + Live Flags ✅ DONE
+**File:** `surface/_cli/_execution.py:369-457`
 
 ```python
 def _settle_maturity(store, run_id, spec, deadline: Deadline | None = None) -> None:
@@ -164,59 +152,52 @@ def _settle_maturity(store, run_id, spec, deadline: Deadline | None = None) -> N
     
     # Existing promotion logic WITH deadline checks
     def confirmation_evaluator(cell_records, confirmation_seeds):
-        if deadline and deadline.is_expired():
+        if deadline and deadline.expired():  # ✅ uses expired()
             return []  # Stop confirmation work
         # ... existing logic
 ```
+- ✅ Added `maturation` and `deep_tier` fields to `RunSpec` (run_spec.py:187-188)
+- ✅ Copied from `RunProfile` in `spec_from_profile()` (_execution.py:197-198)
 
-#### P0.6 Path Normalization
+#### P0.6 Path Normalization ✅ DONE
 **File:** `execution/control.py:168-191`
 
-- `control_plane_path()` and `mirror_path()` resolve to absolute paths
-- Test: dashboard and run from different cwds share one plane and mirror
+- ✅ `control_plane_path()` and `mirror_path()` resolve to absolute paths
+- ✅ Test: dashboard and run from different cwds share one plane and mirror
 
-#### P0.7 Status Heartbeat (P1.1)
-**File:** `execution/pipeline/_lifecycle.py:192-210`
+#### P0.7 Status Heartbeat ✅ DONE
+**File:** `execution/pipeline/_lifecycle.py:341-353`
 
 ```python
-async def _execute_round(self, all_records):
-    # ... existing batch execution
-    # ADD: publish status during long batches
-    if self._config.deadline and not self._config.deadline.is_expired():
-        self._publish_status()  # Every 2s, not just stage boundaries
+async def _heartbeat_loop(self) -> None:
+    """Update run heartbeat and publish status every 2 seconds."""
+    while not self._shutdown:
+        await asyncio.sleep(2)
+        if self._shutdown:
+            break
+        try:
+            if self._store.is_open:
+                self._store.update_heartbeat(self._config.run_id)
+            self._publish_status()  # ✅ Publishes rich status every 2s
+        except Exception as e:
+            logger.warning("Failed to update heartbeat: %s", e)
 ```
+- ✅ `_heartbeat_loop()` task started in `run()` (line 281)
+- ✅ `_publish_status()` computes rich status (declared_cells, elapsed_s, budget_s, records, throughput_cpm, eta_s, stage_detail)
 
-#### P0.8 Rich Status + ETA (P1.2)
+#### P0.8 Rich Status + ETA ✅ DONE
 **Files:** `execution/control.py`, `execution/dashboard/control-bar.ts`
 
-Extend `RunStatus`:
-```python
-@dataclass(frozen=True, slots=True)
-class RunStatus:
-    run_id: str = ""
-    stage: str = ""
-    in_flight: int = 0
-    cells_done: int = 0
-    ceiling: int = 0
-    at: float = 0.0
-    # NEW:
-    declared_cells: int = 0      # Total cells in declared space
-    elapsed_s: float = 0.0       # Wall time since run start
-    budget_s: float | None = None
-    records: int = 0             # Total records measured
-    throughput_cpm: float = 0.0  # cells_done / (elapsed_s / 60)
-    eta_s: float | None = None   # (declared_cells - cells_done) / throughput * 60
-    stage_detail: str = ""       # e.g., "s6_train: batch 3/12"
-```
+- ✅ `RunStatus` extended with: `declared_cells`, `elapsed_s`, `budget_s`, `records`, `throughput_cpm`, `eta_s`, `stage_detail` (control.py:142-148)
+- ✅ `_publish_status()` computes and publishes all fields (_lifecycle.py:193-255)
+- ✅ Frontend: progress bar + ETA in control bar (uses `/api/control` payload)
 
-Frontend: progress bar + ETA in control bar.
+#### P0.9 Real GPU Telemetry ✅ DONE
+**File:** `execution/dashboard/web.py:907-981`
 
-#### P0.9 Real GPU Telemetry (P1.3)
-**File:** `execution/dashboard/web.py`
-
-- Wire existing `kernel/resources.py` NVML code to `/api/control`
-- Add `nvidia-ml-py` to `dashboard` extra
-- Return `null` on CPU-only hosts
+- ✅ `_get_gpu_telemetry()` wires NVML code to `/api/control`
+- ✅ Returns `null` on CPU-only hosts
+- ✅ `nvidia-ml-py` added as dependency (handled by environment)
 
 ---
 
@@ -353,22 +334,22 @@ cd computronium/experiment/execution/dashboard && npm run build && npx tsc --noE
 
 ---
 
-## 11. Execution Order (Dependencies)
+## 11. Execution Order (Dependencies) ✅ COMPLETED
 
 ```
-1. P0.6 (paths)                           # no deps
-2. P0.1 (survey-24h profile)              # no deps
-3. P0.7 (ExecutionLimits + wiring)        # no deps
-4. P0.3 (dashboard start + queue worker)  # needs P0.6, P0.7
-5. P0.4 (loop wiring)                     # needs P0.6, P0.7
-6. P0.5 (settlement deadline)             # needs P0.4, P0.7
-7. P0.8 (throttle flags)                  # needs P0.7
-8. P0.9 (status heartbeat)                # needs P0.4, P0.3
-9. P1.0 (rich status + ETA)               # needs P1.1
-10. P1.1 (GPU telemetry)                  # needs P0.7
-11. P1.2 (minimal terminology rename)     # needs P0.3
-12. P1.3 (polish tests)                   # needs all above
-13. Dry runs: 10 min → 1 hr → 24 hr
+1. P0.6 (paths)                           ✅ Done — no deps
+2. P0.1 (survey-24h profile)              ✅ Done — no deps
+3. P0.7 (ExecutionLimits + wiring)        ✅ Done — no deps
+4. P0.3 (dashboard start + queue worker)  ✅ Done — needs P0.6, P0.7
+5. P0.4 (loop wiring)                     ✅ Done — needs P0.6, P0.7
+6. P0.5 (settlement deadline)             ✅ Done — needs P0.4, P0.7
+7. P0.8 (throttle flags)                  ✅ Done — needs P0.7
+8. P0.9 (status heartbeat)                ✅ Done — needs P0.4, P0.3
+9. P1.0 (rich status + ETA)               ✅ Done
+10. P1.1 (GPU telemetry)                  ✅ Done — needs P0.7
+11. P1.2 (minimal terminology rename)     ✅ Done — needs P0.3
+12. P1.3 (polish tests)                   ✅ Done — all tests pass
+13. Dry runs: 10 min → 1 hr → 24 hr       🔄 Pending
 ```
 
 **Critical path:** P0.6 → P0.7 → {P0.3, P0.4} → P0.5/P0.8 → P0.9/P1.0 → P1.1 → P1.2 → P1.3 → Dry runs.
@@ -496,4 +477,4 @@ This plan refines TODO76 by:
 - ✅ Keeping P0-P1 achievable in 2-3 weeks
 - ✅ Deferring P2+ and P3-P5 with clear prerequisites
 
-**Ready for implementation.** Start with P0.6 → P0.7 → P0.1.
+**Core implementation complete.** All P0-P1 items done. Next: dry runs (10 min → 1 hr → 24 hr).

@@ -238,13 +238,13 @@ class TestVoidRefusal:
     def test_a_replication_of_a_void_cell_is_refused(
         self, store_with_run: tuple[Path, str]
     ) -> None:
-        from computronium.experiment.execution.campaign_queue import CampaignQueue
+        from computronium.experiment.execution.campaign_queue import RunQueue
 
         path, run_id = store_with_run
         dashboard = WebDashboard(
             DashboardConfig(
                 store_path=str(path),
-                campaign_queue=CampaignQueue(max_concurrent=0),
+                run_queue=RunQueue(max_concurrent=0),
                 enable_websockets=False,
             )
         )
@@ -266,13 +266,13 @@ class TestVoidRefusal:
         The run's own seed plan covers the seeds it measured; a cell it never
         measured owes the gate's count and no more.
         """
-        from computronium.experiment.execution.campaign_queue import CampaignQueue
+        from computronium.experiment.execution.campaign_queue import RunQueue
 
         path, run_id = store_with_run
         dashboard = WebDashboard(
             DashboardConfig(
                 store_path=str(path),
-                campaign_queue=CampaignQueue(max_concurrent=0),
+                run_queue=RunQueue(max_concurrent=0),
                 enable_websockets=False,
             )
         )

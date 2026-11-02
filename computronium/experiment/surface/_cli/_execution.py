@@ -161,7 +161,7 @@ def spec_from_profile(
     profile: RunProfile,
     *,
     task: str | None = None,
-    device: str | None = "auto",
+    device: str = "auto",
 ) -> RunSpec:
     """Build the run declaration a profile names.
 
@@ -192,6 +192,8 @@ def spec_from_profile(
         axes=profile.axes,
         hyperparameters=dict(profile.hyperparameters),
         checkpoint_every_n=profile.checkpoint_every_n,
+        maturation=profile.maturation,
+        deep_tier=profile.deep_tier,
         device=device,
     )
 
@@ -410,7 +412,7 @@ def _settle_maturity(
     def confirmation_evaluator(
         cell_records: list[Record], confirmation_seeds: list[int]
     ) -> list[Record]:
-        if deadline and deadline.is_expired():
+        if deadline and deadline.expired():
             return []  # Stop confirmation work
         base = cell_records[0]
         coordinate = Coordinate.from_record(base)

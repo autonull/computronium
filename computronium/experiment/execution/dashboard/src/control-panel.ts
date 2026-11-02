@@ -357,7 +357,7 @@ export class ControlPanelView {
       for (const btn of this.queueSection.querySelectorAll<HTMLButtonElement>("[data-cancel]")) {
         btn.addEventListener("click", async () => {
           btn.disabled = true;
-          await fetch(`/api/campaign/${btn.dataset.cancel}`, { method: "DELETE" });
+          await fetch(`/api/campaigns/${btn.dataset.cancel}/cancel`, { method: "POST" });
           this.renderQueue();
         });
       }
@@ -395,7 +395,11 @@ export class ControlPanelView {
       const res = await fetch("/api/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile, seeds, epochs, budget_seconds: budget, fidelity, device }),
+        body: JSON.stringify({
+          profile,
+          overrides: { n_seeds: seeds, epochs, budget_seconds: budget, fidelity },
+          device,
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Failed to start run");

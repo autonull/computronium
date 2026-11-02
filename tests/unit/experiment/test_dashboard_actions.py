@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from computronium.experiment.execution.campaign_queue import CampaignQueue
+from computronium.experiment.execution.campaign_queue import RunQueue
 from computronium.experiment.execution.dashboard.actions import (
     KIND_CONFIRMATION,
     KIND_QUEST,
@@ -257,14 +257,14 @@ class TestRegistration:
 
 def _dashboard(
     store_path: Path,
-    queue: CampaignQueue | None,
+    queue: RunQueue | None,
     registration_dir: Path | None = None,
 ) -> WebDashboard:
     """A dashboard over one store, with the queue it acts through."""
     return WebDashboard(
         DashboardConfig(
             store_path=str(store_path),
-            campaign_queue=queue,
+            run_queue=queue,
             registration_dir=registration_dir,
             enable_websockets=False,
         )
@@ -280,7 +280,7 @@ class TestEndpoints:
         tmp_path: Path,
     ) -> None:
         path, run_id = store_with_run
-        queue = CampaignQueue(max_concurrent=0)
+        queue = RunQueue(max_concurrent=0)
         dashboard = _dashboard(path, queue)
 
         with TestClient(dashboard.app) as client:
@@ -322,7 +322,7 @@ class TestEndpoints:
 
         with RecordStore(StoreConfig(path=path)):
             pass
-        dashboard = _dashboard(path, CampaignQueue(max_concurrent=0))
+        dashboard = _dashboard(path, RunQueue(max_concurrent=0))
 
         with TestClient(dashboard.app) as client:
             response = client.post(
@@ -428,7 +428,7 @@ class TestTheQuestIsAnswered:
         store_path: Path,
         run_id: str,
         registry: Path,
-        queue: CampaignQueue | None,
+        queue: RunQueue | None,
     ) -> dict:
         dashboard = _dashboard(store_path, queue, registration_dir=registry)
         other = {**COORDINATE, "credit": "pepita"}
@@ -446,7 +446,7 @@ class TestTheQuestIsAnswered:
         tmp_path: Path,
     ) -> None:
         path, run_id = store_with_run
-        queue = CampaignQueue(max_concurrent=0)
+        queue = RunQueue(max_concurrent=0)
 
         body = self._quest(path, run_id, tmp_path / "regs", queue)
 
@@ -467,7 +467,7 @@ class TestTheQuestIsAnswered:
     ) -> None:
         """A threshold written now cannot confirm a run that has begun."""
         path, run_id = store_with_run
-        queue = CampaignQueue(max_concurrent=0)
+        queue = RunQueue(max_concurrent=0)
 
         self._quest(path, run_id, tmp_path / "regs", queue)
 
@@ -480,7 +480,7 @@ class TestTheQuestIsAnswered:
     ) -> None:
         """The run's own seeds say what a measurement costs."""
         path, run_id = store_with_run
-        queue = CampaignQueue(max_concurrent=0)
+        queue = RunQueue(max_concurrent=0)
 
         body = self._quest(path, run_id, tmp_path / "regs", queue)
 
@@ -556,8 +556,8 @@ class TestRunContinuity:
             load_campaign,
         )
         from computronium.experiment.execution.campaign_queue import (
-            CampaignQueue,
-            CampaignQueueEntry,
+            RunQueue,
+            RunQueueEntry,
         )
 
         spec = CampaignSpec(
@@ -572,8 +572,8 @@ class TestRunContinuity:
             ],
             store="experiment.duckdb",
         )
-        queue = CampaignQueue()
-        entry = CampaignQueueEntry(campaign_id="c1", spec=spec)
+        queue = RunQueue()
+        entry = RunQueueEntry(run_id="c1", spec=spec)
 
         path = await queue._write_campaign_yaml(entry)
         loaded = load_campaign(path)
