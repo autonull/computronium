@@ -1,6 +1,6 @@
 # TODO77 — 24-Hour Broad Experiment: Refined Plan
 
-**Status:** In Progress — Core implementation complete, dry runs pending  
+**Status:** Core Implementation Complete — Dry Runs In Progress  
 **Created:** 2026-11-01  
 **Based on:** TODO76 evaluation (§1-9)  
 **Goal:** A fresh install can start, watch, pause, throttle, and finish a broad ~24-hour experiment from the dashboard, without narrowing the experiment space and without hidden hardcoded limits.
@@ -349,10 +349,30 @@ cd computronium/experiment/execution/dashboard && npm run build && npx tsc --noE
 10. P1.1 (GPU telemetry)                  ✅ Done — needs P0.7
 11. P1.2 (minimal terminology rename)     ✅ Done — needs P0.3
 12. P1.3 (polish tests)                   ✅ Done — all tests pass
-13. Dry runs: 10 min → 1 hr → 24 hr       🔄 Pending
+13. Dry runs: 10 min → 1 hr → 24 hr       🔄 In Progress
+    - 10-min quick-verify dry-run: ✅ Passed
+    - 10-min survey-24h dry-run: ⏳ Slow (large cell space)
+    - 1-hr live run: ⏳ Pending
+    - 24-hr broad experiment: ⏳ Pending
 ```
 
 **Critical path:** P0.6 → P0.7 → {P0.3, P0.4} → P0.5/P0.8 → P0.9/P1.0 → P1.1 → P1.2 → P1.3 → Dry runs.
+
+---
+
+## 11b. Dry Run Progress & Findings
+
+| Run | Status | Duration | Notes |
+|-----|--------|----------|-------|
+| `quick-verify --dry-run` | ✅ Pass | ~45s | 90 cells (L0+L1), pricing extrapolated |
+| `survey-24h --dry-run` | ⚠️ Slow | >5 min | ~450+ cells (all 6 axes × L0/L1), pricing computation is bottleneck |
+| 10-min live `quick-verify` | ⏳ Pending | — | Validate queue worker, control plane, heartbeat, ETA |
+| 1-hr live `survey-24h` | ⏳ Pending | — | Validate throttle flags, settlement deadline, GPU telemetry |
+| 24-hr live `survey-24h` | ⏳ Pending | — | Full acceptance criteria validation |
+
+**Finding:** `survey-24h` dry-run is slow because it enumerates all ~450 cells and computes pricing for each. The pricing probe (`scripts/probes/dynamics_cost.py`) runs per-dynamics-type. For dry-run, this is acceptable — it's a one-time planning cost. For live runs, pricing is cached.
+
+**Action:** For 10-min validation, use `quick-verify` or a smaller profile. The `survey-24h` profile is correct for the 24h run; its dry-run slowness doesn't affect live execution (pricing cached after first run).
 
 ---
 
@@ -477,4 +497,4 @@ This plan refines TODO76 by:
 - ✅ Keeping P0-P1 achievable in 2-3 weeks
 - ✅ Deferring P2+ and P3-P5 with clear prerequisites
 
-**Core implementation complete.** All P0-P1 items done. Next: dry runs (10 min → 1 hr → 24 hr).
+**Core implementation complete.** All P0-P1 items done. Dry runs in progress — 10-min `quick-verify` dry-run passed; `survey-24h` dry-run slow due to large cell space enumeration (expected). Next: 10-min live `quick-verify` → 1-hr `survey-24h` → 24-hr broad experiment.
