@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.limits import ExecutionLimits
 
 if TYPE_CHECKING:
     import argparse
@@ -20,6 +21,17 @@ logger = get_logger()
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     """Launch live monitoring web dashboard (Phase E5) or console dashboard."""
 
+    # Create execution limits from CLI args
+    limits = ExecutionLimits.from_cli(
+        cell_workers=args.max_workers,
+        cpu_threads_per_cell=args.cpu_threads,
+        gpu_memory_fraction=args.gpu_memory_fraction,
+        queue_max_concurrent=args.queue_max_concurrent,
+        queue_max_gpus=args.queue_max_gpus,
+        queue_max_cpus=args.queue_max_cpus,
+        queue_max_memory_gb=args.queue_max_memory_gb,
+    )
+
     if args.console:
         from computronium.experiment.execution.dashboard.console import (
             run_console_dashboard,
@@ -29,22 +41,22 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
         logger.info(f"Store: {args.store}")
         logger.info(f"Update interval: {args.update_interval}s")
 
-        # Get campaign queue if available (for queue monitoring)
-        campaign_queue = None
+        # Get run queue if available (for queue monitoring)
+        run_queue = None
         try:
             from computronium.experiment.execution.campaign_queue import (
-                get_campaign_queue,
+                get_run_queue,
             )
 
-            campaign_queue = get_campaign_queue()
+            run_queue = get_run_queue(limits=limits)
         except Exception as exc:
-            logger.debug("campaign queue unavailable: %s", exc)
+            logger.debug("run queue unavailable: %s", exc)
 
         try:
             asyncio.run(
                 run_console_dashboard(
                     store_path=args.store,
-                    campaign_queue=campaign_queue,
+                    run_queue=run_queue,
                     update_interval=args.update_interval,
                 )
             )
@@ -62,14 +74,14 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
     logger.info(f"Starting dashboard on {args.host}:{args.port}")
     logger.info(f"Store: {args.store}")
 
-    # Get campaign queue if available (for queue monitoring)
-    campaign_queue = None
+    # Get run queue if available (for queue monitoring)
+    run_queue = None
     try:
-        from computronium.experiment.execution.campaign_queue import get_campaign_queue
+        from computronium.experiment.execution.campaign_queue import get_run_queue
 
-        campaign_queue = get_campaign_queue()
+        run_queue = get_run_queue(limits=limits)
     except Exception as exc:
-        logger.debug("campaign queue unavailable: %s", exc)
+        logger.debug("run queue unavailable: %s", exc)
 
     try:
         asyncio.run(
@@ -77,7 +89,8 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
                 host=args.host,
                 port=args.port,
                 store_path=args.store,
-                campaign_queue=campaign_queue,
+                run_queue=run_queue,
+                limits=limits,
             )
         )
     except KeyboardInterrupt:

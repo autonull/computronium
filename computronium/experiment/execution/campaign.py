@@ -23,11 +23,11 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.control import control_plane_path
 from computronium.experiment.execution.deadline import Deadline
+from computronium.experiment.execution.limits import ExecutionLimits
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.schema import RunSpec, StageId
 from computronium.experiment.surface.cli import (
-    _CELL_WORKERS,
     _consumed,
     _resolve_spec,
     _settle_maturity,
@@ -78,9 +78,11 @@ class CampaignRunner:
         self,
         spec: CampaignSpec,
         webhook_url: str | None = None,
+        limits: ExecutionLimits | None = None,
     ):
         self.spec = spec
         self.webhook_url = webhook_url or spec.webhook_url
+        self.limits = limits or ExecutionLimits.from_cli()
         self.results: dict[int, dict[str, Any]] = {}
         self.running: dict[int, asyncio.Task] = {}
         self._run_id_map: dict[int, str] = {}
@@ -204,6 +206,8 @@ class CampaignRunner:
             if spec.stages and StageId.S10_DECIDE not in spec.stages:
                 max_rounds = 1
 
+            self.limits.apply_torch_settings()
+
             runner = PipelineRunner(
                 PipelineConfig(
                     run_id=run_id,
@@ -211,7 +215,7 @@ class CampaignRunner:
                     deadline=deadline,
                     cost_model=None,  # Not used in deadline system
                     policy=policy,
-                    backend=LocalBackend(max_workers=_CELL_WORKERS),
+                    backend=LocalBackend(max_workers=self.limits.cell_workers),
                     seed=spec.seed,
                     max_rounds=max_rounds,
                     # The control channel the dashboard drives this run
@@ -251,7 +255,7 @@ class CampaignRunner:
                 )
                 return 130
 
-            _settle_maturity(store, run_id, spec)
+            _settle_maturity(store, run_id, spec, deadline)
 
             budget_consumed = _consumed(runner)
             store.finish_run(run_id, "completed", budget_consumed_s=budget_consumed)
@@ -485,6 +489,7 @@ async def run_campaign(
     parallel: int | None = None,
     device: str | None = None,
     webhook_url: str | None = None,
+    limits: ExecutionLimits | None = None,
 ) -> dict[str, Any]:
     """Run a campaign from a YAML file."""
     spec = load_campaign(campaign_path)
@@ -523,5 +528,5 @@ async def run_campaign(
             max_wall_seconds=spec.max_wall_seconds,
         )
 
-    runner = CampaignRunner(spec)
+    runner = CampaignRunner(spec, limits=limits)
     return await runner.execute()

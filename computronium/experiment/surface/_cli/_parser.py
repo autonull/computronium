@@ -81,6 +81,49 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
     p_run.add_argument("--output", default=None, help="Output file path")
+    # Execution limits (P0.7)
+    p_run.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Max concurrent cells (default: min(4, CPU count))",
+    )
+    p_run.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=None,
+        help="Torch CPU threads per cell worker",
+    )
+    p_run.add_argument(
+        "--gpu-memory-fraction",
+        type=float,
+        default=None,
+        help="Fraction of GPU memory per process (0.0-1.0)",
+    )
+    p_run.add_argument(
+        "--queue-max-concurrent",
+        type=int,
+        default=None,
+        help="Max concurrent runs in queue (default: min(4, CPU count))",
+    )
+    p_run.add_argument(
+        "--queue-max-gpus",
+        type=int,
+        default=None,
+        help="Max GPUs queue may allocate (default: GPU count or 1)",
+    )
+    p_run.add_argument(
+        "--queue-max-cpus",
+        type=int,
+        default=None,
+        help="Max CPUs queue may allocate (default: CPU count)",
+    )
+    p_run.add_argument(
+        "--queue-max-memory-gb",
+        type=float,
+        default=None,
+        help="Max memory GB queue may allocate (default: 80%% of system memory)",
+    )
 
     # Report command
     p_report = sub.add_parser("report", help="Generate report from store")
@@ -245,6 +288,49 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
     p_campaign.add_argument(
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
+    # Execution limits (P0.7)
+    p_campaign.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Max concurrent cells per run (default: min(4, CPU count))",
+    )
+    p_campaign.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=None,
+        help="Torch CPU threads per cell worker",
+    )
+    p_campaign.add_argument(
+        "--gpu-memory-fraction",
+        type=float,
+        default=None,
+        help="Fraction of GPU memory per process (0.0-1.0)",
+    )
+    p_campaign.add_argument(
+        "--queue-max-concurrent",
+        type=int,
+        default=None,
+        help="Max concurrent runs in queue (default: min(4, CPU count))",
+    )
+    p_campaign.add_argument(
+        "--queue-max-gpus",
+        type=int,
+        default=None,
+        help="Max GPUs queue may allocate (default: GPU count or 1)",
+    )
+    p_campaign.add_argument(
+        "--queue-max-cpus",
+        type=int,
+        default=None,
+        help="Max CPUs queue may allocate (default: CPU count)",
+    )
+    p_campaign.add_argument(
+        "--queue-max-memory-gb",
+        type=float,
+        default=None,
+        help="Max memory GB queue may allocate (default: 80%% of system memory)",
+    )
 
     # Loop command — continuous autonomous experiment controller
     p_loop = sub.add_parser(
@@ -339,6 +425,49 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
     )
     p_loop.add_argument(
         "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    # Execution limits (P0.7)
+    p_loop.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Max concurrent cells per cycle (default: min(4, CPU count))",
+    )
+    p_loop.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=None,
+        help="Torch CPU threads per cell worker",
+    )
+    p_loop.add_argument(
+        "--gpu-memory-fraction",
+        type=float,
+        default=None,
+        help="Fraction of GPU memory per process (0.0-1.0)",
+    )
+    p_loop.add_argument(
+        "--queue-max-concurrent",
+        type=int,
+        default=None,
+        help="Max concurrent runs in queue (default: min(4, CPU count))",
+    )
+    p_loop.add_argument(
+        "--queue-max-gpus",
+        type=int,
+        default=None,
+        help="Max GPUs queue may allocate (default: GPU count or 1)",
+    )
+    p_loop.add_argument(
+        "--queue-max-cpus",
+        type=int,
+        default=None,
+        help="Max CPUs queue may allocate (default: CPU count)",
+    )
+    p_loop.add_argument(
+        "--queue-max-memory-gb",
+        type=float,
+        default=None,
+        help="Max memory GB queue may allocate (default: 80%% of system memory)",
     )
     # Phase 5: Hypothesis governance
     p_loop.add_argument(
@@ -1249,6 +1378,49 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
         type=float,
         default=2.0,
         help="Update interval in seconds (console mode)",
+    )
+    # Execution limits (P0.7)
+    p_dashboard.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Max concurrent cells (default: min(4, CPU count))",
+    )
+    p_dashboard.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=None,
+        help="Torch CPU threads per cell worker",
+    )
+    p_dashboard.add_argument(
+        "--gpu-memory-fraction",
+        type=float,
+        default=None,
+        help="Fraction of GPU memory per process (0.0-1.0)",
+    )
+    p_dashboard.add_argument(
+        "--queue-max-concurrent",
+        type=int,
+        default=None,
+        help="Max concurrent runs in queue (default: min(4, CPU count))",
+    )
+    p_dashboard.add_argument(
+        "--queue-max-gpus",
+        type=int,
+        default=None,
+        help="Max GPUs queue may allocate (default: GPU count or 1)",
+    )
+    p_dashboard.add_argument(
+        "--queue-max-cpus",
+        type=int,
+        default=None,
+        help="Max CPUs queue may allocate (default: CPU count)",
+    )
+    p_dashboard.add_argument(
+        "--queue-max-memory-gb",
+        type=float,
+        default=None,
+        help="Max memory GB queue may allocate (default: 80%% of system memory)",
     )
 
     # Dataset registry command

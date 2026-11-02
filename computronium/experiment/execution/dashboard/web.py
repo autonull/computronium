@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -60,21 +60,26 @@ from computronium.experiment.execution.dashboard.runs import (
     axes_payload,
     profiles_payload,
 )
+from computronium.experiment.execution.campaign_queue import (
+    RunQueue,
+    run_queue_worker,
+)
 from computronium.experiment.execution.events import (
     PipelineEvent,
     get_event_bus,
     publish_event,
 )
+
+if TYPE_CHECKING:
+    from computronium.experiment.execution.limits import ExecutionLimits
+
 from computronium.experiment.schema.axis import StructuralAxis
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Sequence
+    from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 
     from computronium.experiment.evidence.mirror import StoreView
     from computronium.experiment.evidence.store import RecordStore
-    from computronium.experiment.execution.campaign_queue import (
-        CampaignQueue,
-    )
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
     from computronium.experiment.surface.report import CellKey
@@ -274,11 +279,12 @@ class DashboardConfig:
     port: int = 8080
     update_interval: float = 2.0  # seconds
     store_path: str | None = None
-    campaign_queue: CampaignQueue | None = None
+    run_queue: RunQueue | None = None
     enable_websockets: bool = True
     template_dir: Path | None = None
     static_dir: Path | None = None
     registration_dir: Path | None = None  # where the dashboard writes registrations
+    limits: ExecutionLimits | None = None
 
 
 class WebDashboard:
@@ -302,6 +308,8 @@ class WebDashboard:
 
         seed_all_registries()
         self.config = config or DashboardConfig()
+        if self.config.limits is not None:
+            self.config.limits.apply_torch_settings()
         self.app = FastAPI(
             title="Computronium Campaign Dashboard", lifespan=self._lifespan
         )
@@ -330,13 +338,23 @@ class WebDashboard:
         self._setup_templates()
 
     @contextlib.asynccontextmanager
-    async def _lifespan(self, app: FastAPI) -> AsyncIterator[None]:
+    async def _lifespan(self, app: FastAPI) -> AsyncGenerator[None]:
         """Lifespan handler to start/stop the dashboard update loop."""
         await self.start()
+        # Start queue worker if we have a queue and limits
+        if self.config.run_queue is not None and self.config.limits is not None:
+            self._queue_worker_task = asyncio.create_task(
+                run_queue_worker(self.config.limits)
+            )
         try:
             yield
         finally:
             await self.stop()
+            # Cancel queue worker
+            if hasattr(self, "_queue_worker_task"):
+                self._queue_worker_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._queue_worker_task
 
     def _setup_templates(self) -> None:
         """Setup Jinja2 templates."""
@@ -543,22 +561,22 @@ class WebDashboard:
 
         @self.app.post("/api/campaigns/{campaign_id}/cancel")
         async def api_cancel_campaign(campaign_id: str) -> JSONResponse:
-            if self.config.campaign_queue:
-                success = await self.config.campaign_queue.cancel(campaign_id)
+            if self.config.run_queue:
+                success = await self.config.run_queue.cancel(campaign_id)
                 return JSONResponse({"success": success})
             return JSONResponse({
                 "success": False,
-                "error": "No campaign queue configured",
+                "error": "No run queue configured",
             })
 
         @self.app.post("/api/campaigns/{campaign_id}/preempt")
         async def api_preempt_campaign(campaign_id: str) -> JSONResponse:
-            if self.config.campaign_queue:
-                success = await self.config.campaign_queue.preempt(campaign_id)
+            if self.config.run_queue:
+                success = await self.config.run_queue.preempt(campaign_id)
                 return JSONResponse({"success": success})
             return JSONResponse({
                 "success": False,
-                "error": "No campaign queue configured",
+                "error": "No run queue configured",
             })
 
         @self.app.post("/api/cells/{run_id}/replicate")
@@ -878,9 +896,89 @@ class WebDashboard:
                 "cpu_count": os.cpu_count(),
             },
         }
-        if self.config.campaign_queue is not None:
-            payload["queue"] = await self.config.campaign_queue.get_resource_usage()
+        if self.config.run_queue is not None:
+            payload["queue"] = await self.config.run_queue.get_resource_usage()
+
+        # Add GPU telemetry (P1.1)
+        payload["gpu"] = await self._get_gpu_telemetry()
+
         return payload
+
+    async def _get_gpu_telemetry(self) -> dict[str, Any] | None:
+        """Get GPU telemetry using NVML."""
+        try:
+            import torch
+        except ImportError:
+            return None
+
+        if not torch.cuda.is_available():
+            return None
+
+        try:
+            import pynvml
+
+            pynvml.nvmlInit()
+            device_count = pynvml.nvmlDeviceGetCount()
+
+            gpus = []
+            for i in range(device_count):
+                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+                name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
+
+                # Memory info
+                mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                memory_used_mb = mem_info.used / (1024**2)
+                memory_total_mb = mem_info.total / (1024**2)
+                memory_percent = (mem_info.used / mem_info.total) * 100
+
+                # Utilization
+                utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                gpu_util = utilization.gpu
+                memory_util = utilization.memory
+
+                # Power
+                try:
+                    power_mw = pynvml.nvmlDeviceGetPowerUsage(handle)
+                    power_watts = power_mw / 1000.0
+                except Exception:
+                    power_watts = 0.0
+
+                # Temperature
+                try:
+                    temp = pynvml.nvmlDeviceGetTemperature(
+                        handle, pynvml.NVML_TEMPERATURE_GPU
+                    )
+                except Exception:
+                    temp = 0
+
+                gpus.append({
+                    "index": i,
+                    "name": name,
+                    "memory_used_mb": round(memory_used_mb, 1),
+                    "memory_total_mb": round(memory_total_mb, 1),
+                    "memory_percent": round(memory_percent, 1),
+                    "gpu_utilization": gpu_util,
+                    "memory_utilization": memory_util,
+                    "power_watts": round(power_watts, 1),
+                    "temperature_c": temp,
+                })
+
+            return {"gpus": gpus}
+        except ImportError:
+            # NVML not available, fall back to basic torch info
+            device_count = torch.cuda.device_count()
+            gpus = []
+            for i in range(device_count):
+                props = torch.cuda.get_device_properties(i)
+                gpus.append({
+                    "index": i,
+                    "name": props.name,
+                    "memory_total_mb": props.total_memory / (1024**2),
+                })
+            return {"gpus": gpus}
+        except Exception as e:
+            logger.debug("GPU telemetry unavailable: %s", e)
+            return None
 
     async def _apply_control(self, body: ControlCommand) -> ActionResult:
         """Merge a command into the plane, and answer with the new state."""
@@ -928,7 +1026,7 @@ class WebDashboard:
             return ActionResult({"error": str(exc)}, status_code=409)
         store_path = self.config.store_path or DEFAULT_STORE
         answer = await enqueue_run(
-            self.config.campaign_queue,
+            self.config.run_queue,
             spec,
             body.overrides,
             store_path=store_path,
@@ -945,17 +1043,17 @@ class WebDashboard:
             "timestamp": datetime.now().isoformat(),
             "running": self._running,
         }
-        if self.config.campaign_queue:
-            queue_status = await self.config.campaign_queue.get_resource_usage()
+        if self.config.run_queue:
+            queue_status = await self.config.run_queue.get_resource_usage()
             status.update(queue_status)
         return status
 
     async def _get_queue_status(self) -> dict[str, Any]:
-        """Get campaign queue status."""
-        if not self.config.campaign_queue:
-            return {"error": "No campaign queue configured"}
+        """Get run queue status."""
+        if not self.config.run_queue:
+            return {"error": "No run queue configured"}
 
-        queue = self.config.campaign_queue
+        queue = self.config.run_queue
         return {
             "max_concurrent": queue.max_concurrent,
             "queued": len(queue._queue),
@@ -966,21 +1064,21 @@ class WebDashboard:
 
     async def _get_resource_usage(self) -> dict[str, Any]:
         """Get current resource usage."""
-        if not self.config.campaign_queue:
-            return {"error": "No campaign queue configured"}
+        if not self.config.run_queue:
+            return {"error": "No run queue configured"}
 
-        return await self.config.campaign_queue.get_resource_usage()
+        return await self.config.run_queue.get_resource_usage()
 
     async def _get_all_campaigns(self) -> dict[str, Any]:
-        """Get all campaigns with their status."""
-        if not self.config.campaign_queue:
-            return {"error": "No campaign queue configured"}
+        """Get all runs with their status."""
+        if not self.config.run_queue:
+            return {"error": "No run queue configured"}
 
-        campaigns = await self.config.campaign_queue.list_campaigns()
+        campaigns = await self.config.run_queue.list_runs()
         return {
             "campaigns": [
                 {
-                    "campaign_id": c.campaign_id,
+                    "campaign_id": c.run_id,
                     "name": c.spec.name,
                     "status": c.status.value,
                     "priority": c.priority.name,
@@ -1053,16 +1151,16 @@ class WebDashboard:
             return {"runs": runs}
 
     async def _get_campaign_detail(self, campaign_id: str) -> dict[str, Any]:
-        """Get detailed status for a specific campaign."""
-        if not self.config.campaign_queue:
-            return {"error": "No campaign queue configured"}
+        """Get detailed status for a specific run."""
+        if not self.config.run_queue:
+            return {"error": "No run queue configured"}
 
-        entry = await self.config.campaign_queue.get_status(campaign_id)
+        entry = await self.config.run_queue.get_status(campaign_id)
         if not entry:
-            return {"error": f"Campaign {campaign_id} not found"}
+            return {"error": f"Run {campaign_id} not found"}
 
         return {
-            "campaign_id": entry.campaign_id,
+            "campaign_id": entry.run_id,
             "name": entry.spec.name,
             "description": "",
             "status": entry.status.value,
@@ -1404,10 +1502,10 @@ class WebDashboard:
             CampaignSpec,
         )
 
-        queue = self.config.campaign_queue
+        queue = self.config.run_queue
         if queue is None:
             return ActionResult(
-                {"error": "no campaign queue is attached to this dashboard"},
+                {"error": "no run queue is attached to this dashboard"},
                 status_code=409,
             )
 
@@ -1600,13 +1698,13 @@ class WebDashboard:
             CampaignSpec,
         )
 
-        queue = self.config.campaign_queue
+        queue = self.config.run_queue
         if queue is None:
             return {
                 "campaign_id": None,
                 "scheduled": False,
                 "note": (
-                    "no campaign queue is attached to this dashboard; the "
+                    "no run queue is attached to this dashboard; the "
                     "question is registered but nothing is scheduled"
                 ),
             }
@@ -2346,14 +2444,16 @@ async def run_dashboard(
     host: str = "0.0.0.0",
     port: int = 8080,
     store_path: str | None = None,
-    campaign_queue: CampaignQueue | None = None,
+    run_queue: RunQueue | None = None,
+    limits: ExecutionLimits | None = None,
 ) -> None:
     """Convenience function to run the dashboard."""
     config = DashboardConfig(
         host=host,
         port=port,
         store_path=store_path,
-        campaign_queue=campaign_queue,
+        run_queue=run_queue,
+        limits=limits,
     )
     dashboard = create_dashboard(config)
     await dashboard.run()

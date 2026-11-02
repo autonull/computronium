@@ -39,11 +39,16 @@ from computronium.experiment.design.hypothesis import (
     TestType,
     create_default_registry,
 )
+from computronium.experiment.evidence.mirror import mirror_path
 from computronium.experiment.evidence.model_registry import ModelRegistry
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import ExecutionBackend, LocalBackend
+from computronium.experiment.execution.control import control_plane_path
 from computronium.experiment.execution.deadline import Deadline
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
+
+if TYPE_CHECKING:
+    from computronium.experiment.execution.limits import ExecutionLimits
 from computronium.experiment.execution.policy import create_policy, policy_context
 from computronium.experiment.execution.statistical_promotion import (
     GateThresholds,
@@ -129,6 +134,8 @@ class LoopConfig:
     use_icu_guided: bool = False
     # TODO65 §3.W3: export each cycle's governed claims to the CEEC ledger
     export_to_ceec: bool = True
+    # Execution limits (P0.7)
+    limits: ExecutionLimits | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +211,9 @@ class LoopDriver:
                 self._hypothesis_registry._hypotheses[hyp_id] = hyp
         # Phase 5: ICU model for guided search
         self._icu_model = ICUModel() if config.use_icu_guided else None
+        # Apply execution limits torch settings
+        if config.limits is not None:
+            config.limits.apply_torch_settings()
 
     # ------------------------------------------------------------------ public
 
@@ -558,6 +568,9 @@ class LoopDriver:
                     backend=self._backend(),
                     seed=spec.seed,
                     max_rounds=max_rounds,
+                    # Control plane and mirror for dashboard visibility (P0.4)
+                    control_plane=control_plane_path(cfg.store_path),
+                    mirror_path=mirror_path(cfg.store_path),
                 ),
                 store=store,
             )
@@ -671,6 +684,9 @@ class LoopDriver:
                     backend=self._backend(),
                     seed=spec.seed,
                     max_rounds=max_rounds,
+                    # Control plane and mirror for dashboard visibility (P0.4)
+                    control_plane=control_plane_path(cfg.store_path),
+                    mirror_path=mirror_path(cfg.store_path),
                 ),
                 store,
             )
@@ -1349,6 +1365,8 @@ class LoopDriver:
     # --------------------------------------------------------------- support
 
     def _backend(self) -> ExecutionBackend:
+        if self._config.limits is not None:
+            return LocalBackend(max_workers=self._config.limits.cell_workers)
         return LocalBackend(max_workers=self._config.cell_workers)
 
     def _device(self) -> str:

@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.limits import ExecutionLimits
 
-from ._execution import _CELL_WORKERS
 from ._profiles import RUN_PROFILES
 
 if TYPE_CHECKING:
@@ -77,12 +77,24 @@ def _cmd_campaign(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
         return 0
 
     try:
+        # Create execution limits from CLI args (P0.7)
+        limits = ExecutionLimits.from_cli(
+            cell_workers=args.max_workers,
+            cpu_threads_per_cell=args.cpu_threads,
+            gpu_memory_fraction=args.gpu_memory_fraction,
+            queue_max_concurrent=args.queue_max_concurrent,
+            queue_max_gpus=args.queue_max_gpus,
+            queue_max_cpus=args.queue_max_cpus,
+            queue_max_memory_gb=args.queue_max_memory_gb,
+        )
+
         result = asyncio.run(
             run_campaign(
                 campaign_path,
                 parallel=args.parallel,
                 device=args.device,
                 webhook_url=args.webhook_url,
+                limits=limits,
             )
         )
     except Exception:
@@ -139,6 +151,18 @@ def _cmd_loop(args: argparse.Namespace) -> int:
     )
     # Use CLI --n-seeds if provided, otherwise fall back to profile default
     n_seeds = args.n_seeds if args.n_seeds is not None else profile.n_seeds
+
+    # Create execution limits from CLI args (P0.7)
+    limits = ExecutionLimits.from_cli(
+        cell_workers=args.max_workers,
+        cpu_threads_per_cell=args.cpu_threads,
+        gpu_memory_fraction=args.gpu_memory_fraction,
+        queue_max_concurrent=args.queue_max_concurrent,
+        queue_max_gpus=args.queue_max_gpus,
+        queue_max_cpus=args.queue_max_cpus,
+        queue_max_memory_gb=args.queue_max_memory_gb,
+    )
+
     config = LoopConfig(
         store_path=Path(args.store),
         state_dir=Path(args.state_dir),
@@ -158,10 +182,11 @@ def _cmd_loop(args: argparse.Namespace) -> int:
         exploit_hours=args.exploit_hours,
         explore_sweep_steps=args.explore_sweep_steps,
         exploit_sweep_steps=args.exploit_sweep_steps,
-        cell_workers=_CELL_WORKERS,
+        cell_workers=limits.cell_workers,
         hypothesis_ids=hypothesis_ids,
         hypothesis_registry_path=hypothesis_registry_path,
         use_icu_guided=args.use_icu_guided,
+        limits=limits,
     )
     return LoopDriver(config).run(dry_run=args.dry_run)
 

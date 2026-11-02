@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
 
-from computronium.experiment.execution.campaign_queue import CampaignQueue
+from computronium.experiment.execution.campaign_queue import RunQueue
 from computronium.experiment.execution.control import (
     ControlPlane,
     RunStatus,
@@ -22,17 +22,18 @@ from computronium.experiment.execution.dashboard.web import (
     DashboardConfig,
     WebDashboard,
 )
+from computronium.experiment.execution.limits import ExecutionLimits
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _dashboard(tmp_path: Path, queue: CampaignQueue | None = None) -> WebDashboard:
+def _dashboard(tmp_path: Path, queue: RunQueue | None = None) -> WebDashboard:
     """A dashboard over a store that need not exist: the plane is beside it."""
     return WebDashboard(
         DashboardConfig(
             store_path=str(tmp_path / "experiment.duckdb"),
-            campaign_queue=queue,
+            run_queue=queue,
             enable_websockets=False,
         )
     )
@@ -201,7 +202,8 @@ class TestStartingARun:
         )
 
     def test_a_run_with_a_queue_is_queued(self, tmp_path: Path) -> None:
-        queue = CampaignQueue(max_concurrent=0)
+        limits = ExecutionLimits.from_cli(queue_max_concurrent=0)
+        queue = RunQueue(_limits=limits)
         dashboard = _dashboard(tmp_path, queue)
 
         with TestClient(dashboard.app) as client:
@@ -219,7 +221,8 @@ class TestStartingARun:
         assert queued.spec.runs[0].overrides["n_seeds"] == 2
 
     def test_an_unknown_profile_is_refused(self, tmp_path: Path) -> None:
-        dashboard = _dashboard(tmp_path, CampaignQueue(max_concurrent=0))
+        limits = ExecutionLimits.from_cli(queue_max_concurrent=0)
+        dashboard = _dashboard(tmp_path, RunQueue(_limits=limits))
 
         with TestClient(dashboard.app) as client:
             response = client.post("/api/runs", json={"profile": "nonsense"})

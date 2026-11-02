@@ -122,6 +122,14 @@ class RunStatus:
         cells_done: The cells the run has measured.
         ceiling: The ceiling on cells in flight the run is holding to.
         at: When the run last said so, in epoch seconds.
+        # NEW fields for rich progress:
+        declared_cells: Total cells in declared space
+        elapsed_s: Wall time since run start
+        budget_s: Total budget seconds
+        records: Total records measured
+        throughput_cpm: cells_done / (elapsed_s / 60)
+        eta_s: (declared_cells - cells_done) / throughput * 60
+        stage_detail: e.g., "s6_train: batch 3/12"
     """
 
     run_id: str = ""
@@ -130,6 +138,14 @@ class RunStatus:
     cells_done: int = 0
     ceiling: int = 0
     at: float = 0.0
+    # NEW:
+    declared_cells: int = 0  # Total cells in declared space
+    elapsed_s: float = 0.0  # Wall time since run start
+    budget_s: float | None = None
+    records: int = 0  # Total records measured
+    throughput_cpm: float = 0.0  # cells_done / (elapsed_s / 60)
+    eta_s: float | None = None  # (declared_cells - cells_done) / throughput * 60
+    stage_detail: str = ""  # e.g., "s6_train: batch 3/12"
 
     def to_dict(self) -> dict[str, Any]:
         """The section as it is written to the document."""
@@ -140,6 +156,13 @@ class RunStatus:
             "cells_done": self.cells_done,
             "ceiling": self.ceiling,
             "at": self.at,
+            "declared_cells": self.declared_cells,
+            "elapsed_s": self.elapsed_s,
+            "budget_s": self.budget_s,
+            "records": self.records,
+            "throughput_cpm": self.throughput_cpm,
+            "eta_s": self.eta_s,
+            "stage_detail": self.stage_detail,
         }
 
     @classmethod
@@ -152,6 +175,13 @@ class RunStatus:
             cells_done=int(payload.get("cells_done", 0) or 0),
             ceiling=int(payload.get("ceiling", 0) or 0),
             at=float(payload.get("at", 0.0) or 0.0),
+            declared_cells=int(payload.get("declared_cells", 0) or 0),
+            elapsed_s=float(payload.get("elapsed_s", 0.0) or 0.0),
+            budget_s=_optional_float(payload.get("budget_s")),
+            records=int(payload.get("records", 0) or 0),
+            throughput_cpm=float(payload.get("throughput_cpm", 0.0) or 0.0),
+            eta_s=_optional_float(payload.get("eta_s")),
+            stage_detail=str(payload.get("stage_detail", "")),
         )
 
 
@@ -161,6 +191,16 @@ def _optional_int(value: object) -> int | None:
         return None
     try:
         return int(value)  # type: ignore[call-overload]
+    except TypeError, ValueError:
+        return None
+
+
+def _optional_float(value: object) -> float | None:
+    """An optional float, read from a document that may hold anything."""
+    if value is None:
+        return None
+    try:
+        return float(value)  # type: ignore[call-overload]
     except TypeError, ValueError:
         return None
 

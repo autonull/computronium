@@ -49,7 +49,6 @@ from ._cli._commands import (
 )
 from ._cli._demo import _cmd_demo
 from ._cli._execution import (
-    _CELL_WORKERS,
     _consumed,
     _resolve_spec,
     _settle_maturity,
@@ -72,7 +71,6 @@ from ._cli._stats import _cmd_diff, _cmd_pareto, _cmd_stats
 __all__ = [
     "CORE_COMMANDS",
     "RUN_PROFILES",
-    "_CELL_WORKERS",
     "RunProfile",
     "_build_parser",
     "_cmd_loop",

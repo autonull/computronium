@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.execution.limits import ExecutionLimits
 from computronium.experiment.execution.pipeline import PipelineConfig
 from computronium.experiment.reporters import (
     generate_html_report as generate_html_report_v2,
@@ -111,7 +112,16 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(_dry_run_report(spec, policy_name=spec.policy or "round_robin_grid"))
         return 0
 
-    return execute_spec(spec, store_path=args.store, run_id=args.run_id)
+    limits = ExecutionLimits.from_cli(
+        cell_workers=args.max_workers,
+        cpu_threads_per_cell=args.cpu_threads,
+        gpu_memory_fraction=args.gpu_memory_fraction,
+        queue_max_concurrent=args.queue_max_concurrent,
+        queue_max_gpus=args.queue_max_gpus,
+        queue_max_cpus=args.queue_max_cpus,
+        queue_max_memory_gb=args.queue_max_memory_gb,
+    )
+    return execute_spec(spec, store_path=args.store, run_id=args.run_id, limits=limits)
 
 
 def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-statements]

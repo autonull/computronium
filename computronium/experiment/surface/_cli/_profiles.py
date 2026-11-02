@@ -281,7 +281,8 @@ RUN_PROFILES: dict[str, RunProfile] = {
         axes=(
             AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
             AxisSelection(
-                axis=StructuralAxis.GEOMETRY, primitives=("feedforward", "recurrent", "tile")
+                axis=StructuralAxis.GEOMETRY,
+                primitives=("feedforward", "recurrent", "tile"),
             ),
             AxisSelection(
                 axis=StructuralAxis.DYNAMICS,
@@ -303,6 +304,37 @@ RUN_PROFILES: dict[str, RunProfile] = {
             ),
         ),
         hyperparameters={"geometry.hidden_dim": Domain(members=(32,))},
+        checkpoint_every_n=0,
+    ),
+    "survey-24h": RunProfile(
+        name="survey-24h",
+        description="Broad 24h mapping: all axes, L0/L1, 1-2 epochs, no settlement",
+        stages=[
+            "s1_frame",
+            "s2_space",
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+            "s9_attribute",
+            "s10_decide",
+            "s11_report",
+        ],
+        fidelity="L0",
+        n_seeds=1,
+        epochs=1,
+        batch_limit=MEASURED_BATCH_LIMIT,
+        budget_seconds=86400.0,  # 24 hours
+        task="digits",
+        policy="model_based",
+        param_budget=BROAD_PARAM_BUDGET,
+        objectives=("validation_accuracy", "walltime_total", "param_count"),
+        promotion_threshold=0.5,
+        maturation=False,  # effective: skip L1→L2 promotion
+        deep_tier=False,  # effective: skip confirmation re-measurement
+        hyperparameters=dict(_SEARCH_SWEEP),
         checkpoint_every_n=0,
     ),
 }

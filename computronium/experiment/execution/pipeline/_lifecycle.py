@@ -23,6 +23,7 @@ from computronium.experiment.execution.sysctx import (
     capture_environment_snapshot,
     resolve_code_sha,
 )
+from computronium.experiment.schema.axis import StructuralAxis
 
 from ._base import _PipelineBase
 from ._types import (
@@ -198,14 +199,58 @@ class _LifecycleMixin(_PipelineBase):
         ceiling = self._ceiling
         if ceiling is None and backend is not None:
             ceiling = backend.max_workers
+
+        # Compute rich status fields
+        declared_cells = 0
+        if self._state.search_space is not None:
+            # Compute total cells as product of primitives per axis
+            total = 1
+            for axis in StructuralAxis:
+                primitives = self._state.search_space.primitives(axis)
+                if primitives:
+                    total *= len(primitives)
+            declared_cells = total
+
+        elapsed_s = 0.0
+        deadline = self._config.deadline
+        if deadline is not None:
+            elapsed_s = deadline.elapsed_seconds()
+
+        budget_s = deadline.remaining_seconds() + deadline.elapsed_seconds() if deadline is not None else None
+
+        records = len(self._state.completed_measurement_keys)
+
+        throughput_cpm = 0.0
+        if elapsed_s > 0:
+            throughput_cpm = records / (elapsed_s / 60.0)
+
+        eta_s = None
+        if throughput_cpm > 0 and declared_cells > records:
+            remaining = declared_cells - records
+            eta_s = (remaining / throughput_cpm) * 60.0
+
+        # Stage detail: include current round if in round loop
+        stage_detail = self._state.current_stage
+        if self._state.current_round > 0:
+            stage_detail = (
+                f"{self._state.current_stage}: round {self._state.current_round}"
+            )
+
         plane.write_status(
             RunStatus(
                 run_id=self._config.run_id,
                 stage=self._state.current_stage,
                 in_flight=backend.in_flight if backend is not None else 0,
-                cells_done=len(self._state.completed_measurement_keys),
+                cells_done=records,
                 ceiling=ceiling or 0,
                 at=time.time(),
+                declared_cells=declared_cells,
+                elapsed_s=elapsed_s,
+                budget_s=budget_s,
+                records=records,
+                throughput_cpm=throughput_cpm,
+                eta_s=eta_s,
+                stage_detail=stage_detail,
             )
         )
 
@@ -294,15 +339,16 @@ class _LifecycleMixin(_PipelineBase):
         return all_records
 
     async def _heartbeat_loop(self) -> None:
-        """Update run heartbeat every 30 seconds."""
+        """Update run heartbeat and publish status every 2 seconds."""
         while not self._shutdown:
-            await asyncio.sleep(30)
+            await asyncio.sleep(2)
             if self._shutdown:
                 break
             try:
                 if self._store.is_open:
                     self._store.update_heartbeat(self._config.run_id)
                     logger.debug("Heartbeat updated for run %s", self._config.run_id)
+                self._publish_status()
             except Exception as e:
                 logger.warning("Failed to update heartbeat: %s", e)
 

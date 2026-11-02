@@ -19,20 +19,19 @@ from computronium.experiment.evidence.mirror import mirror_path
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.control import control_plane_path
+from computronium.experiment.execution.limits import ExecutionLimits
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
 from computronium.experiment.execution.policy import create_policy, policy_context
 from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.run_spec import RunSpec
 
+if TYPE_CHECKING:
+    from computronium.experiment.execution.deadline import Deadline
+
 from ._profiles import RUN_PROFILES, RunProfile
 
 logger = get_logger()
-
-# Cells trained concurrently. Above this, cells contend for one device and each
-# reports the walltime of all of them, which turns ``walltime_total`` into a
-# measurement of the batch rather than of the cell.
-_CELL_WORKERS = 4
 
 
 def _duration_str(seconds: float) -> str:
@@ -240,6 +239,7 @@ def execute_spec(
     *,
     store_path: str,
     run_id: str | None = None,
+    limits: ExecutionLimits | None = None,
 ) -> int:
     """Execute one declared spec into one store, and close the run.
 
@@ -253,6 +253,7 @@ def execute_spec(
         spec: The run declaration; the only source of policy and objectives.
         store_path: DuckDB path to run into.
         run_id: Resume an existing run instead of creating one.
+        limits: Execution limits (cell workers, GPU/CPU settings). If None, uses defaults.
 
     Returns:
         Process exit code: 0 completed, 1 failed, 130 interrupted.
@@ -260,6 +261,10 @@ def execute_spec(
     import signal
 
     from computronium.experiment.execution.deadline import Deadline
+
+    if limits is None:
+        limits = ExecutionLimits.from_cli()
+    limits.apply_torch_settings()
 
     policy_name = spec.policy or "round_robin_grid"
 
@@ -297,7 +302,7 @@ def execute_spec(
                 deadline=deadline,
                 cost_model=None,
                 policy=policy,
-                backend=LocalBackend(max_workers=_CELL_WORKERS),
+                backend=LocalBackend(max_workers=limits.cell_workers),
                 seed=spec.seed,
                 max_rounds=max_rounds,
                 # The control channel the dashboard drives this run through:
@@ -340,7 +345,7 @@ def execute_spec(
             store.finish_run(run, "interrupted", budget_consumed_s=_consumed(runner))
             return 130
 
-        _settle_maturity(store, run, spec)
+        _settle_maturity(store, run, spec, deadline)
 
         budget_consumed = _consumed(runner)
         store.finish_run(run, "completed", budget_consumed_s=budget_consumed)
@@ -361,7 +366,9 @@ def _consumed(runner: PipelineRunner) -> float | None:
     return None
 
 
-def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
+def _settle_maturity(
+    store: RecordStore, run_id: str, spec: RunSpec, deadline: Deadline | None = None
+) -> None:
     """Post-measurement bookkeeping: promotion, then across-seed uncertainty.
 
     Maturity is earned from what landed, not declared up front, so this runs
@@ -369,6 +376,9 @@ def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
 
     Uses statistical promotion gates (L1: superiority, CI width, train/val gap,
     rho band; L2: replay) with config-driven thresholds.
+
+    Honors profile flags: maturation=False skips L1→L2 promotion; deep_tier=False
+    skips confirmation re-measurement.
     """
     from dataclasses import replace
 
@@ -381,6 +391,11 @@ def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
     from computronium.experiment.schema.coordinate import Coordinate
     from computronium.experiment.schema.record import Maturity
     from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
+
+    # Honor profile flags — no new CLI flag needed
+    if not spec.maturation and not spec.deep_tier:
+        compute_and_store_uncertainty(store, run_id, min_seeds=spec.n_seeds)
+        return
 
     # Use statistical gates with thresholds adapted to the run's seed count
     # For low-seed runs, use relaxed thresholds; statistical gates need n>=5
@@ -395,6 +410,8 @@ def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
     def confirmation_evaluator(
         cell_records: list[Record], confirmation_seeds: list[int]
     ) -> list[Record]:
+        if deadline and deadline.is_expired():
+            return []  # Stop confirmation work
         base = cell_records[0]
         coordinate = Coordinate.from_record(base)
         confirmed: list[Record] = []
