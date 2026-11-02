@@ -1638,8 +1638,11 @@ class TileGeometry(nn.Module):
         substrate = self._get_substrate(substrate)
         op = substrate.get_forward_operator()
 
+        # Flatten input if needed (match FeedforwardGeometry behavior)
+        h = x.flatten(1) if x.dim() > 2 else x
+
         # Project input to tile space
-        h = self._input_projection(x)
+        h = self._input_projection(h)
 
         # Set input tile activities
         self._set_input_activities(h)
@@ -3609,6 +3612,9 @@ class NtmGeometry(nn.Module):
         self._reset_buffers()
 
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
+        if x.dim() > 2:
+            x = x.flatten(1)
         if x.dim() == 2:
             # Check if buffers need reinitialization (batch size changed)
             if self._state_h.numel() == 0 or self._state_h.shape[1] != x.shape[0]:

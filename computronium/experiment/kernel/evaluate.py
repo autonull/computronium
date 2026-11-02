@@ -845,7 +845,19 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         )
         metrics.update(task_metrics.to_dict())
     except Exception as exc:  # ruff: ignore[blind-except] - evaluation must not fail the cell
-        logger.warning("task.evaluate() failed for %s: %s", schedule.task_id, exc)
+        logger.warning(
+            "task.evaluate() failed for %s: %s | coordinate=%s | geometry=%s | substrate=%s | dynamics=%s | credit=%s | update=%s | plasticity=%s",
+            schedule.task_id,
+            exc,
+            coordinate.cell_key()[:12],
+            coordinate.geometry,
+            coordinate.substrate,
+            coordinate.dynamics,
+            coordinate.credit,
+            coordinate.update,
+            coordinate.plasticity,
+            exc_info=True,
+        )
 
     # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
     # Higher is better (more accuracy per joule)
