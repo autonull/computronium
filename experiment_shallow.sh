@@ -56,6 +56,18 @@ if [[ -z "${HOURS}" ]]; then
     exit 1
 fi
 
+# Check uv is available
+if ! command -v uv &> /dev/null; then
+    echo "❌ 'uv' not found in PATH. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+fi
+
+# Check we're in the right directory (has pyproject.toml)
+if [[ ! -f "pyproject.toml" ]]; then
+    echo "❌ Not in project root (pyproject.toml not found). Run from computronium directory."
+    exit 1
+fi
+
 # Convert hours to seconds (float arithmetic)
 BUDGET_SECONDS=$(python3 -c "print(int(float('${HOURS}') * 3600))")
 
@@ -95,7 +107,7 @@ echo ""
 
 # Environment check
 echo "🔍 Environment check..."
-uv run python -c "
+if ! uv run python -c "
 import torch, optuna, scipy, torchvision, pytest
 print(f'  CUDA available: {torch.cuda.is_available()}')
 if torch.cuda.is_available():
@@ -104,7 +116,10 @@ if torch.cuda.is_available():
 import os, psutil
 print(f'  CPU cores: {os.cpu_count()}')
 print(f'  System RAM: {psutil.virtual_memory().total / 1e9:.1f} GB')
-"
+"; then
+    echo "❌ Environment check failed — is 'uv' installed and dependencies available?"
+    exit 1
+fi
 
 echo ""
 echo "🚀 Executing: ${CMD[*]}"
@@ -117,18 +132,19 @@ TOTAL_TIMEOUT=$((BUDGET_SECONDS + GRACE_SECONDS))
 if [[ "${DRY_RUN}" == true ]]; then
     "${CMD[@]}"
 else
-    timeout "${TOTAL_TIMEOUT}" "${CMD[@]}" || {
-        EXIT_CODE=$?
-        if [[ $EXIT_CODE -eq 124 ]]; then
-            echo ""
-            echo "⏱️  Experiment timed out after ${TOTAL_TIMEOUT}s (budget + grace)"
-            echo "   This is expected — the pipeline enforces soft deadline at ${BUDGET_SECONDS}s"
-        else
-            echo ""
-            echo "❌ Experiment failed with exit code ${EXIT_CODE}"
-            exit $EXIT_CODE
-        fi
-    }
+    # Use a background process so we can capture output properly
+    timeout "${TOTAL_TIMEOUT}" "${CMD[@]}" 2>&1
+    EXIT_CODE=$?
+    if [[ $EXIT_CODE -eq 124 ]]; then
+        echo ""
+        echo "⏱️  Experiment timed out after ${TOTAL_TIMEOUT}s (budget + grace)"
+        echo "   This is expected — the pipeline enforces soft deadline at ${BUDGET_SECONDS}s"
+    elif [[ $EXIT_CODE -ne 0 ]]; then
+        echo ""
+        echo "❌ Experiment failed with exit code ${EXIT_CODE}"
+        echo "   Check the output above for errors."
+        exit $EXIT_CODE
+    fi
 fi
 
 # Post-run summary
