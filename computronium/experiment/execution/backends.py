@@ -259,9 +259,10 @@ class _ThreadedBackend:
             coordinate,
             schedule,
             provenance,
-            params,
-            checkpoint_dir,
-            resume_checkpoint_path,
+            geometry=None,
+            checkpoint_dir=checkpoint_dir,
+            resume_checkpoint_path=resume_checkpoint_path,
+            params=params,
         )
 
     async def submit(
@@ -629,9 +630,10 @@ class DDPBackend:
                 coordinate,
                 schedule,
                 provenance,
-                params,
-                checkpoint_dir,
-                resume_checkpoint_path,
+                geometry=None,
+                checkpoint_dir=checkpoint_dir,
+                resume_checkpoint_path=resume_checkpoint_path,
+                params=params,
             )
             return record
         finally:

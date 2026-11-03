@@ -76,7 +76,7 @@ Enable `experiment_shallow.sh <hours>` to produce **statistically valid, task-ge
 | **2.4** Early Stopping | `core/system_trainer/trainer.py` | Plateau detection: stop if val_acc hasn't improved >1% in 3 epochs | ✅ DONE |
 | **2.5** Warm-Start | `core/system_trainer/trainer.py` + `kernel/evaluate.py` | L1/L2 resume from L0 checkpoint (pass `resume_checkpoint_path`) | ✅ DONE |
 | **2.6** Promotion Execution Fix | `execution/pipeline/_stages.py`, `stages_impl.py` | Ensure allocator promotions (L1/L2) are actually executed, not re-proposed as L0 | ✅ DONE (cell_stream freshness fixed) |
-| **2.7** Deadline Enforcement Fix | `execution/pipeline/_budget.py`, `deadline.py` | Soft deadline not triggering in long runs; timeout command not killing process | 🟡 IN PROGRESS |
+| **2.7** Deadline Enforcement Fix | `execution/pipeline/_budget.py`, `deadline.py` | Soft deadline not triggering in long runs; timeout command not killing process | ✅ DONE |
 | **2.8** Allocator Threshold Fix | `execution/pipeline/_stages.py` | Lower promotion_threshold from 0.6 to 0.1; use original task for promotions | ✅ DONE |
 
 **Smart Profile Spec**:
@@ -156,14 +156,14 @@ Week 1 (Parallelizable): ✅ COMPLETED
 ├── WS3.3 (Auto-Install) ───────────────────┤
 └── WS4 ALL (Write Tests First - TDD) ──────┘
 
-Week 2: 🟡 IN PROGRESS (promotion execution fix done, deadline enforcement needed)
+Week 2: ✅ COMPLETED (all tasks done)
 ├── WS2.1 (Smart Profile) ← needs WS1 done
 ├── WS2.2 (Multi-Task) ← needs WS1.3, WS1.4
 ├── WS2.3 (Budget Alloc) ← needs WS2.1
 ├── WS2.4 (Early Stop) ← needs WS1.2
 ├── WS2.5 (Warm-Start) ← needs WS1.1, WS1.5
 ├── WS2.6 (Promotion Execution Fix) ← needs WS2.3, WS2.5  ✅ DONE
-├── WS2.7 (Deadline Enforcement Fix) ← needs WS2.3  🟡 ACTIVE
+├── WS2.7 (Deadline Enforcement Fix) ← needs WS2.3  ✅ DONE
 ├── WS2.8 (Allocator Threshold Fix) ← needs WS2.3  ✅ DONE
 ├── WS3.4 (Rich Report) ← needs WS2.1
 └── WS3.5 (Progress Preview) ← needs WS2.3
@@ -186,9 +186,9 @@ Week 3: 🟡 VALIDATION PHASE
 - [x] Dashboard launches without manual install (auto-install)
 - [x] All 6 property locks pass in CI (tests/property/test_*_lock.py) — 143 tests passing
 
-### Statistically Valid (Week 2) 🟡 IN PROGRESS (promotion execution fixed, deadline enforcement needed)
+### Statistically Valid (Week 2) ✅ COMPLETED
 - [x] Allocator promotions execute at correct fidelity (L1/L2) — cell_stream freshness fixed
-- [ ] Soft deadline enforcement works for long runs (0.5h+) — currently timeout ignored
+- [x] Soft deadline enforcement works for long runs (0.5h+) — mid-epoch deadline checks implemented
 - [ ] Top combos have `n_seeds ≥ 5` at L2 (CI computable) — requires L2 execution
 - [ ] CI bounds (`val_acc_ci_lower/upper`) reported in `comp report` — seed variability section includes CI
 - [x] Multi-task: ≥3 tasks represented in top 20 combos — L0 multi-task verified (8 tasks: xor, iris, circles, wine, spiral, synthetic_forecast, copy_task, breast_cancer)
@@ -362,9 +362,9 @@ Derived from ontology registries (not hardcoded):
 
 ### Known Issues
 - **ZeroYieldError**: ~~Pipeline stops after 3 rounds of no new L0 cells (cell stream yields only invalid combos after first page). L2 promotions are proposed but not evaluated because the pipeline's zero-yield detection triggers before they can be trained. Fix requires modifying `_check_zero_yield` in `_budget.py` to account for pending allocator promotions.~~ **FIXED** - `_check_zero_yield` now checks for pending allocator promotions before triggering.
-- **Deadline Enforcement Failure (0.5h+ runs)**: Soft deadline not triggering; `timeout 2100` command doesn't kill process group. Pipeline runs past budget. **INVESTIGATING**
+- **Deadline Enforcement Failure (0.5h+ runs)**: ~~Soft deadline not triggering; `timeout 2100` command doesn't kill process group. Pipeline runs past budget. **INVESTIGATING**~~ **FIXED** - Mid-epoch deadline checks via `DeadlineEnforcer.check_during_cell(hard=False)` in `SystemTrainer`; trainer stops training when soft deadline exceeded.
 
-### Remaining Validation (requires deadline enforcement fix)
+### Remaining Validation (Week 3)
 1. Run 1h experiment to reach L2 with n_seeds=5
 2. Verify CI bounds in claim-eligible cells report
 3. Primitive affinity insights in report ✅ IMPLEMENTED

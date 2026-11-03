@@ -344,13 +344,19 @@ class DeadlineEnforcer:
         """Check if we can start a new cell. Returns True if OK."""
         return not self._deadline.soft_expired()
 
-    def check_during_cell(self) -> bool:
-        """Check if cell should be aborted (hard deadline exceeded).
+    def check_during_cell(self, *, hard: bool = False) -> bool:
+        """Check if cell should be aborted.
 
-        Called periodically during long-running operations (settling, HPO).
+        Args:
+            hard: If True, check hard deadline (with grace). If False (default),
+                check soft deadline. Soft deadline is for stopping new work;
+                hard deadline is for aborting in-progress work.
+
         Returns True to continue, False to abort.
         """
-        return not self._deadline.expired()
+        if hard:
+            return not self._deadline.expired()
+        return not self._deadline.soft_expired()
 
     def check_after_cell(self) -> bool:
         """Check if we can continue to next cell after one completes."""

@@ -902,6 +902,7 @@ class _StageMixin(_PipelineBase):
         Deadline enforcement:
         - Check soft deadline before starting batch
         - Track cell timing for online learning
+        - Pass deadline_check callback to trainer for mid-epoch enforcement
         - Mark QUARANTINE cells if hard deadline breached mid-execution
         """
         if not self._config.backend:
@@ -929,6 +930,15 @@ class _StageMixin(_PipelineBase):
         batch_items = self._fresh_batch_items(proposals, provenance)
         if not batch_items:
             return []
+
+        # Add deadline check callback to params for mid-epoch enforcement
+        if deadline_enforcer:
+            deadline_check_cb = lambda: deadline_enforcer.check_during_cell(hard=False)
+            deadline_check_interval = 1  # Check every batch for precise enforcement
+            batch_items = [
+                (coord, sched, prov, {**params, "deadline_check": deadline_check_cb, "deadline_check_every_n_steps": deadline_check_interval})
+                for coord, sched, prov, params in batch_items
+            ]
 
         # Start cell timing for this batch
         cell_timing = self._state.cell_timing

@@ -713,6 +713,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     geometry: Mapping[str, Any] | None = None,
     checkpoint_dir: str | None = None,
     resume_checkpoint_path: str | None = None,
+    params: Mapping[str, Any] | None = None,
 ) -> CellEvaluation:
     """Train one coordinate on the schedule's task and measure it.
 
@@ -722,6 +723,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         geometry: Topology overrides for the geometry axis.
         checkpoint_dir: Optional directory to save checkpoints. If provided and
             schedule.checkpoint_every_n > 0, checkpoints are saved here.
+        params: Optional experiment parameters, may include deadline_check callback.
 
     Returns:
         CellEvaluation carrying the measured metrics and the effective
@@ -764,6 +766,11 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     )
 
     limit = schedule.batch_limit or None
+    
+    # Extract deadline check callback from params (for WS2.7 deadline enforcement)
+    deadline_check = params.get("deadline_check") if params else None
+    deadline_check_every_n_steps = params.get("deadline_check_every_n_steps", 0) if params else 0
+    
     config = SystemTrainerConfig(
         max_epochs=schedule.epochs,
         device=resolved_device,
@@ -777,6 +784,9 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         checkpoint_every_n=schedule.checkpoint_every_n,
         # Early stopping (WS2.4)
         early_stopping_patience=getattr(schedule, "early_stopping_patience", 0),
+        # Deadline enforcement (WS2.7)
+        deadline_check=deadline_check,
+        deadline_check_every_n_steps=deadline_check_every_n_steps,
         # Distributed training (Phase E1)
         distributed_backend=schedule.distributed_backend,
         ddp_backend=schedule.ddp_backend,
@@ -1082,6 +1092,7 @@ def cell_record(
     geometry: Mapping[str, Any] | None = None,
     checkpoint_dir: str | None = None,
     resume_checkpoint_path: str | None = None,
+    params: Mapping[str, Any] | None = None,
 ) -> Record:
     """Evaluate one cell and wrap the measurement in a Record.
 
@@ -1104,7 +1115,7 @@ def cell_record(
 
     try:
         evaluation = evaluate_cell(
-            coordinate, schedule, geometry, checkpoint_dir, resume_checkpoint_path
+            coordinate, schedule, geometry, checkpoint_dir, resume_checkpoint_path, params
         )
     except EvaluationError as exc:
         cause = FailureCause(exc.cause)

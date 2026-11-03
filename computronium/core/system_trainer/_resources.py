@@ -97,6 +97,7 @@ class EpochResource:
     steps: int
     training_paths: Mapping[str, int]
     budget_stopped: bool = False
+    deadline_exceeded: bool = False
     peak_memory_mb: float | None = None
     forward_flops: int | None = None
     backward_flops: int | None = None
@@ -121,6 +122,7 @@ class EpochResources:
     _peak_mb: float = 0.0
     _energy_j: float = 0.0
     _start_power_w: float = 0.0
+    deadline_exceeded: bool = False
 
     @property
     def _cuda(self) -> bool:
@@ -154,6 +156,7 @@ class EpochResources:
         self.paths = {}
         self._flops_per_batch = 0
         self._energy_j = 0.0
+        self.deadline_exceeded = False
         if self._cuda:
             torch.cuda.reset_peak_memory_stats()
             # Sample initial power for energy estimation
@@ -197,6 +200,7 @@ class EpochResources:
             steps=self.steps,
             training_paths=MappingProxyType(dict(self.paths)),
             budget_stopped=self.over_budget,
+            deadline_exceeded=self.deadline_exceeded,
             peak_memory_mb=self._peak_mb if self._cuda else None,
             forward_flops=forward,
             backward_flops=2 * forward if forward is not None else None,

@@ -207,12 +207,23 @@ class SystemTrainer:
             os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
             torch.use_deterministic_algorithms(True)
 
+    def _check_deadline(self) -> bool:
+        """Check deadline if configured. Returns True to continue, False to stop."""
+        if self.config.deadline_check is not None:
+            return self.config.deadline_check()
+        return True
+
     def train_epoch(self) -> dict[str, float]:  # ruff: ignore[complex-structure, too-many-statements, too-many-branches, too-many-locals]
         """Run one training epoch.
 
         When ``config.async_dataloading`` is True and CUDA is available,
         overlaps host->device data transfer with the previous batch's
         forward/backward using CUDA streams (double-buffering).
+
+        Deadline enforcement: if ``config.deadline_check`` is provided, it is
+        called at epoch boundaries and every ``config.deadline_check_every_n_steps``
+        batches. If it returns False, training stops early and the epoch is
+        marked with ``deadline_exceeded=True`` in resources.
         """
         self.system.geometry.train()
         self._begin_epoch()
@@ -242,7 +253,22 @@ class SystemTrainer:
             load_stream = torch.cuda.Stream()
             pending = self._load_batch(train_iter, load_stream)
 
+        deadline_check_interval = self.config.deadline_check_every_n_steps
+
         for batch_idx in range(max_batches):
+            # Check deadline at epoch start and periodically during training
+            if batch_idx == 0 or (
+                deadline_check_interval > 0 and batch_idx % deadline_check_interval == 0
+            ):
+                if not self._check_deadline():
+                    logger.info(
+                        "Epoch %d stopped at batch %d: deadline exceeded",
+                        self.current_epoch,
+                        batch_idx,
+                    )
+                    self._resources.deadline_exceeded = True
+                    break
+
             if use_async:
                 if pending is None:
                     break
@@ -284,7 +310,7 @@ class SystemTrainer:
             if use_async:
                 with torch.cuda.stream(compute_stream):
                     metrics = _train_step()
-                # Sync to get metrics for logging/accumulation
+                # Sync to get metrics for accumulation
                 torch.cuda.current_stream().wait_stream(compute_stream)
             else:
                 metrics = _train_step()
