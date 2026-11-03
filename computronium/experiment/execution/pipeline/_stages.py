@@ -788,18 +788,13 @@ class _StageMixin(_PipelineBase):
         """
         from computronium.experiment.kernel.evaluate import TaskScheduler
 
-        if not records:
+        if not records or not promotions:
             return promotions
 
-        promotion_threshold = (
-            spec.promotion_threshold if hasattr(spec, "promotion_threshold") else 0.1
-        )
+        promotion_threshold = getattr(spec, "promotion_threshold", 0.1)
 
-        # Budget allocation split: 40% L0→L1, 40% L1→L2, 20% L2 deepening
-        # These constants document the intended budget allocation for smart-survey profile
-        L0_L1_BUDGET_FRACTION = 0.4  # 40% for L0→L1 promotion
-        L1_L2_BUDGET_FRACTION = 0.4  # 40% for L1→L2 promotion
-        L2_DEEPEN_BUDGET_FRACTION = 0.2  # 20% for L2 deepening
+        # Single scheduler instance for ruler-relative normalization
+        scheduler = TaskScheduler()
 
         # Group records by cell_key and fidelity to find best per cell
         cell_best: dict[str, tuple[float, Record]] = {}
@@ -811,8 +806,6 @@ class _StageMixin(_PipelineBase):
             val_acc = record.payload.get("val_acc", 0.0)
             task_name = record.schedule.task_id or "digits"
 
-            # Ruler-relative normalization
-            scheduler = TaskScheduler()
             baseline = scheduler.get_baseline(task_name)
             norm_acc = scheduler.normalize_score(val_acc, task_name, baseline)
 
@@ -821,85 +814,137 @@ class _StageMixin(_PipelineBase):
             if key not in cell_best or norm_acc > cell_best[key][0]:
                 cell_best[key] = (norm_acc, record)
 
-        # Find cells eligible for promotion (at L0 or L1)
-        # The incoming promotions have TARGET fidelity (L1 or L2)
-        eligible_promotions: list[tuple[Coordinate, Schedule]] = []
+        # Filter promotions by threshold and build eligible list
+        eligible_promotions = self._filter_promotions_by_threshold(
+            promotions, cell_best, promotion_threshold
+        )
+
+        # Limit promotions to budget allocation fractions
+        return self._limit_promotions_by_budget(eligible_promotions, cell_best, spec)
+
+    def _filter_promotions_by_threshold(
+        self,
+        promotions: list[tuple[Coordinate, Schedule]],
+        cell_best: dict[str, tuple[float, Record]],
+        threshold: float,
+    ) -> list[tuple[Coordinate, Schedule]]:
+        """Filter promotions whose source fidelity record meets the threshold.
+
+        Returns promotions with corrected schedules (target fidelity, original task).
+        """
+        from computronium.experiment.schema.coordinate import Schedule
+
+        eligible: list[tuple[Coordinate, Schedule]] = []
         for coord, sched in promotions:
             cell_key = coord.cell_key()
-            target_fidelity = sched.fidelity  # This is the TARGET fidelity (L1 or L2)
+            target_fidelity = sched.fidelity
 
-            # Determine source fidelity (where the cell was evaluated)
-            source_fidelity = (
-                "L0"
-                if target_fidelity == "L1"
-                else "L1"
-                if target_fidelity == "L2"
-                else None
-            )
+            source_fidelity = self._source_fidelity_for(target_fidelity)
             if source_fidelity is None:
                 continue
 
-            # Check if this cell has a good record at source fidelity
             best_key = f"{cell_key}|{source_fidelity}"
             if best_key not in cell_best:
                 continue
 
             norm_acc, best_record = cell_best[best_key]
-
-            # Check promotion threshold
-            if norm_acc < promotion_threshold:
+            if norm_acc < threshold:
                 continue
 
             # Use the original task from the source fidelity schedule
             # Task cycling to incompatible tasks causes admission gate rejections
-            original_task = sched.task_id or "digits"
-            target_tasks = (original_task,)
-
-            # For each task, create a promotion with the target fidelity schedule
-            # (seed/epoch already correct from _build_allocator_candidates)
-            for task_name in target_tasks:
-                from computronium.experiment.schema.coordinate import Schedule
-
-                promo_sched = Schedule(
-                    fidelity=target_fidelity,
-                    seed=sched.seed,
-                    n_seeds=sched.n_seeds,
-                    epochs=sched.epochs,
-                    batch_limit=sched.batch_limit,
-                    budget_id=f"promotion_{target_fidelity}",
-                    task_id=task_name,
-                    param_budget=sched.param_budget,
-                    device=sched.device,
-                    deterministic=sched.deterministic,
-                    num_workers=sched.num_workers,
-                    precision=sched.precision,
-                    checkpoint_every_n=spec.checkpoint_every_n,
-                    early_stopping_patience=spec.early_stopping_patience,
-                    distributed_backend=sched.distributed_backend,
-                    ddp_backend=sched.ddp_backend,
-                    fsdp_sharding_strategy=sched.fsdp_sharding_strategy,
-                    fsdp_min_params=sched.fsdp_min_params,
-                    fsdp_cpu_offload=sched.fsdp_cpu_offload,
-                    fsdp_mixed_precision=sched.fsdp_mixed_precision,
-                )
-                eligible_promotions.append((coord, promo_sched))
-
-        # Limit promotions to budget
-        if eligible_promotions:
-            # Sort by normalized accuracy descending (source fidelity score)
-            eligible_promotions.sort(
-                key=lambda x: (
-                    -cell_best.get(
-                        f"{x[0].cell_key()}|{'L0' if x[1].fidelity == 'L1' else 'L1'}",
-                        (0,),
-                    )[0]
-                )
+            original_task = best_record.schedule.task_id or "digits"
+            promo_sched = self._build_promo_schedule(
+                sched=sched,
+                target_fidelity=target_fidelity,
+                task_name=original_task,
+                spec=self._config.run_spec,
             )
-            # Keep top promotions (roughly 40% for L0→L1, 10% for L1→L2)
-            max_promos = len(promotions) // 2  # Conservative limit
-            return eligible_promotions[:max_promos]
+            eligible.append((coord, promo_sched))
+        return eligible
 
-        return promotions
+    @staticmethod
+    def _source_fidelity_for(target_fidelity: str) -> str | None:
+        """Map target fidelity to its source fidelity."""
+        return {"L1": "L0", "L2": "L1"}.get(target_fidelity)
+
+    @staticmethod
+    def _build_promo_schedule(
+        sched: Schedule,
+        target_fidelity: str,
+        task_name: str,
+        spec: RunSpec,
+    ) -> Schedule:
+        """Build a promotion schedule with the target fidelity and task."""
+        from computronium.experiment.schema.coordinate import Schedule
+
+        return Schedule(
+            fidelity=target_fidelity,
+            seed=sched.seed,
+            n_seeds=sched.n_seeds,
+            epochs=sched.epochs,
+            batch_limit=sched.batch_limit,
+            budget_id=f"promotion_{target_fidelity}",
+            task_id=task_name,
+            param_budget=sched.param_budget,
+            device=sched.device,
+            deterministic=sched.deterministic,
+            num_workers=sched.num_workers,
+            precision=sched.precision,
+            checkpoint_every_n=spec.checkpoint_every_n,
+            early_stopping_patience=spec.early_stopping_patience,
+            distributed_backend=sched.distributed_backend,
+            ddp_backend=sched.ddp_backend,
+            fsdp_sharding_strategy=sched.fsdp_sharding_strategy,
+            fsdp_min_params=sched.fsdp_min_params,
+            fsdp_cpu_offload=sched.fsdp_cpu_offload,
+            fsdp_mixed_precision=sched.fsdp_mixed_precision,
+        )
+
+    def _limit_promotions_by_budget(
+        self,
+        eligible: list[tuple[Coordinate, Schedule]],
+        cell_best: dict[str, tuple[float, Record]],
+        spec: RunSpec,
+    ) -> list[tuple[Coordinate, Schedule]]:
+        """Limit promotions according to budget allocation fractions.
+
+        Budget split: 40% L0→L1, 40% L1→L2, 20% L2 deepening.
+        """
+        if not eligible:
+            return eligible
+
+        # Sort by normalized accuracy descending (source fidelity score)
+        eligible.sort(
+            key=lambda x: (
+                -cell_best.get(
+                    f"{x[0].cell_key()}|{self._source_fidelity_for(x[1].fidelity)}",
+                    (0.0,),
+                )[0]
+            )
+        )
+
+        # Count promotions per fidelity transition
+        l0_l1_count = sum(1 for _, s in eligible if s.fidelity == "L1")
+        l1_l2_count = sum(1 for _, s in eligible if s.fidelity == "L2")
+
+        # Apply budget fractions
+        max_l0_l1 = max(1, int(l0_l1_count * 0.4))
+        max_l1_l2 = max(1, int(l1_l2_count * 0.4))
+
+        limited: list[tuple[Coordinate, Schedule]] = []
+        l0_l1_seen = 0
+        l1_l2_seen = 0
+        for coord, sched in eligible:
+            if sched.fidelity == "L1":
+                if l0_l1_seen < max_l0_l1:
+                    limited.append((coord, sched))
+                    l0_l1_seen += 1
+            elif sched.fidelity == "L2":
+                if l1_l2_seen < max_l1_l2:
+                    limited.append((coord, sched))
+                    l1_l2_seen += 1
+        return limited
 
     async def _execute_batch_with_isolation(
         self,

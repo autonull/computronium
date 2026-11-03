@@ -348,168 +348,218 @@ _PREDICTIVE_SETTLING_CREDITS = {
 # before full compose/validate. See TODO78 Appendix for seed data.
 # ============================================================
 
-# Substrate -> incompatible dynamics
-_SUBSTRATE_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
-    "quantum": {"pc_alm", "spike_integration"},
-    "neuromorphic": {"error_predictive_coding"},
-    "ternary": {"spike_integration", "pc_alm"},
-    # memristive: none known
-    # optical: none known (diffusion is compatible)
-    # sparse: none known
-    # analog: none known
-    # complex: spike_integration
-    "complex": {"spike_integration"},
-    # digital: none known
-}
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-# Substrate -> incompatible geometries
-_SUBSTRATE_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
-    "quantum": {"attention", "ntm"},
-    "neuromorphic": {"attention"},
-    "ternary": {"ntm"},
-    "optical": {
-        "diffusion"
-    },  # diffusion as geometry? check - actually "diffusion" is a dynamics
-    # sparse: attention
-    "sparse": {"attention"},
-    "analog": {"ntm"},
-    # memristive, complex, digital: none known
-}
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
-# Substrate -> incompatible plasticities
-_SUBSTRATE_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
-    "quantum": {"fast_weights"},
-    "neuromorphic": {"substrate_coupled"},
-    "ternary": {"temporal_psi"},
-    # memristive, optical, sparse, analog, complex, digital: none known
-}
 
-# Dynamics -> incompatible geometries (additional to substrate-level)
-_DYNAMICS_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
-    "pc_alm": {"attention", "ntm"},
-    "spike_integration": {
-        "attention",
-        "ntm",
-        "spatial_lattice",
-        "graph",
-        "conv",
-        "nca",
-    },
-    "diffusion": {
-        "attention",
-        "ntm",
-        "spatial_lattice",
-        "graph",
-        "conv",
-        "nca",
-        "tile",
-        "tile_mesh",
-        "causal_transformer",
-    },
-    "error_predictive_coding": {"attention", "ntm", "nca", "causal_transformer"},
-    "predictive_settling": {"attention", "ntm", "nca", "causal_transformer"},
-}
+@dataclass(frozen=True, slots=True)
+class _IncompatibilityRule:
+    """A single incompatibility rule: (axis_a, value_a) incompatible with (axis_b, value_b)."""
 
-# Dynamics -> incompatible plasticities
-_DYNAMICS_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
-    "pc_alm": {"fast_weights", "substrate_coupled"},
-    "spike_integration": {"fast_weights", "substrate_coupled", "temporal_psi"},
-    "diffusion": {"fast_weights"},
-    "error_predictive_coding": {"fast_weights"},
-}
+    axis_a: str
+    value_a: str
+    axis_b: str
+    value_b: str
 
-# Geometry -> incompatible dynamics
-_GEOMETRY_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
-    "attention": {
-        "pc_alm",
-        "spike_integration",
-        "diffusion",
-        "error_predictive_coding",
-        "predictive_settling",
-    },
-    "ntm": {
-        "pc_alm",
-        "spike_integration",
-        "diffusion",
-        "error_predictive_coding",
-        "predictive_settling",
-    },
-    "nca": {
-        "pc_alm",
-        "spike_integration",
-        "diffusion",
-        "error_predictive_coding",
-        "predictive_settling",
-    },
-    "causal_transformer": {
-        "pc_alm",
-        "spike_integration",
-        "diffusion",
-        "error_predictive_coding",
-        "predictive_settling",
-    },
-    "spatial_lattice": {"spike_integration", "diffusion"},
-    "graph": {"spike_integration", "diffusion"},
-    "conv": {"spike_integration", "diffusion"},
-    "tile": {"diffusion"},
-    "tile_mesh": {"diffusion", "pc_alm"},
-}
+    def check(self, axes: dict[str, str]) -> str | None:
+        """Check if this rule is violated by the given axes.
 
-# Geometry -> incompatible plasticities
-_GEOMETRY_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
-    "attention": {"fast_weights"},
-    "nca": {"fast_weights"},
-    "ntm": {"fast_weights"},
-    "tile": {"fast_weights"},
-    "tile_mesh": {"fast_weights"},
-}
+        Returns violation message if violated, None otherwise.
+        """
+        if (
+            axes.get(self.axis_a) == self.value_a
+            and axes.get(self.axis_b) == self.value_b
+        ):
+            return (
+                f"{self.axis_a.capitalize()} '{self.value_a}' incompatible with "
+                f"{self.axis_b} '{self.value_b}'"
+            )
+        return None
 
-# Credit -> incompatible dynamics
-_CREDIT_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
-    "gradient": {"diffusion", "spike_integration"},
-    "backprop": {"diffusion", "spike_integration"},
-    "thermodynamic_contrast": {"spike_integration", "instantaneous", "lazy"},
-    "equilibrium": {"spike_integration", "instantaneous", "lazy"},
-    "local_goodness": {"spike_integration"},
-    "forward_only": {"spike_integration"},
-    "temporal_trace": {
-        "instantaneous",
-        "energy_minimization",
-        "lazy",
-        "diffusion",
-        "error_predictive_coding",
-        "pc_alm",
-    },
-    "target_inversion": {
-        "energy_minimization",
-        "lazy",
-        "diffusion",
-        "error_predictive_coding",
-        "pc_alm",
-    },
-    "target_prop": {
-        "energy_minimization",
-        "lazy",
-        "diffusion",
-        "error_predictive_coding",
-        "pc_alm",
-    },
-    "pepita": {"spike_integration", "diffusion"},
-    "local_contrastive": {"spike_integration", "diffusion"},
-    "random_projections": {"spike_integration", "diffusion"},
-    "homeostatic": {"spike_integration", "diffusion"},
-}
 
-# Credit -> incompatible geometries
-_CREDIT_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
-    "local_contrastive": {"attention", "causal_transformer"},
-}
-
-# Update -> incompatible substrates
-_UPDATE_SUBSTRATE_INCOMPAT: dict[str, set[str]] = {
-    "riemannian_orthogonal": {"sparse"},
-    "spectral_constrained": {"sparse"},
-}
+# All incompatibility rules as flat data - single source of truth
+# Format: (axis_a, value_a, axis_b, value_b)
+_INCOMPATIBILITY_RULES: tuple[_IncompatibilityRule, ...] = (
+    # Substrate -> Dynamics
+    _IncompatibilityRule("substrate", "quantum", "dynamics", "pc_alm"),
+    _IncompatibilityRule("substrate", "quantum", "dynamics", "spike_integration"),
+    _IncompatibilityRule(
+        "substrate", "neuromorphic", "dynamics", "error_predictive_coding"
+    ),
+    _IncompatibilityRule("substrate", "ternary", "dynamics", "spike_integration"),
+    _IncompatibilityRule("substrate", "ternary", "dynamics", "pc_alm"),
+    _IncompatibilityRule("substrate", "complex", "dynamics", "spike_integration"),
+    # Substrate -> Geometry
+    _IncompatibilityRule("substrate", "quantum", "geometry", "attention"),
+    _IncompatibilityRule("substrate", "quantum", "geometry", "ntm"),
+    _IncompatibilityRule("substrate", "neuromorphic", "geometry", "attention"),
+    _IncompatibilityRule("substrate", "ternary", "geometry", "ntm"),
+    # Note: "optical" -> "diffusion" is invalid (diffusion is dynamics, not geometry)
+    _IncompatibilityRule("substrate", "sparse", "geometry", "attention"),
+    _IncompatibilityRule("substrate", "analog", "geometry", "ntm"),
+    # Substrate -> Plasticity
+    _IncompatibilityRule("substrate", "quantum", "plasticity", "fast_weights"),
+    _IncompatibilityRule(
+        "substrate", "neuromorphic", "plasticity", "substrate_coupled"
+    ),
+    _IncompatibilityRule("substrate", "ternary", "plasticity", "temporal_psi"),
+    # Dynamics -> Geometry
+    _IncompatibilityRule("dynamics", "pc_alm", "geometry", "attention"),
+    _IncompatibilityRule("dynamics", "pc_alm", "geometry", "ntm"),
+    _IncompatibilityRule("dynamics", "spike_integration", "geometry", "attention"),
+    _IncompatibilityRule("dynamics", "spike_integration", "geometry", "ntm"),
+    _IncompatibilityRule(
+        "dynamics", "spike_integration", "geometry", "spatial_lattice"
+    ),
+    _IncompatibilityRule("dynamics", "spike_integration", "geometry", "graph"),
+    _IncompatibilityRule("dynamics", "spike_integration", "geometry", "conv"),
+    _IncompatibilityRule("dynamics", "spike_integration", "geometry", "nca"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "attention"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "ntm"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "spatial_lattice"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "graph"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "conv"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "nca"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "tile"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "tile_mesh"),
+    _IncompatibilityRule("dynamics", "diffusion", "geometry", "causal_transformer"),
+    _IncompatibilityRule(
+        "dynamics", "error_predictive_coding", "geometry", "attention"
+    ),
+    _IncompatibilityRule("dynamics", "error_predictive_coding", "geometry", "ntm"),
+    _IncompatibilityRule("dynamics", "error_predictive_coding", "geometry", "nca"),
+    _IncompatibilityRule(
+        "dynamics", "error_predictive_coding", "geometry", "causal_transformer"
+    ),
+    _IncompatibilityRule("dynamics", "predictive_settling", "geometry", "attention"),
+    _IncompatibilityRule("dynamics", "predictive_settling", "geometry", "ntm"),
+    _IncompatibilityRule("dynamics", "predictive_settling", "geometry", "nca"),
+    _IncompatibilityRule(
+        "dynamics", "predictive_settling", "geometry", "causal_transformer"
+    ),
+    # Dynamics -> Plasticity
+    _IncompatibilityRule("dynamics", "pc_alm", "plasticity", "fast_weights"),
+    _IncompatibilityRule("dynamics", "pc_alm", "plasticity", "substrate_coupled"),
+    _IncompatibilityRule("dynamics", "spike_integration", "plasticity", "fast_weights"),
+    _IncompatibilityRule(
+        "dynamics", "spike_integration", "plasticity", "substrate_coupled"
+    ),
+    _IncompatibilityRule("dynamics", "spike_integration", "plasticity", "temporal_psi"),
+    _IncompatibilityRule("dynamics", "diffusion", "plasticity", "fast_weights"),
+    _IncompatibilityRule(
+        "dynamics", "error_predictive_coding", "plasticity", "fast_weights"
+    ),
+    # Geometry -> Dynamics (reverse of above, kept for completeness)
+    _IncompatibilityRule("geometry", "attention", "dynamics", "pc_alm"),
+    _IncompatibilityRule("geometry", "attention", "dynamics", "spike_integration"),
+    _IncompatibilityRule("geometry", "attention", "dynamics", "diffusion"),
+    _IncompatibilityRule(
+        "geometry", "attention", "dynamics", "error_predictive_coding"
+    ),
+    _IncompatibilityRule("geometry", "attention", "dynamics", "predictive_settling"),
+    _IncompatibilityRule("geometry", "ntm", "dynamics", "pc_alm"),
+    _IncompatibilityRule("geometry", "ntm", "dynamics", "spike_integration"),
+    _IncompatibilityRule("geometry", "ntm", "dynamics", "diffusion"),
+    _IncompatibilityRule("geometry", "ntm", "dynamics", "error_predictive_coding"),
+    _IncompatibilityRule("geometry", "ntm", "dynamics", "predictive_settling"),
+    _IncompatibilityRule("geometry", "nca", "dynamics", "pc_alm"),
+    _IncompatibilityRule("geometry", "nca", "dynamics", "spike_integration"),
+    _IncompatibilityRule("geometry", "nca", "dynamics", "diffusion"),
+    _IncompatibilityRule("geometry", "nca", "dynamics", "error_predictive_coding"),
+    _IncompatibilityRule("geometry", "nca", "dynamics", "predictive_settling"),
+    _IncompatibilityRule("geometry", "causal_transformer", "dynamics", "pc_alm"),
+    _IncompatibilityRule(
+        "geometry", "causal_transformer", "dynamics", "spike_integration"
+    ),
+    _IncompatibilityRule("geometry", "causal_transformer", "dynamics", "diffusion"),
+    _IncompatibilityRule(
+        "geometry", "causal_transformer", "dynamics", "error_predictive_coding"
+    ),
+    _IncompatibilityRule(
+        "geometry", "causal_transformer", "dynamics", "predictive_settling"
+    ),
+    _IncompatibilityRule(
+        "geometry", "spatial_lattice", "dynamics", "spike_integration"
+    ),
+    _IncompatibilityRule("geometry", "spatial_lattice", "dynamics", "diffusion"),
+    _IncompatibilityRule("geometry", "graph", "dynamics", "spike_integration"),
+    _IncompatibilityRule("geometry", "graph", "dynamics", "diffusion"),
+    _IncompatibilityRule("geometry", "conv", "dynamics", "spike_integration"),
+    _IncompatibilityRule("geometry", "conv", "dynamics", "diffusion"),
+    _IncompatibilityRule("geometry", "tile", "dynamics", "diffusion"),
+    _IncompatibilityRule("geometry", "tile_mesh", "dynamics", "diffusion"),
+    _IncompatibilityRule("geometry", "tile_mesh", "dynamics", "pc_alm"),
+    # Geometry -> Plasticity
+    _IncompatibilityRule("geometry", "attention", "plasticity", "fast_weights"),
+    _IncompatibilityRule("geometry", "nca", "plasticity", "fast_weights"),
+    _IncompatibilityRule("geometry", "ntm", "plasticity", "fast_weights"),
+    _IncompatibilityRule("geometry", "tile", "plasticity", "fast_weights"),
+    _IncompatibilityRule("geometry", "tile_mesh", "plasticity", "fast_weights"),
+    # Credit -> Dynamics
+    _IncompatibilityRule("credit", "gradient", "dynamics", "diffusion"),
+    _IncompatibilityRule("credit", "gradient", "dynamics", "spike_integration"),
+    _IncompatibilityRule("credit", "backprop", "dynamics", "diffusion"),
+    _IncompatibilityRule("credit", "backprop", "dynamics", "spike_integration"),
+    _IncompatibilityRule(
+        "credit", "thermodynamic_contrast", "dynamics", "spike_integration"
+    ),
+    _IncompatibilityRule(
+        "credit", "thermodynamic_contrast", "dynamics", "instantaneous"
+    ),
+    _IncompatibilityRule("credit", "thermodynamic_contrast", "dynamics", "lazy"),
+    _IncompatibilityRule("credit", "equilibrium", "dynamics", "spike_integration"),
+    _IncompatibilityRule("credit", "equilibrium", "dynamics", "instantaneous"),
+    _IncompatibilityRule("credit", "equilibrium", "dynamics", "lazy"),
+    _IncompatibilityRule("credit", "local_goodness", "dynamics", "spike_integration"),
+    _IncompatibilityRule("credit", "forward_only", "dynamics", "spike_integration"),
+    _IncompatibilityRule("credit", "temporal_trace", "dynamics", "instantaneous"),
+    _IncompatibilityRule("credit", "temporal_trace", "dynamics", "energy_minimization"),
+    _IncompatibilityRule("credit", "temporal_trace", "dynamics", "lazy"),
+    _IncompatibilityRule("credit", "temporal_trace", "dynamics", "diffusion"),
+    _IncompatibilityRule(
+        "credit", "temporal_trace", "dynamics", "error_predictive_coding"
+    ),
+    _IncompatibilityRule("credit", "temporal_trace", "dynamics", "pc_alm"),
+    _IncompatibilityRule(
+        "credit", "target_inversion", "dynamics", "energy_minimization"
+    ),
+    _IncompatibilityRule("credit", "target_inversion", "dynamics", "lazy"),
+    _IncompatibilityRule("credit", "target_inversion", "dynamics", "diffusion"),
+    _IncompatibilityRule(
+        "credit", "target_inversion", "dynamics", "error_predictive_coding"
+    ),
+    _IncompatibilityRule("credit", "target_inversion", "dynamics", "pc_alm"),
+    _IncompatibilityRule("credit", "target_prop", "dynamics", "energy_minimization"),
+    _IncompatibilityRule("credit", "target_prop", "dynamics", "lazy"),
+    _IncompatibilityRule("credit", "target_prop", "dynamics", "diffusion"),
+    _IncompatibilityRule(
+        "credit", "target_prop", "dynamics", "error_predictive_coding"
+    ),
+    _IncompatibilityRule("credit", "target_prop", "dynamics", "pc_alm"),
+    _IncompatibilityRule("credit", "pepita", "dynamics", "spike_integration"),
+    _IncompatibilityRule("credit", "pepita", "dynamics", "diffusion"),
+    _IncompatibilityRule(
+        "credit", "local_contrastive", "dynamics", "spike_integration"
+    ),
+    _IncompatibilityRule("credit", "local_contrastive", "dynamics", "diffusion"),
+    _IncompatibilityRule(
+        "credit", "random_projections", "dynamics", "spike_integration"
+    ),
+    _IncompatibilityRule("credit", "random_projections", "dynamics", "diffusion"),
+    _IncompatibilityRule("credit", "homeostatic", "dynamics", "spike_integration"),
+    _IncompatibilityRule("credit", "homeostatic", "dynamics", "diffusion"),
+    # Credit -> Geometry
+    _IncompatibilityRule("credit", "local_contrastive", "geometry", "attention"),
+    _IncompatibilityRule(
+        "credit", "local_contrastive", "geometry", "causal_transformer"
+    ),
+    # Update -> Substrate
+    _IncompatibilityRule("update", "riemannian_orthogonal", "substrate", "sparse"),
+    _IncompatibilityRule("update", "spectral_constrained", "substrate", "sparse"),
+)
 
 
 def check_compatibility_matrix(
@@ -520,15 +570,12 @@ def check_compatibility_matrix(
     credit: str,
     update: str,
 ) -> list[str]:
-    """Fast compatibility check using declarative matrix.
+    """Fast compatibility check using declarative flat rules.
 
     Returns list of violation messages (empty if compatible).
     This is a pre-check before full SystemConfig.validate(); it does not
     replace the full validation but allows early rejection at admission gate.
     """
-    violations = []
-
-    # Inputs keyed by the axis names for declarative checking
     axes = {
         "substrate": substrate,
         "geometry": geometry,
@@ -538,41 +585,22 @@ def check_compatibility_matrix(
         "update": update,
     }
 
-    # Iterate over COMPATIBILITY_MATRIX declaratively
-    for matrix_key, incompat_map in COMPATIBILITY_MATRIX.items():
-        # Parse the matrix key to determine which axes to check
-        # Format: "axis1_axis2" where axis1 is the key in the map, axis2 is the value
-        try:
-            axis1, axis2 = matrix_key.split("_", 1)
-        except ValueError:
-            continue
-
-        key_val = axes.get(axis1)
-        target_val = axes.get(axis2)
-        if key_val is None or target_val is None:
-            continue
-
-        if target_val in incompat_map.get(key_val, set()):
-            violations.append(
-                f"{axis1.capitalize()} '{key_val}' incompatible with {axis2} '{target_val}'"
-            )
-
+    violations: list[str] = []
+    for rule in _INCOMPATIBILITY_RULES:
+        violation = rule.check(axes)
+        if violation:
+            violations.append(violation)
     return violations
 
 
-# Export for admission gate
-COMPATIBILITY_MATRIX = {
-    "substrate_dynamics": _SUBSTRATE_DYNAMICS_INCOMPAT,
-    "substrate_geometry": _SUBSTRATE_GEOMETRY_INCOMPAT,
-    "substrate_plasticity": _SUBSTRATE_PLASTICITY_INCOMPAT,
-    "dynamics_geometry": _DYNAMICS_GEOMETRY_INCOMPAT,
-    "dynamics_plasticity": _DYNAMICS_PLASTICITY_INCOMPAT,
-    "geometry_dynamics": _GEOMETRY_DYNAMICS_INCOMPAT,
-    "geometry_plasticity": _GEOMETRY_PLASTICITY_INCOMPAT,
-    "credit_dynamics": _CREDIT_DYNAMICS_INCOMPAT,
-    "credit_geometry": _CREDIT_GEOMETRY_INCOMPAT,
-    "update_substrate": _UPDATE_SUBSTRATE_INCOMPAT,
-}
+# Backwards-compatible matrix export (for any external consumers)
+# Built from the flat rules to ensure consistency
+COMPATIBILITY_MATRIX: dict[str, dict[str, set[str]]] = {}
+for rule in _INCOMPATIBILITY_RULES:
+    matrix_key = f"{rule.axis_a}_{rule.axis_b}"
+    if matrix_key not in COMPATIBILITY_MATRIX:
+        COMPATIBILITY_MATRIX[matrix_key] = {}
+    COMPATIBILITY_MATRIX[matrix_key].setdefault(rule.value_a, set()).add(rule.value_b)
 
 __all__ = [
     "COMPATIBILITY_MATRIX",

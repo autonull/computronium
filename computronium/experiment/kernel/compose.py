@@ -882,55 +882,82 @@ def _extract_graph_edge_index(task: Any) -> list[list[int]] | None:
     return None
 
 
-def _compose_configs_cache_key(
-    coordinate: Coordinate,
-    geometry: Mapping[str, object],
-    input_shape: tuple[int, ...],
-    output_dim: int,
-    param_budget: int,
-) -> tuple:
-    """Generate a cache key for compose_configs.
+def _make_hashable(value: Any) -> Any:
+    """Recursively convert lists and dicts to hashable tuples."""
+    if isinstance(value, list):
+        return tuple(_make_hashable(v) for v in value)
+    if isinstance(value, dict):
+        return tuple(sorted((k, _make_hashable(v)) for k, v in value.items()))
+    return value
 
-    The key includes all structural parameters that affect composition.
-    Geometry mapping is derived from coordinate and input_shape/output_dim,
-    so we don't need to include it separately.
-    """
-    # Convert coordinate to a hashable representation
-    coord_key = (
-        coordinate.substrate,
-        coordinate.geometry,
-        coordinate.dynamics,
-        coordinate.plasticity,
-        coordinate.credit,
-        coordinate.update,
-        tuple(sorted(coordinate.params.items())),
-    )
-    # Geometry keys that are explicitly provided (not derived)
-    # Convert values to hashable form
-    geometry_items = []
-    for k, v in sorted(geometry.items()):
-        if isinstance(v, list):
-            v = tuple(v)
-        elif isinstance(v, dict):
-            v = tuple(sorted(v.items()))
-        geometry_items.append((k, v))
-    geometry_key = tuple(geometry_items)
-    return (coord_key, geometry_key, input_shape, output_dim, param_budget)
+
+def _restore_mutable(value: Any) -> Any:
+    """Recursively convert tuples back to lists for validation."""
+    if isinstance(value, tuple):
+        return [_restore_mutable(v) for v in value]
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class ComposeCacheKey:
+    """Cache key for compose_configs: all structural parameters affecting composition."""
+
+    substrate: str
+    geometry: str
+    dynamics: str
+    plasticity: str
+    credit: str
+    update: str
+    params: tuple[tuple[str, Any], ...]  # sorted coordinate.params items
+    geometry_explicit: tuple[tuple[str, Any], ...]  # sorted explicit geometry items
+    input_shape: tuple[int, ...]
+    output_dim: int
+    param_budget: int
+    # Store coordinate for use in cached function
+    coordinate: "Coordinate" = None  # type: ignore[assignment]
+
+    @classmethod
+    def from_compose_args(
+        cls,
+        coordinate: Coordinate,
+        geometry: Mapping[str, object],
+        input_shape: tuple[int, ...],
+        output_dim: int,
+        param_budget: int,
+    ) -> ComposeCacheKey:
+        """Create cache key from compose_configs arguments."""
+        # Convert coordinate params to sorted tuple
+        coord_params = tuple(
+            sorted((k, _make_hashable(v)) for k, v in coordinate.params.items())
+        )
+
+        # Convert geometry to sorted tuple with hashable values
+        geometry_items = []
+        for k, v in sorted(geometry.items()):
+            geometry_items.append((k, _make_hashable(v)))
+        geometry_explicit = tuple(geometry_items)
+
+        return cls(
+            substrate=coordinate.substrate,
+            geometry=coordinate.geometry,
+            dynamics=coordinate.dynamics,
+            plasticity=coordinate.plasticity,
+            credit=coordinate.credit,
+            update=coordinate.update,
+            params=coord_params,
+            geometry_explicit=geometry_explicit,
+            input_shape=input_shape,
+            output_dim=output_dim,
+            param_budget=param_budget,
+            coordinate=coordinate,
+        )
 
 
 @lru_cache(maxsize=10000)
-def _compose_configs_cached(
-    cache_key: tuple,
-    coordinate: Coordinate,
-    geometry_key: tuple,
-    input_shape: tuple[int, ...],
-    output_dim: int,
-    param_budget: int,
-) -> Any:
+def _compose_configs_cached(cache_key: ComposeCacheKey) -> Any:
     """Cached inner implementation of compose_configs.
 
-    The cache_key is used for the LRU cache; the actual parameters are passed
-    through for the implementation.
+    Uses the ComposeCacheKey dataclass directly for the LRU cache.
     """
     from computronium.ontology import (
         CreditAssignmentConfig,
@@ -940,12 +967,16 @@ def _compose_configs_cached(
     from computronium.ontology.system import SystemConfig
     from computronium.state.transitions import PlasticityConfig
 
+    coordinate = cache_key.coordinate
+    # Convert geometry back to mutable format with lists for validation
+    geometry_dict = {k: _restore_mutable(v) for k, v in cache_key.geometry_explicit}
+    input_shape = cache_key.input_shape
+    output_dim = cache_key.output_dim
+    param_budget = cache_key.param_budget
+
     active = harvest_schema().active(coordinate)
     substrate_name = coordinate.substrate
     dynamics_name = coordinate.dynamics
-
-    # Reconstruct geometry dict from key
-    geometry_dict = dict(geometry_key)
 
     gcfg = _fit_geometry(
         _geometry_mapping(
@@ -1045,22 +1076,11 @@ def compose_configs(  # ruff: ignore[too-many-locals]
         if edge_index is not None:
             geometry_dict["edge_index"] = edge_index
 
-    # Convert geometry to hashable key for cache
-    geometry_items = []
-    for k, v in sorted(geometry_dict.items()):
-        if isinstance(v, list):
-            v = tuple(v)
-        elif isinstance(v, dict):
-            v = tuple(sorted(v.items()))
-        geometry_items.append((k, v))
-    geometry_key = tuple(geometry_items)
-
-    cache_key = _compose_configs_cache_key(
+    # Build cache key using the ComposeCacheKey dataclass
+    cache_key = ComposeCacheKey.from_compose_args(
         coordinate, geometry_dict, input_shape, output_dim, param_budget
     )
-    return _compose_configs_cached(
-        cache_key, coordinate, geometry_key, input_shape, output_dim, param_budget
-    )
+    return _compose_configs_cached(cache_key)
 
 
 def compose_cell_system(
