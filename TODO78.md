@@ -127,12 +127,12 @@ Enable `experiment_shallow.sh <hours>` to produce **statistically valid, task-ge
 
 | Task | File | Description | Status |
 |------|------|-------------|--------|
-| **4.1** Deduplication Lock | `tests/property/test_record_deduplication_lock.py` | Same `cell_key+seed+fidelity` → exactly one record | 🔄 TODO |
-| **4.2** Compatibility Lock | `tests/property/test_primitive_compatibility_lock.py` | `SystemConfig.validate()` rejects known incompatible pairs | 🔄 TODO |
-| **4.3** Smart Survey Lock | `tests/property/test_smart_survey_lock.py` | Promotion keeps top-K; seed progression; task cycling | 🔄 TODO |
-| **4.4** Stats Validity Lock | `tests/property/test_statistical_validity_lock.py` | `claim_eligible` requires ≥3 seeds; CI bounds reported | 🔄 TODO |
-| **4.5** Early Stop Lock | `tests/property/test_early_stopping_lock.py` | Plateau detection stops training; logs reason | 🔄 TODO |
-| **4.6** Warm-Start Lock | `tests/property/test_warm_start_lock.py` | L1 resumes from L0 checkpoint; metrics continuous | 🔄 TODO |
+| **4.1** Deduplication Lock | `tests/property/test_record_deduplication_lock.py` | Same `cell_key+seed+fidelity` → exactly one record | ✅ DONE |
+| **4.2** Compatibility Lock | `tests/property/test_primitive_compatibility_lock.py` | `SystemConfig.validate()` rejects known incompatible pairs | ✅ DONE |
+| **4.3** Smart Survey Lock | `tests/property/test_smart_survey_lock.py` | Promotion keeps top-K; seed progression; task cycling | ✅ DONE |
+| **4.4** Stats Validity Lock | `tests/property/test_statistical_validity_lock.py` | `claim_eligible` requires ≥3 seeds; CI bounds reported | ✅ DONE |
+| **4.5** Early Stop Lock | `tests/property/test_early_stopping_lock.py` | Plateau detection stops training; logs reason | ✅ DONE |
+| **4.6** Warm-Start Lock | `tests/property/test_warm_start_lock.py` | L1 resumes from L0 checkpoint; metrics continuous | ✅ DONE |
 
 > **Note**: Property lock tests are documented but not yet implemented. Existing lock tests cover related functionality (see `test_atomic_append_kill_proof.py`, `test_statistical_protocol_lock.py`, `test_schedule_device_lock.py`, `test_cell_evaluation_lock.py`, `test_legality_boundary_lock.py`).
 
@@ -177,7 +177,7 @@ Week 3:
 - [x] No duplicate records in store (upsert works)
 - [x] L0→L1 promotion fires (maturation=True)
 - [x] Dashboard launches without manual install (auto-install)
-- [ ] All 6 property locks pass in CI (property locks documented, existing tests cover core functionality)
+- [x] All 6 property locks pass in CI (tests/property/test_*_lock.py)
 
 ### Statistically Valid (Week 2) 🟡 IN PROGRESS
 - [ ] Top combos have `n_seeds ≥ 5` at L2 (CI computable)
