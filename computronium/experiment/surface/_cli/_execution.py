@@ -295,6 +295,20 @@ def execute_spec(
             **policy_context(spec, policy_name, shape=task_shape, deadline=deadline),
         )
 
+        # Create allocator for multi-fidelity promotion (smart-survey profile)
+        # or when maturation/deep_tier is enabled
+        allocator = None
+        if spec.profile == "smart-survey" or (spec.maturation and spec.deep_tier):
+            from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
+
+            allocator = EvidenceDrivenAllocator(
+                promotion_threshold=spec.promotion_threshold,
+                divergence_threshold=2.0,
+                stagnation_patience=spec.early_stopping_patience if spec.early_stopping_patience > 0 else 3,
+                max_fidelity="L2" if spec.deep_tier else "L1",
+                fidelities=("L0", "L1", "L2") if spec.deep_tier else ("L0", "L1"),
+            )
+
         # Without S10 Decide there is no decision to continue or stop on, so
         # the loop would run until the space is exhausted by some other means.
         max_rounds = None
@@ -311,6 +325,7 @@ def execute_spec(
                 backend=LocalBackend(max_workers=limits.cell_workers),
                 seed=spec.seed,
                 max_rounds=max_rounds,
+                allocator=allocator,
                 # The control channel the dashboard drives this run through:
                 # the same path the dashboard derives from the same store
                 # (TODO70).

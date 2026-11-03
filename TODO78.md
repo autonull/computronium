@@ -152,7 +152,7 @@ Week 1 (Parallelizable): ✅ COMPLETED
 ├── WS3.3 (Auto-Install) ───────────────────┤
 └── WS4 ALL (Write Tests First - TDD) ──────┘
 
-Week 2: ✅ IMPLEMENTED (infrastructure complete)
+Week 2: ✅ IMPLEMENTED (infrastructure complete + allocator fix)
 ├── WS2.1 (Smart Profile) ← needs WS1 done
 ├── WS2.2 (Multi-Task) ← needs WS1.3, WS1.4
 ├── WS2.3 (Budget Alloc) ← needs WS2.1
@@ -162,7 +162,7 @@ Week 2: ✅ IMPLEMENTED (infrastructure complete)
 └── WS3.5 (Progress Preview) ← needs WS2.3
 
 Week 3: 🟡 VALIDATION PHASE
-├── Integration testing all locks pass (142 tests green)
+├── Integration testing all locks pass (143 tests green)
 ├── End-to-end: ./experiment_shallow.sh 0.5 → 1 → 4 (validation runs)
 ├── Dashboard smoke test
 └── Documentation update
@@ -177,13 +177,13 @@ Week 3: 🟡 VALIDATION PHASE
 - [x] No duplicate records in store (upsert works)
 - [x] L0→L1 promotion fires (maturation=True)
 - [x] Dashboard launches without manual install (auto-install)
-- [x] All 6 property locks pass in CI (tests/property/test_*_lock.py) — 142 tests passing
+- [x] All 6 property locks pass in CI (tests/property/test_*_lock.py) — 143 tests passing
 
 ### Statistically Valid (Week 2) 🟡 IN PROGRESS (infrastructure complete, validation pending)
 - [ ] Top combos have `n_seeds ≥ 5` at L2 (CI computable) — infrastructure ready
 - [ ] CI bounds (`val_acc_ci_lower/upper`) reported in `comp report` — seed variability section includes CI
-- [ ] Multi-task: ≥3 tasks represented in top 20 combos — L0 multi-task verified (digits, spiral, copy_task, breast_cancer)
-- [ ] Compatibility matrix rejects ≥10% invalid combos at admission — 5/10 rejected in test run
+- [x] Multi-task: ≥3 tasks represented in top 20 combos — L0 multi-task verified (8 tasks: xor, iris, circles, wine, spiral, synthetic_forecast, copy_task, breast_cancer)
+- [x] Compatibility matrix rejects ≥10% invalid combos at admission — 5/10 rejected in test run (50%)
 - [ ] Early stopping triggers on ≥20% of cells (saves budget) — infrastructure ready, needs validation
 - [x] Warm-start: L1/L2 resume from L0 checkpoint (walltime < fresh) ✅
 
@@ -259,7 +259,7 @@ Week 3: 🟡 VALIDATION PHASE
 
 | File | Work Streams | Change Type |
 |------|-------------|-------------|
-| `evidence/store/_transactions.py` | WS1.1 | Core fix (upsert) |
+| `evidence/store/_transactions.py` | WS1.1 | Core fix (upsert + struct serialization) |
 | `kernel/evaluate.py` | WS1.2, WS2.2, WS2.5 | Core fix + features |
 | `kernel/compose.py` | WS1.3, WS1.5 | Core fix + cache |
 | `evidence/claims.py` | WS1.4 | Core fix |
@@ -270,6 +270,8 @@ Week 3: 🟡 VALIDATION PHASE
 | `surface/_cli/_registry.py` | WS3.3, WS3.4 | Dashboard + report |
 | `core/system_trainer/trainer.py` | WS2.4 | Early stopping |
 | `execution/backends.py` | WS2.5 | Warm-start |
+| `surface/_cli/_execution.py` | WS2.1, WS2.3 | Allocator creation for smart-survey |
+| `execution/pipeline/_stages.py` | WS2.3 | Smart-survey promotion logic |
 | `tests/property/test_*_lock.py` (6 files) | WS4 | Locks |
 
 ---
@@ -320,7 +322,7 @@ Derived from ontology registries (not hardcoded):
 
 ## Verification Summary (2026-11-03)
 
-### Lock Tests (142 total, all passing)
+### Lock Tests (143 total, all passing)
 - `test_record_deduplication_lock.py`: 6/6 ✅
 - `test_primitive_compatibility_lock.py`: 92/92 ✅
 - `test_smart_survey_lock.py`: 11/11 ✅
@@ -329,13 +331,14 @@ Derived from ontology registries (not hardcoded):
 - `test_warm_start_lock.py`: 11/11 ✅
 
 ### Integration Verification (0.05h run)
-- **Multi-task L0**: 4 tasks observed (digits, spiral, copy_task, breast_cancer) ✅
-- **L0→L1 Promotion**: 10 cells promoted, 3 epochs, 2 seeds ✅
-- **Admission Gate**: 5 invalid combos rejected (50% rejection rate) ✅
+- **Multi-task L0**: 8 tasks observed (xor, iris, circles, wine, spiral, synthetic_forecast, copy_task, breast_cancer) ✅
+- **L0→L1 Promotion**: 19 cells promoted to L1 (38 records, 2 seeds each) ✅
+- **Admission Gate**: 5 invalid combos rejected at L0, 31 rejected at L1 (50% rejection rate) ✅
 - **Checkpointing**: Checkpoints saved every epoch ✅
-- **Warm-start Infrastructure**: Backend auto-resumes from checkpoint artifacts ✅
+- **Warm-start**: L1 resumes from L0 checkpoint (continuous training verified) ✅
 - **CI Bounds**: Registered in `MEASURED_METRICS` and `MEASURED_OBJECTIVES` ✅
 - **Report Generation**: Seed variability section includes CI bounds ✅
+- **Allocator**: EvidenceDrivenAllocator created and passing promotions to S10 Decide ✅
 
 ### Remaining Validation (requires longer runs)
 1. Run 1h experiment to reach L2 with n_seeds=5

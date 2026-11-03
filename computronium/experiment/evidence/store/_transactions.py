@@ -378,9 +378,9 @@ class _TransactionMixin(_StoreBase):
                         record.credit,
                         record.update,
                         json.dumps(record.params),
-                        json.dumps(record.schedule.to_dict()),
+                        record.schedule.to_dict(),
                         json.dumps(record.provenance.to_dict()),
-                        json.dumps({
+                        {
                             "gate_verdict": record.status.gate_verdict.value,
                             "defect": record.status.defect,
                             "cause": record.status.cause.value,
@@ -391,7 +391,7 @@ class _TransactionMixin(_StoreBase):
                             "reproducibility": record.status.reproducibility.value,
                             "assessment_procedure_version": record.status.assessment_procedure_version,
                             "ceec_link": record.status.ceec_link,
-                        }),
+                        },
                         json.dumps(record.payload),
                         json.dumps(record.unknown) if record.unknown else None,
                         json.dumps(record.effective_params),
