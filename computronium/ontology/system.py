@@ -6,7 +6,7 @@ import logging
 import warnings
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, Self, TypeVar, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, Self, TypeVar, cast, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -348,9 +348,6 @@ _PREDICTIVE_SETTLING_CREDITS = {
 # before full compose/validate. See TODO78 Appendix for seed data.
 # ============================================================
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -593,14 +590,58 @@ def check_compatibility_matrix(
     return violations
 
 
-# Backwards-compatible matrix export (for any external consumers)
-# Built from the flat rules to ensure consistency
-COMPATIBILITY_MATRIX: dict[str, dict[str, set[str]]] = {}
-for rule in _INCOMPATIBILITY_RULES:
-    matrix_key = f"{rule.axis_a}_{rule.axis_b}"
-    if matrix_key not in COMPATIBILITY_MATRIX:
-        COMPATIBILITY_MATRIX[matrix_key] = {}
-    COMPATIBILITY_MATRIX[matrix_key].setdefault(rule.value_a, set()).add(rule.value_b)
+def _build_compatibility_matrix() -> dict[str, dict[str, set[str]]]:
+    """Build compatibility matrix from flat rules on demand.
+
+    This replaces the module-level eager construction, avoiding import-time
+    computation and allowing the matrix to be derived from the single source
+    of truth (_INCOMPATIBILITY_RULES) whenever needed.
+    """
+    matrix: dict[str, dict[str, set[str]]] = {}
+    for rule in _INCOMPATIBILITY_RULES:
+        matrix_key = f"{rule.axis_a}_{rule.axis_b}"
+        if matrix_key not in matrix:
+            matrix[matrix_key] = {}
+        matrix[matrix_key].setdefault(rule.value_a, set()).add(rule.value_b)
+    return matrix
+
+
+# Lazy compatibility matrix - built on first access
+_COMPATIBILITY_MATRIX: dict[str, dict[str, set[str]]] | None = None
+
+
+def get_compatibility_matrix() -> dict[str, dict[str, set[str]]]:
+    """Get the compatibility matrix, building it lazily on first access."""
+    global _COMPATIBILITY_MATRIX  # ruff: ignore[global-statement]
+    if _COMPATIBILITY_MATRIX is None:
+        _COMPATIBILITY_MATRIX = _build_compatibility_matrix()
+    return _COMPATIBILITY_MATRIX
+
+
+# For backwards compatibility - property that builds on first access
+class _LazyCompatibilityMatrix:
+    """Lazy proxy for COMPATIBILITY_MATRIX to maintain backwards compatibility."""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(get_compatibility_matrix(), name)
+
+    def __getitem__(self, key: str) -> Any:
+        return get_compatibility_matrix()[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in get_compatibility_matrix()
+
+    def keys(self):
+        return get_compatibility_matrix().keys()
+
+    def items(self):
+        return get_compatibility_matrix().items()
+
+    def values(self):
+        return get_compatibility_matrix().values()
+
+
+COMPATIBILITY_MATRIX = _LazyCompatibilityMatrix()
 
 __all__ = [
     "COMPATIBILITY_MATRIX",
@@ -610,6 +651,7 @@ __all__ = [
     "SystemConfig",
     "SystemState",
     "check_compatibility_matrix",
+    "get_compatibility_matrix",
 ]
 
 

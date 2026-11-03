@@ -307,30 +307,7 @@ class _TransactionMixin(_StoreBase):
         This key identifies a unique cell measurement across runs/rounds,
         ignoring budget_id which differs across rounds.
         """
-        from computronium.experiment.execution.dedup import dedup_key
-
-        return dedup_key(record)
-
-    def _find_existing_by_dedup(self, record: Record) -> str | None:
-        """Find an existing record_id for the same deduplication key in this run.
-
-        Returns the existing record_id if found, None otherwise.
-        """
-        if self._conn is None:
-            raise StoreError("Connection not initialized")
-        cell_key, seed, fidelity = self._dedup_key(record)
-        row = self._conn.execute(
-            """
-            SELECT record_id FROM records
-            WHERE run_id = ? AND cell_key = ?
-              AND CAST(schedule.seed AS INTEGER) = ?
-              AND CAST(schedule.fidelity AS TEXT) = ?
-            ORDER BY seq DESC
-            LIMIT 1
-            """,
-            [record.run_id, cell_key, seed, fidelity],
-        ).fetchone()
-        return row[0] if row else None
+        return (record.cell_key, record.schedule.seed, record.schedule.fidelity)
 
     def append(self, record: Record) -> Record:
         """Upsert a record on (cell_key, seed, fidelity) composite key.
@@ -349,11 +326,22 @@ class _TransactionMixin(_StoreBase):
 
         with self._write_lock:
             # Check for existing record with same dedup key
-            existing_id = self._find_existing_by_dedup(record)
-            if existing_id:
+            cell_key, seed, fidelity = self._dedup_key(record)
+            row = self._conn.execute(
+                """
+                SELECT record_id FROM records
+                WHERE run_id = ? AND cell_key = ?
+                  AND CAST(schedule.seed AS INTEGER) = ?
+                  AND CAST(schedule.fidelity AS TEXT) = ?
+                ORDER BY seq DESC
+                LIMIT 1
+                """,
+                [record.run_id, cell_key, seed, fidelity],
+            ).fetchone()
+            if row:
                 # Upsert: delete old, insert new (keeps latest)
                 self._conn.execute(
-                    "DELETE FROM records WHERE record_id = ?", [existing_id]
+                    "DELETE FROM records WHERE record_id = ?", [row[0]]
                 )
 
             # Insert record - seq is assigned by DEFAULT nextval('record_seq')

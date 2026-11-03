@@ -900,7 +900,10 @@ def _restore_mutable(value: Any) -> Any:
 
 @dataclass(frozen=True, slots=True)
 class ComposeCacheKey:
-    """Cache key for compose_configs: all structural parameters affecting composition."""
+    """Cache key for compose_configs: all structural parameters affecting composition.
+
+    Fully hashable - contains no mutable objects or external references.
+    """
 
     substrate: str
     geometry: str
@@ -913,8 +916,6 @@ class ComposeCacheKey:
     input_shape: tuple[int, ...]
     output_dim: int
     param_budget: int
-    # Store coordinate for use in cached function
-    coordinate: "Coordinate" = None  # type: ignore[assignment]
 
     @classmethod
     def from_compose_args(
@@ -949,12 +950,30 @@ class ComposeCacheKey:
             input_shape=input_shape,
             output_dim=output_dim,
             param_budget=param_budget,
-            coordinate=coordinate,
         )
+
+    def to_coordinate(self) -> Coordinate:
+        """Reconstruct a minimal coordinate for the cached function."""
+        from computronium.experiment.schema.coordinate import Coordinate
+
+        params = dict(self.params)
+        return Coordinate(
+            substrate=self.substrate,
+            geometry=self.geometry,
+            dynamics=self.dynamics,
+            plasticity=self.plasticity,
+            credit=self.credit,
+            update=self.update,
+            params=params,
+        )
+
+    def to_geometry_dict(self) -> dict[str, object]:
+        """Reconstruct geometry dict with mutable values for validation."""
+        return {k: _restore_mutable(v) for k, v in self.geometry_explicit}
 
 
 @lru_cache(maxsize=10000)
-def _compose_configs_cached(cache_key: ComposeCacheKey) -> Any:
+def _compose_configs_cached(cache_key: ComposeCacheKey) -> Any:  # ruff: ignore[too-many-locals]
     """Cached inner implementation of compose_configs.
 
     Uses the ComposeCacheKey dataclass directly for the LRU cache.
@@ -967,9 +986,8 @@ def _compose_configs_cached(cache_key: ComposeCacheKey) -> Any:
     from computronium.ontology.system import SystemConfig
     from computronium.state.transitions import PlasticityConfig
 
-    coordinate = cache_key.coordinate
-    # Convert geometry back to mutable format with lists for validation
-    geometry_dict = {k: _restore_mutable(v) for k, v in cache_key.geometry_explicit}
+    coordinate = cache_key.to_coordinate()
+    geometry_dict = cache_key.to_geometry_dict()
     input_shape = cache_key.input_shape
     output_dim = cache_key.output_dim
     param_budget = cache_key.param_budget

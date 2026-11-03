@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         Fragment,
         StageContext,
     )
+    from computronium.experiment.kernel.evaluate import TaskScheduler
     from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
@@ -779,12 +780,13 @@ class _StageMixin(_PipelineBase):
     ) -> list[tuple[Coordinate, Schedule]]:
         """Apply smart-survey multi-fidelity promotion rules.
 
-        The incoming promotions already have the TARGET fidelity (L1 for L0→L1, L2 for L1→L2)
-        with correct seed/epoch counts from _build_allocator_candidates. This function:
+        The incoming promotions already have the TARGET fidelity (L1 for L0→L1,
+        L2 for L1→L2) with correct seed/epoch counts from
+        _build_allocator_candidates. This function:
         - Filters by ruler-relative normalized validation_accuracy
         - Applies promotion threshold
-        - Expands to appropriate tasks for the target fidelity (task cycling)
-        - Limits promotions to budget allocation
+        - Uses original task from source fidelity (avoids task cycling rejections)
+        - Limits promotions to budget allocation fractions
         """
         from computronium.experiment.kernel.evaluate import TaskScheduler
 
@@ -792,11 +794,23 @@ class _StageMixin(_PipelineBase):
             return promotions
 
         promotion_threshold = getattr(spec, "promotion_threshold", 0.1)
-
-        # Single scheduler instance for ruler-relative normalization
         scheduler = TaskScheduler()
 
         # Group records by cell_key and fidelity to find best per cell
+        cell_best = self._build_cell_best_map(records, scheduler)
+
+        # Filter promotions by threshold and build eligible list
+        eligible_promotions = self._filter_promotions_by_threshold(
+            promotions, cell_best, promotion_threshold
+        )
+
+        # Limit promotions to budget allocation fractions
+        return self._limit_promotions_by_budget(eligible_promotions, cell_best, spec)
+
+    def _build_cell_best_map(
+        self, records: list[Record], scheduler: TaskScheduler
+    ) -> dict[str, tuple[float, Record]]:
+        """Build map of best normalized accuracy per cell per fidelity."""
         cell_best: dict[str, tuple[float, Record]] = {}
         for record in records:
             if record.status.gate_verdict.value != "PASS" or record.status.quarantine:
@@ -809,18 +823,10 @@ class _StageMixin(_PipelineBase):
             baseline = scheduler.get_baseline(task_name)
             norm_acc = scheduler.normalize_score(val_acc, task_name, baseline)
 
-            # Track best per cell per fidelity
             key = f"{cell_key}|{fidelity}"
             if key not in cell_best or norm_acc > cell_best[key][0]:
                 cell_best[key] = (norm_acc, record)
-
-        # Filter promotions by threshold and build eligible list
-        eligible_promotions = self._filter_promotions_by_threshold(
-            promotions, cell_best, promotion_threshold
-        )
-
-        # Limit promotions to budget allocation fractions
-        return self._limit_promotions_by_budget(eligible_promotions, cell_best, spec)
+        return cell_best
 
     def _filter_promotions_by_threshold(
         self,
@@ -832,7 +838,6 @@ class _StageMixin(_PipelineBase):
 
         Returns promotions with corrected schedules (target fidelity, original task).
         """
-        from computronium.experiment.schema.coordinate import Schedule
 
         eligible: list[tuple[Coordinate, Schedule]] = []
         for coord, sched in promotions:
@@ -907,30 +912,32 @@ class _StageMixin(_PipelineBase):
         cell_best: dict[str, tuple[float, Record]],
         spec: RunSpec,
     ) -> list[tuple[Coordinate, Schedule]]:
-        """Limit promotions according to budget allocation fractions.
+        """Limit promotions according to smart-survey budget allocation.
 
-        Budget split: 40% L0→L1, 40% L1→L2, 20% L2 deepening.
+        Budget split: 40% for L0→L1 promotions, 40% for L1→L2 promotions,
+        20% reserved for L2 deepening (handled by allocator, not here).
         """
         if not eligible:
             return eligible
 
         # Sort by normalized accuracy descending (source fidelity score)
         eligible.sort(
-            key=lambda x: (
-                -cell_best.get(
-                    f"{x[0].cell_key()}|{self._source_fidelity_for(x[1].fidelity)}",
-                    (0.0,),
-                )[0]
-            )
+            key=lambda x: -cell_best.get(
+                f"{x[0].cell_key()}|{self._source_fidelity_for(x[1].fidelity)}",
+                (0.0,),
+            )[0]
         )
+
+        # Budget fractions from smart-survey spec (40% each for L0→L1 and L1→L2)
+        promo_fraction = getattr(spec, "promotion_fraction", 0.4)
 
         # Count promotions per fidelity transition
         l0_l1_count = sum(1 for _, s in eligible if s.fidelity == "L1")
         l1_l2_count = sum(1 for _, s in eligible if s.fidelity == "L2")
 
-        # Apply budget fractions
-        max_l0_l1 = max(1, int(l0_l1_count * 0.4))
-        max_l1_l2 = max(1, int(l1_l2_count * 0.4))
+        # Apply budget fractions (minimum 1 promotion per tier if any eligible)
+        max_l0_l1 = max(1, int(l0_l1_count * promo_fraction))
+        max_l1_l2 = max(1, int(l1_l2_count * promo_fraction))
 
         limited: list[tuple[Coordinate, Schedule]] = []
         l0_l1_seen = 0
@@ -940,13 +947,12 @@ class _StageMixin(_PipelineBase):
                 if l0_l1_seen < max_l0_l1:
                     limited.append((coord, sched))
                     l0_l1_seen += 1
-            elif sched.fidelity == "L2":
-                if l1_l2_seen < max_l1_l2:
-                    limited.append((coord, sched))
-                    l1_l2_seen += 1
+            elif sched.fidelity == "L2" and l1_l2_seen < max_l1_l2:
+                limited.append((coord, sched))
+                l1_l2_seen += 1
         return limited
 
-    async def _execute_batch_with_isolation(
+    async def _execute_batch_with_isolation(  # ruff: ignore[too-many-branches]
         self,
         proposals: list[Proposal],
         progress_bar: tqdm | None = None,  # type: ignore[reportInvalidTypeForm]

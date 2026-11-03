@@ -93,10 +93,7 @@ def _compute_replication_uncertainty(
             # For small n, use t-distribution critical value
             from scipy import stats
 
-            if n_seeds >= 30:
-                t_crit = 1.96  # normal approximation
-            else:
-                t_crit = float(stats.t.ppf(0.975, n_seeds - 1))
+            t_crit = 1.96 if n_seeds >= 30 else float(stats.t.ppf(0.975, n_seeds - 1))
             margin = t_crit * std / math.sqrt(n_seeds)
             ci_lower = mean - margin
             ci_upper = mean + margin
@@ -200,24 +197,28 @@ def _attach_ci_to_payload(
 # =============================================================================
 
 
-def claim_eligible(record: Record) -> bool:
+def _claim_base_check(record: Record, fidelity: str = "L2") -> bool:
+    """Base claim check: PASS gate, not quarantined, correct fidelity."""
+    return (
+        record.status.gate_verdict.value == "PASS"
+        and not record.status.quarantine
+        and record.schedule.fidelity == fidelity
+    )
+
+
+def claim_eligible(record: Record, min_seeds: int = DEFAULT_MIN_SEEDS) -> bool:
     """Check if a record is eligible for claim consideration.
 
     Claim prefilter (plain SQL, per plan §2):
     WHERE status.gate_verdict = 'PASS'
     AND NOT status.quarantine
     AND schedule.fidelity = 'L2'
-    AND schedule.n_seeds >= 5
+    AND schedule.n_seeds >= min_seeds
 
     This is the pure Python predicate; the SQL prefilter lives in
     RecordStore.claim_eligible_prefilter().
     """
-    return (
-        record.status.gate_verdict.value == "PASS"
-        and not record.status.quarantine
-        and record.schedule.fidelity == "L2"
-        and record.schedule.n_seeds >= DEFAULT_MIN_SEEDS
-    )
+    return _claim_base_check(record) and record.schedule.n_seeds >= min_seeds
 
 
 def replication_key(record: Record) -> str:
@@ -255,11 +256,7 @@ def claim_eligible_by_achieved_seeds(
     Returns:
         True if achieved seeds >= min_seeds and other criteria met.
     """
-    if not (
-        record.status.gate_verdict.value == "PASS"
-        and not record.status.quarantine
-        and record.schedule.fidelity == "L2"
-    ):
+    if not _claim_base_check(record):
         return False
 
     achieved = store.count_achieved_seeds(
@@ -269,16 +266,6 @@ def claim_eligible_by_achieved_seeds(
     )
 
     return achieved >= min_seeds
-
-
-def claim_eligible_strict(record: Record, min_seeds: int = DEFAULT_MIN_SEEDS) -> bool:
-    """Strict claim eligibility with configurable minimum seeds."""
-    return (
-        record.status.gate_verdict.value == "PASS"
-        and not record.status.quarantine
-        and record.schedule.fidelity == "L2"
-        and record.schedule.n_seeds >= min_seeds
-    )
 
 
 # =============================================================================
@@ -1116,7 +1103,6 @@ __all__ = [
     "check_leakage",
     "claim_eligible",
     "claim_eligible_by_achieved_seeds",
-    "claim_eligible_strict",
     "compare_matched_cost",
     "derive_claims",
     "evaluation_data_allowed",

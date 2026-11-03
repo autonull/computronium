@@ -12,7 +12,6 @@ from computronium.experiment.evidence.claims import (
     _attach_ci_to_payload,
     _compute_replication_uncertainty,
     claim_eligible,
-    claim_eligible_strict,
 )
 from computronium.experiment.schema import (
     Coordinate,
@@ -140,14 +139,14 @@ class TestStatisticalValidityLock:
         record_quarantine = _make_record(fidelity="L2", n_seeds=5, quarantine=True)
         assert not claim_eligible(record_quarantine)
 
-    def test_claim_eligible_strict_configurable_min_seeds(self) -> None:
-        """claim_eligible_strict allows configurable minimum seeds."""
+    def test_claim_eligible_configurable_min_seeds(self) -> None:
+        """claim_eligible allows configurable minimum seeds."""
         record_3 = _make_record(fidelity="L2", n_seeds=3)
         assert not claim_eligible(record_3)  # Default requires 5
 
-        # With strict and min_seeds=3
-        assert claim_eligible_strict(record_3, min_seeds=3)
-        assert not claim_eligible_strict(record_3, min_seeds=5)
+        # With min_seeds=3
+        assert claim_eligible(record_3, min_seeds=3)
+        assert not claim_eligible(record_3, min_seeds=5)
 
     def test_default_min_seeds_is_5(self) -> None:
         """DEFAULT_MIN_SEEDS constant is 5 (for claim-grade)."""
