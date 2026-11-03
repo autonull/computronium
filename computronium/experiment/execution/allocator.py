@@ -89,6 +89,9 @@ class AllocationState:
         default_factory=dict
     )
 
+    # Measurement keys that have been completed (for deduplication)
+    completed_measurement_keys: set[str] = field(default_factory=set)
+
     # Waste report data
     wasted_evaluations: int = 0
     promoted_cells: int = 0
@@ -161,6 +164,10 @@ class EvidenceDrivenAllocator:
         fidelity = record.schedule.fidelity
         seed = record.schedule.seed
         score = self._extract_score(record)
+        measurement_key = record.measurement_key
+
+        # Track completed measurement keys for deduplication
+        self._state.completed_measurement_keys.add(measurement_key)
 
         # Update fidelity history
         if cell_key not in self._state.fidelity_history:
@@ -283,6 +290,10 @@ class EvidenceDrivenAllocator:
         promotions = []
         for coord, sched in candidates:
             cell_key = coord.cell_key()
+            measurement_key = coord.measurement_key(sched)
+            # Skip already-measured cells entirely
+            if measurement_key in self._state.completed_measurement_keys:
+                continue
             if cell_key in self._state.promotion_candidates:
                 # Check if this schedule matches the promotion
                 promo = self._state.promotion_candidates[cell_key]

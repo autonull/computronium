@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.kernel.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
 
@@ -211,17 +212,28 @@ class _StageMixin(_PipelineBase):
     ) -> list[tuple[Coordinate, Schedule]]:
         """Build candidate coordinates for allocator to consider for promotion.
 
-        Generates structural coordinates at the next fidelity level for cells
-        that have shown promise at lower fidelity.
+        Generates structural coordinates at the NEXT fidelity level (L1 for L0 cells,
+        L2 for L1 cells) with correct seed/epoch counts from the profile's
+        fidelity_seeds/fidelity_epochs. The smart-survey promotion logic
+        (_apply_smart_survey_promotion) will further refine these with ruler-relative
+        normalization, promotion thresholds, task cycling, and budget limits.
+
+        Filters out coordinates that are already measured or rejected.
         """
         from computronium.experiment.kernel.evaluate import task_shape
         from computronium.experiment.kernel.search_space import iter_candidates
+        from computronium.experiment.schema.coordinate import Schedule
 
         candidates = []
-        # Generate candidates at explore fidelity (L0/L1) for promotion to exploit fidelity
         spec = self._config.run_spec
-        # We need to generate candidates without modifying the original spec
-        # Create a temporary spec-like object or use iter_candidates directly
+        # Get fidelity progression from spec (smart-survey profile)
+        fidelity_seeds = spec.fidelity_seeds or {"L0": 1, "L1": 2, "L2": 5}
+        fidelity_epochs = spec.fidelity_epochs or {"L0": 1, "L1": 3, "L2": 10}
+
+        # Get already-measured and rejected keys to skip
+        completed_keys = self._state.completed_measurement_keys
+        rejected_keys = self._state.rejected_keys
+
         for coord, sched in iter_candidates(
             spec,
             search_space,
@@ -232,15 +244,14 @@ class _StageMixin(_PipelineBase):
         ):
             # Only consider cells at explore fidelity for promotion
             if sched.fidelity in {"L0", "L1"}:
-                # Create a new schedule at the next fidelity
+                # Check if this coordinate (at this fidelity) is already measured or rejected
+                # The measurement key includes fidelity, so check the target fidelity schedule
                 next_fidelity = "L1" if sched.fidelity == "L0" else "L2"
-                from computronium.experiment.schema.coordinate import Schedule
-
                 promo_sched = Schedule(
                     fidelity=next_fidelity,
                     seed=sched.seed,
-                    n_seeds=sched.n_seeds,
-                    epochs=sched.epochs * 2,  # More epochs at higher fidelity
+                    n_seeds=fidelity_seeds.get(next_fidelity, 1),
+                    epochs=fidelity_epochs.get(next_fidelity, 1),
                     batch_limit=sched.batch_limit,
                     budget_id="promotion",
                     task_id=sched.task_id,
@@ -249,9 +260,14 @@ class _StageMixin(_PipelineBase):
                     deterministic=sched.deterministic,
                     num_workers=sched.num_workers,
                     precision=sched.precision,
-                    checkpoint_every_n=sched.checkpoint_every_n,
-                    early_stopping_patience=sched.early_stopping_patience,
+                    checkpoint_every_n=spec.checkpoint_every_n,
+                    early_stopping_patience=spec.early_stopping_patience,
                 )
+                # Check if any seed of this promotion is already measured
+                key = coord.measurement_key(promo_sched)
+                if key in completed_keys or key in rejected_keys:
+                    continue
+
                 candidates.append((coord, promo_sched))
 
                 if len(candidates) >= 50:  # Limit candidates
@@ -729,22 +745,25 @@ class _StageMixin(_PipelineBase):
     ) -> list[tuple[Coordinate, Schedule]]:
         """Apply smart-survey multi-fidelity promotion rules.
 
-        - Promotes top-K by validation_accuracy (ruler-relative normalized)
-        - Seed progression: L0(1) → L1(2) → L2(5)
-        - Epoch progression: L0(1) → L1(3) → L2(10)
-        - Task cycling: CHEAP → CHEAP+MEDIUM → ALL
-        - Budget allocation: 40/40/20 split with fallbacks
+        The incoming promotions already have the TARGET fidelity (L1 for L0→L1, L2 for L1→L2)
+        with correct seed/epoch counts from _build_allocator_candidates. This function:
+        - Filters by ruler-relative normalized validation_accuracy
+        - Applies promotion threshold
+        - Expands to appropriate tasks for the target fidelity (task cycling)
+        - Limits promotions to budget allocation
         """
-        from computronium.domains.registry import get_cheap_tasks, get_medium_tasks, get_expensive_tasks
         from computronium.experiment.kernel.evaluate import TaskScheduler
 
         if not records:
             return promotions
 
-        # Get fidelity seeds/epochs from spec
-        fidelity_seeds = spec.fidelity_seeds or {"L0": 1, "L1": 2, "L2": 5}
-        fidelity_epochs = spec.fidelity_epochs or {"L0": 1, "L1": 3, "L2": 10}
         promotion_threshold = spec.promotion_threshold if hasattr(spec, 'promotion_threshold') else 0.6
+
+        # Budget allocation split: 40% L0→L1, 40% L1→L2, 20% L2 deepening
+        # These constants document the intended budget allocation for smart-survey profile
+        L0_L1_BUDGET_FRACTION = 0.4  # 40% for L0→L1 promotion
+        L1_L2_BUDGET_FRACTION = 0.4  # 40% for L1→L2 promotion
+        L2_DEEPEN_BUDGET_FRACTION = 0.2  # 20% for L2 deepening
 
         # Group records by cell_key and fidelity to find best per cell
         cell_best: dict[str, tuple[float, Record]] = {}
@@ -767,18 +786,19 @@ class _StageMixin(_PipelineBase):
                 cell_best[key] = (norm_acc, record)
 
         # Find cells eligible for promotion (at L0 or L1)
+        # The incoming promotions have TARGET fidelity (L1 or L2)
         eligible_promotions: list[tuple[Coordinate, Schedule]] = []
         for coord, sched in promotions:
             cell_key = coord.cell_key()
-            current_fidelity = sched.fidelity
+            target_fidelity = sched.fidelity  # This is the TARGET fidelity (L1 or L2)
 
-            # Determine next fidelity
-            next_fidelity = "L1" if current_fidelity == "L0" else "L2" if current_fidelity == "L1" else None
-            if next_fidelity is None:
+            # Determine source fidelity (where the cell was evaluated)
+            source_fidelity = "L0" if target_fidelity == "L1" else "L1" if target_fidelity == "L2" else None
+            if source_fidelity is None:
                 continue
 
-            # Check if this cell has a good record at current fidelity
-            best_key = f"{cell_key}|{current_fidelity}"
+            # Check if this cell has a good record at source fidelity
+            best_key = f"{cell_key}|{source_fidelity}"
             if best_key not in cell_best:
                 continue
 
@@ -788,25 +808,22 @@ class _StageMixin(_PipelineBase):
             if norm_acc < promotion_threshold:
                 continue
 
-            # Create promoted schedule with next fidelity settings
-            next_seeds = fidelity_seeds.get(next_fidelity, 1)
-            next_epochs = fidelity_epochs.get(next_fidelity, 1)
-
-            # Determine tasks for next fidelity
+            # Determine tasks for target fidelity (task cycling)
             scheduler = TaskScheduler()
-            next_tasks = scheduler.get_tasks_for_fidelity(next_fidelity)
+            target_tasks = scheduler.get_tasks_for_fidelity(target_fidelity)
 
-            # For each task, create a promotion
-            for task_name in next_tasks:
+            # For each task, create a promotion with the target fidelity schedule
+            # (seed/epoch already correct from _build_allocator_candidates)
+            for task_name in target_tasks:
                 from computronium.experiment.schema.coordinate import Schedule
 
                 promo_sched = Schedule(
-                    fidelity=next_fidelity,
+                    fidelity=target_fidelity,
                     seed=sched.seed,
-                    n_seeds=next_seeds,
-                    epochs=next_epochs,
+                    n_seeds=sched.n_seeds,
+                    epochs=sched.epochs,
                     batch_limit=sched.batch_limit,
-                    budget_id=f"promotion_{next_fidelity}",
+                    budget_id=f"promotion_{target_fidelity}",
                     task_id=task_name,
                     param_budget=sched.param_budget,
                     device=sched.device,
@@ -826,7 +843,7 @@ class _StageMixin(_PipelineBase):
 
         # Limit promotions to budget
         if eligible_promotions:
-            # Sort by normalized accuracy descending
+            # Sort by normalized accuracy descending (source fidelity score)
             eligible_promotions.sort(
                 key=lambda x: -cell_best.get(f"{x[0].cell_key()}|{'L0' if x[1].fidelity == 'L1' else 'L1'}", (0,))[0]
             )
