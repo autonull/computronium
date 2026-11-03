@@ -232,7 +232,8 @@ rm -f "$TMP_HW"
 print_preview() {
     local hours="$1"
     local profile="$2"
-    local budget_seconds=$((hours * 3600))
+    # Use python for floating point arithmetic
+    local budget_seconds=$(python3 -c "print(int(float('${hours}') * 3600))")
 
     if [[ "$profile" == "smart-survey" ]]; then
         # Smart survey budget allocation: 40% L0, 40% L1, 20% L2
