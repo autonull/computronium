@@ -14,7 +14,7 @@
 set -euo pipefail
 
 # Defaults
-HOURS="${1:-}"
+HOURS=""
 PROFILE="survey-24h"
 DRY_RUN=false
 DEVICE="auto"
@@ -22,32 +22,9 @@ MAX_WORKERS=""
 OVERRIDES_JSON=""
 EXTRA_ARGS=()
 
-# Parse arguments
-shift 1 || true
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --profile)
-            PROFILE="${2:-survey-24h}"
-            shift 2
-            ;;
-        --dry-run)
-            DRY_RUN=true
-            shift
-            ;;
-        --device)
-            DEVICE="${2:-auto}"
-            shift 2
-            ;;
-        --max-workers)
-            MAX_WORKERS="${2:-}"
-            shift 2
-            ;;
-        --overrides)
-            OVERRIDES_JSON="${2:-}"
-            shift 2
-            ;;
-        --help|-h)
-            cat <<'EOF'
+# Handle --help/-h immediately (before any other parsing)
+if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+    cat <<'EOF'
 Usage: experiment_shallow.sh <hours> [--profile NAME] [--dry-run] [--device auto|cpu|cuda] [--max-workers N] [--overrides JSON]
 
 Runs a broad survey profile with a time budget in hours.
@@ -75,7 +52,35 @@ Examples:
   experiment_shallow.sh 1 --dry-run
   experiment_shallow.sh 1 --overrides '{"n_seeds": 2, "epochs": 2}'
 EOF
-            exit 0
+    exit 0
+fi
+
+# First positional argument is required hours
+HOURS="${1:-}"
+shift 1 || true
+
+# Parse remaining arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --profile)
+            PROFILE="${2:-survey-24h}"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --device)
+            DEVICE="${2:-auto}"
+            shift 2
+            ;;
+        --max-workers)
+            MAX_WORKERS="${2:-}"
+            shift 2
+            ;;
+        --overrides)
+            OVERRIDES_JSON="${2:-}"
+            shift 2
             ;;
         *)
             EXTRA_ARGS+=("$1")
@@ -120,17 +125,55 @@ fi
 
 cd "$PROJECT_ROOT"
 
-# Check if uv environment is set up
-check_uv_env() {
-    if [[ ! -d ".venv" ]] && [[ ! -f "uv.lock" ]]; then
-        return 1
+# Check if uv environment is set up, offer to install if not
+ensure_uv_env() {
+    local needs_setup=false
+    
+    if [[ ! -d ".venv" ]] || [[ ! -f "uv.lock" ]]; then
+        needs_setup=true
+    else
+        # Quick check if key packages are importable
+        if ! uv run python -c "import torch, optuna, scipy, torchvision, pytest" 2>/dev/null; then
+            needs_setup=true
+        fi
     fi
-    # Quick check if key packages are importable
-    if ! uv run python -c "import torch, optuna, scipy, torchvision, pytest" 2>/dev/null; then
-        return 1
+    
+    if [[ "$needs_setup" == true ]]; then
+        echo "⚠️  UV environment not ready (missing .venv, uv.lock, or dependencies)"
+        echo ""
+        echo "   This script needs the computronium environment with all dev dependencies."
+        echo ""
+        echo "   To set up automatically, run:"
+        echo "     uv venv && uv sync --dev --all-extras"
+        echo ""
+        if [[ -t 0 ]] && [[ -t 1 ]]; then
+            # Interactive terminal - offer to run setup
+            read -r -p "   Run setup now? [y/N] " response
+            case "$response" in
+                [yY][eE][sS]|[yY])
+                    echo "   Setting up environment..."
+                    uv venv && uv sync --dev --all-extras
+                    echo "   ✅ Environment ready"
+                    return 0
+                    ;;
+                *)
+                    echo "   Aborted. Run 'uv venv && uv sync --dev --all-extras' manually first."
+                    exit 1
+                    ;;
+            esac
+        else
+            # Non-interactive - exit with clear message
+            echo ""
+            echo "❌ UV environment not ready. Run this first:" >&2
+            echo "   uv venv && uv sync --dev --all-extras" >&2
+            echo ""
+            echo "   Then re-run this script." >&2
+            exit 1
+        fi
     fi
-    return 0
 }
+
+ensure_uv_env
 
 # Convert hours to seconds (float arithmetic, portable)
 BUDGET_SECONDS=$(python3 -c "print(int(float('${HOURS}') * 3600))" 2>/dev/null || \
@@ -170,6 +213,20 @@ fi
 
 CMD+=("${EXTRA_ARGS[@]}")
 
+# Print hardware info (verified by ensure_uv_env)
+TMP_HW="$(mktemp -t hw_info_XXXXXX.py 2>/dev/null || mktemp /tmp/hw_info_XXXXXX.py)"
+cat > "$TMP_HW" << 'PYEOF'
+import torch, os, psutil
+print(f"  CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"  GPU: {torch.cuda.get_device_name(0)}")
+    print(f"  GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+print(f"  CPU cores: {os.cpu_count()}")
+print(f"  System RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
+PYEOF
+uv run python "$TMP_HW"
+rm -f "$TMP_HW"
+
 # Log configuration
 print_box() {
     local title="$1"
@@ -192,44 +249,6 @@ print_box "survey-24h Experiment (shallow/broad mapping)" \
     "$( [[ "${DRY_RUN}" == true ]] && echo "Mode:           DRY RUN (plan only)" || true )" \
     "Profile:        ${PROFILE}"
 echo ""
-
-# Environment check with visible output
-echo "🔍 Environment check..."
-
-# Create temp file portably
-TMP_CHECK="$(mktemp -t env_check_XXXXXX.py 2>/dev/null || mktemp /tmp/env_check_XXXXXX.py)"
-cat > "$TMP_CHECK" << 'PYEOF'
-import sys
-try:
-    import torch, optuna, scipy, torchvision, pytest
-except ImportError as e:
-    print(f"  Missing dependency: {e}", file=sys.stderr)
-    sys.exit(1)
-
-print(f"  CUDA available: {torch.cuda.is_available()}")
-if torch.cuda.is_available():
-    print(f"  GPU: {torch.cuda.get_device_name(0)}")
-    print(f"  GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-import os, psutil
-print(f"  CPU cores: {os.cpu_count()}")
-print(f"  System RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
-PYEOF
-
-# Run with visible output (not suppressed)
-if ! uv run python "$TMP_CHECK"; then
-    EXIT_CODE=$?
-    rm -f "$TMP_CHECK"
-    echo ""
-    echo "❌ Environment check failed (exit code: $EXIT_CODE)" >&2
-    echo "   The 'uv run' command above shows the actual error." >&2
-    echo ""
-    echo "   Common fixes:" >&2
-    echo "   1. Run: uv sync --dev --all-extras" >&2
-    echo "   2. If on a new machine, ensure uv is installed and try: uv venv && uv sync --dev --all-extras" >&2
-    echo "   3. Check that pyproject.toml has all required dependencies" >&2
-    exit 1
-fi
-rm -f "$TMP_CHECK"
 
 echo ""
 echo "🚀 Executing: ${CMD[*]}"
