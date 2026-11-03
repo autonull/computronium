@@ -186,13 +186,19 @@ class EvidenceDrivenAllocator:
                 score,
             )
             self._state.wasted_evaluations += 1
+            # Keep promotion candidate but don't update best_score with diverged value
+            # The candidate preserves its prior best_score for potential re-evaluation
             return
 
         # Check for stagnation
         if self._is_stagnant(cell_key):
-            logger.info("Cell %s stagnated at %s", cell_key, fidelity)
+            # Only log first time stagnation is detected
+            if cell_key not in self._state.stagnated_cells:
+                logger.info("Cell %s stagnated at %s", cell_key, fidelity)
             self._state.stagnation_score = score
             self._state.stagnated_cells.add(cell_key)
+            # Remove from promotion candidates — stagnated cells don't promote
+            self._state.promotion_candidates.pop(cell_key, None)
             return
 
         # Update or create promotion candidate

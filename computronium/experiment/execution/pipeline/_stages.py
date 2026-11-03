@@ -608,6 +608,9 @@ class _StageMixin(_PipelineBase):
                 await self._train_pending(fragment, all_records)
             case StageId.S7_MEASURE | StageId.S8_RECORD:
                 all_records.extend(fragment.records)
+                # Update completed_measurement_keys so cell_stream knows what's been measured
+                for record in fragment.records:
+                    self._state.completed_measurement_keys.add(record.measurement_key)
                 if stage_id is StageId.S7_MEASURE:
                     # Use all_records which includes the just-trained records from S6_TRAIN
                     await self._attribute_allocation(all_records)
@@ -788,7 +791,7 @@ class _StageMixin(_PipelineBase):
         if not records:
             return promotions
 
-        promotion_threshold = spec.promotion_threshold if hasattr(spec, 'promotion_threshold') else 0.6
+        promotion_threshold = spec.promotion_threshold if hasattr(spec, 'promotion_threshold') else 0.1
 
         # Budget allocation split: 40% L0→L1, 40% L1→L2, 20% L2 deepening
         # These constants document the intended budget allocation for smart-survey profile
@@ -839,9 +842,10 @@ class _StageMixin(_PipelineBase):
             if norm_acc < promotion_threshold:
                 continue
 
-            # Determine tasks for target fidelity (task cycling)
-            scheduler = TaskScheduler()
-            target_tasks = scheduler.get_tasks_for_fidelity(target_fidelity)
+            # Use the original task from the source fidelity schedule
+            # Task cycling to incompatible tasks causes admission gate rejections
+            original_task = sched.task_id or "digits"
+            target_tasks = (original_task,)
 
             # For each task, create a promotion with the target fidelity schedule
             # (seed/epoch already correct from _build_allocator_candidates)

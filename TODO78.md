@@ -75,6 +75,9 @@ Enable `experiment_shallow.sh <hours>` to produce **statistically valid, task-ge
 | **2.3** Budget Allocator | `execution/pipeline/_stages.py` | Dynamic 40/40/20 split (L0/L1/L2) with fallback for short budgets | ✅ DONE |
 | **2.4** Early Stopping | `core/system_trainer/trainer.py` | Plateau detection: stop if val_acc hasn't improved >1% in 3 epochs | ✅ DONE |
 | **2.5** Warm-Start | `core/system_trainer/trainer.py` + `kernel/evaluate.py` | L1/L2 resume from L0 checkpoint (pass `resume_checkpoint_path`) | ✅ DONE |
+| **2.6** Promotion Execution Fix | `execution/pipeline/_stages.py`, `stages_impl.py` | Ensure allocator promotions (L1/L2) are actually executed, not re-proposed as L0 | ✅ DONE (cell_stream freshness fixed) |
+| **2.7** Deadline Enforcement Fix | `execution/pipeline/_budget.py`, `deadline.py` | Soft deadline not triggering in long runs; timeout command not killing process | 🟡 IN PROGRESS |
+| **2.8** Allocator Threshold Fix | `execution/pipeline/_stages.py` | Lower promotion_threshold from 0.6 to 0.1; use original task for promotions | ✅ DONE |
 
 **Smart Profile Spec**:
 ```python
@@ -133,6 +136,7 @@ Enable `experiment_shallow.sh <hours>` to produce **statistically valid, task-ge
 | **4.4** Stats Validity Lock | `tests/property/test_statistical_validity_lock.py` | `claim_eligible` requires ≥3 seeds; CI bounds reported | ✅ DONE (13/13 pass) |
 | **4.5** Early Stop Lock | `tests/property/test_early_stopping_lock.py` | Plateau detection stops training; logs reason | ✅ DONE (10/10 pass) |
 | **4.6** Warm-Start Lock | `tests/property/test_warm_start_lock.py` | L1 resumes from L0 checkpoint; metrics continuous | ✅ DONE (11/11 pass) |
+| **4.7** Promotion Execution Lock | `tests/property/test_promotion_execution_lock.py` | Allocator promotions execute at correct fidelity (L1/L2) | 🟡 TODO |
 
 > **Note**: Property lock tests are documented but not yet implemented. Existing lock tests cover related functionality (see `test_atomic_append_kill_proof.py`, `test_statistical_protocol_lock.py`, `test_schedule_device_lock.py`, `test_cell_evaluation_lock.py`, `test_legality_boundary_lock.py`).
 
@@ -152,18 +156,21 @@ Week 1 (Parallelizable): ✅ COMPLETED
 ├── WS3.3 (Auto-Install) ───────────────────┤
 └── WS4 ALL (Write Tests First - TDD) ──────┘
 
-Week 2: ✅ IMPLEMENTED (infrastructure complete + allocator fix)
+Week 2: 🟡 IN PROGRESS (promotion execution fix done, deadline enforcement needed)
 ├── WS2.1 (Smart Profile) ← needs WS1 done
 ├── WS2.2 (Multi-Task) ← needs WS1.3, WS1.4
 ├── WS2.3 (Budget Alloc) ← needs WS2.1
 ├── WS2.4 (Early Stop) ← needs WS1.2
 ├── WS2.5 (Warm-Start) ← needs WS1.1, WS1.5
+├── WS2.6 (Promotion Execution Fix) ← needs WS2.3, WS2.5  ✅ DONE
+├── WS2.7 (Deadline Enforcement Fix) ← needs WS2.3  🟡 ACTIVE
+├── WS2.8 (Allocator Threshold Fix) ← needs WS2.3  ✅ DONE
 ├── WS3.4 (Rich Report) ← needs WS2.1
 └── WS3.5 (Progress Preview) ← needs WS2.3
 
 Week 3: 🟡 VALIDATION PHASE
-├── Integration testing all locks pass (143 tests green)
-├── End-to-end: ./experiment_shallow.sh 0.5 → 1 → 4 (validation runs)
+├── Integration testing all locks pass (148 tests green)
+├── End-to-end: ./experiment_shallow.sh 0.5 → 1 → 4 (validation runs with L1/L2)
 ├── Dashboard smoke test
 └── Documentation update
 ```
@@ -179,14 +186,17 @@ Week 3: 🟡 VALIDATION PHASE
 - [x] Dashboard launches without manual install (auto-install)
 - [x] All 6 property locks pass in CI (tests/property/test_*_lock.py) — 143 tests passing
 
-### Statistically Valid (Week 2) 🟡 IN PROGRESS (infrastructure complete, validation runs passing)
-- [ ] Top combos have `n_seeds ≥ 5` at L2 (CI computable) — infrastructure ready, requires longer runs
+### Statistically Valid (Week 2) 🟡 IN PROGRESS (promotion execution fixed, deadline enforcement needed)
+- [x] Allocator promotions execute at correct fidelity (L1/L2) — cell_stream freshness fixed
+- [ ] Soft deadline enforcement works for long runs (0.5h+) — currently timeout ignored
+- [ ] Top combos have `n_seeds ≥ 5` at L2 (CI computable) — requires L2 execution
 - [ ] CI bounds (`val_acc_ci_lower/upper`) reported in `comp report` — seed variability section includes CI
 - [x] Multi-task: ≥3 tasks represented in top 20 combos — L0 multi-task verified (8 tasks: xor, iris, circles, wine, spiral, synthetic_forecast, copy_task, breast_cancer)
 - [x] Compatibility matrix rejects ≥10% invalid combos at admission — 50% rejection rate observed
 - [x] Early stopping triggers on ≥20% of cells (saves budget) — verified in logs (plateau detection active)
 - [x] Warm-start: L1/L2 resume from L0 checkpoint (walltime < fresh) ✅
 - [x] ZeroYieldError fixed — L0→L1 promotions no longer blocked by zero-yield detection
+- [x] Promotion threshold lowered (0.1) and task cycling fixed (uses original task)
 
 ### Turn-Key Excellence (Week 3)
 - [ ] `experiment_shallow.sh 1` produces publishable Pareto front
@@ -323,13 +333,14 @@ Derived from ontology registries (not hardcoded):
 
 ## Verification Summary (2026-11-03)
 
-### Lock Tests (143 total, all passing)
+### Lock Tests (148 total, all passing)
 - `test_record_deduplication_lock.py`: 6/6 ✅
 - `test_primitive_compatibility_lock.py`: 92/92 ✅
 - `test_smart_survey_lock.py`: 11/11 ✅
 - `test_statistical_validity_lock.py`: 13/13 ✅
 - `test_early_stopping_lock.py`: 10/10 ✅
 - `test_warm_start_lock.py`: 11/11 ✅
+- `test_allocator_promotion.py`: 5/5 ✅
 
 ### Integration Verification (0.5h runs)
 - **Multi-task L0**: 8 tasks observed (xor, iris, circles, wine, spiral, synthetic_forecast, copy_task, breast_cancer) ✅
@@ -351,8 +362,9 @@ Derived from ontology registries (not hardcoded):
 
 ### Known Issues
 - **ZeroYieldError**: ~~Pipeline stops after 3 rounds of no new L0 cells (cell stream yields only invalid combos after first page). L2 promotions are proposed but not evaluated because the pipeline's zero-yield detection triggers before they can be trained. Fix requires modifying `_check_zero_yield` in `_budget.py` to account for pending allocator promotions.~~ **FIXED** - `_check_zero_yield` now checks for pending allocator promotions before triggering.
+- **Deadline Enforcement Failure (0.5h+ runs)**: Soft deadline not triggering; `timeout 2100` command doesn't kill process group. Pipeline runs past budget. **INVESTIGATING**
 
-### Remaining Validation (requires longer runs)
+### Remaining Validation (requires deadline enforcement fix)
 1. Run 1h experiment to reach L2 with n_seeds=5
 2. Verify CI bounds in claim-eligible cells report
 3. Primitive affinity insights in report ✅ IMPLEMENTED
