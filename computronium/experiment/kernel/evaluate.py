@@ -15,12 +15,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from itertools import islice
 from typing import TYPE_CHECKING, Any, Final
-
-if TYPE_CHECKING:
-    import tempfile
-    from collections.abc import Callable
 
 import torch
 
@@ -31,6 +26,21 @@ from computronium.core.system_trainer import (
     SystemTrainerConfig,
 )
 from computronium.domains.base import TaskSplit
+from computronium.experiment.kernel._metrics import (
+    compute_energy_metrics,
+    compute_plasticity_metrics,
+    compute_stability_metrics,
+    history_metrics,
+)
+from computronium.experiment.kernel._task_scheduler import TaskScheduler
+from computronium.experiment.kernel._trainer_utils import (
+    _bounded_batches,
+    _create_trainer_config,
+    _run_training,
+    _sample_inputs,
+    _setup_checkpointing,
+    _val_batches,
+)
 from computronium.experiment.kernel.compose import (
     ComposedCell,
     compose_cell_system,
@@ -173,833 +183,6 @@ def task_shape(task_id: str, device: str = "auto") -> TaskShape:
     return _task_shape(_task(task_id, device))
 
 
-# Task cost classes (from domains.registry)
-_CHEAP_TASKS: tuple[str, ...] = (
-    "xor",
-    "spiral",
-    "circles",
-    "digits",
-    "copy_task",
-    "iris",
-    "wine",
-    "breast_cancer",
-    "synthetic_forecast",
-)
-_MEDIUM_TASKS: tuple[str, ...] = (
-    "mnist",
-    "fashion_mnist",
-    "sequential_mnist",
-    "char_ngram",
-    "cora",
-    "citeseer",
-    "pubmed",
-    "kmnist",
-    "usps",
-)
-_EXPENSIVE_TASKS: tuple[str, ...] = (
-    "cifar10",
-    "tiny_shakespeare",
-    "pendulum",
-    "acrobot",
-    "cartpole",
-    "graph_classification",
-)
-
-# Baseline accuracies for ruler-relative normalization (random guess / majority class)
-_TASK_BASELINES: dict[str, float] = {
-    # 10-class classification
-    "digits": 0.1,
-    "mnist": 0.1,
-    "fashion_mnist": 0.1,
-    "kmnist": 0.1,
-    "usps": 0.1,
-    "cifar10": 0.1,
-    "sequential_mnist": 0.1,
-    # Binary classification
-    "xor": 0.5,
-    "spiral": 0.5,
-    "circles": 0.5,
-    "breast_cancer": 0.5,
-    "graph_classification": 0.5,
-    # 3-class
-    "pubmed": 0.33,
-    "iris": 0.33,
-    "wine": 0.33,
-    # 6-7 class
-    "cora": 0.14,  # 7 classes
-    "citeseer": 0.16,  # 6 classes
-    # Sequence / continuous
-    "copy_task": 0.0,
-    "char_ngram": 0.01,
-    "tiny_shakespeare": 0.01,
-    "synthetic_forecast": 0.0,
-    "pendulum": 0.0,
-    "acrobot": 0.0,
-    "cartpole": 0.0,
-}
-
-_DEFAULT_BASELINE = 0.1  # default 10-class
-
-
-@dataclass(frozen=True, slots=True)
-class TaskScheduler:
-    """Multi-task scheduler for smart-survey profile.
-
-    Cycles through cheap tasks at L0, expands to medium at L1, includes expensive at L2.
-    Uses ruler-relative normalization for cross-task comparison.
-    """
-
-    # Task cost classes (exposed for test compatibility)
-    CHEAP_TASKS: tuple[str, ...] = _CHEAP_TASKS
-    MEDIUM_TASKS: tuple[str, ...] = _MEDIUM_TASKS
-    EXPENSIVE_TASKS: tuple[str, ...] = _EXPENSIVE_TASKS
-
-    # Per-fidelity task selection
-    fidelity_tasks: dict[str, tuple[str, ...]] = None  # type: ignore[assignment]
-
-    def __post_init__(self):
-        if self.fidelity_tasks is None:
-            object.__setattr__(
-                self,
-                "fidelity_tasks",
-                {
-                    "L0": self.CHEAP_TASKS,
-                    "L1": self.CHEAP_TASKS + self.MEDIUM_TASKS,
-                    "L2": self.CHEAP_TASKS + self.MEDIUM_TASKS + self.EXPENSIVE_TASKS,
-                },
-            )
-
-    def get_tasks_for_fidelity(self, fidelity: str) -> tuple[str, ...]:
-        """Get the tasks to use for a given fidelity level."""
-        return self.fidelity_tasks.get(fidelity, self.CHEAP_TASKS)
-
-    def get_task_cycle(self, fidelity: str, max_tasks: int | None = None) -> list[str]:
-        """Get a cycling list of tasks for the given fidelity.
-
-        Args:
-            fidelity: The fidelity level (L0, L1, L2).
-            max_tasks: Optional maximum number of tasks to include.
-
-        Returns:
-            List of task names to cycle through.
-        """
-        tasks = list(self.get_tasks_for_fidelity(fidelity))
-        if max_tasks:
-            tasks = tasks[:max_tasks]
-        return tasks
-
-    def normalize_score(
-        self, score: float, task_name: str, baseline: float = 0.0
-    ) -> float:
-        """Normalize a score relative to a task's baseline (ruler-relative).
-
-        Args:
-            score: The raw score (e.g., validation accuracy).
-            task_name: The task name.
-            baseline: The baseline score for this task (random/majority class).
-
-        Returns:
-            Normalized score where 0 = baseline, 1 = perfect.
-        """
-        if baseline >= 1.0:
-            return 0.0
-        return (score - baseline) / (1.0 - baseline)
-
-    def get_baseline(self, task_name: str) -> float:
-        """Get the baseline accuracy for a task (random guess / majority class).
-
-        Args:
-            task_name: The task name.
-
-        Returns:
-            Baseline accuracy (e.g., 0.1 for 10-class, 0.5 for binary).
-        """
-        return _TASK_BASELINES.get(task_name, _DEFAULT_BASELINE)
-
-
-def history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
-    """Final-epoch observations, flattened to the metric namespace.
-
-    The kernel-owned history→metrics extraction. The lab's certificates path
-    consumes this rather than re-implementing the filter (TODO47 T6): two
-    extractions is how the fallback chain hid dead keys from itself.
-    """
-    if not history:
-        msg = "training produced no epochs"
-        raise EvaluationError("runtime_error", msg)
-    final = history[-1]
-    metrics = {
-        key: float(value) for key, value in final.items() if key in HISTORY_METRICS
-    }
-    metrics["epochs_run"] = float(final.get("global_step", 0))
-    return metrics
-
-
-def _within_ceiling(param_count: int, param_budget: int) -> bool:
-    """Whether a cell honoured the parameter ceiling its schedule declared.
-
-    The tolerance is R25's registered one, read from the same declaration as
-    the ``param_budget_fairness`` predicate, so a cell the constraint accepts is
-    a cell the gate passes.
-    """
-    if param_budget <= 0:
-        return True
-    return param_count <= param_budget * (1 + PARAM_BUDGET_TOLERANCE)
-
-
-def _defect(
-    complete: bool, within_ceiling: bool, param_count: int, param_budget: int
-) -> str:
-    match (complete, within_ceiling):
-        case (True, True):
-            return ""
-        case (False, True):
-            return "training stopped before the requested epochs"
-        case (True, False):
-            return (
-                f"{param_count} parameters exceeds the declared ceiling {param_budget}"
-            )
-        case _:
-            return (
-                "training stopped before the requested epochs; "
-                f"{param_count} parameters exceeds the declared ceiling {param_budget}"
-            )
-
-
-def _finite(metrics: Mapping[str, float]) -> bool:
-    return all(math.isfinite(v) for v in metrics.values())
-
-
-def compute_stability_metrics(
-    system: Any,
-    x: torch.Tensor,
-    max_steps: int = 50,
-) -> dict[str, float]:
-    """Stability of one relaxation step, measured on the trained system.
-
-    Reports, for the settle step's Jacobian ``J`` over the hidden stack:
-
-    - ``spectral_radius`` ρ(J) — asymptotic stability margin
-    - ``max_singular_value`` σ_max(J) — transient amplification bound
-    - ``min_singular_value`` σ_min(J) — the condition-number floor
-    - ``lyapunov_exponent`` — ln ρ(J), negative exactly when contracting
-    - ``settle_steps`` / ``settle_converged`` — the free phase's own telemetry
-    - ``free_energy`` — the dynamics' energy at the settled state
-    - ``drift_spectral_radius``, ``drift_max_singular_value``, ``drift_nonnormality``,
-      ``settle_step_size``, ``contraction_rate`` — drift operator metrics
-
-    The step, not the settle: a loop that runs ``N`` steps composes the step
-    Jacobian N times, so measuring the whole settle reports ρ^N. At ρ=0.997 and
-    N=30 that is 0.91, and any σ_max > 1 is long since below 1 — a contracting
-    but transiently amplifying cell reads as a collapse (TODO51 §2).
-
-    The Jacobian is exact (``torch.autograd.functional.jacobian``) at the
-    settled hidden activations (the fixed point), so the hidden stack is capped:
-    an O(d²) SVD on an uncapped stack is how a measurement turns into a timeout.
-
-    Uses the canonical stability package (packages/stability) for Jacobian
-    spectral analysis via the low-level tensor API.
-    """
-    from computronium.experiment.execution.settle_operator import (
-        settle_step_operator_at_state,
-    )
-
-    metrics: dict[str, float] = {}
-    free_energy, settled_acts = _free_settle_metrics_and_state(system, x)
-    metrics.update(free_energy)
-
-    if settled_acts is None or len(settled_acts) < 3:
-        logger.debug("no settled hidden activations; reporting settle telemetry only")
-        return metrics
-
-    operator = settle_step_operator_at_state(system, settled_acts)
-    if operator is None:
-        logger.debug("geometry is not layered; reporting settle telemetry only")
-        return metrics
-
-    step, width = operator
-    if width > _MAX_JACOBIAN_WIDTH:
-        logger.info(
-            "hidden width %d exceeds the Jacobian cap %d; reporting settle telemetry",
-            width,
-            _MAX_JACOBIAN_WIDTH,
-        )
-        return metrics
-
-    # Compute Jacobian at the settled hidden activations (the fixed point)
-    settled_hidden = torch.cat([h[0] for h in settled_acts[1:-1]])
-
-    _compute_jacobian_metrics(step, settled_hidden, system, metrics)
-
-    return metrics
-
-
-def _compute_jacobian_metrics(
-    step: Callable[[torch.Tensor], torch.Tensor],
-    settled_hidden: torch.Tensor,
-    system: Any,
-    metrics: dict[str, float],
-) -> None:
-    """Compute Jacobian-based stability metrics using the stability package."""
-    from computronium.stability import drift_metrics, jacobian_spectral_metrics
-
-    # Define step function for stability package
-    def step_fn(h: torch.Tensor) -> torch.Tensor:
-        return step(h)
-
-    # Use canonical stability package for spectral metrics
-    spectral = jacobian_spectral_metrics(
-        step_fn,
-        settled_hidden,
-        compute_min_singular=True,
-        use_lowrank_for_large=True,
-    )
-    metrics.update(spectral)
-
-    # Drift metrics
-    step_size = float(getattr(system.dynamics.config, "step_size", 0.0))
-    if step_size > 0:
-        drift = drift_metrics(step_fn, settled_hidden, step_size)
-        metrics.update(drift)
-
-
-def _energy_family(dynamics_type: str) -> str:
-    """Map a dynamics type to its energy family for metric naming.
-
-    Energy is not one quantity across dynamics: energy-based (Hopfield),
-    PC-family (variational free energy, augmented Lagrangian), and others
-    report proxies. The metric name must reflect this.
-    """
-    if dynamics_type in {"energy_minimization", "lazy", "diffusion"}:
-        return "hopfield"
-    if dynamics_type in {"predictive_settling", "error_predictive_coding"}:
-        return "pc"  # metric will be pc_free_energy
-    if dynamics_type == "pc_alm":
-        return "augmented_lagrangian"  # metric will be augmented_lagrangian (no _energy suffix)
-    if dynamics_type == "spike_integration":
-        return "spike_proxy"
-    if dynamics_type == "instantaneous":
-        return "instantaneous_proxy"
-    return "unknown"
-
-
-def _record_family_energy(
-    metrics: dict[str, float],
-    dynamics: Any,
-    settled: Any,
-    geometry: Any,
-    family: str,
-) -> None:
-    """Record the energy metric under the dynamics-family-specific key.
-
-    Detects energy clamping (warning, not failure) and records it separately.
-    """
-    try:
-        energy = dynamics.compute_energy(settled, geometry)
-    except Exception as exc:  # ruff: ignore[blind-except] - a proxy energy is optional
-        logger.debug("free energy unavailable: %s", exc)
-        return
-    if energy is None:
-        return
-    energy_val = float(energy.item() if hasattr(energy, "item") else energy)
-
-    # Detect energy clamping: if energy is at or near the clamp boundary,
-    # it's a warning (numerical stability measure), not a failure.
-    max_energy = getattr(getattr(dynamics, "config", None), "max_energy", 1e6)
-    if abs(energy_val) >= max_energy * 0.999:  # Near clamp boundary
-        metrics["energy_clamped"] = True
-
-    if family == "pc":
-        metrics["pc_free_energy"] = energy_val
-    elif family == "augmented_lagrangian":
-        metrics["augmented_lagrangian"] = energy_val
-    else:
-        metrics[f"{family}_energy"] = energy_val
-    if family == "hopfield":
-        metrics["free_energy"] = energy_val
-
-
-def _free_settle_metrics(system: Any, x: torch.Tensor) -> dict[str, float]:
-    """The free phase's own telemetry: horizon used, convergence, energy.
-
-    Read after a settle this function owns. The dynamics' telemetry counters
-    are reset by the settle that runs next, so a caller reading them after its
-    own settle reads the counters of whichever settle ran last — which is why
-    ``settle_converged`` was ``0`` on cells that converged within the budget.
-
-    Energy is reported under a family-specific key (e.g., ``hopfield_energy``,
-    ``pc_free_energy``, ``augmented_lagrangian``) because these are different
-    quantities; ``free_energy`` is retained as an alias for the energy-based
-    family for backward compatibility.
-    """
-    metrics, _ = _free_settle_metrics_and_state(system, x)
-    return metrics
-
-
-def _free_settle_metrics_and_state(
-    system: Any, x: torch.Tensor
-) -> tuple[dict[str, float], list[torch.Tensor] | None]:
-    """The free phase's own telemetry and the settled activations.
-
-    Returns:
-        Tuple of (metrics_dict, settled_activations_list).
-        settled_activations_list is None if settle failed.
-    """
-    from computronium.core.pipeline import forward_pass
-    from computronium.ontology import SystemState
-
-    metrics: dict[str, float] = {}
-    device = _param_device(system)
-    dynamics_type = getattr(system.dynamics.config, "dynamics_type", "unknown")
-    family = _energy_family(dynamics_type)
-    settled_acts: list[torch.Tensor] | None = None
-    try:  # ruff: ignore[too-many-statements-in-try-clause]
-        with torch.no_grad():
-            state = SystemState(x=x.to(device), y=None)
-            state.activations = forward_pass(
-                system.substrate, system.geometry, x.to(device)
-            )
-            settled = system.dynamics.settle(
-                state, system.geometry, system.substrate, target=None
-            )
-            metrics["settle_steps"] = float(
-                getattr(system.dynamics, "_settle_steps_used", 0)
-            )
-            metrics["settle_converged"] = float(
-                bool(getattr(system.dynamics, "_converged", False))
-            )
-            metrics["settle_horizon"] = float(
-                getattr(system.dynamics, "_settle_horizon", 0)
-            )
-            # Ensure geometry is on the same device as settled activations
-            # to avoid device mismatch in compute_energy
-            if hasattr(system.geometry, "to"):
-                system.geometry.to(device)
-            _record_family_energy(
-                metrics, system.dynamics, settled, system.geometry, family
-            )
-            # Extract settled activations for stability analysis
-            settled_acts = settled.activations
-            if isinstance(settled_acts, torch.Tensor):
-                settled_acts = [settled_acts]
-    except Exception as exc:  # ruff: ignore[blind-except] - a metric must not fail the cell
-        logger.warning("free settle telemetry failed: %s", exc)
-    return metrics, settled_acts
-
-
-def _param_device(system: Any) -> torch.device:
-    """The device the cell's weights live on, wherever it was trained.
-
-    The evaluator may run on a thread whose device differs from the one the
-    system was built on, so the device is read from the parameters rather than
-    from the caller's tensor.
-    """
-    return next(system.geometry.parameters()).device
-
-
-def compute_energy_metrics(system: Any, *, batch_size: int) -> dict[str, float]:
-    """Per-step energy from the substrate's own per-MAC model.
-
-    Charged over the geometry's real layer shapes, one estimate per layer and
-    summed. A single hardcoded ``(out, in)`` weight shape reports one number for
-    every cell, which is how 36k-parameter and 305k-parameter cells came back
-    with byte-identical joules (TODO51 §5).
-    """
-    from computronium.experiment.execution.settle_operator import layer_weight_shapes
-
-    metrics: dict[str, float] = {}
-    estimator = getattr(system.substrate, "estimate_energy", None)
-    if estimator is None:
-        return metrics
-
-    shapes = layer_weight_shapes(system.geometry)
-    if not shapes:
-        return metrics
-
-    forward = update = 0.0
-    per_sample = 0.0
-    for out_features, in_features in shapes:
-        estimate = estimator(
-            input_shape=(batch_size, in_features),
-            weight_shape=(out_features, in_features),
-            batch_size=batch_size,
-        )
-        forward += float(estimate.get("forward_energy_per_batch", 0.0))
-        update += float(estimate.get("update_energy_per_batch", 0.0))
-        per_sample += float(estimate.get("energy_per_sample", 0.0))
-
-    metrics["forward_energy_per_batch"] = forward
-    metrics["update_energy_per_batch"] = update
-    metrics["energy_per_batch"] = forward + update
-    metrics["energy_per_sample"] = per_sample
-    metrics["macs_per_step"] = float(
-        batch_size * 2 * sum(out * inn for out, inn in shapes)
-    )
-    metrics["energy_per_mac"] = (
-        (forward + update) / metrics["macs_per_step"]
-        if metrics["macs_per_step"] > 0
-        else 0.0
-    )
-    return metrics
-
-
-def compute_plasticity_metrics(system: Any) -> dict[str, float]:
-    """Plasticity objectives: psi capacity, consolidation cost, rewrite rate.
-
-    Args:
-        system: The trained system (5-D or 6-D joint).
-
-    Returns:
-        Dict with plasticity metrics:
-        - psi_capacity: Total plastic state dimension (sum of numel)
-        - consolidation_cost: Estimated FLOPs for ψ→θ consolidation
-        - rewrite_rate: Placeholder (requires multi-episode tracking)
-    """
-    metrics: dict[str, float] = {}
-    plasticity = getattr(system, "plasticity", None)
-    if plasticity is None:
-        return metrics
-
-    # Check if it's a NullPlasticity (5-D system)
-    from computronium.state import NullPlasticity
-
-    if isinstance(plasticity, NullPlasticity):
-        return metrics
-
-    # Get plastic state dimensions from config
-    plastic_dims = getattr(plasticity, "config", None)
-    if plastic_dims is None:
-        return metrics
-
-    # Handle both PlasticityConfig (with plastic_state_dims) and specific
-    # plasticity configs (like ConflictAdaptivePsiConfig) that don't have it
-    plastic_state_dims = getattr(plastic_dims, "plastic_state_dims", None)
-    if plastic_state_dims is None:
-        # Try to get from consolidation_config for temporal_psi types
-        consolidation = getattr(plastic_dims, "consolidation_config", None)
-        if consolidation and "trace_decay" in consolidation:
-            # temporal_psi / conflict_adaptive: plastic state is implicit in trace
-            # Return 0 for now; would need to track actual ψ dimensions
-            return metrics
-        return metrics
-
-    # psi_capacity: sum of all plastic state dimensions
-    psi_capacity = sum(plastic_state_dims.values())
-    metrics["psi_capacity"] = float(psi_capacity)
-
-    # consolidation_cost: estimate FLOPs for ψ→θ consolidation
-    # For fast_weights: consolidation is a low-rank update (fast_weight_dim * param_count)
-    # For routing: consolidation is gate logit integration (gate_dim * param_count)
-    # For rule_state: consolidation is operator selection (num_operators * operator_dim)
-    # Use a heuristic: psi_capacity * hidden_dim (typical consolidation cost)
-    hidden_dim = 256  # Typical hidden dimension
-    if hasattr(system.geometry, "config") and hasattr(
-        system.geometry.config, "hidden_dim"
-    ):
-        hidden_dim = system.geometry.config.hidden_dim
-    consolidation_flops = psi_capacity * hidden_dim * 2  # 2 FLOPs per MAC
-    metrics["consolidation_cost"] = float(consolidation_flops)
-
-    # rewrite_rate: placeholder (requires tracking psi over episodes)
-    # Set to 0.0 for now; would need multi-episode tracking
-    metrics["rewrite_rate"] = 0.0
-
-    return metrics
-
-
-def _bounded_batches(source: Any, limit: int) -> Iterator[Any]:
-    """Yield at most ``limit`` batches from a data provider.
-
-    Validation is charged at the same ceiling as training. An unbounded
-    validation pass would make a 2-batch cell cost 45 batch-forwards, which is
-    how one honest measurement turned a 9-minute acceptance suite into a
-    25-minute one.
-    """
-
-    return islice(iter(source), limit)
-
-
-def _val_batches(task: Any, limit: int | None) -> Any | None:
-    """The task's validation split, bounded, or ``None`` when it declares none.
-
-    Without it the evaluator can only report what the cell fit, and
-    ``validation_accuracy`` — the primary objective of every profile — would be
-    a name with no number behind it.
-    """
-    from computronium.domains.base import TaskSplit
-
-    try:
-        loader = task.get_dataloader(TaskSplit.VAL)
-    except (LookupError, ValueError, NotImplementedError) as exc:
-        logger.info("task %s declares no validation split: %s", task.name, exc)
-        return None
-    return _bounded_batches(loader, limit) if limit else loader
-
-
-def _sample_inputs(task: Any, device: str) -> torch.Tensor:
-    """One flattened training batch, on ``device``.
-
-    Flattened because the stability and energy metrics both read the task's
-    own input extent; a rank-4 image batch would make the energy model's
-    ``input_shape[-1]`` the pixel count of a row.
-    """
-    sample_x, _ = next(iter(task.get_dataloader("train")))
-    flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
-    return flat
-
-
-def _setup_seeds_and_device(schedule: Schedule) -> str:
-    """Set all seeds and resolve device before model creation."""
-    import os
-    import random
-
-    import numpy as np
-    import torch
-
-    resolved_device = _resolve_device(schedule.device)
-
-    torch.manual_seed(schedule.seed)
-    if schedule.deterministic:
-        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
-        torch.use_deterministic_algorithms(True)
-    np.random.seed(schedule.seed)
-    random.seed(schedule.seed)
-
-    return resolved_device
-
-
-def _create_trainer_config(
-    schedule: Schedule,
-    resolved_device: str,
-    params: Mapping[str, Any] | None,
-) -> SystemTrainerConfig:
-    """Create SystemTrainerConfig from schedule and params."""
-    limit = schedule.batch_limit or None
-
-    # Extract deadline check callback from params (for WS2.7 deadline enforcement)
-    deadline_check = params.get("deadline_check") if params else None
-    deadline_check_every_n_steps = (
-        params.get("deadline_check_every_n_steps", 0) if params else 0
-    )
-
-    return SystemTrainerConfig(
-        max_epochs=schedule.epochs,
-        device=resolved_device,
-        seed=schedule.seed,
-        limit_train_batches=limit,
-        limit_val_batches=limit,
-        track_flops=True,
-        track_memory=True,
-        deterministic=schedule.deterministic,
-        precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
-        checkpoint_every_n=schedule.checkpoint_every_n,
-        # Early stopping (WS2.4)
-        early_stopping_patience=getattr(schedule, "early_stopping_patience", 0),
-        # Deadline enforcement (WS2.7)
-        deadline_check=deadline_check,
-        deadline_check_every_n_steps=deadline_check_every_n_steps,
-        # Distributed training (Phase E1)
-        distributed_backend=schedule.distributed_backend,
-        ddp_backend=schedule.ddp_backend,
-        fsdp_sharding_strategy=schedule.fsdp_sharding_strategy,
-        fsdp_min_params=schedule.fsdp_min_params,
-        fsdp_cpu_offload=schedule.fsdp_cpu_offload,
-        fsdp_mixed_precision=schedule.fsdp_mixed_precision,
-    )
-
-
-def _setup_checkpointing(
-    schedule: Schedule,
-    checkpoint_dir: str | None,
-    config: SystemTrainerConfig,
-) -> tuple[tempfile.TemporaryDirectory | None, list[str | None], Callable | None]:
-    """Set up checkpoint directory and callback if enabled.
-
-    Returns:
-        Tuple of (temp_dir, checkpoint_path_ref, checkpoint_callback).
-        temp_dir is a TemporaryDirectory that must be cleaned up.
-        checkpoint_path_ref is a mutable reference (list) to capture the path.
-        checkpoint_callback is the callback function or None.
-    """
-    import tempfile
-    from pathlib import Path
-
-    temp_dir: tempfile.TemporaryDirectory | None = None
-    checkpoint_path_ref: list[str | None] = [None]
-
-    if schedule.checkpoint_every_n <= 0:
-        return None, checkpoint_path_ref, None
-
-    if checkpoint_dir is not None:
-        ckpt_dir = Path(checkpoint_dir)
-        ckpt_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        temp_dir = tempfile.TemporaryDirectory(prefix="ckpt_")
-        ckpt_dir = Path(temp_dir.name)
-
-    def _checkpoint_callback(snapshot):
-        ckpt_file = ckpt_dir / f"checkpoint_epoch_{snapshot.epoch}.pt"
-        torch.save(
-            {
-                "epoch": snapshot.epoch,
-                "global_step": snapshot.global_step,
-                "history": snapshot.history,
-                "theta": snapshot.theta,
-                "opt_state": snapshot.opt_state,
-                "credit_state": snapshot.credit_state,
-                "config": config,
-            },
-            ckpt_file,
-        )
-        checkpoint_path_ref[0] = str(ckpt_file)
-
-    return temp_dir, checkpoint_path_ref, _checkpoint_callback
-
-
-def _run_training(
-    trainer_class: type[SystemTrainer],
-    cell: ComposedCell,
-    task: Any,
-    config: SystemTrainerConfig,
-    resume_checkpoint_path: str | None,
-    checkpoint_callback: Callable | None,
-) -> tuple[SystemTrainer, list[dict[str, float]]]:
-    """Run training, optionally resuming from checkpoint.
-
-    Returns:
-        Tuple of (trainer, history).
-    """
-
-    trainer = _create_trainer(
-        trainer_class, cell, task, config, resume_checkpoint_path, checkpoint_callback
-    )
-    try:
-        history = trainer.fit()
-    except EvaluationError:
-        raise
-    except Exception as exc:
-        msg = f"Training failed: {exc}"
-        raise EvaluationError("runtime_error", msg) from exc
-
-    return trainer, history
-
-
-def _create_trainer(
-    trainer_class: type[SystemTrainer],
-    cell: ComposedCell,
-    task: Any,
-    config: SystemTrainerConfig,
-    resume_checkpoint_path: str | None,
-    checkpoint_callback: Callable | None,
-) -> SystemTrainer:
-    """Create trainer, optionally resuming from checkpoint."""
-    from pathlib import Path
-
-    if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
-        # Resume from checkpoint
-        trainer = trainer_class.from_checkpoint(
-            resume_checkpoint_path,
-            system=cell.system,
-            train_data=task.get_dataloader("train"),
-            val_data=_val_batches(task, config.limit_val_batches),
-            max_epochs=config.max_epochs,
-        )
-        if checkpoint_callback is not None:
-            trainer.checkpoint_callback = checkpoint_callback
-    else:
-        trainer = trainer_class(
-            cell.system,
-            config,
-            task.get_dataloader("train"),
-            val_data=_val_batches(task, config.limit_val_batches),
-            checkpoint_callback=checkpoint_callback,
-        )
-    return trainer
-
-
-def _collect_trainer_metrics(trainer: SystemTrainer) -> dict[str, float]:
-    """Extract resource metrics from trainer's last epoch."""
-    metrics: dict[str, float] = {}
-    if not trainer.epoch_resources:
-        return metrics
-
-    last_epoch = trainer.epoch_resources[-1]
-    if last_epoch.forward_flops is not None and last_epoch.steps > 0:
-        flops_per_step = last_epoch.forward_flops / last_epoch.steps
-        metrics["flops"] = float(flops_per_step)
-        metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
-    if last_epoch.peak_memory_mb is not None:
-        metrics["memory_usage"] = last_epoch.peak_memory_mb
-    if last_epoch.steps > 0:
-        metrics["latency_ms"] = (last_epoch.epoch_time_s / last_epoch.steps) * 1000.0
-    if last_epoch.energy_joules is not None and last_epoch.steps > 0:
-        metrics["energy_per_step"] = last_epoch.energy_joules / last_epoch.steps
-    return metrics
-
-
-def _compute_substrate_objectives(
-    coordinate: Coordinate,
-    metrics: dict[str, float],
-    walltime_s: float,
-) -> dict[str, float]:
-    """Compute substrate-specific objectives."""
-
-    name_lower = coordinate.substrate.lower()
-    factory_map = {
-        "digital": SubstrateConfig.digital,
-        "analog": SubstrateConfig.analog,
-        "memristive": SubstrateConfig.memristive,
-        "neuromorphic": SubstrateConfig.neuromorphic,
-        "optical": SubstrateConfig.optical,
-        "quantum": SubstrateConfig.quantum,
-        "sparse": SubstrateConfig.sparse,
-        "ternary": SubstrateConfig.ternary,
-        "complex": SubstrateConfig.complex,
-    }
-    factory = factory_map.get(name_lower, SubstrateConfig.digital)
-    dynamics_name = coordinate.dynamics
-    if dynamics_name in {"diffusion", "spike_integration", "pc_alm"}:
-        substrate_config = factory(noise_level=0.05)
-    else:
-        substrate_config = factory()
-    substrate_spec = SubstrateSpec.from_config(substrate_config)
-    settle_telemetry = {
-        "energy_per_step": metrics.get("energy_per_step", 0.0),
-        "settle_steps_used": metrics.get("settle_steps", 0),
-        "free_energy_final": metrics.get(
-            "hopfield_energy", metrics.get("free_energy", 0.0)
-        ),
-        "spike_rate": metrics.get("spike_rate", 0.0),
-        "event_density": metrics.get("event_density", 0.0),
-    }
-    runtime_stats = {
-        "walltime_s": walltime_s,
-        "memory_mb": metrics.get("memory_usage", 0.0),
-        "flops": metrics.get("flops", 0.0),
-        "latency_ms": metrics.get("latency_ms", 0.0),
-    }
-    substrate_objectives = compute_substrate_objectives(
-        substrate_spec, settle_telemetry, runtime_stats
-    )
-    return substrate_objectives
-
-
-def _extract_convergence_curve(
-    schedule: Schedule, history: list[dict[str, float]]
-) -> list[dict[str, float]] | None:
-    """Extract convergence curve for L1/L2 fidelity."""
-    if schedule.fidelity not in {"L1", "L2", "L3"} or not history:
-        return None
-    curve_keys = {"train_loss", "val_loss", "train_acc", "val_acc", "learning_rate"}
-    return [
-        {
-            **{k: float(v) for k, v in epoch.items() if k in curve_keys},
-            "epoch": i + 1,
-        }
-        for i, epoch in enumerate(history)
-    ]
-
-
 def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-many-locals, too-many-branches]
     coordinate: Coordinate,
     schedule: Schedule,
@@ -1027,7 +210,20 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     """
 
     # Resolve device and set seeds
-    resolved_device = _setup_seeds_and_device(schedule)
+    import os
+    import random
+
+    import numpy as np
+    import torch
+
+    resolved_device = _resolve_device(schedule.device)
+
+    torch.manual_seed(schedule.seed)
+    if schedule.deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+        torch.use_deterministic_algorithms(True)
+    np.random.seed(schedule.seed)
+    random.seed(schedule.seed)
 
     task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
@@ -1112,7 +308,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     if val_acc is not None and energy_per_sample is not None and energy_per_sample > 0:
         metrics["energy_efficiency"] = float(val_acc) / float(energy_per_sample)
 
-    if not _finite(metrics):
+    if not all(math.isfinite(v) for v in metrics.values()):
         msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)
 
@@ -1128,6 +324,89 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         checkpoint_path=checkpoint_path_ref[0],
         convergence_curve=convergence_curve,
     )
+
+
+def _compute_substrate_objectives(
+    coordinate: Coordinate,
+    metrics: dict[str, float],
+    walltime_s: float,
+) -> dict[str, float]:
+    """Compute substrate-specific objectives."""
+
+    name_lower = coordinate.substrate.lower()
+    factory_map = {
+        "digital": SubstrateConfig.digital,
+        "analog": SubstrateConfig.analog,
+        "memristive": SubstrateConfig.memristive,
+        "neuromorphic": SubstrateConfig.neuromorphic,
+        "optical": SubstrateConfig.optical,
+        "quantum": SubstrateConfig.quantum,
+        "sparse": SubstrateConfig.sparse,
+        "ternary": SubstrateConfig.ternary,
+        "complex": SubstrateConfig.complex,
+    }
+    factory = factory_map.get(name_lower, SubstrateConfig.digital)
+    dynamics_name = coordinate.dynamics
+    if dynamics_name in {"diffusion", "spike_integration", "pc_alm"}:
+        substrate_config = factory(noise_level=0.05)
+    else:
+        substrate_config = factory()
+    substrate_spec = SubstrateSpec.from_config(substrate_config)
+    settle_telemetry = {
+        "energy_per_step": metrics.get("energy_per_step", 0.0),
+        "settle_steps_used": metrics.get("settle_steps", 0),
+        "free_energy_final": metrics.get(
+            "hopfield_energy", metrics.get("free_energy", 0.0)
+        ),
+        "spike_rate": metrics.get("spike_rate", 0.0),
+        "event_density": metrics.get("event_density", 0.0),
+    }
+    runtime_stats = {
+        "walltime_s": walltime_s,
+        "memory_mb": metrics.get("memory_usage", 0.0),
+        "flops": metrics.get("flops", 0.0),
+        "latency_ms": metrics.get("latency_ms", 0.0),
+    }
+    substrate_objectives = compute_substrate_objectives(
+        substrate_spec, settle_telemetry, runtime_stats
+    )
+    return substrate_objectives
+
+
+def _extract_convergence_curve(
+    schedule: Schedule, history: list[dict[str, float]]
+) -> list[dict[str, float]] | None:
+    """Extract convergence curve for L1/L2 fidelity."""
+    if schedule.fidelity not in {"L1", "L2", "L3"} or not history:
+        return None
+    curve_keys = {"train_loss", "val_loss", "train_acc", "val_acc", "learning_rate"}
+    return [
+        {
+            **{k: float(v) for k, v in epoch.items() if k in curve_keys},
+            "epoch": i + 1,
+        }
+        for i, epoch in enumerate(history)
+    ]
+
+
+def _collect_trainer_metrics(trainer: SystemTrainer) -> dict[str, float]:
+    """Extract resource metrics from trainer's last epoch."""
+    metrics: dict[str, float] = {}
+    if not trainer.epoch_resources:
+        return metrics
+
+    last_epoch = trainer.epoch_resources[-1]
+    if last_epoch.forward_flops is not None and last_epoch.steps > 0:
+        flops_per_step = last_epoch.forward_flops / last_epoch.steps
+        metrics["flops"] = float(flops_per_step)
+        metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
+    if last_epoch.peak_memory_mb is not None:
+        metrics["memory_usage"] = last_epoch.peak_memory_mb
+    if last_epoch.steps > 0:
+        metrics["latency_ms"] = (last_epoch.epoch_time_s / last_epoch.steps) * 1000.0
+    if last_epoch.energy_joules is not None and last_epoch.steps > 0:
+        metrics["energy_per_step"] = last_epoch.energy_joules / last_epoch.steps
+    return metrics
 
 
 def _determine_procedure_metadata() -> tuple[str, str, str]:
@@ -1316,3 +595,34 @@ def cell_record(
         payload=payload,
         effective_params=dict(evaluation.params),
     )
+
+
+def _within_ceiling(param_count: int, param_budget: int) -> bool:
+    """Whether a cell honoured the parameter ceiling its schedule declared.
+
+    The tolerance is R25's registered one, read from the same declaration as
+    the ``param_budget_fairness`` predicate, so a cell the constraint accepts is
+    a cell the gate passes.
+    """
+    if param_budget <= 0:
+        return True
+    return param_count <= param_budget * (1 + PARAM_BUDGET_TOLERANCE)
+
+
+def _defect(
+    complete: bool, within_ceiling: bool, param_count: int, param_budget: int
+) -> str:
+    match (complete, within_ceiling):
+        case (True, True):
+            return ""
+        case (False, True):
+            return "training stopped before the requested epochs"
+        case (True, False):
+            return (
+                f"{param_count} parameters exceeds the declared ceiling {param_budget}"
+            )
+        case _:
+            return (
+                "training stopped before the requested epochs; "
+                f"{param_count} parameters exceeds the declared ceiling {param_budget}"
+            )
