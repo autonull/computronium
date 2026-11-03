@@ -307,7 +307,9 @@ class _TransactionMixin(_StoreBase):
         This key identifies a unique cell measurement across runs/rounds,
         ignoring budget_id which differs across rounds.
         """
-        return (record.cell_key, record.schedule.seed, record.schedule.fidelity)
+        from computronium.experiment.execution.dedup import dedup_key
+
+        return dedup_key(record)
 
     def _find_existing_by_dedup(self, record: Record) -> str | None:
         """Find an existing record_id for the same deduplication key in this run.

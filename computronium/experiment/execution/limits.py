@@ -62,13 +62,21 @@ class ExecutionLimits:
         queue_max_memory_gb = kwargs.get("queue_max_memory_gb")
 
         return cls(
-            cell_workers=cell_workers if cell_workers is not None else min(4, cpu_count),
+            cell_workers=cell_workers
+            if cell_workers is not None
+            else min(4, cpu_count),
             cpu_threads_per_cell=kwargs.get("cpu_threads_per_cell"),
             gpu_memory_fraction=kwargs.get("gpu_memory_fraction"),
-            queue_max_concurrent=queue_max_concurrent if queue_max_concurrent is not None else min(4, cpu_count),
-            queue_max_gpus=queue_max_gpus if queue_max_gpus is not None else max(1, gpu_count),
+            queue_max_concurrent=queue_max_concurrent
+            if queue_max_concurrent is not None
+            else min(4, cpu_count),
+            queue_max_gpus=queue_max_gpus
+            if queue_max_gpus is not None
+            else max(1, gpu_count),
             queue_max_cpus=queue_max_cpus if queue_max_cpus is not None else cpu_count,
-            queue_max_memory_gb=queue_max_memory_gb if queue_max_memory_gb is not None else mem_gb * 0.8,
+            queue_max_memory_gb=queue_max_memory_gb
+            if queue_max_memory_gb is not None
+            else mem_gb * 0.8,
         )
 
     def apply_torch_settings(self) -> None:

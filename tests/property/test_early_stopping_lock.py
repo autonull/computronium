@@ -7,23 +7,23 @@ from __future__ import annotations
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
-from computronium.core.pipeline import forward_pass
 from computronium.core.system_trainer.factory import compose_system_from_configs
-from computronium.ontology.substrate import SubstrateConfig
-from computronium.ontology.geometry import GeometryConfig
-from computronium.ontology.dynamics import StateDynamicsConfig
 from computronium.ontology.credit import CreditAssignmentConfig
+from computronium.ontology.dynamics import StateDynamicsConfig
+from computronium.ontology.geometry import GeometryConfig
+from computronium.ontology.substrate import SubstrateConfig
 from computronium.ontology.update import ParameterUpdateConfig
-
 
 
 def _make_simple_system() -> nn.Module:
     """Create a simple system for testing early stopping."""
     config = SubstrateConfig.digital()
-    geometry = GeometryConfig.feedforward(input_dim=64, output_dim=10, hidden_dims=[128, 64])
+    geometry = GeometryConfig.feedforward(
+        input_dim=64, output_dim=10, hidden_dims=[128, 64]
+    )
     dynamics = StateDynamicsConfig.instantaneous()
     credit = CreditAssignmentConfig.gradient()
     update = ParameterUpdateConfig.euclidean()
@@ -38,7 +38,12 @@ def _make_simple_system() -> nn.Module:
     return system
 
 
-def _make_dataloader(num_samples: int = 100, batch_size: int = 32, input_dim: int = 64, num_classes: int = 10):
+def _make_dataloader(
+    num_samples: int = 100,
+    batch_size: int = 32,
+    input_dim: int = 64,
+    num_classes: int = 10,
+):
     """Create a simple dataloader for testing."""
     from torch.utils.data import DataLoader, TensorDataset
 

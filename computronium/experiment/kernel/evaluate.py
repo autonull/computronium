@@ -54,8 +54,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CellEvaluation",
-    "TaskShape",
     "TaskScheduler",
+    "TaskShape",
     "cell_record",
     "compute_energy_metrics",
     "compute_stability_metrics",
@@ -178,20 +178,51 @@ class TaskScheduler:
     """
 
     # Task cost classes (from domains.registry)
-    CHEAP_TASKS: tuple[str, ...] = ("xor", "spiral", "circles", "digits", "copy_task", "iris", "wine", "breast_cancer", "synthetic_forecast")
-    MEDIUM_TASKS: tuple[str, ...] = ("mnist", "fashion_mnist", "sequential_mnist", "char_ngram", "cora", "citeseer", "pubmed", "kmnist", "usps")
-    EXPENSIVE_TASKS: tuple[str, ...] = ("cifar10", "tiny_shakespeare", "pendulum", "acrobot", "cartpole", "graph_classification")
+    CHEAP_TASKS: tuple[str, ...] = (
+        "xor",
+        "spiral",
+        "circles",
+        "digits",
+        "copy_task",
+        "iris",
+        "wine",
+        "breast_cancer",
+        "synthetic_forecast",
+    )
+    MEDIUM_TASKS: tuple[str, ...] = (
+        "mnist",
+        "fashion_mnist",
+        "sequential_mnist",
+        "char_ngram",
+        "cora",
+        "citeseer",
+        "pubmed",
+        "kmnist",
+        "usps",
+    )
+    EXPENSIVE_TASKS: tuple[str, ...] = (
+        "cifar10",
+        "tiny_shakespeare",
+        "pendulum",
+        "acrobot",
+        "cartpole",
+        "graph_classification",
+    )
 
     # Per-fidelity task selection
     fidelity_tasks: dict[str, tuple[str, ...]] = None  # type: ignore[assignment]
 
     def __post_init__(self):
         if self.fidelity_tasks is None:
-            object.__setattr__(self, "fidelity_tasks", {
-                "L0": self.CHEAP_TASKS,
-                "L1": self.CHEAP_TASKS + self.MEDIUM_TASKS,
-                "L2": self.CHEAP_TASKS + self.MEDIUM_TASKS + self.EXPENSIVE_TASKS,
-            })
+            object.__setattr__(
+                self,
+                "fidelity_tasks",
+                {
+                    "L0": self.CHEAP_TASKS,
+                    "L1": self.CHEAP_TASKS + self.MEDIUM_TASKS,
+                    "L2": self.CHEAP_TASKS + self.MEDIUM_TASKS + self.EXPENSIVE_TASKS,
+                },
+            )
 
     def get_tasks_for_fidelity(self, fidelity: str) -> tuple[str, ...]:
         """Get the tasks to use for a given fidelity level."""
@@ -212,7 +243,9 @@ class TaskScheduler:
             tasks = tasks[:max_tasks]
         return tasks
 
-    def normalize_score(self, score: float, task_name: str, baseline: float = 0.0) -> float:
+    def normalize_score(
+        self, score: float, task_name: str, baseline: float = 0.0
+    ) -> float:
         """Normalize a score relative to a task's baseline (ruler-relative).
 
         Args:
@@ -766,11 +799,13 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     )
 
     limit = schedule.batch_limit or None
-    
+
     # Extract deadline check callback from params (for WS2.7 deadline enforcement)
     deadline_check = params.get("deadline_check") if params else None
-    deadline_check_every_n_steps = params.get("deadline_check_every_n_steps", 0) if params else 0
-    
+    deadline_check_every_n_steps = (
+        params.get("deadline_check_every_n_steps", 0) if params else 0
+    )
+
     config = SystemTrainerConfig(
         max_epochs=schedule.epochs,
         device=resolved_device,
@@ -1115,7 +1150,12 @@ def cell_record(
 
     try:
         evaluation = evaluate_cell(
-            coordinate, schedule, geometry, checkpoint_dir, resume_checkpoint_path, params
+            coordinate,
+            schedule,
+            geometry,
+            checkpoint_dir,
+            resume_checkpoint_path,
+            params,
         )
     except EvaluationError as exc:
         cause = FailureCause(exc.cause)

@@ -92,6 +92,7 @@ def _compute_replication_uncertainty(
             # Compute 95% CI using t-distribution (approximate with normal for n>=30)
             # For small n, use t-distribution critical value
             from scipy import stats
+
             if n_seeds >= 30:
                 t_crit = 1.96  # normal approximation
             else:
@@ -167,7 +168,12 @@ def compute_and_store_uncertainty(
 def _attach_ci_to_payload(
     records: Sequence[Record],
     uncertainty: Uncertainty,
-    primary_metrics: tuple[str, ...] = ("val_acc", "val_loss", "walltime_s", "energy_per_sample"),
+    primary_metrics: tuple[str, ...] = (
+        "val_acc",
+        "val_loss",
+        "walltime_s",
+        "energy_per_sample",
+    ),
 ) -> None:
     """Attach CI bounds to record payload for primary metrics.
 
@@ -220,14 +226,11 @@ def replication_key(record: Record) -> str:
     One definition of measurement identity, read by claim eligibility, the
     achieved-seed count, the claim table and the limitations.
     """
-    return (
-        f"{record.cell_key}|"
-        f"{record.schedule.fidelity}|"
-        f"{record.schedule.n_seeds}|"
-        f"{record.schedule.epochs}|"
-        f"{record.schedule.batch_limit}|"
-        f"{record.schedule.budget_id}"
+    from computronium.experiment.execution.dedup import (
+        replication_key as _replication_key,
     )
+
+    return _replication_key(record)
 
 
 def claim_eligible_by_achieved_seeds(

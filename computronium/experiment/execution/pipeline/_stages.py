@@ -273,9 +273,9 @@ class _StageMixin(_PipelineBase):
 
         # 2. Generate L1→L2 promotion candidates from allocator's promotion_candidates
         # These are cells that have been measured at L1 and shown promise
-        if self._config.allocator and hasattr(self._config.allocator, '_state'):
+        if self._config.allocator and hasattr(self._config.allocator, "_state"):
             allocator_state = self._config.allocator._state
-            promotion_candidates = getattr(allocator_state, 'promotion_candidates', {})
+            promotion_candidates = getattr(allocator_state, "promotion_candidates", {})
             for cell_key, promo_candidate in promotion_candidates.items():
                 if promo_candidate.current_fidelity != "L2":
                     continue
@@ -791,7 +791,9 @@ class _StageMixin(_PipelineBase):
         if not records:
             return promotions
 
-        promotion_threshold = spec.promotion_threshold if hasattr(spec, 'promotion_threshold') else 0.1
+        promotion_threshold = (
+            spec.promotion_threshold if hasattr(spec, "promotion_threshold") else 0.1
+        )
 
         # Budget allocation split: 40% L0→L1, 40% L1→L2, 20% L2 deepening
         # These constants document the intended budget allocation for smart-survey profile
@@ -827,7 +829,13 @@ class _StageMixin(_PipelineBase):
             target_fidelity = sched.fidelity  # This is the TARGET fidelity (L1 or L2)
 
             # Determine source fidelity (where the cell was evaluated)
-            source_fidelity = "L0" if target_fidelity == "L1" else "L1" if target_fidelity == "L2" else None
+            source_fidelity = (
+                "L0"
+                if target_fidelity == "L1"
+                else "L1"
+                if target_fidelity == "L2"
+                else None
+            )
             if source_fidelity is None:
                 continue
 
@@ -880,7 +888,12 @@ class _StageMixin(_PipelineBase):
         if eligible_promotions:
             # Sort by normalized accuracy descending (source fidelity score)
             eligible_promotions.sort(
-                key=lambda x: -cell_best.get(f"{x[0].cell_key()}|{'L0' if x[1].fidelity == 'L1' else 'L1'}", (0,))[0]
+                key=lambda x: (
+                    -cell_best.get(
+                        f"{x[0].cell_key()}|{'L0' if x[1].fidelity == 'L1' else 'L1'}",
+                        (0,),
+                    )[0]
+                )
             )
             # Keep top promotions (roughly 40% for L0→L1, 10% for L1→L2)
             max_promos = len(promotions) // 2  # Conservative limit
@@ -933,11 +946,23 @@ class _StageMixin(_PipelineBase):
 
         # Add deadline check callback to params for mid-epoch enforcement
         if deadline_enforcer:
-            from computronium.experiment.execution.deadline import deadline_check_callback
+            from computronium.experiment.execution.deadline import (
+                deadline_check_callback,
+            )
+
             deadline_check_cb = deadline_check_callback(deadline_enforcer, hard=False)
             deadline_check_interval = 1  # Check every batch for precise enforcement
             batch_items = [
-                (coord, sched, prov, {**params, "deadline_check": deadline_check_cb, "deadline_check_every_n_steps": deadline_check_interval})
+                (
+                    coord,
+                    sched,
+                    prov,
+                    {
+                        **params,
+                        "deadline_check": deadline_check_cb,
+                        "deadline_check_every_n_steps": deadline_check_interval,
+                    },
+                )
                 for coord, sched, prov, params in batch_items
             ]
 

@@ -317,14 +317,10 @@ def check_ci_width_gate(
 ) -> GateResult:
     """Check if confidence interval is narrow enough."""
     if len(cell_values) < 2:
-        # For n_seeds=1, we can't compute CI - pass with a note
-        return GateResult(
-            gate_name="ci_width",
-            passed=True,
-            statistic=len(cell_values),
-            threshold=2,
-            reason=f"Insufficient seeds for CI (need 2, got {len(cell_values)}); gate skipped",
-            details={"n_seeds": len(cell_values), "skipped": True},
+        return _skipped_gate(
+            "ci_width",
+            f"Insufficient seeds for CI (need 2, got {len(cell_values)}); gate skipped",
+            len(cell_values),
         )
 
     mean = np.mean(cell_values)
@@ -360,13 +356,11 @@ def check_train_val_gap_gate(
 ) -> GateResult:
     """Check if train/validation gap is within threshold."""
     if not train_values or not val_values:
-        return GateResult(
-            gate_name="train_val_gap",
-            passed=False,
-            statistic=None,
-            threshold=None,
-            reason="Missing train or validation values",
-            details={},
+        return _insufficient_data_gate(
+            "train_val_gap",
+            len(train_values) if train_values else 0,
+            1,
+            "missing train or validation values",
         )
 
     train_mean = np.mean(train_values)
@@ -400,13 +394,10 @@ def check_rho_band_gate(
 ) -> GateResult:
     """Check if spectral radius (stability metric) is within acceptable band."""
     if not rho_values:
-        return GateResult(
-            gate_name="rho_band",
-            passed=True,  # Not a hard failure if not available
-            statistic=None,
-            threshold=None,
-            reason="No ρ values available (skipping)",
-            details={},
+        return _skipped_gate(
+            "rho_band",
+            "No ρ values available (skipping)",
+            0,
         )
 
     rho_mean = np.mean(rho_values)
@@ -431,6 +422,87 @@ def check_rho_band_gate(
             else 0.0,
         },
     )
+
+
+def _insufficient_data_gate(
+    gate_name: str,
+    n_seeds: int,
+    min_seeds: int,
+    reason_suffix: str = "",
+) -> GateResult:
+    """Helper for gates with insufficient data - returns INSUFFICIENT verdict."""
+    return GateResult(
+        gate_name=gate_name,
+        passed=False,
+        statistic=n_seeds,
+        threshold=min_seeds,
+        reason=(
+            f"Insufficient seeds: {n_seeds} < {min_seeds} required"
+            f"{f' ({reason_suffix})' if reason_suffix else ''}"
+        ),
+        details={"n_seeds": n_seeds, "min_seeds": min_seeds, "skipped": True},
+        verdict=StatisticalVerdict.INSUFFICIENT,
+    )
+
+
+def _skipped_gate(
+    gate_name: str,
+    reason: str,
+    n_seeds: int = 0,
+) -> GateResult:
+    """Helper for gates that are skipped (not failed) due to missing data."""
+    return GateResult(
+        gate_name=gate_name,
+        passed=True,
+        statistic=n_seeds,
+        threshold=None,
+        reason=reason,
+        details={"n_seeds": n_seeds, "skipped": True},
+        verdict=StatisticalVerdict.INSUFFICIENT,
+    )
+
+
+def _extract_metrics_from_records(
+    records: list[Record],
+) -> tuple[list[float], list[float], list[float], list[float]]:
+    """Extract cell_values, train_values, val_values, rho_values from records.
+
+    Returns:
+        Tuple of (cell_values, train_values, val_values, rho_values) where:
+        - cell_values: primary metric values (val_acc) for superiority/CI gates
+        - train_values: training metric values for train/val gap gate
+        - val_values: validation metric values (same as cell_values, paired with train)
+        - rho_values: spectral radius values for stability gate
+    """
+    from computronium.experiment.schema.metrics import HISTORY_METRICS, objective_metric
+
+    metric_key = "validation_accuracy"
+    val_key = objective_metric(metric_key)
+    train_key = "train_acc" if "train_acc" in HISTORY_METRICS else val_key
+
+    cell_values: list[float] = []
+    train_values: list[float] = []
+    val_values: list[float] = []
+    rho_values: list[float] = []
+
+    for record in records:
+        # Validation accuracy (primary metric for superiority/CI gates)
+        val = record.payload.get(val_key)
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            cell_values.append(float(val))
+            val_values.append(float(val))  # Paired with train for train/val gap
+
+        # Train accuracy
+        train = record.payload.get(train_key)
+        if isinstance(train, (int, float)) and not isinstance(train, bool):
+            train_values.append(float(train))
+
+        # Spectral radius (stability)
+        rho = record.payload.get("spectral_radius")
+        if isinstance(rho, (int, float)) and not isinstance(rho, bool):
+            rho_values.append(float(rho))
+
+    return cell_values, train_values, val_values, rho_values
 
 
 def compute_required_seeds_power(
@@ -476,44 +548,22 @@ def run_l1_statistical_gates(  # ruff: ignore[too-many-locals] - one accumulator
         )
 
     cell_key = cell_records[0].cell_key
-    replication_key = (
-        cell_records[0].measurement_key.rsplit("_seed_", 1)[0]
-        if "_seed_" in cell_records[0].measurement_key
-        else cell_key
+    from computronium.experiment.execution.dedup import (
+        replication_key as _replication_key,
     )
 
-    # Extract metric values from records. Objectives are named in the registry;
-    # payloads carry their metric_key (e.g. val_acc), never the objective name —
-    # reading the objective name here left every gate measuring nothing (TODO63).
-    from computronium.experiment.schema.metrics import HISTORY_METRICS, objective_metric
+    replication_key = _replication_key(cell_records[0])
 
-    metric_key = "validation_accuracy"  # Primary metric
+    # Extract metric values from records
+    cell_values, train_values, val_values, rho_values = _extract_metrics_from_records(
+        cell_records
+    )
+
+    # Get metric key for baseline lookup
+    from computronium.experiment.schema.metrics import objective_metric
+
+    metric_key = "validation_accuracy"
     val_key = objective_metric(metric_key)
-    train_key = "train_acc" if "train_acc" in HISTORY_METRICS else val_key
-    cell_values = []
-    train_values = []
-    val_values = []
-    rho_values = []
-
-    for record in cell_records:
-        # Validation accuracy
-        val = record.payload.get(val_key)
-        if isinstance(val, (int, float)) and not isinstance(val, bool):
-            cell_values.append(float(val))
-
-        # Train accuracy
-        train = record.payload.get(train_key)
-        if isinstance(train, (int, float)) and not isinstance(train, bool):
-            train_values.append(float(train))
-
-        val = record.payload.get(val_key)
-        if isinstance(val, (int, float)) and not isinstance(val, bool):
-            val_values.append(float(val))
-
-        # Spectral radius (stability)
-        rho = record.payload.get("spectral_radius")
-        if isinstance(rho, (int, float)) and not isinstance(rho, bool):
-            rho_values.append(float(rho))
 
     gate_results: list[GateResult] = []
 

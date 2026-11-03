@@ -7,15 +7,15 @@ from __future__ import annotations
 
 import pytest
 
+from computronium.ontology.credit import CreditAssignmentConfig
+from computronium.ontology.dynamics import StateDynamicsConfig
+from computronium.ontology.geometry import GeometryConfig
+from computronium.ontology.substrate import SubstrateConfig
 from computronium.ontology.system import (
+    COMPATIBILITY_MATRIX,
     SystemConfig,
     check_compatibility_matrix,
-    COMPATIBILITY_MATRIX,
 )
-from computronium.ontology.substrate import SubstrateConfig
-from computronium.ontology.geometry import GeometryConfig
-from computronium.ontology.dynamics import StateDynamicsConfig
-from computronium.ontology.credit import CreditAssignmentConfig
 from computronium.ontology.update import ParameterUpdateConfig
 from computronium.state import PlasticityConfig
 
@@ -30,8 +30,12 @@ def _base_config(
 ) -> SystemConfig:
     """Create a valid base SystemConfig for testing."""
     return SystemConfig(
-        substrate=SubstrateConfig.digital() if substrate == "digital" else SubstrateConfig.analog(),
-        geometry=GeometryConfig.feedforward(input_dim=64, output_dim=10, hidden_dims=[128, 64])
+        substrate=SubstrateConfig.digital()
+        if substrate == "digital"
+        else SubstrateConfig.analog(),
+        geometry=GeometryConfig.feedforward(
+            input_dim=64, output_dim=10, hidden_dims=[128, 64]
+        )
         if geometry == "feedforward"
         else GeometryConfig.recurrent(input_dim=64, output_dim=10, hidden_dim=128),
         dynamics=StateDynamicsConfig.energy_minimization()
@@ -39,7 +43,9 @@ def _base_config(
         else StateDynamicsConfig.instantaneous(),
         plasticity=PlasticityConfig.null()
         if plasticity == "null"
-        else PlasticityConfig.fast_weights(fast_weight_dim=64, decay=0.9, learning_rate=0.1),
+        else PlasticityConfig.fast_weights(
+            fast_weight_dim=64, decay=0.9, learning_rate=0.1
+        ),
         credit=CreditAssignmentConfig.thermodynamic_contrast()
         if credit == "thermodynamic_contrast"
         else CreditAssignmentConfig.gradient(),
@@ -64,7 +70,9 @@ class TestPrimitiveCompatibilityLock:
             ("complex", "spike_integration"),
         ],
     )
-    def test_substrate_dynamics_incompatibilities_rejected(self, substrate: str, dynamics: str) -> None:
+    def test_substrate_dynamics_incompatibilities_rejected(
+        self, substrate: str, dynamics: str
+    ) -> None:
         """Known substrate-dynamics incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate=substrate,
@@ -89,7 +97,9 @@ class TestPrimitiveCompatibilityLock:
             ("analog", "ntm"),
         ],
     )
-    def test_substrate_geometry_incompatibilities_rejected(self, substrate: str, geometry: str) -> None:
+    def test_substrate_geometry_incompatibilities_rejected(
+        self, substrate: str, geometry: str
+    ) -> None:
         """Known substrate-geometry incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate=substrate,
@@ -111,7 +121,9 @@ class TestPrimitiveCompatibilityLock:
             ("ternary", "temporal_psi"),
         ],
     )
-    def test_substrate_plasticity_incompatibilities_rejected(self, substrate: str, plasticity: str) -> None:
+    def test_substrate_plasticity_incompatibilities_rejected(
+        self, substrate: str, plasticity: str
+    ) -> None:
         """Known substrate-plasticity incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate=substrate,
@@ -155,7 +167,9 @@ class TestPrimitiveCompatibilityLock:
             ("predictive_settling", "causal_transformer"),
         ],
     )
-    def test_dynamics_geometry_incompatibilities_rejected(self, dynamics: str, geometry: str) -> None:
+    def test_dynamics_geometry_incompatibilities_rejected(
+        self, dynamics: str, geometry: str
+    ) -> None:
         """Known dynamics-geometry incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate="digital",
@@ -181,7 +195,9 @@ class TestPrimitiveCompatibilityLock:
             ("error_predictive_coding", "fast_weights"),
         ],
     )
-    def test_dynamics_plasticity_incompatibilities_rejected(self, dynamics: str, plasticity: str) -> None:
+    def test_dynamics_plasticity_incompatibilities_rejected(
+        self, dynamics: str, plasticity: str
+    ) -> None:
         """Known dynamics-plasticity incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate="digital",
@@ -236,7 +252,9 @@ class TestPrimitiveCompatibilityLock:
             ("homeostatic", "diffusion"),
         ],
     )
-    def test_credit_dynamics_incompatibilities_rejected(self, credit: str, dynamics: str) -> None:
+    def test_credit_dynamics_incompatibilities_rejected(
+        self, credit: str, dynamics: str
+    ) -> None:
         """Known credit-dynamics incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate="digital",
@@ -257,7 +275,9 @@ class TestPrimitiveCompatibilityLock:
             ("local_contrastive", "causal_transformer"),
         ],
     )
-    def test_credit_geometry_incompatibilities_rejected(self, credit: str, geometry: str) -> None:
+    def test_credit_geometry_incompatibilities_rejected(
+        self, credit: str, geometry: str
+    ) -> None:
         """Known credit-geometry incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate="digital",
@@ -278,7 +298,9 @@ class TestPrimitiveCompatibilityLock:
             ("spectral_constrained", "sparse"),
         ],
     )
-    def test_update_substrate_incompatibilities_rejected(self, update: str, substrate: str) -> None:
+    def test_update_substrate_incompatibilities_rejected(
+        self, update: str, substrate: str
+    ) -> None:
         """Known update-substrate incompatibilities are rejected by compatibility matrix."""
         violations = check_compatibility_matrix(
             substrate=substrate,
@@ -321,7 +343,9 @@ class TestPrimitiveCompatibilityLock:
         # Use temporal_trace credit which is compatible with spike_integration
         config = SystemConfig(
             substrate=SubstrateConfig.quantum(),
-            geometry=GeometryConfig.feedforward(input_dim=64, output_dim=10, hidden_dims=[128, 64]),
+            geometry=GeometryConfig.feedforward(
+                input_dim=64, output_dim=10, hidden_dims=[128, 64]
+            ),
             dynamics=StateDynamicsConfig.spike_integration(),
             plasticity=PlasticityConfig.null(),
             credit=CreditAssignmentConfig.temporal_trace(),
@@ -355,15 +379,15 @@ class TestPrimitiveCompatibilityLock:
     def test_admission_gate_uses_compatibility_matrix(self) -> None:
         """Admission gate (pipeline) uses check_compatibility_matrix for fast rejection."""
         # This test verifies the integration point exists
-        from computronium.experiment.execution.pipeline._stages import _StageMixin
 
         # The _fresh_batch_items method calls check_compatibility_matrix
         # We can't easily test the full pipeline here, but we can verify
         # the function is imported and used in the pipeline module
-        import computronium.experiment.execution.pipeline._stages as stages_module
-
         # Check that check_compatibility_matrix is imported in the pipeline module
         import inspect
+
+        import computronium.experiment.execution.pipeline._stages as stages_module
+
         source = inspect.getsource(stages_module)
         assert "check_compatibility_matrix" in source
         assert "ADMISSION_REJECTED" in source

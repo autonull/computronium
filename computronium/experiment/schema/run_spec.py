@@ -355,6 +355,7 @@ class RunSpec(BaseModel):
         # Handle "auto" task for smart-survey profile
         if self.task == "auto":
             from computronium.domains.registry import get_cheap_tasks
+
             return tuple(get_cheap_tasks())
         return tuple(dict.fromkeys(n for n in (self.task, *self.tasks) if n))
 

@@ -47,11 +47,30 @@ PRESETS = ["watch", "audit", "drive", "free"]
 
 # All 25 registered stage views (from index.ts) - plot2d/ramp are stores, not views
 STAGE_VIEWS = [
-    "space", "ledger", "timeline", "landscape", "basin", "spectrum",
-    "trajectory", "flow", "frontier", "contrast", "convergence",
-    "uncertainty", "effect", "spread", "matrix", "layers", "slices",
-    "small-multiples", "terrain", "claim-cost", "multirun",
-    "trained-trajectory", "trained-basin", "trained-landscape",
+    "space",
+    "ledger",
+    "timeline",
+    "landscape",
+    "basin",
+    "spectrum",
+    "trajectory",
+    "flow",
+    "frontier",
+    "contrast",
+    "convergence",
+    "uncertainty",
+    "effect",
+    "spread",
+    "matrix",
+    "layers",
+    "slices",
+    "small-multiples",
+    "terrain",
+    "claim-cost",
+    "multirun",
+    "trained-trajectory",
+    "trained-basin",
+    "trained-landscape",
     "trained-spectrum",
 ]
 
@@ -84,14 +103,21 @@ PANEL_NAMES = {
 }
 
 
-def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: float = 30.0) -> dict:
+def wait_for_stage_view(
+    page, instance_id: str, expected_view: str, timeout: float = 30.0
+) -> dict:
     """Wait for stage debug info to report the expected view with rendered canvas AND data (ready=true)."""
     deadline = time.time() + timeout
     last_rect = None
     stable_count = 0
 
     # Views that require trained dynamics data (not in demo profile)
-    trained_views = {"trained-trajectory", "trained-basin", "trained-landscape", "trained-spectrum"}
+    trained_views = {
+        "trained-trajectory",
+        "trained-basin",
+        "trained-landscape",
+        "trained-spectrum",
+    }
 
     while time.time() < deadline:
         debug = page.evaluate(
@@ -137,7 +163,12 @@ def wait_for_stage_view(page, instance_id: str, expected_view: str, timeout: flo
         instance_id,
     )
     # Don't raise on timeout - return what we have (might be empty view with just grid)
-    return debug or {"ready": False, "measured": 0, "view": expected_view, "canvas": {"w": 0, "h": 0}}
+    return debug or {
+        "ready": False,
+        "measured": 0,
+        "view": expected_view,
+        "canvas": {"w": 0, "h": 0},
+    }
 
 
 def wait_for_panel_ready(page, instance_id: str, timeout: float = 15.0) -> dict:
@@ -170,7 +201,10 @@ def filter_console_errors(console_messages: list[dict]) -> list[dict]:
             text = msg["text"]
             if "favicon.ico" in text or "Failed to load resource" in text:
                 continue
-            if "Failed to fetch dynamically imported module" in text and "layout.js" in text:
+            if (
+                "Failed to fetch dynamically imported module" in text
+                and "layout.js" in text
+            ):
                 continue
             # Filter out the "require is not defined" errors from the built dashboard JS
             if "ReferenceError: require is not defined" in text:
@@ -251,8 +285,14 @@ def crop_panel_screenshot(page, instance_id: str, output: Path) -> dict:
     page.screenshot(path=str(full_path))
 
     from PIL import Image
+
     img = Image.open(full_path)
-    cropped = img.crop((rect["x"], rect["y"], rect["x"] + rect["width"], rect["y"] + rect["height"]))
+    cropped = img.crop((
+        rect["x"],
+        rect["y"],
+        rect["x"] + rect["width"],
+        rect["y"] + rect["height"],
+    ))
     cropped.save(output)
     full_path.unlink()
 
@@ -281,7 +321,9 @@ def image_diff_pct(img1: Path, img2: Path) -> float:
     return float(np.mean(diff) / 255.0 * 100)
 
 
-def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: bool = False) -> list[dict]:
+def capture_tour(
+    port: int, store_path: Path, output_dir: Path, skip_campaigns: bool = False
+) -> list[dict]:
     """Capture the comprehensive dashboard tour."""
     from playwright.sync_api import sync_playwright
 
@@ -299,8 +341,18 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
         context = browser.new_context(viewport=VIEWPORT)
         page = context.new_page()
 
-        page.on("console", lambda msg: console_messages.append({"type": msg.type, "text": msg.text}))
-        page.on("pageerror", lambda err: page_errors.append(str(err)) if "require is not defined" not in str(err) else None)
+        page.on(
+            "console",
+            lambda msg: console_messages.append({"type": msg.type, "text": msg.text}),
+        )
+        page.on(
+            "pageerror",
+            lambda err: (
+                page_errors.append(str(err))
+                if "require is not defined" not in str(err)
+                else None
+            ),
+        )
 
         page.goto(f"http://localhost:{port}/", wait_until="load")
         page.wait_for_selector("#workspace", state="attached", timeout=30000)
@@ -335,6 +387,7 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
             # Also copy to assets dir for README
             assets_path = assets_dir / f"dashboard-{preset}.png"
             import shutil
+
             shutil.copy2(output_path, assets_path)
 
             diff = 0.0
@@ -407,7 +460,9 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
                     "path": str(crop_path.relative_to(REPO_ROOT)),
                     "diff_pct": diff,
                 })
-                logger.info(f"  {view}: {rect['width']}x{rect['height']}, measured={debug.get('measured')}, diff={diff:.1f}%")
+                logger.info(
+                    f"  {view}: {rect['width']}x{rect['height']}, measured={debug.get('measured')}, diff={diff:.1f}%"
+                )
 
         # ========== 3. PANEL TYPES (full panel shots) ==========
         logger.info("=== Capturing Panel Types ===")
@@ -440,7 +495,9 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
                     "path": str(output_path.relative_to(REPO_ROOT)),
                     "diff_pct": diff,
                 })
-                logger.info(f"  {panel_name}: {rect['width']}x{rect['height']}, diff={diff:.1f}%")
+                logger.info(
+                    f"  {panel_name}: {rect['width']}x{rect['height']}, diff={diff:.1f}%"
+                )
             finally:
                 close_panel(page, instance_id)
 
@@ -453,7 +510,9 @@ def capture_tour(port: int, store_path: Path, output_dir: Path, skip_campaigns: 
         if page_errors:
             raise RuntimeError(f"Page errors: {page_errors}")
         if duplicate_ids > 0:
-            raise RuntimeError(f"Duplicate DOM ids: {duplicate_ids} ({duplicate_id_list})")
+            raise RuntimeError(
+                f"Duplicate DOM ids: {duplicate_ids} ({duplicate_id_list})"
+            )
 
     return report
 

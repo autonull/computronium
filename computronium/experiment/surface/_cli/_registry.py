@@ -75,6 +75,7 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
         if "fastapi" in str(e) or "uvicorn" in str(e):
             logger.info("Dashboard dependencies not found, installing...")
             import subprocess
+
             try:
                 subprocess.run(
                     ["uv", "pip", "install", "fastapi", "uvicorn"],
@@ -82,9 +83,13 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
                     capture_output=True,
                 )
                 logger.info("Dashboard dependencies installed")
-                from computronium.experiment.execution.dashboard.web import run_dashboard
+                from computronium.experiment.execution.dashboard.web import (
+                    run_dashboard,
+                )
             except subprocess.CalledProcessError as install_err:
-                logger.error("Failed to install dashboard dependencies: %s", install_err)
+                logger.error(
+                    "Failed to install dashboard dependencies: %s", install_err
+                )
                 print(
                     "Error: Could not install dashboard dependencies (fastapi, uvicorn).",
                     file=sys.stderr,

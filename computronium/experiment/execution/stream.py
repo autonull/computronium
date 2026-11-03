@@ -130,7 +130,12 @@ class CellStream:
             logger.info("Deadline soft-expired, stream yielding empty")
             return []
 
-        logger.info("Cell stream: fetching %d cells (offset=%d, page_size=%d)", k, self._state.offset, self._page_size)
+        logger.info(
+            "Cell stream: fetching %d cells (offset=%d, page_size=%d)",
+            k,
+            self._state.offset,
+            self._page_size,
+        )
         results: list[tuple[Coordinate, Schedule]] = []
         examined_count = 0
         while len(results) < k and not self._state.exhausted:
@@ -143,7 +148,11 @@ class CellStream:
                 examined = True
                 examined_count += 1
                 if self._deadline and self._deadline.soft_expired():
-                    logger.info("Cell stream: deadline expired, yielded %d/%d cells", len(results), k)
+                    logger.info(
+                        "Cell stream: deadline expired, yielded %d/%d cells",
+                        len(results),
+                        k,
+                    )
                     return results[:k]
                 key = coordinate.measurement_key(schedule)
                 if key in self._rejected_keys or self._is_measured(key):
@@ -157,7 +166,11 @@ class CellStream:
                 # next page's offset so resume stays offset-indexed.
                 self._iterator = None
                 self._finish_page(examined)
-                logger.info("Cell stream: page exhausted, examined %d candidates, yielded %d cells", examined_count, len(results))
+                logger.info(
+                    "Cell stream: page exhausted, examined %d candidates, yielded %d cells",
+                    examined_count,
+                    len(results),
+                )
                 examined_count = 0
                 continue
             break

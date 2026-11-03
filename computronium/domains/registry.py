@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 __all__ = [
     "SUPPORTED_TASKS",
+    "TASK_COST_CLASS",
     "TaskSpec",
+    "get_cheap_tasks",
+    "get_expensive_tasks",
+    "get_medium_tasks",
+    "get_task_cost_class",
     "resolve_task",
     "resolve_task_from_data_config",
-    "TASK_COST_CLASS",
-    "get_task_cost_class",
-    "get_cheap_tasks",
-    "get_medium_tasks",
-    "get_expensive_tasks",
 ]
 
 # The schedulable set is exactly what resolves and sets up offline: geometry

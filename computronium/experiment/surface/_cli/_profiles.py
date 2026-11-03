@@ -327,22 +327,22 @@ RUN_PROFILES: dict[str, RunProfile] = {
             "s11_report",
         ],
         fidelity="L0",
-        n_seeds=1,                    # L0: 1, L1: 2, L2: 5 (via fidelity_seeds)
-        epochs=1,                     # L0: 1, L1: 3, L2: 10 (via fidelity_epochs)
+        n_seeds=1,  # L0: 1, L1: 2, L2: 5 (via fidelity_seeds)
+        epochs=1,  # L0: 1, L1: 3, L2: 10 (via fidelity_epochs)
         batch_limit=MEASURED_BATCH_LIMIT,
-        budget_seconds=3600.0,        # overridden by CLI
-        task="auto",                  # cycles through cheap tasks
+        budget_seconds=3600.0,  # overridden by CLI
+        task="auto",  # cycles through cheap tasks
         policy="model_based",
         param_budget=BROAD_PARAM_BUDGET,
         objectives=("validation_accuracy", "walltime_total", "param_count"),
-        promotion_threshold=0.3,      # normalized score threshold for promotion (was 0.6)
-        maturation=True,              # ENABLED
-        deep_tier=True,               # ENABLED
+        promotion_threshold=0.3,  # normalized score threshold for promotion (was 0.6)
+        maturation=True,  # ENABLED
+        deep_tier=True,  # ENABLED
         fidelity_seeds={"L0": 1, "L1": 2, "L2": 5},
         fidelity_epochs={"L0": 1, "L1": 3, "L2": 10},
         early_stopping_patience=3,
         hyperparameters=dict(_SEARCH_SWEEP),
-        checkpoint_every_n=1,         # Enable for warm-start
+        checkpoint_every_n=1,  # Enable for warm-start
     ),
     "survey-24h": RunProfile(
         name="survey-24h",

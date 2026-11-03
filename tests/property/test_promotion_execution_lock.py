@@ -6,15 +6,12 @@ WS4.7 acceptance: Promotion flow verified end-to-end.
 from __future__ import annotations
 
 import inspect
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
 from computronium.experiment.execution.pipeline._stages import _StageMixin
 from computronium.experiment.kernel.evaluate import TaskScheduler
-from computronium.experiment.kernel.search_space import search_space_from_spec
 from computronium.experiment.schema import (
     Coordinate,
     DataOrigin,
@@ -24,7 +21,6 @@ from computronium.experiment.schema import (
     Provenance,
     Record,
     ReproducibilityClass,
-    RunSpec,
     Schedule,
     Severity,
     Status,
@@ -78,7 +74,11 @@ def _make_record(
             cause=FailureCause.UNKNOWN,
             severity=Severity.LOW,
             quarantine=False,
-            maturity=Maturity.L0 if fidelity == "L0" else Maturity.L1 if fidelity == "L1" else Maturity.L2,
+            maturity=Maturity.L0
+            if fidelity == "L0"
+            else Maturity.L1
+            if fidelity == "L1"
+            else Maturity.L2,
             uncertainty={},
             reproducibility=ReproducibilityClass.REPLAYABLE,
             assessment_procedure_version="1.0",
@@ -108,12 +108,10 @@ class TestPromotionExecutionLock:
     def test_build_allocator_candidates_creates_l1_promotions_from_l0(self) -> None:
         """_build_allocator_candidates generates L1 schedules from L0 base."""
         from computronium.experiment.execution.pipeline._stages import _StageMixin
-        from computronium.experiment.kernel.evaluate import task_shape
-        from computronium.experiment.kernel.search_space import iter_candidates
 
         # Verify the method exists and creates L1 schedules
         source = inspect.getsource(_StageMixin._build_allocator_candidates)
-        assert "next_fidelity = \"L1\"" in source
+        assert 'next_fidelity = "L1"' in source
         assert "fidelity_seeds.get(next_fidelity" in source
         assert "fidelity_epochs.get(next_fidelity" in source
         assert "checkpoint_every_n=spec.checkpoint_every_n" in source
@@ -122,10 +120,10 @@ class TestPromotionExecutionLock:
         """_build_allocator_candidates generates L2 schedules from allocator L1 candidates."""
         source = inspect.getsource(_StageMixin._build_allocator_candidates)
         # Check L1→L2 promotion logic
-        assert "promo_candidate.current_fidelity != \"L2\"" in source
-        assert "fidelity=\"L2\"" in source
-        assert "fidelity_seeds.get(\"L2\"" in source
-        assert "fidelity_epochs.get(\"L2\"" in source
+        assert 'promo_candidate.current_fidelity != "L2"' in source
+        assert 'fidelity="L2"' in source
+        assert 'fidelity_seeds.get("L2"' in source
+        assert 'fidelity_epochs.get("L2"' in source
 
     def test_apply_smart_survey_promotion_filters_by_threshold(self) -> None:
         """_apply_smart_survey_promotion filters cells below promotion_threshold."""
@@ -158,19 +156,21 @@ class TestPromotionExecutionLock:
     def test_s10_decide_converts_promotions_to_proposals(self) -> None:
         """S10 Decide converts allocator_promotions to Proposal objects."""
         from computronium.experiment.execution.stages_impl import DecideStage
+
         source = inspect.getsource(DecideStage.run)
         assert "allocator_promotions = list(ctx.allocator_promotions)" in source
-        assert "rationale=\"allocator_promotion\"" in source
+        assert 'rationale="allocator_promotion"' in source
         assert "Promotion(" in source
-        assert "from_fidelity=\"L0\" if sched.fidelity == \"L1\" else \"L1\"" in source
+        assert 'from_fidelity="L0" if sched.fidelity == "L1" else "L1"' in source
         assert "to_fidelity=sched.fidelity" in source
 
     def test_promotion_fidelity_correct_in_s10(self) -> None:
         """S10 sets from_fidelity correctly: L0→L1 or L1→L2."""
         from computronium.experiment.execution.stages_impl import DecideStage
+
         source = inspect.getsource(DecideStage.run)
         # from_fidelity should be L0 for L1 target, L1 for L2 target
-        assert "from_fidelity=\"L0\" if sched.fidelity == \"L1\" else \"L1\"" in source
+        assert 'from_fidelity="L0" if sched.fidelity == "L1" else "L1"' in source
 
     def test_allocator_observes_records_before_proposing(self) -> None:
         """_run_allocator calls allocator.observe on all records before propose."""
@@ -189,7 +189,7 @@ class TestPromotionExecutionLock:
     def test_smart_survey_promotion_applied_in_run_allocator(self) -> None:
         """_run_allocator applies _apply_smart_survey_promotion for smart-survey profile."""
         source = inspect.getsource(_StageMixin._run_allocator)
-        assert "spec.profile == \"smart-survey\"" in source
+        assert 'spec.profile == "smart-survey"' in source
         assert "_apply_smart_survey_promotion" in source
 
     def test_promotion_schedule_includes_checkpoint_every_n(self) -> None:
@@ -289,6 +289,7 @@ class TestPromotionExecutionLock:
     def test_zero_yield_check_skips_when_promotions_pending(self) -> None:
         """_check_zero_yield resets counter when allocator_promotions exist."""
         from computronium.experiment.execution.pipeline._budget import _BudgetMixin
+
         source = inspect.getsource(_BudgetMixin._check_zero_yield)
         assert "_state.allocator_promotions" in source
         assert "self._state.zero_yield_count = 0" in source

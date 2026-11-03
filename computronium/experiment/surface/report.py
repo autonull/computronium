@@ -1079,6 +1079,74 @@ def _row_stats(
     return mean, std, len(values), at_chance
 
 
+# Module-level constant for primitive pairs to analyze
+_PRIMITIVE_AFFINITY_PAIRS: list[tuple[str, str]] = [
+    ("credit", "update"),
+    ("substrate", "dynamics"),
+    ("geometry", "plasticity"),
+    ("dynamics", "credit"),
+    ("substrate", "credit"),
+]
+
+
+def _build_affinity_matrix(
+    records: list,
+    axis_x: str,
+    axis_y: str,
+    metric: str = "val_acc",
+) -> tuple[list[str], list[str], dict[str, dict[str, list[float]]]]:
+    """Build affinity matrix for two axes from valid records."""
+    from collections import defaultdict
+
+    x_vals = sorted(set(getattr(r, axis_x) for r in records))
+    y_vals = sorted(set(getattr(r, axis_y) for r in records))
+
+    matrix: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for r in records:
+        x = getattr(r, axis_x)
+        y = getattr(r, axis_y)
+        matrix[y][x].append(float(r.payload[metric]))
+
+    return x_vals, y_vals, matrix
+
+
+def _render_heatmap(
+    axis_x: str,
+    axis_y: str,
+    x_vals: list[str],
+    y_vals: list[str],
+    matrix: dict[str, dict[str, list[float]]],
+) -> list[str]:
+    """Render a text heatmap from a pre-built matrix."""
+    import statistics
+
+    lines = [f"  {axis_y} × {axis_x}:"]
+    # Header
+    header = "      " + " ".join(f"{x[:8]:>8}" for x in x_vals)
+    lines.append(header)
+    for y in y_vals:
+        row_vals = []
+        for x in x_vals:
+            vals = matrix[y].get(x, [])
+            if vals:
+                mean_val = statistics.mean(vals)
+                row_vals.append(f"{mean_val:>8.3f}")
+            else:
+                row_vals.append("    N/A")
+        lines.append(f"  {y[:6]:6} " + " ".join(row_vals))
+        # Show count per cell
+        count_row = []
+        for x in x_vals:
+            vals = matrix[y].get(x, [])
+            if vals:
+                count_row.append(f" (n={len(vals)})")
+            else:
+                count_row.append("")
+        lines.append("       " + " ".join(f"{c:>8}" for c in count_row))
+    lines.append("")
+    return lines
+
+
 def _primitive_affinity_section(generator: ReportGenerator, run_id: str) -> list[str]:
     """Primitive affinity heatmaps: mean val_acc for key primitive pairs."""
     lines = _section("Primitive Affinity Heatmaps (mean val_acc):")
@@ -1091,7 +1159,8 @@ def _primitive_affinity_section(generator: ReportGenerator, run_id: str) -> list
 
     # Only use PASS records with val_acc
     valid_records = [
-        r for r in records
+        r
+        for r in records
         if r.status.gate_verdict == GateVerdict.PASS_
         and not r.status.quarantine
         and r.payload.get("val_acc") is not None
@@ -1099,61 +1168,18 @@ def _primitive_affinity_section(generator: ReportGenerator, run_id: str) -> list
     if not valid_records:
         return [*lines, "  (no PASS records with val_acc)"]
 
-    # Define key primitive pairs to analyze
-    primitive_pairs = [
-        ("credit", "update"),
-        ("substrate", "dynamics"),
-        ("geometry", "plasticity"),
-        ("dynamics", "credit"),
-        ("substrate", "credit"),
-    ]
-
-    import statistics
-    from collections import defaultdict
-
-    for axis_x, axis_y in primitive_pairs:
-        # Build matrix
-        x_vals = sorted(set(getattr(r, axis_x) for r in valid_records))
-        y_vals = sorted(set(getattr(r, axis_y) for r in valid_records))
-
+    # Render heatmaps for each primitive pair
+    for axis_x, axis_y in _PRIMITIVE_AFFINITY_PAIRS:
+        x_vals, y_vals, matrix = _build_affinity_matrix(valid_records, axis_x, axis_y)
         if len(x_vals) < 2 or len(y_vals) < 2:
             continue
-
-        # Compute mean val_acc per cell
-        matrix: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
-        for r in valid_records:
-            x = getattr(r, axis_x)
-            y = getattr(r, axis_y)
-            matrix[y][x].append(float(r.payload["val_acc"]))
-
-        # Render text heatmap
-        lines.append(f"  {axis_y} × {axis_x}:")
-        # Header
-        header = "      " + " ".join(f"{x[:8]:>8}" for x in x_vals)
-        lines.append(header)
-        for y in y_vals:
-            row_vals = []
-            for x in x_vals:
-                vals = matrix[y].get(x, [])
-                if vals:
-                    mean_val = statistics.mean(vals)
-                    row_vals.append(f"{mean_val:>8.3f}")
-                else:
-                    row_vals.append("    N/A")
-            lines.append(f"  {y[:6]:6} " + " ".join(row_vals))
-            # Show count per cell
-            count_row = []
-            for x in x_vals:
-                vals = matrix[y].get(x, [])
-                if vals:
-                    count_row.append(f" (n={len(vals)})")
-                else:
-                    count_row.append("")
-            lines.append("       " + " ".join(f"{c:>8}" for c in count_row))
-        lines.append("")
+        lines.extend(_render_heatmap(axis_x, axis_y, x_vals, y_vals, matrix))
 
     # Also show top primitive combinations
     lines.append("  Top 10 Primitive Combinations (by mean val_acc):")
+    import statistics
+    from collections import defaultdict
+
     combo_scores: dict[str, list[float]] = defaultdict(list)
     for r in valid_records:
         combo = f"{r.substrate}/{r.geometry}/{r.dynamics}/{r.plasticity}/{r.credit}/{r.update}"

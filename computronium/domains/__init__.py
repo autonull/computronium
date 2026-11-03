@@ -20,13 +20,13 @@ from computronium.domains.graph import GraphTask
 from computronium.domains.lm import LMTask
 from computronium.domains.registry import (
     SUPPORTED_TASKS,
-    TaskSpec,
-    resolve_task,
     TASK_COST_CLASS,
-    get_task_cost_class,
+    TaskSpec,
     get_cheap_tasks,
-    get_medium_tasks,
     get_expensive_tasks,
+    get_medium_tasks,
+    get_task_cost_class,
+    resolve_task,
 )
 from computronium.domains.rl import RLTask
 from computronium.domains.scientific import ScientificTask
@@ -98,4 +98,9 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "TaskProtocol",
     "_TaskTrainer",
     "_resolve_task_loss",
+    "TASK_COST_CLASS",
+    "get_cheap_tasks",
+    "get_expensive_tasks",
+    "get_medium_tasks",
+    "get_task_cost_class",
 ]

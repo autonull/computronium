@@ -79,7 +79,10 @@ def probe_viewport(port: int, viewport: dict) -> dict:
         context = browser.new_context(viewport=viewport)
         page = context.new_page()
 
-        page.on("console", lambda msg: console_messages.append({"type": msg.type, "text": msg.text}))
+        page.on(
+            "console",
+            lambda msg: console_messages.append({"type": msg.type, "text": msg.text}),
+        )
         page.on("pageerror", lambda err: page_errors.append(str(err)))
         # Expose console messages to page for debugging
         page.add_init_script("""
@@ -139,7 +142,10 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                 }}"""
             )
             logger.info(f"Menubar state after {wait_time}ms: {menubar_debug}")
-            if menubar_debug.get("hasMenubarDiv") and menubar_debug.get("menuCount", 0) >= 5:
+            if (
+                menubar_debug.get("hasMenubarDiv")
+                and menubar_debug.get("menuCount", 0) >= 5
+            ):
                 break
 
         try:
@@ -304,7 +310,11 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                     }""",
                     instance_id,
                 )
-                if stage_debug and stage_debug.get("ready") and stage_debug.get("measured", 0) > 0:
+                if (
+                    stage_debug
+                    and stage_debug.get("ready")
+                    and stage_debug.get("measured", 0) > 0
+                ):
                     break
                 time.sleep(0.2)
 
@@ -312,7 +322,11 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                 canvas = stage_debug.get("canvas", {})
                 rect = geometry.get("stage", {})
                 aspect = stage_debug.get("cameraAspect", 1)
-                expected_aspect = rect.get("width", 1) / rect.get("height", 1) if rect.get("height", 0) > 0 else 1
+                expected_aspect = (
+                    rect.get("width", 1) / rect.get("height", 1)
+                    if rect.get("height", 0) > 0
+                    else 1
+                )
 
                 stage_contracts = {
                     "ready": stage_debug.get("ready"),
@@ -333,12 +347,15 @@ def probe_viewport(port: int, viewport: dict) -> dict:
                     expected_w = rect["width"] * canvas["dpr"]
                     expected_h = rect["height"] * canvas["dpr"]
                     stage_contracts["canvas_matches_rect_dpr"] = (
-                        abs(canvas["w"] - expected_w) < 2 and abs(canvas["h"] - expected_h) < 2
+                        abs(canvas["w"] - expected_w) < 2
+                        and abs(canvas["h"] - expected_h) < 2
                     )
 
                 # Check height = panel (stage fills its panel)
                 if rect and canvas.get("h"):
-                    stage_contracts["height_equals_panel"] = abs(canvas["h"] / canvas["dpr"] - rect["height"]) < 2
+                    stage_contracts["height_equals_panel"] = (
+                        abs(canvas["h"] / canvas["dpr"] - rect["height"]) < 2
+                    )
 
                 # Check crop differs from background (non-blank)
                 crop_differs = page.evaluate(
@@ -611,20 +628,36 @@ def main() -> int:
         if "error" in r:
             print(f"  {r['viewport']}: ERROR - {r['error']}")
         else:
-            css_ok = r["css"].get("dvPosition") == "relative" and r["css"].get("tabCount", 0) > 0
-            chrome_ok = r["chrome"].get("menuCount", 0) == 5 and len(r["chrome"].get("duplicateIds", [])) == 0
-            geo_ok = r["geometry"].get("stage_ge_60x55", False) and r["geometry"].get("left_in_range", False)
-            stage_ok = r["stage"].get("ready", False) and r["stage"].get("measured", 0) > 0
-            print(f"  {r['viewport']}: CSS={'✓' if css_ok else '✗'} Chrome={'✓' if chrome_ok else '✗'} Geo={'✓' if geo_ok else '✗'} Stage={'✓' if stage_ok else '✗'}")
+            css_ok = (
+                r["css"].get("dvPosition") == "relative"
+                and r["css"].get("tabCount", 0) > 0
+            )
+            chrome_ok = (
+                r["chrome"].get("menuCount", 0) == 5
+                and len(r["chrome"].get("duplicateIds", [])) == 0
+            )
+            geo_ok = r["geometry"].get("stage_ge_60x55", False) and r["geometry"].get(
+                "left_in_range", False
+            )
+            stage_ok = (
+                r["stage"].get("ready", False) and r["stage"].get("measured", 0) > 0
+            )
+            print(
+                f"  {r['viewport']}: CSS={'✓' if css_ok else '✗'} Chrome={'✓' if chrome_ok else '✗'} Geo={'✓' if geo_ok else '✗'} Stage={'✓' if stage_ok else '✗'}"
+            )
 
     # Baseline inventory summary (from 1920x1080 viewport)
-    baseline_result = next((r for r in all_results if r.get("viewport") == "1920x1080"), None)
+    baseline_result = next(
+        (r for r in all_results if r.get("viewport") == "1920x1080"), None
+    )
     if baseline_result and "baseline_inventory" in baseline_result:
         print("\nBaseline inventory:")
         for name, info in baseline_result["baseline_inventory"].items():
             base = "✓" if info["baseline_exists"] else "✗"
             curr = "✓" if info["current_exists"] else "✗"
-            diff = f" diff={info['diff_pct']:.1f}%" if info["diff_pct"] is not None else ""
+            diff = (
+                f" diff={info['diff_pct']:.1f}%" if info["diff_pct"] is not None else ""
+            )
             print(f"  {name}: baseline={base} current={curr}{diff}")
 
     if server_error:

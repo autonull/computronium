@@ -9,10 +9,10 @@ import pytest
 
 from computronium.experiment.evidence.claims import (
     DEFAULT_MIN_SEEDS,
+    _attach_ci_to_payload,
+    _compute_replication_uncertainty,
     claim_eligible,
     claim_eligible_strict,
-    _compute_replication_uncertainty,
-    _attach_ci_to_payload,
 )
 from computronium.experiment.schema import (
     Coordinate,
@@ -122,10 +122,14 @@ class TestStatisticalValidityLock:
 
     def test_claim_eligible_requires_pass_verdict(self) -> None:
         """Claim eligible requires PASS gate verdict."""
-        record_pass = _make_record(fidelity="L2", n_seeds=5, gate_verdict=GateVerdict.PASS_)
+        record_pass = _make_record(
+            fidelity="L2", n_seeds=5, gate_verdict=GateVerdict.PASS_
+        )
         assert claim_eligible(record_pass)
 
-        record_fail = _make_record(fidelity="L2", n_seeds=5, gate_verdict=GateVerdict.FAIL)
+        record_fail = _make_record(
+            fidelity="L2", n_seeds=5, gate_verdict=GateVerdict.FAIL
+        )
         assert not claim_eligible(record_fail)
 
     def test_claim_eligible_requires_not_quarantine(self) -> None:
@@ -219,8 +223,11 @@ class TestStatisticalValidityLock:
         """compute_and_store_uncertainty persists CI bounds to store."""
         import tempfile
         from pathlib import Path
+
+        from computronium.experiment.evidence.claims import (
+            compute_and_store_uncertainty,
+        )
         from computronium.experiment.evidence.store import RecordStore, StoreConfig
-        from computronium.experiment.evidence.claims import compute_and_store_uncertainty
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "test.duckdb"
@@ -271,7 +278,9 @@ class TestStatisticalValidityLock:
                     store.append(record)
 
                 # Compute and store uncertainty
-                all_uncertainty = compute_and_store_uncertainty(store, run_id, min_seeds=3)
+                all_uncertainty = compute_and_store_uncertainty(
+                    store, run_id, min_seeds=3
+                )
 
                 # Should have uncertainty for the replication key
                 assert len(all_uncertainty) == 1
@@ -297,6 +306,7 @@ class TestStatisticalValidityLock:
         # This test verifies the report function includes CI bounds
         # We can't easily run the full report, but we can check the source
         import inspect
+
         import computronium.experiment.evidence.claims as claims_module
 
         source = inspect.getsource(claims_module)

@@ -412,7 +412,9 @@ class _DeadlineCheckCallback:
         return self._enforcer.check_during_cell(hard=self._hard)
 
 
-def deadline_check_callback(enforcer: DeadlineEnforcer, *, hard: bool = False) -> _DeadlineCheckCallback:
+def deadline_check_callback(
+    enforcer: DeadlineEnforcer, *, hard: bool = False
+) -> _DeadlineCheckCallback:
     """Create a picklable deadline check callback.
 
     Returns a callable object that checks the deadline using the enforcer's methods.

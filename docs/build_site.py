@@ -591,9 +591,9 @@ def _cheatsheet() -> MapBundle:
         )
         raise FileNotFoundError(msg)
     manifest = json.loads(CHEATSHEET_MANIFEST.read_text(encoding="utf-8"))
-    doc_keys = {
-        section.key for section in _doc_sections_about()
-    } | {section.key for section in _doc_sections_howto()}
+    doc_keys = {section.key for section in _doc_sections_about()} | {
+        section.key for section in _doc_sections_howto()
+    }
     panels = manifest["panels"]
     for panel in panels:
         if panel["doc"] not in doc_keys:
@@ -724,7 +724,9 @@ def build_site() -> str:
         "cheatsheet_svg": map_bundle.svg,
         "canvas_w": f"{map_bundle.canvas_w:g}",
         "canvas_h": f"{map_bundle.canvas_h:g}",
-        "site_index": _site_index(slides, research_slides, sections_about, sections_howto, map_bundle),
+        "site_index": _site_index(
+            slides, research_slides, sections_about, sections_howto, map_bundle
+        ),
         "map_manifest": json.dumps(map_bundle.manifest, ensure_ascii=False).replace(
             "<", "\\u003c"
         ),

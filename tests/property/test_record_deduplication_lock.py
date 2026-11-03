@@ -8,8 +8,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.schema import (
     Coordinate,
@@ -109,7 +107,13 @@ class TestRecordDeduplicationLock:
                 records = store.query_records(run_id=run_id)
 
                 # Should have exactly ONE record for this cell_key+seed+fidelity
-                matching = [r for r in records if r.cell_key == rec1.cell_key and r.schedule.seed == 0 and r.schedule.fidelity == "L0"]
+                matching = [
+                    r
+                    for r in records
+                    if r.cell_key == rec1.cell_key
+                    and r.schedule.seed == 0
+                    and r.schedule.fidelity == "L0"
+                ]
                 assert len(matching) == 1, f"Expected 1 record, got {len(matching)}"
 
                 # The surviving record should be the latest (higher val_acc)
@@ -131,8 +135,14 @@ class TestRecordDeduplicationLock:
                 store.append(rec2)
 
                 records = store.query_records(run_id=run_id)
-                matching = [r for r in records if r.cell_key == rec1.cell_key and r.schedule.fidelity == "L0"]
-                assert len(matching) == 2, f"Expected 2 records (different seeds), got {len(matching)}"
+                matching = [
+                    r
+                    for r in records
+                    if r.cell_key == rec1.cell_key and r.schedule.fidelity == "L0"
+                ]
+                assert len(matching) == 2, (
+                    f"Expected 2 records (different seeds), got {len(matching)}"
+                )
 
     def test_different_fidelity_different_records(self) -> None:
         """Different fidelity for same cell_key → separate records."""
@@ -150,8 +160,14 @@ class TestRecordDeduplicationLock:
                 store.append(rec2)
 
                 records = store.query_records(run_id=run_id)
-                matching = [r for r in records if r.cell_key == rec1.cell_key and r.schedule.seed == 0]
-                assert len(matching) == 2, f"Expected 2 records (different fidelity), got {len(matching)}"
+                matching = [
+                    r
+                    for r in records
+                    if r.cell_key == rec1.cell_key and r.schedule.seed == 0
+                ]
+                assert len(matching) == 2, (
+                    f"Expected 2 records (different fidelity), got {len(matching)}"
+                )
 
     def test_different_cell_keys_different_records(self) -> None:
         """Different coordinates (different cell_keys) → separate records."""
@@ -163,14 +179,20 @@ class TestRecordDeduplicationLock:
                 run_id = store.create_run()
 
                 # Create records with different coordinates (different cell_keys)
-                rec1 = _make_record(seed=0, fidelity="L0", geometry="feedforward", run_id=run_id)
-                rec2 = _make_record(seed=0, fidelity="L0", geometry="recurrent", run_id=run_id)
+                rec1 = _make_record(
+                    seed=0, fidelity="L0", geometry="feedforward", run_id=run_id
+                )
+                rec2 = _make_record(
+                    seed=0, fidelity="L0", geometry="recurrent", run_id=run_id
+                )
 
                 store.append(rec1)
                 store.append(rec2)
 
                 records = store.query_records(run_id=run_id)
-                assert len(records) == 2, f"Expected 2 records (different cell_keys), got {len(records)}"
+                assert len(records) == 2, (
+                    f"Expected 2 records (different cell_keys), got {len(records)}"
+                )
 
     def test_count_matches_distinct_composite_key(self) -> None:
         """Total records == distinct (cell_key, seed, fidelity) combinations."""
@@ -184,14 +206,35 @@ class TestRecordDeduplicationLock:
                 # Create records with various combinations
                 combos = [
                     ("feedforward", "energy_minimization", 0, "L0"),
-                    ("feedforward", "energy_minimization", 0, "L0"),  # Duplicate - should upsert
+                    (
+                        "feedforward",
+                        "energy_minimization",
+                        0,
+                        "L0",
+                    ),  # Duplicate - should upsert
                     ("feedforward", "energy_minimization", 1, "L0"),  # Different seed
-                    ("feedforward", "energy_minimization", 0, "L1"),  # Different fidelity
-                    ("recurrent", "energy_minimization", 0, "L0"),    # Different cell_key (geometry)
+                    (
+                        "feedforward",
+                        "energy_minimization",
+                        0,
+                        "L1",
+                    ),  # Different fidelity
+                    (
+                        "recurrent",
+                        "energy_minimization",
+                        0,
+                        "L0",
+                    ),  # Different cell_key (geometry)
                 ]
 
                 for geometry, dynamics, seed, fidelity in combos:
-                    rec = _make_record(seed=seed, fidelity=fidelity, geometry=geometry, dynamics=dynamics, run_id=run_id)
+                    rec = _make_record(
+                        seed=seed,
+                        fidelity=fidelity,
+                        geometry=geometry,
+                        dynamics=dynamics,
+                        run_id=run_id,
+                    )
                     store.append(rec)
 
                 records = store.query_records(run_id=run_id)
@@ -199,7 +242,11 @@ class TestRecordDeduplicationLock:
                 # Count distinct composite keys
                 distinct_keys = set()
                 for r in records:
-                    distinct_keys.add((r.cell_key, r.schedule.seed, r.schedule.fidelity))
+                    distinct_keys.add((
+                        r.cell_key,
+                        r.schedule.seed,
+                        r.schedule.fidelity,
+                    ))
 
                 assert len(records) == len(distinct_keys), (
                     f"Record count ({len(records)}) != distinct composite keys ({len(distinct_keys)})"
@@ -292,7 +339,13 @@ class TestRecordDeduplicationLock:
                 store.append(rec_l1)
 
                 records = store.query_records(run_id=run_id)
-                matching = [r for r in records if r.cell_key == rec_l0.cell_key and r.schedule.seed == 0 and r.schedule.fidelity == "L0"]
+                matching = [
+                    r
+                    for r in records
+                    if r.cell_key == rec_l0.cell_key
+                    and r.schedule.seed == 0
+                    and r.schedule.fidelity == "L0"
+                ]
                 assert len(matching) == 1
                 # Should keep the L1 maturity record (higher maturity)
                 assert matching[0].status.maturity == Maturity.L1

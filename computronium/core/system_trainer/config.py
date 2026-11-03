@@ -6,8 +6,9 @@ Protocols are in protocol.py, serialization utilities are in spec.py.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -92,7 +93,9 @@ class SystemTrainerConfig:
     early_stopping_min_delta: float = 0.01  # Minimum improvement (1% default)
     early_stopping_metric: str = "val_acc"  # Metric to monitor
     # Deadline enforcement (WS2.7)
-    deadline_check: Callable[[], bool] | None = None  # Returns True to continue, False to stop
+    deadline_check: Callable[[], bool] | None = (
+        None  # Returns True to continue, False to stop
+    )
     deadline_check_every_n_steps: int = 0  # 0 = only at epoch boundaries
     # Distributed training (Phase E1)
     distributed_backend: Literal["none", "ddp", "fsdp"] = "none"

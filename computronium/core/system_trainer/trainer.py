@@ -257,17 +257,20 @@ class SystemTrainer:
 
         for batch_idx in range(max_batches):
             # Check deadline at epoch start and periodically during training
-            if batch_idx == 0 or (
-                deadline_check_interval > 0 and batch_idx % deadline_check_interval == 0
-            ):
-                if not self._check_deadline():
-                    logger.info(
-                        "Epoch %d stopped at batch %d: deadline exceeded",
-                        self.current_epoch,
-                        batch_idx,
-                    )
-                    self._resources.deadline_exceeded = True
-                    break
+            if (
+                batch_idx == 0
+                or (
+                    deadline_check_interval > 0
+                    and batch_idx % deadline_check_interval == 0
+                )
+            ) and not self._check_deadline():
+                logger.info(
+                    "Epoch %d stopped at batch %d: deadline exceeded",
+                    self.current_epoch,
+                    batch_idx,
+                )
+                self._resources.deadline_exceeded = True
+                break
 
             if use_async:
                 if pending is None:
@@ -483,6 +486,7 @@ class SystemTrainer:
         if max_epochs is not None:
             # Create a new config with updated max_epochs
             import dataclasses
+
             config = dataclasses.replace(config, max_epochs=max_epochs)
         trainer = cls(
             system=system, config=config, train_data=train_data, val_data=val_data

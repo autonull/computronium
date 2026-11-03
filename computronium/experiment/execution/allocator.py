@@ -203,8 +203,6 @@ class EvidenceDrivenAllocator:
 
         # Update or create promotion candidate
         self._update_promotion_candidate(cell_key, record, score)
-        
-        
 
     def _extract_score(self, record: Record) -> float:
         """Extract primary score from record payload."""

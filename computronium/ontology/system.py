@@ -367,7 +367,9 @@ _SUBSTRATE_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
     "quantum": {"attention", "ntm"},
     "neuromorphic": {"attention"},
     "ternary": {"ntm"},
-    "optical": {"diffusion"},  # diffusion as geometry? check - actually "diffusion" is a dynamics
+    "optical": {
+        "diffusion"
+    },  # diffusion as geometry? check - actually "diffusion" is a dynamics
     # sparse: attention
     "sparse": {"attention"},
     "analog": {"ntm"},
@@ -385,8 +387,25 @@ _SUBSTRATE_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
 # Dynamics -> incompatible geometries (additional to substrate-level)
 _DYNAMICS_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
     "pc_alm": {"attention", "ntm"},
-    "spike_integration": {"attention", "ntm", "spatial_lattice", "graph", "conv", "nca"},
-    "diffusion": {"attention", "ntm", "spatial_lattice", "graph", "conv", "nca", "tile", "tile_mesh", "causal_transformer"},
+    "spike_integration": {
+        "attention",
+        "ntm",
+        "spatial_lattice",
+        "graph",
+        "conv",
+        "nca",
+    },
+    "diffusion": {
+        "attention",
+        "ntm",
+        "spatial_lattice",
+        "graph",
+        "conv",
+        "nca",
+        "tile",
+        "tile_mesh",
+        "causal_transformer",
+    },
     "error_predictive_coding": {"attention", "ntm", "nca", "causal_transformer"},
     "predictive_settling": {"attention", "ntm", "nca", "causal_transformer"},
 }
@@ -401,10 +420,34 @@ _DYNAMICS_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
 
 # Geometry -> incompatible dynamics
 _GEOMETRY_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
-    "attention": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
-    "ntm": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
-    "nca": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
-    "causal_transformer": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
+    "attention": {
+        "pc_alm",
+        "spike_integration",
+        "diffusion",
+        "error_predictive_coding",
+        "predictive_settling",
+    },
+    "ntm": {
+        "pc_alm",
+        "spike_integration",
+        "diffusion",
+        "error_predictive_coding",
+        "predictive_settling",
+    },
+    "nca": {
+        "pc_alm",
+        "spike_integration",
+        "diffusion",
+        "error_predictive_coding",
+        "predictive_settling",
+    },
+    "causal_transformer": {
+        "pc_alm",
+        "spike_integration",
+        "diffusion",
+        "error_predictive_coding",
+        "predictive_settling",
+    },
     "spatial_lattice": {"spike_integration", "diffusion"},
     "graph": {"spike_integration", "diffusion"},
     "conv": {"spike_integration", "diffusion"},
@@ -429,9 +472,28 @@ _CREDIT_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
     "equilibrium": {"spike_integration", "instantaneous", "lazy"},
     "local_goodness": {"spike_integration"},
     "forward_only": {"spike_integration"},
-    "temporal_trace": {"instantaneous", "energy_minimization", "lazy", "diffusion", "error_predictive_coding", "pc_alm"},
-    "target_inversion": {"energy_minimization", "lazy", "diffusion", "error_predictive_coding", "pc_alm"},
-    "target_prop": {"energy_minimization", "lazy", "diffusion", "error_predictive_coding", "pc_alm"},
+    "temporal_trace": {
+        "instantaneous",
+        "energy_minimization",
+        "lazy",
+        "diffusion",
+        "error_predictive_coding",
+        "pc_alm",
+    },
+    "target_inversion": {
+        "energy_minimization",
+        "lazy",
+        "diffusion",
+        "error_predictive_coding",
+        "pc_alm",
+    },
+    "target_prop": {
+        "energy_minimization",
+        "lazy",
+        "diffusion",
+        "error_predictive_coding",
+        "pc_alm",
+    },
     "pepita": {"spike_integration", "diffusion"},
     "local_contrastive": {"spike_integration", "diffusion"},
     "random_projections": {"spike_integration", "diffusion"},
@@ -466,65 +528,34 @@ def check_compatibility_matrix(
     """
     violations = []
 
-    # Substrate-Dynamics
-    if dynamics in _SUBSTRATE_DYNAMICS_INCOMPAT.get(substrate, set()):
-        violations.append(
-            f"Substrate '{substrate}' incompatible with dynamics '{dynamics}'"
-        )
+    # Inputs keyed by the axis names for declarative checking
+    axes = {
+        "substrate": substrate,
+        "geometry": geometry,
+        "dynamics": dynamics,
+        "plasticity": plasticity,
+        "credit": credit,
+        "update": update,
+    }
 
-    # Substrate-Geometry
-    if geometry in _SUBSTRATE_GEOMETRY_INCOMPAT.get(substrate, set()):
-        violations.append(
-            f"Substrate '{substrate}' incompatible with geometry '{geometry}'"
-        )
+    # Iterate over COMPATIBILITY_MATRIX declaratively
+    for matrix_key, incompat_map in COMPATIBILITY_MATRIX.items():
+        # Parse the matrix key to determine which axes to check
+        # Format: "axis1_axis2" where axis1 is the key in the map, axis2 is the value
+        try:
+            axis1, axis2 = matrix_key.split("_", 1)
+        except ValueError:
+            continue
 
-    # Substrate-Plasticity
-    if plasticity in _SUBSTRATE_PLASTICITY_INCOMPAT.get(substrate, set()):
-        violations.append(
-            f"Substrate '{substrate}' incompatible with plasticity '{plasticity}'"
-        )
+        key_val = axes.get(axis1)
+        target_val = axes.get(axis2)
+        if key_val is None or target_val is None:
+            continue
 
-    # Dynamics-Geometry
-    if geometry in _DYNAMICS_GEOMETRY_INCOMPAT.get(dynamics, set()):
-        violations.append(
-            f"Dynamics '{dynamics}' incompatible with geometry '{geometry}'"
-        )
-
-    # Dynamics-Plasticity
-    if plasticity in _DYNAMICS_PLASTICITY_INCOMPAT.get(dynamics, set()):
-        violations.append(
-            f"Dynamics '{dynamics}' incompatible with plasticity '{plasticity}'"
-        )
-
-    # Geometry-Dynamics (reverse lookup)
-    if dynamics in _GEOMETRY_DYNAMICS_INCOMPAT.get(geometry, set()):
-        violations.append(
-            f"Geometry '{geometry}' incompatible with dynamics '{dynamics}'"
-        )
-
-    # Geometry-Plasticity
-    if plasticity in _GEOMETRY_PLASTICITY_INCOMPAT.get(geometry, set()):
-        violations.append(
-            f"Geometry '{geometry}' incompatible with plasticity '{plasticity}'"
-        )
-
-    # Credit-Dynamics
-    if dynamics in _CREDIT_DYNAMICS_INCOMPAT.get(credit, set()):
-        violations.append(
-            f"Credit '{credit}' incompatible with dynamics '{dynamics}'"
-        )
-
-    # Credit-Geometry
-    if geometry in _CREDIT_GEOMETRY_INCOMPAT.get(credit, set()):
-        violations.append(
-            f"Credit '{credit}' incompatible with geometry '{geometry}'"
-        )
-
-    # Update-Substrate
-    if substrate in _UPDATE_SUBSTRATE_INCOMPAT.get(update, set()):
-        violations.append(
-            f"Update '{update}' incompatible with substrate '{substrate}'"
-        )
+        if target_val in incompat_map.get(key_val, set()):
+            violations.append(
+                f"{axis1.capitalize()} '{key_val}' incompatible with {axis2} '{target_val}'"
+            )
 
     return violations
 
@@ -544,15 +575,13 @@ COMPATIBILITY_MATRIX = {
 }
 
 __all__ = [
-    "SystemState",
+    "COMPATIBILITY_MATRIX",
+    "ModelAdapter",
     "Phase",
     "System",
     "SystemConfig",
-    "ModelAdapter",
-    "compose_system_from_configs",
-    "compose_joint_system_from_configs",
+    "SystemState",
     "check_compatibility_matrix",
-    "COMPATIBILITY_MATRIX",
 ]
 
 

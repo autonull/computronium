@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from computronium.experiment.kernel.evaluate import evaluate_cell, cell_record
-from computronium.experiment.schema import Coordinate, Schedule, Provenance
+from computronium.experiment.kernel.evaluate import cell_record, evaluate_cell
+from computronium.experiment.schema import Coordinate, Provenance, Schedule
 
 
 def _make_coordinate() -> Coordinate:
@@ -62,12 +62,14 @@ class TestWarmStartLock:
     def test_evaluate_cell_accepts_resume_checkpoint_path(self) -> None:
         """evaluate_cell accepts resume_checkpoint_path parameter."""
         import inspect
+
         sig = inspect.signature(evaluate_cell)
         assert "resume_checkpoint_path" in sig.parameters
 
     def test_cell_record_accepts_resume_checkpoint_path(self) -> None:
         """cell_record accepts resume_checkpoint_path parameter."""
         import inspect
+
         sig = inspect.signature(cell_record)
         assert "resume_checkpoint_path" in sig.parameters
 
@@ -91,7 +93,9 @@ class TestWarmStartLock:
             assert len(checkpoint_files) > 0, "No checkpoint files created"
 
             # Verify checkpoint content
-            checkpoint = torch.load(checkpoint_files[-1], map_location="cpu", weights_only=False)
+            checkpoint = torch.load(
+                checkpoint_files[-1], map_location="cpu", weights_only=False
+            )
             assert "epoch" in checkpoint
             assert "global_step" in checkpoint
             assert "history" in checkpoint
@@ -134,7 +138,7 @@ class TestWarmStartLock:
 
     def test_resume_checkpoint_validates_architecture_match(self) -> None:
         """Resume validates architecture matches before loading.
-        
+
         Note: Currently the trainer does not validate architecture on resume.
         This test documents the expected behavior for future implementation
         (see TODO78 Risk Mitigation: "Warm-start checkpoint mismatch").
@@ -254,6 +258,7 @@ class TestWarmStartLock:
         """Promotion logic passes checkpoint path to L1/L2 schedules."""
         # Check that _apply_smart_survey_promotion includes checkpoint_every_n
         import inspect
+
         import computronium.experiment.execution.pipeline._stages as stages_module
 
         source = inspect.getsource(stages_module)

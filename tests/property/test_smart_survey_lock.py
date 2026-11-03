@@ -8,9 +8,8 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment.kernel.evaluate import TaskScheduler
-from computronium.experiment.schema.run_spec import RunSpec, BROAD_PARAM_BUDGET
-from computronium.experiment.execution.pipeline._stages import _StageMixin
 from computronium.experiment.schema import Coordinate, Schedule
+from computronium.experiment.schema.run_spec import BROAD_PARAM_BUDGET, RunSpec
 
 
 class TestSmartSurveyLock:
@@ -131,14 +130,12 @@ class TestSmartSurveyLock:
 
     def test_promotion_threshold_applied(self) -> None:
         """Promotion logic filters by promotion_threshold."""
-        from computronium.experiment.execution.pipeline._stages import _PipelineBase
 
         # Test the promotion logic directly by checking the _apply_smart_survey_promotion method
         # We can't easily instantiate _PipelineBase, but we can test the logic in isolation
 
         # Create mock records with different normalized accuracies
         from computronium.experiment.schema import (
-            Coordinate,
             DataOrigin,
             FailureCause,
             GateVerdict,
@@ -146,7 +143,6 @@ class TestSmartSurveyLock:
             Provenance,
             Record,
             ReproducibilityClass,
-            Schedule,
             Severity,
             Status,
         )
@@ -211,33 +207,42 @@ class TestSmartSurveyLock:
 
         # Create mock promotions (coordinate, schedule pairs)
         promotions = [
-            (Coordinate(
-                substrate=rec_a.substrate,
-                geometry=rec_a.geometry,
-                dynamics=rec_a.dynamics,
-                plasticity=rec_a.plasticity,
-                credit=rec_a.credit,
-                update=rec_a.update,
-                params=rec_a.params,
-            ), rec_a.schedule),
-            (Coordinate(
-                substrate=rec_b.substrate,
-                geometry=rec_b.geometry,
-                dynamics=rec_b.dynamics,
-                plasticity=rec_b.plasticity,
-                credit=rec_b.credit,
-                update=rec_b.update,
-                params=rec_b.params,
-            ), rec_b.schedule),
-            (Coordinate(
-                substrate=rec_c.substrate,
-                geometry=rec_c.geometry,
-                dynamics=rec_c.dynamics,
-                plasticity=rec_c.plasticity,
-                credit=rec_c.credit,
-                update=rec_c.update,
-                params=rec_c.params,
-            ), rec_c.schedule),
+            (
+                Coordinate(
+                    substrate=rec_a.substrate,
+                    geometry=rec_a.geometry,
+                    dynamics=rec_a.dynamics,
+                    plasticity=rec_a.plasticity,
+                    credit=rec_a.credit,
+                    update=rec_a.update,
+                    params=rec_a.params,
+                ),
+                rec_a.schedule,
+            ),
+            (
+                Coordinate(
+                    substrate=rec_b.substrate,
+                    geometry=rec_b.geometry,
+                    dynamics=rec_b.dynamics,
+                    plasticity=rec_b.plasticity,
+                    credit=rec_b.credit,
+                    update=rec_b.update,
+                    params=rec_b.params,
+                ),
+                rec_b.schedule,
+            ),
+            (
+                Coordinate(
+                    substrate=rec_c.substrate,
+                    geometry=rec_c.geometry,
+                    dynamics=rec_c.dynamics,
+                    plasticity=rec_c.plasticity,
+                    credit=rec_c.credit,
+                    update=rec_c.update,
+                    params=rec_c.params,
+                ),
+                rec_c.schedule,
+            ),
         ]
 
         records = [rec_a, rec_b, rec_c]
@@ -304,10 +309,10 @@ class TestSmartSurveyLock:
 
     def test_budget_allocation_split(self) -> None:
         """Budget allocator uses 40/40/20 split with fallbacks."""
-        from computronium.experiment.execution.pipeline._stages import _PipelineBase
 
         # Verify the budget allocation logic is present in the codebase
         import inspect
+
         import computronium.experiment.execution.pipeline._stages as stages_module
 
         source = inspect.getsource(stages_module)
@@ -332,10 +337,10 @@ class TestSmartSurveyLock:
 
     def test_promotion_creates_correct_schedules(self) -> None:
         """Promotion creates schedules with correct fidelity, seeds, epochs."""
-        from computronium.experiment.execution.pipeline._stages import _PipelineBase
 
         # Verify promotion logic creates correct next-fidelity schedules
         import inspect
+
         import computronium.experiment.execution.pipeline._stages as stages_module
 
         source = inspect.getsource(stages_module)

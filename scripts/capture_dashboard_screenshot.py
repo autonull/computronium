@@ -96,7 +96,9 @@ def wait_for_stage_ready(page, instance_id: str, timeout: float = 60.0) -> dict:
         }""",
         instance_id,
     )
-    raise TimeoutError(f"Stage {instance_id} not ready in {timeout}s: {json.dumps(debug)}")
+    raise TimeoutError(
+        f"Stage {instance_id} not ready in {timeout}s: {json.dumps(debug)}"
+    )
 
 
 def check_console_errors(page) -> list[str]:
@@ -136,7 +138,9 @@ def wait_for_stage_ready(page, instance_id: str, timeout: float = 60.0) -> dict:
 
         # Debug logging
         if debug:
-            print(f"  [debug] getStageDebug: ready={debug.get('ready')}, measured={debug.get('measured')}, view={debug.get('view')}, canvas={debug.get('canvas')}")
+            print(
+                f"  [debug] getStageDebug: ready={debug.get('ready')}, measured={debug.get('measured')}, view={debug.get('view')}, canvas={debug.get('canvas')}"
+            )
 
         if debug and debug.get("ready") and debug.get("measured", 0) > 0:
             canvas = debug.get("canvas", {})
@@ -176,7 +180,9 @@ def wait_for_stage_ready(page, instance_id: str, timeout: float = 60.0) -> dict:
         instance_id,
     )
     print(f"  [debug] Final getStageDebug: {json.dumps(debug)}")
-    raise TimeoutError(f"Stage {instance_id} not ready in {timeout}s: {json.dumps(debug)}")
+    raise TimeoutError(
+        f"Stage {instance_id} not ready in {timeout}s: {json.dumps(debug)}"
+    )
 
 
 def check_page_errors(page) -> list[str]:
@@ -210,7 +216,10 @@ def capture_hero(port: int, store_path: Path, output: Path) -> dict:
         context = browser.new_context(viewport=VIEWPORT)
         page = context.new_page()
 
-        page.on("console", lambda msg: console_messages.append({"type": msg.type, "text": msg.text}))
+        page.on(
+            "console",
+            lambda msg: console_messages.append({"type": msg.type, "text": msg.text}),
+        )
         page.on("pageerror", lambda err: page_errors.append(str(err)))
 
         page.goto(f"http://localhost:{port}/", wait_until="load")
@@ -245,7 +254,9 @@ def capture_hero(port: int, store_path: Path, output: Path) -> dict:
         if page_errors:
             raise RuntimeError(f"Page errors: {page_errors}")
         if duplicate_ids > 0:
-            raise RuntimeError(f"Duplicate DOM ids: {duplicate_ids} ({duplicate_id_list})")
+            raise RuntimeError(
+                f"Duplicate DOM ids: {duplicate_ids} ({duplicate_id_list})"
+            )
         if debug.get("measured", 0) == 0:
             raise RuntimeError(f"No measured cells: {debug}")
 
