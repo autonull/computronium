@@ -75,7 +75,19 @@ class _BudgetMixin(_PipelineBase):
 
         If K>=3 consecutive batches produce zero successes with a single shared
         failure cause, raise ZeroYieldError — a reviewable failure, not a silent stop.
+
+        Does NOT trigger if allocator promotions are pending for next round
+        (e.g., L0→L1 or L1→L2 promotions in smart-survey profile), since those
+        represent valid work that hasn't been evaluated yet.
         """
+        # If there are pending proposals (from S10_DECIDE) or allocator promotions
+        # queued for the next round, this is not a true zero-yield — work remains.
+        if self._state.pending_proposals or self._state.allocator_promotions:
+            # Reset zero-yield counter since work is queued
+            self._state.zero_yield_count = 0
+            self._state.last_zero_yield_cause = None
+            return
+
         # Analyze the last round's rejections to find the dominant failure cause
         if not self._state.rejections:
             return

@@ -179,13 +179,14 @@ Week 3: 🟡 VALIDATION PHASE
 - [x] Dashboard launches without manual install (auto-install)
 - [x] All 6 property locks pass in CI (tests/property/test_*_lock.py) — 143 tests passing
 
-### Statistically Valid (Week 2) 🟡 IN PROGRESS (infrastructure complete, validation blocked by ZeroYieldError)
-- [ ] Top combos have `n_seeds ≥ 5` at L2 (CI computable) — infrastructure ready, blocked by ZeroYieldError
+### Statistically Valid (Week 2) 🟡 IN PROGRESS (infrastructure complete, validation runs passing)
+- [ ] Top combos have `n_seeds ≥ 5` at L2 (CI computable) — infrastructure ready, requires longer runs
 - [ ] CI bounds (`val_acc_ci_lower/upper`) reported in `comp report` — seed variability section includes CI
 - [x] Multi-task: ≥3 tasks represented in top 20 combos — L0 multi-task verified (8 tasks: xor, iris, circles, wine, spiral, synthetic_forecast, copy_task, breast_cancer)
 - [x] Compatibility matrix rejects ≥10% invalid combos at admission — 50% rejection rate observed
 - [x] Early stopping triggers on ≥20% of cells (saves budget) — verified in logs (plateau detection active)
 - [x] Warm-start: L1/L2 resume from L0 checkpoint (walltime < fresh) ✅
+- [x] ZeroYieldError fixed — L0→L1 promotions no longer blocked by zero-yield detection
 
 ### Turn-Key Excellence (Week 3)
 - [ ] `experiment_shallow.sh 1` produces publishable Pareto front (blocked by ZeroYieldError)
@@ -341,8 +342,14 @@ Derived from ontology registries (not hardcoded):
 - **Report Generation**: Seed variability section includes CI bounds ✅
 - **Allocator**: EvidenceDrivenAllocator created and passing promotions to S10 Decide ✅
 
+### Integration Verification (0.05h / 0.1h runs) — **NEW: ZeroYieldError Fix Verified**
+- **L0→L1 Promotion works**: Smart-survey profile completes L0 screening, promotes top cells to L1, runs L1 cells
+- **Multi-fidelity execution confirmed**: Records at both L0 (1 epoch, 1 seed) and L1 (2-3 epochs, 1-2 seeds) present
+- **Pipeline completes without ZeroYieldError**: Run "completed" status vs previous "failed" due to zero-yield
+- **Checkpoint continuity**: L1 records show `checkpoint_path` and `convergence_curve` from warm-start
+
 ### Known Issues
-- **ZeroYieldError**: Pipeline stops after 3 rounds of no new L0 cells (cell stream yields only invalid combos after first page). L2 promotions are proposed but not evaluated because the pipeline's zero-yield detection triggers before they can be trained. Fix requires modifying `_check_zero_yield` in `_budget.py` to account for pending allocator promotions.
+- **ZeroYieldError**: ~~Pipeline stops after 3 rounds of no new L0 cells (cell stream yields only invalid combos after first page). L2 promotions are proposed but not evaluated because the pipeline's zero-yield detection triggers before they can be trained. Fix requires modifying `_check_zero_yield` in `_budget.py` to account for pending allocator promotions.~~ **FIXED** - `_check_zero_yield` now checks for pending allocator promotions before triggering.
 
 ### Remaining Validation (requires ZeroYieldError fix + longer runs)
 1. Run 1h experiment to reach L2 with n_seeds=5
