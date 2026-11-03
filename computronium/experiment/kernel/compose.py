@@ -482,85 +482,52 @@ def _restore_mutable(value: Any) -> Any:
     return value
 
 
-@dataclass(frozen=True, slots=True)
-class ComposeCacheKey:
-    """Cache key for compose_configs: all structural parameters affecting composition.
-
-    Fully hashable - contains no mutable objects or external references.
-    """
-
-    substrate: str
-    geometry: str
-    dynamics: str
-    plasticity: str
-    credit: str
-    update: str
-    params: tuple[tuple[str, Any], ...]  # sorted coordinate.params items
-    geometry_explicit: tuple[tuple[str, Any], ...]  # sorted explicit geometry items
-    input_shape: tuple[int, ...]
-    output_dim: int
-    param_budget: int
-
-    @classmethod
-    def from_compose_args(
-        cls,
-        coordinate: Coordinate,
-        geometry: Mapping[str, object],
-        input_shape: tuple[int, ...],
-        output_dim: int,
-        param_budget: int,
-    ) -> ComposeCacheKey:
-        """Create cache key from compose_configs arguments."""
-        # Convert coordinate params to sorted tuple
-        coord_params = tuple(
-            sorted((k, _make_hashable(v)) for k, v in coordinate.params.items())
-        )
-
-        # Convert geometry to sorted tuple with hashable values
-        geometry_items = []
-        for k, v in sorted(geometry.items()):
-            geometry_items.append((k, _make_hashable(v)))
-        geometry_explicit = tuple(geometry_items)
-
-        return cls(
-            substrate=coordinate.substrate,
-            geometry=coordinate.geometry,
-            dynamics=coordinate.dynamics,
-            plasticity=coordinate.plasticity,
-            credit=coordinate.credit,
-            update=coordinate.update,
-            params=coord_params,
-            geometry_explicit=geometry_explicit,
-            input_shape=input_shape,
-            output_dim=output_dim,
-            param_budget=param_budget,
-        )
-
-    def to_coordinate(self) -> Coordinate:
-        """Reconstruct a minimal coordinate for the cached function."""
-        from computronium.experiment.schema.coordinate import Coordinate
-
-        params = dict(self.params)
-        return Coordinate(
-            substrate=self.substrate,
-            geometry=self.geometry,
-            dynamics=self.dynamics,
-            plasticity=self.plasticity,
-            credit=self.credit,
-            update=self.update,
-            params=params,
-        )
-
-    def to_geometry_dict(self) -> dict[str, object]:
-        """Reconstruct geometry dict with mutable values for validation."""
-        return {k: _restore_mutable(v) for k, v in self.geometry_explicit}
+def _build_cache_key(
+    coordinate: Coordinate,
+    geometry: Mapping[str, object],
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int,
+) -> tuple:
+    """Build a hashable cache key from compose_configs arguments."""
+    coord_params = tuple(
+        sorted((k, _make_hashable(v)) for k, v in coordinate.params.items())
+    )
+    geometry_explicit = tuple(
+        sorted((k, _make_hashable(v)) for k, v in geometry.items())
+    )
+    return (
+        coordinate.substrate,
+        coordinate.geometry,
+        coordinate.dynamics,
+        coordinate.plasticity,
+        coordinate.credit,
+        coordinate.update,
+        coord_params,
+        geometry_explicit,
+        input_shape,
+        output_dim,
+        param_budget,
+    )
 
 
 @lru_cache(maxsize=10000)
-def _compose_configs_cached(cache_key: ComposeCacheKey) -> Any:  # ruff: ignore[too-many-locals]
+def _compose_configs_cached(
+    substrate: str,
+    geometry: str,
+    dynamics: str,
+    plasticity: str,
+    credit: str,
+    update: str,
+    coord_params: tuple[tuple[str, Any], ...],
+    geometry_explicit: tuple[tuple[str, Any], ...],
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int,
+) -> Any:  # ruff: ignore[too-many-locals]
     """Cached inner implementation of compose_configs.
 
-    Uses the ComposeCacheKey dataclass directly for the LRU cache.
+    Uses flat tuple arguments for the LRU cache (more efficient than dataclass).
     """
     from computronium.ontology import (
         CreditAssignmentConfig,
@@ -568,13 +535,20 @@ def _compose_configs_cached(cache_key: ComposeCacheKey) -> Any:  # ruff: ignore[
         StateDynamicsConfig,
     )
     from computronium.ontology.system import SystemConfig
+    from computronium.experiment.schema.coordinate import Coordinate
     from computronium.state.transitions import PlasticityConfig
 
-    coordinate = cache_key.to_coordinate()
-    geometry_dict = cache_key.to_geometry_dict()
-    input_shape = cache_key.input_shape
-    output_dim = cache_key.output_dim
-    param_budget = cache_key.param_budget
+    # Reconstruct coordinate
+    coordinate = Coordinate(
+        substrate=substrate,
+        geometry=geometry,
+        dynamics=dynamics,
+        plasticity=plasticity,
+        credit=credit,
+        update=update,
+        params=dict(coord_params),
+    )
+    geometry_dict = {k: _restore_mutable(v) for k, v in geometry_explicit}
 
     active = harvest_schema().active(coordinate)
     substrate_name = coordinate.substrate
@@ -678,11 +652,10 @@ def compose_configs(  # ruff: ignore[too-many-locals]
         if edge_index is not None:
             geometry_dict["edge_index"] = edge_index
 
-    # Build cache key using the ComposeCacheKey dataclass
-    cache_key = ComposeCacheKey.from_compose_args(
+    cache_key = _build_cache_key(
         coordinate, geometry_dict, input_shape, output_dim, param_budget
     )
-    return _compose_configs_cached(cache_key)
+    return _compose_configs_cached(*cache_key)
 
 
 def compose_cell_system(

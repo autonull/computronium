@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 # Task cost classes (from domains.registry)
-_CHEAP_TASKS: tuple[str, ...] = (
+CHEAP_TASKS: tuple[str, ...] = (
     "xor",
     "spiral",
     "circles",
@@ -21,7 +21,7 @@ _CHEAP_TASKS: tuple[str, ...] = (
     "breast_cancer",
     "synthetic_forecast",
 )
-_MEDIUM_TASKS: tuple[str, ...] = (
+MEDIUM_TASKS: tuple[str, ...] = (
     "mnist",
     "fashion_mnist",
     "sequential_mnist",
@@ -32,7 +32,7 @@ _MEDIUM_TASKS: tuple[str, ...] = (
     "kmnist",
     "usps",
 )
-_EXPENSIVE_TASKS: tuple[str, ...] = (
+EXPENSIVE_TASKS: tuple[str, ...] = (
     "cifar10",
     "tiny_shakespeare",
     "pendulum",
@@ -42,7 +42,7 @@ _EXPENSIVE_TASKS: tuple[str, ...] = (
 )
 
 # Baseline accuracies for ruler-relative normalization (random guess / majority class)
-_TASK_BASELINES: dict[str, float] = {
+TASK_BASELINES: dict[str, float] = {
     # 10-class classification
     "digits": 0.1,
     "mnist": 0.1,
@@ -74,7 +74,7 @@ _TASK_BASELINES: dict[str, float] = {
     "cartpole": 0.0,
 }
 
-_DEFAULT_BASELINE = 0.1  # default 10-class
+DEFAULT_BASELINE = 0.1  # default 10-class
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,9 +86,9 @@ class TaskScheduler:
     """
 
     # Task cost classes (exposed for test compatibility)
-    CHEAP_TASKS: tuple[str, ...] = _CHEAP_TASKS
-    MEDIUM_TASKS: tuple[str, ...] = _MEDIUM_TASKS
-    EXPENSIVE_TASKS: tuple[str, ...] = _EXPENSIVE_TASKS
+    CHEAP_TASKS: tuple[str, ...] = CHEAP_TASKS
+    MEDIUM_TASKS: tuple[str, ...] = MEDIUM_TASKS
+    EXPENSIVE_TASKS: tuple[str, ...] = EXPENSIVE_TASKS
 
     # Per-fidelity task selection
     fidelity_tasks: dict[str, tuple[str, ...]] = None  # type: ignore[assignment]
@@ -150,4 +150,4 @@ class TaskScheduler:
         Returns:
             Baseline accuracy (e.g., 0.1 for 10-class, 0.5 for binary).
         """
-        return _TASK_BASELINES.get(task_name, _DEFAULT_BASELINE)
+        return TASK_BASELINES.get(task_name, DEFAULT_BASELINE)

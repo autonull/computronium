@@ -218,12 +218,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
 
     resolved_device = _resolve_device(schedule.device)
 
-    torch.manual_seed(schedule.seed)
-    if schedule.deterministic:
-        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
-        torch.use_deterministic_algorithms(True)
-    np.random.seed(schedule.seed)
-    random.seed(schedule.seed)
+    _set_seeds(schedule.seed, schedule.deterministic)
 
     task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
@@ -240,11 +235,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     config = _create_trainer_config(schedule, resolved_device, params)
 
     # Choose trainer class based on distributed backend
-    trainer_class = (
-        DistributedSystemTrainer
-        if schedule.distributed_backend != "none"
-        else SystemTrainer
-    )
+    trainer_class = _choose_trainer_class(schedule)
 
     # Set up checkpointing
     temp_dir, checkpoint_path_ref, checkpoint_callback = _setup_checkpointing(
@@ -261,8 +252,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     if temp_dir is not None:
         temp_dir.cleanup()
 
-    metrics = history_metrics(history)
-    metrics.update(_collect_trainer_metrics(trainer))
+    metrics = _collect_all_metrics(trainer, history, cell, task, schedule, coordinate)
 
     # Ensure system geometry is on the correct device for metrics computation
     # (trainer.close() moves geometry to CPU)
@@ -282,6 +272,74 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
 
     # Domain-specific evaluation (perplexity, f1_score, bleu_score, mean_reward, etc.)
     # Use the task's own evaluate() method which knows the proper metrics for its domain.
+    _update_task_metrics(task, metrics, cell, schedule, coordinate)
+
+    # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
+    _add_energy_efficiency(metrics)
+
+    _validate_metrics_finite(metrics, coordinate)
+
+    convergence_curve = _extract_convergence_curve(schedule, history)
+
+    return CellEvaluation(
+        metrics=metrics,
+        params=dict(cell.params),
+        param_count=cell.param_count,
+        walltime_s=walltime_s,
+        epochs_completed=len(history),
+        task_id=schedule.task_id,
+        checkpoint_path=checkpoint_path_ref[0],
+        convergence_curve=convergence_curve,
+    )
+
+
+def _set_seeds(seed: int, deterministic: bool) -> None:
+    """Set all random seeds for reproducibility."""
+    import os
+    import random
+
+    import numpy as np
+    import torch
+
+    torch.manual_seed(seed)
+    if deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+        torch.use_deterministic_algorithms(True)
+    np.random.seed(seed)
+    random.seed(seed)
+
+
+def _choose_trainer_class(schedule: Schedule):
+    """Choose trainer class based on distributed backend."""
+    return (
+        DistributedSystemTrainer
+        if schedule.distributed_backend != "none"
+        else SystemTrainer
+    )
+
+
+def _collect_all_metrics(
+    trainer: SystemTrainer,
+    history: list[dict[str, float]],
+    cell: ComposedCell,
+    task: Any,
+    schedule: Schedule,
+    coordinate: Coordinate,
+) -> dict[str, float]:
+    """Collect all metrics from history, trainer, and substrate."""
+    metrics = history_metrics(history)
+    metrics.update(_collect_trainer_metrics(trainer))
+    return metrics
+
+
+def _update_task_metrics(
+    task: Any,
+    metrics: dict[str, float],
+    cell: ComposedCell,
+    schedule: Schedule,
+    coordinate: Coordinate,
+) -> None:
+    """Update metrics with task-specific evaluation."""
     try:
         task_metrics = task.evaluate(
             cell.system.geometry, split=TaskSplit.VAL, max_batches=schedule.batch_limit
@@ -302,28 +360,21 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
             exc_info=True,
         )
 
-    # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
+
+def _add_energy_efficiency(metrics: dict[str, float]) -> None:
+    """Add derived energy_efficiency metric if components exist."""
     val_acc = metrics.get("val_acc")
     energy_per_sample = metrics.get("energy_per_sample")
     if val_acc is not None and energy_per_sample is not None and energy_per_sample > 0:
         metrics["energy_efficiency"] = float(val_acc) / float(energy_per_sample)
 
+
+def _validate_metrics_finite(metrics: dict[str, float], coordinate: Coordinate) -> None:
+    """Validate all metrics are finite."""
+    import math
     if not all(math.isfinite(v) for v in metrics.values()):
         msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)
-
-    convergence_curve = _extract_convergence_curve(schedule, history)
-
-    return CellEvaluation(
-        metrics=metrics,
-        params=dict(cell.params),
-        param_count=cell.param_count,
-        walltime_s=walltime_s,
-        epochs_completed=len(history),
-        task_id=schedule.task_id,
-        checkpoint_path=checkpoint_path_ref[0],
-        convergence_curve=convergence_curve,
-    )
 
 
 def _compute_substrate_objectives(
@@ -391,21 +442,24 @@ def _extract_convergence_curve(
 
 def _collect_trainer_metrics(trainer: SystemTrainer) -> dict[str, float]:
     """Extract resource metrics from trainer's last epoch."""
-    metrics: dict[str, float] = {}
     if not trainer.epoch_resources:
-        return metrics
+        return {}
+    return _trainer_epoch_to_metrics(trainer.epoch_resources[-1])
 
-    last_epoch = trainer.epoch_resources[-1]
-    if last_epoch.forward_flops is not None and last_epoch.steps > 0:
-        flops_per_step = last_epoch.forward_flops / last_epoch.steps
+
+def _trainer_epoch_to_metrics(epoch) -> dict[str, float]:
+    """Convert a single epoch's resource data to metrics dict."""
+    metrics: dict[str, float] = {}
+    if epoch.forward_flops is not None and epoch.steps > 0:
+        flops_per_step = epoch.forward_flops / epoch.steps
         metrics["flops"] = float(flops_per_step)
         metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
-    if last_epoch.peak_memory_mb is not None:
-        metrics["memory_usage"] = last_epoch.peak_memory_mb
-    if last_epoch.steps > 0:
-        metrics["latency_ms"] = (last_epoch.epoch_time_s / last_epoch.steps) * 1000.0
-    if last_epoch.energy_joules is not None and last_epoch.steps > 0:
-        metrics["energy_per_step"] = last_epoch.energy_joules / last_epoch.steps
+    if epoch.peak_memory_mb is not None:
+        metrics["memory_usage"] = epoch.peak_memory_mb
+    if epoch.steps > 0:
+        metrics["latency_ms"] = (epoch.epoch_time_s / epoch.steps) * 1000.0
+    if epoch.energy_joules is not None and epoch.steps > 0:
+        metrics["energy_per_step"] = epoch.energy_joules / epoch.steps
     return metrics
 
 
@@ -437,9 +491,6 @@ def _build_status_with_procedures(
     within_ceiling: bool,
     param_count: int,
     param_budget: int,
-    procedure_name: str,
-    procedure_version: str,
-    procedure_code_hash: str,
 ) -> Status:
     """Build schema Status with assessment procedure metadata (WP5)."""
     from computronium.experiment.evidence.status import (
@@ -455,6 +506,9 @@ def _build_status_with_procedures(
         Status,
     )
 
+    procedure_name, procedure_version, procedure_code_hash = (
+        _determine_procedure_metadata()
+    )
     legacy_status = StatusLegacy(
         gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
         defect=_defect(complete, within_ceiling, param_count, param_budget),
@@ -569,11 +623,6 @@ def cell_record(
         payload["convergence_curve"] = evaluation.convergence_curve
     passed = complete and within_ceiling
 
-    # Determine procedure metadata for assessment stamping (WP5)
-    procedure_name, procedure_version, procedure_code_hash = (
-        _determine_procedure_metadata()
-    )
-
     # Build legacy status and convert to schema Status with procedure metadata
     status = _build_status_with_procedures(
         passed,
@@ -581,9 +630,6 @@ def cell_record(
         within_ceiling,
         evaluation.param_count,
         schedule.param_budget,
-        procedure_name,
-        procedure_version,
-        procedure_code_hash,
     )
 
     return Record.create(

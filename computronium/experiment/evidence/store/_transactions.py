@@ -301,6 +301,21 @@ class _TransactionMixin(_StoreBase):
         with self._write_lock:
             self._conn.execute("DELETE FROM checkpoints WHERE run_id = ?", [run_id])
 
+    def _serialize_status(self, status) -> dict[str, Any]:
+        """Serialize a Status object to a dict for DuckDB storage."""
+        return {
+            "gate_verdict": status.gate_verdict.value,
+            "defect": status.defect,
+            "cause": status.cause.value,
+            "severity": status.severity.value,
+            "quarantine": status.quarantine,
+            "maturity": status.maturity.value,
+            "uncertainty": status.uncertainty,
+            "reproducibility": status.reproducibility.value,
+            "assessment_procedure_version": status.assessment_procedure_version,
+            "ceec_link": status.ceec_link,
+        }
+
     def _dedup_key(self, record: Record) -> tuple[str, int, str]:
         """Compute the deduplication key: (cell_key, seed, fidelity).
 
@@ -308,6 +323,29 @@ class _TransactionMixin(_StoreBase):
         ignoring budget_id which differs across rounds.
         """
         return (record.cell_key, record.schedule.seed, record.schedule.fidelity)
+
+    def _build_insert_values(self, record: Record) -> list:
+        """Build the VALUES list for INSERT statement from a Record."""
+        return [
+            record.record_id,
+            record.run_id,
+            record.schema_version,
+            record.cell_key,
+            record.measurement_key,
+            record.substrate,
+            record.geometry,
+            record.dynamics,
+            record.plasticity,
+            record.credit,
+            record.update,
+            json.dumps(record.params),
+            record.schedule.to_dict(),
+            json.dumps(record.provenance.to_dict()),
+            self._serialize_status(record.status),
+            json.dumps(record.payload),
+            json.dumps(record.unknown) if record.unknown else None,
+            json.dumps(record.effective_params),
+        ]
 
     def append(self, record: Record) -> Record:
         """Upsert a record on (cell_key, seed, fidelity) composite key.
@@ -353,37 +391,7 @@ class _TransactionMixin(_StoreBase):
                         effective_params
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [
-                        record.record_id,
-                        record.run_id,
-                        record.schema_version,
-                        record.cell_key,
-                        record.measurement_key,
-                        record.substrate,
-                        record.geometry,
-                        record.dynamics,
-                        record.plasticity,
-                        record.credit,
-                        record.update,
-                        json.dumps(record.params),
-                        record.schedule.to_dict(),
-                        json.dumps(record.provenance.to_dict()),
-                        {
-                            "gate_verdict": record.status.gate_verdict.value,
-                            "defect": record.status.defect,
-                            "cause": record.status.cause.value,
-                            "severity": record.status.severity.value,
-                            "quarantine": record.status.quarantine,
-                            "maturity": record.status.maturity.value,
-                            "uncertainty": record.status.uncertainty,
-                            "reproducibility": record.status.reproducibility.value,
-                            "assessment_procedure_version": record.status.assessment_procedure_version,
-                            "ceec_link": record.status.ceec_link,
-                        },
-                        json.dumps(record.payload),
-                        json.dumps(record.unknown) if record.unknown else None,
-                        json.dumps(record.effective_params),
-                    ],
+                    self._build_insert_values(record),
                 )
             except duckdb.ConstraintException as e:
                 if "record_id" in str(e):
