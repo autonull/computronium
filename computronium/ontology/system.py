@@ -6,7 +6,7 @@ import logging
 import warnings
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Protocol, Self, TypeVar, cast, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, TypeVar, cast, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -618,33 +618,7 @@ def get_compatibility_matrix() -> dict[str, dict[str, set[str]]]:
     return _COMPATIBILITY_MATRIX
 
 
-# For backwards compatibility - property that builds on first access
-class _LazyCompatibilityMatrix:
-    """Lazy proxy for COMPATIBILITY_MATRIX to maintain backwards compatibility."""
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(get_compatibility_matrix(), name)
-
-    def __getitem__(self, key: str) -> Any:
-        return get_compatibility_matrix()[key]
-
-    def __contains__(self, key: str) -> bool:
-        return key in get_compatibility_matrix()
-
-    def keys(self):
-        return get_compatibility_matrix().keys()
-
-    def items(self):
-        return get_compatibility_matrix().items()
-
-    def values(self):
-        return get_compatibility_matrix().values()
-
-
-COMPATIBILITY_MATRIX = _LazyCompatibilityMatrix()
-
 __all__ = [
-    "COMPATIBILITY_MATRIX",
     "ModelAdapter",
     "Phase",
     "System",

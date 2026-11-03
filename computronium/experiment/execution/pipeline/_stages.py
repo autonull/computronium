@@ -952,7 +952,7 @@ class _StageMixin(_PipelineBase):
                 l1_l2_seen += 1
         return limited
 
-    async def _execute_batch_with_isolation(  # ruff: ignore[too-many-branches]
+    async def _execute_batch_with_isolation(
         self,
         proposals: list[Proposal],
         progress_bar: tqdm | None = None,  # type: ignore[reportInvalidTypeForm]
@@ -973,19 +973,30 @@ class _StageMixin(_PipelineBase):
             logger.warning("No backend configured, skipping batch execution")
             return []
 
-        # The batch boundary: a pause holds here, and a step releases exactly
-        # this batch.
+        # The batch boundary: a pause holds here, and a step releases exactly this batch.
         await self._await_control(consumes_step=True)
         if self._shutdown:
             return []
 
-        # Check deadline before starting batch
         deadline_enforcer = self._state.deadline_enforcer
         if deadline_enforcer and not deadline_enforcer.check_before_cell():
             logger.info("Soft deadline reached, stopping before new batch")
             self._shutdown = True
             return []
 
+        batch_items = self._prepare_batch_items(proposals, deadline_enforcer)
+        if not batch_items:
+            return []
+
+        results = await self._execute_batch_with_timing(batch_items)
+        return self._finalize_batch(results, batch_items, deadline_enforcer, progress_bar)
+
+    def _prepare_batch_items(
+        self,
+        proposals: list[Proposal],
+        deadline_enforcer,
+    ) -> list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]]:
+        """Prepare batch items with provenance and deadline callbacks."""
         system_context = self._state.system_context
         if system_context is None:
             raise ValueError("SystemContext not initialized")
@@ -1016,8 +1027,12 @@ class _StageMixin(_PipelineBase):
                 )
                 for coord, sched, prov, params in batch_items
             ]
+        return batch_items
 
-        # Start cell timing for this batch
+    async def _execute_batch_with_timing(
+        self, batch_items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]]
+    ):
+        """Execute batch with cell timing."""
         cell_timing = self._state.cell_timing
         if cell_timing:
             cell_timing.start_cell()
@@ -1025,10 +1040,18 @@ class _StageMixin(_PipelineBase):
         try:
             results = await self._config.backend.submit_batch(batch_items, self._store)
         finally:
-            # End cell timing
             if cell_timing:
                 cell_timing.end_cell()
+        return results
 
+    def _finalize_batch(
+        self,
+        results,
+        batch_items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
+        deadline_enforcer,
+        progress_bar: tqdm | None,
+    ) -> list[Record]:
+        """Persist results, observe records, check post-batch deadline."""
         stored = self._persist_results(batch_items, results)
         self._publish_status()
         if stored:

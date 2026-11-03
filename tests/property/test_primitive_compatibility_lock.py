@@ -12,9 +12,9 @@ from computronium.ontology.dynamics import StateDynamicsConfig
 from computronium.ontology.geometry import GeometryConfig
 from computronium.ontology.substrate import SubstrateConfig
 from computronium.ontology.system import (
-    COMPATIBILITY_MATRIX,
     SystemConfig,
     check_compatibility_matrix,
+    get_compatibility_matrix,
 )
 from computronium.ontology.update import ParameterUpdateConfig
 from computronium.state import PlasticityConfig
@@ -361,7 +361,7 @@ class TestPrimitiveCompatibilityLock:
         config.validate()  # Should not raise
 
     def test_compatibility_matrix_completeness(self) -> None:
-        """COMPATIBILITY_MATRIX contains all expected categories."""
+        """get_compatibility_matrix() contains all expected categories."""
         expected_categories = {
             "substrate_dynamics",
             "substrate_geometry",
@@ -374,7 +374,7 @@ class TestPrimitiveCompatibilityLock:
             "credit_geometry",
             "update_substrate",
         }
-        assert set(COMPATIBILITY_MATRIX.keys()) == expected_categories
+        assert set(get_compatibility_matrix().keys()) == expected_categories
 
     def test_admission_gate_uses_compatibility_matrix(self) -> None:
         """Admission gate (pipeline) uses check_compatibility_matrix for fast rejection."""
