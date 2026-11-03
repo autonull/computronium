@@ -306,6 +306,98 @@ class _StageMixin(_PipelineBase):
 
         return candidates
 
+    def _check_already_measured(
+        self, key: str, seen: set[str], rejected: set[str]
+    ) -> tuple[bool, bool]:
+        """Check if a key was already measured or rejected.
+
+        Returns:
+            Tuple of (is_skipped, is_rejected).
+        """
+        if key in seen:
+            return True, False
+        if key in rejected:
+            return False, True
+        return False, False
+
+    def _check_compatibility_gate(
+        self, coordinate: Coordinate, schedule: Schedule, key: str
+    ) -> tuple[bool, str | None]:
+        """Check compatibility matrix for known-incompatible combos.
+
+        Returns:
+            Tuple of (passed, rejection_message_or_none).
+        """
+        from computronium.ontology.system import check_compatibility_matrix
+
+        compat_violations = check_compatibility_matrix(
+            substrate=coordinate.substrate,
+            geometry=coordinate.geometry,
+            dynamics=coordinate.dynamics,
+            plasticity=coordinate.plasticity,
+            credit=coordinate.credit,
+            update=coordinate.update,
+        )
+        if compat_violations:
+            self._state.rejected_keys.add(key)
+            message = "; ".join(compat_violations)
+            self._classify_rejection(
+                coordinate=coordinate,
+                schedule=schedule,
+                cause="ADMISSION_REJECTED",
+                message=message,
+            )
+            return False, message
+        return True, None
+
+    def _check_compose_gate(
+        self, coordinate: Coordinate, schedule: Schedule, key: str
+    ) -> tuple[bool, str | None]:
+        """Check SystemConfig.validate via compose_configs (last-mile legality).
+
+        Returns:
+            Tuple of (passed, rejection_message_or_none).
+        """
+        from computronium.experiment.kernel.compose import (
+            compose_configs,
+            geometry_param_count,
+        )
+        from computronium.experiment.kernel.evaluate import task_shape
+        from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
+
+        try:
+            task_id = schedule.task_id or (
+                self._config.run_spec.task_names[0]
+                if self._config.run_spec.task_names
+                else "unknown"
+            )
+            task_shape_info = task_shape(task_id)
+            config = compose_configs(
+                coordinate=coordinate,
+                geometry={},
+                input_shape=task_shape_info.input_shape,
+                output_dim=task_shape_info.output_dim,
+                param_budget=schedule.param_budget,
+            )
+            # Param budget check (R25 fairness rule)
+            if schedule.param_budget > 0 and geometry_param_count(
+                config.geometry
+            ) > schedule.param_budget * (1 + PARAM_BUDGET_TOLERANCE):
+                raise ValueError(
+                    f"Param budget exceeded: {geometry_param_count(config.geometry)} > {schedule.param_budget}"
+                )
+        except (ValueError, TypeError, KeyError) as e:
+            self._state.rejected_keys.add(key)
+            message = str(e)
+            self._classify_rejection(
+                coordinate=coordinate,
+                schedule=schedule,
+                cause="ADMISSION_REJECTED",
+                message=message,
+            )
+            return False, message
+        return True, None
+
     def _fresh_batch_items(
         self, proposals: list[Proposal], provenance: Provenance
     ) -> list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]]:
@@ -328,10 +420,6 @@ class _StageMixin(_PipelineBase):
         (via compose_configs) at the batch boundary. Invalid cells are added
         to rejected_keys and never reach the trainer.
         """
-        from computronium.experiment.kernel.compose import compose_configs
-        from computronium.experiment.kernel.evaluate import task_shape
-        from computronium.ontology.system import check_compatibility_matrix
-
         seen: set[str] = set(self._state.completed_measurement_keys)
         rejected: set[str] = set(self._state.rejected_keys)
         skipped = 0
@@ -341,76 +429,28 @@ class _StageMixin(_PipelineBase):
             item_provenance = _provenance_for(provenance, proposal)
             for schedule in proposal.schedule.seed_plan:
                 key = proposal.coordinate.measurement_key(schedule)
-                if key in seen:
+                is_skipped, is_rejected = self._check_already_measured(
+                    key, seen, rejected
+                )
+                if is_skipped:
                     skipped += 1
                     continue
-                if key in rejected:
+                if is_rejected:
                     rejected_this_batch += 1
                     continue
 
-                # ADMISSION GATE: fast compatibility matrix pre-check
-                # Reject known-incompatible combos before full compose/validate
                 coord = proposal.coordinate
-                compat_violations = check_compatibility_matrix(
-                    substrate=coord.substrate,
-                    geometry=coord.geometry,
-                    dynamics=coord.dynamics,
-                    plasticity=coord.plasticity,
-                    credit=coord.credit,
-                    update=coord.update,
-                )
-                if compat_violations:
-                    # Reject this cell - add to durable rejected set
-                    self._state.rejected_keys.add(key)
+
+                # ADMISSION GATE 1: fast compatibility matrix pre-check
+                passed, _ = self._check_compatibility_gate(coord, schedule, key)
+                if not passed:
                     rejected_this_batch += 1
-                    self._classify_rejection(
-                        coordinate=coord,
-                        schedule=schedule,
-                        cause="ADMISSION_REJECTED",
-                        message="; ".join(compat_violations),
-                    )
                     continue
 
-                # ADMISSION GATE: last-mile SystemConfig.validate check
-                # This is the single source of truth for legality
-                try:
-                    task_id = schedule.task_id or (
-                        self._config.run_spec.task_names[0]
-                        if self._config.run_spec.task_names
-                        else "unknown"
-                    )
-                    task_shape_info = task_shape(task_id)
-                    config = compose_configs(
-                        coordinate=proposal.coordinate,
-                        geometry={},
-                        input_shape=task_shape_info.input_shape,
-                        output_dim=task_shape_info.output_dim,
-                        param_budget=schedule.param_budget,
-                    )
-                    # Param budget check (R25 fairness rule)
-                    from computronium.experiment.kernel.compose import (
-                        geometry_param_count,
-                    )
-                    from computronium.experiment.schema.registries import (
-                        PARAM_BUDGET_TOLERANCE,
-                    )
-
-                    if schedule.param_budget > 0 and geometry_param_count(
-                        config.geometry
-                    ) > schedule.param_budget * (1 + PARAM_BUDGET_TOLERANCE):
-                        raise ValueError(
-                            f"Param budget exceeded: {geometry_param_count(config.geometry)} > {schedule.param_budget}"
-                        )
-                except (ValueError, TypeError, KeyError) as e:
-                    # Reject this cell - add to durable rejected set
-                    self._state.rejected_keys.add(key)
+                # ADMISSION GATE 2: last-mile SystemConfig.validate check
+                passed, _ = self._check_compose_gate(coord, schedule, key)
+                if not passed:
                     rejected_this_batch += 1
-                    self._classify_rejection(
-                        coordinate=proposal.coordinate,
-                        schedule=schedule,
-                        cause="ADMISSION_REJECTED",
-                        message=str(e),
-                    )
                     continue
 
                 seen.add(key)
@@ -922,10 +962,12 @@ class _StageMixin(_PipelineBase):
 
         # Sort by normalized accuracy descending (source fidelity score)
         eligible.sort(
-            key=lambda x: -cell_best.get(
-                f"{x[0].cell_key()}|{self._source_fidelity_for(x[1].fidelity)}",
-                (0.0,),
-            )[0]
+            key=lambda x: (
+                -cell_best.get(
+                    f"{x[0].cell_key()}|{self._source_fidelity_for(x[1].fidelity)}",
+                    (0.0,),
+                )[0]
+            )
         )
 
         # Budget fractions from smart-survey spec (40% each for L0→L1 and L1→L2)
@@ -989,7 +1031,9 @@ class _StageMixin(_PipelineBase):
             return []
 
         results = await self._execute_batch_with_timing(batch_items)
-        return self._finalize_batch(results, batch_items, deadline_enforcer, progress_bar)
+        return self._finalize_batch(
+            results, batch_items, deadline_enforcer, progress_bar
+        )
 
     def _prepare_batch_items(
         self,

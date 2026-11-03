@@ -19,6 +19,7 @@ from itertools import islice
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
+    import tempfile
     from collections.abc import Callable
 
 import torch
@@ -30,7 +31,10 @@ from computronium.core.system_trainer import (
     SystemTrainerConfig,
 )
 from computronium.domains.base import TaskSplit
-from computronium.experiment.kernel.compose import compose_cell_system
+from computronium.experiment.kernel.compose import (
+    ComposedCell,
+    compose_cell_system,
+)
 from computronium.experiment.schema.metrics import HISTORY_METRICS
 from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
@@ -169,6 +173,74 @@ def task_shape(task_id: str, device: str = "auto") -> TaskShape:
     return _task_shape(_task(task_id, device))
 
 
+# Task cost classes (from domains.registry)
+_CHEAP_TASKS: tuple[str, ...] = (
+    "xor",
+    "spiral",
+    "circles",
+    "digits",
+    "copy_task",
+    "iris",
+    "wine",
+    "breast_cancer",
+    "synthetic_forecast",
+)
+_MEDIUM_TASKS: tuple[str, ...] = (
+    "mnist",
+    "fashion_mnist",
+    "sequential_mnist",
+    "char_ngram",
+    "cora",
+    "citeseer",
+    "pubmed",
+    "kmnist",
+    "usps",
+)
+_EXPENSIVE_TASKS: tuple[str, ...] = (
+    "cifar10",
+    "tiny_shakespeare",
+    "pendulum",
+    "acrobot",
+    "cartpole",
+    "graph_classification",
+)
+
+# Baseline accuracies for ruler-relative normalization (random guess / majority class)
+_TASK_BASELINES: dict[str, float] = {
+    # 10-class classification
+    "digits": 0.1,
+    "mnist": 0.1,
+    "fashion_mnist": 0.1,
+    "kmnist": 0.1,
+    "usps": 0.1,
+    "cifar10": 0.1,
+    "sequential_mnist": 0.1,
+    # Binary classification
+    "xor": 0.5,
+    "spiral": 0.5,
+    "circles": 0.5,
+    "breast_cancer": 0.5,
+    "graph_classification": 0.5,
+    # 3-class
+    "pubmed": 0.33,
+    "iris": 0.33,
+    "wine": 0.33,
+    # 6-7 class
+    "cora": 0.14,  # 7 classes
+    "citeseer": 0.16,  # 6 classes
+    # Sequence / continuous
+    "copy_task": 0.0,
+    "char_ngram": 0.01,
+    "tiny_shakespeare": 0.01,
+    "synthetic_forecast": 0.0,
+    "pendulum": 0.0,
+    "acrobot": 0.0,
+    "cartpole": 0.0,
+}
+
+_DEFAULT_BASELINE = 0.1  # default 10-class
+
+
 @dataclass(frozen=True, slots=True)
 class TaskScheduler:
     """Multi-task scheduler for smart-survey profile.
@@ -177,37 +249,10 @@ class TaskScheduler:
     Uses ruler-relative normalization for cross-task comparison.
     """
 
-    # Task cost classes (from domains.registry)
-    CHEAP_TASKS: tuple[str, ...] = (
-        "xor",
-        "spiral",
-        "circles",
-        "digits",
-        "copy_task",
-        "iris",
-        "wine",
-        "breast_cancer",
-        "synthetic_forecast",
-    )
-    MEDIUM_TASKS: tuple[str, ...] = (
-        "mnist",
-        "fashion_mnist",
-        "sequential_mnist",
-        "char_ngram",
-        "cora",
-        "citeseer",
-        "pubmed",
-        "kmnist",
-        "usps",
-    )
-    EXPENSIVE_TASKS: tuple[str, ...] = (
-        "cifar10",
-        "tiny_shakespeare",
-        "pendulum",
-        "acrobot",
-        "cartpole",
-        "graph_classification",
-    )
+    # Task cost classes (exposed for test compatibility)
+    CHEAP_TASKS: tuple[str, ...] = _CHEAP_TASKS
+    MEDIUM_TASKS: tuple[str, ...] = _MEDIUM_TASKS
+    EXPENSIVE_TASKS: tuple[str, ...] = _EXPENSIVE_TASKS
 
     # Per-fidelity task selection
     fidelity_tasks: dict[str, tuple[str, ...]] = None  # type: ignore[assignment]
@@ -269,34 +314,7 @@ class TaskScheduler:
         Returns:
             Baseline accuracy (e.g., 0.1 for 10-class, 0.5 for binary).
         """
-        # Default baselines by task type
-        baselines = {
-            "digits": 0.1,  # 10 classes
-            "mnist": 0.1,
-            "fashion_mnist": 0.1,
-            "kmnist": 0.1,
-            "usps": 0.1,
-            "cifar10": 0.1,
-            "sequential_mnist": 0.1,
-            "xor": 0.5,  # binary
-            "spiral": 0.5,
-            "circles": 0.5,
-            "copy_task": 0.0,  # sequence copy - near 0
-            "char_ngram": 0.01,  # large vocab
-            "tiny_shakespeare": 0.01,
-            "cora": 0.14,  # 7 classes
-            "citeseer": 0.16,  # 6 classes
-            "pubmed": 0.33,  # 3 classes
-            "graph_classification": 0.5,
-            "pendulum": 0.0,  # continuous control
-            "acrobot": 0.0,
-            "cartpole": 0.0,
-            "iris": 0.33,
-            "wine": 0.33,
-            "breast_cancer": 0.5,
-            "synthetic_forecast": 0.0,
-        }
-        return baselines.get(task_name, 0.1)  # default 10-class
+        return _TASK_BASELINES.get(task_name, _DEFAULT_BASELINE)
 
 
 def history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
@@ -689,8 +707,8 @@ def compute_plasticity_metrics(system: Any) -> dict[str, float]:
     return metrics
 
 
-class _Batches:
-    """A bounded view of a data provider: ``batch_limit`` batches, then stop.
+def _bounded_batches(source: Any, limit: int) -> Iterator[Any]:
+    """Yield at most ``limit`` batches from a data provider.
 
     Validation is charged at the same ceiling as training. An unbounded
     validation pass would make a 2-batch cell cost 45 batch-forwards, which is
@@ -698,17 +716,7 @@ class _Batches:
     25-minute one.
     """
 
-    __slots__ = ("_limit", "_source")
-
-    def __init__(self, source: Any, limit: int) -> None:
-        self._source = source
-        self._limit = limit
-
-    def __iter__(self) -> Iterator[Any]:
-        return islice(iter(self._source), self._limit)
-
-    def __len__(self) -> int:
-        return min(self._limit, len(self._source))
+    return islice(iter(source), limit)
 
 
 def _val_batches(task: Any, limit: int | None) -> Any | None:
@@ -725,7 +733,7 @@ def _val_batches(task: Any, limit: int | None) -> Any | None:
     except (LookupError, ValueError, NotImplementedError) as exc:
         logger.info("task %s declares no validation split: %s", task.name, exc)
         return None
-    return _Batches(loader, limit) if limit else loader
+    return _bounded_batches(loader, limit) if limit else loader
 
 
 def _sample_inputs(task: Any, device: str) -> torch.Tensor:
@@ -738,6 +746,258 @@ def _sample_inputs(task: Any, device: str) -> torch.Tensor:
     sample_x, _ = next(iter(task.get_dataloader("train")))
     flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
     return flat
+
+
+def _setup_seeds_and_device(schedule: Schedule) -> str:
+    """Set all seeds and resolve device before model creation."""
+    import os
+    import random
+
+    import numpy as np
+    import torch
+
+    resolved_device = _resolve_device(schedule.device)
+
+    torch.manual_seed(schedule.seed)
+    if schedule.deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+        torch.use_deterministic_algorithms(True)
+    np.random.seed(schedule.seed)
+    random.seed(schedule.seed)
+
+    return resolved_device
+
+
+def _create_trainer_config(
+    schedule: Schedule,
+    resolved_device: str,
+    params: Mapping[str, Any] | None,
+) -> SystemTrainerConfig:
+    """Create SystemTrainerConfig from schedule and params."""
+    limit = schedule.batch_limit or None
+
+    # Extract deadline check callback from params (for WS2.7 deadline enforcement)
+    deadline_check = params.get("deadline_check") if params else None
+    deadline_check_every_n_steps = (
+        params.get("deadline_check_every_n_steps", 0) if params else 0
+    )
+
+    return SystemTrainerConfig(
+        max_epochs=schedule.epochs,
+        device=resolved_device,
+        seed=schedule.seed,
+        limit_train_batches=limit,
+        limit_val_batches=limit,
+        track_flops=True,
+        track_memory=True,
+        deterministic=schedule.deterministic,
+        precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
+        checkpoint_every_n=schedule.checkpoint_every_n,
+        # Early stopping (WS2.4)
+        early_stopping_patience=getattr(schedule, "early_stopping_patience", 0),
+        # Deadline enforcement (WS2.7)
+        deadline_check=deadline_check,
+        deadline_check_every_n_steps=deadline_check_every_n_steps,
+        # Distributed training (Phase E1)
+        distributed_backend=schedule.distributed_backend,
+        ddp_backend=schedule.ddp_backend,
+        fsdp_sharding_strategy=schedule.fsdp_sharding_strategy,
+        fsdp_min_params=schedule.fsdp_min_params,
+        fsdp_cpu_offload=schedule.fsdp_cpu_offload,
+        fsdp_mixed_precision=schedule.fsdp_mixed_precision,
+    )
+
+
+def _setup_checkpointing(
+    schedule: Schedule,
+    checkpoint_dir: str | None,
+    config: SystemTrainerConfig,
+) -> tuple[tempfile.TemporaryDirectory | None, list[str | None], Callable | None]:
+    """Set up checkpoint directory and callback if enabled.
+
+    Returns:
+        Tuple of (temp_dir, checkpoint_path_ref, checkpoint_callback).
+        temp_dir is a TemporaryDirectory that must be cleaned up.
+        checkpoint_path_ref is a mutable reference (list) to capture the path.
+        checkpoint_callback is the callback function or None.
+    """
+    import tempfile
+    from pathlib import Path
+
+    temp_dir: tempfile.TemporaryDirectory | None = None
+    checkpoint_path_ref: list[str | None] = [None]
+
+    if schedule.checkpoint_every_n <= 0:
+        return None, checkpoint_path_ref, None
+
+    if checkpoint_dir is not None:
+        ckpt_dir = Path(checkpoint_dir)
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        temp_dir = tempfile.TemporaryDirectory(prefix="ckpt_")
+        ckpt_dir = Path(temp_dir.name)
+
+    def _checkpoint_callback(snapshot):
+        ckpt_file = ckpt_dir / f"checkpoint_epoch_{snapshot.epoch}.pt"
+        torch.save(
+            {
+                "epoch": snapshot.epoch,
+                "global_step": snapshot.global_step,
+                "history": snapshot.history,
+                "theta": snapshot.theta,
+                "opt_state": snapshot.opt_state,
+                "credit_state": snapshot.credit_state,
+                "config": config,
+            },
+            ckpt_file,
+        )
+        checkpoint_path_ref[0] = str(ckpt_file)
+
+    return temp_dir, checkpoint_path_ref, _checkpoint_callback
+
+
+def _run_training(
+    trainer_class: type[SystemTrainer],
+    cell: ComposedCell,
+    task: Any,
+    config: SystemTrainerConfig,
+    resume_checkpoint_path: str | None,
+    checkpoint_callback: Callable | None,
+) -> tuple[SystemTrainer, list[dict[str, float]]]:
+    """Run training, optionally resuming from checkpoint.
+
+    Returns:
+        Tuple of (trainer, history).
+    """
+
+    trainer = _create_trainer(
+        trainer_class, cell, task, config, resume_checkpoint_path, checkpoint_callback
+    )
+    try:
+        history = trainer.fit()
+    except EvaluationError:
+        raise
+    except Exception as exc:
+        msg = f"Training failed: {exc}"
+        raise EvaluationError("runtime_error", msg) from exc
+
+    return trainer, history
+
+
+def _create_trainer(
+    trainer_class: type[SystemTrainer],
+    cell: ComposedCell,
+    task: Any,
+    config: SystemTrainerConfig,
+    resume_checkpoint_path: str | None,
+    checkpoint_callback: Callable | None,
+) -> SystemTrainer:
+    """Create trainer, optionally resuming from checkpoint."""
+    from pathlib import Path
+
+    if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
+        # Resume from checkpoint
+        trainer = trainer_class.from_checkpoint(
+            resume_checkpoint_path,
+            system=cell.system,
+            train_data=task.get_dataloader("train"),
+            val_data=_val_batches(task, config.limit_val_batches),
+            max_epochs=config.max_epochs,
+        )
+        if checkpoint_callback is not None:
+            trainer.checkpoint_callback = checkpoint_callback
+    else:
+        trainer = trainer_class(
+            cell.system,
+            config,
+            task.get_dataloader("train"),
+            val_data=_val_batches(task, config.limit_val_batches),
+            checkpoint_callback=checkpoint_callback,
+        )
+    return trainer
+
+
+def _collect_trainer_metrics(trainer: SystemTrainer) -> dict[str, float]:
+    """Extract resource metrics from trainer's last epoch."""
+    metrics: dict[str, float] = {}
+    if not trainer.epoch_resources:
+        return metrics
+
+    last_epoch = trainer.epoch_resources[-1]
+    if last_epoch.forward_flops is not None and last_epoch.steps > 0:
+        flops_per_step = last_epoch.forward_flops / last_epoch.steps
+        metrics["flops"] = float(flops_per_step)
+        metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
+    if last_epoch.peak_memory_mb is not None:
+        metrics["memory_usage"] = last_epoch.peak_memory_mb
+    if last_epoch.steps > 0:
+        metrics["latency_ms"] = (last_epoch.epoch_time_s / last_epoch.steps) * 1000.0
+    if last_epoch.energy_joules is not None and last_epoch.steps > 0:
+        metrics["energy_per_step"] = last_epoch.energy_joules / last_epoch.steps
+    return metrics
+
+
+def _compute_substrate_objectives(
+    coordinate: Coordinate,
+    metrics: dict[str, float],
+    walltime_s: float,
+) -> dict[str, float]:
+    """Compute substrate-specific objectives."""
+
+    name_lower = coordinate.substrate.lower()
+    factory_map = {
+        "digital": SubstrateConfig.digital,
+        "analog": SubstrateConfig.analog,
+        "memristive": SubstrateConfig.memristive,
+        "neuromorphic": SubstrateConfig.neuromorphic,
+        "optical": SubstrateConfig.optical,
+        "quantum": SubstrateConfig.quantum,
+        "sparse": SubstrateConfig.sparse,
+        "ternary": SubstrateConfig.ternary,
+        "complex": SubstrateConfig.complex,
+    }
+    factory = factory_map.get(name_lower, SubstrateConfig.digital)
+    dynamics_name = coordinate.dynamics
+    if dynamics_name in {"diffusion", "spike_integration", "pc_alm"}:
+        substrate_config = factory(noise_level=0.05)
+    else:
+        substrate_config = factory()
+    substrate_spec = SubstrateSpec.from_config(substrate_config)
+    settle_telemetry = {
+        "energy_per_step": metrics.get("energy_per_step", 0.0),
+        "settle_steps_used": metrics.get("settle_steps", 0),
+        "free_energy_final": metrics.get(
+            "hopfield_energy", metrics.get("free_energy", 0.0)
+        ),
+        "spike_rate": metrics.get("spike_rate", 0.0),
+        "event_density": metrics.get("event_density", 0.0),
+    }
+    runtime_stats = {
+        "walltime_s": walltime_s,
+        "memory_mb": metrics.get("memory_usage", 0.0),
+        "flops": metrics.get("flops", 0.0),
+        "latency_ms": metrics.get("latency_ms", 0.0),
+    }
+    substrate_objectives = compute_substrate_objectives(
+        substrate_spec, settle_telemetry, runtime_stats
+    )
+    return substrate_objectives
+
+
+def _extract_convergence_curve(
+    schedule: Schedule, history: list[dict[str, float]]
+) -> list[dict[str, float]] | None:
+    """Extract convergence curve for L1/L2 fidelity."""
+    if schedule.fidelity not in {"L1", "L2", "L3"} or not history:
+        return None
+    curve_keys = {"train_loss", "val_loss", "train_acc", "val_acc", "learning_rate"}
+    return [
+        {
+            **{k: float(v) for k, v in epoch.items() if k in curve_keys},
+            "epoch": i + 1,
+        }
+        for i, epoch in enumerate(history)
+    ]
 
 
 def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-many-locals, too-many-branches]
@@ -765,26 +1025,9 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     Raises:
         EvaluationError: The task, the composition, or the training run failed.
     """
-    import random
-    import tempfile
-    from pathlib import Path
 
-    import numpy as np
-    import torch
-
-    # Resolve device early so "auto" becomes "cuda" or "cpu" before any PyTorch ops
-    # This is critical when called from thread pools where device context may differ
-    resolved_device = _resolve_device(schedule.device)
-
-    # Set all seeds BEFORE model creation for reproducible initialization
-    torch.manual_seed(schedule.seed)
-    if schedule.deterministic:
-        import os
-
-        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
-        torch.use_deterministic_algorithms(True)
-    np.random.seed(schedule.seed)
-    random.seed(schedule.seed)
+    # Resolve device and set seeds
+    resolved_device = _setup_seeds_and_device(schedule)
 
     task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
@@ -798,38 +1041,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         task=task,
     )
 
-    limit = schedule.batch_limit or None
-
-    # Extract deadline check callback from params (for WS2.7 deadline enforcement)
-    deadline_check = params.get("deadline_check") if params else None
-    deadline_check_every_n_steps = (
-        params.get("deadline_check_every_n_steps", 0) if params else 0
-    )
-
-    config = SystemTrainerConfig(
-        max_epochs=schedule.epochs,
-        device=resolved_device,
-        seed=schedule.seed,
-        limit_train_batches=limit,
-        limit_val_batches=limit,
-        track_flops=True,
-        track_memory=True,
-        deterministic=schedule.deterministic,
-        precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
-        checkpoint_every_n=schedule.checkpoint_every_n,
-        # Early stopping (WS2.4)
-        early_stopping_patience=getattr(schedule, "early_stopping_patience", 0),
-        # Deadline enforcement (WS2.7)
-        deadline_check=deadline_check,
-        deadline_check_every_n_steps=deadline_check_every_n_steps,
-        # Distributed training (Phase E1)
-        distributed_backend=schedule.distributed_backend,
-        ddp_backend=schedule.ddp_backend,
-        fsdp_sharding_strategy=schedule.fsdp_sharding_strategy,
-        fsdp_min_params=schedule.fsdp_min_params,
-        fsdp_cpu_offload=schedule.fsdp_cpu_offload,
-        fsdp_mixed_precision=schedule.fsdp_mixed_precision,
-    )
+    config = _create_trainer_config(schedule, resolved_device, params)
 
     # Choose trainer class based on distributed backend
     trainer_class = (
@@ -838,94 +1050,23 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         else SystemTrainer
     )
 
-    # Set up checkpoint directory if checkpointing is enabled
-    checkpoint_path: str | None = None
-    temp_dir: tempfile.TemporaryDirectory | None = None
-    if schedule.checkpoint_every_n > 0:
-        if checkpoint_dir is not None:
-            ckpt_dir = Path(checkpoint_dir)
-            ckpt_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            temp_dir = tempfile.TemporaryDirectory(prefix="ckpt_")
-            ckpt_dir = Path(temp_dir.name)
-
-        def _checkpoint_callback(snapshot):
-            nonlocal checkpoint_path
-            ckpt_file = ckpt_dir / f"checkpoint_epoch_{snapshot.epoch}.pt"
-            torch.save(
-                {
-                    "epoch": snapshot.epoch,
-                    "global_step": snapshot.global_step,
-                    "history": snapshot.history,
-                    "theta": snapshot.theta,
-                    "opt_state": snapshot.opt_state,
-                    "credit_state": snapshot.credit_state,
-                    "config": config,
-                },
-                ckpt_file,
-            )
-            checkpoint_path = str(ckpt_file)
+    # Set up checkpointing
+    temp_dir, checkpoint_path_ref, checkpoint_callback = _setup_checkpointing(
+        schedule, checkpoint_dir, config
+    )
 
     start = time.monotonic()
-    trainer: SystemTrainer | None = (
-        None  # Both SystemTrainer and DistributedSystemTrainer
+    trainer, history = _run_training(
+        trainer_class, cell, task, config, resume_checkpoint_path, checkpoint_callback
     )
-    try:  # ruff: ignore[too-many-statements-in-try-clause]
-        if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
-            # Resume from checkpoint
-            trainer = trainer_class.from_checkpoint(
-                resume_checkpoint_path,
-                system=cell.system,
-                train_data=task.get_dataloader("train"),
-                val_data=_val_batches(task, config.limit_val_batches),
-                max_epochs=schedule.epochs,
-            )
-            # Update checkpoint callback for continued checkpointing
-            if schedule.checkpoint_every_n > 0:
-                trainer.checkpoint_callback = _checkpoint_callback
-            history = trainer.fit()
-        else:
-            trainer = trainer_class(
-                cell.system,
-                config,
-                task.get_dataloader("train"),
-                val_data=_val_batches(task, config.limit_val_batches),
-                checkpoint_callback=_checkpoint_callback
-                if schedule.checkpoint_every_n > 0
-                else None,
-            )
-            history = trainer.fit()
-    except EvaluationError:
-        raise
-    except Exception as exc:
-        msg = f"{coordinate.dynamics}/{coordinate.credit} on {schedule.task_id}: {exc}"
-        raise EvaluationError("runtime_error", msg) from exc
-    finally:
-        if trainer is not None:
-            trainer.close()
-        if temp_dir is not None:
-            temp_dir.cleanup()
     walltime_s = time.monotonic() - start
 
-    metrics = history_metrics(history)
+    # Clean up temp dir after training
+    if temp_dir is not None:
+        temp_dir.cleanup()
 
-    # Extract resource metrics from trainer
-    if trainer is not None and trainer.epoch_resources:
-        last_epoch = trainer.epoch_resources[-1]
-        if last_epoch.forward_flops is not None and last_epoch.steps > 0:
-            flops_per_step = last_epoch.forward_flops / last_epoch.steps
-            metrics["flops"] = float(flops_per_step)
-            metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
-        if last_epoch.peak_memory_mb is not None:
-            metrics["memory_usage"] = last_epoch.peak_memory_mb
-        # Latency estimate: epoch_time_s / steps * 1000 (ms per step)
-        if last_epoch.steps > 0:
-            metrics["latency_ms"] = (
-                last_epoch.epoch_time_s / last_epoch.steps
-            ) * 1000.0
-        # Energy per step (NVML-based)
-        if last_epoch.energy_joules is not None and last_epoch.steps > 0:
-            metrics["energy_per_step"] = last_epoch.energy_joules / last_epoch.steps
+    metrics = history_metrics(history)
+    metrics.update(_collect_trainer_metrics(trainer))
 
     # Ensure system geometry is on the correct device for metrics computation
     # (trainer.close() moves geometry to CPU)
@@ -938,53 +1079,13 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     metrics.update(compute_energy_metrics(cell.system, batch_size=sample_x.shape[0]))
 
     # Substrate-specific objectives
-    # Build SubstrateSpec from coordinate's substrate name (mirrors compose logic)
-    name_lower = coordinate.substrate.lower()
-    factory_map = {
-        "digital": SubstrateConfig.digital,
-        "analog": SubstrateConfig.analog,
-        "memristive": SubstrateConfig.memristive,
-        "neuromorphic": SubstrateConfig.neuromorphic,
-        "optical": SubstrateConfig.optical,
-        "quantum": SubstrateConfig.quantum,
-        "sparse": SubstrateConfig.sparse,
-        "ternary": SubstrateConfig.ternary,
-        "complex": SubstrateConfig.complex,
-    }
-    factory = factory_map.get(name_lower, SubstrateConfig.digital)
-    # Add noise for diffusion/spike_integration/pc_alm dynamics (mirrors compose logic)
-    dynamics_name = coordinate.dynamics
-    if dynamics_name in {"diffusion", "spike_integration", "pc_alm"}:
-        substrate_config = factory(noise_level=0.05)
-    else:
-        substrate_config = factory()
-    substrate_spec = SubstrateSpec.from_config(substrate_config)
-    settle_telemetry = {
-        "energy_per_step": metrics.get("energy_per_step", 0.0),
-        "settle_steps_used": metrics.get("settle_steps", 0),
-        "free_energy_final": metrics.get(
-            "hopfield_energy", metrics.get("free_energy", 0.0)
-        ),
-        "spike_rate": metrics.get("spike_rate", 0.0),
-        "event_density": metrics.get("event_density", 0.0),
-    }
-    runtime_stats = {
-        "walltime_s": walltime_s,
-        "memory_mb": metrics.get("memory_usage", 0.0),
-        "flops": metrics.get("flops", 0.0),
-        "latency_ms": metrics.get("latency_ms", 0.0),
-    }
-    substrate_objectives = compute_substrate_objectives(
-        substrate_spec, settle_telemetry, runtime_stats
-    )
-    metrics.update(substrate_objectives)
+    metrics.update(_compute_substrate_objectives(coordinate, metrics, walltime_s))
 
     # Plasticity objectives
     metrics.update(compute_plasticity_metrics(cell.system))
 
     # Domain-specific evaluation (perplexity, f1_score, bleu_score, mean_reward, etc.)
     # Use the task's own evaluate() method which knows the proper metrics for its domain.
-    # The geometry is the nn.Module that the task evaluates.
     try:
         task_metrics = task.evaluate(
             cell.system.geometry, split=TaskSplit.VAL, max_batches=schedule.batch_limit
@@ -1006,7 +1107,6 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         )
 
     # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
-    # Higher is better (more accuracy per joule)
     val_acc = metrics.get("val_acc")
     energy_per_sample = metrics.get("energy_per_sample")
     if val_acc is not None and energy_per_sample is not None and energy_per_sample > 0:
@@ -1016,17 +1116,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)
 
-    # Extract convergence curve (per-epoch metrics) for L1/L2 fidelity
-    convergence_curve = None
-    if schedule.fidelity in {"L1", "L2", "L3"} and history:
-        curve_keys = {"train_loss", "val_loss", "train_acc", "val_acc", "learning_rate"}
-        convergence_curve = [
-            {
-                **{k: float(v) for k, v in epoch.items() if k in curve_keys},
-                "epoch": i + 1,
-            }
-            for i, epoch in enumerate(history)
-        ]
+    convergence_curve = _extract_convergence_curve(schedule, history)
 
     return CellEvaluation(
         metrics=metrics,
@@ -1035,7 +1125,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         walltime_s=walltime_s,
         epochs_completed=len(history),
         task_id=schedule.task_id,
-        checkpoint_path=checkpoint_path,
+        checkpoint_path=checkpoint_path_ref[0],
         convergence_curve=convergence_curve,
     )
 

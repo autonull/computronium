@@ -123,6 +123,63 @@ class _TransactionMixin(_StoreBase):
                 [datetime.now(), run_id],
             )
 
+    def _update_status_field(
+        self,
+        run_id: str,
+        cell_key: str,
+        field: str,
+        value: Any,
+    ) -> int:
+        """Update a single field in the status struct for all records of a cell.
+
+        DuckDB refuses a qualified SET target, so the struct is rebuilt with
+        the specified field changed and all others carried through unchanged.
+
+        Args:
+            run_id: The run identifier.
+            cell_key: The cell key.
+            field: The status field to update (e.g., 'maturity', 'uncertainty', 'ceec_link', 'reproducibility').
+            value: The new value for the field (will be JSON-serialized if dict/list).
+
+        Returns:
+            Number of records updated.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+
+        # Serialize value if it's a dict/list
+        import json
+
+        if isinstance(value, dict | list):
+            serialized_value = json.dumps(value)
+        else:
+            serialized_value = value
+
+        # Build the SET clause carrying through all other fields
+        set_clause = (
+            "UPDATE records SET status = {"
+            "'gate_verdict': status.gate_verdict, 'defect': status.defect, "
+            "'cause': status.cause, 'severity': status.severity, "
+            "'quarantine': status.quarantine, 'maturity': status.maturity, "
+            "'uncertainty': status.uncertainty, "
+            "'reproducibility': status.reproducibility, "
+            "'assessment_procedure_version': "
+            "status.assessment_procedure_version, "
+            "'ceec_link': status.ceec_link} "
+        )
+        # Replace the target field
+        set_clause = set_clause.replace(
+            f"'{field}': status.{field}",
+            f"'{field}': ?",
+        )
+
+        with self._write_lock:
+            result = self._conn.execute(
+                set_clause + "WHERE run_id = ? AND cell_key = ?",
+                [serialized_value, run_id, cell_key],
+            )
+        return len(result.fetchall())
+
     def set_cell_maturity(
         self,
         run_id: str,
@@ -136,31 +193,14 @@ class _TransactionMixin(_StoreBase):
         earn is a claim the store cannot back. A replay-verdict upgrade also
         writes the reproducibility class the verdict measured.
         """
-        if self._conn is None:
-            raise StoreError("Connection not initialized")
-        # DuckDB refuses a qualified SET target, so the struct is rebuilt: the
-        # earned fields change, every other field is carried through unchanged.
-        reproducibility_sql = "?" if reproducibility else "status.reproducibility"
-        with self._write_lock:
-            result = self._conn.execute(
-                "UPDATE records SET status = {"
-                "'gate_verdict': status.gate_verdict, 'defect': status.defect, "
-                "'cause': status.cause, 'severity': status.severity, "
-                "'quarantine': status.quarantine, 'maturity': ?, "
-                "'uncertainty': status.uncertainty, "
-                f"'reproducibility': {reproducibility_sql}, "
-                "'assessment_procedure_version': "
-                "status.assessment_procedure_version, "
-                "'ceec_link': status.ceec_link} "
-                "WHERE run_id = ? AND cell_key = ?",
-                [
-                    maturity.value,
-                    *([reproducibility.value] if reproducibility else []),
-                    run_id,
-                    cell_key,
-                ],
+        updated = self._update_status_field(
+            run_id, cell_key, "maturity", maturity.value
+        )
+        if reproducibility is not None:
+            self._update_status_field(
+                run_id, cell_key, "reproducibility", reproducibility.value
             )
-        return len(result.fetchall())
+        return updated
 
     def set_cell_uncertainty(
         self,
@@ -174,31 +214,7 @@ class _TransactionMixin(_StoreBase):
         in the status struct. This is the E1 implementation: uncertainty is
         a measurement, not {}.
         """
-        if self._conn is None:
-            raise StoreError("Connection not initialized")
-        # DuckDB refuses a qualified SET target, so the struct is rebuilt.
-        import json
-
-        uncertainty_json = json.dumps(uncertainty)
-        with self._write_lock:
-            result = self._conn.execute(
-                "UPDATE records SET status = {"
-                "'gate_verdict': status.gate_verdict, 'defect': status.defect, "
-                "'cause': status.cause, 'severity': status.severity, "
-                "'quarantine': status.quarantine, 'maturity': status.maturity, "
-                "'uncertainty': ?, "
-                "'reproducibility': status.reproducibility, "
-                "'assessment_procedure_version': "
-                "status.assessment_procedure_version, "
-                "'ceec_link': status.ceec_link} "
-                "WHERE run_id = ? AND cell_key = ?",
-                [
-                    uncertainty_json,
-                    run_id,
-                    cell_key,
-                ],
-            )
-        return len(result.fetchall())
+        return self._update_status_field(run_id, cell_key, "uncertainty", uncertainty)
 
     def set_cell_ceec_link(
         self,
@@ -212,23 +228,7 @@ class _TransactionMixin(_StoreBase):
         the governed ledger is worse than no link. Called after a belief is
         created so the record and the ledger agree on the claim's identity.
         """
-        if self._conn is None:
-            raise StoreError("Connection not initialized")
-        with self._write_lock:
-            result = self._conn.execute(
-                "UPDATE records SET status = {"
-                "'gate_verdict': status.gate_verdict, 'defect': status.defect, "
-                "'cause': status.cause, 'severity': status.severity, "
-                "'quarantine': status.quarantine, 'maturity': status.maturity, "
-                "'uncertainty': status.uncertainty, "
-                "'reproducibility': status.reproducibility, "
-                "'assessment_procedure_version': "
-                "status.assessment_procedure_version, "
-                "'ceec_link': ?} "
-                "WHERE run_id = ? AND cell_key = ?",
-                [ceec_link, run_id, cell_key],
-            )
-        return len(result.fetchall())
+        return self._update_status_field(run_id, cell_key, "ceec_link", ceec_link)
 
     def finish_run(
         self,
@@ -340,9 +340,7 @@ class _TransactionMixin(_StoreBase):
             ).fetchone()
             if row:
                 # Upsert: delete old, insert new (keeps latest)
-                self._conn.execute(
-                    "DELETE FROM records WHERE record_id = ?", [row[0]]
-                )
+                self._conn.execute("DELETE FROM records WHERE record_id = ?", [row[0]])
 
             # Insert record - seq is assigned by DEFAULT nextval('record_seq')
             try:
