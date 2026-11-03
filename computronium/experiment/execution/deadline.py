@@ -395,6 +395,31 @@ def create_deadline_from_cli(
     return None
 
 
+class _DeadlineCheckCallback:
+    """Picklable deadline check callback.
+
+    A class-based callback is picklable because it uses __call__ and
+    stores the enforcer reference as an instance attribute.
+    """
+
+    __slots__ = ("_enforcer", "_hard")
+
+    def __init__(self, enforcer: DeadlineEnforcer, *, hard: bool = False):
+        self._enforcer = enforcer
+        self._hard = hard
+
+    def __call__(self) -> bool:
+        return self._enforcer.check_during_cell(hard=self._hard)
+
+
+def deadline_check_callback(enforcer: DeadlineEnforcer, *, hard: bool = False) -> _DeadlineCheckCallback:
+    """Create a picklable deadline check callback.
+
+    Returns a callable object that checks the deadline using the enforcer's methods.
+    """
+    return _DeadlineCheckCallback(enforcer, hard=hard)
+
+
 __all__ = [
     "CellTiming",
     "CheckpointData",
@@ -402,4 +427,5 @@ __all__ = [
     "DeadlineEnforcer",
     "SignalHandler",
     "create_deadline_from_cli",
+    "deadline_check_callback",
 ]

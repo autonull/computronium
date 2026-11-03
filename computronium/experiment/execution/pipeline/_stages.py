@@ -933,7 +933,8 @@ class _StageMixin(_PipelineBase):
 
         # Add deadline check callback to params for mid-epoch enforcement
         if deadline_enforcer:
-            deadline_check_cb = lambda: deadline_enforcer.check_during_cell(hard=False)
+            from computronium.experiment.execution.deadline import deadline_check_callback
+            deadline_check_cb = deadline_check_callback(deadline_enforcer, hard=False)
             deadline_check_interval = 1  # Check every batch for precise enforcement
             batch_items = [
                 (coord, sched, prov, {**params, "deadline_check": deadline_check_cb, "deadline_check_every_n_steps": deadline_check_interval})
