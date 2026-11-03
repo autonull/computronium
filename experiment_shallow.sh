@@ -15,7 +15,7 @@ set -euo pipefail
 
 # Defaults
 HOURS=""
-PROFILE="survey-24h"
+PROFILE="smart-survey"
 DRY_RUN=false
 DEVICE="auto"
 MAX_WORKERS=""
@@ -31,14 +31,15 @@ Runs a broad survey profile with a time budget in hours.
 Results stored in experiment_<N>h.duckdb
 
 Profiles:
-  survey-24h      Broad 24h mapping: all 6 axes, L0/L1, 1-2 epochs, no settlement (default)
+  smart-survey    Adaptive multi-fidelity: L0 screen → L1 confirm → L2 deepen (default)
+  survey-24h      Broad 24h mapping: all 6 axes, L0/L1, 1-2 epochs, no settlement
   quick-verify    Fast sanity check: L0 smoke + L1 evidence on few seeds (~5 min)
   quick-run       Dashboard quick-start: diverse cells in ~30s for Pareto/ablation
   production-map  Full broad mapping: L0→L1→L2 maturation with multi-objective Pareto
   demo            One controlled contrast: four credit rules, five axes fixed
 
 Options:
-  --profile NAME       Profile to run (default: survey-24h)
+  --profile NAME       Profile to run (default: smart-survey)
   --dry-run            Print plan without executing
   --device auto|cpu|cuda  Device to run on (default: auto)
   --max-workers N      Max concurrent cell workers
@@ -227,6 +228,47 @@ PYEOF
 uv run python "$TMP_HW"
 rm -f "$TMP_HW"
 
+# Progress preview function
+print_preview() {
+    local hours="$1"
+    local profile="$2"
+    local budget_seconds=$((hours * 3600))
+
+    if [[ "$profile" == "smart-survey" ]]; then
+        # Smart survey budget allocation: 40% L0, 40% L1, 20% L2
+        local l0_budget=$((budget_seconds * 40 / 100))
+        local l1_budget=$((budget_seconds * 40 / 100))
+        local l2_budget=$((budget_seconds * 20 / 100))
+
+        # Estimate cells per fidelity (rough estimates based on measured cell costs)
+        local l0_cells=$((l0_budget / 5))    # ~5s per L0 cell (1 epoch, 1 seed)
+        local l1_cells=$((l1_budget / 30))   # ~30s per L1 cell (3 epochs, 2 seeds)
+        local l2_cells=$((l2_budget / 300))  # ~300s per L2 cell (10 epochs, 5 seeds)
+
+        # Promotions: top 40% from L0→L1, top 10% from L1→L2
+        local l1_promos=$((l0_cells * 40 / 100))
+        local l2_promos=$((l1_promos * 10 / 100))
+
+        echo ""
+        echo "📋 Smart Survey Preview (${hours}h budget):"
+        echo "┌────────────────────────────────────────────────────────────┐"
+        printf "│ %-56s │\n" "Fidelity   Budget    Est. Cells   Promotes To"
+        printf "│ %-56s │\n" "────────   ──────    ─────────   ───────────"
+        printf "│ %-56s │\n" "L0 (screen)  ${l0_budget}s      ~${l0_cells}          → L1: ~${l1_promos}"
+        printf "│ %-56s │\n" "L1 (confirm) ${l1_budget}s      ~${l1_cells}          → L2: ~${l2_promos}"
+        printf "│ %-56s │\n" "L2 (deepen)  ${l2_budget}s      ~${l2_cells}          (final)"
+        echo "└────────────────────────────────────────────────────────────┘"
+        echo ""
+        echo "Expected outcomes:"
+        echo "  • Will screen ~${l0_cells} cells at L0 (1 epoch, 1 seed, CHEAP tasks)"
+        echo "  • Will promote ~${l1_promos} cells to L1 (3 epochs, 2 seeds, CHEAP+MEDIUM tasks)"
+        echo "  • Will deepen ~${l2_promos} cells to L2 (10 epochs, 5 seeds, ALL tasks)"
+        echo "  • Top combos at L2 will have n_seeds=5 with CI reporting"
+        echo "  • Multi-task: ≥3 tasks represented in top combos"
+        echo ""
+    fi
+}
+
 # Log configuration
 print_box() {
     local title="$1"
@@ -241,14 +283,18 @@ print_box() {
     printf "╚%*s╝\n" $((width-1)) | tr ' ' '═'
 }
 
-print_box "survey-24h Experiment (shallow/broad mapping)" \
+print_box "smart-survey Experiment (adaptive multi-fidelity)" \
     "Time limit:     ${HOURS} hour(s) (${BUDGET_SECONDS} seconds)" \
     "Store:          ${STORE_PATH}" \
     "Device:         ${DEVICE}" \
     "$( [[ -n "${MAX_WORKERS}" ]] && echo "Max workers:    ${MAX_WORKERS}" || true )" \
     "$( [[ "${DRY_RUN}" == true ]] && echo "Mode:           DRY RUN (plan only)" || true )" \
     "Profile:        ${PROFILE}"
-echo ""
+
+# Print progress preview (always show for smart-survey)
+if [[ "${PROFILE}" == "smart-survey" ]]; then
+    print_preview "${HOURS}" "${PROFILE}"
+fi
 
 echo ""
 echo "🚀 Executing: ${CMD[*]}"

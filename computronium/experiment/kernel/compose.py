@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, fields
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.core.logging import get_logger
@@ -881,40 +882,55 @@ def _extract_graph_edge_index(task: Any) -> list[list[int]] | None:
     return None
 
 
-def compose_configs(  # ruff: ignore[too-many-locals]
-    *,
+def _compose_configs_cache_key(
     coordinate: Coordinate,
     geometry: Mapping[str, object],
     input_shape: tuple[int, ...],
     output_dim: int,
-    param_budget: int = 0,
-    task: Any | None = None,
+    param_budget: int,
+) -> tuple:
+    """Generate a cache key for compose_configs.
+
+    The key includes all structural parameters that affect composition.
+    Geometry mapping is derived from coordinate and input_shape/output_dim,
+    so we don't need to include it separately.
+    """
+    # Convert coordinate to a hashable representation
+    coord_key = (
+        coordinate.substrate,
+        coordinate.geometry,
+        coordinate.dynamics,
+        coordinate.plasticity,
+        coordinate.credit,
+        coordinate.update,
+        tuple(sorted(coordinate.params.items())),
+    )
+    # Geometry keys that are explicitly provided (not derived)
+    # Convert values to hashable form
+    geometry_items = []
+    for k, v in sorted(geometry.items()):
+        if isinstance(v, list):
+            v = tuple(v)
+        elif isinstance(v, dict):
+            v = tuple(sorted(v.items()))
+        geometry_items.append((k, v))
+    geometry_key = tuple(geometry_items)
+    return (coord_key, geometry_key, input_shape, output_dim, param_budget)
+
+
+@lru_cache(maxsize=10000)
+def _compose_configs_cached(
+    cache_key: tuple,
+    coordinate: Coordinate,
+    geometry_key: tuple,
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int,
 ) -> Any:
-    """Compose and validate the configs of one cell, building no ``System``.
+    """Cached inner implementation of compose_configs.
 
-    What each primitive can accept is decided by availability predicates in
-    ``AXES``, evaluated against ``coordinate`` — not by inspecting factories and
-    not by branching on pairs of axis names. Adding a coupling between two axes
-    is a spec row. Cross-axis legality is ``SystemConfig.validate``, so this is
-    also the cheap way to ask *whether a cell can exist* before spending a
-    training run on it.
-
-    Args:
-        coordinate: The six-axis selection and its hyperparameter overrides.
-        geometry: Topology parameters; harvested geometry values fill the gaps.
-        input_shape: The task's own input shape, channels first.
-        output_dim: Class count, derived from the task.
-        param_budget: Parameter ceiling for derived sizing; 0 disables it.
-        task: Optional task instance for extracting task-specific geometry data
-            (e.g., edge_index for graph tasks).
-
-    Returns:
-        The validated ``SystemConfig`` for the cell.
-
-    Raises:
-        ProposalComposeError: A primitive, or one of its parameters, has no
-            place in this cell.
-        ValueError: ``SystemConfig.validate`` rejected the combination.
+    The cache_key is used for the LRU cache; the actual parameters are passed
+    through for the implementation.
     """
     from computronium.ontology import (
         CreditAssignmentConfig,
@@ -928,16 +944,8 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     substrate_name = coordinate.substrate
     dynamics_name = coordinate.dynamics
 
-    # Auto-extract graph edge_index from task if not provided in geometry
-    geometry_dict = dict(geometry)
-    if (
-        coordinate.geometry == "graph"
-        and "edge_index" not in geometry_dict
-        and task is not None
-    ):
-        edge_index = _extract_graph_edge_index(task)
-        if edge_index is not None:
-            geometry_dict["edge_index"] = edge_index
+    # Reconstruct geometry dict from key
+    geometry_dict = dict(geometry_key)
 
     gcfg = _fit_geometry(
         _geometry_mapping(
@@ -986,6 +994,73 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     )
     config.validate()
     return config
+
+
+def compose_configs(  # ruff: ignore[too-many-locals]
+    *,
+    coordinate: Coordinate,
+    geometry: Mapping[str, object],
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int = 0,
+    task: Any | None = None,
+) -> Any:
+    """Compose and validate the configs of one cell, building no ``System``.
+
+    What each primitive can accept is decided by availability predicates in
+    ``AXES``, evaluated against ``coordinate`` — not by inspecting factories and
+    not by branching on pairs of axis names. Adding a coupling between two axes
+    is a spec row. Cross-axis legality is ``SystemConfig.validate``, so this is
+    also the cheap way to ask *whether a cell can exist* before spending a
+    training run on it.
+
+    Uses an LRU cache (maxsize=10000) keyed by (coordinate, geometry, input_shape,
+    output_dim, param_budget) to avoid re-composing the same cell across seeds/rounds.
+
+    Args:
+        coordinate: The six-axis selection and its hyperparameter overrides.
+        geometry: Topology parameters; harvested geometry values fill the gaps.
+        input_shape: The task's own input shape, channels first.
+        output_dim: Class count, derived from the task.
+        param_budget: Parameter ceiling for derived sizing; 0 disables it.
+        task: Optional task instance for extracting task-specific geometry data
+            (e.g., edge_index for graph tasks).
+
+    Returns:
+        The validated ``SystemConfig`` for the cell.
+
+    Raises:
+        ProposalComposeError: A primitive, or one of its parameters, has no
+            place in this cell.
+        ValueError: ``SystemConfig.validate`` rejected the combination.
+    """
+    # Auto-extract graph edge_index from task if not provided in geometry
+    geometry_dict = dict(geometry)
+    if (
+        coordinate.geometry == "graph"
+        and "edge_index" not in geometry_dict
+        and task is not None
+    ):
+        edge_index = _extract_graph_edge_index(task)
+        if edge_index is not None:
+            geometry_dict["edge_index"] = edge_index
+
+    # Convert geometry to hashable key for cache
+    geometry_items = []
+    for k, v in sorted(geometry_dict.items()):
+        if isinstance(v, list):
+            v = tuple(v)
+        elif isinstance(v, dict):
+            v = tuple(sorted(v.items()))
+        geometry_items.append((k, v))
+    geometry_key = tuple(geometry_items)
+
+    cache_key = _compose_configs_cache_key(
+        coordinate, geometry_dict, input_shape, output_dim, param_budget
+    )
+    return _compose_configs_cached(
+        cache_key, coordinate, geometry_key, input_shape, output_dim, param_budget
+    )
 
 
 def compose_cell_system(

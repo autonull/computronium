@@ -166,6 +166,8 @@ class Schedule:
     precision: Literal["fp32", "fp16", "bf16"] = "fp32"
     # Save checkpoint every N epochs (0 = disabled)
     checkpoint_every_n: int = 0
+    # Early stopping (WS2.4)
+    early_stopping_patience: int = 0
     # Distributed training (Phase E1)
     distributed_backend: Literal["none", "ddp", "fsdp"] = "none"
     ddp_backend: str = "nccl"  # nccl, gloo, mpi
@@ -199,6 +201,8 @@ class Schedule:
             )
         if self.checkpoint_every_n < 0:
             raise ValueError("checkpoint_every_n must be non-negative")
+        if self.early_stopping_patience < 0:
+            raise ValueError("early_stopping_patience must be non-negative")
         if self.distributed_backend not in {"none", "ddp", "fsdp"}:
             raise ValueError(
                 f"Invalid distributed_backend: {self.distributed_backend}; expected 'none', 'ddp', or 'fsdp'"
@@ -219,6 +223,7 @@ class Schedule:
             "num_workers": self.num_workers,
             "precision": self.precision,
             "checkpoint_every_n": self.checkpoint_every_n,
+            "early_stopping_patience": self.early_stopping_patience,
             "distributed_backend": self.distributed_backend,
             "ddp_backend": self.ddp_backend,
             "fsdp_sharding_strategy": self.fsdp_sharding_strategy,
@@ -257,6 +262,7 @@ class Schedule:
             num_workers=data.get("num_workers", 0),
             precision=data.get("precision", "fp32"),
             checkpoint_every_n=data.get("checkpoint_every_n", 0),
+            early_stopping_patience=data.get("early_stopping_patience", 0),
             distributed_backend=data.get("distributed_backend", "none"),
             ddp_backend=data.get("ddp_backend", "nccl"),
             fsdp_sharding_strategy=data.get("fsdp_sharding_strategy", "FULL_SHARD"),

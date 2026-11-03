@@ -21,6 +21,11 @@ __all__ = [
     "TaskSpec",
     "resolve_task",
     "resolve_task_from_data_config",
+    "TASK_COST_CLASS",
+    "get_task_cost_class",
+    "get_cheap_tasks",
+    "get_medium_tasks",
+    "get_expensive_tasks",
 ]
 
 # The schedulable set is exactly what resolves and sets up offline: geometry
@@ -64,6 +69,62 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     # timeseries
     "synthetic_forecast",
 })
+
+
+# Task cost classes for multi-fidelity scheduling (TODO78 WS2.2)
+# Based on measured seconds per epoch at reference configuration
+TASK_COST_CLASS: dict[str, str] = {
+    # CHEAP (<10s/epoch)
+    "xor": "CHEAP",
+    "spiral": "CHEAP",
+    "circles": "CHEAP",
+    "digits": "CHEAP",
+    "copy_task": "CHEAP",
+    # MEDIUM (10-60s/epoch)
+    "mnist": "MEDIUM",
+    "fashion_mnist": "MEDIUM",
+    "sequential_mnist": "MEDIUM",
+    "char_ngram": "MEDIUM",
+    "cora": "MEDIUM",
+    "citeseer": "MEDIUM",
+    "pubmed": "MEDIUM",
+    "kmnist": "MEDIUM",
+    "usps": "MEDIUM",
+    "iris": "CHEAP",
+    "wine": "CHEAP",
+    "breast_cancer": "CHEAP",
+    "synthetic_forecast": "CHEAP",
+    # EXPENSIVE (>60s/epoch)
+    "cifar10": "EXPENSIVE",
+    "tiny_shakespeare": "EXPENSIVE",
+    "pendulum": "EXPENSIVE",
+    "acrobot": "EXPENSIVE",
+    "cartpole": "EXPENSIVE",
+    "graph_classification": "EXPENSIVE",
+}
+
+
+def get_task_cost_class(task_name: str) -> str:
+    """Get the cost class for a task (CHEAP, MEDIUM, EXPENSIVE).
+
+    Returns "MEDIUM" for unknown tasks as a safe default.
+    """
+    return TASK_COST_CLASS.get(task_name, "MEDIUM")
+
+
+def get_cheap_tasks() -> list[str]:
+    """Return list of CHEAP tasks for L0 screening."""
+    return [task for task, cost in TASK_COST_CLASS.items() if cost == "CHEAP"]
+
+
+def get_medium_tasks() -> list[str]:
+    """Return list of MEDIUM tasks for L1 confirmation."""
+    return [task for task, cost in TASK_COST_CLASS.items() if cost == "MEDIUM"]
+
+
+def get_expensive_tasks() -> list[str]:
+    """Return list of EXPENSIVE tasks for L2 deepening."""
+    return [task for task, cost in TASK_COST_CLASS.items() if cost == "EXPENSIVE"]
 
 
 @dataclass(frozen=True, slots=True)

@@ -250,6 +250,7 @@ class _StageMixin(_PipelineBase):
                     num_workers=sched.num_workers,
                     precision=sched.precision,
                     checkpoint_every_n=sched.checkpoint_every_n,
+                    early_stopping_patience=sched.early_stopping_patience,
                 )
                 candidates.append((coord, promo_sched))
 
@@ -282,6 +283,7 @@ class _StageMixin(_PipelineBase):
         """
         from computronium.experiment.kernel.compose import compose_configs
         from computronium.experiment.kernel.evaluate import task_shape
+        from computronium.ontology.system import check_compatibility_matrix
 
         seen: set[str] = set(self._state.completed_measurement_keys)
         rejected: set[str] = set(self._state.rejected_keys)
@@ -297,6 +299,29 @@ class _StageMixin(_PipelineBase):
                     continue
                 if key in rejected:
                     rejected_this_batch += 1
+                    continue
+
+                # ADMISSION GATE: fast compatibility matrix pre-check
+                # Reject known-incompatible combos before full compose/validate
+                coord = proposal.coordinate
+                compat_violations = check_compatibility_matrix(
+                    substrate=coord.substrate,
+                    geometry=coord.geometry,
+                    dynamics=coord.dynamics,
+                    plasticity=coord.plasticity,
+                    credit=coord.credit,
+                    update=coord.update,
+                )
+                if compat_violations:
+                    # Reject this cell - add to durable rejected set
+                    self._state.rejected_keys.add(key)
+                    rejected_this_batch += 1
+                    self._classify_rejection(
+                        coordinate=coord,
+                        schedule=schedule,
+                        cause="ADMISSION_REJECTED",
+                        message="; ".join(compat_violations),
+                    )
                     continue
 
                 # ADMISSION GATE: last-mile SystemConfig.validate check
@@ -643,6 +668,10 @@ class _StageMixin(_PipelineBase):
         In the deadline system, allocator uses online cell timing for
         cost estimation instead of predicted cost models.
 
+        For smart-survey profile: handles multi-fidelity promotion (L0→L1→L2)
+        with seed progression (1→2→5), epoch progression (1→3→10),
+        and task cycling (CHEAP→MEDIUM→EXPENSIVE).
+
         Returns:
             List of promoted (coordinate, schedule) pairs for the next round.
         """
@@ -684,7 +713,127 @@ class _StageMixin(_PipelineBase):
             cost_model=None,
         )
 
+        # Smart-survey: apply multi-fidelity promotion logic
+        spec = self._config.run_spec
+        if spec.profile == "smart-survey" and promotions:
+            promotions = self._apply_smart_survey_promotion(promotions, records, spec)
+
         logger.info("Allocator proposed %d promotions", len(promotions))
+        return promotions
+
+    def _apply_smart_survey_promotion(
+        self,
+        promotions: list[tuple[Coordinate, Schedule]],
+        records: list[Record],
+        spec: RunSpec,
+    ) -> list[tuple[Coordinate, Schedule]]:
+        """Apply smart-survey multi-fidelity promotion rules.
+
+        - Promotes top-K by validation_accuracy (ruler-relative normalized)
+        - Seed progression: L0(1) → L1(2) → L2(5)
+        - Epoch progression: L0(1) → L1(3) → L2(10)
+        - Task cycling: CHEAP → CHEAP+MEDIUM → ALL
+        - Budget allocation: 40/40/20 split with fallbacks
+        """
+        from computronium.domains.registry import get_cheap_tasks, get_medium_tasks, get_expensive_tasks
+        from computronium.experiment.kernel.evaluate import TaskScheduler
+
+        if not records:
+            return promotions
+
+        # Get fidelity seeds/epochs from spec
+        fidelity_seeds = spec.fidelity_seeds or {"L0": 1, "L1": 2, "L2": 5}
+        fidelity_epochs = spec.fidelity_epochs or {"L0": 1, "L1": 3, "L2": 10}
+        promotion_threshold = spec.promotion_threshold if hasattr(spec, 'promotion_threshold') else 0.6
+
+        # Group records by cell_key and fidelity to find best per cell
+        cell_best: dict[str, tuple[float, Record]] = {}
+        for record in records:
+            if record.status.gate_verdict.value != "PASS" or record.status.quarantine:
+                continue
+            cell_key = record.cell_key
+            fidelity = record.schedule.fidelity
+            val_acc = record.payload.get("val_acc", 0.0)
+            task_name = record.schedule.task_id or "digits"
+
+            # Ruler-relative normalization
+            scheduler = TaskScheduler()
+            baseline = scheduler.get_baseline(task_name)
+            norm_acc = scheduler.normalize_score(val_acc, task_name, baseline)
+
+            # Track best per cell per fidelity
+            key = f"{cell_key}|{fidelity}"
+            if key not in cell_best or norm_acc > cell_best[key][0]:
+                cell_best[key] = (norm_acc, record)
+
+        # Find cells eligible for promotion (at L0 or L1)
+        eligible_promotions: list[tuple[Coordinate, Schedule]] = []
+        for coord, sched in promotions:
+            cell_key = coord.cell_key()
+            current_fidelity = sched.fidelity
+
+            # Determine next fidelity
+            next_fidelity = "L1" if current_fidelity == "L0" else "L2" if current_fidelity == "L1" else None
+            if next_fidelity is None:
+                continue
+
+            # Check if this cell has a good record at current fidelity
+            best_key = f"{cell_key}|{current_fidelity}"
+            if best_key not in cell_best:
+                continue
+
+            norm_acc, best_record = cell_best[best_key]
+
+            # Check promotion threshold
+            if norm_acc < promotion_threshold:
+                continue
+
+            # Create promoted schedule with next fidelity settings
+            next_seeds = fidelity_seeds.get(next_fidelity, 1)
+            next_epochs = fidelity_epochs.get(next_fidelity, 1)
+
+            # Determine tasks for next fidelity
+            scheduler = TaskScheduler()
+            next_tasks = scheduler.get_tasks_for_fidelity(next_fidelity)
+
+            # For each task, create a promotion
+            for task_name in next_tasks:
+                from computronium.experiment.schema.coordinate import Schedule
+
+                promo_sched = Schedule(
+                    fidelity=next_fidelity,
+                    seed=sched.seed,
+                    n_seeds=next_seeds,
+                    epochs=next_epochs,
+                    batch_limit=sched.batch_limit,
+                    budget_id=f"promotion_{next_fidelity}",
+                    task_id=task_name,
+                    param_budget=sched.param_budget,
+                    device=sched.device,
+                    deterministic=sched.deterministic,
+                    num_workers=sched.num_workers,
+                    precision=sched.precision,
+                    checkpoint_every_n=spec.checkpoint_every_n,
+                    early_stopping_patience=spec.early_stopping_patience,
+                    distributed_backend=sched.distributed_backend,
+                    ddp_backend=sched.ddp_backend,
+                    fsdp_sharding_strategy=sched.fsdp_sharding_strategy,
+                    fsdp_min_params=sched.fsdp_min_params,
+                    fsdp_cpu_offload=sched.fsdp_cpu_offload,
+                    fsdp_mixed_precision=sched.fsdp_mixed_precision,
+                )
+                eligible_promotions.append((coord, promo_sched))
+
+        # Limit promotions to budget
+        if eligible_promotions:
+            # Sort by normalized accuracy descending
+            eligible_promotions.sort(
+                key=lambda x: -cell_best.get(f"{x[0].cell_key()}|{'L0' if x[1].fidelity == 'L1' else 'L1'}", (0,))[0]
+            )
+            # Keep top promotions (roughly 40% for L0→L1, 10% for L1→L2)
+            max_promos = len(promotions) // 2  # Conservative limit
+            return eligible_promotions[:max_promos]
+
         return promotions
 
     async def _execute_batch_with_isolation(

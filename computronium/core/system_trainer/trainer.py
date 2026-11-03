@@ -437,6 +437,7 @@ class SystemTrainer:
         system: System,
         train_data: _DataProvider,
         val_data: _DataProvider | None = None,
+        max_epochs: int | None = None,
     ) -> SystemTrainer:
         """Load a trainer from a checkpoint file.
 
@@ -445,12 +446,18 @@ class SystemTrainer:
             system: The system to load state into.
             train_data: Training data provider.
             val_data: Optional validation data provider.
+            max_epochs: Optional override for max_epochs (useful for warm-start
+                where you want to train beyond the original checkpoint's max_epochs).
 
         Returns:
             A new SystemTrainer instance restored from the checkpoint.
         """
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         config = checkpoint["config"]
+        if max_epochs is not None:
+            # Create a new config with updated max_epochs
+            import dataclasses
+            config = dataclasses.replace(config, max_epochs=max_epochs)
         trainer = cls(
             system=system, config=config, train_data=train_data, val_data=val_data
         )
@@ -541,16 +548,58 @@ class SystemTrainer:
         )
 
     def fit(self) -> list[dict[str, float]]:
-        """Run the training loop to ``config.max_epochs`` total epochs."""
+        """Run the training loop to ``config.max_epochs`` total epochs.
+
+        Supports early stopping based on validation metric plateau detection.
+        """
         logger.debug(
             "Starting training for %d epochs (from epoch %d)",
             self.config.max_epochs,
             self.current_epoch,
         )
 
+        # Early stopping state
+        best_metric = -float("inf")
+        patience_counter = 0
+        patience = self.config.early_stopping_patience
+        min_delta = self.config.early_stopping_min_delta
+        metric_name = self.config.early_stopping_metric
+        early_stopping_enabled = patience > 0 and self.val_data is not None
+
         self._harvest_init()
         while self.current_epoch < self.config.max_epochs:
             self.train_epoch()
+
+            # Check early stopping after each epoch
+            if early_stopping_enabled and self.history:
+                last_epoch = self.history[-1]
+                current_metric = last_epoch.get(metric_name)
+                if current_metric is not None:
+                    if current_metric > best_metric + min_delta:
+                        best_metric = current_metric
+                        patience_counter = 0
+                        logger.info(
+                            "Early stopping: %s improved to %.4f (patience reset)",
+                            metric_name,
+                            best_metric,
+                        )
+                    else:
+                        patience_counter += 1
+                        logger.info(
+                            "Early stopping: %s=%.4f did not improve >%.4f for %d/%d epochs",
+                            metric_name,
+                            current_metric,
+                            min_delta,
+                            patience_counter,
+                            patience,
+                        )
+                        if patience_counter >= patience:
+                            logger.info(
+                                "Early stopping triggered: %s plateaued for %d epochs",
+                                metric_name,
+                                patience,
+                            )
+                            break
 
         self._harvest_finalize()
         logger.debug("Training complete")

@@ -116,6 +116,12 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "rewrite_rate",
     # Energy clamping flag
     "energy_clamped",
+    # Statistical validity: confidence intervals (WS1.4)
+    "val_acc_ci_lower",
+    "val_acc_ci_upper",
+    "val_acc_mean",
+    "val_acc_std",
+    "val_acc_n_seeds",
 }
 
 # Objective name -> the payload key that satisfies it.
@@ -166,6 +172,12 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "psi_capacity": "psi_capacity",
     "consolidation_cost": "consolidation_cost",
     "rewrite_rate": "rewrite_rate",
+    # Statistical validity: confidence intervals (WS1.4)
+    "val_acc_ci_lower": "val_acc_ci_lower",
+    "val_acc_ci_upper": "val_acc_ci_upper",
+    "val_acc_mean": "val_acc_mean",
+    "val_acc_std": "val_acc_std",
+    "val_acc_n_seeds": "val_acc_n_seeds",
 })
 
 

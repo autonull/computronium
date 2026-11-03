@@ -84,6 +84,10 @@ class SystemTrainerConfig:
     async_dataloading: bool = False
     precision: Literal["fp32", "fp16", "bf16"] = "fp32"
     checkpoint_every_n: int = 0
+    # Early stopping (WS2.4)
+    early_stopping_patience: int = 0  # 0 = disabled
+    early_stopping_min_delta: float = 0.01  # Minimum improvement (1% default)
+    early_stopping_metric: str = "val_acc"  # Metric to monitor
     # Distributed training (Phase E1)
     distributed_backend: Literal["none", "ddp", "fsdp"] = "none"
     ddp_backend: str = "nccl"

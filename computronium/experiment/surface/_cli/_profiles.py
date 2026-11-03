@@ -39,6 +39,10 @@ class RunProfile:
     deep_tier: bool  # Whether to run deep-tier claim-grade
     axes: tuple[AxisSelection, ...] = ()
     checkpoint_every_n: int = 0  # Save checkpoint every N epochs (0 = disabled)
+    # Multi-fidelity settings (smart-survey profile)
+    fidelity_seeds: dict[str, int] = field(default_factory=dict)
+    fidelity_epochs: dict[str, int] = field(default_factory=dict)
+    early_stopping_patience: int = 0
     # The hyperparameters this profile searches, keyed canonically
     # ``"{axis}.{name}"``. Empty means "structural axes only" — a profile that
     # searches no knob (a smoke, a geometry sweep) declares none. A profile that
@@ -305,6 +309,40 @@ RUN_PROFILES: dict[str, RunProfile] = {
         ),
         hyperparameters={"geometry.hidden_dim": Domain(members=(32,))},
         checkpoint_every_n=0,
+    ),
+    "smart-survey": RunProfile(
+        name="smart-survey",
+        description="Adaptive multi-fidelity: L0 screen → L1 confirm → L2 deepen",
+        stages=[
+            "s1_frame",
+            "s2_space",
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+            "s9_attribute",
+            "s10_decide",
+            "s11_report",
+        ],
+        fidelity="L0",
+        n_seeds=1,                    # L0: 1, L1: 2, L2: 5 (via fidelity_seeds)
+        epochs=1,                     # L0: 1, L1: 3, L2: 10 (via fidelity_epochs)
+        batch_limit=MEASURED_BATCH_LIMIT,
+        budget_seconds=3600.0,        # overridden by CLI
+        task="auto",                  # cycles through cheap tasks
+        policy="model_based",
+        param_budget=BROAD_PARAM_BUDGET,
+        objectives=("validation_accuracy", "walltime_total", "param_count"),
+        promotion_threshold=0.6,      # top 40% promoted
+        maturation=True,              # ENABLED
+        deep_tier=True,               # ENABLED
+        fidelity_seeds={"L0": 1, "L1": 2, "L2": 5},
+        fidelity_epochs={"L0": 1, "L1": 3, "L2": 10},
+        early_stopping_patience=3,
+        hyperparameters=dict(_SEARCH_SWEEP),
+        checkpoint_every_n=1,         # Enable for warm-start
     ),
     "survey-24h": RunProfile(
         name="survey-24h",

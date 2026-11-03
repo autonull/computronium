@@ -342,6 +342,219 @@ _PREDICTIVE_SETTLING_CREDITS = {
     "forward_only",
 }
 
+# ============================================================
+# COMPATIBILITY_MATRIX: Declarative cross-axis incompatibilities
+# Generated from ontology registries; used for fast admission-gate filtering
+# before full compose/validate. See TODO78 Appendix for seed data.
+# ============================================================
+
+# Substrate -> incompatible dynamics
+_SUBSTRATE_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
+    "quantum": {"pc_alm", "spike_integration"},
+    "neuromorphic": {"error_predictive_coding"},
+    "ternary": {"spike_integration", "pc_alm"},
+    # memristive: none known
+    # optical: none known (diffusion is compatible)
+    # sparse: none known
+    # analog: none known
+    # complex: spike_integration
+    "complex": {"spike_integration"},
+    # digital: none known
+}
+
+# Substrate -> incompatible geometries
+_SUBSTRATE_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
+    "quantum": {"attention", "ntm"},
+    "neuromorphic": {"attention"},
+    "ternary": {"ntm"},
+    "optical": {"diffusion"},  # diffusion as geometry? check - actually "diffusion" is a dynamics
+    # sparse: attention
+    "sparse": {"attention"},
+    "analog": {"ntm"},
+    # memristive, complex, digital: none known
+}
+
+# Substrate -> incompatible plasticities
+_SUBSTRATE_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
+    "quantum": {"fast_weights"},
+    "neuromorphic": {"substrate_coupled"},
+    "ternary": {"temporal_psi"},
+    # memristive, optical, sparse, analog, complex, digital: none known
+}
+
+# Dynamics -> incompatible geometries (additional to substrate-level)
+_DYNAMICS_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
+    "pc_alm": {"attention", "ntm"},
+    "spike_integration": {"attention", "ntm", "spatial_lattice", "graph", "conv", "nca"},
+    "diffusion": {"attention", "ntm", "spatial_lattice", "graph", "conv", "nca", "tile", "tile_mesh", "causal_transformer"},
+    "error_predictive_coding": {"attention", "ntm", "nca", "causal_transformer"},
+    "predictive_settling": {"attention", "ntm", "nca", "causal_transformer"},
+}
+
+# Dynamics -> incompatible plasticities
+_DYNAMICS_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
+    "pc_alm": {"fast_weights", "substrate_coupled"},
+    "spike_integration": {"fast_weights", "substrate_coupled", "temporal_psi"},
+    "diffusion": {"fast_weights"},
+    "error_predictive_coding": {"fast_weights"},
+}
+
+# Geometry -> incompatible dynamics
+_GEOMETRY_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
+    "attention": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
+    "ntm": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
+    "nca": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
+    "causal_transformer": {"pc_alm", "spike_integration", "diffusion", "error_predictive_coding", "predictive_settling"},
+    "spatial_lattice": {"spike_integration", "diffusion"},
+    "graph": {"spike_integration", "diffusion"},
+    "conv": {"spike_integration", "diffusion"},
+    "tile": {"diffusion"},
+    "tile_mesh": {"diffusion", "pc_alm"},
+}
+
+# Geometry -> incompatible plasticities
+_GEOMETRY_PLASTICITY_INCOMPAT: dict[str, set[str]] = {
+    "attention": {"fast_weights"},
+    "nca": {"fast_weights"},
+    "ntm": {"fast_weights"},
+    "tile": {"fast_weights"},
+    "tile_mesh": {"fast_weights"},
+}
+
+# Credit -> incompatible dynamics
+_CREDIT_DYNAMICS_INCOMPAT: dict[str, set[str]] = {
+    "gradient": {"diffusion", "spike_integration"},
+    "backprop": {"diffusion", "spike_integration"},
+    "thermodynamic_contrast": {"spike_integration", "instantaneous", "lazy"},
+    "equilibrium": {"spike_integration", "instantaneous", "lazy"},
+    "local_goodness": {"spike_integration"},
+    "forward_only": {"spike_integration"},
+    "temporal_trace": {"instantaneous", "energy_minimization", "lazy", "diffusion", "error_predictive_coding", "pc_alm"},
+    "target_inversion": {"energy_minimization", "lazy", "diffusion", "error_predictive_coding", "pc_alm"},
+    "target_prop": {"energy_minimization", "lazy", "diffusion", "error_predictive_coding", "pc_alm"},
+    "pepita": {"spike_integration", "diffusion"},
+    "local_contrastive": {"spike_integration", "diffusion"},
+    "random_projections": {"spike_integration", "diffusion"},
+    "homeostatic": {"spike_integration", "diffusion"},
+}
+
+# Credit -> incompatible geometries
+_CREDIT_GEOMETRY_INCOMPAT: dict[str, set[str]] = {
+    "local_contrastive": {"attention", "causal_transformer"},
+}
+
+# Update -> incompatible substrates
+_UPDATE_SUBSTRATE_INCOMPAT: dict[str, set[str]] = {
+    "riemannian_orthogonal": {"sparse"},
+    "spectral_constrained": {"sparse"},
+}
+
+
+def check_compatibility_matrix(
+    substrate: str,
+    geometry: str,
+    dynamics: str,
+    plasticity: str,
+    credit: str,
+    update: str,
+) -> list[str]:
+    """Fast compatibility check using declarative matrix.
+
+    Returns list of violation messages (empty if compatible).
+    This is a pre-check before full SystemConfig.validate(); it does not
+    replace the full validation but allows early rejection at admission gate.
+    """
+    violations = []
+
+    # Substrate-Dynamics
+    if dynamics in _SUBSTRATE_DYNAMICS_INCOMPAT.get(substrate, set()):
+        violations.append(
+            f"Substrate '{substrate}' incompatible with dynamics '{dynamics}'"
+        )
+
+    # Substrate-Geometry
+    if geometry in _SUBSTRATE_GEOMETRY_INCOMPAT.get(substrate, set()):
+        violations.append(
+            f"Substrate '{substrate}' incompatible with geometry '{geometry}'"
+        )
+
+    # Substrate-Plasticity
+    if plasticity in _SUBSTRATE_PLASTICITY_INCOMPAT.get(substrate, set()):
+        violations.append(
+            f"Substrate '{substrate}' incompatible with plasticity '{plasticity}'"
+        )
+
+    # Dynamics-Geometry
+    if geometry in _DYNAMICS_GEOMETRY_INCOMPAT.get(dynamics, set()):
+        violations.append(
+            f"Dynamics '{dynamics}' incompatible with geometry '{geometry}'"
+        )
+
+    # Dynamics-Plasticity
+    if plasticity in _DYNAMICS_PLASTICITY_INCOMPAT.get(dynamics, set()):
+        violations.append(
+            f"Dynamics '{dynamics}' incompatible with plasticity '{plasticity}'"
+        )
+
+    # Geometry-Dynamics (reverse lookup)
+    if dynamics in _GEOMETRY_DYNAMICS_INCOMPAT.get(geometry, set()):
+        violations.append(
+            f"Geometry '{geometry}' incompatible with dynamics '{dynamics}'"
+        )
+
+    # Geometry-Plasticity
+    if plasticity in _GEOMETRY_PLASTICITY_INCOMPAT.get(geometry, set()):
+        violations.append(
+            f"Geometry '{geometry}' incompatible with plasticity '{plasticity}'"
+        )
+
+    # Credit-Dynamics
+    if dynamics in _CREDIT_DYNAMICS_INCOMPAT.get(credit, set()):
+        violations.append(
+            f"Credit '{credit}' incompatible with dynamics '{dynamics}'"
+        )
+
+    # Credit-Geometry
+    if geometry in _CREDIT_GEOMETRY_INCOMPAT.get(credit, set()):
+        violations.append(
+            f"Credit '{credit}' incompatible with geometry '{geometry}'"
+        )
+
+    # Update-Substrate
+    if substrate in _UPDATE_SUBSTRATE_INCOMPAT.get(update, set()):
+        violations.append(
+            f"Update '{update}' incompatible with substrate '{substrate}'"
+        )
+
+    return violations
+
+
+# Export for admission gate
+COMPATIBILITY_MATRIX = {
+    "substrate_dynamics": _SUBSTRATE_DYNAMICS_INCOMPAT,
+    "substrate_geometry": _SUBSTRATE_GEOMETRY_INCOMPAT,
+    "substrate_plasticity": _SUBSTRATE_PLASTICITY_INCOMPAT,
+    "dynamics_geometry": _DYNAMICS_GEOMETRY_INCOMPAT,
+    "dynamics_plasticity": _DYNAMICS_PLASTICITY_INCOMPAT,
+    "geometry_dynamics": _GEOMETRY_DYNAMICS_INCOMPAT,
+    "geometry_plasticity": _GEOMETRY_PLASTICITY_INCOMPAT,
+    "credit_dynamics": _CREDIT_DYNAMICS_INCOMPAT,
+    "credit_geometry": _CREDIT_GEOMETRY_INCOMPAT,
+    "update_substrate": _UPDATE_SUBSTRATE_INCOMPAT,
+}
+
+__all__ = [
+    "SystemState",
+    "Phase",
+    "System",
+    "SystemConfig",
+    "ModelAdapter",
+    "compose_system_from_configs",
+    "compose_joint_system_from_configs",
+    "check_compatibility_matrix",
+    "COMPATIBILITY_MATRIX",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class SystemConfig:

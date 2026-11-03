@@ -18,7 +18,16 @@ from computronium.domains.base import (
 from computronium.domains.factory import CharNGramTask, create_task
 from computronium.domains.graph import GraphTask
 from computronium.domains.lm import LMTask
-from computronium.domains.registry import SUPPORTED_TASKS, TaskSpec, resolve_task
+from computronium.domains.registry import (
+    SUPPORTED_TASKS,
+    TaskSpec,
+    resolve_task,
+    TASK_COST_CLASS,
+    get_task_cost_class,
+    get_cheap_tasks,
+    get_medium_tasks,
+    get_expensive_tasks,
+)
 from computronium.domains.rl import RLTask
 from computronium.domains.scientific import ScientificTask
 from computronium.domains.tabular import TabularTask

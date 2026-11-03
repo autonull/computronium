@@ -97,6 +97,7 @@ class _SchemaMixin(_StoreBase):
                                         task_id TEXT, param_budget INTEGER, device TEXT,
                                         deterministic BOOLEAN, num_workers INTEGER,
                                         precision TEXT, checkpoint_every_n INTEGER,
+                                        early_stopping_patience INTEGER,
                                         distributed_backend TEXT, ddp_backend TEXT,
                                         fsdp_sharding_strategy TEXT, fsdp_min_params INTEGER,
                                         fsdp_cpu_offload BOOLEAN, fsdp_mixed_precision BOOLEAN) NOT NULL,

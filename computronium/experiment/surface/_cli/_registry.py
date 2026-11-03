@@ -68,8 +68,31 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
             return 1
         return 0
 
-    # Web dashboard (default)
-    from computronium.experiment.execution.dashboard.web import run_dashboard
+    # Web dashboard (default) - auto-install dependencies if missing
+    try:
+        from computronium.experiment.execution.dashboard.web import run_dashboard
+    except ImportError as e:
+        if "fastapi" in str(e) or "uvicorn" in str(e):
+            logger.info("Dashboard dependencies not found, installing...")
+            import subprocess
+            try:
+                subprocess.run(
+                    ["uv", "pip", "install", "fastapi", "uvicorn"],
+                    check=True,
+                    capture_output=True,
+                )
+                logger.info("Dashboard dependencies installed")
+                from computronium.experiment.execution.dashboard.web import run_dashboard
+            except subprocess.CalledProcessError as install_err:
+                logger.error("Failed to install dashboard dependencies: %s", install_err)
+                print(
+                    "Error: Could not install dashboard dependencies (fastapi, uvicorn).",
+                    file=sys.stderr,
+                )
+                print("Run: uv pip install fastapi uvicorn", file=sys.stderr)
+                return 1
+        else:
+            raise
 
     logger.info(f"Starting dashboard on {args.host}:{args.port}")
     logger.info(f"Store: {args.store}")

@@ -301,11 +301,43 @@ class _TransactionMixin(_StoreBase):
         with self._write_lock:
             self._conn.execute("DELETE FROM checkpoints WHERE run_id = ?", [run_id])
 
-    def append(self, record: Record) -> Record:
-        """Append a record to the store. Returns record with assigned seq.
+    def _dedup_key(self, record: Record) -> tuple[str, int, str]:
+        """Compute the deduplication key: (cell_key, seed, fidelity).
 
-        Raises DuplicateMeasurementError if measurement_key already exists.
-        Raises ValueError if record provenance is incomplete.
+        This key identifies a unique cell measurement across runs/rounds,
+        ignoring budget_id which differs across rounds.
+        """
+        return (record.cell_key, record.schedule.seed, record.schedule.fidelity)
+
+    def _find_existing_by_dedup(self, record: Record) -> str | None:
+        """Find an existing record_id for the same deduplication key in this run.
+
+        Returns the existing record_id if found, None otherwise.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        cell_key, seed, fidelity = self._dedup_key(record)
+        row = self._conn.execute(
+            """
+            SELECT record_id FROM records
+            WHERE run_id = ? AND cell_key = ?
+              AND CAST(schedule.seed AS INTEGER) = ?
+              AND CAST(schedule.fidelity AS TEXT) = ?
+            ORDER BY seq DESC
+            LIMIT 1
+            """,
+            [record.run_id, cell_key, seed, fidelity],
+        ).fetchone()
+        return row[0] if row else None
+
+    def append(self, record: Record) -> Record:
+        """Upsert a record on (cell_key, seed, fidelity) composite key.
+
+        Keeps the latest record (highest maturity/epochs) for the same
+        cell_key+seed+fidelity within a run. This deduplicates across rounds
+        where budget_id differs but the structural identity is the same.
+
+        Returns the stored record with assigned seq.
         """
         if self._conn is None:
             raise StoreError("Connection not initialized")
@@ -314,8 +346,16 @@ class _TransactionMixin(_StoreBase):
         self._validate_record_provenance(record)
 
         with self._write_lock:
+            # Check for existing record with same dedup key
+            existing_id = self._find_existing_by_dedup(record)
+            if existing_id:
+                # Upsert: delete old, insert new (keeps latest)
+                self._conn.execute(
+                    "DELETE FROM records WHERE record_id = ?", [existing_id]
+                )
+
+            # Insert record - seq is assigned by DEFAULT nextval('record_seq')
             try:
-                # Insert record - seq is assigned by DEFAULT nextval('record_seq')
                 self._conn.execute(
                     """
                     INSERT INTO records (
@@ -358,7 +398,7 @@ class _TransactionMixin(_StoreBase):
                     ],
                 )
             except duckdb.ConstraintException as e:
-                if "measurement_key" in str(e) or "record_id" in str(e):
+                if "record_id" in str(e):
                     raise DuplicateMeasurementError(record.measurement_key) from e
                 raise StoreError(f"Constraint violation: {e}") from e
 

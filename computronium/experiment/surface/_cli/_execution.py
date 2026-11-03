@@ -195,6 +195,10 @@ def spec_from_profile(
         maturation=profile.maturation,
         deep_tier=profile.deep_tier,
         device=device,
+        fidelity_seeds=getattr(profile, "fidelity_seeds", {}),
+        fidelity_epochs=getattr(profile, "fidelity_epochs", {}),
+        early_stopping_patience=getattr(profile, "early_stopping_patience", 0),
+        promotion_threshold=getattr(profile, "promotion_threshold", 0.6),
     )
 
 

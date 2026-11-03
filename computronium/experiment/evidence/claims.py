@@ -89,11 +89,24 @@ def _compute_replication_uncertainty(
                 else 0.0
             )
             std = math.sqrt(variance) if variance > 0 else 0.0
+            # Compute 95% CI using t-distribution (approximate with normal for n>=30)
+            # For small n, use t-distribution critical value
+            from scipy import stats
+            if n_seeds >= 30:
+                t_crit = 1.96  # normal approximation
+            else:
+                t_crit = float(stats.t.ppf(0.975, n_seeds - 1))
+            margin = t_crit * std / math.sqrt(n_seeds)
+            ci_lower = mean - margin
+            ci_upper = mean + margin
             uncertainty[metric] = {
                 "mean": mean,
                 "std": std,
                 "n": len(values),
                 "variance": variance,
+                "ci_lower": ci_lower,
+                "ci_upper": ci_upper,
+                "ci_level": 0.95,
             }
     return uncertainty
 
@@ -145,8 +158,35 @@ def compute_and_store_uncertainty(
             # Persist uncertainty to all records in this cell
             cell_key = group[0].cell_key
             store.set_cell_uncertainty(run_id, cell_key, uncertainty)
+            # Also write CI bounds to record payload for primary metrics
+            _attach_ci_to_payload(group, uncertainty)
 
     return all_uncertainty
+
+
+def _attach_ci_to_payload(
+    records: Sequence[Record],
+    uncertainty: Uncertainty,
+    primary_metrics: tuple[str, ...] = ("val_acc", "val_loss", "walltime_s", "energy_per_sample"),
+) -> None:
+    """Attach CI bounds to record payload for primary metrics.
+
+    Mutates the record payloads in-place to include:
+    - {metric}_ci_lower
+    - {metric}_ci_upper
+    - {metric}_mean
+    - {metric}_std
+    - {metric}_n_seeds
+    """
+    for record in records:
+        for metric in primary_metrics:
+            entry = uncertainty.get(metric)
+            if entry and "mean" in entry:
+                record.payload[f"{metric}_ci_lower"] = entry["ci_lower"]
+                record.payload[f"{metric}_ci_upper"] = entry["ci_upper"]
+                record.payload[f"{metric}_mean"] = entry["mean"]
+                record.payload[f"{metric}_std"] = entry["std"]
+                record.payload[f"{metric}_n_seeds"] = entry["n"]
 
 
 # =============================================================================

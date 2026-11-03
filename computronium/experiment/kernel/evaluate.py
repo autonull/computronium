@@ -55,6 +55,7 @@ if TYPE_CHECKING:
 __all__ = [
     "CellEvaluation",
     "TaskShape",
+    "TaskScheduler",
     "cell_record",
     "compute_energy_metrics",
     "compute_stability_metrics",
@@ -166,6 +167,103 @@ def task_shape(task_id: str, device: str = "auto") -> TaskShape:
     filter cells with the same shape the evaluator will use.
     """
     return _task_shape(_task(task_id, device))
+
+
+@dataclass(frozen=True, slots=True)
+class TaskScheduler:
+    """Multi-task scheduler for smart-survey profile.
+
+    Cycles through cheap tasks at L0, expands to medium at L1, includes expensive at L2.
+    Uses ruler-relative normalization for cross-task comparison.
+    """
+
+    # Task cost classes (from domains.registry)
+    CHEAP_TASKS: tuple[str, ...] = ("xor", "spiral", "circles", "digits", "copy_task", "iris", "wine", "breast_cancer", "synthetic_forecast")
+    MEDIUM_TASKS: tuple[str, ...] = ("mnist", "fashion_mnist", "sequential_mnist", "char_ngram", "cora", "citeseer", "pubmed", "kmnist", "usps")
+    EXPENSIVE_TASKS: tuple[str, ...] = ("cifar10", "tiny_shakespeare", "pendulum", "acrobot", "cartpole", "graph_classification")
+
+    # Per-fidelity task selection
+    fidelity_tasks: dict[str, tuple[str, ...]] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.fidelity_tasks is None:
+            object.__setattr__(self, "fidelity_tasks", {
+                "L0": self.CHEAP_TASKS,
+                "L1": self.CHEAP_TASKS + self.MEDIUM_TASKS,
+                "L2": self.CHEAP_TASKS + self.MEDIUM_TASKS + self.EXPENSIVE_TASKS,
+            })
+
+    def get_tasks_for_fidelity(self, fidelity: str) -> tuple[str, ...]:
+        """Get the tasks to use for a given fidelity level."""
+        return self.fidelity_tasks.get(fidelity, self.CHEAP_TASKS)
+
+    def get_task_cycle(self, fidelity: str, max_tasks: int | None = None) -> list[str]:
+        """Get a cycling list of tasks for the given fidelity.
+
+        Args:
+            fidelity: The fidelity level (L0, L1, L2).
+            max_tasks: Optional maximum number of tasks to include.
+
+        Returns:
+            List of task names to cycle through.
+        """
+        tasks = list(self.get_tasks_for_fidelity(fidelity))
+        if max_tasks:
+            tasks = tasks[:max_tasks]
+        return tasks
+
+    def normalize_score(self, score: float, task_name: str, baseline: float = 0.0) -> float:
+        """Normalize a score relative to a task's baseline (ruler-relative).
+
+        Args:
+            score: The raw score (e.g., validation accuracy).
+            task_name: The task name.
+            baseline: The baseline score for this task (random/majority class).
+
+        Returns:
+            Normalized score where 0 = baseline, 1 = perfect.
+        """
+        if baseline >= 1.0:
+            return 0.0
+        return (score - baseline) / (1.0 - baseline)
+
+    def get_baseline(self, task_name: str) -> float:
+        """Get the baseline accuracy for a task (random guess / majority class).
+
+        Args:
+            task_name: The task name.
+
+        Returns:
+            Baseline accuracy (e.g., 0.1 for 10-class, 0.5 for binary).
+        """
+        # Default baselines by task type
+        baselines = {
+            "digits": 0.1,  # 10 classes
+            "mnist": 0.1,
+            "fashion_mnist": 0.1,
+            "kmnist": 0.1,
+            "usps": 0.1,
+            "cifar10": 0.1,
+            "sequential_mnist": 0.1,
+            "xor": 0.5,  # binary
+            "spiral": 0.5,
+            "circles": 0.5,
+            "copy_task": 0.0,  # sequence copy - near 0
+            "char_ngram": 0.01,  # large vocab
+            "tiny_shakespeare": 0.01,
+            "cora": 0.14,  # 7 classes
+            "citeseer": 0.16,  # 6 classes
+            "pubmed": 0.33,  # 3 classes
+            "graph_classification": 0.5,
+            "pendulum": 0.0,  # continuous control
+            "acrobot": 0.0,
+            "cartpole": 0.0,
+            "iris": 0.33,
+            "wine": 0.33,
+            "breast_cancer": 0.5,
+            "synthetic_forecast": 0.0,
+        }
+        return baselines.get(task_name, 0.1)  # default 10-class
 
 
 def history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
@@ -677,6 +775,8 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         deterministic=schedule.deterministic,
         precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
         checkpoint_every_n=schedule.checkpoint_every_n,
+        # Early stopping (WS2.4)
+        early_stopping_patience=getattr(schedule, "early_stopping_patience", 0),
         # Distributed training (Phase E1)
         distributed_backend=schedule.distributed_backend,
         ddp_backend=schedule.ddp_backend,
@@ -733,6 +833,7 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
                 system=cell.system,
                 train_data=task.get_dataloader("train"),
                 val_data=_val_batches(task, config.limit_val_batches),
+                max_epochs=schedule.epochs,
             )
             # Update checkpoint callback for continued checkpointing
             if schedule.checkpoint_every_n > 0:

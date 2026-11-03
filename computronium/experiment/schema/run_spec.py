@@ -187,6 +187,15 @@ class RunSpec(BaseModel):
     checkpoint_every_n: _NONNEG = 0
     maturation: bool = False
     deep_tier: bool = False
+    # Multi-fidelity settings (smart-survey profile)
+    fidelity_seeds: dict[str, int] = Field(default_factory=dict)
+    fidelity_epochs: dict[str, int] = Field(default_factory=dict)
+    early_stopping_patience: _NONNEG = 0
+    promotion_threshold: float = 0.6
+    # Task cycling for multi-task scheduling
+    task_cycle: list[str] = Field(default_factory=list)
+    # Budget allocation for multi-fidelity (L0/L1/L2 fractions)
+    fidelity_budget_split: dict[str, float] = Field(default_factory=dict)
     # Axis-aligned objective sets: mapping from axis name to tuple of objective names.
     # When set, the policy will use per-axis objective sets for multi-objective optimization.
     # Format: {"substrate": ("energy_efficiency", "latency_ms", "precision"), ...}
@@ -343,6 +352,10 @@ class RunSpec(BaseModel):
     @property
     def task_names(self) -> tuple[str, ...]:
         """Every task this run measures, singular field first."""
+        # Handle "auto" task for smart-survey profile
+        if self.task == "auto":
+            from computronium.domains.registry import get_cheap_tasks
+            return tuple(get_cheap_tasks())
         return tuple(dict.fromkeys(n for n in (self.task, *self.tasks) if n))
 
     @property
