@@ -120,7 +120,7 @@ Enable `experiment_shallow.sh <hours>` to produce **statistically valid, task-ge
 | **3.1** Default Profile | `experiment_shallow.sh` | Switch default to `smart-survey`; add `--profile` completion | ✅ DONE |
 | **3.2** Dashboard Deps | `pyproject.toml` | `[project.optional-dependencies.dashboard]` with `uvicorn`, `fastapi` | ✅ DONE (already existed) |
 | **3.3** Auto-Install | `surface/_cli/_registry.py` | `comp dashboard` auto-installs missing deps | ✅ DONE |
-| **3.4** Rich Report | `surface/_cli/_registry.py`, `surface/report.py` | Structured post-run summary: top combos with CI, affinity heatmaps, Pareto front | 🟡 PARTIAL (report exists with CI in seed variability; affinity heatmaps pending) |
+| **3.4** Rich Report | `surface/_cli/_registry.py`, `surface/report.py` | Structured post-run summary: top combos with CI, affinity heatmaps, Pareto front | ✅ DONE (primitive affinity heatmaps added to text report) |
 | **3.5** Progress Preview | `experiment_shallow.sh` | Print expected outcomes: "Will screen ~N, promote ~M, deepen ~K" | ✅ DONE |
 
 ### WS4: Validation & Lockstep Tests (TDD — Write First)
@@ -189,8 +189,8 @@ Week 3: 🟡 VALIDATION PHASE
 - [x] ZeroYieldError fixed — L0→L1 promotions no longer blocked by zero-yield detection
 
 ### Turn-Key Excellence (Week 3)
-- [ ] `experiment_shallow.sh 1` produces publishable Pareto front (blocked by ZeroYieldError)
-- [ ] Post-run report includes primitive affinity insights
+- [ ] `experiment_shallow.sh 1` produces publishable Pareto front
+- [x] Post-run report includes primitive affinity insights
 - [ ] Zero manual intervention needed for any time budget 0.1h–24h
 - [ ] All locks pass in CI on every commit
 
@@ -340,6 +340,7 @@ Derived from ontology registries (not hardcoded):
 - **Early Stopping**: Plateau detection active (val_acc no improvement >1% for 3 epochs) ✅
 - **CI Bounds**: Registered in `MEASURED_METRICS` and `MEASURED_OBJECTIVES` ✅
 - **Report Generation**: Seed variability section includes CI bounds ✅
+- **Primitive Affinity Heatmaps**: Added to text report (update×credit, dynamics×substrate, plasticity×geometry, credit×dynamics, credit×substrate, top 10 combos) ✅
 - **Allocator**: EvidenceDrivenAllocator created and passing promotions to S10 Decide ✅
 
 ### Integration Verification (0.05h / 0.1h runs) — **NEW: ZeroYieldError Fix Verified**
@@ -351,7 +352,7 @@ Derived from ontology registries (not hardcoded):
 ### Known Issues
 - **ZeroYieldError**: ~~Pipeline stops after 3 rounds of no new L0 cells (cell stream yields only invalid combos after first page). L2 promotions are proposed but not evaluated because the pipeline's zero-yield detection triggers before they can be trained. Fix requires modifying `_check_zero_yield` in `_budget.py` to account for pending allocator promotions.~~ **FIXED** - `_check_zero_yield` now checks for pending allocator promotions before triggering.
 
-### Remaining Validation (requires ZeroYieldError fix + longer runs)
+### Remaining Validation (requires longer runs)
 1. Run 1h experiment to reach L2 with n_seeds=5
 2. Verify CI bounds in claim-eligible cells report
-3. Verify primitive affinity insights in report
+3. Primitive affinity insights in report ✅ IMPLEMENTED

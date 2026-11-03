@@ -1079,6 +1079,98 @@ def _row_stats(
     return mean, std, len(values), at_chance
 
 
+def _primitive_affinity_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Primitive affinity heatmaps: mean val_acc for key primitive pairs."""
+    lines = _section("Primitive Affinity Heatmaps (mean val_acc):")
+
+    records = generator.claim_eligible_records(run_id)
+    if not records:
+        records = list(generator._store.query_records(run_id=run_id))
+    if not records:
+        return [*lines, "  (no records)"]
+
+    # Only use PASS records with val_acc
+    valid_records = [
+        r for r in records
+        if r.status.gate_verdict == GateVerdict.PASS_
+        and not r.status.quarantine
+        and r.payload.get("val_acc") is not None
+    ]
+    if not valid_records:
+        return [*lines, "  (no PASS records with val_acc)"]
+
+    # Define key primitive pairs to analyze
+    primitive_pairs = [
+        ("credit", "update"),
+        ("substrate", "dynamics"),
+        ("geometry", "plasticity"),
+        ("dynamics", "credit"),
+        ("substrate", "credit"),
+    ]
+
+    import statistics
+    from collections import defaultdict
+
+    for axis_x, axis_y in primitive_pairs:
+        # Build matrix
+        x_vals = sorted(set(getattr(r, axis_x) for r in valid_records))
+        y_vals = sorted(set(getattr(r, axis_y) for r in valid_records))
+
+        if len(x_vals) < 2 or len(y_vals) < 2:
+            continue
+
+        # Compute mean val_acc per cell
+        matrix: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+        for r in valid_records:
+            x = getattr(r, axis_x)
+            y = getattr(r, axis_y)
+            matrix[y][x].append(float(r.payload["val_acc"]))
+
+        # Render text heatmap
+        lines.append(f"  {axis_y} × {axis_x}:")
+        # Header
+        header = "      " + " ".join(f"{x[:8]:>8}" for x in x_vals)
+        lines.append(header)
+        for y in y_vals:
+            row_vals = []
+            for x in x_vals:
+                vals = matrix[y].get(x, [])
+                if vals:
+                    mean_val = statistics.mean(vals)
+                    row_vals.append(f"{mean_val:>8.3f}")
+                else:
+                    row_vals.append("    N/A")
+            lines.append(f"  {y[:6]:6} " + " ".join(row_vals))
+            # Show count per cell
+            count_row = []
+            for x in x_vals:
+                vals = matrix[y].get(x, [])
+                if vals:
+                    count_row.append(f" (n={len(vals)})")
+                else:
+                    count_row.append("")
+            lines.append("       " + " ".join(f"{c:>8}" for c in count_row))
+        lines.append("")
+
+    # Also show top primitive combinations
+    lines.append("  Top 10 Primitive Combinations (by mean val_acc):")
+    combo_scores: dict[str, list[float]] = defaultdict(list)
+    for r in valid_records:
+        combo = f"{r.substrate}/{r.geometry}/{r.dynamics}/{r.plasticity}/{r.credit}/{r.update}"
+        combo_scores[combo].append(float(r.payload["val_acc"]))
+
+    combo_means = [
+        (combo, statistics.mean(vals), len(vals), min(vals), max(vals))
+        for combo, vals in combo_scores.items()
+    ]
+    combo_means.sort(key=lambda x: x[1], reverse=True)
+
+    for combo, mean, n, mn, mx in combo_means[:10]:
+        lines.append(f"    {combo}: mean={mean:.4f}, n={n}, range=[{mn:.4f}, {mx:.4f}]")
+
+    return lines
+
+
 def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
     """Per-axis ablation tables, only where the other five axes are held fixed."""
     records = list(store.query_records(run_id=run_id))
@@ -1395,6 +1487,7 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
         *_pareto_section(generator, run_id),
         *_axis_frontiers_section(generator, run_id),
         *_ablation_section(store, run_id),
+        *_primitive_affinity_section(generator, run_id),
         *_pareto_analysis_section(generator, run_id),
         *_seed_variability_section(generator, run_id),
         *_hardware_variance_section(generator, run_id),

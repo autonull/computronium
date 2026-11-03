@@ -291,7 +291,7 @@ select = [
     "SIM",  # flake8-simplify
 ]
 ignore = [
-    "line-too-long",   # line-too-long — disabled forever (user directive 2026-09-03): the formatter handles what it can, the rest is noise
+    "E501",   # line-too-long — disabled forever (user directive 2026-09-03): the formatter handles what it can, the rest is noise
     "magic-value-comparison", # magic-value-comparison — numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
     "no-self-use", # no-self-use — protocol implementations keep a uniform method surface (self unused by design)
     "unused-function-argument",  # unused-function-argument — math notation (W, G, V, X) is the domain's naming convention

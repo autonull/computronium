@@ -234,6 +234,7 @@ class _StageMixin(_PipelineBase):
         completed_keys = self._state.completed_measurement_keys
         rejected_keys = self._state.rejected_keys
 
+        # 1. Generate L0→L1 promotion candidates from search space (base fidelity L0)
         for coord, sched in iter_candidates(
             spec,
             search_space,
@@ -242,36 +243,65 @@ class _StageMixin(_PipelineBase):
             max_scan=1000,  # Limit scan for allocator candidates
             check_composable=False,  # Skip composability for speed at allocation time
         ):
-            # Only consider cells at explore fidelity for promotion
-            if sched.fidelity in {"L0", "L1"}:
-                # Check if this coordinate (at this fidelity) is already measured or rejected
-                # The measurement key includes fidelity, so check the target fidelity schedule
-                next_fidelity = "L1" if sched.fidelity == "L0" else "L2"
+            if sched.fidelity != "L0":
+                continue
+            next_fidelity = "L1"
+            promo_sched = Schedule(
+                fidelity=next_fidelity,
+                seed=sched.seed,
+                n_seeds=fidelity_seeds.get(next_fidelity, 1),
+                epochs=fidelity_epochs.get(next_fidelity, 1),
+                batch_limit=sched.batch_limit,
+                budget_id="promotion",
+                task_id=sched.task_id,
+                param_budget=sched.param_budget,
+                device=sched.device,
+                deterministic=sched.deterministic,
+                num_workers=sched.num_workers,
+                precision=sched.precision,
+                checkpoint_every_n=spec.checkpoint_every_n,
+                early_stopping_patience=spec.early_stopping_patience,
+            )
+            key = coord.measurement_key(promo_sched)
+            if key in completed_keys or key in rejected_keys:
+                continue
+
+            candidates.append((coord, promo_sched))
+
+            if len(candidates) >= 50:
+                break
+
+        # 2. Generate L1→L2 promotion candidates from allocator's promotion_candidates
+        # These are cells that have been measured at L1 and shown promise
+        if self._config.allocator and hasattr(self._config.allocator, '_state'):
+            allocator_state = self._config.allocator._state
+            promotion_candidates = getattr(allocator_state, 'promotion_candidates', {})
+            for cell_key, promo_candidate in promotion_candidates.items():
+                if promo_candidate.current_fidelity != "L2":
+                    continue
+                if len(candidates) >= 50:
+                    break
+                # Check if already measured or rejected at L2
                 promo_sched = Schedule(
-                    fidelity=next_fidelity,
-                    seed=sched.seed,
-                    n_seeds=fidelity_seeds.get(next_fidelity, 1),
-                    epochs=fidelity_epochs.get(next_fidelity, 1),
-                    batch_limit=sched.batch_limit,
+                    fidelity="L2",
+                    seed=promo_candidate.current_seed,
+                    n_seeds=fidelity_seeds.get("L2", 5),
+                    epochs=fidelity_epochs.get("L2", 10),
+                    batch_limit=spec.batch_limit,
                     budget_id="promotion",
-                    task_id=sched.task_id,
-                    param_budget=sched.param_budget,
-                    device=sched.device,
-                    deterministic=sched.deterministic,
-                    num_workers=sched.num_workers,
-                    precision=sched.precision,
+                    task_id=spec.task_names[0] if spec.task_names else "digits",
+                    param_budget=spec.param_budget,
+                    device=spec.device,
+                    deterministic=spec.deterministic,
+                    num_workers=spec.num_workers,
+                    precision=spec.precision,
                     checkpoint_every_n=spec.checkpoint_every_n,
                     early_stopping_patience=spec.early_stopping_patience,
                 )
-                # Check if any seed of this promotion is already measured
-                key = coord.measurement_key(promo_sched)
+                key = promo_candidate.coordinate.measurement_key(promo_sched)
                 if key in completed_keys or key in rejected_keys:
                     continue
-
-                candidates.append((coord, promo_sched))
-
-                if len(candidates) >= 50:  # Limit candidates
-                    break
+                candidates.append((promo_candidate.coordinate, promo_sched))
 
         return candidates
 
@@ -579,7 +609,8 @@ class _StageMixin(_PipelineBase):
             case StageId.S7_MEASURE | StageId.S8_RECORD:
                 all_records.extend(fragment.records)
                 if stage_id is StageId.S7_MEASURE:
-                    await self._attribute_allocation(fragment.records)
+                    # Use all_records which includes the just-trained records from S6_TRAIN
+                    await self._attribute_allocation(all_records)
             case _:
                 # S9 attributes axes and names nothing downstream.
                 ...

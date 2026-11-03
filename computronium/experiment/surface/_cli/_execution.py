@@ -301,8 +301,11 @@ def execute_spec(
         if spec.profile == "smart-survey" or (spec.maturation and spec.deep_tier):
             from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
 
+            # Use a small promotion threshold for the allocator's internal candidate tracking
+            # The smart-survey profile's promotion_threshold (0.3) is applied in
+            # _apply_smart_survey_promotion for ruler-relative normalized score filtering.
             allocator = EvidenceDrivenAllocator(
-                promotion_threshold=spec.promotion_threshold,
+                promotion_threshold=0.01,  # Small threshold for candidate tracking
                 divergence_threshold=2.0,
                 stagnation_patience=spec.early_stopping_patience if spec.early_stopping_patience > 0 else 3,
                 max_fidelity="L2" if spec.deep_tier else "L1",
