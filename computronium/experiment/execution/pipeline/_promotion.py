@@ -1,4 +1,4 @@
-"""Smart-survey promotion logic extracted from _stages.py.
+"""Smart-survey promotion logic.
 
 Handles multi-fidelity promotion (L0→L1→L2) with:
 - Ruler-relative normalization for cross-task comparison
@@ -6,6 +6,9 @@ Handles multi-fidelity promotion (L0→L1→L2) with:
 - Budget allocation fractions (40/40/20)
 - Seed/epoch progression (1→2→5, 1→3→10)
 - Original task preservation (avoids task cycling rejections)
+
+Budget allocation is defined as module-level constants for single-source-of-truth
+sharing with experiment_shallow.sh preview and pipeline budgeting.
 """
 
 from __future__ import annotations
@@ -25,10 +28,20 @@ if TYPE_CHECKING:
 
 FIDELITY_ORDER = ("L0", "L1", "L2")
 
+# Single-source budget allocation for smart-survey (shared with experiment_shallow.sh preview)
+# L0: 40% screen, L1: 40% confirm, L2: 20% deepen
+BUDGET_FRACTION_L0 = 0.4
+BUDGET_FRACTION_L1 = 0.4
+BUDGET_FRACTION_L2 = 0.2
+
 # Smart-survey default promotion fraction (40% of eligible promotions per tier)
 DEFAULT_PROMOTION_FRACTION: float = 0.4
 # Minimum promotions per tier if any eligible
 MIN_PROMOTIONS_PER_TIER: int = 1
+
+# Fidelity progression defaults (can be overridden in RunSpec)
+DEFAULT_FIDELITY_SEEDS: dict[str, int] = {"L0": 1, "L1": 2, "L2": 5}
+DEFAULT_FIDELITY_EPOCHS: dict[str, int] = {"L0": 1, "L1": 3, "L2": 10}
 
 
 def _source_fidelity_for(target_fidelity: str) -> str | None:

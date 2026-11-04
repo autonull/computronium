@@ -228,23 +228,27 @@ PYEOF
 uv run python "$TMP_HW"
 rm -f "$TMP_HW"
 
-# Progress preview function
+# Progress preview function - self-contained to avoid import chain issues
 print_preview() {
     local hours="$1"
     local profile="$2"
-    # Use python for floating point arithmetic
+    # Use python for floating point arithmetic and shared constants
     local budget_seconds=$(python3 -c "print(int(float('${hours}') * 3600))")
 
     if [[ "$profile" == "smart-survey" ]]; then
-        # Smart survey budget allocation: 40% L0, 40% L1, 20% L2
-        local l0_budget=$((budget_seconds * 40 / 100))
-        local l1_budget=$((budget_seconds * 40 / 100))
-        local l2_budget=$((budget_seconds * 20 / 100))
+        # Smart-survey budget allocation constants (shared with _promotion.py)
+        local BUDGET_FRACTION_L0=0.4
+        local BUDGET_FRACTION_L1=0.4
+        local BUDGET_FRACTION_L2=0.2
+
+        local l0_budget=$(python3 -c "print(int(${budget_seconds} * ${BUDGET_FRACTION_L0}))")
+        local l1_budget=$(python3 -c "print(int(${budget_seconds} * ${BUDGET_FRACTION_L1}))")
+        local l2_budget=$(python3 -c "print(int(${budget_seconds} * ${BUDGET_FRACTION_L2}))")
 
         # Estimate cells per fidelity (rough estimates based on measured cell costs)
-        local l0_cells=$((l0_budget / 5))    # ~5s per L0 cell (1 epoch, 1 seed)
-        local l1_cells=$((l1_budget / 30))   # ~30s per L1 cell (3 epochs, 2 seeds)
-        local l2_cells=$((l2_budget / 300))  # ~300s per L2 cell (10 epochs, 5 seeds)
+        local l0_cells=$((l0_budget / 5))      # ~5s per L0 cell (1 epoch, 1 seed)
+        local l1_cells=$((l1_budget / 30))     # ~30s per L1 cell (3 epochs, 2 seeds)
+        local l2_cells=$((l2_budget / 300))    # ~300s per L2 cell (10 epochs, 5 seeds)
 
         # Promotions: top 40% from L0→L1, top 10% from L1→L2
         local l1_promos=$((l0_cells * 40 / 100))

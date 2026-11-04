@@ -722,137 +722,191 @@ class SystemConfig:
         self._validate_per_element_displacement_step_size()
         self._validate_energy_minimization_momentum_update()
 
+    # --- Validation Helpers ---
+
+    def _require_when(
+        self,
+        condition: bool,
+        allowed_values: set[str],
+        axis_name: str,
+        actual_value: str,
+        context: str = "",
+    ) -> None:
+        """Raise ValueError if condition is true and actual_value not in allowed_values."""
+        if condition and actual_value not in allowed_values:
+            ctx = f" ({context})" if context else ""
+            raise ValueError(
+                f"{axis_name}={actual_value!r} requires one of {sorted(allowed_values)!r}{ctx}"
+            )
+
+    def _forbid_when(
+        self,
+        condition: bool,
+        forbidden_values: set[str],
+        axis_name: str,
+        actual_value: str,
+        context: str = "",
+    ) -> None:
+        """Raise ValueError if condition is true and actual_value in forbidden_values."""
+        if condition and actual_value in forbidden_values:
+            ctx = f" ({context})" if context else ""
+            raise ValueError(
+                f"{axis_name}={actual_value!r} is incompatible{ctx}"
+            )
+
+    def _require_all_when(
+        self,
+        condition: bool,
+        requirements: dict[str, set[str]],
+        context: str = "",
+    ) -> None:
+        """Raise ValueError if condition is true and any requirement not met.
+
+        requirements maps axis_name -> allowed_values for that axis.
+        """
+        if not condition:
+            return
+        for axis_name, allowed in requirements.items():
+            actual = getattr(self, axis_name)
+            # Handle nested attributes like geometry.topology_type
+            if "." in axis_name:
+                obj_name, attr_name = axis_name.split(".", 1)
+                obj = getattr(self, obj_name)
+                actual = getattr(obj, attr_name)
+            self._require_when(True, allowed, axis_name, actual, context)
+
+    def _forbid_any_when(
+        self,
+        condition: bool,
+        forbidden: dict[str, set[str]],
+        context: str = "",
+    ) -> None:
+        """Raise ValueError if condition is true and any forbidden value is present."""
+        if not condition:
+            return
+        for axis_name, forbidden_vals in forbidden.items():
+            actual = getattr(self, axis_name)
+            if "." in axis_name:
+                obj_name, attr_name = axis_name.split(".", 1)
+                obj = getattr(self, obj_name)
+                actual = getattr(obj, attr_name)
+            self._forbid_when(True, forbidden_vals, axis_name, actual, context)
+
     # --- Geometry-Dynamics Validation Methods ---
 
     def _validate_recurrent_geometry_dynamics(self) -> None:
         """Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics."""
-        if self.geometry.topology_type in {
-            "recurrent",
-            "recurrent_attractor",
-        } and self.dynamics.dynamics_type not in {
-            "energy_minimization",
-            "predictive_settling",
-            "error_predictive_coding",
-            "pc_alm",
-            "diffusion",
-            "instantaneous",
-        }:
-            raise ValueError(
-                f"Recurrent geometry (topology_type={self.geometry.topology_type!r}) "
-                f"requires energy-based, PC-family, diffusion, or instantaneous dynamics, "
-                f"got {self.dynamics.dynamics_type!r}"
-            )
+        self._require_when(
+            condition=self.geometry.topology_type in {"recurrent", "recurrent_attractor"},
+            allowed_values={
+                "energy_minimization",
+                "predictive_settling",
+                "error_predictive_coding",
+                "pc_alm",
+                "diffusion",
+                "instantaneous",
+            },
+            axis_name="dynamics.dynamics_type",
+            actual_value=self.dynamics.dynamics_type,
+            context=f"recurrent geometry (topology_type={self.geometry.topology_type!r})",
+        )
 
     def _validate_nonlayered_geometry_dynamics(self) -> None:
         """Non-layered geometries cannot host settling dynamics."""
-        if self.dynamics.dynamics_type != "instantaneous" and (
-            self.geometry.topology_type
-            in {
-                "attention",
-                "spatial_lattice",
-                "graph",
-                "conv",
-                "nca",
-                "ntm",
-                "causal_transformer",
-            }
-        ):
-            raise ValueError(
-                f"{self.dynamics.dynamics_type!r} settling feeds raw states "
-                f"into geometry.route(), which {self.geometry.topology_type!r} "
-                f"geometry does not support (state-shape contract)"
-            )
+        nonlayered = {
+            "attention",
+            "spatial_lattice",
+            "graph",
+            "conv",
+            "nca",
+            "ntm",
+            "causal_transformer",
+        }
+        self._forbid_when(
+            condition=self.geometry.topology_type in nonlayered,
+            forbidden_values={"instantaneous"},
+            axis_name="dynamics.dynamics_type",
+            actual_value=self.dynamics.dynamics_type,
+            context=f"{self.geometry.topology_type!r} geometry cannot host settling dynamics",
+        )
 
     def _validate_tile_mesh_dynamics(self) -> None:
         """Tile mesh geometry requires compatible dynamics."""
-        if self.geometry.topology_type in {"tile_mesh", "tile"}:
-            if self.dynamics.dynamics_type not in {
-                "energy_minimization",
-                "pc_alm",
-                "instantaneous",
-            }:
-                raise ValueError(
-                    f"Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics, "
-                    f"got {self.dynamics.dynamics_type!r}"
-                )
+        self._require_when(
+            condition=self.geometry.topology_type in {"tile_mesh", "tile"},
+            allowed_values={"energy_minimization", "pc_alm", "instantaneous"},
+            axis_name="dynamics.dynamics_type",
+            actual_value=self.dynamics.dynamics_type,
+            context=f"tile mesh geometry (topology_type={self.geometry.topology_type!r})",
+        )
 
     def _validate_nca_ntm_geometry(self) -> None:
         """NCA/NTM geometries require instantaneous dynamics."""
-        if self.geometry.topology_type in {"nca", "ntm"} and (
-            self.dynamics.dynamics_type != "instantaneous"
-        ):
-            raise ValueError(
-                f"{self.geometry.topology_type.upper()} geometry requires "
-                f"instantaneous dynamics, got {self.dynamics.dynamics_type!r}"
-            )
+        self._require_when(
+            condition=self.geometry.topology_type in {"nca", "ntm"},
+            allowed_values={"instantaneous"},
+            axis_name="dynamics.dynamics_type",
+            actual_value=self.dynamics.dynamics_type,
+            context=f"{self.geometry.topology_type.upper()} geometry",
+        )
 
     def _validate_diffusion_dynamics_credit(self) -> None:
         """Diffusion settle produces non-differentiable state; gradient/backprop unsupported."""
-        if self.dynamics.dynamics_type == "diffusion":
-            if self.credit.credit_type in {"gradient", "backprop"}:
-                raise ValueError(
-                    f"Diffusion dynamics produce a non-differentiable settled "
-                    f"state; gradient/backprop credit "
-                    f"(credit_type={self.credit.credit_type!r}) is unsupported"
-                )
+        self._forbid_when(
+            condition=self.dynamics.dynamics_type == "diffusion",
+            forbidden_values={"gradient", "backprop"},
+            axis_name="credit.credit_type",
+            actual_value=self.credit.credit_type,
+            context="diffusion dynamics produce non-differentiable settled state",
+        )
 
     def _validate_diffusion_dynamics_geometry(self) -> None:
         """Diffusion dynamics requires energy-based geometry (recurrent)."""
-        if self.dynamics.dynamics_type == "diffusion":
-            if self.geometry.topology_type not in {"recurrent", "recurrent_attractor"}:
-                raise ValueError(
-                    f"Diffusion dynamics requires recurrent geometry, "
-                    f"got {self.geometry.topology_type!r}"
-                )
+        self._require_when(
+            condition=self.dynamics.dynamics_type == "diffusion",
+            allowed_values={"recurrent", "recurrent_attractor"},
+            axis_name="geometry.topology_type",
+            actual_value=self.geometry.topology_type,
+            context="diffusion dynamics requires recurrent geometry",
+        )
 
     def _validate_spike_integration_credit(self) -> None:
         """Spike integration dynamics requires temporal trace or target inversion credit."""
-        if self.dynamics.dynamics_type == "spike_integration":
-            if self.credit.credit_type not in {
-                "temporal_trace",
-                "spiking",
-                "target_inversion",
-                "target_prop",
-            }:
-                raise ValueError(
-                    f"Spike integration dynamics requires temporal trace or target inversion credit, "
-                    f"got {self.credit.credit_type!r}"
-                )
+        self._require_when(
+            condition=self.dynamics.dynamics_type == "spike_integration",
+            allowed_values={"temporal_trace", "spiking", "target_inversion", "target_prop"},
+            axis_name="credit.credit_type",
+            actual_value=self.credit.credit_type,
+            context="spike integration dynamics",
+        )
 
     def _validate_predictive_settling_credit(self) -> None:
         """Predictive settling dynamics requires compatible credit."""
-        if self.dynamics.dynamics_type in {
-            "predictive_settling",
-            "error_predictive_coding",
-        } and self.credit.credit_type not in {
-            "thermodynamic_contrast",
-            "equilibrium",
-            "local_goodness",
-            "forward_only",
-        }:
-            raise ValueError(
-                f"{self.dynamics.dynamics_type} dynamics requires "
-                f"thermodynamic_contrast, local_goodness, or forward_only credit, "
-                f"got {self.credit.credit_type!r}"
-            )
+        self._require_when(
+            condition=self.dynamics.dynamics_type in {"predictive_settling", "error_predictive_coding"},
+            allowed_values={"thermodynamic_contrast", "equilibrium", "local_goodness", "forward_only"},
+            axis_name="credit.credit_type",
+            actual_value=self.credit.credit_type,
+            context=f"{self.dynamics.dynamics_type} dynamics",
+        )
 
     def _validate_pc_alm_dynamics(self) -> None:
         """PC-ALM dynamics requires PCALMCredit (or thermodynamic_contrast) and layered geometry."""
         if self.dynamics.dynamics_type == "pc_alm":
-            if self.credit.credit_type not in {"pc_alm", "thermodynamic_contrast"}:
-                raise ValueError(
-                    f"PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit, "
-                    f"got {self.credit.credit_type!r}"
-                )
-            if self.geometry.topology_type not in {
-                "feedforward",
-                "recurrent",
-                "tile_mesh",
-            }:
-                raise ValueError(
-                    f"PC-ALM dynamics requires layered geometry, "
-                    f"got {self.geometry.topology_type!r}"
-                )
+            self._require_when(
+                condition=True,
+                allowed_values={"pc_alm", "thermodynamic_contrast"},
+                axis_name="credit.credit_type",
+                actual_value=self.credit.credit_type,
+                context="PC-ALM dynamics",
+            )
+            self._require_when(
+                condition=True,
+                allowed_values={"feedforward", "recurrent", "tile_mesh"},
+                axis_name="geometry.topology_type",
+                actual_value=self.geometry.topology_type,
+                context="PC-ALM dynamics requires layered geometry",
+            )
 
     def _validate_residual_connections(self) -> None:
         """Residual connections only supported on feedforward geometry."""

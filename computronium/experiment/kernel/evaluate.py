@@ -23,7 +23,6 @@ from computronium.core.logging import get_logger
 from computronium.core.system_trainer import (
     DistributedSystemTrainer,
     SystemTrainer,
-    SystemTrainerConfig,
 )
 from computronium.domains.base import TaskSplit
 from computronium.experiment.kernel._metrics import (
@@ -34,18 +33,15 @@ from computronium.experiment.kernel._metrics import (
 )
 from computronium.experiment.kernel._task_scheduler import TaskScheduler
 from computronium.experiment.kernel._trainer_utils import (
-    _bounded_batches,
     _create_trainer_config,
     _run_training,
     _sample_inputs,
     _setup_checkpointing,
-    _val_batches,
 )
 from computronium.experiment.kernel.compose import (
     ComposedCell,
     compose_cell_system,
 )
-from computronium.experiment.schema.metrics import HISTORY_METRICS
 from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
     PARAM_BUDGET_TOLERANCE,
@@ -57,7 +53,7 @@ from computronium.ontology.substrate.spec import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Mapping
 
     from computronium.experiment.schema.coordinate import (
         Coordinate,
@@ -208,33 +204,16 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     Raises:
         EvaluationError: The task, the composition, or the training run failed.
     """
-
     # Resolve device and set seeds
-    import os
-    import random
-
-    import numpy as np
-    import torch
 
     resolved_device = _resolve_device(schedule.device)
-
     _set_seeds(schedule.seed, schedule.deterministic)
 
+    # Compose cell and create trainer config
     task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
-
-    cell = compose_cell_system(
-        coordinate=coordinate,
-        geometry=dict(geometry or {}),
-        input_shape=shape.input_shape,
-        output_dim=shape.output_dim,
-        param_budget=schedule.param_budget,
-        task=task,
-    )
-
+    cell = _compose_cell(coordinate, geometry, shape, schedule.param_budget, task)
     config = _create_trainer_config(schedule, resolved_device, params)
-
-    # Choose trainer class based on distributed backend
     trainer_class = _choose_trainer_class(schedule)
 
     # Set up checkpointing
@@ -242,41 +221,19 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         schedule, checkpoint_dir, config
     )
 
+    # Run training
     start = time.monotonic()
     trainer, history = _run_training(
         trainer_class, cell, task, config, resume_checkpoint_path, checkpoint_callback
     )
     walltime_s = time.monotonic() - start
 
-    # Clean up temp dir after training
     if temp_dir is not None:
         temp_dir.cleanup()
 
+    # Collect all metrics
     metrics = _collect_all_metrics(trainer, history, cell, task, schedule, coordinate)
-
-    # Ensure system geometry is on the correct device for metrics computation
-    # (trainer.close() moves geometry to CPU)
-    device = _resolve_device(config.device)
-    if hasattr(cell.system.geometry, "to"):
-        cell.system.geometry.to(device)
-
-    sample_x = _sample_inputs(task, config.device)
-    metrics.update(compute_stability_metrics(cell.system, sample_x))
-    metrics.update(compute_energy_metrics(cell.system, batch_size=sample_x.shape[0]))
-
-    # Substrate-specific objectives
-    metrics.update(_compute_substrate_objectives(coordinate, metrics, walltime_s))
-
-    # Plasticity objectives
-    metrics.update(compute_plasticity_metrics(cell.system))
-
-    # Domain-specific evaluation (perplexity, f1_score, bleu_score, mean_reward, etc.)
-    # Use the task's own evaluate() method which knows the proper metrics for its domain.
-    _update_task_metrics(task, metrics, cell, schedule, coordinate)
-
-    # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
-    _add_energy_efficiency(metrics)
-
+    _post_training_metrics(metrics, cell, task, schedule, coordinate, walltime_s)
     _validate_metrics_finite(metrics, coordinate)
 
     convergence_curve = _extract_convergence_curve(schedule, history)
@@ -291,6 +248,56 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
         checkpoint_path=checkpoint_path_ref[0],
         convergence_curve=convergence_curve,
     )
+
+
+def _compose_cell(
+    coordinate: Coordinate,
+    geometry: Mapping[str, Any] | None,
+    shape: TaskShape,
+    param_budget: int,
+    task: Any,
+) -> ComposedCell:
+    """Compose a cell system from coordinate and task shape."""
+    return compose_cell_system(
+        coordinate=coordinate,
+        geometry=dict(geometry or {}),
+        input_shape=shape.input_shape,
+        output_dim=shape.output_dim,
+        param_budget=param_budget,
+        task=task,
+    )
+
+
+def _post_training_metrics(
+    metrics: dict[str, float],
+    cell: ComposedCell,
+    task: Any,
+    schedule: Schedule,
+    coordinate: Coordinate,
+    walltime_s: float,
+) -> None:
+    """Collect post-training metrics: stability, energy, substrate, plasticity, task-specific."""
+    # Ensure system geometry is on the correct device for metrics computation
+    # (trainer.close() moves geometry to CPU)
+    resolved_device = _resolve_device(schedule.device)
+    if hasattr(cell.system.geometry, "to"):
+        cell.system.geometry.to(resolved_device)
+
+    sample_x = _sample_inputs(task, resolved_device)
+    metrics.update(compute_stability_metrics(cell.system, sample_x))
+    metrics.update(compute_energy_metrics(cell.system, batch_size=sample_x.shape[0]))
+
+    # Substrate-specific objectives
+    metrics.update(_compute_substrate_objectives(coordinate, metrics, walltime_s))
+
+    # Plasticity objectives
+    metrics.update(compute_plasticity_metrics(cell.system))
+
+    # Domain-specific evaluation (perplexity, f1_score, bleu_score, mean_reward, etc.)
+    _update_task_metrics(task, metrics, cell, schedule, coordinate)
+
+    # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
+    _add_energy_efficiency(metrics)
 
 
 def _set_seeds(seed: int, deterministic: bool) -> None:

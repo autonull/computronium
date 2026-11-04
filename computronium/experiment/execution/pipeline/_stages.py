@@ -435,13 +435,13 @@ class _StageMixin(_PipelineBase):
         skipped = 0
         rejected_this_batch = 0
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]] = []
+
         for proposal in proposals:
             item_provenance = _provenance_for(provenance, proposal)
             for schedule in proposal.schedule.seed_plan:
                 key = proposal.coordinate.measurement_key(schedule)
-                is_skipped, is_rejected = self._check_already_measured(
-                    key, seen, rejected
-                )
+
+                is_skipped, is_rejected = self._check_already_measured(key, seen, rejected)
                 if is_skipped:
                     skipped += 1
                     continue
@@ -451,28 +451,41 @@ class _StageMixin(_PipelineBase):
 
                 coord = proposal.coordinate
 
-                # ADMISSION GATE 1: fast compatibility matrix pre-check
-                passed, _ = self._check_compatibility_gate(coord, schedule, key)
-                if not passed:
-                    rejected_this_batch += 1
-                    continue
-
-                # ADMISSION GATE 2: last-mile SystemConfig.validate check
-                passed, _ = self._check_compose_gate(coord, schedule, key)
-                if not passed:
+                # ADMISSION GATE: compatibility + compose validation
+                if not self._passes_admission_gates(coord, schedule, key):
                     rejected_this_batch += 1
                     continue
 
                 seen.add(key)
                 items.append((proposal.coordinate, schedule, item_provenance, {}))
 
+        self._log_batch_filtering(skipped, rejected_this_batch)
+        return items
+
+    def _passes_admission_gates(
+        self, coordinate: Coordinate, schedule: Schedule, key: str
+    ) -> bool:
+        """Run both admission gates: compatibility matrix + compose validation.
+
+        Returns True if both gates pass, False otherwise.
+        """
+        # ADMISSION GATE 1: fast compatibility matrix pre-check
+        passed, _ = self._check_compatibility_gate(coordinate, schedule, key)
+        if not passed:
+            return False
+
+        # ADMISSION GATE 2: last-mile SystemConfig.validate check
+        passed, _ = self._check_compose_gate(coordinate, schedule, key)
+        return passed
+
+    def _log_batch_filtering(self, skipped: int, rejected_this_batch: int) -> None:
+        """Log batch filtering statistics."""
         if skipped:
             logger.info("Skipped %d already-measured seed(s)", skipped)
         if rejected_this_batch:
             logger.info(
                 "Admission gate rejected %d invalid cell(s)", rejected_this_batch
             )
-        return items
 
     def _persist_results(
         self,
