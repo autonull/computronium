@@ -11,6 +11,7 @@ import json
 import random
 import shutil
 import subprocess
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -505,6 +506,8 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
                         )
                 except Exception as e:
                     logger.exception("Cell evaluation failed: %s", e)
+                    if verbose:
+                        print(f"  [ERROR] Cell {i}/{n_total} failed: {e}", file=sys.stderr)
 
         # 7. Store results
         for record in results:
@@ -542,6 +545,7 @@ def main() -> None:
     """CLI entry point for simple_survey."""
     import argparse
     import logging
+    import sys
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
 
@@ -576,28 +580,33 @@ def main() -> None:
     hyperparameters = json.loads(args.hyperparameters) if args.hyperparameters else None
     objectives = tuple(args.objectives.split(",")) if args.objectives else ()
 
-    result = run_simple_survey(
-        hours=args.hours,
-        fidelity=args.fidelity,
-        tasks=tasks,
-        max_workers=args.max_workers,
-        store_path=args.store,
-        promote_from=args.promote_from,
-        promote_top=args.promote_top,
-        seed=args.seed,
-        dry_run=args.dry_run,
-        device=args.device,
-        param_budget=args.param_budget,
-        n_seeds=args.n_seeds,
-        epochs=args.epochs,
-        batch_limit=args.batch_limit,
-        axes=axes,
-        hyperparameters=hyperparameters,
-        objectives=objectives,
-        verbose=args.verbose,
-    )
-
-    print(json.dumps(result, default=str, indent=2))
+    try:
+        result = run_simple_survey(
+            hours=args.hours,
+            fidelity=args.fidelity,
+            tasks=tasks,
+            max_workers=args.max_workers,
+            store_path=args.store,
+            promote_from=args.promote_from,
+            promote_top=args.promote_top,
+            seed=args.seed,
+            dry_run=args.dry_run,
+            device=args.device,
+            param_budget=args.param_budget,
+            n_seeds=args.n_seeds,
+            epochs=args.epochs,
+            batch_limit=args.batch_limit,
+            axes=axes,
+            hyperparameters=hyperparameters,
+            objectives=objectives,
+            verbose=args.verbose,
+        )
+        print(json.dumps(result, default=str, indent=2))
+    except Exception as e:
+        print(f"FATAL: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
