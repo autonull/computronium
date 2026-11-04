@@ -552,6 +552,68 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     }
 
 
+def _self_test() -> bool:
+    """Run environment self-tests. Returns True if all pass."""
+    import sys
+
+    print("[SelfTest] Checking environment...", file=sys.stderr)
+
+    # Test 1: Python version
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    print(f"[SelfTest] Python: {py_version}", file=sys.stderr)
+    if sys.version_info < (3, 10):
+        print(f"[SelfTest] FAIL: Python 3.10+ required, got {py_version}", file=sys.stderr)
+        return False
+
+    # Test 2: torch import
+    try:
+        import torch
+        print(f"[SelfTest] Torch: {torch.__version__}", file=sys.stderr)
+        print(f"[SelfTest] CUDA available: {torch.cuda.is_available()}", file=sys.stderr)
+        if torch.cuda.is_available():
+            print(f"[SelfTest] GPU: {torch.cuda.get_device_name(0)}", file=sys.stderr)
+            print(f"[SelfTest] GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB", file=sys.stderr)
+    except ImportError as e:
+        print(f"[SelfTest] FAIL: torch import failed: {e}", file=sys.stderr)
+        return False
+
+    # Test 3: Required modules
+    required = [
+        "computronium.experiment.simple_survey",
+        "computronium.experiment.kernel.search_space",
+        "computronium.experiment.kernel.evaluate",
+        "computronium.experiment.evidence.store",
+        "computronium.experiment.schema.run_spec",
+        "computronium.ontology.system",
+        "computronium.domains._task_registry",
+    ]
+    for mod in required:
+        try:
+            __import__(mod)
+        except ImportError as e:
+            print(f"[SelfTest] FAIL: {mod} import failed: {e}", file=sys.stderr)
+            return False
+    print(f"[SelfTest] All {len(required)} modules OK", file=sys.stderr)
+
+    # Test 4: Basic functionality - dry run
+    try:
+        from computronium.experiment.simple_survey import run_simple_survey
+        result = run_simple_survey(0.001, fidelity="L0", dry_run=True, device="cpu")
+        n_cells = result.get("n", 0)
+        print(f"[SelfTest] Dry-run generated {n_cells} cells", file=sys.stderr)
+        if n_cells == 0:
+            print("[SelfTest] FAIL: dry-run generated 0 cells", file=sys.stderr)
+            return False
+    except Exception as e:
+        print(f"[SelfTest] FAIL: dry-run crashed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return False
+
+    print("[SelfTest] ALL TESTS PASSED", file=sys.stderr)
+    return True
+
+
 def main() -> None:
     """CLI entry point for simple_survey."""
     import argparse
@@ -559,8 +621,6 @@ def main() -> None:
     import sys
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-
-    print(f"[SimpleSurvey] Starting with args: {sys.argv}", file=sys.stderr)
 
     parser = argparse.ArgumentParser(
         description="SimpleSurvey - Minimal adaptive experiment system"
@@ -585,6 +645,16 @@ def main() -> None:
     parser.add_argument("--hyperparameters", default="", help="JSON: hyperparameters")
     parser.add_argument("--objectives", default="", help="Comma-separated objectives")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose progress output")
+    parser.add_argument("--no-self-test", action="store_true", help="Skip environment self-test")
+
+    args = parser.parse_args()
+
+    print(f"[SimpleSurvey] Starting with args: {sys.argv}", file=sys.stderr)
+
+    if not args.no_self_test:
+        if not _self_test():
+            print("[SimpleSurvey] Self-test failed. Use --no-self-test to skip.", file=sys.stderr)
+            sys.exit(1)
 
     args = parser.parse_args()
 

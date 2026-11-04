@@ -33,6 +33,7 @@ AXES=""
 HYPERPARAMETERS=""
 OBJECTIVES=""
 VERBOSE=false
+NO_SELF_TEST=false
 
 # Handle --help/-h immediately
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
@@ -60,6 +61,7 @@ Options:
   --hyperparams JSON      JSON: hyperparameter domains
   --objectives LIST       Comma-separated objectives
   --verbose, -v           Verbose progress output
+  --no-self-test          Skip environment self-test (for debugging)
   --help, -h              Show this help
 
 Examples:
@@ -153,6 +155,10 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        --no-self-test)
+            NO_SELF_TEST=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1" >&2
             exit 1
@@ -235,6 +241,10 @@ fi
 
 if [[ "${VERBOSE}" == true ]]; then
     CMD+=(--verbose)
+fi
+
+if [[ "${NO_SELF_TEST}" == true ]]; then
+    CMD+=(--no-self-test)
 fi
 
 # Print configuration
