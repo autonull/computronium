@@ -64,7 +64,7 @@ shift 1 || true
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --profile)
-            PROFILE="${2:-survey-24h}"
+            PROFILE="${2:-smart-survey}"
             shift 2
             ;;
         --dry-run)

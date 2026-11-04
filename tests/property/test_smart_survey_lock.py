@@ -341,11 +341,11 @@ class TestSmartSurveyLock:
         # Verify promotion logic creates correct next-fidelity schedules
         import inspect
 
-        import computronium.experiment.execution.pipeline._stages as stages_module
+        import computronium.experiment.execution.pipeline._promotion as promo_module
 
-        source = inspect.getsource(stages_module)
+        source = inspect.getsource(promo_module)
         # Check that promotion creates schedules with next fidelity settings
-        assert "next_fidelity" in source
+        assert "build_promotion_schedule" in source
         assert "fidelity_seeds" in source
         assert "fidelity_epochs" in source
         assert "checkpoint_every_n" in source

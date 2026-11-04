@@ -524,7 +524,7 @@ def _compose_configs_cached(
     input_shape: tuple[int, ...],
     output_dim: int,
     param_budget: int,
-) -> Any:  # ruff: ignore[too-many-locals]
+) -> Any:
     """Cached inner implementation of compose_configs.
 
     Uses flat tuple arguments for the LRU cache (more efficient than dataclass).
@@ -538,7 +538,6 @@ def _compose_configs_cached(
     from computronium.experiment.schema.coordinate import Coordinate
     from computronium.state.transitions import PlasticityConfig
 
-    # Reconstruct coordinate
     coordinate = Coordinate(
         substrate=substrate,
         geometry=geometry,
@@ -554,42 +553,19 @@ def _compose_configs_cached(
     substrate_name = coordinate.substrate
     dynamics_name = coordinate.dynamics
 
-    gcfg = _fit_geometry(
-        _geometry_mapping(
-            active, geometry_dict, coordinate.geometry, coordinate.params
-        ),
-        topology=coordinate.geometry,
-        input_shape=input_shape,
-        output_dim=output_dim,
-        param_budget=param_budget,
+    gcfg = _build_geometry_config_from_active(
+        active, geometry_dict, coordinate, input_shape, output_dim, param_budget
     )
 
-    d_factory = _axis_factory(StateDynamicsConfig, dynamics_name)
-    dynamics_step_size = active.values.get(
-        "dynamics.step_size", _config_default_step_size(d_factory)
-    )
-    if "dynamics.step_size" not in coordinate.params:
-        dynamics_step_size = apply_dynamics_step_size(dynamics_step_size, dynamics_name)
-    dcfg = d_factory(**{
-        **active.for_axis(StructuralAxis.DYNAMICS, dynamics_name),
-        "step_size": dynamics_step_size,
-    })
-
-    c_factory = _axis_factory(CreditAssignmentConfig, coordinate.credit)
-    ccfg = c_factory(**active.for_axis(StructuralAxis.CREDIT, coordinate.credit))
-
-    u_factory = _axis_factory(ParameterUpdateConfig, coordinate.update)
-    ucfg = u_factory(**active.for_axis(StructuralAxis.UPDATE, coordinate.update))
-
+    dcfg = _build_dynamics_config(active, dynamics_name, coordinate)
+    ccfg = _build_credit_config(active, coordinate)
+    ucfg = _build_update_config(active, coordinate)
     substrate_config = _build_substrate_config(
         substrate_name,
         dynamics_name,
         active.for_axis(StructuralAxis.SUBSTRATE, substrate_name),
     )
-    m_factory = _axis_factory(PlasticityConfig, coordinate.plasticity)
-    mcfg = m_factory(
-        **active.for_axis(StructuralAxis.PLASTICITY, coordinate.plasticity)
-    )
+    mcfg = _build_plasticity_config(active, coordinate)
 
     config = SystemConfig(
         substrate=substrate_config,
@@ -601,6 +577,63 @@ def _compose_configs_cached(
     )
     config.validate()
     return config
+
+
+def _build_geometry_config_from_active(
+    active: Any,
+    geometry_dict: dict[str, Any],
+    coordinate: Coordinate,
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int,
+) -> Any:
+    """Build geometry config from active space."""
+    return _fit_geometry(
+        _geometry_mapping(
+            active, geometry_dict, coordinate.geometry, coordinate.params
+        ),
+        topology=coordinate.geometry,
+        input_shape=input_shape,
+        output_dim=output_dim,
+        param_budget=param_budget,
+    )
+
+
+def _build_dynamics_config(active: Any, dynamics_name: str, coordinate: Coordinate) -> Any:
+    """Build dynamics config from active space."""
+    d_factory = _axis_factory(StateDynamicsConfig, dynamics_name)
+    dynamics_step_size = active.values.get(
+        "dynamics.step_size", _config_default_step_size(d_factory)
+    )
+    if "dynamics.step_size" not in coordinate.params:
+        dynamics_step_size = apply_dynamics_step_size(dynamics_step_size, dynamics_name)
+    return d_factory(**{
+        **active.for_axis(StructuralAxis.DYNAMICS, dynamics_name),
+        "step_size": dynamics_step_size,
+    })
+
+
+def _build_credit_config(active: Any, coordinate: Coordinate) -> Any:
+    """Build credit config from active space."""
+    from computronium.ontology.credit import CreditAssignmentConfig
+    c_factory = _axis_factory(CreditAssignmentConfig, coordinate.credit)
+    return c_factory(**active.for_axis(StructuralAxis.CREDIT, coordinate.credit))
+
+
+def _build_update_config(active: Any, coordinate: Coordinate) -> Any:
+    """Build update config from active space."""
+    from computronium.ontology.update import ParameterUpdateConfig
+    u_factory = _axis_factory(ParameterUpdateConfig, coordinate.update)
+    return u_factory(**active.for_axis(StructuralAxis.UPDATE, coordinate.update))
+
+
+def _build_plasticity_config(active: Any, coordinate: Coordinate) -> Any:
+    """Build plasticity config from active space."""
+    from computronium.state.transitions import PlasticityConfig
+    m_factory = _axis_factory(PlasticityConfig, coordinate.plasticity)
+    return m_factory(
+        **active.for_axis(StructuralAxis.PLASTICITY, coordinate.plasticity)
+    )
 
 
 def compose_configs(  # ruff: ignore[too-many-locals]

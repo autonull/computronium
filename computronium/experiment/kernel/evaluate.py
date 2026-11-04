@@ -33,7 +33,9 @@ from computronium.experiment.kernel._metrics import (
 )
 from computronium.experiment.kernel._task_scheduler import TaskScheduler
 from computronium.experiment.kernel._trainer_utils import (
+    _collect_trainer_metrics,
     _create_trainer_config,
+    _resolve_device,
     _run_training,
     _sample_inputs,
     _setup_checkpointing,
@@ -88,13 +90,6 @@ logger = get_logger(__name__)
 # free-threaded CPython — several workers ask for the same task at once.
 _TASK_CACHE: dict[tuple[str, str, int], Any] = {}
 _TASK_LOCK: Final[threading.Lock] = threading.Lock()
-
-
-def _resolve_device(device: str) -> str:
-    """Resolve 'auto' to 'cuda' if available, otherwise 'cpu'."""
-    if device == "auto":
-        return "cuda" if torch.cuda.is_available() else "cpu"
-    return device
 
 
 class EvaluationError(RuntimeError):
@@ -179,7 +174,7 @@ def task_shape(task_id: str, device: str = "auto") -> TaskShape:
     return _task_shape(_task(task_id, device))
 
 
-def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-many-locals, too-many-branches]
+def evaluate_cell(
     coordinate: Coordinate,
     schedule: Schedule,
     geometry: Mapping[str, Any] | None = None,
@@ -204,24 +199,19 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     Raises:
         EvaluationError: The task, the composition, or the training run failed.
     """
-    # Resolve device and set seeds
-
     resolved_device = _resolve_device(schedule.device)
     _set_seeds(schedule.seed, schedule.deterministic)
 
-    # Compose cell and create trainer config
     task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
     cell = _compose_cell(coordinate, geometry, shape, schedule.param_budget, task)
     config = _create_trainer_config(schedule, resolved_device, params)
     trainer_class = _choose_trainer_class(schedule)
 
-    # Set up checkpointing
     temp_dir, checkpoint_path_ref, checkpoint_callback = _setup_checkpointing(
         schedule, checkpoint_dir, config
     )
 
-    # Run training
     start = time.monotonic()
     trainer, history = _run_training(
         trainer_class, cell, task, config, resume_checkpoint_path, checkpoint_callback
@@ -231,7 +221,6 @@ def evaluate_cell(  # ruff: ignore[complex-structure, too-many-statements, too-m
     if temp_dir is not None:
         temp_dir.cleanup()
 
-    # Collect all metrics
     metrics = _collect_all_metrics(trainer, history, cell, task, schedule, coordinate)
     _post_training_metrics(metrics, cell, task, schedule, coordinate, walltime_s)
     _validate_metrics_finite(metrics, coordinate)
@@ -445,29 +434,6 @@ def _extract_convergence_curve(
         }
         for i, epoch in enumerate(history)
     ]
-
-
-def _collect_trainer_metrics(trainer: SystemTrainer) -> dict[str, float]:
-    """Extract resource metrics from trainer's last epoch."""
-    if not trainer.epoch_resources:
-        return {}
-    return _trainer_epoch_to_metrics(trainer.epoch_resources[-1])
-
-
-def _trainer_epoch_to_metrics(epoch) -> dict[str, float]:
-    """Convert a single epoch's resource data to metrics dict."""
-    metrics: dict[str, float] = {}
-    if epoch.forward_flops is not None and epoch.steps > 0:
-        flops_per_step = epoch.forward_flops / epoch.steps
-        metrics["flops"] = float(flops_per_step)
-        metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
-    if epoch.peak_memory_mb is not None:
-        metrics["memory_usage"] = epoch.peak_memory_mb
-    if epoch.steps > 0:
-        metrics["latency_ms"] = (epoch.epoch_time_s / epoch.steps) * 1000.0
-    if epoch.energy_joules is not None and epoch.steps > 0:
-        metrics["energy_per_step"] = epoch.energy_joules / epoch.steps
-    return metrics
 
 
 def _determine_procedure_metadata() -> tuple[str, str, str]:

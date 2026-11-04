@@ -112,19 +112,15 @@ class TestPromotionExecutionLock:
 
         # Verify the method exists and creates L1 schedules
         source = inspect.getsource(_StageMixin._build_allocator_candidates)
-        assert 'next_fidelity = "L1"' in source
-        assert "fidelity_seeds.get(next_fidelity" in source
-        assert "fidelity_epochs.get(next_fidelity" in source
-        assert "checkpoint_every_n=spec.checkpoint_every_n" in source
+        assert "_generate_fidelity_promotions" in source
+        assert 'source_fidelity="L0"' in source
+        assert 'target_fidelity="L1"' in source
 
     def test_build_allocator_candidates_creates_l2_promotions_from_l1(self) -> None:
         """_build_allocator_candidates generates L2 schedules from allocator L1 candidates."""
         source = inspect.getsource(_StageMixin._build_allocator_candidates)
         # Check L1→L2 promotion logic
-        assert 'promo_candidate.current_fidelity != "L2"' in source
-        assert 'fidelity="L2"' in source
-        assert 'fidelity_seeds.get("L2"' in source
-        assert 'fidelity_epochs.get("L2"' in source
+        assert "_generate_l1_to_l2_promotions" in source
 
     def test_apply_smart_survey_promotion_filters_by_threshold(self) -> None:
         """_apply_smart_survey_promotion filters cells below promotion_threshold."""
@@ -137,13 +133,13 @@ class TestPromotionExecutionLock:
     def test_apply_smart_survey_promotion_uses_original_task(self) -> None:
         """_apply_smart_survey_promotion uses original task (not task cycling)."""
         filter_source = inspect.getsource(promotion_module._filter_promotions_by_threshold)
-        build_source = inspect.getsource(promotion_module._build_promo_schedule)
+        build_source = inspect.getsource(promotion_module.build_promotion_schedule)
         assert "original_task = entry.record.schedule.task_id" in filter_source
         assert "task_id=task_name" in build_source
 
     def test_apply_smart_survey_promotion_creates_correct_schedules(self) -> None:
         """Promotion creates schedules with correct fidelity, seeds, epochs, checkpoint."""
-        build_source = inspect.getsource(promotion_module._build_promo_schedule)
+        build_source = inspect.getsource(promotion_module.build_promotion_schedule)
         assert "fidelity=target_fidelity" in build_source
         assert "n_seeds=fidelity_seeds.get" in build_source  # Uses spec fidelity_seeds
         assert "epochs=fidelity_epochs.get" in build_source  # Uses spec fidelity_epochs
@@ -196,7 +192,7 @@ class TestPromotionExecutionLock:
 
     def test_promotion_schedule_includes_checkpoint_every_n(self) -> None:
         """Promotion schedules include checkpoint_every_n for warm-start."""
-        build_source = inspect.getsource(promotion_module._build_promo_schedule)
+        build_source = inspect.getsource(promotion_module.build_promotion_schedule)
         assert "checkpoint_every_n=spec.checkpoint_every_n" in build_source
 
     def test_promotion_budget_allocation_split_constants(self) -> None:
@@ -311,7 +307,7 @@ class TestPromotionExecutionLock:
 
     def test_promotion_schedule_includes_resume_checkpoint_support(self) -> None:
         """Promotion schedules support resume_checkpoint_path (via checkpoint_every_n)."""
-        build_source = inspect.getsource(promotion_module._build_promo_schedule)
+        build_source = inspect.getsource(promotion_module.build_promotion_schedule)
         # checkpoint_every_n enables checkpoint saving which enables resume
         assert "checkpoint_every_n" in build_source
         # The schedule passed to promotion already has checkpoint_every_n from _build_allocator_candidates

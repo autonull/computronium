@@ -23,6 +23,7 @@ from computronium.experiment.schema.coordinate import (
 from ._base import _PipelineBase, tqdm
 from ._promotion import (
     apply_smart_survey_promotion,
+    build_promotion_schedule,
 )
 from ._types import _ROUND_STAGE_ORDER, _provenance_for, _resolve_tasks
 
@@ -235,86 +236,123 @@ class _StageMixin(_PipelineBase):
         from computronium.experiment.kernel.search_space import iter_candidates
         from computronium.experiment.schema.coordinate import Schedule
 
-        candidates = []
         spec = self._config.run_spec
-        # Get fidelity progression from spec (smart-survey profile)
         fidelity_seeds = spec.fidelity_seeds or {"L0": 1, "L1": 2, "L2": 5}
         fidelity_epochs = spec.fidelity_epochs or {"L0": 1, "L1": 3, "L2": 10}
-
-        # Get already-measured and rejected keys to skip
         completed_keys = self._state.completed_measurement_keys
         rejected_keys = self._state.rejected_keys
 
-        # 1. Generate L0→L1 promotion candidates from search space (base fidelity L0)
+        candidates = []
+
+        # Generate L0→L1 promotion candidates from search space
+        candidates.extend(
+            self._generate_fidelity_promotions(
+                search_space=search_space,
+                source_fidelity="L0",
+                target_fidelity="L1",
+                fidelity_seeds=fidelity_seeds,
+                fidelity_epochs=fidelity_epochs,
+                completed_keys=completed_keys,
+                rejected_keys=rejected_keys,
+                spec=spec,
+            )
+        )
+
+        # Generate L1→L2 promotion candidates from allocator's promotion_candidates
+        candidates.extend(
+            self._generate_l1_to_l2_promotions(
+                fidelity_seeds=fidelity_seeds,
+                fidelity_epochs=fidelity_epochs,
+                completed_keys=completed_keys,
+                rejected_keys=rejected_keys,
+                spec=spec,
+            )
+        )
+
+        return candidates[:50]  # Cap total candidates
+
+    def _generate_fidelity_promotions(
+        self,
+        search_space: SearchSpace,
+        source_fidelity: str,
+        target_fidelity: str,
+        fidelity_seeds: dict[str, int],
+        fidelity_epochs: dict[str, int],
+        completed_keys: set[str],
+        rejected_keys: set[str],
+        spec,
+    ) -> list[tuple[Coordinate, Schedule]]:
+        """Generate promotion candidates from a source fidelity to target fidelity."""
+        from computronium.experiment.kernel.evaluate import task_shape
+        from computronium.experiment.kernel.search_space import iter_candidates
+
+        promotions = []
         for coord, sched in iter_candidates(
             spec,
             search_space,
             deadline=self._state.deadline,
             shape=task_shape,
-            max_scan=1000,  # Limit scan for allocator candidates
-            check_composable=False,  # Skip composability for speed at allocation time
+            max_scan=1000,
+            check_composable=False,
         ):
-            if sched.fidelity != "L0":
+            if sched.fidelity != source_fidelity:
                 continue
-            next_fidelity = "L1"
-            promo_sched = Schedule(
-                fidelity=next_fidelity,
-                seed=sched.seed,
-                n_seeds=fidelity_seeds.get(next_fidelity, 1),
-                epochs=fidelity_epochs.get(next_fidelity, 1),
-                batch_limit=sched.batch_limit,
-                budget_id="promotion",
-                task_id=sched.task_id,
-                param_budget=sched.param_budget,
-                device=sched.device,
-                deterministic=sched.deterministic,
-                num_workers=sched.num_workers,
-                precision=sched.precision,
-                checkpoint_every_n=spec.checkpoint_every_n,
-                early_stopping_patience=spec.early_stopping_patience,
-            )
+            promo_sched = build_promotion_schedule(sched, target_fidelity, sched.task_id, spec)
             key = coord.measurement_key(promo_sched)
             if key in completed_keys or key in rejected_keys:
                 continue
 
-            candidates.append((coord, promo_sched))
+            promotions.append((coord, promo_sched))
+            if len(promotions) >= 50:
+                break
+        return promotions
 
-            if len(candidates) >= 50:
+    def _generate_l1_to_l2_promotions(
+        self,
+        fidelity_seeds: dict[str, int],
+        fidelity_epochs: dict[str, int],
+        completed_keys: set[str],
+        rejected_keys: set[str],
+        spec,
+    ) -> list[tuple[Coordinate, Schedule]]:
+        """Generate L1→L2 promotion candidates from allocator's promotion_candidates."""
+        from computronium.experiment.schema.coordinate import Schedule
+
+        if not (self._config.allocator and hasattr(self._config.allocator, "_state")):
+            return []
+
+        allocator_state = self._config.allocator._state
+        promotion_candidates = getattr(allocator_state, "promotion_candidates", {})
+        promotions = []
+
+        for cell_key, promo_candidate in promotion_candidates.items():
+            if promo_candidate.current_fidelity != "L2":
+                continue
+            if len(promotions) >= 50:
                 break
 
-        # 2. Generate L1→L2 promotion candidates from allocator's promotion_candidates
-        # These are cells that have been measured at L1 and shown promise
-        if self._config.allocator and hasattr(self._config.allocator, "_state"):
-            allocator_state = self._config.allocator._state
-            promotion_candidates = getattr(allocator_state, "promotion_candidates", {})
-            for cell_key, promo_candidate in promotion_candidates.items():
-                if promo_candidate.current_fidelity != "L2":
-                    continue
-                if len(candidates) >= 50:
-                    break
-                # Check if already measured or rejected at L2
-                promo_sched = Schedule(
-                    fidelity="L2",
-                    seed=promo_candidate.current_seed,
-                    n_seeds=fidelity_seeds.get("L2", 5),
-                    epochs=fidelity_epochs.get("L2", 10),
-                    batch_limit=spec.batch_limit,
-                    budget_id="promotion",
-                    task_id=spec.task_names[0] if spec.task_names else "digits",
-                    param_budget=spec.param_budget,
-                    device=spec.device,
-                    deterministic=spec.deterministic,
-                    num_workers=spec.num_workers,
-                    precision=spec.precision,
-                    checkpoint_every_n=spec.checkpoint_every_n,
-                    early_stopping_patience=spec.early_stopping_patience,
-                )
-                key = promo_candidate.coordinate.measurement_key(promo_sched)
-                if key in completed_keys or key in rejected_keys:
-                    continue
-                candidates.append((promo_candidate.coordinate, promo_sched))
+            promo_sched = Schedule(
+                fidelity="L2",
+                seed=promo_candidate.current_seed,
+                n_seeds=fidelity_seeds.get("L2", 5),
+                epochs=fidelity_epochs.get("L2", 10),
+                batch_limit=spec.batch_limit,
+                budget_id="promotion",
+                task_id=spec.task_names[0] if spec.task_names else "digits",
+                param_budget=spec.param_budget,
+                device=spec.device,
+                deterministic=spec.deterministic,
+                num_workers=spec.num_workers,
+                precision=spec.precision,
+                checkpoint_every_n=spec.checkpoint_every_n,
+                early_stopping_patience=spec.early_stopping_patience,
+            )
+            key = promo_candidate.coordinate.measurement_key(promo_sched)
+            if key in completed_keys or key in rejected_keys:
+                continue
+            promotions.append((promo_candidate.coordinate, promo_sched))
 
-        return candidates
+        return promotions
 
     def _check_already_measured(
         self, key: str, seen: set[str], rejected: set[str]
@@ -404,8 +442,7 @@ class _StageMixin(_PipelineBase):
                 cause="ADMISSION_REJECTED",
                 message=msg or "Admission gate failed",
             )
-            return False
-        return True
+        return passed
 
     def _log_batch_filtering(self, skipped: int, rejected_this_batch: int) -> None:
         """Log batch filtering statistics."""

@@ -698,7 +698,7 @@ class SystemConfig:
         # Credit-Dynamics compatibility
         self._validate_thermodynamic_contrast_dynamics()
 
-        # Beta matching (soft constraints)
+        # Beta matching (soft constraints, log only)
         self._validate_beta_matching_energy_minimization()
         self._validate_beta_matching_pc_alm()
 

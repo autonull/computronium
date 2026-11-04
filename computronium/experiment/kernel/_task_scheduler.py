@@ -6,7 +6,7 @@ Uses ruler-relative normalization for cross-task comparison.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from computronium.domains._task_registry import (
     CHEAP_TASKS,
@@ -32,14 +32,14 @@ class TaskScheduler:
     MEDIUM_TASKS: tuple[str, ...] = MEDIUM_TASKS
     EXPENSIVE_TASKS: tuple[str, ...] = EXPENSIVE_TASKS
 
-    # Per-fidelity task selection
-    fidelity_tasks: dict[str, tuple[str, ...]] = None  # type: ignore[assignment]
+    # Per-fidelity task selection (lazy init)
+    _fidelity_tasks: dict[str, tuple[str, ...]] = field(default=None, init=False)  # type: ignore[assignment]
 
     def __post_init__(self):
-        if self.fidelity_tasks is None:
+        if self._fidelity_tasks is None:
             object.__setattr__(
                 self,
-                "fidelity_tasks",
+                "_fidelity_tasks",
                 {
                     "L0": CHEAP_TASKS,
                     "L1": CHEAP_TASKS + MEDIUM_TASKS,

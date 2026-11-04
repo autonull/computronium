@@ -37,13 +37,23 @@ def _source_fidelity_for(target_fidelity: str) -> str | None:
     return {"L1": "L0", "L2": "L1"}.get(target_fidelity)
 
 
-def _build_promo_schedule(
+def build_promotion_schedule(
     sched: Schedule,
     target_fidelity: str,
     task_name: str,
     spec: RunSpec,
 ) -> Schedule:
-    """Build a promotion schedule with the target fidelity and task."""
+    """Build a promotion schedule with the target fidelity and task.
+
+    Args:
+        sched: The source schedule.
+        target_fidelity: Target fidelity (L1 or L2).
+        task_name: The task name to use.
+        spec: The run spec containing fidelity_seeds/fidelity_epochs.
+
+    Returns:
+        A new Schedule for the promotion.
+    """
     fidelity_seeds = spec.fidelity_seeds or {"L0": 1, "L1": 2, "L2": 5}
     fidelity_epochs = spec.fidelity_epochs or {"L0": 1, "L1": 3, "L2": 10}
 
@@ -132,7 +142,7 @@ def _filter_promotions_by_threshold(
         # Task cycling to incompatible tasks causes admission gate rejections
         # entry.record is guaranteed non-None here since cell_best only contains real records
         original_task = entry.record.schedule.task_id or "digits"  # type: ignore[union-attr]
-        promo_sched = _build_promo_schedule(
+        promo_sched = build_promotion_schedule(
             sched=sched,
             target_fidelity=target_fidelity,
             task_name=original_task,
@@ -227,7 +237,7 @@ __all__ = [
     "FIDELITY_ORDER",
     "MIN_PROMOTIONS_PER_TIER",
     "_build_cell_best_map",
-    "_build_promo_schedule",
+    "build_promotion_schedule",
     "_filter_promotions_by_threshold",
     "_limit_promotions_by_budget",
     "_source_fidelity_for",
