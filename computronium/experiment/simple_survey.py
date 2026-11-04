@@ -6,6 +6,10 @@ Adaptivity comes from offline importance sampling using prior runs, not online p
 
 from __future__ import annotations
 
+# Module load marker - prints IMMEDIATELY on import (before uv finishes startup)
+import sys
+print(f"[SimpleSurvey] Module loaded: {__file__}", file=sys.stderr)
+
 # Standard library imports (always available)
 import argparse
 import importlib
@@ -14,7 +18,6 @@ import os
 import random
 import shutil
 import subprocess
-import sys
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
