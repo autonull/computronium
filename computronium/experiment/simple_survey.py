@@ -673,9 +673,17 @@ def main() -> None:
     print(f"[SimpleSurvey] Starting with args: {sys.argv}", file=sys.stderr)
 
     if not args.no_self_test:
-        if not _self_test():
-            print("[SimpleSurvey] Self-test failed. Use --no-self-test to skip.", file=sys.stderr)
+        print("[SimpleSurvey] Running self-test...", file=sys.stderr)
+        try:
+            if not _self_test():
+                print("[SimpleSurvey] Self-test failed. Use --no-self-test to skip.", file=sys.stderr)
+                sys.exit(1)
+        except Exception as e:
+            print(f"[SimpleSurvey] Self-test CRASHED: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
             sys.exit(1)
+        print("[SimpleSurvey] Self-test passed", file=sys.stderr)
 
     print(f"[SimpleSurvey] Parsed args: fidelity={args.fidelity}, device={args.device}, workers={args.max_workers}", file=sys.stderr)
 

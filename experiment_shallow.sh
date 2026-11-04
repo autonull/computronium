@@ -24,7 +24,7 @@ PROMOTE_FROM=""
 PROMOTE_TOP=20
 SEED=42
 DRY_RUN=false
-DEVICE="auto"
+DEVICE="cpu"
 PARAM_BUDGET=0
 N_SEEDS=1
 EPOCHS=1
@@ -38,7 +38,7 @@ NO_SELF_TEST=false
 # Handle --help/-h immediately
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
     cat <<'EOF'
-Usage: experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda] [--verbose]
+Usage: experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device cpu|auto|cuda] [--verbose]
 
 Runs a SimpleSurvey experiment with a time budget in hours.
 Results stored in <store>.duckdb
@@ -52,7 +52,7 @@ Options:
   --promote-top N         Number of top cells to promote (default: 20)
   --seed N                Random seed (default: 42)
   --dry-run               Generate cells only, no training
-  --device auto|cpu|cuda  Device (default: auto)
+  --device cpu|auto|cuda  Device (default: cpu)
   --param-budget N        Parameter budget ceiling (default: 0 = unconstrained)
   --n-seeds N             Seeds per cell (default: 1)
   --epochs N              Epochs per cell (default: 1)
