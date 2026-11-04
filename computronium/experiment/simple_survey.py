@@ -6,119 +6,27 @@ Adaptivity comes from offline importance sampling using prior runs, not online p
 
 from __future__ import annotations
 
-# Module load marker - prints IMMEDIATELY on import (before uv finishes startup)
-import sys
-print(f"[SimpleSurvey] Module loaded: {__file__}", file=sys.stderr)
-
-# Standard library imports (always available)
 import argparse
-import importlib
+import contextlib
 import json
 import os
 import random
 import shutil
 import subprocess
+import sys
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
-def _self_test() -> bool:
-    """Run environment self-tests. Returns True if all pass."""
-    print("[SelfTest] Checking environment...", file=sys.stderr)
-
-    # Test 1: Python version
-    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    print(f"[SelfTest] Python: {py_version}", file=sys.stderr)
-    if sys.version_info < (3, 10):
-        print(f"[SelfTest] FAIL: Python 3.10+ required, got {py_version}", file=sys.stderr)
-        return False
-
-    # Test 2: uv available
-    try:
-        result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)
-        if result.returncode != 0:
-            print("[SelfTest] FAIL: uv not found", file=sys.stderr)
-            return False
-        print(f"[SelfTest] uv: {result.stdout.strip()}", file=sys.stderr)
-    except Exception as e:
-        print(f"[SelfTest] FAIL: uv check failed: {e}", file=sys.stderr)
-        return False
-
-    # Test 3: Core stdlib modules
-    for mod in ["json", "uuid", "pathlib", "dataclasses", "concurrent.futures", "random"]:
-        try:
-            __import__(mod)
-        except ImportError as e:
-            print(f"[SelfTest] FAIL: stdlib {mod} missing: {e}", file=sys.stderr)
-            return False
-    print("[SelfTest] stdlib OK", file=sys.stderr)
-
-    # Test 4: torch (required)
-    try:
-        import torch
-        print(f"[SelfTest] Torch: {torch.__version__}", file=sys.stderr)
-        print(f"[SelfTest] CUDA available: {torch.cuda.is_available()}", file=sys.stderr)
-        if torch.cuda.is_available():
-            print(f"[SelfTest] GPU: {torch.cuda.get_device_name(0)}", file=sys.stderr)
-            print(f"[SelfTest] GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB", file=sys.stderr)
-    except ImportError as e:
-        print(f"[SelfTest] FAIL: torch import failed: {e}", file=sys.stderr)
-        print("[SelfTest] Fix: uv sync --dev --all-extras", file=sys.stderr)
-        return False
-
-    # Test 5: computronium modules (lazy import)
-    required = [
-        "computronium.core.logging",
-        "computronium.domains._task_registry",
-        "computronium.experiment.evidence.store",
-        "computronium.experiment.evidence.store._models",
-        "computronium.experiment.execution.pipeline._budget_constants",
-        "computronium.experiment.kernel.evaluate",
-        "computronium.experiment.kernel.search_space",
-        "computronium.experiment.schema.axis",
-        "computronium.experiment.schema.coordinate",
-        "computronium.experiment.schema.run_spec",
-        "computronium.ontology.system",
-    ]
-    for mod in required:
-        try:
-            importlib.import_module(mod)
-        except Exception as e:
-            print(f"[SelfTest] FAIL: {mod} import failed: {e}", file=sys.stderr)
-            print("[SelfTest] Fix: uv sync --dev --all-extras", file=sys.stderr)
-            return False
-    print(f"[SelfTest] All {len(required)} modules OK", file=sys.stderr)
-
-    # Test 6: Dry-run functional test
-    try:
-        from computronium.experiment.simple_survey import run_simple_survey
-        result = run_simple_survey(0.001, fidelity="L0", dry_run=True, device="cpu")
-        n_cells = result.get("n", 0)
-        print(f"[SelfTest] Dry-run generated {n_cells} cells", file=sys.stderr)
-        if n_cells == 0:
-            print("[SelfTest] FAIL: dry-run generated 0 cells", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"[SelfTest] FAIL: dry-run crashed: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-        return False
-
-    print("[SelfTest] ALL TESTS PASSED", file=sys.stderr)
-    return True
-
-
-# Heavy imports (after self-test function)
 from computronium.core.logging import get_logger
 from computronium.domains._task_registry import get_fidelity_tasks
 from computronium.experiment.evidence.store import RecordStore
 from computronium.experiment.evidence.store._models import StoreConfig
-from computronium.experiment.execution.pipeline._budget_constants import (
-    estimate_cell_counts,
-)
 from computronium.experiment.kernel.evaluate import (
     cell_record,
     task_shape,
@@ -137,9 +45,6 @@ from computronium.experiment.schema.coordinate import (
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.ontology.system import check_compatibility_matrix
 
-if TYPE_CHECKING:
-    from computronium.experiment.schema.record import Record
-
 logger = get_logger(__name__)
 
 
@@ -153,6 +58,24 @@ class SimpleSurveyResult:
     cells_passed: int
     cells_failed: int
     walltime_s: float
+
+
+# Fidelity cost estimates (seconds per cell)
+FIDELITY_COSTS: dict[str, int] = {
+    "L0": 5,  # ~5s per cell (1 epoch, 1 seed)
+    "L1": 30,  # ~30s per cell (3 epochs, 2 seeds)
+    "L2": 300,  # ~300s per cell (10 epochs, 5 seeds)
+}
+
+# Structural axes in mutation order
+MUTATION_AXES: list[StructuralAxis] = [
+    StructuralAxis.SUBSTRATE,
+    StructuralAxis.GEOMETRY,
+    StructuralAxis.DYNAMICS,
+    StructuralAxis.PLASTICITY,
+    StructuralAxis.CREDIT,
+    StructuralAxis.UPDATE,
+]
 
 
 def _schedule_from_spec(spec: RunSpec, task: str, fidelity: str) -> Schedule:
@@ -183,19 +106,17 @@ def _build_provenance(spec: RunSpec, run_id: str) -> Provenance:
     git_path = shutil.which("git")
     code_sha = "unknown"
     if git_path:
-        try:
+        with contextlib.suppress(Exception):
             code_sha = subprocess.check_output(
                 [git_path, "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, text=True
             ).strip()
-        except Exception:
-            try:
+        with contextlib.suppress(Exception):
+            if code_sha == "unknown":
                 code_sha = subprocess.check_output(
                     [git_path, "rev-parse", "--short", "HEAD"],
                     stderr=subprocess.DEVNULL,
                     text=True,
                 ).strip()
-            except Exception:
-                pass
 
     dataset = spec.dataset if spec.dataset != "unknown" else "digits"
     dataset_version = spec.dataset_version if spec.dataset_version != "1.0" else "1.0"
@@ -213,6 +134,110 @@ def _build_provenance(spec: RunSpec, run_id: str) -> Provenance:
         links={"run_id": run_id},
         data_origin=DataOrigin.EXPLORATION,
     )
+
+
+def _check_coord_compatibility(coord: Coordinate) -> bool:
+    """Check if a coordinate passes the compatibility matrix."""
+    violations = check_compatibility_matrix(
+        coord.substrate,
+        coord.geometry,
+        coord.dynamics,
+        coord.plasticity,
+        coord.credit,
+        coord.update,
+    )
+    return not violations
+
+
+def _mutate_around(
+    top_coords: list[Coordinate],
+    n: int,
+    fidelity: str,
+    tasks: Sequence[str],
+    spec: RunSpec,
+    search_space,
+) -> list[tuple[Coordinate, Schedule]]:
+    """Mutate 1-2 axes of top performers to explore neighborhood."""
+    mutated_cells: list[tuple[Coordinate, Schedule]] = []
+
+    if not top_coords:
+        return mutated_cells
+
+    per_coord = max(1, n // len(top_coords))
+
+    for coord in top_coords:
+        for _ in range(per_coord):
+            if len(mutated_cells) >= n:
+                break
+
+            # Mutate 1-2 axes
+            k = random.randint(1, 2)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            axes_to_mutate = random.sample(MUTATION_AXES, k)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+
+            new_values = {
+                "substrate": coord.substrate,
+                "geometry": coord.geometry,
+                "dynamics": coord.dynamics,
+                "plasticity": coord.plasticity,
+                "credit": coord.credit,
+                "update": coord.update,
+            }
+
+            for axis in axes_to_mutate:
+                primitives = search_space.primitives(axis)
+                if primitives:
+                    new_values[axis.value] = random.choice(primitives)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+
+            mutated_coord = Coordinate(
+                substrate=new_values["substrate"],
+                geometry=new_values["geometry"],
+                dynamics=new_values["dynamics"],
+                plasticity=new_values["plasticity"],
+                credit=new_values["credit"],
+                update=new_values["update"],
+                params=dict(coord.params),
+            )
+
+            if not _check_coord_compatibility(mutated_coord):
+                continue
+
+            task = random.choice(tasks)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            schedule = _schedule_from_spec(spec, task, fidelity)
+            mutated_cells.append((mutated_coord, schedule))
+
+    return mutated_cells
+
+
+def _random_explore(
+    n: int,
+    fidelity: str,
+    tasks: Sequence[str],
+    seed: int,
+    spec: RunSpec,
+    search_space,
+) -> list[tuple[Coordinate, Schedule]]:
+    """Random valid cells from iter_candidates."""
+    cells: list[tuple[Coordinate, Schedule]] = []
+
+    for coord, schedule in iter_candidates(
+        spec,
+        search_space,
+        shape=task_shape,
+        max_scan=50000,
+        check_composable=True,
+    ):
+        if len(cells) >= n:
+            break
+
+        if not _check_coord_compatibility(coord):
+            continue
+
+        cell_schedule = schedule
+        if schedule.fidelity != fidelity:
+            cell_schedule = _schedule_from_spec(spec, schedule.task_id, fidelity)
+        cells.append((coord, cell_schedule))
+
+    return cells
 
 
 def _generate_valid_cells(
@@ -240,7 +265,10 @@ def _generate_valid_cells(
                     )
                 )
         except Exception as exc:
-            logger.debug("Prior store unavailable, falling back to random exploration: %s", exc)
+            logger.debug(
+                "Prior store unavailable, falling back to random exploration: %s",
+                exc,
+            )
 
     # 2. Exploration: random valid cells
     remaining = n - len(cells)
@@ -275,128 +303,12 @@ def _get_top_coordinates(store: RecordStore, fidelity: str, k: int) -> list[Coor
     return coords
 
 
-def _mutate_around(
-    top_coords: list[Coordinate],
-    n: int,
-    fidelity: str,
-    tasks: Sequence[str],
-    spec: RunSpec,
-    search_space,
-) -> list[tuple[Coordinate, Schedule]]:
-    """Mutate 1-2 axes of top performers to explore neighborhood."""
-    mutated_cells: list[tuple[Coordinate, Schedule]] = []
-
-    if not top_coords:
-        return mutated_cells
-
-    per_coord = max(1, n // len(top_coords))
-    axes_order = [
-        StructuralAxis.SUBSTRATE,
-        StructuralAxis.GEOMETRY,
-        StructuralAxis.DYNAMICS,
-        StructuralAxis.PLASTICITY,
-        StructuralAxis.CREDIT,
-        StructuralAxis.UPDATE,
-    ]
-
-    for coord in top_coords:
-        for _ in range(per_coord):
-            if len(mutated_cells) >= n:
-                break
-
-            # Mutate 1-2 axes
-            k = random.randint(1, 2)  # ruff: ignore[S311]
-            axes_to_mutate = random.sample(axes_order, k)  # ruff: ignore[S311]
-
-            new_params = dict(coord.params)
-            new_values = {
-                "substrate": coord.substrate,
-                "geometry": coord.geometry,
-                "dynamics": coord.dynamics,
-                "plasticity": coord.plasticity,
-                "credit": coord.credit,
-                "update": coord.update,
-            }
-
-            for axis in axes_to_mutate:
-                primitives = search_space.primitives(axis)
-                if primitives:
-                    new_values[axis.value] = random.choice(primitives)  # ruff: ignore[S311]
-
-            mutated_coord = Coordinate(
-                substrate=new_values["substrate"],
-                geometry=new_values["geometry"],
-                dynamics=new_values["dynamics"],
-                plasticity=new_values["plasticity"],
-                credit=new_values["credit"],
-                update=new_values["update"],
-                params=new_params,
-            )
-
-            violations = check_compatibility_matrix(
-                mutated_coord.substrate,
-                mutated_coord.geometry,
-                mutated_coord.dynamics,
-                mutated_coord.plasticity,
-                mutated_coord.credit,
-                mutated_coord.update,
-            )
-            if violations:
-                continue
-
-            task = random.choice(tasks)  # ruff: ignore[S311]
-            schedule = _schedule_from_spec(spec, task, fidelity)
-            mutated_cells.append((mutated_coord, schedule))
-
-    return mutated_cells
-
-
-def _random_explore(
-    n: int,
-    fidelity: str,
-    tasks: Sequence[str],
-    seed: int,
-    spec: RunSpec,
-    search_space,
-) -> list[tuple[Coordinate, Schedule]]:
-    """Random valid cells from iter_candidates."""
-    cells: list[tuple[Coordinate, Schedule]] = []
-
-    for coord, schedule in iter_candidates(
-        spec,
-        search_space,
-        shape=task_shape,
-        max_scan=50000,
-        check_composable=True,
-    ):
-        if len(cells) >= n:
-            break
-
-        violations = check_compatibility_matrix(
-            coord.substrate,
-            coord.geometry,
-            coord.dynamics,
-            coord.plasticity,
-            coord.credit,
-            coord.update,
-        )
-        if violations:
-            continue
-
-        cell_schedule = schedule
-        if schedule.fidelity != fidelity:
-            cell_schedule = _schedule_from_spec(spec, schedule.task_id, fidelity)
-        cells.append((coord, cell_schedule))
-
-    return cells
-
-
 def _evaluate_one(
     cell: tuple[Coordinate, Schedule],
     fidelity: str,
     store_path: str,
     provenance: Provenance,
-) -> Record:
+):
     """Evaluate a single cell (for ProcessPoolExecutor)."""
     coord, schedule = cell
     try:
@@ -405,10 +317,9 @@ def _evaluate_one(
             schedule=schedule,
             provenance=provenance,
         )
-    except Exception as e:
+    except Exception:
         logger.exception(
-            "Cell evaluation failed: %s | %s/%s/%s/%s/%s/%s",
-            e,
+            "Cell evaluation failed: %s/%s/%s/%s/%s/%s",
             coord.substrate,
             coord.geometry,
             coord.dynamics,
@@ -419,7 +330,164 @@ def _evaluate_one(
         raise
 
 
-def run_simple_survey(  # noqa: PLR0913, PLR0915
+@dataclass(frozen=True, slots=True)
+class _SpecParams:
+    """Parameters for building a RunSpec."""
+
+    hours: float
+    fidelity: str
+    tasks: Sequence[str] | None
+    seed: int
+    device: str
+    param_budget: int
+    n_seeds: int
+    epochs: int
+    batch_limit: int
+    axes: dict[str, tuple[str, ...]] | None
+    hyperparameters: dict[str, Any] | None
+    objectives: tuple[str, ...]
+
+
+def _build_spec(params: _SpecParams) -> RunSpec:
+    """Build RunSpec from survey parameters."""
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.run_spec import AxisSelection
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+
+    axis_selections = []
+    if params.axes:
+        for axis_name, primitives in params.axes.items():
+            axis_enum = getattr(StructuralAxis, axis_name.upper())
+            axis_selections.append(AxisSelection(axis=axis_enum, primitives=primitives))
+
+    spec = RunSpec(
+        profile="simple_survey",
+        task=params.tasks[0] if params.tasks else "auto",
+        tasks=tuple(params.tasks) if params.tasks else (),
+        objectives=params.objectives or ("validation_accuracy", "energy_per_step"),
+        fidelity=params.fidelity,
+        n_seeds=params.n_seeds,
+        epochs=params.epochs,
+        batch_limit=params.batch_limit,
+        seed=params.seed,
+        budget_seconds=int(params.hours * 3600),
+        param_budget=params.param_budget,
+        device=params.device,
+        axes=tuple(axis_selections),
+        hyperparameters=params.hyperparameters or {},
+        fidelity_seeds={"L0": 1, "L1": 2, "L2": 5},
+        fidelity_epochs={"L0": 1, "L1": 3, "L2": 10},
+    )
+    return spec
+
+
+def _generate_cells(
+    spec: RunSpec,
+    fidelity: str,
+    tasks: Sequence[str],
+    seed: int,
+    promote_from: str | None,
+    promote_top: int,
+) -> list[tuple[Coordinate, Schedule]]:
+    """Generate cells for the survey."""
+    search_space = search_space_from_spec(spec, tasks=tasks)
+
+    random.seed(seed)
+    n_cells = _estimate_cell_count(spec.budget_seconds, fidelity)
+
+    logger.info(
+        "SimpleSurvey: budget=%ds, fidelity=%s, cost_per_cell=%ds, estimated_cells=%d",
+        spec.budget_seconds,
+        fidelity,
+        FIDELITY_COSTS.get(fidelity, 30),
+        n_cells,
+    )
+
+    cells = _generate_valid_cells(
+        n_cells,
+        fidelity,
+        tasks,
+        seed,
+        spec,
+        search_space,
+        promote_from,
+        promote_top,
+    )
+
+    logger.info("Generated %d valid cells", len(cells))
+    return cells
+
+
+def _estimate_cell_count(budget_seconds: int, fidelity: str) -> int:
+    """Estimate number of cells from budget and fidelity."""
+    cost_per_cell = FIDELITY_COSTS.get(fidelity, 30)
+    return max(1, int(budget_seconds // cost_per_cell))
+
+
+def _evaluate_cells_parallel(
+    cells: list[tuple[Coordinate, Schedule]],
+    fidelity: str,
+    store_path: str,
+    provenance: Provenance,
+    max_workers: int,
+    verbose: bool,
+) -> list:
+    """Evaluate cells in parallel using ProcessPoolExecutor."""
+    n_total = len(cells)
+    results: list = []
+
+    logger.info("Evaluating %d cells with %d workers...", n_total, max_workers)
+
+    with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        futures = [
+            pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
+            for cell in cells
+        ]
+        for i, future in enumerate(as_completed(futures), 1):
+            record = future.result()
+            results.append(record)
+            if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
+                gate = record.status.gate_verdict.value
+                val_acc = record.payload.get("val_acc", "N/A")
+                logger.info(
+                    "  [%d/%d] %s | val_acc=%s | %s/%s/%s/%s/%s/%s",
+                    i,
+                    n_total,
+                    gate,
+                    f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
+                    record.substrate,
+                    record.geometry,
+                    record.dynamics,
+                    record.plasticity,
+                    record.credit,
+                    record.update,
+                )
+
+    return results
+
+
+def _store_results(store_path: str, run_id: str, spec: RunSpec, results: list) -> None:
+    """Store evaluation results in the record store."""
+    store_config = StoreConfig(path=Path(store_path))
+    with RecordStore(store_config) as store:
+        store.create_run(run_id, spec)
+        for record in results:
+            store.append(record)
+
+
+def _generate_report(store_path: str, run_id: str) -> dict:
+    """Generate report from stored results."""
+    from computronium.experiment.surface.report import ReportGenerator
+
+    store_config = StoreConfig(path=Path(store_path))
+    with RecordStore(store_config) as store:
+        generator = ReportGenerator(store)
+        return generator.run_summary(run_id)
+
+
+def run_simple_survey(  # ruff: ignore[too-many-arguments]
     hours: float,
     fidelity: str = "L0",
     tasks: Sequence[str] | None = None,
@@ -465,90 +533,36 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str]}
         If evaluation: {"run_id": str, "store_path": str, "cells_evaluated": int, ...}
     """
-    # 1. Budget -> cell count
-    budget_s = int(hours * 3600)
-    fidelity_costs = {
-        "L0": 5,    # ~5s per cell (1 epoch, 1 seed)
-        "L1": 30,   # ~30s per cell (3 epochs, 2 seeds)
-        "L2": 300,  # ~300s per cell (10 epochs, 5 seeds)
-    }
-    cost_per_cell = fidelity_costs.get(fidelity, 30)
-    n_cells = max(1, budget_s // cost_per_cell)
-
-    logger.info(
-        "SimpleSurvey: budget=%.2fh (%ds), fidelity=%s, cost_per_cell=%ds, estimated_cells=%d",
-        hours,
-        budget_s,
-        fidelity,
-        cost_per_cell,
-        n_cells,
-    )
-    print(f"[SimpleSurvey] Budget: {hours}h = {budget_s}s, n_cells={n_cells}", file=sys.stderr)
-
-    # 2. Build RunSpec
-    from computronium.experiment.schema.axis import StructuralAxis
-    from computronium.experiment.schema.run_spec import AxisSelection
-    from computronium.experiment.schema.seed_registries import seed_all_registries
-
-    print("[SimpleSurvey] Seeding registries...", file=sys.stderr)
-    seed_all_registries()
-    print("[SimpleSurvey] Registries seeded", file=sys.stderr)
-
-    axis_selections = []
-    if axes:
-        for axis_name, primitives in axes.items():
-            axis_enum = getattr(StructuralAxis, axis_name.upper())
-            axis_selections.append(AxisSelection(axis=axis_enum, primitives=primitives))
-
-    spec = RunSpec(
-        profile="simple_survey",
-        task=tasks[0] if tasks else "auto",
-        tasks=tuple(tasks) if tasks else (),
-        objectives=objectives or ("validation_accuracy", "energy_per_step"),
+    # 1. Build RunSpec
+    params = _SpecParams(
+        hours=hours,
         fidelity=fidelity,
+        tasks=tasks,
+        seed=seed,
+        device=device,
+        param_budget=param_budget,
         n_seeds=n_seeds,
         epochs=epochs,
         batch_limit=batch_limit,
-        seed=seed,
-        budget_seconds=budget_s,
-        param_budget=param_budget,
-        device=device,
-        axes=tuple(axis_selections),
-        hyperparameters=hyperparameters or {},
-        fidelity_seeds={"L0": 1, "L1": 2, "L2": 5},
-        fidelity_epochs={"L0": 1, "L1": 3, "L2": 10},
+        axes=axes,
+        hyperparameters=hyperparameters,
+        objectives=objectives,
     )
-    print(f"[SimpleSurvey] Spec created: task_names={spec.task_names}", file=sys.stderr)
+    spec = _build_spec(params)
 
-    # 3. Build search space
-    print("[SimpleSurvey] Building search space...", file=sys.stderr)
-    search_space = search_space_from_spec(spec, tasks=spec.task_names)
-    print(
-        f"[SimpleSurvey] Search space: tasks={search_space.tasks}, primitives={ {ax.value: len(search_space.primitives(ax)) for ax in StructuralAxis} }",
-        file=sys.stderr,
-    )
-
-    # 4. Determine tasks to use
+    # 2. Determine tasks to use
     if tasks is None:
         tasks = get_fidelity_tasks(fidelity)
-    print(f"[SimpleSurvey] Using tasks: {tasks}", file=sys.stderr)
 
-    # 5. Generate cells
-    print("[SimpleSurvey] Generating cells...", file=sys.stderr)
-    random.seed(seed)
-    cells = _generate_valid_cells(
-        n_cells,
-        fidelity,
-        tasks,
-        seed,
-        spec,
-        search_space,
-        promote_from,
-        promote_top,
+    # 3. Generate cells
+    cells = _generate_cells(
+        spec=spec,
+        fidelity=fidelity,
+        tasks=tasks,
+        seed=seed,
+        promote_from=promote_from,
+        promote_top=promote_top,
     )
-
-    print(f"[SimpleSurvey] Generated {len(cells)} valid cells", file=sys.stderr)
-    logger.info("Generated %d valid cells", len(cells))
 
     if dry_run:
         return {
@@ -558,72 +572,35 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
             "fidelity": fidelity,
         }
 
-    # 6. Parallel evaluate
-    print("[SimpleSurvey] Starting parallel evaluation...", file=sys.stderr)
+    # 4. Parallel evaluate
     run_id = str(uuid.uuid4())[:8]
     provenance = _build_provenance(spec, run_id)
 
-    store_config = StoreConfig(path=Path(store_path))
-    with RecordStore(store_config) as store:
-        store.create_run(run_id, spec)
+    results = _evaluate_cells_parallel(
+        cells=cells,
+        fidelity=fidelity,
+        store_path=store_path,
+        provenance=provenance,
+        max_workers=max_workers,
+        verbose=verbose,
+    )
 
-        results: list[Record] = []
-        n_total = len(cells)
-        print(f"[SimpleSurvey] Evaluating {n_total} cells with {max_workers} workers...", file=sys.stderr)
-        logger.info("Evaluating %d cells with %d workers...", n_total, max_workers)
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            futures = [
-                pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
-                for cell in cells
-            ]
-            for i, future in enumerate(as_completed(futures), 1):
-                try:
-                    record = future.result()
-                    results.append(record)
-                    if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
-                        gate = record.status.gate_verdict.value
-                        val_acc = record.payload.get("val_acc", "N/A")
-                        logger.info(
-                            "  [%d/%d] %s | val_acc=%s | %s/%s/%s/%s/%s/%s",
-                            i,
-                            n_total,
-                            gate,
-                            f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
-                            record.substrate,
-                            record.geometry,
-                            record.dynamics,
-                            record.plasticity,
-                            record.credit,
-                            record.update,
-                        )
-                except Exception as e:
-                    logger.exception("Cell evaluation failed: %s", e)
-                    if verbose:
-                        print(f"  [ERROR] Cell {i}/{n_total} failed: {e}", file=sys.stderr)
+    # 5. Store results
+    _store_results(store_path, run_id, spec, results)
 
-        # 7. Store results
-        for record in results:
-            store.append(record)
-
-        # 8. Generate report
-        from computronium.experiment.surface.report import ReportGenerator
-
-        generator = ReportGenerator(store)
-        report = generator.run_summary(run_id)
+    # 6. Generate report
+    report = _generate_report(store_path, run_id)
 
     passed = sum(1 for r in results if r.status.gate_verdict.value == "PASS")
     failed = len(results) - passed
+    total_walltime = sum(r.payload.get("walltime_s", 0) for r in results)
 
-    print(
-        f"[SimpleSurvey] Done: {len(results)} evaluated, {passed} passed, {failed} failed, {sum(r.payload.get('walltime_s', 0) for r in results):.1f}s walltime",
-        file=sys.stderr,
-    )
     logger.info(
         "Done: %d evaluated, %d passed, %d failed, %.1fs walltime",
         len(results),
         passed,
         failed,
-        sum(r.payload.get("walltime_s", 0) for r in results),
+        total_walltime,
     )
 
     return {
@@ -632,9 +609,164 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         "cells_evaluated": len(results),
         "cells_passed": passed,
         "cells_failed": failed,
-        "walltime_s": sum(r.payload.get("walltime_s", 0) for r in results),
+        "walltime_s": total_walltime,
         "report": report,
     }
+
+
+@dataclass(frozen=True, slots=True)
+class _SelfTestConfig:
+    """Configuration for self-test."""
+
+    min_python: tuple[int, int] = (3, 10)
+    dry_run_hours: float = 0.001
+    dry_run_fidelity: str = "L0"
+    dry_run_device: str = "cpu"
+
+
+def _check_python_version(config: _SelfTestConfig) -> bool:
+    """Check Python version meets minimum."""
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    logger.info("Python: %s", py_version)
+    if sys.version_info < config.min_python:
+        logger.error("Python %s+ required, got %s", config.min_python, py_version)
+        return False
+    return True
+
+
+def _check_uv_available() -> bool:
+    """Check uv is available."""
+    try:
+        result = subprocess.run(
+            ["uv", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except Exception:
+        logger.exception("uv check failed")
+        return False
+    else:
+        if result.returncode != 0:
+            logger.error("uv not found")
+            return False
+        logger.info("uv: %s", result.stdout.strip())
+        return True
+
+
+def _check_stdlib_modules() -> bool:
+    """Check core stdlib modules are available."""
+    for mod in [
+        "json",
+        "uuid",
+        "pathlib",
+        "dataclasses",
+        "concurrent.futures",
+        "random",
+    ]:
+        try:
+            __import__(mod)
+        except ImportError:
+            logger.exception("stdlib %s missing", mod)
+            return False
+    logger.info("stdlib OK")
+    return True
+
+
+def _check_torch() -> bool:
+    """Check torch is available."""
+    try:
+        import torch
+
+    except ImportError:
+        logger.exception("torch import failed")
+        logger.exception("Fix: uv sync --dev --all-extras")
+        return False
+    else:
+        logger.info("Torch: %s", torch.__version__)
+        logger.info("CUDA available: %s", torch.cuda.is_available())
+        if torch.cuda.is_available():
+            logger.info("GPU: %s", torch.cuda.get_device_name(0))
+            logger.info(
+                "GPU memory: %.1f GB",
+                torch.cuda.get_device_properties(0).total_memory / 1e9,
+            )
+        return True
+
+
+def _check_computronium_modules() -> bool:
+    """Check computronium modules are importable."""
+    required = [
+        "computronium.core.logging",
+        "computronium.domains._task_registry",
+        "computronium.experiment.evidence.store",
+        "computronium.experiment.evidence.store._models",
+        "computronium.experiment.execution.pipeline._budget_constants",
+        "computronium.experiment.kernel.evaluate",
+        "computronium.experiment.kernel.search_space",
+        "computronium.experiment.schema.axis",
+        "computronium.experiment.schema.coordinate",
+        "computronium.experiment.schema.run_spec",
+        "computronium.ontology.system",
+    ]
+    for mod in required:
+        try:
+            __import__(mod)
+        except Exception:
+            logger.exception("%s import failed", mod)
+            logger.exception("Fix: uv sync --dev --all-extras")
+            return False
+    logger.info("All %d modules OK", len(required))
+    return True
+
+
+def _check_dry_run(config: _SelfTestConfig) -> bool:
+    """Run dry-run functional test."""
+    try:
+        result = run_simple_survey(
+            config.dry_run_hours,
+            fidelity=config.dry_run_fidelity,
+            dry_run=True,
+            device=config.dry_run_device,
+        )
+    except Exception:
+        logger.exception("dry-run crashed")
+        import traceback
+
+        traceback.print_exc()
+        return False
+    else:
+        n_cells = result.get("n", 0)
+        logger.info("Dry-run generated %d cells", n_cells)
+        if n_cells == 0:
+            logger.error("dry-run generated 0 cells")
+            return False
+        return True
+
+
+def _run_self_test() -> bool:
+    """Run environment self-tests. Returns True if all pass."""
+    logger.info("Checking environment...")
+    config = _SelfTestConfig()
+
+    checks = [
+        ("Python version", lambda: _check_python_version(config)),
+        ("uv available", _check_uv_available),
+        ("stdlib modules", _check_stdlib_modules),
+        ("torch", _check_torch),
+        ("computronium modules", _check_computronium_modules),
+        ("dry-run", lambda: _check_dry_run(config)),
+    ]
+
+    for idx, (name, check) in enumerate(checks, 1):
+        logger.info("Test %d/%d: %s...", idx, len(checks), name)
+        if not check():
+            logger.error("FAIL: %s", name)
+            return False
+
+    logger.info("ALL TESTS PASSED")
+    return True
 
 
 def main() -> None:
@@ -665,27 +797,28 @@ def main() -> None:
     parser.add_argument("--axes", default="", help="JSON: axis -> [primitives]")
     parser.add_argument("--hyperparameters", default="", help="JSON: hyperparameters")
     parser.add_argument("--objectives", default="", help="Comma-separated objectives")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose progress output")
-    parser.add_argument("--no-self-test", action="store_true", help="Skip environment self-test")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Verbose progress output"
+    )
+    parser.add_argument(
+        "--no-self-test", action="store_true", help="Skip environment self-test"
+    )
 
     args = parser.parse_args()
 
-    print(f"[SimpleSurvey] Starting with args: {sys.argv}", file=sys.stderr)
-
     if not args.no_self_test:
-        print("[SimpleSurvey] Running self-test...", file=sys.stderr)
+        logger.info("Running self-test...")
         try:
-            if not _self_test():
-                print("[SimpleSurvey] Self-test failed. Use --no-self-test to skip.", file=sys.stderr)
+            if not _run_self_test():
+                logger.error("Self-test failed. Use --no-self-test to skip.")
                 sys.exit(1)
-        except Exception as e:
-            print(f"[SimpleSurvey] Self-test CRASHED: {e}", file=sys.stderr)
+        except Exception:
+            logger.exception("Self-test CRASHED")
             import traceback
+
             traceback.print_exc()
             sys.exit(1)
-        print("[SimpleSurvey] Self-test passed", file=sys.stderr)
-
-    print(f"[SimpleSurvey] Parsed args: fidelity={args.fidelity}, device={args.device}, workers={args.max_workers}", file=sys.stderr)
+        logger.info("Self-test passed")
 
     tasks = args.tasks.split(",") if args.tasks else None
     axes = json.loads(args.axes) if args.axes else None
@@ -714,10 +847,8 @@ def main() -> None:
             verbose=args.verbose,
         )
         print(json.dumps(result, default=str, indent=2))
-    except Exception as e:
-        print(f"[SimpleSurvey] FATAL: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
+    except Exception:
+        logger.exception("FATAL")
         sys.exit(1)
 
 
