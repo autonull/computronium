@@ -18,6 +18,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
+# Default grace period for hard deadline enforcement (±30s contract)
+DEFAULT_GRACE_SECONDS: float = 30.0
+
+
 @dataclass(frozen=True, slots=True)
 class Deadline:
     """Hard deadline for experiment execution.
@@ -27,11 +31,11 @@ class Deadline:
     """
 
     deadline_ts: float  # Absolute monotonic timestamp when budget expires
-    grace_seconds: float = 30.0  # Hard stop grace period
+    grace_seconds: float = DEFAULT_GRACE_SECONDS  # Hard stop grace period
     started_at: float = 0.0  # When this deadline was created (monotonic)
 
     @classmethod
-    def from_hours(cls, hours: float, *, grace_seconds: float = 30.0) -> Deadline:
+    def from_hours(cls, hours: float, *, grace_seconds: float = DEFAULT_GRACE_SECONDS) -> Deadline:
         """Create deadline from hours budget."""
         now = time.monotonic()
         return cls(
@@ -41,7 +45,7 @@ class Deadline:
         )
 
     @classmethod
-    def from_seconds(cls, seconds: float, *, grace_seconds: float = 30.0) -> Deadline:
+    def from_seconds(cls, seconds: float, *, grace_seconds: float = DEFAULT_GRACE_SECONDS) -> Deadline:
         """Create deadline from seconds budget."""
         now = time.monotonic()
         return cls(
@@ -380,7 +384,7 @@ class DeadlineEnforcer:
 def create_deadline_from_cli(
     hours: float | None = None,
     seconds: float | None = None,
-    grace_seconds: float = 30.0,
+    grace_seconds: float = DEFAULT_GRACE_SECONDS,
 ) -> Deadline | None:
     """Create deadline from CLI arguments.
 

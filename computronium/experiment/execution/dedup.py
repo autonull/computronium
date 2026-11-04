@@ -50,19 +50,7 @@ def measurement_key(record: Record) -> str:
     )
 
 
-def replication_key(record: Record) -> str:
-    """Compute the replication key for a record.
-
-    The replication key identifies a cell's measurement configuration
-    without the seed - used for grouping seeds belonging to the same cell.
-
-    Args:
-        record: The record to compute the key for.
-
-    Returns:
-        String key in format "cell_key|fidelity|n_seeds|epochs|batch_limit|budget_id".
-    """
-    return measurement_key(record)
+replication_key = measurement_key  # Alias: same key identifies replication group
 
 
 __all__ = [

@@ -505,25 +505,6 @@ def _extract_metrics_from_records(
     return cell_values, train_values, val_values, rho_values
 
 
-def compute_required_seeds_power(
-    effect_size: float,
-    power: float = 0.8,
-    alpha: float = 0.05,
-    test_type: str = "t_test",
-) -> int:
-    """Compute required seeds for a given effect size and power.
-
-    Delegates to canonical implementation in core.statistics.
-    """
-    from computronium.core.statistics import required_sample_size
-
-    return required_sample_size(
-        effect_size=effect_size,
-        power=power,
-        alpha=alpha,
-    )
-
-
 def run_l1_statistical_gates(  # ruff: ignore[too-many-locals] - one accumulator per gate metric
     cell_records: list[Record],
     baseline: BaselineRecord | None,
@@ -817,7 +798,6 @@ __all__ = [
     "check_superiority_gate",
     "check_train_val_gap_gate",
     "compute_confidence_interval",
-    "compute_required_seeds_power",
     "promote_with_stats",
     "run_l1_statistical_gates",
 ]

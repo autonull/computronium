@@ -37,6 +37,63 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 
+FIDELITY_ORDER = ("L0", "L1", "L2")
+
+# Smart-survey default promotion fraction (40% of eligible promotions per tier)
+DEFAULT_PROMOTION_FRACTION: float = 0.4
+# Minimum promotions per tier if any eligible
+MIN_PROMOTIONS_PER_TIER: int = 1
+
+
+def _source_fidelity_for(target_fidelity: str) -> str | None:
+    """Map target fidelity to its source fidelity."""
+    return {"L1": "L0", "L2": "L1"}.get(target_fidelity)
+
+
+def _build_promo_schedule(
+    sched: Schedule,
+    target_fidelity: str,
+    task_name: str,
+    spec: RunSpec,
+) -> Schedule:
+    """Build a promotion schedule with the target fidelity and task."""
+    fidelity_seeds = spec.fidelity_seeds or {"L0": 1, "L1": 2, "L2": 5}
+    fidelity_epochs = spec.fidelity_epochs or {"L0": 1, "L1": 3, "L2": 10}
+
+    return Schedule(
+        fidelity=target_fidelity,
+        seed=sched.seed,
+        n_seeds=fidelity_seeds.get(target_fidelity, sched.n_seeds),
+        epochs=fidelity_epochs.get(target_fidelity, sched.epochs),
+        batch_limit=sched.batch_limit,
+        budget_id=f"promotion_{target_fidelity}",
+        task_id=task_name,
+        param_budget=sched.param_budget,
+        device=sched.device,
+        deterministic=sched.deterministic,
+        num_workers=sched.num_workers,
+        precision=sched.precision,
+        checkpoint_every_n=spec.checkpoint_every_n,
+        early_stopping_patience=spec.early_stopping_patience,
+        distributed_backend=sched.distributed_backend,
+        ddp_backend=sched.ddp_backend,
+        fsdp_sharding_strategy=sched.fsdp_sharding_strategy,
+        fsdp_min_params=sched.fsdp_min_params,
+        fsdp_cpu_offload=sched.fsdp_cpu_offload,
+        fsdp_mixed_precision=sched.fsdp_mixed_precision,
+    )
+
+
+if TYPE_CHECKING:
+    from computronium.experiment.execution.stage import (
+        Fragment,
+        StageContext,
+    )
+    from computronium.experiment.kernel.evaluate import TaskScheduler
+    from computronium.experiment.kernel.search_space import SearchSpace
+    from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
+
 logger = logging.getLogger(__name__)
 
 
@@ -884,7 +941,7 @@ class _StageMixin(_PipelineBase):
             cell_key = coord.cell_key()
             target_fidelity = sched.fidelity
 
-            source_fidelity = self._source_fidelity_for(target_fidelity)
+            source_fidelity = _source_fidelity_for(target_fidelity)
             if source_fidelity is None:
                 continue
 
@@ -899,7 +956,7 @@ class _StageMixin(_PipelineBase):
             # Use the original task from the source fidelity schedule
             # Task cycling to incompatible tasks causes admission gate rejections
             original_task = best_record.schedule.task_id or "digits"
-            promo_sched = self._build_promo_schedule(
+            promo_sched = _build_promo_schedule(
                 sched=sched,
                 target_fidelity=target_fidelity,
                 task_name=original_task,
@@ -908,6 +965,55 @@ class _StageMixin(_PipelineBase):
             eligible.append((coord, promo_sched))
         return eligible
 
+    def _limit_promotions_by_budget(
+        self,
+        eligible: list[tuple[Coordinate, Schedule]],
+        cell_best: dict[str, tuple[float, Record]],
+        spec: RunSpec,
+    ) -> list[tuple[Coordinate, Schedule]]:
+        """Limit promotions according to smart-survey budget allocation.
+
+        Budget split: 40% for L0→L1 promotions, 40% for L1→L2 promotions,
+        20% reserved for L2 deepening (handled by allocator, not here).
+        """
+        if not eligible:
+            return eligible
+
+        # Sort by normalized accuracy descending (source fidelity score)
+        eligible.sort(
+            key=lambda x: (
+                -cell_best.get(
+                    f"{x[0].cell_key()}|{_source_fidelity_for(x[1].fidelity)}",
+                    (0.0,),
+                )[0]
+            )
+        )
+
+        # Budget fractions from smart-survey spec (40% each for L0→L1 and L1→L2)
+        promo_fraction = getattr(spec, "promotion_fraction", DEFAULT_PROMOTION_FRACTION)
+
+        # Count promotions per fidelity transition
+        l0_l1_count = sum(1 for _, s in eligible if s.fidelity == "L1")
+        l1_l2_count = sum(1 for _, s in eligible if s.fidelity == "L2")
+
+        # Apply budget fractions (minimum 1 promotion per tier if any eligible)
+        max_l0_l1 = max(MIN_PROMOTIONS_PER_TIER, int(l0_l1_count * promo_fraction))
+        max_l1_l2 = max(MIN_PROMOTIONS_PER_TIER, int(l1_l2_count * promo_fraction))
+
+        limited: list[tuple[Coordinate, Schedule]] = []
+        l0_l1_seen = 0
+        l1_l2_seen = 0
+        for coord, sched in eligible:
+            if sched.fidelity == "L1":
+                if l0_l1_seen < max_l0_l1:
+                    limited.append((coord, sched))
+                    l0_l1_seen += 1
+            elif sched.fidelity == "L2" and l1_l2_seen < max_l1_l2:
+                limited.append((coord, sched))
+                l1_l2_seen += 1
+        return limited
+
+    # Compatibility methods for tests that inspect class internals
     @staticmethod
     def _source_fidelity_for(target_fidelity: str) -> str | None:
         """Map target fidelity to its source fidelity."""
@@ -945,54 +1051,6 @@ class _StageMixin(_PipelineBase):
             fsdp_cpu_offload=sched.fsdp_cpu_offload,
             fsdp_mixed_precision=sched.fsdp_mixed_precision,
         )
-
-    def _limit_promotions_by_budget(
-        self,
-        eligible: list[tuple[Coordinate, Schedule]],
-        cell_best: dict[str, tuple[float, Record]],
-        spec: RunSpec,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Limit promotions according to smart-survey budget allocation.
-
-        Budget split: 40% for L0→L1 promotions, 40% for L1→L2 promotions,
-        20% reserved for L2 deepening (handled by allocator, not here).
-        """
-        if not eligible:
-            return eligible
-
-        # Sort by normalized accuracy descending (source fidelity score)
-        eligible.sort(
-            key=lambda x: (
-                -cell_best.get(
-                    f"{x[0].cell_key()}|{self._source_fidelity_for(x[1].fidelity)}",
-                    (0.0,),
-                )[0]
-            )
-        )
-
-        # Budget fractions from smart-survey spec (40% each for L0→L1 and L1→L2)
-        promo_fraction = getattr(spec, "promotion_fraction", 0.4)
-
-        # Count promotions per fidelity transition
-        l0_l1_count = sum(1 for _, s in eligible if s.fidelity == "L1")
-        l1_l2_count = sum(1 for _, s in eligible if s.fidelity == "L2")
-
-        # Apply budget fractions (minimum 1 promotion per tier if any eligible)
-        max_l0_l1 = max(1, int(l0_l1_count * promo_fraction))
-        max_l1_l2 = max(1, int(l1_l2_count * promo_fraction))
-
-        limited: list[tuple[Coordinate, Schedule]] = []
-        l0_l1_seen = 0
-        l1_l2_seen = 0
-        for coord, sched in eligible:
-            if sched.fidelity == "L1":
-                if l0_l1_seen < max_l0_l1:
-                    limited.append((coord, sched))
-                    l0_l1_seen += 1
-            elif sched.fidelity == "L2" and l1_l2_seen < max_l1_l2:
-                limited.append((coord, sched))
-                l1_l2_seen += 1
-        return limited
 
     async def _execute_batch_with_isolation(
         self,

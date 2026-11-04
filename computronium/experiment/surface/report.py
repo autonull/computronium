@@ -1098,8 +1098,8 @@ def _build_affinity_matrix(
     """Build affinity matrix for two axes from valid records."""
     from collections import defaultdict
 
-    x_vals = sorted(set(getattr(r, axis_x) for r in records))
-    y_vals = sorted(set(getattr(r, axis_y) for r in records))
+    x_vals = sorted({getattr(r, axis_x) for r in records})
+    y_vals = sorted({getattr(r, axis_y) for r in records})
 
     matrix: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for r in records:
@@ -1197,6 +1197,77 @@ def _primitive_affinity_section(generator: ReportGenerator, run_id: str) -> list
     return lines
 
 
+def _compute_ablation_data(
+    records: list,
+    axis: str,
+) -> list[dict[str, Any]]:
+    """Compute ablation data for an axis.
+
+    Returns a list of groups, each containing:
+    - 'fixed': string description of fixed axes
+    - 'task_id': task ID for the group
+    - 'metrics': dict of metric_name -> list of arm dicts with keys:
+        'axis_value', 'mean', 'std', 'n', 'at_chance', 'min', 'max'
+    """
+    import statistics
+
+    groups_result = []
+    for index, group in enumerate(contrast_groups(records, axis), start=1):
+        fixed = ", ".join(
+            f"{name}={getattr(next(iter(group.values()))[0], name)}"
+            for name in _STRUCTURAL_AXES
+            if name != axis
+        )
+        task_id = next(iter(group.values()))[0].schedule.task_id
+
+        axis_groups = []
+        for metric in _ABLATION_METRICS:
+            present = {
+                value: arm
+                for value, arm in group.items()
+                if any(metric in record.payload for record in arm)
+            }
+            if not present:
+                continue
+
+            chance = chance_level(task_id, metric)
+            arms_data = []
+            for axis_value, arm in sorted(present.items()):
+                values = [
+                    float(record.payload[metric])
+                    for record in arm
+                    if isinstance(record.payload.get(metric), (int, float))
+                    and not isinstance(record.payload.get(metric), bool)
+                ]
+                if not values:
+                    continue
+                mean = statistics.mean(values)
+                std = statistics.stdev(values) if len(values) > 1 else 0.0
+                at_chance = chance is not None and mean <= chance
+                arms_data.append({
+                    "axis_value": axis_value,
+                    "mean": mean,
+                    "std": std,
+                    "n": len(values),
+                    "min": min(values),
+                    "max": max(values),
+                    "at_chance": at_chance,
+                })
+            if arms_data:
+                axis_groups.append({"metric": metric, "arms": arms_data})
+
+        if axis_groups:
+            groups_result.append({
+                "axis": axis,
+                "group_index": index,
+                "fixed_axes": fixed,
+                "task_id": task_id,
+                "metrics": axis_groups,
+            })
+
+    return groups_result
+
+
 def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
     """Per-axis ablation tables, only where the other five axes are held fixed."""
     records = list(store.query_records(run_id=run_id))
@@ -1205,33 +1276,19 @@ def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
 
     lines = _section("Per-Axis Ablation Tables:")
     reported = False
+
     for axis in _ABLATION_AXES:
-        groups = contrast_groups(records, axis)
-        for index, group in enumerate(groups, start=1):
-            fixed = ", ".join(
-                f"{name}={getattr(next(iter(group.values()))[0], name)}"
-                for name in _STRUCTURAL_AXES
-                if name != axis
-            )
+        ablation_data = _compute_ablation_data(records, axis)
+        for group in ablation_data:
             lines.append(
-                f"  {axis.capitalize()} Ablation [group {index}, fixed: {fixed}]:"
+                f"  {group['axis'].capitalize()} Ablation [group {group['group_index']}, fixed: {group['fixed_axes']}]:"
             )
-            task_id = next(iter(group.values()))[0].schedule.task_id
-            for metric in _ABLATION_METRICS:
-                present = {
-                    value: arm
-                    for value, arm in group.items()
-                    if any(metric in record.payload for record in arm)
-                }
-                if not present:
-                    continue
-                lines.append(f"    {metric}:")
-                chance = chance_level(task_id, metric)
-                for axis_value, arm in sorted(present.items()):
-                    mean, std, n, at_chance = _row_stats(arm, metric, chance)
-                    flag = " [at chance]" if at_chance else ""
+            for metric_data in group["metrics"]:
+                lines.append(f"    {metric_data['metric']}:")
+                for arm in metric_data["arms"]:
+                    flag = " [at chance]" if arm["at_chance"] else ""
                     lines.append(
-                        f"      {axis_value}: mean={mean:.4g}, std={std:.4g}, n={n}{flag}"
+                        f"      {arm['axis_value']}: mean={arm['mean']:.4g}, std={arm['std']:.4g}, n={arm['n']}{flag}"
                     )
             lines.append("")
             reported = True
@@ -1682,46 +1739,32 @@ def _generate_ablation_html(generator: ReportGenerator, run_id: str) -> str:
     ]
     reported = False
     for axis in _ABLATION_AXES:
-        for index, group in enumerate(contrast_groups(records, axis), start=1):
-            fixed = ", ".join(
-                f"{name}={getattr(next(iter(group.values()))[0], name)}"
-                for name in _STRUCTURAL_AXES
-                if name != axis
-            )
-            task_id = next(iter(group.values()))[0].schedule.task_id
+        ablation_data = _compute_ablation_data(records, axis)
+        for group in ablation_data:
             html_parts.append(
-                f"<h3>{axis.capitalize()} Ablation "
-                f"<small>(group {index}; fixed: {fixed})</small></h3>"
+                f"<h3>{group['axis'].capitalize()} Ablation "
+                f"<small>(group {group['group_index']}; fixed: {group['fixed_axes']})</small></h3>"
             )
-            for metric in _ABLATION_METRICS:
-                present = {
-                    value: arm
-                    for value, arm in group.items()
-                    if any(metric in record.payload for record in arm)
-                }
-                if not present:
-                    continue
-                html_parts.append(f"<h4>{metric}</h4>")
+            for metric_data in group["metrics"]:
+                html_parts.append(f"<h4>{metric_data['metric']}</h4>")
                 html_parts.append(
                     "<table style='border-collapse: collapse; width: 100%; "
                     "margin-bottom: 20px;'><thead><tr "
                     "style='background-color: #e9ecef;'>"
-                    f"<th style='border: 1px solid #dee2e6; padding: 8px;'>{axis}</th>"
+                    f"<th style='border: 1px solid #dee2e6; padding: 8px;'>{group['axis']}</th>"
                     "<th style='border: 1px solid #dee2e6; padding: 8px;'>Mean</th>"
                     "<th style='border: 1px solid #dee2e6; padding: 8px;'>Std</th>"
                     "<th style='border: 1px solid #dee2e6; padding: 8px;'>n</th>"
                     "</tr></thead><tbody>"
                 )
-                chance = chance_level(task_id, metric)
-                for axis_value, arm in sorted(present.items()):
-                    mean, std, n, at_chance = _row_stats(arm, metric, chance)
-                    flag = " (at chance)" if at_chance else ""
+                for arm in metric_data["arms"]:
+                    flag = " (at chance)" if arm["at_chance"] else ""
                     html_parts.append(
                         f"<tr><td style='border: 1px solid #dee2e6; padding: 8px;'>"
-                        f"{axis_value}{flag}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{mean:.4g}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{std:.4g}</td>"
-                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{n}</td>"
+                        f"{arm['axis_value']}{flag}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{arm['mean']:.4g}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{arm['std']:.4g}</td>"
+                        f"<td style='border: 1px solid #dee2e6; padding: 8px;'>{arm['n']}</td>"
                         "</tr>"
                     )
                 html_parts.append("</tbody></table>")
