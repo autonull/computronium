@@ -313,9 +313,9 @@ class TestSmartSurveyLock:
         # Verify the budget allocation logic is present in the codebase
         import inspect
 
-        import computronium.experiment.execution.pipeline._stages as stages_module
+        import computronium.experiment.execution.pipeline._promotion as promotion_module
 
-        source = inspect.getsource(stages_module)
+        source = inspect.getsource(promotion_module)
         # Check for budget allocation constants or logic
         assert "40" in source or "0.4" in source  # 40% for L0/L1
         assert "20" in source or "0.2" in source  # 20% for L2

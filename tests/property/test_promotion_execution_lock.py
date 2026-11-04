@@ -9,6 +9,7 @@ import inspect
 
 import pytest
 
+import computronium.experiment.execution.pipeline._promotion as promotion_module
 from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
 from computronium.experiment.execution.pipeline._stages import _StageMixin
 from computronium.experiment.kernel.evaluate import TaskScheduler
@@ -127,25 +128,25 @@ class TestPromotionExecutionLock:
 
     def test_apply_smart_survey_promotion_filters_by_threshold(self) -> None:
         """_apply_smart_survey_promotion filters cells below promotion_threshold."""
-        source = inspect.getsource(_StageMixin._apply_smart_survey_promotion)
-        filter_source = inspect.getsource(_StageMixin._filter_promotions_by_threshold)
+        source = inspect.getsource(promotion_module.apply_smart_survey_promotion)
+        filter_source = inspect.getsource(promotion_module._filter_promotions_by_threshold)
         assert "promotion_threshold" in source
         assert "norm_acc < threshold" in filter_source
         assert "continue" in filter_source  # Skip cells below threshold
 
     def test_apply_smart_survey_promotion_uses_original_task(self) -> None:
         """_apply_smart_survey_promotion uses original task (not task cycling)."""
-        filter_source = inspect.getsource(_StageMixin._filter_promotions_by_threshold)
-        build_source = inspect.getsource(_StageMixin._build_promo_schedule)
-        assert "original_task = best_record.schedule.task_id" in filter_source
+        filter_source = inspect.getsource(promotion_module._filter_promotions_by_threshold)
+        build_source = inspect.getsource(promotion_module._build_promo_schedule)
+        assert "original_task = entry.record.schedule.task_id" in filter_source
         assert "task_id=task_name" in build_source
 
     def test_apply_smart_survey_promotion_creates_correct_schedules(self) -> None:
         """Promotion creates schedules with correct fidelity, seeds, epochs, checkpoint."""
-        build_source = inspect.getsource(_StageMixin._build_promo_schedule)
+        build_source = inspect.getsource(promotion_module._build_promo_schedule)
         assert "fidelity=target_fidelity" in build_source
-        assert "n_seeds=sched.n_seeds" in build_source
-        assert "epochs=sched.epochs" in build_source
+        assert "n_seeds=fidelity_seeds.get" in build_source  # Uses spec fidelity_seeds
+        assert "epochs=fidelity_epochs.get" in build_source  # Uses spec fidelity_epochs
         assert "checkpoint_every_n=spec.checkpoint_every_n" in build_source
         assert "early_stopping_patience=spec.early_stopping_patience" in build_source
 
@@ -188,25 +189,25 @@ class TestPromotionExecutionLock:
         assert "deadline=self._state.deadline" in source
 
     def test_smart_survey_promotion_applied_in_run_allocator(self) -> None:
-        """_run_allocator applies _apply_smart_survey_promotion for smart-survey profile."""
+        """_run_allocator applies apply_smart_survey_promotion for smart-survey profile."""
         source = inspect.getsource(_StageMixin._run_allocator)
         assert 'spec.profile == "smart-survey"' in source
-        assert "_apply_smart_survey_promotion" in source
+        assert "apply_smart_survey_promotion" in source
 
     def test_promotion_schedule_includes_checkpoint_every_n(self) -> None:
         """Promotion schedules include checkpoint_every_n for warm-start."""
-        build_source = inspect.getsource(_StageMixin._build_promo_schedule)
+        build_source = inspect.getsource(promotion_module._build_promo_schedule)
         assert "checkpoint_every_n=spec.checkpoint_every_n" in build_source
 
     def test_promotion_budget_allocation_split_constants(self) -> None:
         """Budget allocation constants documented in _limit_promotions_by_budget."""
-        source = inspect.getsource(_StageMixin._limit_promotions_by_budget)
+        source = inspect.getsource(promotion_module._limit_promotions_by_budget)
         assert "40%" in source or "0.4" in source
         assert "40%" in source or "0.4" in source
 
     def test_promotion_sorts_by_normalized_accuracy(self) -> None:
         """Promotions sorted by normalized accuracy descending."""
-        limit_source = inspect.getsource(_StageMixin._limit_promotions_by_budget)
+        limit_source = inspect.getsource(promotion_module._limit_promotions_by_budget)
         assert "sort" in limit_source
         assert "cell_best.get" in limit_source
         assert "norm_acc" in limit_source or "source_fidelity" in limit_source
@@ -310,7 +311,7 @@ class TestPromotionExecutionLock:
 
     def test_promotion_schedule_includes_resume_checkpoint_support(self) -> None:
         """Promotion schedules support resume_checkpoint_path (via checkpoint_every_n)."""
-        build_source = inspect.getsource(_StageMixin._build_promo_schedule)
+        build_source = inspect.getsource(promotion_module._build_promo_schedule)
         # checkpoint_every_n enables checkpoint saving which enables resume
         assert "checkpoint_every_n" in build_source
         # The schedule passed to promotion already has checkpoint_every_n from _build_allocator_candidates
