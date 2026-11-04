@@ -1,57 +1,70 @@
 #!/usr/bin/env bash
-# experiment_shallow.sh — Run a broad survey profile with a time limit (hours)
+# experiment_shallow.sh — Run a SimpleSurvey experiment with a time limit (hours)
 #
 # Usage:
-#   ./experiment_shallow.sh <hours> [--profile NAME] [--dry-run] [--device auto|cpu|cuda] [--max-workers N] [--overrides JSON]
+#   ./experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list]
+#                          [--workers N] [--store PATH] [--promote-from PATH]
+#                          [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda]
 #
 # Examples:
-#   ./experiment_shallow.sh 1                              # 1 hour, survey-24h profile
-#   ./experiment_shallow.sh 0.5 --profile quick-verify     # 30 min, quick verify
-#   ./experiment_shallow.sh 2 --max-workers 2              # 2 hours, 2 workers
-#   ./experiment_shallow.sh 1 --dry-run                    # Show plan without executing
-#   ./experiment_shallow.sh 1 --overrides '{"n_seeds": 2}' # 1 hour, 2 seeds/cell
+#   ./experiment_shallow.sh 0.5 --fidelity L0                    # 30 min L0 screen
+#   ./experiment_shallow.sh 0.5 --fidelity L1 --promote-from L0.duckdb  # Promote top 20 from L0
+#   ./experiment_shallow.sh 1 --fidelity L2 --promote-from L1.duckdb --promote-top 5  # Deepen top 5
+#   ./experiment_shallow.sh 0.01 --dry-run                       # Dry run (generation only)
 
 set -euo pipefail
 
 # Defaults
 HOURS=""
-PROFILE="smart-survey"
+FIDELITY="L0"
+TASKS="auto"
+MAX_WORKERS=4
+STORE_PATH=""
+PROMOTE_FROM=""
+PROMOTE_TOP=20
+SEED=42
 DRY_RUN=false
 DEVICE="auto"
-MAX_WORKERS=""
-OVERRIDES_JSON=""
-EXTRA_ARGS=()
+PARAM_BUDGET=0
+N_SEEDS=1
+EPOCHS=1
+BATCH_LIMIT=0
+AXES=""
+HYPERPARAMETERS=""
+OBJECTIVES=""
 
-# Handle --help/-h immediately (before any other parsing)
+# Handle --help/-h immediately
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
     cat <<'EOF'
-Usage: experiment_shallow.sh <hours> [--profile NAME] [--dry-run] [--device auto|cpu|cuda] [--max-workers N] [--overrides JSON]
+Usage: experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda]
 
-Runs a broad survey profile with a time budget in hours.
-Results stored in experiment_<N>h.duckdb
-
-Profiles:
-  smart-survey    Adaptive multi-fidelity: L0 screen → L1 confirm → L2 deepen (default)
-  survey-24h      Broad 24h mapping: all 6 axes, L0/L1, 1-2 epochs, no settlement
-  quick-verify    Fast sanity check: L0 smoke + L1 evidence on few seeds (~5 min)
-  quick-run       Dashboard quick-start: diverse cells in ~30s for Pareto/ablation
-  production-map  Full broad mapping: L0→L1→L2 maturation with multi-objective Pareto
-  demo            One controlled contrast: four credit rules, five axes fixed
+Runs a SimpleSurvey experiment with a time budget in hours.
+Results stored in <store>.duckdb
 
 Options:
-  --profile NAME       Profile to run (default: smart-survey)
-  --dry-run            Print plan without executing
-  --device auto|cpu|cuda  Device to run on (default: auto)
-  --max-workers N      Max concurrent cell workers
-  --overrides JSON     JSON overrides for profile parameters
-  --help, -h           Show this help
+  --fidelity L0|L1|L2     Fidelity level (default: L0)
+  --tasks auto|list       Comma-separated task names or "auto" (default: auto)
+  --workers N             Max concurrent workers (default: 4)
+  --store PATH            DuckDB store path (default: experiment_<hours>h.duckdb)
+  --promote-from PATH     Prior store path for importance sampling
+  --promote-top N         Number of top cells to promote (default: 20)
+  --seed N                Random seed (default: 42)
+  --dry-run               Generate cells only, no training
+  --device auto|cpu|cuda  Device (default: auto)
+  --param-budget N        Parameter budget ceiling (default: 0 = unconstrained)
+  --n-seeds N             Seeds per cell (default: 1)
+  --epochs N              Epochs per cell (default: 1)
+  --batch-limit N         Batch limit (default: 0 = full dataset)
+  --axes JSON             JSON: {"axis": ["primitives"]}
+  --hyperparams JSON      JSON: hyperparameter domains
+  --objectives LIST       Comma-separated objectives
+  --help, -h              Show this help
 
 Examples:
-  experiment_shallow.sh 1
-  experiment_shallow.sh 0.5 --profile quick-verify
-  experiment_shallow.sh 2 --max-workers 2 --device cpu
-  experiment_shallow.sh 1 --dry-run
-  experiment_shallow.sh 1 --overrides '{"n_seeds": 2, "epochs": 2}'
+  experiment_shallow.sh 0.5 --fidelity L0
+  experiment_shallow.sh 0.5 --fidelity L1 --promote-from L0.duckdb
+  experiment_shallow.sh 1 --fidelity L2 --promote-from L1.duckdb --promote-top 5
+  experiment_shallow.sh 0.01 --dry-run
 EOF
     exit 0
 fi
@@ -60,11 +73,41 @@ fi
 HOURS="${1:-}"
 shift 1 || true
 
+if [[ -z "${HOURS}" ]]; then
+    echo "Error: Hours argument required" >&2
+    echo "Usage: $0 <hours> [options]" >&2
+    exit 1
+fi
+
 # Parse remaining arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --profile)
-            PROFILE="${2:-smart-survey}"
+        --fidelity)
+            FIDELITY="${2:-L0}"
+            shift 2
+            ;;
+        --tasks)
+            TASKS="${2:-auto}"
+            shift 2
+            ;;
+        --workers)
+            MAX_WORKERS="${2:-4}"
+            shift 2
+            ;;
+        --store)
+            STORE_PATH="${2:-}"
+            shift 2
+            ;;
+        --promote-from)
+            PROMOTE_FROM="${2:-}"
+            shift 2
+            ;;
+        --promote-top)
+            PROMOTE_TOP="${2:-20}"
+            shift 2
+            ;;
+        --seed)
+            SEED="${2:-42}"
             shift 2
             ;;
         --dry-run)
@@ -75,27 +118,40 @@ while [[ $# -gt 0 ]]; do
             DEVICE="${2:-auto}"
             shift 2
             ;;
-        --max-workers)
-            MAX_WORKERS="${2:-}"
+        --param-budget)
+            PARAM_BUDGET="${2:-0}"
             shift 2
             ;;
-        --overrides)
-            OVERRIDES_JSON="${2:-}"
+        --n-seeds)
+            N_SEEDS="${2:-1}"
+            shift 2
+            ;;
+        --epochs)
+            EPOCHS="${2:-1}"
+            shift 2
+            ;;
+        --batch-limit)
+            BATCH_LIMIT="${2:-0}"
+            shift 2
+            ;;
+        --axes)
+            AXES="${2:-}"
+            shift 2
+            ;;
+        --hyperparams)
+            HYPERPARAMETERS="${2:-}"
+            shift 2
+            ;;
+        --objectives)
+            OBJECTIVES="${2:-}"
             shift 2
             ;;
         *)
-            EXTRA_ARGS+=("$1")
-            shift
+            echo "Unknown option: $1" >&2
+            exit 1
             ;;
     esac
 done
-
-# Validate hours argument
-if [[ -z "${HOURS}" ]]; then
-    echo "Error: Hours argument required" >&2
-    echo "Usage: $0 <hours> [--profile NAME] [--dry-run] [--device auto|cpu|cuda] [--max-workers N] [--overrides JSON]" >&2
-    exit 1
-fi
 
 # Check uv is available
 if ! command -v uv &> /dev/null; then
@@ -104,7 +160,7 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
-# Find project root (directory containing pyproject.toml)
+# Find project root
 find_project_root() {
     local dir="$PWD"
     while [[ "$dir" != "/" ]]; do
@@ -119,192 +175,107 @@ find_project_root() {
 
 PROJECT_ROOT="$(find_project_root)"
 if [[ -z "${PROJECT_ROOT}" ]]; then
-    echo "❌ Could not find project root (pyproject.toml not found in any parent directory)." >&2
-    echo "   Run this script from within the computronium repository." >&2
+    echo "❌ Could not find project root (pyproject.toml not found)." >&2
     exit 1
 fi
 
 cd "$PROJECT_ROOT"
 
-# Check if uv environment is set up, offer to install if not
-ensure_uv_env() {
-    local needs_setup=false
-    
-    if [[ ! -d ".venv" ]] || [[ ! -f "uv.lock" ]]; then
-        needs_setup=true
-    else
-        # Quick check if key packages are importable
-        if ! uv run python -c "import torch, optuna, scipy, torchvision, pytest" 2>/dev/null; then
-            needs_setup=true
-        fi
-    fi
-    
-    if [[ "$needs_setup" == true ]]; then
-        echo "⚠️  UV environment not ready (missing .venv, uv.lock, or dependencies)"
-        echo ""
-        echo "   This script needs the computronium environment with all dev dependencies."
-        echo ""
-        echo "   To set up automatically, run:"
-        echo "     uv venv && uv sync --dev --all-extras"
-        echo ""
-        if [[ -t 0 ]] && [[ -t 1 ]]; then
-            # Interactive terminal - offer to run setup
-            read -r -p "   Run setup now? [y/N] " response
-            case "$response" in
-                [yY][eE][sS]|[yY])
-                    echo "   Setting up environment..."
-                    uv venv && uv sync --dev --all-extras
-                    echo "   ✅ Environment ready"
-                    return 0
-                    ;;
-                *)
-                    echo "   Aborted. Run 'uv venv && uv sync --dev --all-extras' manually first."
-                    exit 1
-                    ;;
-            esac
-        else
-            # Non-interactive - exit with clear message
-            echo ""
-            echo "❌ UV environment not ready. Run this first:" >&2
-            echo "   uv venv && uv sync --dev --all-extras" >&2
-            echo ""
-            echo "   Then re-run this script." >&2
-            exit 1
-        fi
-    fi
-}
-
-ensure_uv_env
-
-# Convert hours to seconds (float arithmetic, portable)
-BUDGET_SECONDS=$(python3 -c "print(int(float('${HOURS}') * 3600))" 2>/dev/null || \
-                 awk -v h="${HOURS}" 'BEGIN {print int(h * 3600)}')
-
-# Store path with hours in name
-STORE_PATH="experiment_${HOURS}h.duckdb"
-
-# Build overrides JSON
-OVERRIDES="{\"budget_seconds\": ${BUDGET_SECONDS}}"
-if [[ -n "${OVERRIDES_JSON}" ]]; then
-    # Merge user overrides with budget_seconds
-    OVERRIDES=$(python3 -c "
-import json, sys
-base = json.loads('${OVERRIDES}')
-user = json.loads('${OVERRIDES_JSON}')
-base.update(user)
-print(json.dumps(base))
-" 2>/dev/null || echo "${OVERRIDES}")
+# Default store path
+if [[ -z "${STORE_PATH}" ]]; then
+    STORE_PATH="experiment_${HOURS}h.duckdb"
 fi
 
 # Build command
 CMD=(
-    uv run comp run "${PROFILE}"
+    uv run python -m computronium.experiment.simple_survey
+    "${HOURS}"
+    --fidelity "${FIDELITY}"
+    --max-workers "${MAX_WORKERS}"
     --store "${STORE_PATH}"
+    --seed "${SEED}"
     --device "${DEVICE}"
-    --overrides "${OVERRIDES}"
+    --param-budget "${PARAM_BUDGET}"
+    --n-seeds "${N_SEEDS}"
+    --epochs "${EPOCHS}"
+    --batch-limit "${BATCH_LIMIT}"
 )
 
-if [[ -n "${MAX_WORKERS}" ]]; then
-    CMD+=(--max-workers "${MAX_WORKERS}")
+if [[ "${TASKS}" != "auto" ]]; then
+    CMD+=(--tasks "${TASKS}")
+fi
+
+if [[ -n "${PROMOTE_FROM}" ]]; then
+    CMD+=(--promote-from "${PROMOTE_FROM}")
+    CMD+=(--promote-top "${PROMOTE_TOP}")
+fi
+
+if [[ -n "${AXES}" ]]; then
+    CMD+=(--axes "${AXES}")
+fi
+
+if [[ -n "${HYPERPARAMETERS}" ]]; then
+    CMD+=(--hyperparameters "${HYPERPARAMETERS}")
+fi
+
+if [[ -n "${OBJECTIVES}" ]]; then
+    CMD+=(--objectives "${OBJECTIVES}")
 fi
 
 if [[ "${DRY_RUN}" == true ]]; then
     CMD+=(--dry-run)
 fi
 
-CMD+=("${EXTRA_ARGS[@]}")
-
-# Print hardware info (verified by ensure_uv_env)
-TMP_HW="$(mktemp -t hw_info_XXXXXX.py 2>/dev/null || mktemp /tmp/hw_info_XXXXXX.py)"
-cat > "$TMP_HW" << 'PYEOF'
-import torch, os, psutil
-print(f"  CUDA available: {torch.cuda.is_available()}")
-if torch.cuda.is_available():
-    print(f"  GPU: {torch.cuda.get_device_name(0)}")
-    print(f"  GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-print(f"  CPU cores: {os.cpu_count()}")
-print(f"  System RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
-PYEOF
-uv run python "$TMP_HW"
-rm -f "$TMP_HW"
-
-# Progress preview function - self-contained to avoid import chain issues
-print_preview() {
-    local hours="$1"
-    local profile="$2"
-    
-    if [[ "$profile" == "smart-survey" ]]; then
-        uv run python -m computronium.experiment.execution.pipeline.preview "${hours}"
-    fi
-}
-
-# Log configuration
-print_box() {
-    local title="$1"
-    shift
-    local width=64
-    printf "╔%*s╗\n" $((width-1)) | tr ' ' '═'
-    printf "║ %-*s ║\n" $((width-4)) "${title}"
-    printf "╠%*s╣\n" $((width-1)) | tr ' ' '═'
-    for line in "$@"; do
-        printf "║ %-*s ║\n" $((width-4)) "${line}"
-    done
-    printf "╚%*s╝\n" $((width-1)) | tr ' ' '═'
-}
-
-print_box "smart-survey Experiment (adaptive multi-fidelity)" \
-    "Time limit:     ${HOURS} hour(s) (${BUDGET_SECONDS} seconds)" \
-    "Store:          ${STORE_PATH}" \
-    "Device:         ${DEVICE}" \
-    "$( [[ -n "${MAX_WORKERS}" ]] && echo "Max workers:    ${MAX_WORKERS}" || true )" \
-    "$( [[ "${DRY_RUN}" == true ]] && echo "Mode:           DRY RUN (plan only)" || true )" \
-    "Profile:        ${PROFILE}"
-
-# Print progress preview (always show for smart-survey)
-if [[ "${PROFILE}" == "smart-survey" ]]; then
-    print_preview "${HOURS}" "${PROFILE}"
-fi
-
+# Print configuration
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║              SimpleSurvey Experiment                         ║"
+echo "╠══════════════════════════════════════════════════════════════╣"
+printf "║ Time limit:     %-45s ║\n" "${HOURS} hour(s)"
+printf "║ Fidelity:       %-45s ║\n" "${FIDELITY}"
+printf "║ Store:          %-45s ║\n" "${STORE_PATH}"
+printf "║ Device:         %-45s ║\n" "${DEVICE}"
+printf "║ Max workers:    %-45s ║\n" "${MAX_WORKERS}"
+printf "║ Seed:           %-45s ║\n" "${SEED}"
+[[ -n "${PROMOTE_FROM}" ]] && printf "║ Promote from:   %-45s ║\n" "${PROMOTE_FROM}"
+[[ -n "${PROMOTE_FROM}" ]] && printf "║ Promote top:    %-45s ║\n" "${PROMOTE_TOP}"
+[[ "${DRY_RUN}" == true ]] && printf "║ Mode:           %-45s ║\n" "DRY RUN (generation only)"
+echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "🚀 Executing: ${CMD[*]}"
 echo ""
 
-# Run with timeout (add 5 min grace), portable timeout handling
+# Run with timeout (add 5 min grace)
 GRACE_SECONDS=300
+BUDGET_SECONDS=$(python3 -c "print(int(float('${HOURS}') * 3600))" 2>/dev/null || awk -v h="${HOURS}" 'BEGIN {print int(h * 3600)}')
 TOTAL_TIMEOUT=$((BUDGET_SECONDS + GRACE_SECONDS))
 
-# Check if timeout command exists
 if command -v timeout &> /dev/null; then
     TIMEOUT_CMD=(timeout "${TOTAL_TIMEOUT}")
 else
-    # No timeout command - run without hard timeout (pipeline enforces soft deadline)
     TIMEOUT_CMD=()
-    echo "⚠️  'timeout' command not found; relying on pipeline soft deadline only"
+    echo "⚠️  'timeout' command not found; running without hard timeout"
 fi
 
 if [[ "${DRY_RUN}" == true ]]; then
     "${CMD[@]}"
 else
-    # Run with output visible
     if [[ ${#TIMEOUT_CMD[@]} -gt 0 ]]; then
         "${TIMEOUT_CMD[@]}" "${CMD[@]}" 2>&1
     else
         "${CMD[@]}" 2>&1
     fi
     EXIT_CODE=$?
-    
+
     if [[ $EXIT_CODE -eq 124 ]]; then
         echo ""
         echo "⏱️  Experiment timed out after ${TOTAL_TIMEOUT}s (budget + grace)"
-        echo "   This is expected — the pipeline enforces soft deadline at ${BUDGET_SECONDS}s"
     elif [[ $EXIT_CODE -eq 127 ]]; then
         echo ""
-        echo "❌ Command not found. Ensure 'uv' and 'comp' are available." >&2
+        echo "❌ Command not found. Ensure 'uv' is available." >&2
         exit 127
     elif [[ $EXIT_CODE -ne 0 ]]; then
         echo ""
         echo "❌ Experiment failed with exit code ${EXIT_CODE}" >&2
-        echo "   Check the output above for errors." >&2
         exit $EXIT_CODE
     fi
 fi
