@@ -403,14 +403,17 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         cost_per_cell,
         n_cells,
     )
+    print(f"[SimpleSurvey] Budget: {hours}h = {budget_s}s, n_cells={n_cells}", file=sys.stderr)
 
     # 2. Build RunSpec
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.run_spec import AxisSelection
     from computronium.experiment.schema.seed_registries import seed_all_registries
 
+    print("[SimpleSurvey] Seeding registries...", file=sys.stderr)
     # Ensure registries are seeded
     seed_all_registries()
+    print("[SimpleSurvey] Registries seeded", file=sys.stderr)
 
     axis_selections = []
     if axes:
@@ -436,15 +439,20 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         fidelity_seeds={"L0": 1, "L1": 2, "L2": 5},
         fidelity_epochs={"L0": 1, "L1": 3, "L2": 10},
     )
+    print(f"[SimpleSurvey] Spec created: task_names={spec.task_names}", file=sys.stderr)
 
     # 3. Build search space
+    print("[SimpleSurvey] Building search space...", file=sys.stderr)
     search_space = search_space_from_spec(spec, tasks=spec.task_names)
+    print(f"[SimpleSurvey] Search space: tasks={search_space.tasks}, primitives={ {ax.value: len(search_space.primitives(ax)) for ax in StructuralAxis} }", file=sys.stderr)
 
     # 4. Determine tasks to use
     if tasks is None:
         tasks = get_fidelity_tasks(fidelity)
+    print(f"[SimpleSurvey] Using tasks: {tasks}", file=sys.stderr)
 
     # 5. Generate cells
+    print("[SimpleSurvey] Generating cells...", file=sys.stderr)
     random.seed(seed)
     cells = _generate_valid_cells(
         n_cells,
@@ -457,6 +465,7 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         promote_top,
     )
 
+    print(f"[SimpleSurvey] Generated {len(cells)} valid cells", file=sys.stderr)
     logger.info("Generated %d valid cells", len(cells))
 
     if dry_run:
@@ -468,6 +477,7 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         }
 
     # 6. Parallel evaluate
+    print("[SimpleSurvey] Starting parallel evaluation...", file=sys.stderr)
     run_id = str(uuid.uuid4())[:8]
     provenance = _build_provenance(spec, run_id)
 
@@ -478,6 +488,7 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
 
         results: list[Record] = []
         n_total = len(cells)
+        print(f"[SimpleSurvey] Evaluating {n_total} cells with {max_workers} workers...", file=sys.stderr)
         logger.info("Evaluating %d cells with %d workers...", n_total, max_workers)
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [
@@ -549,6 +560,8 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
 
+    print(f"[SimpleSurvey] Starting with args: {sys.argv}", file=sys.stderr)
+
     parser = argparse.ArgumentParser(
         description="SimpleSurvey - Minimal adaptive experiment system"
     )
@@ -574,6 +587,8 @@ def main() -> None:
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose progress output")
 
     args = parser.parse_args()
+
+    print(f"[SimpleSurvey] Parsed args: fidelity={args.fidelity}, device={args.device}, workers={args.max_workers}", file=sys.stderr)
 
     tasks = args.tasks.split(",") if args.tasks else None
     axes = json.loads(args.axes) if args.axes else None
@@ -603,7 +618,7 @@ def main() -> None:
         )
         print(json.dumps(result, default=str, indent=2))
     except Exception as e:
-        print(f"FATAL: {e}", file=sys.stderr)
+        print(f"[SimpleSurvey] FATAL: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         sys.exit(1)
