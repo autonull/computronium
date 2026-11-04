@@ -330,84 +330,6 @@ class _StageMixin(_PipelineBase):
             return False, True
         return False, False
 
-    def _check_compatibility_gate(
-        self, coordinate: Coordinate, schedule: Schedule, key: str
-    ) -> tuple[bool, str | None]:
-        """Check compatibility matrix for known-incompatible combos.
-
-        Returns:
-            Tuple of (passed, rejection_message_or_none).
-        """
-        from computronium.ontology.system import check_compatibility_matrix
-
-        compat_violations = check_compatibility_matrix(
-            substrate=coordinate.substrate,
-            geometry=coordinate.geometry,
-            dynamics=coordinate.dynamics,
-            plasticity=coordinate.plasticity,
-            credit=coordinate.credit,
-            update=coordinate.update,
-        )
-        if compat_violations:
-            self._state.rejected_keys.add(key)
-            message = "; ".join(compat_violations)
-            self._classify_rejection(
-                coordinate=coordinate,
-                schedule=schedule,
-                cause="ADMISSION_REJECTED",
-                message=message,
-            )
-            return False, message
-        return True, None
-
-    def _check_compose_gate(
-        self, coordinate: Coordinate, schedule: Schedule, key: str
-    ) -> tuple[bool, str | None]:
-        """Check SystemConfig.validate via compose_configs (last-mile legality).
-
-        Returns:
-            Tuple of (passed, rejection_message_or_none).
-        """
-        from computronium.experiment.kernel.compose import (
-            compose_configs,
-            geometry_param_count,
-        )
-        from computronium.experiment.kernel.evaluate import task_shape
-        from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
-
-        try:
-            task_id = schedule.task_id or (
-                self._config.run_spec.task_names[0]
-                if self._config.run_spec.task_names
-                else "unknown"
-            )
-            task_shape_info = task_shape(task_id)
-            config = compose_configs(
-                coordinate=coordinate,
-                geometry={},
-                input_shape=task_shape_info.input_shape,
-                output_dim=task_shape_info.output_dim,
-                param_budget=schedule.param_budget,
-            )
-            # Param budget check (R25 fairness rule)
-            if schedule.param_budget > 0 and geometry_param_count(
-                config.geometry
-            ) > schedule.param_budget * (1 + PARAM_BUDGET_TOLERANCE):
-                raise ValueError(
-                    f"Param budget exceeded: {geometry_param_count(config.geometry)} > {schedule.param_budget}"
-                )
-        except (ValueError, TypeError, KeyError) as e:
-            self._state.rejected_keys.add(key)
-            message = str(e)
-            self._classify_rejection(
-                coordinate=coordinate,
-                schedule=schedule,
-                cause="ADMISSION_REJECTED",
-                message=message,
-            )
-            return False, message
-        return True, None
-
     def _fresh_batch_items(
         self, proposals: list[Proposal], provenance: Provenance
     ) -> list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]]:
@@ -441,7 +363,9 @@ class _StageMixin(_PipelineBase):
             for schedule in proposal.schedule.seed_plan:
                 key = proposal.coordinate.measurement_key(schedule)
 
-                is_skipped, is_rejected = self._check_already_measured(key, seen, rejected)
+                is_skipped, is_rejected = self._check_already_measured(
+                    key, seen, rejected
+                )
                 if is_skipped:
                     skipped += 1
                     continue
@@ -469,14 +393,19 @@ class _StageMixin(_PipelineBase):
 
         Returns True if both gates pass, False otherwise.
         """
-        # ADMISSION GATE 1: fast compatibility matrix pre-check
-        passed, _ = self._check_compatibility_gate(coordinate, schedule, key)
-        if not passed:
-            return False
+        from ._admission_gate import passes_admission_gate
 
-        # ADMISSION GATE 2: last-mile SystemConfig.validate check
-        passed, _ = self._check_compose_gate(coordinate, schedule, key)
-        return passed
+        passed, msg = passes_admission_gate(coordinate, schedule, schedule.task_id)
+        if not passed:
+            self._state.rejected_keys.add(key)
+            self._classify_rejection(
+                coordinate=coordinate,
+                schedule=schedule,
+                cause="ADMISSION_REJECTED",
+                message=msg or "Admission gate failed",
+            )
+            return False
+        return True
 
     def _log_batch_filtering(self, skipped: int, rejected_this_batch: int) -> None:
         """Log batch filtering statistics."""

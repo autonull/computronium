@@ -380,14 +380,12 @@ class TestPrimitiveCompatibilityLock:
         """Admission gate (pipeline) uses check_compatibility_matrix for fast rejection."""
         # This test verifies the integration point exists
 
-        # The _fresh_batch_items method calls check_compatibility_matrix
-        # We can't easily test the full pipeline here, but we can verify
-        # the function is imported and used in the pipeline module
-        # Check that check_compatibility_matrix is imported in the pipeline module
+        # The admission gate module calls check_compatibility_matrix
+        # Check that check_compatibility_matrix is imported and used in the admission gate module
         import inspect
 
-        import computronium.experiment.execution.pipeline._stages as stages_module
+        import computronium.experiment.execution.pipeline._admission_gate as admission_module
 
-        source = inspect.getsource(stages_module)
+        source = inspect.getsource(admission_module)
         assert "check_compatibility_matrix" in source
-        assert "ADMISSION_REJECTED" in source
+        assert "compat_violations" in source

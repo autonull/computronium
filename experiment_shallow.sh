@@ -232,45 +232,9 @@ rm -f "$TMP_HW"
 print_preview() {
     local hours="$1"
     local profile="$2"
-    # Use python for floating point arithmetic and shared constants
-    local budget_seconds=$(python3 -c "print(int(float('${hours}') * 3600))")
-
+    
     if [[ "$profile" == "smart-survey" ]]; then
-        # Smart-survey budget allocation constants (shared with _promotion.py)
-        local BUDGET_FRACTION_L0=0.4
-        local BUDGET_FRACTION_L1=0.4
-        local BUDGET_FRACTION_L2=0.2
-
-        local l0_budget=$(python3 -c "print(int(${budget_seconds} * ${BUDGET_FRACTION_L0}))")
-        local l1_budget=$(python3 -c "print(int(${budget_seconds} * ${BUDGET_FRACTION_L1}))")
-        local l2_budget=$(python3 -c "print(int(${budget_seconds} * ${BUDGET_FRACTION_L2}))")
-
-        # Estimate cells per fidelity (rough estimates based on measured cell costs)
-        local l0_cells=$((l0_budget / 5))      # ~5s per L0 cell (1 epoch, 1 seed)
-        local l1_cells=$((l1_budget / 30))     # ~30s per L1 cell (3 epochs, 2 seeds)
-        local l2_cells=$((l2_budget / 300))    # ~300s per L2 cell (10 epochs, 5 seeds)
-
-        # Promotions: top 40% from L0→L1, top 10% from L1→L2
-        local l1_promos=$((l0_cells * 40 / 100))
-        local l2_promos=$((l1_promos * 10 / 100))
-
-        echo ""
-        echo "📋 Smart Survey Preview (${hours}h budget):"
-        echo "┌────────────────────────────────────────────────────────────┐"
-        printf "│ %-56s │\n" "Fidelity   Budget    Est. Cells   Promotes To"
-        printf "│ %-56s │\n" "────────   ──────    ─────────   ───────────"
-        printf "│ %-56s │\n" "L0 (screen)  ${l0_budget}s      ~${l0_cells}          → L1: ~${l1_promos}"
-        printf "│ %-56s │\n" "L1 (confirm) ${l1_budget}s      ~${l1_cells}          → L2: ~${l2_promos}"
-        printf "│ %-56s │\n" "L2 (deepen)  ${l2_budget}s      ~${l2_cells}          (final)"
-        echo "└────────────────────────────────────────────────────────────┘"
-        echo ""
-        echo "Expected outcomes:"
-        echo "  • Will screen ~${l0_cells} cells at L0 (1 epoch, 1 seed, CHEAP tasks)"
-        echo "  • Will promote ~${l1_promos} cells to L1 (3 epochs, 2 seeds, CHEAP+MEDIUM tasks)"
-        echo "  • Will deepen ~${l2_promos} cells to L2 (10 epochs, 5 seeds, ALL tasks)"
-        echo "  • Top combos at L2 will have n_seeds=5 with CI reporting"
-        echo "  • Multi-task: ≥3 tasks represented in top combos"
-        echo ""
+        uv run python -m computronium.experiment.execution.pipeline.preview "${hours}"
     fi
 }
 

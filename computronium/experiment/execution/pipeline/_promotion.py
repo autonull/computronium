@@ -7,7 +7,7 @@ Handles multi-fidelity promotion (L0→L1→L2) with:
 - Seed/epoch progression (1→2→5, 1→3→10)
 - Original task preservation (avoids task cycling rejections)
 
-Budget allocation is defined as module-level constants for single-source-of-truth
+Budget allocation constants are imported from _budget_constants for single-source-of-truth
 sharing with experiment_shallow.sh preview and pipeline budgeting.
 """
 
@@ -25,23 +25,11 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 
-
-FIDELITY_ORDER = ("L0", "L1", "L2")
-
-# Single-source budget allocation for smart-survey (shared with experiment_shallow.sh preview)
-# L0: 40% screen, L1: 40% confirm, L2: 20% deepen
-BUDGET_FRACTION_L0 = 0.4
-BUDGET_FRACTION_L1 = 0.4
-BUDGET_FRACTION_L2 = 0.2
-
-# Smart-survey default promotion fraction (40% of eligible promotions per tier)
-DEFAULT_PROMOTION_FRACTION: float = 0.4
-# Minimum promotions per tier if any eligible
-MIN_PROMOTIONS_PER_TIER: int = 1
-
-# Fidelity progression defaults (can be overridden in RunSpec)
-DEFAULT_FIDELITY_SEEDS: dict[str, int] = {"L0": 1, "L1": 2, "L2": 5}
-DEFAULT_FIDELITY_EPOCHS: dict[str, int] = {"L0": 1, "L1": 3, "L2": 10}
+from ._budget_constants import (
+    DEFAULT_PROMOTION_FRACTION,
+    FIDELITY_ORDER,
+    MIN_PROMOTIONS_PER_TIER,
+)
 
 
 def _source_fidelity_for(target_fidelity: str) -> str | None:
@@ -88,7 +76,7 @@ class _CellBestEntry:
     """Best normalized accuracy and record for a cell at a fidelity."""
 
     norm_acc: float
-    record: Record
+    record: Record | None = None
 
 
 def _build_cell_best_map(
@@ -142,7 +130,8 @@ def _filter_promotions_by_threshold(
 
         # Use the original task from the source fidelity schedule
         # Task cycling to incompatible tasks causes admission gate rejections
-        original_task = entry.record.schedule.task_id or "digits"
+        # entry.record is guaranteed non-None here since cell_best only contains real records
+        original_task = entry.record.schedule.task_id or "digits"  # type: ignore[union-attr]
         promo_sched = _build_promo_schedule(
             sched=sched,
             target_fidelity=target_fidelity,
@@ -166,12 +155,15 @@ def _limit_promotions_by_budget(
     if not eligible:
         return list(eligible)
 
+    # Convert to list for sorting
+    eligible_list = list(eligible)
+
     # Sort by normalized accuracy descending (source fidelity score)
-    eligible.sort(
+    eligible_list.sort(
         key=lambda x: (
             -cell_best.get(
                 f"{x[0].cell_key()}|{_source_fidelity_for(x[1].fidelity)}",
-                _CellBestEntry(norm_acc=0.0, record=None),
+                _CellBestEntry(norm_acc=0.0),
             ).norm_acc
         )
     )

@@ -12,6 +12,11 @@ import torch
 
 from computronium.core.logging import get_logger
 from computronium.core.losses import perplexity
+from computronium.core.system_trainer._early_stopping import (
+    EarlyStoppingConfig,
+    EarlyStoppingState,
+    check_early_stopping,
+)
 from computronium.core.system_trainer._resources import EpochResource, EpochResources
 from computronium.core.system_trainer._resume import (
     DOMAIN_EPOCH,
@@ -588,13 +593,17 @@ class SystemTrainer:
             self.current_epoch,
         )
 
-        # Early stopping state
-        best_metric = -float("inf")
-        patience_counter = 0
-        patience = self.config.early_stopping_patience
-        min_delta = self.config.early_stopping_min_delta
-        metric_name = self.config.early_stopping_metric
-        early_stopping_enabled = patience > 0 and self.val_data is not None
+        # Early stopping configuration
+        early_stopping_config = EarlyStoppingConfig(
+            patience=self.config.early_stopping_patience,
+            min_delta=self.config.early_stopping_min_delta,
+            metric=self.config.early_stopping_metric,
+            mode="max",  # val_acc is maximized
+        )
+        early_stopping_state = EarlyStoppingState()
+        early_stopping_enabled = (
+            early_stopping_config.patience > 0 and self.val_data is not None
+        )
 
         self._harvest_init()
         while self.current_epoch < self.config.max_epochs:
@@ -603,33 +612,12 @@ class SystemTrainer:
             # Check early stopping after each epoch
             if early_stopping_enabled and self.history:
                 last_epoch = self.history[-1]
-                current_metric = last_epoch.get(metric_name)
-                if current_metric is not None:
-                    if current_metric > best_metric + min_delta:
-                        best_metric = current_metric
-                        patience_counter = 0
-                        logger.info(
-                            "Early stopping: %s improved to %.4f (patience reset)",
-                            metric_name,
-                            best_metric,
-                        )
-                    else:
-                        patience_counter += 1
-                        logger.info(
-                            "Early stopping: %s=%.4f did not improve >%.4f for %d/%d epochs",
-                            metric_name,
-                            current_metric,
-                            min_delta,
-                            patience_counter,
-                            patience,
-                        )
-                        if patience_counter >= patience:
-                            logger.info(
-                                "Early stopping triggered: %s plateaued for %d epochs",
-                                metric_name,
-                                patience,
-                            )
-                            break
+                should_stop, reason = check_early_stopping(
+                    early_stopping_state, early_stopping_config, last_epoch
+                )
+                if should_stop:
+                    logger.info(reason)
+                    break
 
         self._harvest_finalize()
         logger.debug("Training complete")
