@@ -32,11 +32,12 @@ BATCH_LIMIT=0
 AXES=""
 HYPERPARAMETERS=""
 OBJECTIVES=""
+VERBOSE=false
 
 # Handle --help/-h immediately
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
     cat <<'EOF'
-Usage: experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda]
+Usage: experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda] [--verbose]
 
 Runs a SimpleSurvey experiment with a time budget in hours.
 Results stored in <store>.duckdb
@@ -58,6 +59,7 @@ Options:
   --axes JSON             JSON: {"axis": ["primitives"]}
   --hyperparams JSON      JSON: hyperparameter domains
   --objectives LIST       Comma-separated objectives
+  --verbose, -v           Verbose progress output
   --help, -h              Show this help
 
 Examples:
@@ -65,6 +67,7 @@ Examples:
   experiment_shallow.sh 0.5 --fidelity L1 --promote-from L0.duckdb
   experiment_shallow.sh 1 --fidelity L2 --promote-from L1.duckdb --promote-top 5
   experiment_shallow.sh 0.01 --dry-run
+  experiment_shallow.sh 0.1 --fidelity L0 --verbose
 EOF
     exit 0
 fi
@@ -146,6 +149,10 @@ while [[ $# -gt 0 ]]; do
             OBJECTIVES="${2:-}"
             shift 2
             ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1" >&2
             exit 1
@@ -224,6 +231,10 @@ fi
 
 if [[ "${DRY_RUN}" == true ]]; then
     CMD+=(--dry-run)
+fi
+
+if [[ "${VERBOSE}" == true ]]; then
+    CMD+=(--verbose)
 fi
 
 # Print configuration

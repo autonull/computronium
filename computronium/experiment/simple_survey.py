@@ -354,6 +354,7 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     axes: dict[str, tuple[str, ...]] | None = None,
     hyperparameters: dict[str, Any] | None = None,
     objectives: tuple[str, ...] = (),
+    verbose: bool = False,
 ) -> dict[str, Any]:
     """Run a SimpleSurvey experiment.
 
@@ -381,15 +382,24 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         If evaluation: {"run_id": str, "store_path": str, "cells_evaluated": int, ...}
     """
     # 1. Budget -> cell count
+    # For single-fidelity runs, use full budget for that fidelity
     budget_s = int(hours * 3600)
     cell_counts = estimate_cell_counts(budget_s)
-    n_cells = cell_counts.get(fidelity, 10)
+    # Use full budget for the selected fidelity, not split
+    fidelity_costs = {
+        "L0": 5,    # ~5s per cell (1 epoch, 1 seed)
+        "L1": 30,   # ~30s per cell (3 epochs, 2 seeds)
+        "L2": 300,  # ~300s per cell (10 epochs, 5 seeds)
+    }
+    cost_per_cell = fidelity_costs.get(fidelity, 30)
+    n_cells = max(1, budget_s // cost_per_cell)
 
     logger.info(
-        "SimpleSurvey: budget=%.2fh (%ds), fidelity=%s, estimated_cells=%d",
+        "SimpleSurvey: budget=%.2fh (%ds), fidelity=%s, cost_per_cell=%ds, estimated_cells=%d",
         hours,
         budget_s,
         fidelity,
+        cost_per_cell,
         n_cells,
     )
 
@@ -466,15 +476,33 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         store.create_run(run_id, spec)
 
         results: list[Record] = []
+        n_total = len(cells)
+        logger.info("Evaluating %d cells with %d workers...", n_total, max_workers)
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [
                 pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
                 for cell in cells
             ]
-            for future in concurrent.futures.as_completed(futures):
+            for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
                 try:
                     record = future.result()
                     results.append(record)
+                    if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
+                        gate = record.status.gate_verdict.value
+                        val_acc = record.payload.get("val_acc", "N/A")
+                        logger.info(
+                            "  [%d/%d] %s | val_acc=%s | %s/%s/%s/%s/%s/%s",
+                            i,
+                            n_total,
+                            gate,
+                            f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
+                            record.substrate,
+                            record.geometry,
+                            record.dynamics,
+                            record.plasticity,
+                            record.credit,
+                            record.update,
+                        )
                 except Exception as e:
                     logger.exception("Cell evaluation failed: %s", e)
 
@@ -491,6 +519,14 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     passed = sum(1 for r in results if r.status.gate_verdict.value == "PASS")
     failed = len(results) - passed
 
+    logger.info(
+        "Done: %d evaluated, %d passed, %d failed, %.1fs walltime",
+        len(results),
+        passed,
+        failed,
+        sum(r.payload.get("walltime_s", 0) for r in results),
+    )
+
     return {
         "run_id": run_id,
         "store_path": store_path,
@@ -505,6 +541,9 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
 def main() -> None:
     """CLI entry point for simple_survey."""
     import argparse
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
 
     parser = argparse.ArgumentParser(
         description="SimpleSurvey - Minimal adaptive experiment system"
@@ -528,6 +567,7 @@ def main() -> None:
     parser.add_argument("--axes", default="", help="JSON: axis -> [primitives]")
     parser.add_argument("--hyperparameters", default="", help="JSON: hyperparameters")
     parser.add_argument("--objectives", default="", help="Comma-separated objectives")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose progress output")
 
     args = parser.parse_args()
 
@@ -554,6 +594,7 @@ def main() -> None:
         axes=axes,
         hyperparameters=hyperparameters,
         objectives=objectives,
+        verbose=args.verbose,
     )
 
     print(json.dumps(result, default=str, indent=2))
