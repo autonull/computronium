@@ -6,17 +6,109 @@ Adaptivity comes from offline importance sampling using prior runs, not online p
 
 from __future__ import annotations
 
-import concurrent.futures
+# Standard library imports (always available)
+import argparse
+import importlib
 import json
+import os
 import random
 import shutil
 import subprocess
 import sys
 import uuid
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
+
+def _self_test() -> bool:
+    """Run environment self-tests. Returns True if all pass."""
+    print("[SelfTest] Checking environment...", file=sys.stderr)
+
+    # Test 1: Python version
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    print(f"[SelfTest] Python: {py_version}", file=sys.stderr)
+    if sys.version_info < (3, 10):
+        print(f"[SelfTest] FAIL: Python 3.10+ required, got {py_version}", file=sys.stderr)
+        return False
+
+    # Test 2: uv available
+    try:
+        result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            print("[SelfTest] FAIL: uv not found", file=sys.stderr)
+            return False
+        print(f"[SelfTest] uv: {result.stdout.strip()}", file=sys.stderr)
+    except Exception as e:
+        print(f"[SelfTest] FAIL: uv check failed: {e}", file=sys.stderr)
+        return False
+
+    # Test 3: Core stdlib modules
+    for mod in ["json", "uuid", "pathlib", "dataclasses", "concurrent.futures", "random"]:
+        try:
+            __import__(mod)
+        except ImportError as e:
+            print(f"[SelfTest] FAIL: stdlib {mod} missing: {e}", file=sys.stderr)
+            return False
+    print("[SelfTest] stdlib OK", file=sys.stderr)
+
+    # Test 4: torch (required)
+    try:
+        import torch
+        print(f"[SelfTest] Torch: {torch.__version__}", file=sys.stderr)
+        print(f"[SelfTest] CUDA available: {torch.cuda.is_available()}", file=sys.stderr)
+        if torch.cuda.is_available():
+            print(f"[SelfTest] GPU: {torch.cuda.get_device_name(0)}", file=sys.stderr)
+            print(f"[SelfTest] GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB", file=sys.stderr)
+    except ImportError as e:
+        print(f"[SelfTest] FAIL: torch import failed: {e}", file=sys.stderr)
+        print("[SelfTest] Fix: uv sync --dev --all-extras", file=sys.stderr)
+        return False
+
+    # Test 5: computronium modules (lazy import)
+    required = [
+        "computronium.core.logging",
+        "computronium.domains._task_registry",
+        "computronium.experiment.evidence.store",
+        "computronium.experiment.evidence.store._models",
+        "computronium.experiment.execution.pipeline._budget_constants",
+        "computronium.experiment.kernel.evaluate",
+        "computronium.experiment.kernel.search_space",
+        "computronium.experiment.schema.axis",
+        "computronium.experiment.schema.coordinate",
+        "computronium.experiment.schema.run_spec",
+        "computronium.ontology.system",
+    ]
+    for mod in required:
+        try:
+            importlib.import_module(mod)
+        except Exception as e:
+            print(f"[SelfTest] FAIL: {mod} import failed: {e}", file=sys.stderr)
+            print("[SelfTest] Fix: uv sync --dev --all-extras", file=sys.stderr)
+            return False
+    print(f"[SelfTest] All {len(required)} modules OK", file=sys.stderr)
+
+    # Test 6: Dry-run functional test
+    try:
+        from computronium.experiment.simple_survey import run_simple_survey
+        result = run_simple_survey(0.001, fidelity="L0", dry_run=True, device="cpu")
+        n_cells = result.get("n", 0)
+        print(f"[SelfTest] Dry-run generated {n_cells} cells", file=sys.stderr)
+        if n_cells == 0:
+            print("[SelfTest] FAIL: dry-run generated 0 cells", file=sys.stderr)
+            return False
+    except Exception as e:
+        print(f"[SelfTest] FAIL: dry-run crashed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return False
+
+    print("[SelfTest] ALL TESTS PASSED", file=sys.stderr)
+    return True
+
+
+# Heavy imports (after self-test function)
 from computronium.core.logging import get_logger
 from computronium.domains._task_registry import get_fidelity_tasks
 from computronium.experiment.evidence.store import RecordStore
@@ -43,8 +135,6 @@ from computronium.experiment.schema.run_spec import RunSpec
 from computronium.ontology.system import check_compatibility_matrix
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-    from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.record import Record
 
 logger = get_logger(__name__)
@@ -64,7 +154,6 @@ class SimpleSurveyResult:
 
 def _schedule_from_spec(spec: RunSpec, task: str, fidelity: str) -> Schedule:
     """Create a Schedule from a RunSpec for a given task and fidelity."""
-    # Get fidelity-specific settings
     fidelity_seeds = spec.fidelity_seeds or {}
     fidelity_epochs = spec.fidelity_epochs or {}
 
@@ -88,8 +177,6 @@ def _schedule_from_spec(spec: RunSpec, task: str, fidelity: str) -> Schedule:
 
 def _build_provenance(spec: RunSpec, run_id: str) -> Provenance:
     """Build provenance metadata for records."""
-    import os
-
     git_path = shutil.which("git")
     code_sha = "unknown"
     if git_path:
@@ -107,7 +194,6 @@ def _build_provenance(spec: RunSpec, run_id: str) -> Provenance:
             except Exception:
                 pass
 
-    # Use actual dataset from the first task
     dataset = spec.dataset if spec.dataset != "unknown" else "digits"
     dataset_version = spec.dataset_version if spec.dataset_version != "1.0" else "1.0"
 
@@ -176,7 +262,6 @@ def _get_top_coordinates(store: RecordStore, fidelity: str, k: int) -> list[Coor
     except Exception:
         return []
 
-    # Sort by val_acc descending
     valid_records = [r for r in records if r.payload.get("val_acc") is not None]
     valid_records.sort(key=lambda r: r.payload.get("val_acc", 0.0), reverse=True)
 
@@ -231,7 +316,6 @@ def _mutate_around(
             }
 
             for axis in axes_to_mutate:
-                # Get valid primitives for this axis from search space
                 primitives = search_space.primitives(axis)
                 if primitives:
                     new_values[axis.value] = random.choice(primitives)  # ruff: ignore[S311]
@@ -246,7 +330,6 @@ def _mutate_around(
                 params=new_params,
             )
 
-            # Check compatibility
             violations = check_compatibility_matrix(
                 mutated_coord.substrate,
                 mutated_coord.geometry,
@@ -258,7 +341,6 @@ def _mutate_around(
             if violations:
                 continue
 
-            # Pick a task and create schedule
             task = random.choice(tasks)  # ruff: ignore[S311]
             schedule = _schedule_from_spec(spec, task, fidelity)
             mutated_cells.append((mutated_coord, schedule))
@@ -277,7 +359,6 @@ def _random_explore(
     """Random valid cells from iter_candidates."""
     cells: list[tuple[Coordinate, Schedule]] = []
 
-    # Use iter_candidates with a reasonable max_scan
     for coord, schedule in iter_candidates(
         spec,
         search_space,
@@ -299,8 +380,6 @@ def _random_explore(
         if violations:
             continue
 
-        # The schedule from iter_candidates already has the correct task_id
-        # But we need to ensure it matches our fidelity settings
         cell_schedule = schedule
         if schedule.fidelity != fidelity:
             cell_schedule = _schedule_from_spec(spec, schedule.task_id, fidelity)
@@ -377,16 +456,14 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         axes: Axis selections (axis -> primitives).
         hyperparameters: Hyperparameter domains.
         objectives: Objective names.
+        verbose: Verbose progress output.
 
     Returns:
         If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str]}
         If evaluation: {"run_id": str, "store_path": str, "cells_evaluated": int, ...}
     """
     # 1. Budget -> cell count
-    # For single-fidelity runs, use full budget for that fidelity
     budget_s = int(hours * 3600)
-    cell_counts = estimate_cell_counts(budget_s)
-    # Use full budget for the selected fidelity, not split
     fidelity_costs = {
         "L0": 5,    # ~5s per cell (1 epoch, 1 seed)
         "L1": 30,   # ~30s per cell (3 epochs, 2 seeds)
@@ -411,7 +488,6 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     from computronium.experiment.schema.seed_registries import seed_all_registries
 
     print("[SimpleSurvey] Seeding registries...", file=sys.stderr)
-    # Ensure registries are seeded
     seed_all_registries()
     print("[SimpleSurvey] Registries seeded", file=sys.stderr)
 
@@ -444,7 +520,10 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     # 3. Build search space
     print("[SimpleSurvey] Building search space...", file=sys.stderr)
     search_space = search_space_from_spec(spec, tasks=spec.task_names)
-    print(f"[SimpleSurvey] Search space: tasks={search_space.tasks}, primitives={ {ax.value: len(search_space.primitives(ax)) for ax in StructuralAxis} }", file=sys.stderr)
+    print(
+        f"[SimpleSurvey] Search space: tasks={search_space.tasks}, primitives={ {ax.value: len(search_space.primitives(ax)) for ax in StructuralAxis} }",
+        file=sys.stderr,
+    )
 
     # 4. Determine tasks to use
     if tasks is None:
@@ -481,7 +560,6 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     run_id = str(uuid.uuid4())[:8]
     provenance = _build_provenance(spec, run_id)
 
-    # Create store and run
     store_config = StoreConfig(path=Path(store_path))
     with RecordStore(store_config) as store:
         store.create_run(run_id, spec)
@@ -490,12 +568,12 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
         n_total = len(cells)
         print(f"[SimpleSurvey] Evaluating {n_total} cells with {max_workers} workers...", file=sys.stderr)
         logger.info("Evaluating %d cells with %d workers...", n_total, max_workers)
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as pool:
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [
                 pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
                 for cell in cells
             ]
-            for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
+            for i, future in enumerate(as_completed(futures), 1):
                 try:
                     record = future.result()
                     results.append(record)
@@ -533,6 +611,10 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     passed = sum(1 for r in results if r.status.gate_verdict.value == "PASS")
     failed = len(results) - passed
 
+    print(
+        f"[SimpleSurvey] Done: {len(results)} evaluated, {passed} passed, {failed} failed, {sum(r.payload.get('walltime_s', 0) for r in results):.1f}s walltime",
+        file=sys.stderr,
+    )
     logger.info(
         "Done: %d evaluated, %d passed, %d failed, %.1fs walltime",
         len(results),
@@ -552,73 +634,9 @@ def run_simple_survey(  # noqa: PLR0913, PLR0915
     }
 
 
-def _self_test() -> bool:
-    """Run environment self-tests. Returns True if all pass."""
-    import sys
-
-    print("[SelfTest] Checking environment...", file=sys.stderr)
-
-    # Test 1: Python version
-    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    print(f"[SelfTest] Python: {py_version}", file=sys.stderr)
-    if sys.version_info < (3, 10):
-        print(f"[SelfTest] FAIL: Python 3.10+ required, got {py_version}", file=sys.stderr)
-        return False
-
-    # Test 2: torch import
-    try:
-        import torch
-        print(f"[SelfTest] Torch: {torch.__version__}", file=sys.stderr)
-        print(f"[SelfTest] CUDA available: {torch.cuda.is_available()}", file=sys.stderr)
-        if torch.cuda.is_available():
-            print(f"[SelfTest] GPU: {torch.cuda.get_device_name(0)}", file=sys.stderr)
-            print(f"[SelfTest] GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB", file=sys.stderr)
-    except ImportError as e:
-        print(f"[SelfTest] FAIL: torch import failed: {e}", file=sys.stderr)
-        return False
-
-    # Test 3: Required modules
-    required = [
-        "computronium.experiment.simple_survey",
-        "computronium.experiment.kernel.search_space",
-        "computronium.experiment.kernel.evaluate",
-        "computronium.experiment.evidence.store",
-        "computronium.experiment.schema.run_spec",
-        "computronium.ontology.system",
-        "computronium.domains._task_registry",
-    ]
-    for mod in required:
-        try:
-            __import__(mod)
-        except ImportError as e:
-            print(f"[SelfTest] FAIL: {mod} import failed: {e}", file=sys.stderr)
-            return False
-    print(f"[SelfTest] All {len(required)} modules OK", file=sys.stderr)
-
-    # Test 4: Basic functionality - dry run
-    try:
-        from computronium.experiment.simple_survey import run_simple_survey
-        result = run_simple_survey(0.001, fidelity="L0", dry_run=True, device="cpu")
-        n_cells = result.get("n", 0)
-        print(f"[SelfTest] Dry-run generated {n_cells} cells", file=sys.stderr)
-        if n_cells == 0:
-            print("[SelfTest] FAIL: dry-run generated 0 cells", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"[SelfTest] FAIL: dry-run crashed: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-        return False
-
-    print("[SelfTest] ALL TESTS PASSED", file=sys.stderr)
-    return True
-
-
 def main() -> None:
     """CLI entry point for simple_survey."""
-    import argparse
     import logging
-    import sys
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
 
@@ -655,8 +673,6 @@ def main() -> None:
         if not _self_test():
             print("[SimpleSurvey] Self-test failed. Use --no-self-test to skip.", file=sys.stderr)
             sys.exit(1)
-
-    args = parser.parse_args()
 
     print(f"[SimpleSurvey] Parsed args: fidelity={args.fidelity}, device={args.device}, workers={args.max_workers}", file=sys.stderr)
 
