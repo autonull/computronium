@@ -12,7 +12,7 @@ import json
 import os
 import random
 import shutil
-import subprocess
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - used for git SHA lookup with validated path
 import sys
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -107,12 +107,12 @@ def _build_provenance(spec: RunSpec, run_id: str) -> Provenance:
     code_sha = "unknown"
     if git_path:
         with contextlib.suppress(Exception):
-            code_sha = subprocess.check_output(
+            code_sha = subprocess.check_output(  # ruff: ignore[subprocess-without-shell-equals-true] - git_path validated via shutil.which
                 [git_path, "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, text=True
             ).strip()
         with contextlib.suppress(Exception):
             if code_sha == "unknown":
-                code_sha = subprocess.check_output(
+                code_sha = subprocess.check_output(  # ruff: ignore[subprocess-without-shell-equals-true] - git_path validated via shutil.which
                     [git_path, "rev-parse", "--short", "HEAD"],
                     stderr=subprocess.DEVNULL,
                     text=True,
@@ -487,7 +487,7 @@ def _generate_report(store_path: str, run_id: str) -> dict:
         return generator.run_summary(run_id)
 
 
-def run_simple_survey(  # ruff: ignore[too-many-arguments]
+def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] - experiment config requires many parameters
     hours: float,
     fidelity: str = "L0",
     tasks: Sequence[str] | None = None,
@@ -618,7 +618,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments]
 class _SelfTestConfig:
     """Configuration for self-test."""
 
-    min_python: tuple[int, int] = (3, 10)
+    min_python: tuple[int, int] = (3, 14)  # Match pyproject.toml requires-python
     dry_run_hours: float = 0.001
     dry_run_fidelity: str = "L0"
     dry_run_device: str = "cpu"
@@ -636,9 +636,13 @@ def _check_python_version(config: _SelfTestConfig) -> bool:
 
 def _check_uv_available() -> bool:
     """Check uv is available."""
+    uv_path = shutil.which("uv")
+    if uv_path is None:
+        logger.error("uv not found in PATH")
+        return False
     try:
-        result = subprocess.run(
-            ["uv", "--version"],
+        result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - uv_path validated via shutil.which
+            [uv_path, "--version"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -675,7 +679,7 @@ def _check_stdlib_modules() -> bool:
 
 
 def _check_torch() -> bool:
-    """Check torch is available."""
+    """Check torch is available and functional."""
     try:
         import torch
 
@@ -683,16 +687,47 @@ def _check_torch() -> bool:
         logger.exception("torch import failed")
         logger.exception("Fix: uv sync --dev --all-extras")
         return False
+    except Exception:
+        logger.exception("torch import crashed")
+        logger.exception("This may indicate a CUDA driver/library mismatch")
+        logger.exception("Try: export CUDA_VISIBLE_DEVICES='' to force CPU mode")
+        return False
     else:
         logger.info("Torch: %s", torch.__version__)
-        logger.info("CUDA available: %s", torch.cuda.is_available())
-        if torch.cuda.is_available():
-            logger.info("GPU: %s", torch.cuda.get_device_name(0))
-            logger.info(
-                "GPU memory: %.1f GB",
-                torch.cuda.get_device_properties(0).total_memory / 1e9,
-            )
+        cuda_available = False
+        try:
+            cuda_available = torch.cuda.is_available()
+        except Exception as e:
+            logger.warning("CUDA check failed: %s", e)
+            logger.warning("Forcing CPU mode")
+
+        logger.info("CUDA available: %s", cuda_available)
+        if cuda_available:
+            try:
+                logger.info("GPU: %s", torch.cuda.get_device_name(0))
+                logger.info(
+                    "GPU memory: %.1f GB",
+                    torch.cuda.get_device_properties(0).total_memory / 1e9,
+                )
+            except Exception as e:
+                logger.warning("GPU query failed: %s", e)
+
+        # Test basic tensor ops
+        _test_tensor_ops()
+
         return True
+
+
+def _test_tensor_ops() -> None:
+    """Test basic tensor operations."""
+    import torch
+
+    x = torch.tensor([1.0, 2.0])
+    y = x * 2
+    if y.tolist() != [2.0, 4.0]:
+        msg = "tensor ops produced unexpected result"
+        raise AssertionError(msg)
+    logger.info("Tensor ops: OK")
 
 
 def _check_computronium_modules() -> bool:
@@ -710,13 +745,19 @@ def _check_computronium_modules() -> bool:
         "computronium.experiment.schema.run_spec",
         "computronium.ontology.system",
     ]
+    failed = []
     for mod in required:
         try:
             __import__(mod)
         except Exception:
             logger.exception("%s import failed", mod)
-            logger.exception("Fix: uv sync --dev --all-extras")
-            return False
+            failed.append(mod)
+
+    if failed:
+        logger.error("Failed imports (%d): %s", len(failed), ", ".join(failed))
+        logger.error("Fix: uv sync --dev --all-extras")
+        return False
+
     logger.info("All %d modules OK", len(required))
     return True
 
@@ -733,14 +774,14 @@ def _check_dry_run(config: _SelfTestConfig) -> bool:
     except Exception:
         logger.exception("dry-run crashed")
         import traceback
-
         traceback.print_exc()
         return False
     else:
         n_cells = result.get("n", 0)
         logger.info("Dry-run generated %d cells", n_cells)
         if n_cells == 0:
-            logger.error("dry-run generated 0 cells")
+            logger.error("dry-run generated 0 cells - search space may be empty or over-constrained")
+            logger.error("Try: --fidelity L0 --device cpu --no-self-test")
             return False
         return True
 
@@ -769,7 +810,7 @@ def _run_self_test() -> bool:
     return True
 
 
-def main() -> None:
+def main() -> None:  # ruff: ignore[too-many-statements] - CLI entry point handles many arguments
     """CLI entry point for simple_survey."""
     import logging
 
@@ -778,7 +819,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="SimpleSurvey - Minimal adaptive experiment system"
     )
-    parser.add_argument("hours", type=float, help="Time budget in hours")
+    parser.add_argument("hours", type=float, nargs="?", help="Time budget in hours (required unless --doctor)")
     parser.add_argument("--fidelity", default="L0", choices=["L0", "L1", "L2"])
     parser.add_argument(
         "--tasks", default="", help="Comma-separated task names (default: auto)"
@@ -803,8 +844,24 @@ def main() -> None:
     parser.add_argument(
         "--no-self-test", action="store_true", help="Skip environment self-test"
     )
+    parser.add_argument(
+        "--doctor", action="store_true", help="Run environment diagnostics and exit"
+    )
 
     args = parser.parse_args()
+
+    if args.doctor:
+        from computronium.experiment.environment.diagnostics import (
+            print_diagnostics,
+            run_diagnostics,
+        )
+
+        result = run_diagnostics(device="cpu", hours=0.001)
+        print_diagnostics(result)
+        sys.exit(0 if result.errors == [] else 1)
+
+    if args.hours is None:
+        parser.error("hours argument required (unless using --doctor)")
 
     if not args.no_self_test:
         logger.info("Running self-test...")

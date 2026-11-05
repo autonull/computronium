@@ -174,7 +174,7 @@ class TestNtmCreditUpdateComposition:
         # before the ntm-specific message; either rejection is correct.
         with pytest.raises(
             ValueError,
-            match=r"state-shape contract|NTM geometry requires instantaneous",
+            match=r"requires one of \['instantaneous'\].*NTM geometry",
         ):
             config.validate()
 

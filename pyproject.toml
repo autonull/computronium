@@ -350,6 +350,11 @@ ignore = [
     "mutable-class-default",  # implicit-namespace-package — DYNAMICS_REGISTRY lives beside its classes (R1.1)
     "implicit-optional",  # non-empty-init-module — the registry is the single-source wiring point by design (TODO18 wiring lock)
 ]
+"computronium/experiment/environment/diagnostics.py" = [
+    "suspicious-subprocess-import",  # subprocess used for uv version check (validated via shutil.which)
+    "subprocess-without-shell-equals-true",  # subprocess.run with validated executable path
+]
+
 "computronium/acceleration/pc_kernels.py" = [
     "too-many-statements",
 ]

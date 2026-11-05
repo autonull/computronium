@@ -5,12 +5,14 @@
 #   ./experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list]
 #                          [--workers N] [--store PATH] [--promote-from PATH]
 #                          [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda]
+#                          [--verbose] [--no-self-test] [--doctor]
 #
 # Examples:
 #   ./experiment_shallow.sh 0.5 --fidelity L0                    # 30 min L0 screen
 #   ./experiment_shallow.sh 0.5 --fidelity L1 --promote-from L0.duckdb  # Promote top 20 from L0
 #   ./experiment_shallow.sh 1 --fidelity L2 --promote-from L1.duckdb --promote-top 5  # Deepen top 5
 #   ./experiment_shallow.sh 0.01 --dry-run                       # Dry run (generation only)
+#   ./experiment_shallow.sh 0.1 --fidelity L0 --doctor           # Environment diagnostics only
 
 set -euo pipefail
 
@@ -34,11 +36,12 @@ HYPERPARAMETERS=""
 OBJECTIVES=""
 VERBOSE=false
 NO_SELF_TEST=false
+DOCTOR_MODE=false
 
 # Handle --help/-h immediately
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
     cat <<'EOF'
-Usage: experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device cpu|auto|cuda] [--verbose]
+Usage: experiment_shallow.sh <hours> [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device cpu|auto|cuda] [--verbose] [--no-self-test] [--doctor]
 
 Runs a SimpleSurvey experiment with a time budget in hours.
 Results stored in <store>.duckdb
@@ -62,6 +65,7 @@ Options:
   --objectives LIST       Comma-separated objectives
   --verbose, -v           Verbose progress output
   --no-self-test          Skip environment self-test (for debugging)
+  --doctor                Run environment diagnostics only, no experiment
   --help, -h              Show this help
 
 Examples:
@@ -70,15 +74,20 @@ Examples:
   experiment_shallow.sh 1 --fidelity L2 --promote-from L1.duckdb --promote-top 5
   experiment_shallow.sh 0.01 --dry-run
   experiment_shallow.sh 0.1 --fidelity L0 --verbose
+  experiment_shallow.sh 0.1 --fidelity L0 --doctor
 EOF
     exit 0
 fi
 
-# First positional argument is required hours
-HOURS="${1:-}"
-shift 1 || true
+# First positional argument is required hours (unless --doctor)
+if [[ "${1:-}" == "--doctor" ]]; then
+    DOCTOR_MODE=true
+else
+    HOURS="${1:-}"
+    shift 1 || true
+fi
 
-if [[ -z "${HOURS}" ]]; then
+if [[ "${DOCTOR_MODE}" == false && -z "${HOURS}" ]]; then
     echo "Error: Hours argument required" >&2
     echo "Usage: $0 <hours> [options]" >&2
     exit 1
@@ -159,6 +168,10 @@ while [[ $# -gt 0 ]]; do
             NO_SELF_TEST=true
             shift
             ;;
+        --doctor)
+            DOCTOR_MODE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1" >&2
             exit 1
@@ -166,11 +179,61 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Environment diagnostics function
+run_doctor() {
+    echo "🔍 Running environment diagnostics via Python module..."
+    # Find project root
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/pyproject.toml" ]]; then
+            cd "$dir"
+            uv run python -m computronium.experiment.environment.diagnostics
+            return
+        fi
+        dir="$(dirname "$dir")"
+    done
+    echo "❌ Could not find project root (pyproject.toml not found)" >&2
+    exit 1
+}
+
+if [[ "${DOCTOR_MODE}" == true ]]; then
+    run_doctor
+    exit 0
+fi
+
+# Run doctor automatically if no self-test and first run to diagnose issues
+if [[ "${NO_SELF_TEST}" == true && -z "${SKIP_DOCTOR:-}" ]]; then
+    echo ">>> Running quick diagnostics (use SKIP_DOCTOR=1 to skip)..."
+    run_doctor
+    echo ""
+fi
+
 # Check uv is available
 if ! command -v uv &> /dev/null; then
     echo "❌ 'uv' not found in PATH." >&2
     echo "   Install with: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
     exit 1
+fi
+
+# Test that uv can run the module
+echo ">>> Testing uv environment..."
+if ! uv run python -c "import sys; print('Python:', sys.version)" 2>&1; then
+    echo "⚠️  uv run failed, trying direct python..."
+    USE_DIRECT_PYTHON=true
+else
+    USE_DIRECT_PYTHON=false
+fi
+
+# Test that the module can be loaded
+echo ">>> Testing module import..."
+if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
+    PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
+    if [[ ! -f "${PYTHON_EXE}" ]]; then
+        PYTHON_EXE="python3"
+    fi
+    "${PYTHON_EXE}" -c "import computronium.experiment.simple_survey; print('Module loaded OK')" 2>&1
+else
+    uv run python -c "import computronium.experiment.simple_survey; print('Module loaded OK')" 2>&1
 fi
 
 # Find project root
@@ -189,9 +252,11 @@ find_project_root() {
 PROJECT_ROOT="$(find_project_root)"
 if [[ -z "${PROJECT_ROOT}" ]]; then
     echo "❌ Could not find project root (pyproject.toml not found)." >&2
+    echo "   Current directory: $PWD" >&2
     exit 1
 fi
 
+echo "📁 Project root: ${PROJECT_ROOT}"
 cd "$PROJECT_ROOT"
 
 # Default store path
@@ -200,8 +265,21 @@ if [[ -z "${STORE_PATH}" ]]; then
 fi
 
 # Build command
-CMD=(
-    uv run python -m computronium.experiment.simple_survey
+if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
+    # Use direct python with the virtual environment
+    PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
+    if [[ ! -f "${PYTHON_EXE}" ]]; then
+        PYTHON_EXE="python3"
+    fi
+    CMD=(
+        "${PYTHON_EXE}" -m computronium.experiment.simple_survey
+    )
+else
+    CMD=(
+        uv run python -m computronium.experiment.simple_survey
+    )
+fi
+CMD+=(
     "${HOURS}"
     --fidelity "${FIDELITY}"
     --max-workers "${MAX_WORKERS}"
@@ -260,6 +338,7 @@ printf "║ Seed:           %-45s ║\n" "${SEED}"
 [[ -n "${PROMOTE_FROM}" ]] && printf "║ Promote from:   %-45s ║\n" "${PROMOTE_FROM}"
 [[ -n "${PROMOTE_FROM}" ]] && printf "║ Promote top:    %-45s ║\n" "${PROMOTE_TOP}"
 [[ "${DRY_RUN}" == true ]] && printf "║ Mode:           %-45s ║\n" "DRY RUN (generation only)"
+[[ "${NO_SELF_TEST}" == true ]] && printf "║ Self-test:      %-45s ║\n" "SKIPPED"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "🚀 Executing: ${CMD[*]}"
@@ -277,15 +356,21 @@ else
     echo "⚠️  'timeout' command not found; running without hard timeout"
 fi
 
+# Run the experiment
 if [[ "${DRY_RUN}" == true ]]; then
-    "${CMD[@]}"
+    echo ">>> Running dry-run..."
+    stdbuf -oL -eL "${CMD[@]}" 2>&1
+    EXIT_CODE=$?
+    echo ">>> Dry-run exit code: $EXIT_CODE"
 else
+    echo ">>> Starting experiment (timeout: ${TOTAL_TIMEOUT}s)..."
     if [[ ${#TIMEOUT_CMD[@]} -gt 0 ]]; then
-        "${TIMEOUT_CMD[@]}" "${CMD[@]}" 2>&1
+        stdbuf -oL -eL "${TIMEOUT_CMD[@]}" "${CMD[@]}" 2>&1
     else
-        "${CMD[@]}" 2>&1
+        stdbuf -oL -eL "${CMD[@]}" 2>&1
     fi
     EXIT_CODE=$?
+    echo ">>> Experiment exit code: $EXIT_CODE"
 
     if [[ $EXIT_CODE -eq 124 ]]; then
         echo ""
@@ -297,15 +382,19 @@ else
     elif [[ $EXIT_CODE -ne 0 ]]; then
         echo ""
         echo "❌ Experiment failed with exit code ${EXIT_CODE}" >&2
+        echo "   Try running with --doctor to diagnose environment issues"
+        echo "   Try running with --no-self-test to skip environment checks"
         exit $EXIT_CODE
     fi
 fi
 
 # Post-run summary
-if [[ "${DRY_RUN}" != true ]]; then
+if [[ "${DRY_RUN}" != true && $EXIT_CODE -eq 0 ]]; then
     echo ""
     echo "📊 Post-run analysis:"
     echo "  uv run comp coverage report --store ${STORE_PATH}"
     echo "  uv run comp report --store ${STORE_PATH} --format text"
     echo "  uv run comp dashboard --store ${STORE_PATH}"
 fi
+
+exit $EXIT_CODE
