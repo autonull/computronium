@@ -38,8 +38,8 @@ classifiers = [
 dependencies = [
     # Core ML framework
     "torch>=2.5",
-    # Numerical
-    "numpy",
+    # Numerical — pinned to pre-X86_V2 baseline for pre-Nehalem CPU compatibility
+    "numpy>=2.3.3,<2.4",
     # CLI / progress / output
     "tqdm",
     # Configuration & validation
@@ -52,7 +52,6 @@ dependencies = [
     "stability",
     "local-feedback",
     "computronium-lab",
-    "pandas>=3.0.5",
     "optuna>=4.9.0",
     "duckdb>=1.5.6",
 ]
