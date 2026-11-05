@@ -14,16 +14,21 @@ import random
 import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - used for git SHA lookup with validated path
 import sys
+import time
 import uuid
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import torch
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 from computronium.core.logging import get_logger
+from computronium.core.utils.device import get_device
 from computronium.domains._task_registry import get_fidelity_tasks
 from computronium.experiment.evidence.store import RecordStore
 from computronium.experiment.evidence.store._models import StoreConfig
@@ -60,12 +65,67 @@ class SimpleSurveyResult:
     walltime_s: float
 
 
-# Fidelity cost estimates (seconds per cell)
-FIDELITY_COSTS: dict[str, int] = {
-    "L0": 5,  # ~5s per cell (1 epoch, 1 seed)
-    "L1": 30,  # ~30s per cell (3 epochs, 2 seeds)
-    "L2": 300,  # ~300s per cell (10 epochs, 5 seeds)
+# Fallback per-cell costs (seconds) used until the run has measured its own.
+DEFAULT_COSTS: dict[str, float] = {
+    "L0": 5.0,  # 1 epoch, 1 seed
+    "L1": 30.0,  # 3 epochs, 2 seeds
+    "L2": 300.0,  # 10 epochs, 5 seeds
 }
+
+# Fallback fixed cost of starting a run: imports, task construction, pool spawn.
+DEFAULT_STARTUP_S = 10.0
+
+# Measured costs, shared across runs so the second run is not a guess.
+TIMING_CACHE = Path("experiments") / ".timing.json"
+
+# Rows the dry-run table shows before summarising the rest.
+MAX_PREVIEW_CELLS = 20
+
+
+@dataclass(frozen=True, slots=True)
+class CostModel:
+    """Per-cell timing used to size a run against its budget.
+
+    Attributes:
+        cost_per_cell_s: Serialized seconds one cell occupies one worker.
+        startup_s: Fixed seconds before the first cell lands.
+        measured: Whether both numbers come from a previous run.
+    """
+
+    cost_per_cell_s: float
+    startup_s: float
+    measured: bool = False
+
+    @property
+    def source(self) -> str:
+        """Human-readable provenance of the numbers."""
+        return "measured" if self.measured else "default"
+
+
+def _load_cost_model(device: str, fidelity: str) -> CostModel:
+    """Measured cost for this device and fidelity, else the fallback table."""
+    try:
+        entry = json.loads(TIMING_CACHE.read_text())[f"{device}/{fidelity}"]
+        return CostModel(
+            cost_per_cell_s=float(entry["cost_per_cell_s"]),
+            startup_s=float(entry["startup_s"]),
+            measured=True,
+        )
+    except OSError, ValueError, KeyError, TypeError:
+        return CostModel(DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S)
+
+
+def _save_cost_model(device: str, fidelity: str, model: CostModel) -> None:
+    """Persist a measurement so the next run sizes itself from it."""
+    with contextlib.suppress(OSError, ValueError):
+        TIMING_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        existing = json.loads(TIMING_CACHE.read_text()) if TIMING_CACHE.exists() else {}
+        existing[f"{device}/{fidelity}"] = {
+            "cost_per_cell_s": round(model.cost_per_cell_s, 3),
+            "startup_s": round(model.startup_s, 3),
+        }
+        TIMING_CACHE.write_text(json.dumps(existing, indent=2, sort_keys=True))
+
 
 # Structural axes in mutation order
 MUTATION_AXES: list[StructuralAxis] = [
@@ -390,19 +450,23 @@ def _generate_cells(
     seed: int,
     promote_from: str | None,
     promote_top: int,
+    model: CostModel,
+    workers: int,
 ) -> list[tuple[Coordinate, Schedule]]:
     """Generate cells for the survey."""
     search_space = search_space_from_spec(spec, tasks=tasks)
 
     random.seed(seed)
-    n_cells = _estimate_cell_count(spec.budget_seconds, fidelity)
+    n_cells = _estimate_cell_count(spec.budget_seconds, model, workers)
 
     logger.info(
-        "SimpleSurvey: budget=%ds, fidelity=%s, cost_per_cell=%ds, estimated_cells=%d",
+        "Budget %ds -> ~%d cells (%.1fs/cell %s, %.0fs startup, %d workers)",
         spec.budget_seconds,
-        fidelity,
-        FIDELITY_COSTS.get(fidelity, 30),
         n_cells,
+        model.cost_per_cell_s,
+        model.source,
+        model.startup_s,
+        workers,
     )
 
     cells = _generate_valid_cells(
@@ -420,10 +484,166 @@ def _generate_cells(
     return cells
 
 
-def _estimate_cell_count(budget_seconds: int, fidelity: str) -> int:
-    """Estimate number of cells from budget and fidelity."""
-    cost_per_cell = FIDELITY_COSTS.get(fidelity, 30)
-    return max(1, int(budget_seconds // cost_per_cell))
+def _estimate_cell_count(budget_seconds: int, model: CostModel, workers: int) -> int:
+    """Cells that fit ``budget_seconds`` at ``workers``-way parallelism.
+
+    The budget pays startup once and serialized cell time thereafter, so the
+    cell count scales with the worker count: dividing by the serial cost alone
+    sized CPU runs for one worker while the pool ran four.
+    """
+    usable = budget_seconds - model.startup_s
+    return max(1, int(usable * max(1, workers) // model.cost_per_cell_s))
+
+
+def _pretty_print_dry_run(
+    result: dict[str, Any],
+    *,
+    hours: float,
+    fidelity: str,
+    model: CostModel,
+    workers: int,
+) -> None:
+    """Pretty-print dry-run results as a table."""
+    cells = result.get("cells", [])
+    tasks = result.get("tasks", [])
+    n = result.get("n", 0)
+
+    print("\n=== SimpleSurvey Dry-Run ===")
+    print(
+        f"Budget: {hours}h ({int(hours * 3600)}s) | Fidelity: {fidelity} | "
+        f"Tasks: {', '.join(tasks)}"
+    )
+    print(f"Estimated cells: {n} across {workers} workers")
+    print()
+
+    if not cells:
+        print("No cells generated (search space may be empty or over-constrained)")
+        return
+
+    header = (
+        f"{'#':>3}  {'Substrate':<15} {'Geometry':<15} {'Dynamics':<20} "
+        f"{'Plasticity':<15} {'Credit':<20} {'Update':<15}"
+    )
+    print(header)
+    print("-" * 120)
+    for i, (coord, _schedule) in enumerate(cells[:MAX_PREVIEW_CELLS], 1):
+        print(
+            f"{i:>3}  {coord.substrate:<15} {coord.geometry:<15} {coord.dynamics:<20} "
+            f"{coord.plasticity:<15} {coord.credit:<20} {coord.update:<15}"
+        )
+    if n > MAX_PREVIEW_CELLS:
+        print(f"  ... {n - MAX_PREVIEW_CELLS} more cells")
+
+    total_est = model.startup_s + n * model.cost_per_cell_s / max(1, workers)
+    print()
+    print(
+        f"Cost per cell: ~{model.cost_per_cell_s:.1f}s ({model.source}), "
+        f"startup ~{model.startup_s:.0f}s"
+    )
+    print(f"Total estimated time: ~{total_est:.0f}s ({total_est / 60:.1f}m)")
+
+
+def _resolve_max_workers(max_workers: int | str, device: torch.device) -> int:
+    """Resolve max_workers from 'auto' or int to actual count."""
+    import os
+
+    if max_workers == "auto" or (isinstance(max_workers, int) and max_workers <= 0):
+        if device.type == "cuda":
+            return torch.cuda.device_count() or 1
+        return min(4, os.cpu_count() or 4)
+    return int(max_workers)
+
+
+def _default_store_path() -> str:
+    """Generate default timestamped store path in experiments/ directory."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    exp_dir = Path("experiments")
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    return str(exp_dir / f"experiment_{timestamp}.duckdb")
+
+
+def _format_error(message: str, hint: str | None = None) -> str:
+    """Format a user-friendly error message."""
+    lines = [f"Error: {message}"]
+    if hint:
+        lines.append(f"Hint: {hint}")
+    return "\n".join(lines)
+
+
+def _axis_overrides(
+    axes_json: str, *, digital: bool
+) -> dict[str, tuple[str, ...]] | None:
+    """Axes from the ``--axes`` JSON, with ``--digital`` pinning the substrate."""
+    axes: dict[str, tuple[str, ...]] | None = (
+        json.loads(axes_json) if axes_json else None
+    )
+    if not digital:
+        return axes
+    pinned = dict(axes or {})
+    pinned["substrate"] = ("digital",)
+    return pinned
+
+
+@dataclass(frozen=True, slots=True)
+class _Evaluation:
+    """What a parallel evaluation measured.
+
+    Attributes:
+        results: Records for the cells that landed inside the budget.
+        elapsed_s: Wall clock from pool creation to the last record.
+        startup_s: Seconds until the first record landed, less its own time.
+        skipped: Cells that never ran because the budget ran out.
+    """
+
+    results: list
+    elapsed_s: float
+    startup_s: float
+    skipped: int
+
+
+def _log_progress(i: int, n_total: int, record: Any) -> None:
+    """One progress line for a landed cell."""
+    gate = record.status.gate_verdict.value
+    val_acc = record.payload.get("val_acc", "N/A")
+    logger.info(
+        "  [%d/%d] %s | val_acc=%s | %s/%s/%s/%s/%s/%s",
+        i,
+        n_total,
+        gate,
+        f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
+        record.substrate,
+        record.geometry,
+        record.dynamics,
+        record.plasticity,
+        record.credit,
+        record.update,
+    )
+
+
+def _init_worker(cpu_threads: int) -> None:
+    """Pin one worker's torch to ``cpu_threads``.
+
+    N processes each spawning a full thread pool oversubscribe the machine and
+    make every cell many times slower; the probe measured 77s/cell with four
+    free-threaded workers against 4s/cell at one thread apiece.
+    """
+    if cpu_threads > 0:
+        import torch
+
+        torch.set_num_threads(cpu_threads)
+
+
+def _blend(previous: CostModel, measured: CostModel) -> CostModel:
+    """Half-way between what we believed and what the run just showed.
+
+    One run's average is a noisy sample — task mix varies cell to cell — so
+    the stored cost follows the measurement without chasing it.
+    """
+    return CostModel(
+        cost_per_cell_s=0.5 * (previous.cost_per_cell_s + measured.cost_per_cell_s),
+        startup_s=0.5 * (previous.startup_s + measured.startup_s),
+        measured=True,
+    )
 
 
 def _evaluate_cells_parallel(
@@ -433,39 +653,73 @@ def _evaluate_cells_parallel(
     provenance: Provenance,
     max_workers: int,
     verbose: bool,
-) -> list:
-    """Evaluate cells in parallel using ProcessPoolExecutor."""
+    budget_seconds: int | None = None,
+    cpu_threads: int = 1,
+) -> _Evaluation:
+    """Evaluate cells in parallel, stopping when the budget is spent.
+
+    A run must not outlive the budget it was asked for, so submissions are
+    windowed: a cell is only handed to the pool while time remains. In-flight
+    cells finish, which bounds the overshoot to one wave.
+    """
     n_total = len(cells)
     results: list = []
+    started = time.monotonic()
+    deadline = started + budget_seconds if budget_seconds else None
+    queue = iter(cells)
+    pending: dict[Any, tuple[Coordinate, Schedule]] = {}
+    startup_s = 0.0
 
-    logger.info("Evaluating %d cells with %d workers...", n_total, max_workers)
+    logger.info("Evaluating up to %d cells with %d workers...", n_total, max_workers)
 
-    with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        futures = [
-            pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
-            for cell in cells
-        ]
-        for i, future in enumerate(as_completed(futures), 1):
-            record = future.result()
-            results.append(record)
-            if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
-                gate = record.status.gate_verdict.value
-                val_acc = record.payload.get("val_acc", "N/A")
-                logger.info(
-                    "  [%d/%d] %s | val_acc=%s | %s/%s/%s/%s/%s/%s",
-                    i,
-                    n_total,
-                    gate,
-                    f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
-                    record.substrate,
-                    record.geometry,
-                    record.dynamics,
-                    record.plasticity,
-                    record.credit,
-                    record.update,
-                )
+    with ProcessPoolExecutor(
+        max_workers=max_workers,
+        initializer=_init_worker,
+        initargs=(cpu_threads,),
+    ) as pool:
 
-    return results
+        def _submit_next() -> None:
+            cell = next(queue, None)
+            if cell is not None:
+                pending[
+                    pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
+                ] = cell
+
+        for _ in range(min(max_workers, n_total)):
+            _submit_next()
+
+        while pending:
+            for future in wait(pending, return_when=FIRST_COMPLETED).done:
+                del pending[future]
+                record = future.result()
+                results.append(record)
+
+                if not startup_s:
+                    # Time before the first result landed, less that cell's work.
+                    startup_s = max(
+                        0.0,
+                        (time.monotonic() - started)
+                        - float(record.payload.get("walltime_s", 0.0)),
+                    )
+
+                i = len(results)
+                if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
+                    _log_progress(i, n_total, record)
+
+                if deadline is None or time.monotonic() < deadline:
+                    _submit_next()
+
+    elapsed = time.monotonic() - started
+    skipped = n_total - len(results)
+    if skipped:
+        logger.info(
+            "Budget spent: %d of %d cells evaluated, %d skipped (%.0fs elapsed)",
+            len(results),
+            n_total,
+            skipped,
+            elapsed,
+        )
+    return _Evaluation(results, elapsed, startup_s, skipped)
 
 
 def _store_results(store_path: str, run_id: str, spec: RunSpec, results: list) -> None:
@@ -491,7 +745,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
     hours: float,
     fidelity: str = "L0",
     tasks: Sequence[str] | None = None,
-    max_workers: int = 4,
+    max_workers: int | str = "auto",
     store_path: str = "experiment.duckdb",
     promote_from: str | None = None,
     promote_top: int = 20,
@@ -506,14 +760,15 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
     hyperparameters: dict[str, Any] | None = None,
     objectives: tuple[str, ...] = (),
     verbose: bool = False,
+    cpu_threads: int = 1,
 ) -> dict[str, Any]:
     """Run a SimpleSurvey experiment.
 
     Args:
-        hours: Time budget in hours.
+        hours: Time budget in hours; evaluation stops when it is spent.
         fidelity: Fidelity level (L0, L1, L2).
         tasks: Task names to use (defaults to fidelity-appropriate tasks).
-        max_workers: Number of parallel workers.
+        max_workers: Number of parallel workers, or ``"auto"``.
         store_path: Path to DuckDB store.
         promote_from: Path to prior store for importance sampling.
         promote_top: Number of top cells to promote from prior run.
@@ -528,9 +783,11 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         hyperparameters: Hyperparameter domains.
         objectives: Objective names.
         verbose: Verbose progress output.
+        cpu_threads: Torch threads per worker (1 avoids CPU oversubscription).
 
     Returns:
-        If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str]}
+        If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str],
+        "model": CostModel, "workers": int}
         If evaluation: {"run_id": str, "store_path": str, "cells_evaluated": int, ...}
     """
     # 1. Build RunSpec
@@ -554,6 +811,9 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
     if tasks is None:
         tasks = get_fidelity_tasks(fidelity)
 
+    workers = _resolve_max_workers(max_workers, get_device(device))
+    model = _load_cost_model(get_device(device).type, fidelity)
+
     # 3. Generate cells
     cells = _generate_cells(
         spec=spec,
@@ -562,6 +822,8 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         seed=seed,
         promote_from=promote_from,
         promote_top=promote_top,
+        model=model,
+        workers=workers,
     )
 
     if dry_run:
@@ -570,20 +832,25 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
             "n": len(cells),
             "tasks": list(tasks),
             "fidelity": fidelity,
+            "model": model,
+            "workers": workers,
         }
 
     # 4. Parallel evaluate
     run_id = str(uuid.uuid4())[:8]
     provenance = _build_provenance(spec, run_id)
 
-    results = _evaluate_cells_parallel(
+    evaluation = _evaluate_cells_parallel(
         cells=cells,
         fidelity=fidelity,
         store_path=store_path,
         provenance=provenance,
-        max_workers=max_workers,
+        max_workers=workers,
         verbose=verbose,
+        budget_seconds=spec.budget_seconds,
+        cpu_threads=cpu_threads,
     )
+    results = evaluation.results
 
     # 5. Store results
     _store_results(store_path, run_id, spec, results)
@@ -593,14 +860,28 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
 
     passed = sum(1 for r in results if r.status.gate_verdict.value == "PASS")
     failed = len(results) - passed
-    total_walltime = sum(r.payload.get("walltime_s", 0) for r in results)
+
+    # 7. Learn this run's real cost so the next run sizes itself honestly.
+    if results:
+        measured = CostModel(
+            cost_per_cell_s=max(0.01, evaluation.elapsed_s * workers / len(results)),
+            startup_s=evaluation.startup_s,
+            measured=True,
+        )
+        logger.info(
+            "Measured: %.1fs/cell, %.0fs startup (estimate said %.1fs/cell)",
+            measured.cost_per_cell_s,
+            measured.startup_s,
+            model.cost_per_cell_s,
+        )
+        _save_cost_model(get_device(device).type, fidelity, _blend(model, measured))
 
     logger.info(
-        "Done: %d evaluated, %d passed, %d failed, %.1fs walltime",
+        "Done: %d evaluated, %d passed, %d failed, %.1fs elapsed",
         len(results),
         passed,
         failed,
-        total_walltime,
+        evaluation.elapsed_s,
     )
 
     return {
@@ -609,7 +890,8 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         "cells_evaluated": len(results),
         "cells_passed": passed,
         "cells_failed": failed,
-        "walltime_s": total_walltime,
+        "cells_skipped": evaluation.skipped,
+        "walltime_s": evaluation.elapsed_s,
         "report": report,
     }
 
@@ -623,10 +905,21 @@ class _SelfTestConfig:
     dry_run_fidelity: str = "L0"
     dry_run_device: str = "cpu"
 
+    def with_device(self, device: str) -> _SelfTestConfig:
+        """Return config with updated dry_run_device."""
+        return _SelfTestConfig(
+            min_python=self.min_python,
+            dry_run_hours=self.dry_run_hours,
+            dry_run_fidelity=self.dry_run_fidelity,
+            dry_run_device=device,
+        )
+
 
 def _check_python_version(config: _SelfTestConfig) -> bool:
     """Check Python version meets minimum."""
-    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    py_version = (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
     logger.info("Python: %s", py_version)
     if sys.version_info < config.min_python:
         logger.error("Python %s+ required, got %s", config.min_python, py_version)
@@ -678,8 +971,12 @@ def _check_stdlib_modules() -> bool:
     return True
 
 
-def _check_torch() -> bool:
-    """Check torch is available and functional."""
+def _check_torch(device: str = "auto") -> bool:
+    """Check torch is available and functional.
+
+    Args:
+        device: Target device. If "cpu", skip CUDA probe entirely.
+    """
     try:
         import torch
 
@@ -695,11 +992,12 @@ def _check_torch() -> bool:
     else:
         logger.info("Torch: %s", torch.__version__)
         cuda_available = False
-        try:
-            cuda_available = torch.cuda.is_available()
-        except Exception as e:
-            logger.warning("CUDA check failed: %s", e)
-            logger.warning("Forcing CPU mode")
+        if device != "cpu":
+            try:
+                cuda_available = torch.cuda.is_available()
+            except Exception as e:
+                logger.warning("CUDA check failed: %s", e)
+                logger.warning("Forcing CPU mode")
 
         logger.info("CUDA available: %s", cuda_available)
         if cuda_available:
@@ -711,6 +1009,10 @@ def _check_torch() -> bool:
                 )
             except Exception as e:
                 logger.warning("GPU query failed: %s", e)
+        elif device == "cpu":
+            logger.info("CUDA: skipped (cpu mode)")
+        else:
+            logger.info("CUDA: not available, using CPU")
 
         # Test basic tensor ops
         _test_tensor_ops()
@@ -774,28 +1076,31 @@ def _check_dry_run(config: _SelfTestConfig) -> bool:
     except Exception:
         logger.exception("dry-run crashed")
         import traceback
+
         traceback.print_exc()
         return False
     else:
         n_cells = result.get("n", 0)
-        logger.info("Dry-run generated %d cells", n_cells)
+        logger.debug("Dry-run generated %d cells", n_cells)
         if n_cells == 0:
-            logger.error("dry-run generated 0 cells - search space may be empty or over-constrained")
-            logger.error("Try: --fidelity L0 --device cpu --no-self-test")
+            logger.error(
+                "dry-run generated 0 cells - search space may be empty or over-constrained"
+            )
+            logger.error("Try: --fidelity L0 --device cpu")
             return False
         return True
 
 
-def _run_self_test() -> bool:
+def _run_self_test(device: str = "cpu") -> bool:
     """Run environment self-tests. Returns True if all pass."""
     logger.info("Checking environment...")
-    config = _SelfTestConfig()
+    config = _SelfTestConfig().with_device(device)
 
     checks = [
         ("Python version", lambda: _check_python_version(config)),
         ("uv available", _check_uv_available),
         ("stdlib modules", _check_stdlib_modules),
-        ("torch", _check_torch),
+        ("torch", lambda: _check_torch(device)),
         ("computronium modules", _check_computronium_modules),
         ("dry-run", lambda: _check_dry_run(config)),
     ]
@@ -810,7 +1115,7 @@ def _run_self_test() -> bool:
     return True
 
 
-def main() -> None:  # ruff: ignore[too-many-statements] - CLI entry point handles many arguments
+def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-many-branches, complex-structure] - CLI entry point handles many arguments
     """CLI entry point for simple_survey."""
     import logging
 
@@ -819,30 +1124,66 @@ def main() -> None:  # ruff: ignore[too-many-statements] - CLI entry point handl
     parser = argparse.ArgumentParser(
         description="SimpleSurvey - Minimal adaptive experiment system"
     )
-    parser.add_argument("hours", type=float, nargs="?", help="Time budget in hours (required unless --doctor)")
+    parser.add_argument(
+        "hours",
+        type=float,
+        nargs="?",
+        help="Time budget in hours (required unless --doctor)",
+    )
     parser.add_argument("--fidelity", default="L0", choices=["L0", "L1", "L2"])
     parser.add_argument(
         "--tasks", default="", help="Comma-separated task names (default: auto)"
     )
-    parser.add_argument("--max-workers", type=int, default=4)
-    parser.add_argument("--store", default="experiment.duckdb")
+    parser.add_argument(
+        "--max-workers", default="auto", help="Max workers (int or 'auto')"
+    )
+    parser.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=1,
+        help="Torch threads per worker (default 1)",
+    )
+    parser.add_argument(
+        "--store",
+        default=None,
+        help="DuckDB store path (default: experiments/experiment_YYYYMMDD_HHMMSS.duckdb)",
+    )
     parser.add_argument("--promote-from", default=None)
     parser.add_argument("--promote-top", type=int, default=20)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--dry-run-format",
+        choices=["json", "table", "summary"],
+        default="table",
+        help="Dry-run output format",
+    )
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--param-budget", type=int, default=0)
     parser.add_argument("--n-seeds", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch-limit", type=int, default=0)
     parser.add_argument("--axes", default="", help="JSON: axis -> [primitives]")
+    parser.add_argument(
+        "--digital", action="store_true", help="Restrict to digital substrate only"
+    )
     parser.add_argument("--hyperparameters", default="", help="JSON: hyperparameters")
     parser.add_argument("--objectives", default="", help="Comma-separated objectives")
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Verbose progress output"
     )
     parser.add_argument(
-        "--no-self-test", action="store_true", help="Skip environment self-test"
+        "--quiet", "-q", action="store_true", help="Suppress progress output"
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Run environment self-test before experiment",
+    )
+    parser.add_argument(
+        "--no-self-test",
+        action="store_true",
+        help="Deprecated: use --self-test to enable instead",
     )
     parser.add_argument(
         "--doctor", action="store_true", help="Run environment diagnostics and exit"
@@ -863,37 +1204,71 @@ def main() -> None:  # ruff: ignore[too-many-statements] - CLI entry point handl
     if args.hours is None:
         parser.error("hours argument required (unless using --doctor)")
 
-    if not args.no_self_test:
+    # Handle self-test flags
+    run_self_test = args.self_test
+    if args.no_self_test and not args.self_test:
+        logger.warning(
+            "--no-self-test is deprecated; self-test is now opt-in with --self-test"
+        )
+    elif args.no_self_test and args.self_test:
+        parser.error("Cannot use both --self-test and --no-self-test")
+
+    # Resolve device early (before self-test) to avoid CUDA probe in CPU mode
+    try:
+        device = get_device(args.device)
+        device_str = device.type
+    except Exception as e:
+        print(_format_error(f"Failed to resolve device: {e}", "Try --device cpu"))
+        sys.exit(1)
+
+    # Run self-test if requested
+    if run_self_test:
         logger.info("Running self-test...")
         try:
-            if not _run_self_test():
-                logger.error("Self-test failed. Use --no-self-test to skip.")
+            if not _run_self_test(device_str):
+                print(
+                    _format_error(
+                        "Self-test failed",
+                        "Run with --device cpu to skip CUDA checks, or fix the reported issue",
+                    )
+                )
                 sys.exit(1)
         except Exception:
             logger.exception("Self-test CRASHED")
             import traceback
 
             traceback.print_exc()
+            print(_format_error("Self-test crashed", "See traceback above for details"))
             sys.exit(1)
         logger.info("Self-test passed")
 
+    # Determine verbosity: default to True for TTY unless --quiet
+    verbose = args.verbose or (not args.quiet and sys.stdout.isatty())
+
+    # Resolve store path
+    store_path = args.store or _default_store_path()
+
+    # Resolve max_workers
+    max_workers = _resolve_max_workers(args.max_workers, device)
+
     tasks = args.tasks.split(",") if args.tasks else None
-    axes = json.loads(args.axes) if args.axes else None
+    axes = _axis_overrides(args.axes, digital=args.digital)
     hyperparameters = json.loads(args.hyperparameters) if args.hyperparameters else None
     objectives = tuple(args.objectives.split(",")) if args.objectives else ()
 
+    # ruff: ignore[too-many-statements-in-try-clause] - CLI entry point, single try for all execution paths
     try:
         result = run_simple_survey(
             hours=args.hours,
             fidelity=args.fidelity,
             tasks=tasks,
-            max_workers=args.max_workers,
-            store_path=args.store,
+            max_workers=max_workers,
+            store_path=store_path,
             promote_from=args.promote_from,
             promote_top=args.promote_top,
             seed=args.seed,
             dry_run=args.dry_run,
-            device=args.device,
+            device=device_str,
             param_budget=args.param_budget,
             n_seeds=args.n_seeds,
             epochs=args.epochs,
@@ -901,11 +1276,60 @@ def main() -> None:  # ruff: ignore[too-many-statements] - CLI entry point handl
             axes=axes,
             hyperparameters=hyperparameters,
             objectives=objectives,
-            verbose=args.verbose,
+            verbose=verbose,
+            cpu_threads=args.cpu_threads,
         )
-        print(json.dumps(result, default=str, indent=2))
-    except Exception:
-        logger.exception("FATAL")
+
+        if args.dry_run:
+            if args.dry_run_format == "json":
+                print(json.dumps(result, default=str, indent=2))
+            elif args.dry_run_format == "table":
+                _pretty_print_dry_run(
+                    result,
+                    hours=args.hours,
+                    fidelity=args.fidelity,
+                    model=result["model"],
+                    workers=result["workers"],
+                )
+            else:  # summary
+                n = result.get("n", 0)
+                tasks_str = ", ".join(result.get("tasks", []))
+                model: CostModel = result["model"]
+                total_est = model.startup_s + n * model.cost_per_cell_s / max(
+                    1, result["workers"]
+                )
+                print(
+                    f"Dry-run: {n} cells | {args.fidelity} | {tasks_str} | "
+                    f"~{model.cost_per_cell_s:.1f}s/cell ({model.source}) | "
+                    f"~{total_est:.0f}s total"
+                )
+        else:
+            print(json.dumps(result, default=str, indent=2))
+
+    except KeyboardInterrupt:
+        print("\nInterrupted")
+        sys.exit(130)
+    except SystemExit:
+        raise
+    except Exception as e:
+        # Friendly error handling
+        error_msg = str(e)
+        hint = None
+
+        if "CUDA" in error_msg or "cuda" in error_msg.lower():
+            hint = "Try --device cpu or export CUDA_VISIBLE_DEVICES=''"
+        elif "search space" in error_msg.lower() or "no cells" in error_msg.lower():
+            hint = "Try --fidelity L0 --device cpu, or check --axes constraints"
+        elif "import" in error_msg.lower() or "module" in error_msg.lower():
+            hint = "Run: uv sync --dev --all-extras"
+        elif "permission" in error_msg.lower():
+            hint = "Check file permissions for store path"
+        elif "no space" in error_msg.lower() or "disk" in error_msg.lower():
+            hint = "Free up disk space or use --store with a different path"
+
+        print(_format_error(error_msg, hint))
+        if verbose:
+            logger.exception("Full traceback:")
         sys.exit(1)
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from computronium.experiment import simple_survey
 from computronium.experiment.simple_survey import run_simple_survey
 from computronium.ontology.system import check_compatibility_matrix
 
@@ -140,6 +141,66 @@ def test_promote_from_dry_run():
     )
     # Should fall back to random exploration
     assert result["n"] > 0
+
+
+def test_estimate_cell_count_scales_with_workers():
+    """Four workers fit four times the serialized cell time."""
+    model = simple_survey.CostModel(cost_per_cell_s=10.0, startup_s=10.0)
+
+    assert simple_survey._estimate_cell_count(50, model, workers=1) == 4
+    assert simple_survey._estimate_cell_count(50, model, workers=4) == 16
+
+
+def test_estimate_cell_count_never_zero():
+    """A budget smaller than startup still runs one cell."""
+    model = simple_survey.CostModel(cost_per_cell_s=10.0, startup_s=10.0)
+
+    assert simple_survey._estimate_cell_count(1, model, workers=1) == 1
+
+
+def test_cost_model_round_trip(tmp_path, monkeypatch):
+    """A measurement survives to the next run through the cache."""
+    monkeypatch.setattr(simple_survey, "TIMING_CACHE", tmp_path / ".timing.json")
+    measured = simple_survey.CostModel(9.25, 5.5, measured=True)
+
+    simple_survey._save_cost_model("cpu", "L0", measured)
+    loaded = simple_survey._load_cost_model("cpu", "L0")
+
+    assert loaded.measured is True
+    assert loaded.cost_per_cell_s == pytest.approx(9.25)
+    assert loaded.startup_s == pytest.approx(5.5)
+
+
+def test_cost_model_missing_falls_back_to_defaults(tmp_path, monkeypatch):
+    """No cache entry means the documented fallback table, not a crash."""
+    monkeypatch.setattr(simple_survey, "TIMING_CACHE", tmp_path / "absent.json")
+
+    model = simple_survey._load_cost_model("cpu", "L0")
+
+    assert model.measured is False
+    assert model.cost_per_cell_s == simple_survey.DEFAULT_COSTS["L0"]
+    assert model.startup_s == simple_survey.DEFAULT_STARTUP_S
+
+
+def test_digital_flag_pins_substrate():
+    """--digital restricts the substrate axis and keeps other axes intact."""
+    axes = simple_survey._axis_overrides('{"dynamics": ["lazy"]}', digital=True)
+
+    assert axes == {"dynamics": ["lazy"], "substrate": ("digital",)}
+
+    result = run_simple_survey(
+        0.01, fidelity="L0", axes=axes, dry_run=True, max_workers=2
+    )
+    assert result["n"] > 0
+    assert {coord.substrate for coord, _ in result["cells"]} == {"digital"}
+
+
+def test_axis_overrides_without_digital_is_passthrough():
+    """Without --digital the JSON is used as written."""
+    assert simple_survey._axis_overrides("", digital=False) is None
+    assert simple_survey._axis_overrides('{"dynamics": ["lazy"]}', digital=False) == {
+        "dynamics": ["lazy"]
+    }
 
 
 if __name__ == "__main__":

@@ -352,6 +352,11 @@ ignore = [
 "computronium/experiment/environment/diagnostics.py" = [
     "suspicious-subprocess-import",  # subprocess used for uv version check (validated via shutil.which)
     "subprocess-without-shell-equals-true",  # subprocess.run with validated executable path
+    "start-process-with-partial-path",  # ldconfig is system command; nvidia-smi via shutil.which
+    "complex-structure",  # check_torch has many branches for CUDA probing
+    "too-many-branches",  # check_torch has many branches for CUDA probing
+    "too-many-statements-in-try-clause",  # CUDA info gathering is multi-statement
+    "too-many-locals",  # run_diagnostics collects many check results
 ]
 
 "computronium/acceleration/pc_kernels.py" = [

@@ -5,7 +5,6 @@ Provides comprehensive environment validation and debugging information.
 
 from __future__ import annotations
 
-import contextlib
 import platform
 import shutil
 import subprocess
@@ -48,9 +47,16 @@ def check_nvidia_driver() -> tuple[bool, str, dict]:
     nvidia_smi = shutil.which("nvidia-smi")
     if nvidia_smi:
         try:
-            result = subprocess.run(  # noqa: S603 - nvidia_smi validated via shutil.which
-                [nvidia_smi, "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
-                capture_output=True, text=True, timeout=5, check=False
+            result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - nvidia_smi validated via shutil.which
+                [
+                    nvidia_smi,
+                    "--query-gpu=name,driver_version,memory.total",
+                    "--format=csv,noheader",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
             )
             if result.returncode == 0:
                 info["nvidia_smi"] = result.stdout.strip()
@@ -65,8 +71,12 @@ def check_nvidia_driver() -> tuple[bool, str, dict]:
     cuda_libs = ["libcudart.so", "libcublas.so", "libcudnn.so"]
     for lib in cuda_libs:
         try:
-            result = subprocess.run(  # noqa: S603 - ldconfig is system command
-                ["ldconfig", "-p"], capture_output=True, text=True, timeout=5, check=False
+            result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - ldconfig is system command
+                ["ldconfig", "-p"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
             )
             if lib in result.stdout:
                 info[f"has_{lib}"] = True
@@ -96,8 +106,12 @@ def check_uv() -> tuple[bool, str]:
     if uv_path is None:
         return False, "uv not found in PATH"
     try:
-        result = subprocess.run(  # nosec B603: uv_path is validated via shutil.which
-            [uv_path, "--version"], capture_output=True, text=True, timeout=5, check=False
+        result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - uv_path validated via shutil.which
+            [uv_path, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
         )
         if result.returncode == 0:
             return True, result.stdout.strip()
@@ -106,7 +120,7 @@ def check_uv() -> tuple[bool, str]:
         return False, f"uv check failed: {e}"
 
 
-def check_torch() -> tuple[bool, str, bool, dict]:
+def check_torch(device: str = "auto") -> tuple[bool, str, bool, dict]:
     """Check torch is available and functional. Returns (ok, message, cuda_available, cuda_info)."""
     cuda_info = {}
     try:
@@ -117,11 +131,12 @@ def check_torch() -> tuple[bool, str, bool, dict]:
         return False, f"torch import crashed: {e}", False, cuda_info
 
     cuda_available = False
-    try:
-        cuda_available = torch.cuda.is_available()
-    except Exception as e:
-        cuda_info["cuda_check_error"] = str(e)
-        return False, f"torch.cuda.is_available() crashed: {e}", False, cuda_info
+    if device != "cpu":
+        try:
+            cuda_available = torch.cuda.is_available()
+        except Exception as e:
+            cuda_info["cuda_check_error"] = str(e)
+            return False, f"torch.cuda.is_available() crashed: {e}", False, cuda_info
 
     if cuda_available:
         try:
@@ -144,7 +159,12 @@ def check_torch() -> tuple[bool, str, bool, dict]:
         x = torch.tensor([1.0, 2.0])
         y = x * 2
         if y.tolist() != [2.0, 4.0]:
-            return False, "tensor ops produced unexpected result", cuda_available, cuda_info
+            return (
+                False,
+                "tensor ops produced unexpected result",
+                cuda_available,
+                cuda_info,
+            )
     except Exception as e:
         return False, f"CPU tensor ops failed: {e}", cuda_available, cuda_info
 
@@ -166,6 +186,8 @@ def check_torch() -> tuple[bool, str, bool, dict]:
             msg += f", CUDA {torch.version.cuda}, GPU: {torch.cuda.get_device_name(0)}"
         except Exception:
             msg += ", CUDA available (query failed)"
+    elif device == "cpu":
+        msg += ", CPU-only mode (CUDA skipped)"
     else:
         msg += ", CPU-only mode"
 
@@ -235,7 +257,7 @@ def run_diagnostics(
     if not nvidia_ok:
         errors.append(nvidia_msg)
 
-    torch_ok, torch_msg, cuda_available, cuda_info = check_torch()
+    torch_ok, torch_msg, cuda_available, cuda_info = check_torch(device)
     if not torch_ok:
         errors.append(torch_msg)
 
@@ -295,7 +317,9 @@ def print_diagnostics(result: DiagnosticsResult) -> None:
             print(f"    {key}: {value}")
 
     print("\n🧪 Computronium imports:")
-    print(f"  {(result.computronium_imports_ok and '✅') or '❌'} {result.computronium_imports_ok}")
+    print(
+        f"  {(result.computronium_imports_ok and '✅') or '❌'} {result.computronium_imports_ok}"
+    )
 
     print("\n🧪 Dry-run test:")
     print(f"  {(result.dry_run_ok and '✅') or '❌'} {result.dry_run_ok}")
@@ -306,15 +330,13 @@ def print_diagnostics(result: DiagnosticsResult) -> None:
             print(f"  - {err}")
 
     print("\n" + "=" * 60)
-    all_ok = all(
-        [
-            result.python_ok,
-            result.uv_ok,
-            result.torch_ok,
-            result.computronium_imports_ok,
-            result.dry_run_ok,
-        ]
-    )
+    all_ok = all([
+        result.python_ok,
+        result.uv_ok,
+        result.torch_ok,
+        result.computronium_imports_ok,
+        result.dry_run_ok,
+    ])
     print(f"Overall: {'✅ PASS' if all_ok else '❌ FAIL'}")
     print("=" * 60)
 
