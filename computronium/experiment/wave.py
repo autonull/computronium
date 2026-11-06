@@ -535,6 +535,7 @@ class PolicyPlanner:
                 seed=self.seed,
                 n_startup_trials=self.n_startup_trials,
                 spec=self.spec,
+                axis_objectives=self.spec.axis_objectives,
             )
 
     def _get_legal_primitives(self) -> dict[str, list[str]]:
@@ -1033,6 +1034,7 @@ class _SpecParams:
     axes: dict[str, tuple[str, ...]] | None
     hyperparameters: dict[str, Any] | None
     objectives: tuple[str, ...]
+    axis_objectives: dict[str, tuple[str, ...]] | None = None
 
 
 def _build_spec(params: _SpecParams) -> RunSpec:
@@ -1066,6 +1068,7 @@ def _build_spec(params: _SpecParams) -> RunSpec:
         device=params.device,
         axes=tuple(axis_selections),
         hyperparameters=params.hyperparameters or {},
+        axis_objectives=params.axis_objectives or {},
     )
     return spec
 

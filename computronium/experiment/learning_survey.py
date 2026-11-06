@@ -106,6 +106,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
     axes: dict[str, tuple[str, ...]] | None = None,
     hyperparameters: dict[str, Any] | None = None,
     objectives: tuple[str, ...] = (),
+    axis_objectives: dict[str, tuple[str, ...]] | None = None,
     verbose: bool = False,
     cpu_threads: int = 1,
     resume: bool = False,
@@ -132,6 +133,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         axes: Axis selections (axis -> primitives).
         hyperparameters: Hyperparameter domains.
         objectives: Objective names.
+        axis_objectives: Axis-aligned objectives for multi-objective optimization (e.g., NSGA-II).
         verbose: Verbose progress output.
         cpu_threads: Torch threads per worker (1 avoids CPU oversubscription).
         resume: If True, warm-start policy from store_path records.
@@ -162,6 +164,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         axes=axes,
         hyperparameters=hyperparameters,
         objectives=objectives,
+        axis_objectives=axis_objectives,
     )
     spec = _build_spec(params)
 
@@ -343,6 +346,7 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
     )
     parser.add_argument("--hyperparameters", default="", help="JSON: hyperparameters")
     parser.add_argument("--objectives", default="", help="Comma-separated objectives")
+    parser.add_argument("--axis-objectives", default="", help="JSON: axis -> [objectives]")
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Verbose progress output"
     )
@@ -445,6 +449,7 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
     axes = _axis_overrides(args.axes, digital=args.digital)
     hyperparameters = json.loads(args.hyperparameters) if args.hyperparameters else None
     objectives = tuple(args.objectives.split(",")) if args.objectives else ()
+    axis_objectives = json.loads(args.axis_objectives) if args.axis_objectives else None
 
     try:  # ruff: ignore[too-many-nested-blocks] - main entry point try block is inherently complex
         result = run_learning_survey(
@@ -465,6 +470,7 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
             axes=axes,
             hyperparameters=hyperparameters,
             objectives=objectives,
+            axis_objectives=axis_objectives,
             verbose=verbose,
             cpu_threads=args.cpu_threads,
             resume=args.resume,
