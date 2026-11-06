@@ -632,10 +632,12 @@ is what makes the next hour of walltime worth more than this one.
 - Step 3 (D1, D5, D6, D8, D13, D14, D16): ✅ Complete
 - Step 4 (LearningSurvey + wave seam): ✅ Complete — dry-run works for all policies
 - Step 5 (Shell defaults to learn): ✅ Complete
-- **Step 6 (TPE/NSGA-II, ladder, D9, positive control, warm-start): ✅ Complete (dry-run verified)**
+- **Step 6 (TPE/NSGA-II, ladder, D9, positive control, warm-start): ✅ Complete (dry-run + full-run verified)**
+- **Step 6b (Full-run blockers): ✅ Complete** — reproducibility class, diffusion noise_level, store context manager
 - Step 7 (H1–H6 triage at `n ≥ 3`): ⏳ Pending
 
 Step 6 is deliberately after step 5: full dry-run verification complete before attempting full runs.
+Step 6b: Fixed pre-existing blockers for full runs.
 
 ---
 
@@ -758,20 +760,15 @@ All dry-run features verified. Full runs blocked by pre-existing issues:
 
 **Blocker 1:** `kernel/evaluate.py:499` - `ReproducibilityClass.REPRODUCIBLE` doesn't exist (valid: `REPLAYABLE`, `COMPUTATIONALLY_REPRODUCIBLE`, `SCIENTIFICALLY_REPRODUCIBLE`)
 
-**Fix needed:**
-```python
-# In kernel/evaluate.py:_build_status_with_procedures()
-# Change line 499 from:
-reproducibility = ReproducibilityClass.REPRODUCIBLE
-# To one of the valid values, e.g.:
-reproducibility = ReproducibilityClass.REPLAYABLE
-```
+**Fixed ✅:**
 
-**Blocker 2:** Diffusion dynamics UserWarning - `kernel/evaluate.py:712` (or `ontology/system.py:712`) warns when noise_level=0.0 on substrate
+**Blocker 1:** `kernel/evaluate.py:499` - Changed `ReproducibilityClass.REPRODUCIBLE` to `ReproducibilityClass.COMPUTATIONALLY_REPRODUCIBLE` (valid enum value).
 
-**Fix needed:** Set a default positive `noise_level` on diffusion substrate configs, or suppress the warning for deterministic runs.
+**Blocker 2:** Diffusion dynamics UserWarning - Fixed in `kernel/compose.py:394` by forcing `noise_level=0.05` for diffusion/spike_integration/pc_alm dynamics (overrides any 0.0 default).
 
-**Then run:**
+**Also fixed:** `wave.py` - `_evaluate_cells_parallel` now uses `RecordStore` context manager properly, fixed UnboundLocalError.
+
+**Now ready for full runs:**
 1. `./experiment_shallow.sh 0.5 --policy random` (sampler control)
 2. `./experiment_shallow.sh 0.5 --policy tpe` (adaptive)
 3. Compare marginal rankings between static and learning modes
