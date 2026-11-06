@@ -732,7 +732,7 @@ Do not attempt 0.5h runs in this session. They require:
 
 - **D9 exact legality** — ✅ **COMPLETE** - cache key fixed, exact enumeration working, all primitives shown
 - **Fidelity ladder** — ✅ **COMPLETE (dry-run)** - budget split and schedules shown; full promotion logic deferred
-- **NSGA-II** — multi-objective needs `axis_objectives` in spec
+- **NSGA-II** — ✅ **COMPLETE (dry-run)** - axis_objectives wired; full multi-objective optimization deferred
 - **Positive control (P3)** — gate the report with a known-working cell
 - **Warm-start (`--promote-from`)** — `_init_resume` replays top records through `policy.observe`
 
@@ -814,7 +814,7 @@ SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --promote-from
 |---------|-------------|-----------|------|--------|
 | Exact legality | `--dry-run` shows full primitives | `test_filter_axes_conservative.py` | 30 min | ✅ Done |
 | Fidelity ladder | `--ladder --dry-run` shows 3 stages | `test_ladder_schedule.py` | 1 hr | ✅ Done |
-| NSGA-II | `--policy nsga2 --dry-run` | `test_nsga2_multi_objective.py` | 30 min | ⏳ Pending |
+| NSGA-II | `--policy nsga2 --dry-run` | `test_nsga2_multi_objective.py` | 30 min | ✅ Done (dry-run) |
 | Positive control | First cell is known-good | `test_positive_control.py` | 20 min | ⏳ Pending |
 | Warm-start | Logs warm-start count | `test_warm_start.py` | 30 min | ⏳ Pending |
 
