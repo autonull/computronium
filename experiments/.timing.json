@@ -4,9 +4,9 @@
     "startup_s": 7.47
   },
   "cpu/L0/13": {
-    "cost_per_cell_s": 61.759,
+    "cost_per_cell_s": 64.695,
     "per_task": {
-      "digits": 0.128
+      "digits": 0.135
     },
     "startup_s": 0.0
   }

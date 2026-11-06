@@ -713,9 +713,8 @@ def _evaluate_cells_parallel(
     store_config = StoreConfig(path=Path(store_path))
 
     # Use context manager for store to ensure proper initialization and cleanup
+    # Run is already created in run_waves before calling this function
     with RecordStore(store_config) as store:
-        if run_id and spec:
-            store.create_run(run_id, spec)
 
         def _sigterm_handler(signum, frame):
             logger.info("SIGTERM received, closing store after current record...")
@@ -944,7 +943,7 @@ def run_waves(
     fidelity_walltime: dict[str, float] = {}
     evaluation = None
 
-    # Create run in store before evaluation
+    # Create run in store before any evaluation
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.evidence.store._models import StoreConfig
     store_config = StoreConfig(path=Path(store_path))
@@ -974,8 +973,8 @@ def run_waves(
             budget_seconds=min(300, budget_remaining),
             cpu_threads=cpu_threads,
             device_str=device_str,
-            run_id=None,
-            spec=None,
+            run_id=run_id,
+            spec=spec,
         )
         pc_elapsed = time.monotonic() - pc_start
         positive_control_results.extend(pc_eval.results)
