@@ -2,11 +2,16 @@
 
 Single source of truth for task definitions, cost classes, baselines,
 and other task metadata used across the codebase.
+
+This module derives its data from the enriched task registry in
+`experiment.registry.task_registry`, which is the authoritative source.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from computronium.experiment.registry.task_registry import TaskRegistry
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,36 +25,27 @@ class TaskInfo:
     input_shape: tuple[int, ...] | None = None
 
 
-# Task definitions - single source of truth
-_TASK_DEFINITIONS: dict[str, TaskInfo] = {
-    # CHEAP tasks (<10s/epoch)
-    "xor": TaskInfo("xor", "cheap", 0.5, 2, (2,)),
-    "spiral": TaskInfo("spiral", "cheap", 0.5, 2, (2,)),
-    "circles": TaskInfo("circles", "cheap", 0.5, 2, (2,)),
-    "digits": TaskInfo("digits", "cheap", 0.1, 10, (64,)),
-    "copy_task": TaskInfo("copy_task", "cheap", 0.0, None, (10,)),
-    "iris": TaskInfo("iris", "cheap", 0.33, 3, (4,)),
-    "wine": TaskInfo("wine", "cheap", 0.33, 3, (13,)),
-    "breast_cancer": TaskInfo("breast_cancer", "cheap", 0.5, 2, (30,)),
-    "synthetic_forecast": TaskInfo("synthetic_forecast", "cheap", 0.0, None, (10,)),
-    # MEDIUM tasks (10-60s/epoch)
-    "mnist": TaskInfo("mnist", "medium", 0.1, 10, (1, 28, 28)),
-    "fashion_mnist": TaskInfo("fashion_mnist", "medium", 0.1, 10, (1, 28, 28)),
-    "sequential_mnist": TaskInfo("sequential_mnist", "medium", 0.1, 10, (28, 28)),
-    "char_ngram": TaskInfo("char_ngram", "medium", 0.01, None, (100,)),
-    "cora": TaskInfo("cora", "medium", 0.14, 7, (1433,)),
-    "citeseer": TaskInfo("citeseer", "medium", 0.16, 6, (3703,)),
-    "pubmed": TaskInfo("pubmed", "medium", 0.33, 3, (500,)),
-    "kmnist": TaskInfo("kmnist", "medium", 0.1, 10, (1, 28, 28)),
-    "usps": TaskInfo("usps", "medium", 0.1, 10, (16, 16)),
-    # EXPENSIVE tasks (>60s/epoch)
-    "cifar10": TaskInfo("cifar10", "expensive", 0.1, 10, (3, 32, 32)),
-    "tiny_shakespeare": TaskInfo("tiny_shakespeare", "expensive", 0.01, None, (100,)),
-    "pendulum": TaskInfo("pendulum", "expensive", 0.0, None, (3,)),
-    "acrobot": TaskInfo("acrobot", "expensive", 0.0, None, (6,)),
-    "cartpole": TaskInfo("cartpole", "expensive", 0.0, None, (4,)),
-    "graph_classification": TaskInfo("graph_classification", "expensive", 0.5, 2, None),
-}
+def _build_task_definitions() -> dict[str, TaskInfo]:
+    """Build task definitions from the enriched registry."""
+    registry = TaskRegistry()
+    definitions = {}
+    for task in registry:
+        # Get baseline from the enriched registry's baseline (1/output_dim for classification)
+        baseline = (
+            1.0 / task.output_dim if task.output_dim and task.output_dim > 1 else 0.0
+        )
+        definitions[task.name] = TaskInfo(
+            name=task.name,
+            cost_class=task.cost_class.value,
+            baseline=baseline,
+            num_classes=task.output_dim,
+            input_shape=task.input_shape,
+        )
+    return definitions
+
+
+# Task definitions - derived from the enriched registry (single source of truth)
+_TASK_DEFINITIONS: dict[str, TaskInfo] = _build_task_definitions()
 
 
 def get_task_info(task_name: str) -> TaskInfo | None:

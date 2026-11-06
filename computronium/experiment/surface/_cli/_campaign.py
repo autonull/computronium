@@ -422,6 +422,12 @@ def _cmd_coverage(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
                 print("No PASS records found")
                 return 0
 
+            # Per-axis coverage: measured vs declared
+            from computronium.experiment.schema.axis import (
+                AXES_REGISTRIES,
+                StructuralAxis,
+            )
+
             primitives_seen: dict[str, set[str]] = {
                 "substrate": set(),
                 "geometry": set(),
@@ -435,10 +441,33 @@ def _cmd_coverage(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
                     primitives_seen[axis].add(getattr(record, axis))
 
             print(f"Total PASS cells: {len(records)}")
-            for axis, names in primitives_seen.items():
-                print(f"{axis.title()}: {sorted(names)}")
+            print("\nPer-Axis Coverage (measured / declared):")
+            for axis_name, names in primitives_seen.items():
+                axis_enum = StructuralAxis[axis_name.upper()]
+                all_primitives = set(AXES_REGISTRIES[axis_enum].keys())
+                measured = len(names)
+                declared = len(all_primitives)
+                pct = 100.0 * measured / max(1, declared)
+                print(f"  {axis_name}: {measured} / {declared} ({pct:.1f}%)")
+                print(f"    Measured: {sorted(names)}")
+                missing = all_primitives - names
+                if missing:
+                    print(f"    Missing: {sorted(missing)}")
 
+            # Per-task coverage
+            print("\nPer-Task Coverage:")
             registry = TaskRegistry()
+            all_tasks = registry._enrichments.keys()
+            for task_name in sorted(all_tasks):
+                task_records = [r for r in records if r.schedule.task_id == task_name]
+                if task_records:
+                    cells = {r.cell_key for r in task_records}
+                    print(
+                        f"  {task_name}: {len(cells)} cells, {len(task_records)} records"
+                    )
+                else:
+                    print(f"  {task_name}: NOT TOUCHED")
+
             print("\nNote: Full domain×primitive matrix requires task-aware scheduling")
             print(
                 f"Registry has {len(registry._enrichments)} tasks across "

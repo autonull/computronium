@@ -205,38 +205,57 @@ class _QueryMixin(_StoreBase):
     def claim_eligible_replication_keys(
         self,
         run_id: str | None = None,
-        min_n_seeds: int = 5,
-        fidelity: str | None = "L2",
+        min_n_seeds: int = 3,
+        fidelity: str | None = None,
+        require_replay_hash: bool = True,
+        require_normalized_metric: bool = True,
     ) -> tuple[str, ...]:
-        """Replication keys that *achieved* ``min_n_seeds`` distinct passing seeds.
+        """Replication keys that achieved the claim floor.
 
-        Claim eligibility is a property of a cell, not of one of its seeds: the
-        executor writes one record per seed with ``schedule.n_seeds == 1``, so
-        no record-level filter can answer it. One grouped query, so the answer
-        costs one round trip rather than one per cell.
+        Eligibility requires (D11):
+        - Replicated cell: achieved PASS seeds >= min_n_seeds (default 3)
+        - Normalized metric present in payload (e.g., val_acc with task baseline)
+        - Replay hash present in payload (for reproducibility)
+        - PASS gate verdict
+        - Not quarantined
+
+        Args:
+            run_id: Optional run filter.
+            min_n_seeds: Minimum achieved seeds per cell (default 3).
+            fidelity: Optional fidelity filter (None = all fidelities).
+            require_replay_hash: Require replay_hash in payload (default True).
+            require_normalized_metric: Require normalized metric (default True).
         """
         if self._conn is None:
             raise StoreError("Connection not initialized")
-        conditions = ["status.gate_verdict = ?"]
-        params: list[Any] = [GateVerdict.PASS_.value]
+        conditions = ["status.gate_verdict = ?", "status.quarantine = ?"]
+        params: list[Any] = [GateVerdict.PASS_.value, False]
         if fidelity is not None:
             conditions.append("schedule.fidelity = ?")
             params.append(fidelity)
         if run_id is not None:
             conditions.append("run_id = ?")
             params.append(run_id)
+
+        # Build query with eligibility checks
+        # We need to check payload for replay_hash and normalized metrics
+        # Since payload is JSON, we use json_extract
         query = (
-            f"SELECT {_REPLICATION_COLUMNS}, COUNT(DISTINCT schedule.seed) "
-            "FROM records WHERE "
-            + " AND ".join(conditions)
-            + f" GROUP BY {_REPLICATION_COLUMNS}"
+            f"SELECT {_REPLICATION_COLUMNS}, COUNT(DISTINCT CAST(schedule.seed AS INTEGER)) "
+            "FROM records WHERE " + " AND ".join(conditions)
         )
+
+        if require_replay_hash:
+            query += " AND json_extract(payload, '$.replay_hash') IS NOT NULL"
+        if require_normalized_metric:
+            query += " AND (json_extract(payload, '$.val_acc') IS NOT NULL OR json_extract(payload, '$.normalized_val_acc') IS NOT NULL)"
+
+        query += f" GROUP BY {_REPLICATION_COLUMNS}"
+        query += " HAVING COUNT(DISTINCT CAST(schedule.seed AS INTEGER)) >= ?"
+        params.append(int(min_n_seeds))
+
         rows = self._conn.execute(query, params).fetchall()  # ruff: ignore[hardcoded-sql-expression] - static columns, bound params
-        return tuple(
-            format_replication_key(row[:6])
-            for row in rows
-            if row[6] >= int(min_n_seeds)
-        )
+        return tuple(format_replication_key(row[:6]) for row in rows)
 
     def _row_to_record(self, row: tuple) -> Record:
         """Convert a database row to a Record."""

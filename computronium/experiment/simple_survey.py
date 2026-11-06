@@ -11,12 +11,14 @@ from __future__ import annotations
 import os
 import sys
 
+import torch
+
 if "--device" in sys.argv:
     try:
         idx = sys.argv.index("--device")
         if idx + 1 < len(sys.argv) and sys.argv[idx + 1] == "cpu":
             os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         pass
 
 import argparse
@@ -99,11 +101,15 @@ class CostModel:
         cost_per_cell_s: Serialized seconds one cell occupies one worker.
         startup_s: Fixed seconds before the first cell lands.
         measured: Whether both numbers come from a previous run.
+        workers: Number of workers the model was measured with.
+        per_task: Per-task mean cost per cell (optional).
     """
 
     cost_per_cell_s: float
     startup_s: float
     measured: bool = False
+    workers: int = 1
+    per_task: dict[str, float] | None = None
 
     @property
     def source(self) -> str:
@@ -111,17 +117,21 @@ class CostModel:
         return "measured" if self.measured else "default"
 
 
-def _load_cost_model(device: str, fidelity: str) -> CostModel:
-    """Measured cost for this device and fidelity, else the fallback table."""
+def _load_cost_model(device: str, fidelity: str, workers: int) -> CostModel:
+    """Measured cost for this device, fidelity, and worker count, else the fallback table."""
     try:
-        entry = json.loads(TIMING_CACHE.read_text())[f"{device}/{fidelity}"]
+        entry = json.loads(TIMING_CACHE.read_text())[f"{device}/{fidelity}/{workers}"]
         return CostModel(
             cost_per_cell_s=float(entry["cost_per_cell_s"]),
             startup_s=float(entry["startup_s"]),
             measured=True,
+            workers=workers,
+            per_task=entry.get("per_task"),
         )
     except OSError, ValueError, KeyError, TypeError:
-        return CostModel(DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S)
+        return CostModel(
+            DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S, workers=workers
+        )
 
 
 def _save_cost_model(device: str, fidelity: str, model: CostModel) -> None:
@@ -129,10 +139,14 @@ def _save_cost_model(device: str, fidelity: str, model: CostModel) -> None:
     with contextlib.suppress(OSError, ValueError):
         TIMING_CACHE.parent.mkdir(parents=True, exist_ok=True)
         existing = json.loads(TIMING_CACHE.read_text()) if TIMING_CACHE.exists() else {}
-        existing[f"{device}/{fidelity}"] = {
+        key = f"{device}/{fidelity}/{model.workers}"
+        data: dict[str, Any] = {
             "cost_per_cell_s": round(model.cost_per_cell_s, 3),
             "startup_s": round(model.startup_s, 3),
         }
+        if model.per_task:
+            data["per_task"] = {k: round(v, 3) for k, v in model.per_task.items()}
+        existing[key] = data
         TIMING_CACHE.write_text(json.dumps(existing, indent=2, sort_keys=True))
 
 
@@ -149,25 +163,9 @@ MUTATION_AXES: list[StructuralAxis] = [
 
 def _schedule_from_spec(spec: RunSpec, task: str, fidelity: str) -> Schedule:
     """Create a Schedule from a RunSpec for a given task and fidelity."""
-    fidelity_seeds = spec.fidelity_seeds or {}
-    fidelity_epochs = spec.fidelity_epochs or {}
+    from computronium.experiment.kernel.search_space import schedule_for
 
-    return Schedule(
-        fidelity=fidelity,
-        seed=spec.seed,
-        n_seeds=fidelity_seeds.get(fidelity, spec.n_seeds),
-        epochs=fidelity_epochs.get(fidelity, spec.epochs),
-        batch_limit=spec.batch_limit,
-        budget_id=f"{fidelity}_initial",
-        task_id=task,
-        param_budget=spec.param_budget,
-        device=spec.device,
-        deterministic=spec.deterministic,
-        num_workers=spec.num_workers,
-        precision=spec.precision,
-        checkpoint_every_n=spec.checkpoint_every_n,
-        early_stopping_patience=spec.early_stopping_patience,
-    )
+    return schedule_for(spec, task, fidelity)
 
 
 def _build_provenance(spec: RunSpec, run_id: str) -> Provenance:
@@ -225,12 +223,20 @@ def _mutate_around(
     tasks: Sequence[str],
     spec: RunSpec,
     search_space,
+    seen: set[str] | None = None,
 ) -> list[tuple[Coordinate, Schedule]]:
-    """Mutate 1-2 axes of top performers to explore neighborhood."""
+    """Mutate 1-2 axes of top performers to explore neighborhood.
+
+    Filters mutated candidates through the same measurement_key set the walk uses
+    to avoid duplicates and already-measured cells.
+    """
     mutated_cells: list[tuple[Coordinate, Schedule]] = []
 
     if not top_coords:
         return mutated_cells
+
+    if seen is None:
+        seen = set()
 
     per_coord = max(1, n // len(top_coords))
 
@@ -272,6 +278,13 @@ def _mutate_around(
 
             task = random.choice(tasks)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
             schedule = _schedule_from_spec(spec, task, fidelity)
+
+            # Dedupe: skip if already seen
+            measurement_key = mutated_coord.measurement_key(schedule)
+            if measurement_key in seen:
+                continue
+            seen.add(measurement_key)
+
             mutated_cells.append((mutated_coord, schedule))
 
     return mutated_cells
@@ -284,29 +297,68 @@ def _random_explore(
     seed: int,
     spec: RunSpec,
     search_space,
+    seen: set[str] | None = None,
 ) -> list[tuple[Coordinate, Schedule]]:
-    """Random valid cells from iter_candidates."""
-    cells: list[tuple[Coordinate, Schedule]] = []
+    """Random valid cells from iter_candidates.
 
-    for coord, schedule in iter_candidates(
-        spec,
-        search_space,
-        shape=task_shape,
-        max_scan=50000,
-        check_composable=True,
-    ):
-        if len(cells) >= n:
+    Pages until N cells or the space is exhausted. Reports planned vs measured
+    and warns when measured < 80% of planned.
+    """
+    if seen is None:
+        seen = set()
+
+    cells: list[tuple[Coordinate, Schedule]] = []
+    offset = 0
+    page_size = 50000
+
+    while len(cells) < n:
+        page_cells: list[tuple[Coordinate, Schedule]] = []
+
+        for coord, schedule in iter_candidates(
+            spec,
+            search_space,
+            shape=task_shape,
+            max_scan=page_size,
+            check_composable=True,
+            offset=offset,
+        ):
+            if not _check_coord_compatibility(coord):
+                continue
+
+            # Always create schedule with target fidelity (uses schedule_for internally)
+            cell_schedule = _schedule_from_spec(spec, schedule.task_id, fidelity)
+
+            # Dedupe: skip if already seen
+            measurement_key = coord.measurement_key(cell_schedule)
+            if measurement_key in seen:
+                continue
+            seen.add(measurement_key)
+
+            page_cells.append((coord, cell_schedule))
+
+            if len(cells) + len(page_cells) >= n:
+                break
+
+        if not page_cells:
+            # No more cells in this page; we've exhausted the space
             break
 
-        if not _check_coord_compatibility(coord):
-            continue
+        cells.extend(page_cells)
+        offset += page_size
 
-        cell_schedule = schedule
-        if schedule.fidelity != fidelity:
-            cell_schedule = _schedule_from_spec(spec, schedule.task_id, fidelity)
-        cells.append((coord, cell_schedule))
+        if len(page_cells) < page_size:
+            # Last page was short; we've exhausted the space
+            break
 
-    return cells
+    if len(cells) < n:
+        logger.warning(
+            "Planned %d cells but only found %d valid cells (%.1f%% of target)",
+            n,
+            len(cells),
+            100.0 * len(cells) / max(1, n),
+        )
+
+    return cells[:n]
 
 
 def _generate_valid_cells(
@@ -321,6 +373,7 @@ def _generate_valid_cells(
 ) -> list[tuple[Coordinate, Schedule]]:
     """Generate N valid cells with optional importance sampling from prior runs."""
     cells: list[tuple[Coordinate, Schedule]] = []
+    seen: set[str] = set()
 
     # 1. Exploitation: bias toward prior winners (if prior run exists)
     if promote_from:
@@ -330,7 +383,7 @@ def _generate_valid_cells(
             if top_coords:
                 cells.extend(
                     _mutate_around(
-                        top_coords, n // 2, fidelity, tasks, spec, search_space
+                        top_coords, n // 2, fidelity, tasks, spec, search_space, seen
                     )
                 )
         except Exception as exc:
@@ -343,19 +396,25 @@ def _generate_valid_cells(
     remaining = n - len(cells)
     if remaining > 0:
         cells.extend(
-            _random_explore(remaining, fidelity, tasks, seed, spec, search_space)
+            _random_explore(remaining, fidelity, tasks, seed, spec, search_space, seen)
         )
 
     return cells[:n]
 
 
 def _get_top_coordinates(store: RecordStore, fidelity: str, k: int) -> list[Coordinate]:
-    """Get top-k coordinates by val_acc from a prior store."""
+    """Get top-k coordinates by val_acc from a prior store.
+
+    FIX (D1): Select by measurement, not by target fidelity — all records with a
+    finite val_acc, ranked by normalized score. Log promoted=N of top M, and
+    raise when a promotion was requested and produced zero coordinates.
+    """
+    from computronium.domains._task_registry import get_baseline, normalize_score
     from computronium.experiment.schema.record import GateVerdict
 
     try:
+        # Query ALL records regardless of fidelity, filter by gate verdict
         records = store.query_records(
-            fidelity=fidelity,
             gate_verdict=GateVerdict.PASS_,
             quarantine=False,
         )
@@ -363,10 +422,31 @@ def _get_top_coordinates(store: RecordStore, fidelity: str, k: int) -> list[Coor
         return []
 
     valid_records = [r for r in records if r.payload.get("val_acc") is not None]
-    valid_records.sort(key=lambda r: r.payload.get("val_acc", 0.0), reverse=True)
+    if not valid_records:
+        logger.warning("Promotion requested but no PASS records with val_acc found")
+        return []
+
+    # Rank by normalized score (per-task baseline)
+    def _norm_val(record):
+        task_id = record.schedule.task_id
+        val_acc = record.payload.get("val_acc", 0.0)
+        baseline = get_baseline(task_id)
+        return normalize_score(val_acc, task_id, baseline)
+
+    valid_records.sort(key=_norm_val, reverse=True)
+
+    promoted_count = min(k, len(valid_records))
+    logger.info(
+        "Promoted %d of top %d coordinates from prior store",
+        promoted_count,
+        len(valid_records),
+    )
+
+    if promoted_count == 0:
+        raise ValueError("Promotion requested but produced zero coordinates")
 
     coords = []
-    for record in valid_records[:k]:
+    for record in valid_records[:promoted_count]:
         coord = Coordinate.from_record(record)
         coords.append(coord)
     return coords
@@ -431,14 +511,18 @@ def _build_spec(params: _SpecParams) -> RunSpec:
             axis_enum = getattr(StructuralAxis, axis_name.upper())
             axis_selections.append(AxisSelection(axis=axis_enum, primitives=primitives))
 
+    # n_seeds and epochs: None means "use fidelity ladder"
+    n_seeds = params.n_seeds if params.n_seeds != 1 else None
+    epochs = params.epochs if params.epochs != 1 else None
+
     spec = RunSpec(
         profile="simple_survey",
         task=params.tasks[0] if params.tasks else "auto",
         tasks=tuple(params.tasks) if params.tasks else (),
         objectives=params.objectives or ("validation_accuracy", "energy_per_step"),
         fidelity=params.fidelity,
-        n_seeds=params.n_seeds,
-        epochs=params.epochs,
+        n_seeds=n_seeds,
+        epochs=epochs,
         batch_limit=params.batch_limit,
         seed=params.seed,
         budget_seconds=int(params.hours * 3600),
@@ -446,8 +530,8 @@ def _build_spec(params: _SpecParams) -> RunSpec:
         device=params.device,
         axes=tuple(axis_selections),
         hyperparameters=params.hyperparameters or {},
-        fidelity_seeds={"L0": 1, "L1": 2, "L2": 5},
-        fidelity_epochs={"L0": 1, "L1": 3, "L2": 10},
+        # fidelity_seeds and fidelity_epochs are set by the caller if needed
+        # For SimpleSurvey, we use the ladder defaults via schedule_for()
     )
     return spec
 
@@ -552,15 +636,30 @@ def _pretty_print_dry_run(
     print(f"Total estimated time: ~{total_est:.0f}s ({total_est / 60:.1f}m)")
 
 
-def _resolve_max_workers(max_workers: int | str, device: "torch.device") -> int:
-    """Resolve max_workers from 'auto' or int to actual count."""
+def _resolve_max_workers(max_workers: int | str, device: torch.device) -> int:
+    """Resolve max_workers from 'auto' or int to actual count.
+
+    Default to os.cpu_count() bounded by memory (min(cores, available_memory_gb / per_worker_rss)).
+    Keep cpu_threads=1, and let --workers override.
+    """
     import os
-    import torch
+
+    import psutil
 
     if max_workers == "auto" or (isinstance(max_workers, int) and max_workers <= 0):
         if device.type == "cuda":
             return torch.cuda.device_count() or 1
-        return min(4, os.cpu_count() or 4)
+        # CPU: use all cores, bounded by memory (assume ~2GB per worker)
+        cores = os.cpu_count() or 4
+        try:
+            import psutil
+
+            available_gb = psutil.virtual_memory().available / (1024**3)
+            # Rough estimate: 2GB per worker
+            max_by_memory = max(1, int(available_gb / 2))
+            return min(cores, max_by_memory)
+        except Exception:
+            return cores
     return int(max_workers)
 
 
@@ -651,10 +750,29 @@ def _blend(previous: CostModel, measured: CostModel) -> CostModel:
     One run's average is a noisy sample — task mix varies cell to cell — so
     the stored cost follows the measurement without chasing it.
     """
+    # Blend per-task costs if both have them
+    per_task = None
+    if previous.per_task and measured.per_task:
+        per_task = {}
+        all_tasks = set(previous.per_task.keys()) | set(measured.per_task.keys())
+        for task in all_tasks:
+            prev = previous.per_task.get(task)
+            meas = measured.per_task.get(task)
+            if prev is not None and meas is not None:
+                per_task[task] = 0.5 * (prev + meas)
+            elif meas is not None:
+                per_task[task] = meas
+            else:
+                per_task[task] = prev
+    elif measured.per_task:
+        per_task = measured.per_task
+
     return CostModel(
         cost_per_cell_s=0.5 * (previous.cost_per_cell_s + measured.cost_per_cell_s),
         startup_s=0.5 * (previous.startup_s + measured.startup_s),
         measured=True,
+        workers=measured.workers,
+        per_task=per_task,
     )
 
 
@@ -668,13 +786,20 @@ def _evaluate_cells_parallel(
     budget_seconds: int | None = None,
     cpu_threads: int = 1,
     device_str: str = "cpu",
+    run_id: str | None = None,
+    spec: RunSpec | None = None,
 ) -> _Evaluation:
     """Evaluate cells in parallel, stopping when the budget is spent.
 
     A run must not outlive the budget it was asked for, so submissions are
     windowed: a cell is only handed to the pool while time remains. In-flight
     cells finish, which bounds the overshoot to one wave.
+
+    Records are appended to the store as they land (streaming), so an interruption
+    preserves all completed work.
     """
+    import signal
+
     n_total = len(cells)
     results: list = []
     started = time.monotonic()
@@ -683,44 +808,72 @@ def _evaluate_cells_parallel(
     pending: dict[Any, tuple[Coordinate, Schedule]] = {}
     startup_s = 0.0
 
+    # Initialize store for streaming writes
+    store_config = StoreConfig(path=Path(store_path))
+    store = RecordStore(store_config)
+    if run_id and spec:
+        store.create_run(run_id, spec)
+
+    # SIGTERM handler: close store gracefully
+    def _sigterm_handler(signum, frame):
+        logger.info("SIGTERM received, closing store after current record...")
+        store.close()
+        sys.exit(130)
+
+    old_sigterm = signal.signal(signal.SIGTERM, _sigterm_handler)
+    old_sigint = signal.signal(signal.SIGINT, _sigterm_handler)
+
     logger.info("Evaluating up to %d cells with %d workers...", n_total, max_workers)
 
-    with ProcessPoolExecutor(
-        max_workers=max_workers,
-        initializer=_init_worker,
-        initargs=(cpu_threads, device_str),
-    ) as pool:
+    try:
+        with ProcessPoolExecutor(
+            max_workers=max_workers,
+            initializer=_init_worker,
+            initargs=(cpu_threads, device_str),
+        ) as pool:
 
-        def _submit_next() -> None:
-            cell = next(queue, None)
-            if cell is not None:
-                pending[
-                    pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
-                ] = cell
+            def _submit_next() -> None:
+                cell = next(queue, None)
+                if cell is not None:
+                    pending[
+                        pool.submit(
+                            _evaluate_one, cell, fidelity, store_path, provenance
+                        )
+                    ] = cell
 
-        for _ in range(min(max_workers, n_total)):
-            _submit_next()
+            for _ in range(min(max_workers, n_total)):
+                _submit_next()
 
-        while pending:
-            for future in wait(pending, return_when=FIRST_COMPLETED).done:
-                del pending[future]
-                record = future.result()
-                results.append(record)
+            while pending:
+                for future in wait(pending, return_when=FIRST_COMPLETED).done:
+                    del pending[future]
+                    record = future.result()
+                    results.append(record)
 
-                if not startup_s:
-                    # Time before the first result landed, less that cell's work.
-                    startup_s = max(
-                        0.0,
-                        (time.monotonic() - started)
-                        - float(record.payload.get("walltime_s", 0.0)),
-                    )
+                    # Stream record to store immediately
+                    store.append(record)
 
-                i = len(results)
-                if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
-                    _log_progress(i, n_total, record)
+                    if not startup_s:
+                        # Time before the first result landed, less that cell's work.
+                        startup_s = max(
+                            0.0,
+                            (time.monotonic() - started)
+                            - float(record.payload.get("walltime_s", 0.0)),
+                        )
 
-                if deadline is None or time.monotonic() < deadline:
-                    _submit_next()
+                    i = len(results)
+                    if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
+                        _log_progress(i, n_total, record)
+
+                    if deadline is None or time.monotonic() < deadline:
+                        _submit_next()
+
+    finally:
+        # Restore signal handlers
+        signal.signal(signal.SIGTERM, old_sigterm)
+        signal.signal(signal.SIGINT, old_sigint)
+        # Close store
+        store.close()
 
     elapsed = time.monotonic() - started
     skipped = n_total - len(results)
@@ -733,15 +886,6 @@ def _evaluate_cells_parallel(
             elapsed,
         )
     return _Evaluation(results, elapsed, startup_s, skipped)
-
-
-def _store_results(store_path: str, run_id: str, spec: RunSpec, results: list) -> None:
-    """Store evaluation results in the record store."""
-    store_config = StoreConfig(path=Path(store_path))
-    with RecordStore(store_config) as store:
-        store.create_run(run_id, spec)
-        for record in results:
-            store.append(record)
 
 
 def _generate_report(store_path: str, run_id: str) -> dict:
@@ -831,7 +975,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         tasks = get_fidelity_tasks(fidelity)
 
     workers = _resolve_max_workers(max_workers, get_device(device))
-    model = _load_cost_model(get_device(device).type, fidelity)
+    model = _load_cost_model(get_device(device).type, fidelity, workers)
 
     # 3. Generate cells
     cells = _generate_cells(
@@ -869,13 +1013,12 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         budget_seconds=spec.budget_seconds,
         cpu_threads=cpu_threads,
         device_str=device_str,
+        run_id=run_id,
+        spec=spec,
     )
     results = evaluation.results
 
-    # 5. Store results
-    _store_results(store_path, run_id, spec, results)
-
-    # 6. Generate report
+    # 5. Generate report (results already streamed to store)
     report = _generate_report(store_path, run_id)
 
     passed = sum(1 for r in results if r.status.gate_verdict.value == "PASS")
@@ -883,10 +1026,27 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
 
     # 7. Learn this run's real cost so the next run sizes itself honestly.
     if results:
+        # Compute per-task mean cost per cell
+        from collections import defaultdict
+
+        task_times: defaultdict[str, list[float]] = defaultdict(list)
+        for r in results:
+            task_id = r.payload.get("task_id")
+            walltime = r.payload.get("walltime_s")
+            if task_id and walltime:
+                task_times[task_id].append(float(walltime))
+
+        per_task = {}
+        for task_id, times in task_times.items():
+            if times:
+                per_task[task_id] = sum(times) / len(times)
+
         measured = CostModel(
             cost_per_cell_s=max(0.01, evaluation.elapsed_s * workers / len(results)),
             startup_s=evaluation.startup_s,
             measured=True,
+            workers=workers,
+            per_task=per_task,
         )
         logger.info(
             "Measured: %.1fs/cell, %.0fs startup (estimate said %.1fs/cell)",

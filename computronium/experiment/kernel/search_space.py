@@ -155,12 +155,12 @@ def _search_space_cache_key(spec: RunSpec, tasks: Sequence[str] | None) -> tuple
 
 def _filter_axes_cache_key(axes_snapshot: list, spec: RunSpec) -> tuple:
     """Create a cache key for _filter_axes_for_validity."""
-    # Key includes: axis names per axis kind, task
+    # Key includes: axis names per axis kind, ALL tasks (not just first)
     axes_key = tuple(
         tuple(sorted(s.name for s in axes_snapshot if s.axis_kind == axis))
         for axis in StructuralAxis
     )
-    task_key = spec.task_names[0] if spec.task_names else None
+    task_key = tuple(sorted(spec.task_names)) if spec.task_names else ()
     return (axes_key, task_key)
 
 
@@ -306,21 +306,19 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     if not all(axis_primitives):
         return axes_snapshot
 
-    total_combos = math.prod(len(p) for p in axis_primitives)
-
-    # For small spaces, use full Cartesian product (exact)
-    # For large spaces, use per-primitive validation (approximate but fast)
-    if total_combos <= 100_000:
-        # Exact: enumerate all combinations
-        valid_tuples: set[tuple[str, ...]] = set()
-        for values in product(*axis_primitives):
+    # Exact: enumerate all combinations (conservative - no primitive the exact path accepts may be dropped)
+    # The cache ensures this is fast for subsequent runs with the same spec.
+    valid_tuples: set[tuple[str, ...]] = set()
+    for values in product(*axis_primitives):
+        # Check against ALL tasks in the spec (not just the first)
+        # A primitive is valid if it works for AT LEAST ONE task
+        valid_for_any_task = False
+        for task_name in spec.task_names:
             selection = {
                 axis.value: name for axis, name in zip(axes_order, values, strict=True)
             }
             coordinate = Coordinate(**selection, params={})
-            ctx = CoordinateContext(
-                coordinate, task=spec.task_names[0] if spec.task_names else None
-            )
+            ctx = CoordinateContext(coordinate, task=task_name)
 
             all_pass = True
             for constraint in void_constraints:
@@ -332,158 +330,16 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
                     break
 
             if all_pass:
-                valid_tuples.add(values)
+                valid_for_any_task = True
+                break
 
-        valid_by_axis: dict[StructuralAxis, set[str]] = {
-            axis: set() for axis in axes_order
-        }
-        for tup in valid_tuples:
-            for axis, name in zip(axes_order, tup, strict=True):
-                valid_by_axis[axis].add(name)
-    else:
-        # Approximate: for each primitive, check if it can be part of ANY valid combination
-        # by searching combinations with that primitive fixed
-        valid_by_axis: dict[StructuralAxis, set[str]] = {
-            axis: set() for axis in axes_order
-        }
+        if valid_for_any_task:
+            valid_tuples.add(values)
 
-        # Pre-compute candidate values per axis - use more primitives to find valid combinations
-        # For small axes (<=5 primitives), use all; for larger, use first 5
-        # CRITICAL: For axes involved in void constraints, we need broader coverage
-        # because specific combinations are required (e.g., diffusion needs recurrent geometry,
-        # spike_integration needs target_inversion credit)
-        candidate_values: dict[StructuralAxis, list[str]] = {}
-        for axis in axes_order:
-            primitives = primitives_by_axis.get(axis, [])
-            # Use more candidates for axes that appear in void constraint predicates
-            # Geometry, Credit, Dynamics are heavily constrained
-            if axis in {
-                StructuralAxis.GEOMETRY,
-                StructuralAxis.CREDIT,
-                StructuralAxis.DYNAMICS,
-                StructuralAxis.SUBSTRATE,
-            }:
-                candidate_values[axis] = (
-                    primitives  # Use ALL for heavily constrained axes
-                )
-            elif len(primitives) <= 5:
-                candidate_values[axis] = primitives
-            else:
-                candidate_values[axis] = primitives[:5]
-
-        # Max combinations to check per primitive
-        max_checks_per_primitive = 5000
-
-        for axis in axes_order:
-            for primitive in primitives_by_axis.get(axis, []):
-                # Try to find a valid combination with this primitive fixed
-                found = False
-
-                # Build list of other axes' candidate primitives
-                other_axes = [a for a in axes_order if a != axis]
-                other_candidates = [candidate_values.get(a, []) for a in other_axes]
-
-                if not all(other_candidates):
-                    # Some axis has no candidates - skip
-                    continue
-
-                # First try: test against first candidate of each other axis (the original default)
-                test_selection = {
-                    a.value: cands[0]
-                    for a, cands in zip(other_axes, other_candidates)
-                    if cands
-                }
-                test_selection[axis.value] = primitive
-                coordinate = Coordinate(**test_selection, params={})
-                ctx = CoordinateContext(
-                    coordinate, task=spec.task_names[0] if spec.task_names else None
-                )
-
-                all_pass = True
-                for constraint in void_constraints:
-                    pred = constraint.predicate
-                    if pred is None:
-                        continue
-                    if not evaluate(pred, ctx):
-                        all_pass = False
-                        break
-
-                if all_pass:
-                    valid_by_axis[axis].add(primitive)
-                    continue
-
-                # Second try: search Cartesian product of candidate values for other axes
-                checks = 0
-                for values in product(*other_candidates):
-                    if checks >= max_checks_per_primitive:
-                        break
-                    test_selection = {
-                        a.value: v for a, v in zip(other_axes, values, strict=True)
-                    }
-                    test_selection[axis.value] = primitive
-                    coordinate = Coordinate(**test_selection, params={})
-                    ctx = CoordinateContext(
-                        coordinate, task=spec.task_names[0] if spec.task_names else None
-                    )
-
-                    all_pass = True
-                    for constraint in void_constraints:
-                        pred = constraint.predicate
-                        if pred is None:
-                            continue
-                        if not evaluate(pred, ctx):
-                            all_pass = False
-                            break
-
-                    if all_pass:
-                        valid_by_axis[axis].add(primitive)
-                        found = True
-                        break
-                    checks += 1
-
-                # Third try: if still not found, try a broader search with more primitives per axis
-                if not found:
-                    # Expand search to more primitives per axis (up to 5)
-                    expanded_candidates = {}
-                    for a in other_axes:
-                        primitives = primitives_by_axis.get(a, [])
-                        expanded_candidates[a] = primitives[:5] if primitives else []
-
-                    if all(expanded_candidates.values()):
-                        other_axes_expanded = list(expanded_candidates.keys())
-                        other_candidates_expanded = list(expanded_candidates.values())
-
-                        checks = 0
-                        for values in product(*other_candidates_expanded):
-                            if checks >= max_checks_per_primitive:
-                                break
-                            test_selection = {
-                                a.value: v
-                                for a, v in zip(
-                                    other_axes_expanded, values, strict=True
-                                )
-                            }
-                            test_selection[axis.value] = primitive
-                            coordinate = Coordinate(**test_selection, params={})
-                            ctx = CoordinateContext(
-                                coordinate,
-                                task=spec.task_names[0] if spec.task_names else None,
-                            )
-
-                            all_pass = True
-                            for constraint in void_constraints:
-                                pred = constraint.predicate
-                                if pred is None:
-                                    continue
-                                if not evaluate(pred, ctx):
-                                    all_pass = False
-                                    break
-
-                            if all_pass:
-                                valid_by_axis[axis].add(primitive)
-                                found = True
-                                break
-                            checks += 1
+    valid_by_axis: dict[StructuralAxis, set[str]] = {axis: set() for axis in axes_order}
+    for tup in valid_tuples:
+        for axis, name in zip(axes_order, tup, strict=True):
+            valid_by_axis[axis].add(name)
 
     # Cache the result (store as dict of axis -> set of names)
     _filter_axes_cache[cache_key] = {
@@ -735,21 +591,21 @@ def _composable(
     except ValueError, TypeError, KeyError:
         _composable_cache[cache_key] = False
         return False
-    if param_budget <= 0:
-        _composable_cache[cache_key] = True
-        return True
+
     # The same R25 fairness rule the evaluator's gate applies, asked here so a
     # cell that cannot honour its ceiling is never proposed: a cell that cannot
     # fit is discovered by training, which is the expensive way to find out.
-    result = geometry_param_count(config.geometry) <= param_budget * (
-        1 + PARAM_BUDGET_TOLERANCE
-    )
-    if not result:
-        _composable_cache[cache_key] = False
-        return False
+    if param_budget > 0:
+        result = geometry_param_count(config.geometry) <= param_budget * (
+            1 + PARAM_BUDGET_TOLERANCE
+        )
+        if not result:
+            _composable_cache[cache_key] = False
+            return False
 
     # Dry-run gate: verify the cell can actually train (catches detached graphs,
     # FA contract failures, no-gradient-reached, etc.)
+    # Run unconditionally - default param_budget=0 must not disable the gate.
     from computronium.experiment.kernel.compose import _dry_run_trainable
 
     dry_ok, _dry_reason = _dry_run_trainable(
@@ -767,15 +623,50 @@ def _composable(
     return True
 
 
-def _schedule(spec: RunSpec, task: str) -> Schedule:
-    """The cell's schedule, from the spec rather than from a literal."""
+def schedule_for(
+    spec: RunSpec,
+    task: str,
+    fidelity: str,
+) -> Schedule:
+    """Create a Schedule from spec for a given task and fidelity.
+
+    Precedence (highest first):
+    1. Explicit spec.n_seeds / spec.epochs (CLI set them)
+    2. spec.fidelity_seeds[fidelity] / spec.fidelity_epochs[fidelity]
+    3. Ladder defaults: L0=1/1, L1=3/5, L2=5/20
+    """
+    fidelity_seeds = spec.fidelity_seeds or {}
+    fidelity_epochs = spec.fidelity_epochs or {}
+
+    # Ladder defaults
+    ladder_seeds = {"L0": 1, "L1": 3, "L2": 5}
+    ladder_epochs = {"L0": 1, "L1": 5, "L2": 20}
+
+    # n_seeds: explicit > fidelity > ladder
+    if (
+        spec.n_seeds is not None and spec.n_seeds != 1
+    ):  # 1 is the default, so check if explicitly set
+        n_seeds = spec.n_seeds
+    elif fidelity in fidelity_seeds:
+        n_seeds = fidelity_seeds[fidelity]
+    else:
+        n_seeds = ladder_seeds.get(fidelity, 1)
+
+    # epochs: explicit > fidelity > ladder
+    if spec.epochs is not None and spec.epochs != 1:  # 1 is the default
+        epochs = spec.epochs
+    elif fidelity in fidelity_epochs:
+        epochs = fidelity_epochs[fidelity]
+    else:
+        epochs = ladder_epochs.get(fidelity, 1)
+
     return Schedule(
-        fidelity=spec.fidelity,
+        fidelity=fidelity,
         seed=spec.seed,
-        n_seeds=spec.n_seeds,
-        epochs=spec.epochs,
+        n_seeds=n_seeds,
+        epochs=epochs,
         batch_limit=spec.batch_limit,
-        budget_id="initial",
+        budget_id=f"{fidelity}_initial",
         task_id=task,
         param_budget=spec.param_budget,
         device=spec.device,
@@ -783,7 +674,16 @@ def _schedule(spec: RunSpec, task: str) -> Schedule:
         num_workers=spec.num_workers,
         precision=spec.precision,  # type: ignore[arg-type]
         checkpoint_every_n=spec.checkpoint_every_n,
+        early_stopping_patience=spec.early_stopping_patience,
     )
+
+
+def _schedule(spec: RunSpec, task: str) -> Schedule:
+    """The cell's schedule, from the spec rather than from a literal.
+
+    Deprecated: use schedule_for(spec, task, spec.fidelity) instead.
+    """
+    return schedule_for(spec, task, spec.fidelity)
 
 
 def declared_cell_count(spec: RunSpec, space: SearchSpace) -> int:

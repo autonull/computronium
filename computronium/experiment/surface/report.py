@@ -14,6 +14,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from computronium.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -273,14 +277,24 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
     def _claim_eligible_cells(self, run_id: str) -> set[str]:
         """Cells that reached the claim floor of achieved PASS seeds.
 
+        Eligibility (D11): replicated cell (n >= 3), normalized metric present,
+        replay hash present, PASS gate verdict, not quarantined.
+
         The same rule ``derive_claims`` applies, so the summary's eligibility
         count and the Claims section cannot contradict each other.
         """
-        return set(
-            self._store.claim_eligible_replication_keys(
-                run_id, min_n_seeds=DEFAULT_MIN_SEEDS, fidelity=None
-            )
+        eligible = self._store.claim_eligible_replication_keys(
+            run_id,
+            min_n_seeds=3,
+            fidelity=None,
+            require_replay_hash=True,
+            require_normalized_metric=True,
         )
+        logger.info(
+            "Claim-eligible cells: %d (n>=3, replay_hash, normalized metric, PASS, not quarantined)",
+            len(eligible),
+        )
+        return set(eligible)
 
     def promoted_records(self, run_id: str) -> list[Record]:
         """Get the promoted records of a run."""
@@ -490,7 +504,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
 
     def _min_seeds(self, run_id: str) -> int:
         """The seed floor every claim-side derivation agrees on."""
-        return DEFAULT_MIN_SEEDS
+        return 3
 
     def front_objectives(self, run_id: str, limit: int = 2) -> tuple[str, ...]:
         """The payload keys a whole-run front defaults to.
@@ -779,7 +793,17 @@ def _claims_section(generator: ReportGenerator, run_id: str) -> list[str]:
     )
     claims = generator.claims(run_id)
     if not claims:
-        return [*lines, "  (none — see Limitations)"]
+        eligible_count = (
+            generator.run_summary(run_id).claim_eligible_cells
+            if generator.run_summary(run_id)
+            else 0
+        )
+        if eligible_count == 0:
+            return [
+                *lines,
+                "  (none — no claim-eligible cells: need n>=3 seeds, replay_hash, normalized metric, PASS, not quarantined)",
+            ]
+        return [*lines, "  (no claims derived from eligible cells)"]
     impact = strongest_axis(claims)
     if impact is not None:
         lines.append(f"  {impact.render()}")
@@ -847,7 +871,17 @@ def _pareto_section(generator: ReportGenerator, run_id: str) -> list[str]:
     lines = _section(f"Pareto Frontier ({primary} vs {secondary}):")
     pareto = generator.pareto_frontier(run_id)
     if not pareto:
-        return [*lines, "  (no claim-eligible records)"]
+        eligible_count = (
+            generator.run_summary(run_id).claim_eligible_cells
+            if generator.run_summary(run_id)
+            else 0
+        )
+        if eligible_count == 0:
+            return [
+                *lines,
+                "  (no claim-eligible records: need n>=3 seeds, replay_hash, normalized metric, PASS, not quarantined)",
+            ]
+        return [*lines, "  (no Pareto points from claim-eligible records)"]
     return [
         *lines,
         *(
@@ -1045,9 +1079,8 @@ def contrast_groups(records: list, axis: str) -> list[dict[str, list]]:
     """Contrast groups for ablating ``axis``, or none when the run is confounded.
 
     An ablation table is only a comparison when every arm holds the other five
-    structural axes and the swept hyperparameters fixed. Cells that differ on
-    any of them are *not* comparable: aggregating them reports ``hidden_dim``
-    and optimizer choice as if it were the ablated axis (TODO66 §2.9).
+    structural axes, task_id, seed, fidelity, and the swept hyperparameters fixed.
+    Cells that differ on any of them are *not* comparable.
     """
     import json
     from collections import defaultdict
@@ -1056,6 +1089,9 @@ def contrast_groups(records: list, axis: str) -> list[dict[str, list]]:
     for record in records:
         key = (
             tuple(getattr(record, name) for name in _STRUCTURAL_AXES if name != axis),
+            record.schedule.task_id,
+            record.schedule.seed,
+            record.schedule.fidelity,
             json.dumps(record.params, sort_keys=True, default=str),
         )
         groups[key][getattr(record, axis)].append(record)
@@ -1207,9 +1243,11 @@ def _compute_ablation_data(
     - 'fixed': string description of fixed axes
     - 'task_id': task ID for the group
     - 'metrics': dict of metric_name -> list of arm dicts with keys:
-        'axis_value', 'mean', 'std', 'n', 'at_chance', 'min', 'max'
+        'axis_value', 'mean', 'std', 'n', 'at_chance', 'below_chance', 'min', 'max', 'normalized_mean'
     """
     import statistics
+
+    from computronium.domains._task_registry import get_baseline, normalize_score
 
     groups_result = []
     for index, group in enumerate(contrast_groups(records, axis), start=1):
@@ -1219,6 +1257,7 @@ def _compute_ablation_data(
             if name != axis
         )
         task_id = next(iter(group.values()))[0].schedule.task_id
+        baseline = get_baseline(task_id)
 
         axis_groups = []
         for metric in _ABLATION_METRICS:
@@ -1243,15 +1282,32 @@ def _compute_ablation_data(
                     continue
                 mean = statistics.mean(values)
                 std = statistics.stdev(values) if len(values) > 1 else 0.0
-                at_chance = chance is not None and mean <= chance
+
+                # Normalize score relative to task baseline (ruler-relative)
+                norm_mean = (
+                    normalize_score(mean, task_id, baseline)
+                    if metric == "val_acc"
+                    else mean
+                )
+
+                # Distinguish at_chance (within noise of baseline) vs below_chance (significantly under)
+                at_chance = chance is not None and abs(mean - chance) <= (
+                    std if std > 0 else 1e-6
+                )
+                below_chance = chance is not None and mean < chance - (
+                    std if std > 0 else 1e-6
+                )
+
                 arms_data.append({
                     "axis_value": axis_value,
                     "mean": mean,
+                    "normalized_mean": norm_mean,
                     "std": std,
                     "n": len(values),
                     "min": min(values),
                     "max": max(values),
                     "at_chance": at_chance,
+                    "below_chance": below_chance,
                 })
             if arms_data:
                 axis_groups.append({"metric": metric, "arms": arms_data})
@@ -1281,14 +1337,25 @@ def _ablation_section(store: RecordStore, run_id: str) -> list[str]:
         ablation_data = _compute_ablation_data(records, axis)
         for group in ablation_data:
             lines.append(
-                f"  {group['axis'].capitalize()} Ablation [group {group['group_index']}, fixed: {group['fixed_axes']}]:"
+                f"  {group['axis'].capitalize()} Ablation [group {group['group_index']}, fixed: {group['fixed_axes']}, task: {group['task_id']}]:"
             )
             for metric_data in group["metrics"]:
                 lines.append(f"    {metric_data['metric']}:")
                 for arm in metric_data["arms"]:
-                    flag = " [at chance]" if arm["at_chance"] else ""
+                    flags = []
+                    if arm["below_chance"]:
+                        flags.append("[below chance]")
+                    elif arm["at_chance"]:
+                        flags.append("[at chance]")
+                    flag_str = " " + " ".join(flags) if flags else ""
+                    norm_str = (
+                        f", norm={arm['normalized_mean']:.4g}"
+                        if "normalized_mean" in arm
+                        and arm["normalized_mean"] != arm["mean"]
+                        else ""
+                    )
                     lines.append(
-                        f"      {arm['axis_value']}: mean={arm['mean']:.4g}, std={arm['std']:.4g}, n={arm['n']}{flag}"
+                        f"      {arm['axis_value']}: mean={arm['mean']:.4g}{norm_str}, std={arm['std']:.4g}, n={arm['n']}{flag_str}"
                     )
             lines.append("")
             reported = True
@@ -1325,6 +1392,16 @@ def _pareto_analysis_section(generator: ReportGenerator, run_id: str) -> list[st
     # Get claim-eligible records for analysis
     records = generator.claim_eligible_records(run_id)
     if not records:
+        eligible_count = (
+            generator.run_summary(run_id).claim_eligible_cells
+            if generator.run_summary(run_id)
+            else 0
+        )
+        if eligible_count == 0:
+            return [
+                *lines,
+                "  (no claim-eligible records: need n>=3 seeds, replay_hash, normalized metric, PASS, not quarantined)",
+            ]
         return [*lines, "  (no claim-eligible records)"]
 
     # Use the run's declared objectives
@@ -1375,6 +1452,16 @@ def _seed_variability_section(generator: ReportGenerator, run_id: str) -> list[s
 
     records = generator.claim_eligible_records(run_id)
     if not records:
+        eligible_count = (
+            generator.run_summary(run_id).claim_eligible_cells
+            if generator.run_summary(run_id)
+            else 0
+        )
+        if eligible_count == 0:
+            return [
+                *lines,
+                "  (no claim-eligible records: need n>=3 seeds, replay_hash, normalized metric, PASS, not quarantined)",
+            ]
         return [*lines, "  (no claim-eligible records)"]
 
     # Analyze primary metrics
@@ -1415,6 +1502,16 @@ def _hardware_variance_section(generator: ReportGenerator, run_id: str) -> list[
 
     records = generator.claim_eligible_records(run_id)
     if not records:
+        eligible_count = (
+            generator.run_summary(run_id).claim_eligible_cells
+            if generator.run_summary(run_id)
+            else 0
+        )
+        if eligible_count == 0:
+            return [
+                *lines,
+                "  (no claim-eligible records: need n>=3 seeds, replay_hash, normalized metric, PASS, not quarantined)",
+            ]
         return [*lines, "  (no claim-eligible records)"]
 
     # Group by device

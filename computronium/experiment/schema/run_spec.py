@@ -161,8 +161,8 @@ class RunSpec(BaseModel):
     objectives: tuple[str, ...] = ()
     stages: tuple[str, ...] | None = None
     fidelity: Fidelity = "L0"
-    n_seeds: _POSITIVE = 1
-    epochs: _POSITIVE = 1
+    n_seeds: _POSITIVE | None = None
+    epochs: _POSITIVE | None = None
     batch_limit: _NONNEG = 0
     seed: _NONNEG = 0
     budget_seconds: Annotated[float, Field(gt=0)] | None = None

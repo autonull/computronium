@@ -295,7 +295,6 @@ def _set_seeds(seed: int, deterministic: bool) -> None:
     import random
 
     import numpy as np
-    import torch
 
     torch.manual_seed(seed)
     if deterministic:
@@ -368,6 +367,7 @@ def _add_energy_efficiency(metrics: dict[str, float]) -> None:
 def _validate_metrics_finite(metrics: dict[str, float], coordinate: Coordinate) -> None:
     """Validate all metrics are finite."""
     import math
+
     if not all(math.isfinite(v) for v in metrics.values()):
         msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)
@@ -464,8 +464,17 @@ def _build_status_with_procedures(
     within_ceiling: bool,
     param_count: int,
     param_budget: int,
+    *,
+    replay_hash: str | None = None,
+    deterministic: bool = False,
 ) -> Status:
-    """Build schema Status with assessment procedure metadata (WP5)."""
+    """Build schema Status with assessment procedure metadata (WP5).
+
+    Reproducibility class is derived from replay hash presence and determinism:
+    - REPLAYABLE: replay_hash present AND deterministic=True
+    - REPRODUCIBLE: replay_hash present but not deterministic
+    - UNVERIFIED: no replay hash
+    """
     from computronium.experiment.evidence.status import (
         StatusLegacy,
         build_assessments_from_legacy,
@@ -482,6 +491,15 @@ def _build_status_with_procedures(
     procedure_name, procedure_version, procedure_code_hash = (
         _determine_procedure_metadata()
     )
+
+    # Determine reproducibility class (D10)
+    if replay_hash and deterministic:
+        reproducibility = ReproducibilityClass.REPLAYABLE
+    elif replay_hash:
+        reproducibility = ReproducibilityClass.REPRODUCIBLE
+    else:
+        reproducibility = ReproducibilityClass.UNVERIFIED
+
     legacy_status = StatusLegacy(
         gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
         defect=_defect(complete, within_ceiling, param_count, param_budget),
@@ -490,7 +508,7 @@ def _build_status_with_procedures(
         quarantine=not passed,
         maturity=Maturity.L0,
         uncertainty={},
-        reproducibility=ReproducibilityClass.REPLAYABLE,
+        reproducibility=reproducibility,
         assessment_procedure_version=procedure_version,
         ceec_link=None,
     )
@@ -568,7 +586,7 @@ def cell_record(
                 quarantine=True,
                 maturity=Maturity.L0,
                 uncertainty={},
-                reproducibility=ReproducibilityClass.REPLAYABLE,
+                reproducibility=ReproducibilityClass.UNVERIFIED,
                 assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
                 ceec_link=None,
             ),
@@ -577,6 +595,14 @@ def cell_record(
 
     complete = evaluation.epochs_completed >= schedule.epochs
     within_ceiling = _within_ceiling(evaluation.param_count, schedule.param_budget)
+
+    # Compute replay hash for reproducibility (D10)
+    # Hash over: code_sha, dataset_version, coordinate, schedule
+    import hashlib
+
+    replay_data = f"{provenance.code_sha}|{provenance.dataset_version}|{coordinate.cell_key()}|{schedule.fidelity}|{schedule.n_seeds}|{schedule.epochs}|{schedule.batch_limit}|{schedule.param_budget}|{schedule.device}"
+    replay_hash = hashlib.sha256(replay_data.encode()).hexdigest()[:16]
+
     payload: dict[str, Any] = {
         "status": "evaluated",
         **evaluation.metrics,
@@ -589,6 +615,7 @@ def cell_record(
         "params": dict(evaluation.params),
         "param_count": evaluation.param_count,
         "param_budget": schedule.param_budget,
+        "replay_hash": replay_hash,
     }
     if evaluation.checkpoint_path:
         payload["checkpoint_path"] = evaluation.checkpoint_path
@@ -603,6 +630,8 @@ def cell_record(
         within_ceiling,
         evaluation.param_count,
         schedule.param_budget,
+        replay_hash=replay_hash,
+        deterministic=schedule.deterministic,
     )
 
     return Record.create(
