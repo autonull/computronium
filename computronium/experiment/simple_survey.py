@@ -6,14 +6,25 @@ Adaptivity comes from offline importance sampling using prior runs, not online p
 
 from __future__ import annotations
 
+# Disable CUDA before ANY torch import if --device cpu is in argv
+# Must run before any module that imports torch at module level
+import os
+import sys
+
+if "--device" in sys.argv:
+    try:
+        idx = sys.argv.index("--device")
+        if idx + 1 < len(sys.argv) and sys.argv[idx + 1] == "cpu":
+            os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    except (ValueError, IndexError):
+        pass
+
 import argparse
 import contextlib
 import json
-import os
 import random
 import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - used for git SHA lookup with validated path
-import sys
 import time
 import uuid
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
@@ -21,8 +32,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import torch
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -543,9 +552,10 @@ def _pretty_print_dry_run(
     print(f"Total estimated time: ~{total_est:.0f}s ({total_est / 60:.1f}m)")
 
 
-def _resolve_max_workers(max_workers: int | str, device: torch.device) -> int:
+def _resolve_max_workers(max_workers: int | str, device: "torch.device") -> int:
     """Resolve max_workers from 'auto' or int to actual count."""
     import os
+    import torch
 
     if max_workers == "auto" or (isinstance(max_workers, int) and max_workers <= 0):
         if device.type == "cuda":
