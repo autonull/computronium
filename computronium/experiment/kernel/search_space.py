@@ -30,6 +30,7 @@ from computronium.experiment.schema.harvest import (
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 
 if TYPE_CHECKING:
+    from computronium.experiment.legality.dsl import Expr
     from computronium.experiment.kernel.evaluate import TaskShape
     from computronium.experiment.schema.axis import AxisSpec
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
@@ -50,6 +51,101 @@ _search_space_cache: dict[tuple, SearchSpace] = {}
 
 # Module-level cache for _filter_axes_for_validity
 _filter_axes_cache: dict[tuple, dict[str, list[str]]] = {}
+
+# Axis positions in the tuple consumed by the compiled constraint evaluators
+# (substrate, geometry, dynamics, plasticity, credit, update, task).
+_AXIS_INDICES: Final = {
+    "substrate": 0,
+    "geometry": 1,
+    "dynamics": 2,
+    "plasticity": 3,
+    "credit": 4,
+    "update": 5,
+    "task": 6,
+}
+
+
+def _compile_expr(expr: Expr) -> Callable[[tuple[str, ...]], Any]:  # ruff: ignore[complex-structure, too-many-return-statements]
+    """Compile a legality DSL expression to a function of the axis-value tuple."""
+    from computronium.experiment.legality.dsl import (
+        And,
+        Const,
+        Eq,
+        Gt,
+        HasKey,
+        In,
+        Not,
+        NotIn,
+        Or,
+        Var,
+    )
+
+    match expr:
+        case Var(name=name):
+            return lambda vals: vals[_AXIS_INDICES[name]]
+        case Const(value=value):
+            return lambda _vals: value
+        case Eq(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) == rf(vals)
+        case In(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) in rf(vals)
+        case NotIn(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) not in rf(vals)
+        case And(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) and rf(vals)
+        case Or(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) or rf(vals)
+        case Not(expr=child):
+            cf = _compile_expr(child)
+            return lambda vals: not cf(vals)
+        case Gt(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) > rf(vals)
+        case HasKey():
+            return lambda _vals: True
+        case _:
+            raise ValueError(f"Unknown expr type: {type(expr)}")
+
+
+def _compiled_void_constraints() -> tuple[list[Callable[[tuple[str, ...]], Any]], list[Callable[[tuple[str, ...]], Any]]]:
+    """Compiled ``(task-independent, task-dependent)`` void constraint evaluators.
+
+    Task-independent constraints never read ``task`` and are checked once per
+    candidate; task-dependent ones are checked for the candidate's own task.
+    Constraints reading hyperparameters are excluded here — the caller
+    evaluates those only once the cell is composed.
+    """
+    from computronium.experiment.legality.dsl import references_params
+    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+
+    indep: list[Callable[[tuple[str, ...]], Any]] = []
+    dep: list[Callable[[tuple[str, ...]], Any]] = []
+    for constraint in CONSTRAINTS_REGISTRY.values():
+        if constraint.kind.value != "void":
+            continue
+        pred = constraint.predicate
+        if pred is None or references_params(pred):
+            continue
+        fn = _compile_expr(pred)
+        (dep if "task" in str(pred) else indep).append(fn)
+    return indep, dep
+
+
+def _void_pass(
+    indep: list[Callable[[tuple[str, ...]], Any]],
+    dep: list[Callable[[tuple[str, ...]], Any]],
+    values: tuple[str, ...],
+    task: str,
+) -> bool:
+    """Whether a structural selection satisfies every void constraint."""
+    indep_vals = (*values, "")
+    task_vals = (*values, task)
+    return all(fn(indep_vals) for fn in indep) and all(fn(task_vals) for fn in dep)
 
 
 def _void_cache_key(coordinate: Coordinate) -> tuple[str, ...]:
@@ -258,29 +354,14 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure, too-many-state
     interpreter-based evaluation). Conservative: no primitive the exact path
     accepts may be dropped.
 
-    Every primitive is filtered to those that participate in at least one legal
+    Every primitive is kept only if it participates in at least one legal
     combination of the declared space. A primitive that cannot compose with the
     rest of the declaration is unreachable, whether the declaration named it or
     inherited it.
     """
     from itertools import product
 
-    from computronium.experiment.legality.dsl import (
-        And,
-        Const,
-        Eq,
-        Expr,
-        Gt,
-        HasKey,
-        In,
-        Not,
-        NotIn,
-        Or,
-        Var,
-        references_params,
-    )
     from computronium.experiment.schema.axis import StructuralAxis
-    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
     # Check cache
     cache_key = _filter_axes_cache_key(axes_snapshot, spec, tasks)
@@ -300,72 +381,18 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure, too-many-state
         primitives_by_axis.setdefault(axis_spec.axis_kind, []).append(axis_spec.name)
 
     # Get all void constraints that can be evaluated at search space time
-    void_constraints = [
-        c
-        for c in CONSTRAINTS_REGISTRY.values()
-        if c.kind.value == "void"
-        and c.predicate is not None
-        and not references_params(c.predicate)
-    ]
+    task_indep_fns, task_dep_fns = _compiled_void_constraints()
 
-    if not void_constraints:
+    # If no void constraints, keep all primitives
+    if not task_indep_fns and not task_dep_fns:
         return axes_snapshot
 
     axes_order = list(StructuralAxis)
     axis_primitives = [primitives_by_axis.get(axis, []) for axis in axes_order]
 
+    # Quick exit if any axis has no primitives
     if not all(axis_primitives):
         return axes_snapshot
-
-    # Compile void constraints to fast functions
-    axis_indices = {
-        "substrate": 0,
-        "geometry": 1,
-        "dynamics": 2,
-        "plasticity": 3,
-        "credit": 4,
-        "update": 5,
-        "task": 6,
-    }
-
-    def _compile_expr(expr: Expr) -> callable:  # ruff: ignore[complex-structure, too-many-return-statements]
-        """Compile an expression to a function that takes a tuple of values."""
-        match expr:
-            case Var(name=name):
-                return lambda vals: vals[axis_indices[name]]
-            case Const(value=value):
-                return lambda _vals: value
-            case Eq(left=left, right=right):
-                lf, rf = _compile_expr(left), _compile_expr(right)
-                return lambda vals: lf(vals) == rf(vals)
-            case In(left=left, right=right):
-                lf, rf = _compile_expr(left), _compile_expr(right)
-                return lambda vals: lf(vals) in rf(vals)
-            case NotIn(left=left, right=right):
-                lf, rf = _compile_expr(left), _compile_expr(right)
-                return lambda vals: lf(vals) not in rf(vals)
-            case And(left=left, right=right):
-                lf, rf = _compile_expr(left), _compile_expr(right)
-                return lambda vals: lf(vals) and rf(vals)
-            case Or(left=left, right=right):
-                lf, rf = _compile_expr(left), _compile_expr(right)
-                return lambda vals: lf(vals) or rf(vals)
-            case Not(expr=child):
-                cf = _compile_expr(child)
-                return lambda vals: not cf(vals)
-            case Gt(left=left, right=right):
-                lf, rf = _compile_expr(left), _compile_expr(right)
-                return lambda vals: lf(vals) > rf(vals)
-            case HasKey():
-                return lambda _vals: True
-            case _:
-                raise ValueError(f"Unknown expr type: {type(expr)}")
-
-    task_indep_fns = []
-    task_dep_fns = []
-    for constraint in void_constraints:
-        fn = _compile_expr(constraint.predicate)
-        (task_dep_fns if "task" in str(constraint.predicate) else task_indep_fns).append(fn)
 
     task_list = tasks or spec.task_names
 
@@ -863,21 +890,7 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             Yields:
                 ``(coordinate, schedule)`` pairs, in a deterministic order.
     """
-    from computronium.experiment.legality.dsl import (
-        CoordinateContext,
-        evaluate,
-        references_params,
-    )
-    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
-
-    # Use ALL void constraints that don't require hyperparameters
-    void_constraints = [
-        c
-        for c in CONSTRAINTS_REGISTRY.values()
-        if c.kind.value == "void"
-        and c.predicate is not None
-        and not references_params(c.predicate)
-    ]
+    task_indep_fns, task_dep_fns = _compiled_void_constraints()
 
     # Get void cache for this run (persisted across runs)
     void_cache = get_void_cache() if use_void_cache else None
@@ -901,18 +914,17 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         if use_void_cache and void_cache and void_cache.is_known_void(coordinate):
             continue
 
-        # Fast void constraint check (DSL evaluation, no composition)
-        if void_constraints:
-            ctx = CoordinateContext(coordinate, task=task)
-            failed = False
-            for constraint in void_constraints:
-                pred = constraint.predicate
-                if pred is None:
-                    continue  # Should not happen, filtered above
-                if not evaluate(pred, ctx):
-                    failed = True
-                    break
-            if failed:
+        # Fast void constraint check (compiled predicates, no composition)
+        if task_indep_fns or task_dep_fns:
+            values = (
+                coordinate.substrate,
+                coordinate.geometry,
+                coordinate.dynamics,
+                coordinate.plasticity,
+                coordinate.credit,
+                coordinate.update,
+            )
+            if not _void_pass(task_indep_fns, task_dep_fns, values, task):
                 # Record in void cache for future runs
                 if use_void_cache and void_cache:
                     void_cache.record_void(coordinate)

@@ -356,82 +356,106 @@ class _TransactionMixin(_StoreBase):
 
         Returns the stored record with assigned seq.
         """
+        return self.append_batch([record])[0]
+
+    def append_batch(self, records: list[Record]) -> list[Record]:
+        """Upsert multiple records in a single transaction.
+
+        Buffers 10-50 records per transaction for throughput. Each record is
+        upserted on (cell_key, seed, fidelity) composite key, keeping the
+        latest record for the same cell_key+seed+fidelity within a run.
+
+        Args:
+            records: List of records to append. Must not be empty.
+
+        Returns:
+            List of stored records with assigned seq, in the same order.
+        """
+        if not records:
+            raise ValueError("append_batch requires at least one record")
         if self._conn is None:
             raise StoreError("Connection not initialized")
 
         # Validate provenance before write
-        self._validate_record_provenance(record)
+        for record in records:
+            self._validate_record_provenance(record)
 
         with self._write_lock:
-            # Check for existing record with same dedup key
-            cell_key, seed, fidelity = self._dedup_key(record)
-            row = self._conn.execute(
-                """
-                SELECT record_id FROM records
-                WHERE run_id = ? AND cell_key = ?
-                  AND CAST(schedule.seed AS INTEGER) = ?
-                  AND CAST(schedule.fidelity AS TEXT) = ?
-                ORDER BY seq DESC
-                LIMIT 1
-                """,
-                [record.run_id, cell_key, seed, fidelity],
-            ).fetchone()
-            if row:
-                # Upsert: delete old, insert new (keeps latest)
-                self._conn.execute("DELETE FROM records WHERE record_id = ?", [row[0]])
-
-            # Insert record - seq is assigned by DEFAULT nextval('record_seq')
-            try:
-                self._conn.execute(
+            results = []
+            for record in records:
+                # Check for existing record with same dedup key
+                cell_key, seed, fidelity = self._dedup_key(record)
+                row = self._conn.execute(
                     """
-                    INSERT INTO records (
-                        record_id, run_id, schema_version, cell_key, measurement_key,
-                        substrate, geometry, dynamics, plasticity, credit, update,
-                        params, schedule, provenance, status, payload, unknown,
-                        effective_params
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    SELECT record_id FROM records
+                    WHERE run_id = ? AND cell_key = ?
+                      AND CAST(schedule.seed AS INTEGER) = ?
+                      AND CAST(schedule.fidelity AS TEXT) = ?
+                    ORDER BY seq DESC
+                    LIMIT 1
                     """,
-                    self._build_insert_values(record),
+                    [record.run_id, cell_key, seed, fidelity],
+                ).fetchone()
+                if row:
+                    # Upsert: delete old, insert new (keeps latest)
+                    self._conn.execute("DELETE FROM records WHERE record_id = ?", [row[0]])
+
+                # Insert record - seq is assigned by DEFAULT nextval('record_seq')
+                try:
+                    self._conn.execute(
+                        """
+                        INSERT INTO records (
+                            record_id, run_id, schema_version, cell_key, measurement_key,
+                            substrate, geometry, dynamics, plasticity, credit, update,
+                            params, schedule, provenance, status, payload, unknown,
+                            effective_params
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        self._build_insert_values(record),
+                    )
+                except duckdb.ConstraintException as e:
+                    if "record_id" in str(e):
+                        raise DuplicateMeasurementError(record.measurement_key) from e
+                    raise StoreError(f"Constraint violation: {e}") from e
+
+                # Fetch the assigned seq
+                result = self._conn.execute(
+                    "SELECT seq FROM records WHERE record_id = ?", [record.record_id]
+                ).fetchone()
+
+                if result is None:
+                    raise StoreError("Failed to retrieve seq after insert")
+
+                # Create new record with assigned seq, preserving original objects
+                results.append(
+                    Record(
+                        record_id=record.record_id,
+                        seq=result[0],
+                        run_id=record.run_id,
+                        schema_version=record.schema_version,
+                        cell_key=record.cell_key,
+                        measurement_key=record.measurement_key,
+                        substrate=record.substrate,
+                        geometry=record.geometry,
+                        dynamics=record.dynamics,
+                        plasticity=record.plasticity,
+                        credit=record.credit,
+                        update=record.update,
+                        params=record.params,
+                        effective_params=record.effective_params,
+                        schedule=record.schedule,
+                        provenance=record.provenance,
+                        status=record.status,
+                        payload=record.payload,
+                        unknown=record.unknown,
+                    )
                 )
-            except duckdb.ConstraintException as e:
-                if "record_id" in str(e):
-                    raise DuplicateMeasurementError(record.measurement_key) from e
-                raise StoreError(f"Constraint violation: {e}") from e
-
-            # Fetch the assigned seq
-            result = self._conn.execute(
-                "SELECT seq FROM records WHERE record_id = ?", [record.record_id]
-            ).fetchone()
-
-            if result is None:
-                raise StoreError("Failed to retrieve seq after insert")
 
             # A reader in another process cannot open this store: publish the
             # picture for it.
             self._publish_mirror()
 
-            # Create new record with assigned seq, preserving original objects
-            return Record(
-                record_id=record.record_id,
-                seq=result[0],
-                run_id=record.run_id,
-                schema_version=record.schema_version,
-                cell_key=record.cell_key,
-                measurement_key=record.measurement_key,
-                substrate=record.substrate,
-                geometry=record.geometry,
-                dynamics=record.dynamics,
-                plasticity=record.plasticity,
-                credit=record.credit,
-                update=record.update,
-                params=record.params,
-                effective_params=record.effective_params,
-                schedule=record.schedule,
-                provenance=record.provenance,
-                status=record.status,
-                payload=record.payload,
-                unknown=record.unknown,
-            )
+            return results
 
     def record_intent(self, run_id: str, intent: dict[str, Any]) -> Record:
         """Persist an operator intent as a run-linked record (R84, L13).

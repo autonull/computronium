@@ -27,6 +27,7 @@ from computronium.ontology._settle_kernel import (
 from computronium.ontology.dynamics._registry import dynamics_backend
 from computronium.ontology.dynamics._relaxation import prediction_relaxation
 from computronium.ontology.dynamics._settle_driver import (
+    FiniteGuard,
     SettleIterate,
     checkpointed,
     checkpointed_every,
@@ -1314,6 +1315,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         iterate = SettleIterate((all_acts, self._velocity))
         previous = SettleIterate(all_acts[-1].detach())
         advance = checkpointed(_kernel_step)
+        guard = FiniteGuard()
 
         def _step(step: int) -> None:
             acts, _ = iterate.value
@@ -1325,13 +1327,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             self._velocity = iterate.value[1]
 
         def _observe(step: int) -> bool:
-            # NaN/Inf guard (D2)
-            for a in iterate.value[0]:
-                if not torch.isfinite(a).all():
-                    raise RuntimeError(
-                        f"NaN/Inf detected in activations at step {step} "
-                        f"(energy_minimization settle)"
-                    )
+            guard.observe(
+                "activations (energy_minimization settle)", iterate.value[0], step
+            )
             self._track_free_energy_and_check_convergence(
                 iterate.value[0], geometry, step, previous.value, on_step
             )
@@ -1341,6 +1339,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             _step,
             max_steps=self.config.max_steps,
             after_step=_observe,
+            guard=guard,
         )
         return iterate.value[0]
 
@@ -1357,6 +1356,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         self._note_settle_start()
         iterate = SettleIterate(all_acts)
         previous = SettleIterate(iterate.value[-1])
+        guard = FiniteGuard()
 
         def _clamp_activations(acts: list[Tensor]) -> list[Tensor]:
             """Clamp activation norms to respect max_energy budget."""
@@ -1386,20 +1386,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             iterate.value = new_acts
 
         def _observe(step: int) -> bool:
-            # NaN/Inf guard (D2)
-            acts = iterate.value
-            if isinstance(acts, list):
-                for a in acts:
-                    if not torch.isfinite(a).all():
-                        raise RuntimeError(
-                            f"NaN/Inf detected in activations at step {step} "
-                            f"(energy_minimization eager settle)"
-                        )
-            elif not torch.isfinite(acts).all():
-                raise RuntimeError(
-                    f"NaN/Inf detected in activations at step {step} "
-                    f"(energy_minimization eager settle)"
-                )
+            guard.observe(
+                "activations (energy_minimization eager settle)", iterate.value, step
+            )
             self._track_free_energy_and_check_convergence(
                 iterate.value, geometry, step, previous.value, on_step
             )
@@ -1409,6 +1398,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             _step,
             max_steps=self.config.max_steps,
             after_step=_observe,
+            guard=guard,
         )
         return iterate.value
 
@@ -1576,6 +1566,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
         iterate = SettleIterate(h)
+        guard = FiniteGuard()
 
         def _step(step: int) -> None:
             prediction = geometry.route(iterate.value)
@@ -1587,16 +1578,15 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                     "weight", torch.eye(iterate.value.shape[-1], device=h.device)
                 ),
             )
-            # NaN/Inf guard (D2)
-            if not torch.isfinite(iterate.value).all():
-                raise RuntimeError(
-                    f"NaN/Inf detected in activations at step {step} "
-                    f"(predictive_settling recurrent settle)"
-                )
+            guard.observe(
+                "activations (predictive_settling recurrent settle)",
+                iterate.value,
+                step,
+            )
             self._track_free_energy_recurrent(error, step, on_step)
 
         self._settle_steps_used = run_settle_loop(
-            _step, max_steps=self.config.max_steps
+            _step, max_steps=self.config.max_steps, guard=guard
         )
 
         return _create_output_state(
@@ -1747,6 +1737,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         effective_step_size = (
             step_size if step_size is not None else self.config.step_size
         )
+        guard = FiniteGuard()
 
         def _step(step: int) -> None:
             acts_ = iterate.value
@@ -1766,17 +1757,13 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
             if on_step is not None:
                 on_step(step, step_energy)
-            # NaN/Inf guard (D2)
-            for a in new_acts:
-                if not torch.isfinite(a).all():
-                    raise RuntimeError(
-                        f"NaN/Inf detected in activations at step {step} "
-                        f"(predictive_settling layered settle)"
-                    )
+            guard.observe(
+                "activations (predictive_settling layered settle)", new_acts, step
+            )
             iterate.value = new_acts
 
         self._settle_steps_used = run_settle_loop(
-            _step, max_steps=self.config.max_steps
+            _step, max_steps=self.config.max_steps, guard=guard
         )
         return iterate.value
 
@@ -1804,6 +1791,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         all_acts = self._tile_block_acts(geometry, x, substrate)
         iterate = SettleIterate(all_acts)
         previous = SettleIterate(all_acts)
+        guard = FiniteGuard()
 
         def _step(step: int) -> None:
             previous.value = iterate.value
@@ -1811,13 +1799,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
         def _observe(step: int) -> bool:
             new_acts = iterate.value
-            # NaN/Inf guard (D2)
-            for a in new_acts:
-                if not torch.isfinite(a).all():
-                    raise RuntimeError(
-                        f"NaN/Inf detected in activations at step {step} "
-                        f"(predictive_settling tile settle)"
-                    )
+            guard.observe(
+                "activations (predictive_settling tile settle)", new_acts, step
+            )
             if self._free_energy_history is not None or on_step is not None:
                 # Free energy in predictive coding = squared prediction errors
                 fe = 0.0
@@ -2515,24 +2499,15 @@ class PCALMDynamics(_SettleTelemetry):
             else _step_fn
         )
 
+        guard = FiniteGuard()
+
         def _step(step: int) -> None:
             iterate.value = advance(step)
 
         def _observe(step: int) -> bool:
             acts_, dual_vars_, constraints = iterate.value
-            # NaN/Inf guard (D2)
-            for a in acts_:
-                if not torch.isfinite(a).all():
-                    raise RuntimeError(
-                        f"NaN/Inf detected in activations at step {step} "
-                        f"(pc_alm settle)"
-                    )
-            for lam in dual_vars_:
-                if not torch.isfinite(lam).all():
-                    raise RuntimeError(
-                        f"NaN/Inf detected in dual variables at step {step} "
-                        f"(pc_alm settle)"
-                    )
+            guard.observe("activations (pc_alm settle)", acts_, step)
+            guard.observe("dual variables (pc_alm settle)", dual_vars_, step)
             self._track_augmented_lagrangian_and_check_convergence(
                 acts_, dual_vars_, constraints, layered, op, current_rho, step, on_step
             )
@@ -2542,6 +2517,7 @@ class PCALMDynamics(_SettleTelemetry):
             _step,
             max_steps=self.config.max_steps,
             after_step=_observe,
+            guard=guard,
         )
         return iterate.value[0]
 

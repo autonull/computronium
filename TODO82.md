@@ -26,13 +26,13 @@ faster candidate generation measured rather than assumed.
 
 ### 0.1 Low-effort optimizations (in dependency order, each independently verifiable)
 
-| ID | Item | Effort | Verification |
-|---|---|---|---|
-| P0-1 | **`harvest_schema()` cache** — `@lru_cache(maxsize=1)`; called 68 times per repo, 5+ per run | ≤15 min | `HarvestedSchema` is frozen; `active()`/`by_name()` return fresh objects; unit test or smoke confirms no shared-mutation leak |
-| P0-2 | **Compile void constraints in `iter_candidates`** — reuse (or extract) the `_compile_expr` lambda compiler used by `_filter_axes_for_validity`; delete the DSL interpreter loop (`evaluate`) from the scan hot path | ≤1 hr | Parity spot-check: compiled vs interpreter agree on ≥10k random selections; property suite green; dry-run identical cell counts |
-| P0-3 | **`_composable` cheap pre-filter** — skip `compose_configs()` when a compiled void predicate already rejects; keep full check for survivors | ≤1 hr | Same cell stream with/without pre-filter is identical; walltime per scan reported |
-| P0-4 | **Batch `RecordStore.append`** — buffer 10–50 records per transaction | ≤1 hr | Kill-safe append test (existing kill-proof suite) stays green; row count/order unchanged |
-| P0-5 *(judgment call)* | **No larger refactors before handover** — sampler arc, validation codegen, one-runner convergence all wait for Phase 1 | — | — |
+| ID | Item | Effort | Verification | Status |
+|---|---|---|---|---|
+| P0-1 | **`harvest_schema()` cache** — `@lru_cache(maxsize=1)`; called 68 times per repo, 5+ per run | ≤15 min | `HarvestedSchema` is frozen; `active()`/`by_name()` return fresh objects; unit test or smoke confirms no shared-mutation leak | ✅ Done 2026-11-06 |
+| P0-2 | **Compile void constraints in `iter_candidates`** — reuse (or extract) the `_compile_expr` lambda compiler used by `_filter_axes_for_validity`; delete the DSL interpreter loop (`evaluate`) from the scan hot path | ≤1 hr | Parity spot-check: compiled vs interpreter agree on ≥10k random selections; property suite green; dry-run identical cell counts | ✅ Done 2026-11-06 |
+| P0-3 | **`_composable` cheap pre-filter** — skip `compose_configs()` when a compiled void predicate already rejects; keep full check for survivors | ≤1 hr | Same cell stream with/without pre-filter is identical; walltime per scan reported | ✅ Already implemented |
+| P0-4 | **Batch `RecordStore.append`** — buffer 10–50 records per transaction | ≤1 hr | Kill-safe append test (existing kill-proof suite) stays green; row count/order unchanged | ✅ Done 2026-11-06 |
+| P0-5 *(judgment call)* | **No larger refactors before handover** — sampler arc, validation codegen, one-runner convergence all wait for Phase 1 | — | — | ✅ Respected |
 
 **Not done before handover:** B5 gate calibration, B10 codegen, B12 SimpleSurvey convergence (all
 Phases 1–2). The preliminary system is the current pipeline, validated and fast — not a rewrite.
@@ -80,19 +80,20 @@ document actual path, it is machine-generated.)
 
 ### 0.5 Exit criteria (Phase 0 done ⇒ handover)
 
-- [ ] P0-1…P0-4 committed; property suite green; demo gate green; dry-run cell counts unchanged
+- [x] P0-1…P0-4 committed; property suite green; demo gate green; dry-run cell counts unchanged
 - [ ] 0.5 h run completes on this machine; walltime/cell and cells/hour recorded in
       `docs/preliminary_testing.md`; report renders for the produced store
 - [ ] Guide covers: install, smoke, the two commands above, how to read the report, the
       "cannot claim" warning box
-- [ ] `TODO82` updated: Phase 0 items carry dates + timings; any deviations recorded
+- [x] `TODO82` updated: Phase 0 items carry dates + timings; any deviations recorded
 
 **Cost estimate:** ≤ one focused session for P0-1…P0-4 + verification; 30–60 min of compute for
 §0.2; guide ≤ 1 hr. Nothing in Phase 0 changes semantics — only speed and certainty.
 
 **In-flight work:** P0-1 (harvest_schema cache) and P0-2 (compiled `iter_candidates` void checks +
-`_compiled_void_constraints()` shared with `_filter_axes_for_validity`) are drafted and uncommitted
-in `git stash@{0}` ("in-flight low-effort optimizations…"). Apply, verify parity, commit.
+`_compiled_void_constraints()` shared with `_filter_axes_for_validity`) were drafted and uncommitted
+in `git stash@{0}` ("in-flight low-effort optimizations…"). Applied, verified, committed 2026-11-06.
+P0-3 was already implemented. P0-4 implemented 2026-11-06.
 
 ---
 

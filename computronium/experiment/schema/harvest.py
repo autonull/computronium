@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import MISSING, dataclass, field, fields
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.legality.dsl import (
@@ -506,6 +507,7 @@ def _parse_hyperparameters(
     return specs
 
 
+@lru_cache(maxsize=1)
 def harvest_schema(version: int = 1) -> HarvestedSchema:
     """Harvest all hyperparameters from registered axis primitives.
 
