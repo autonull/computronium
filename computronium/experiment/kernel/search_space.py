@@ -153,14 +153,14 @@ def _search_space_cache_key(spec: RunSpec, tasks: Sequence[str] | None) -> tuple
     return (axes_key, tasks_key, objectives_key)
 
 
-def _filter_axes_cache_key(axes_snapshot: list, spec: RunSpec) -> tuple:
+def _filter_axes_cache_key(axes_snapshot: list, spec: RunSpec, tasks: Sequence[str] | None = None) -> tuple:
     """Create a cache key for _filter_axes_for_validity."""
     # Key includes: axis names per axis kind, ALL tasks (not just first)
     axes_key = tuple(
         tuple(sorted(s.name for s in axes_snapshot if s.axis_kind == axis))
         for axis in StructuralAxis
     )
-    task_key = tuple(sorted(spec.task_names)) if spec.task_names else ()
+    task_key = tuple(sorted(tasks or spec.task_names)) if (tasks or spec.task_names) else ()
     return (axes_key, task_key)
 
 
@@ -177,8 +177,13 @@ class SearchSpace:
     objectives: tuple[ObjectiveSpec, ...]
     tasks: tuple[str, ...]
 
-    def primitives(self, axis: StructuralAxis) -> tuple[str, ...]:
+    def primitives(self, axis: StructuralAxis | str) -> tuple[str, ...]:
         """The primitives this space offers on one structural axis."""
+        if isinstance(axis, str):
+            try:
+                axis = StructuralAxis(axis)
+            except ValueError:
+                return ()
         return tuple(s.name for s in self.axes_snapshot if s.axis_kind is axis)
 
 
@@ -219,7 +224,7 @@ def search_space_from_spec(
 
     # Pre-filter structural axes to only include primitives that participate
     # in at least one valid combination (avoids iterating 100k+ invalid combos)
-    axes_snapshot = _filter_axes_for_validity(axes_snapshot, spec)
+    axes_snapshot = _filter_axes_for_validity(axes_snapshot, spec, tasks)
 
     objectives = tuple(
         OBJECTIVES_REGISTRY[name]
@@ -242,6 +247,7 @@ def search_space_from_spec(
 def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     axes_snapshot: list[AxisSpec],
     spec: RunSpec,
+    tasks: Sequence[str] | None = None,
 ) -> list[AxisSpec]:
     """Filter axis primitives to only those with at least one valid combination.
 
@@ -265,7 +271,7 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
     # Check cache
-    cache_key = _filter_axes_cache_key(axes_snapshot, spec)
+    cache_key = _filter_axes_cache_key(axes_snapshot, spec, tasks)
     if cache_key in _filter_axes_cache:
         # Convert cached names back to AxisSpec objects
         valid_names_by_axis: dict[str, set[str]] = {}
@@ -310,11 +316,12 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     # Exact: enumerate all combinations (conservative - no primitive the exact path accepts may be dropped)
     # The cache ensures this is fast for subsequent runs with the same spec.
     valid_tuples: set[tuple[str, ...]] = set()
+    task_list = tasks or spec.task_names
     for values in product(*axis_primitives):
-        # Check against ALL tasks in the spec (not just the first)
+        # Check against ALL tasks (not just the first)
         # A primitive is valid if it works for AT LEAST ONE task
         valid_for_any_task = False
-        for task_name in spec.task_names:
+        for task_name in task_list:
             selection = {
                 axis.value: name for axis, name in zip(axes_order, values, strict=True)
             }
