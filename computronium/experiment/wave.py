@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import random
 import signal
 import sys
@@ -16,22 +17,28 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 import torch
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
 from computronium.core.logging import get_logger
-from computronium.core.utils.device import get_device
-from computronium.domains._task_registry import get_fidelity_tasks
 from computronium.experiment.evidence.store import RecordStore
 from computronium.experiment.evidence.store._models import StoreConfig
 from computronium.experiment.kernel.evaluate import cell_record, task_shape
-from computronium.experiment.kernel.search_space import iter_candidates, schedule_for, search_space_from_spec
+from computronium.experiment.kernel.search_space import (
+    iter_candidates,
+    schedule_for,
+)
 from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate, DataOrigin, Provenance, Schedule
+from computronium.experiment.schema.coordinate import (
+    Coordinate,
+    DataOrigin,
+    Provenance,
+    Schedule,
+)
 from computronium.experiment.schema.record import GateVerdict
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.ontology.system import check_compatibility_matrix
@@ -80,7 +87,9 @@ def _load_cost_model(device: str, fidelity: str, workers: int) -> CostModel:
             per_task=entry.get("per_task"),
         )
     except OSError, ValueError, KeyError, TypeError:
-        return CostModel(DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S, workers=workers)
+        return CostModel(
+            DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S, workers=workers
+        )
 
 
 def _save_cost_model(device: str, fidelity: str, model: CostModel) -> None:
@@ -161,7 +170,9 @@ def _check_coord_compatibility(coord: Coordinate) -> bool:
     return not violations
 
 
-def _build_provenance(spec: RunSpec, run_id: str, data_origin: DataOrigin = DataOrigin.EXPLORATION) -> Provenance:
+def _build_provenance(
+    spec: RunSpec, run_id: str, data_origin: DataOrigin = DataOrigin.EXPLORATION
+) -> Provenance:
     import shutil
     import subprocess
 
@@ -184,7 +195,11 @@ def _build_provenance(spec: RunSpec, run_id: str, data_origin: DataOrigin = Data
     dataset_version = spec.dataset_version if spec.dataset_version != "1.0" else "1.0"
 
     return Provenance(
-        env={k: v for k, v in os.environ.items() if k.startswith(("CUDA", "TORCH", "OMP"))},
+        env={
+            k: v
+            for k, v in os.environ.items()
+            if k.startswith(("CUDA", "TORCH", "OMP"))
+        },
         dataset=dataset,
         dataset_version=dataset_version,
         code_sha=code_sha,
@@ -252,9 +267,13 @@ class StaticPlanner:
                 with store:
                     records = store.query_records()
                     self._seen = {r.measurement_key for r in records}
-                logger.info("Resume: skipping %d already-measured cells", len(self._seen))
+                logger.info(
+                    "Resume: skipping %d already-measured cells", len(self._seen)
+                )
             except Exception as exc:
-                logger.warning("Could not read resume store %s: %s", self.resume_from, exc)
+                logger.warning(
+                    "Could not read resume store %s: %s", self.resume_from, exc
+                )
 
     def _load_promotion_coords(self) -> list[Coordinate]:
         if not self.promote_from:
@@ -262,13 +281,20 @@ class StaticPlanner:
         try:
             store = RecordStore(StoreConfig(path=Path(self.promote_from)))
             with store:
-                records = store.query_records(gate_verdict=GateVerdict.PASS_, quarantine=False)
+                records = store.query_records(
+                    gate_verdict=GateVerdict.PASS_, quarantine=False
+                )
             valid_records = [r for r in records if r.payload.get("val_acc") is not None]
             if not valid_records:
-                logger.warning("Promotion requested but no PASS records with val_acc found")
+                logger.warning(
+                    "Promotion requested but no PASS records with val_acc found"
+                )
                 return []
 
-            from computronium.domains._task_registry import get_baseline, normalize_score
+            from computronium.domains._task_registry import (
+                get_baseline,
+                normalize_score,
+            )
 
             def _norm_val(record):
                 task_id = record.schedule.task_id
@@ -279,7 +305,11 @@ class StaticPlanner:
             valid_records.sort(key=_norm_val, reverse=True)
 
             promoted_count = min(self.promote_top, len(valid_records))
-            logger.info("Promoted %d of top %d coordinates from prior store", promoted_count, len(valid_records))
+            logger.info(
+                "Promoted %d of top %d coordinates from prior store",
+                promoted_count,
+                len(valid_records),
+            )
 
             if promoted_count == 0:
                 raise ValueError("Promotion requested but produced zero coordinates")
@@ -289,10 +319,14 @@ class StaticPlanner:
                 coords.append(Coordinate.from_record(record))
             return coords
         except Exception as exc:
-            logger.debug("Prior store unavailable, falling back to random exploration: %s", exc)
+            logger.debug(
+                "Prior store unavailable, falling back to random exploration: %s", exc
+            )
             return []
 
-    def _mutate_around(self, top_coords: list[Coordinate], n: int) -> list[tuple[Coordinate, Schedule]]:
+    def _mutate_around(
+        self, top_coords: list[Coordinate], n: int
+    ) -> list[tuple[Coordinate, Schedule]]:
         mutated_cells: list[tuple[Coordinate, Schedule]] = []
 
         if not top_coords:
@@ -453,13 +487,18 @@ class PolicyPlanner:
         try:
             store = RecordStore(StoreConfig(path=Path(resume_from)))
             with store:
-                records = store.query_records(gate_verdict=GateVerdict.PASS_, quarantine=False)
+                records = store.query_records(
+                    gate_verdict=GateVerdict.PASS_, quarantine=False
+                )
             valid_records = [r for r in records if r.payload.get("val_acc") is not None]
             if not valid_records:
                 logger.info("Warm-start store has no valid records")
                 return
 
-            from computronium.domains._task_registry import get_baseline, normalize_score
+            from computronium.domains._task_registry import (
+                get_baseline,
+                normalize_score,
+            )
 
             def _norm_val(record):
                 task_id = record.schedule.task_id
@@ -473,28 +512,29 @@ class PolicyPlanner:
                 self._policy.observe(record)
                 self._seen.add(record.measurement_key)
 
-            logger.info("Warm-started policy with %d records from %s", len(valid_records), resume_from)
+            logger.info(
+                "Warm-started policy with %d records from %s",
+                len(valid_records),
+                resume_from,
+            )
         except Exception as exc:
             logger.warning("Could not warm-start from %s: %s", resume_from, exc)
 
     def _init_policy(self) -> None:
-        from computronium.experiment.execution.policy import ModelBasedPolicy, UniformRandomPolicy
-
-        axes_config = {}
-        for axis in StructuralAxis:
-            primitives = self.search_space.primitives(axis)
-            if primitives:
-                axes_config[axis.value] = list(primitives)
+        from computronium.experiment.execution.policy import (
+            ModelBasedPolicy,
+            UniformRandomPolicy,
+        )
 
         if self.policy_name == "random":
-            self._policy = UniformRandomPolicy(axes_config, seed=self.seed)
+            self._policy = UniformRandomPolicy(seed=self.seed)
         else:
             sampler = "tpe" if self.policy_name == "tpe" else "nsga2"
             self._policy = ModelBasedPolicy(
-                axes_config,
                 sampler=sampler,
                 seed=self.seed,
                 n_startup_trials=self.n_startup_trials,
+                spec=self.spec,
             )
 
     def _get_legal_primitives(self) -> dict[str, list[str]]:
@@ -507,41 +547,34 @@ class PolicyPlanner:
 
     def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
         self._seen.update(seen)
-
         from computronium.experiment.execution.policy import ProposalContext
+        from computronium.experiment.kernel.evaluate import task_shape
 
-        context = ProposalContext(
+        ctx = ProposalContext(
             search_space=self.search_space,
             spec=self.spec,
             run_id="learning_survey",
             n_propose=n,
-            legal_primitives=self._get_legal_primitives(),
-            seen_keys=self._seen,
-            fidelity=self.fidelity,
-            tasks=list(self.tasks),
+            task=self.tasks[0] if self.tasks else None,
+            shape=task_shape,  # real ShapeResolver
+            deadline=None,
         )
-
-        proposals = list(self._policy.propose(context))
+        proposals = list(self._policy.propose(ctx))
 
         cells: list[tuple[Coordinate, Schedule]] = []
         for prop in proposals:
             if len(cells) >= n:
                 break
-
             coord = prop.coordinate
             if not _check_coord_compatibility(coord):
                 continue
-
-            task = getattr(prop, "task", random.choice(self.tasks))
+            task = getattr(prop, "task", self.tasks[0] if self.tasks else "digits")
             schedule = schedule_for(self.spec, task, self.fidelity)
-
             measurement_key = coord.measurement_key(schedule)
             if measurement_key in self._seen:
                 continue
             self._seen.add(measurement_key)
-
             cells.append((coord, schedule))
-
         return cells
 
     def observe(self, record: Any) -> None:
@@ -570,10 +603,16 @@ def _init_worker(cpu_threads: int, device: str) -> None:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
     if cpu_threads > 0:
         import torch
+
         torch.set_num_threads(cpu_threads)
 
 
-def _evaluate_one(cell: tuple[Coordinate, Schedule], fidelity: str, store_path: str, provenance: Provenance) -> Any:
+def _evaluate_one(
+    cell: tuple[Coordinate, Schedule],
+    fidelity: str,
+    store_path: str,
+    provenance: Provenance,
+) -> Any:
     coord, schedule = cell
     try:
         return cell_record(coordinate=coord, schedule=schedule, provenance=provenance)
@@ -655,7 +694,9 @@ def _evaluate_cells_parallel(
                 cell = next(queue, None)
                 if cell is not None:
                     pending[
-                        pool.submit(_evaluate_one, cell, fidelity, store_path, provenance)
+                        pool.submit(
+                            _evaluate_one, cell, fidelity, store_path, provenance
+                        )
                     ] = cell
 
             for _ in range(min(max_workers, n_total)):
@@ -672,7 +713,8 @@ def _evaluate_cells_parallel(
                     if not startup_s:
                         startup_s = max(
                             0.0,
-                            (time.monotonic() - started) - float(record.payload.get("walltime_s", 0.0)),
+                            (time.monotonic() - started)
+                            - float(record.payload.get("walltime_s", 0.0)),
                         )
 
                     i = len(results)
@@ -845,7 +887,9 @@ def run_waves(
         # Size wave based on measured throughput
         if all_results:
             measured_cost = total_elapsed * workers / len(all_results)
-            n_wave = max(1, min(64, int(budget_remaining * workers / max(1.0, measured_cost))))
+            n_wave = max(
+                1, min(64, int(budget_remaining * workers / max(1.0, measured_cost)))
+            )
         else:
             n_wave = min(64, workers * 2)
 
@@ -874,7 +918,9 @@ def run_waves(
         wave_elapsed = time.monotonic() - wave_start
         total_elapsed += wave_elapsed
         budget_remaining -= wave_elapsed
-        fidelity_walltime[fidelity] = fidelity_walltime.get(fidelity, 0.0) + wave_elapsed
+        fidelity_walltime[fidelity] = (
+            fidelity_walltime.get(fidelity, 0.0) + wave_elapsed
+        )
 
         all_results.extend(evaluation.results)
 
@@ -1033,8 +1079,12 @@ def _format_error(message: str, hint: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def _axis_overrides(axes_json: str, *, digital: bool) -> dict[str, tuple[str, ...]] | None:
-    axes: dict[str, tuple[str, ...]] | None = json.loads(axes_json) if axes_json else None
+def _axis_overrides(
+    axes_json: str, *, digital: bool
+) -> dict[str, tuple[str, ...]] | None:
+    axes: dict[str, tuple[str, ...]] | None = (
+        json.loads(axes_json) if axes_json else None
+    )
     if not digital:
         return axes
     pinned = dict(axes or {})
@@ -1064,7 +1114,9 @@ class _SelfTestConfig:
 
 
 def _check_python_version(config: _SelfTestConfig) -> bool:
-    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    py_version = (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
     logger.info("Python: %s", py_version)
     if sys.version_info < config.min_python:
         logger.error("Python %s+ required, got %s", config.min_python, py_version)
@@ -1082,7 +1134,11 @@ def _check_uv_available() -> bool:
         return False
     try:
         result = subprocess.run(
-            [uv_path, "--version"], capture_output=True, text=True, timeout=5, check=False
+            [uv_path, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
         )
     except Exception:
         logger.exception("uv check failed")
@@ -1096,7 +1152,14 @@ def _check_uv_available() -> bool:
 
 
 def _check_stdlib_modules() -> bool:
-    for mod in ["json", "uuid", "pathlib", "dataclasses", "concurrent.futures", "random"]:
+    for mod in [
+        "json",
+        "uuid",
+        "pathlib",
+        "dataclasses",
+        "concurrent.futures",
+        "random",
+    ]:
         try:
             __import__(mod)
         except ImportError:
@@ -1132,7 +1195,10 @@ def _check_torch(device: str = "auto") -> bool:
         if cuda_available:
             try:
                 logger.info("GPU: %s", torch.cuda.get_device_name(0))
-                logger.info("GPU memory: %.1f GB", torch.cuda.get_device_properties(0).total_memory / 1e9)
+                logger.info(
+                    "GPU memory: %.1f GB",
+                    torch.cuda.get_device_properties(0).total_memory / 1e9,
+                )
             except Exception as e:
                 logger.warning("GPU query failed: %s", e)
         elif device == "cpu":

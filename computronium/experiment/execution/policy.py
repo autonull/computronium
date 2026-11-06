@@ -515,6 +515,45 @@ class UniformRandomPolicy:
         return self._name
 
 
+class DiverseRandomPolicy:
+    """Diverse random sampling across structural axes for startup trials.
+
+    Ensures broad coverage across substrates, geometries, and dynamics during
+    the initial exploration phase before model-based policies take over.
+    """
+
+    def __init__(self, *, seed: int | None = None) -> None:
+        self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
+        self._name = "diverse_random"
+
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose cells with stratified sampling across structural axes."""
+        # Stratify by substrate|geometry|dynamics to ensure diversity
+        strata: dict[str, list[tuple[Coordinate, Schedule]]] = {}
+        for coord, sched in ctx.pool():
+            strata.setdefault(
+                f"{coord.substrate}|{coord.geometry}|{coord.dynamics}", []
+            ).append((coord, sched))
+
+        per_stratum = max(1, ctx.n_propose // max(1, len(strata)))
+        proposed = 0
+        for cells in strata.values():
+            self._rng.shuffle(cells)
+            for coord, sched in cells[:per_stratum]:
+                if not ctx.legal(coord, sched):
+                    continue
+                yield Proposal(coord, sched, self._name)
+                proposed += 1
+                if proposed >= ctx.n_propose:
+                    return
+
+    def observe(self, record: Record) -> None:
+        """Diverse random doesn't learn from observations."""
+
+    def get_name(self) -> str:
+        return self._name
+
+
 class ModelBasedPolicy:
     """Model-based optimization using Optuna.
 
@@ -1265,6 +1304,7 @@ POLICY_CATALOG: dict[str, type[Policy]] = {
     "stratified_random": StratifiedRandomPolicy,
     "round_robin_grid": RoundRobinGridPolicy,
     "uniform_random": UniformRandomPolicy,
+    "diverse_random": DiverseRandomPolicy,
     "model_based": ModelBasedPolicy,
     "evolution": EvolutionPolicy,
     "synthesis": SynthesisPolicy,

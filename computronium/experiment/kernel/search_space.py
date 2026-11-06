@@ -268,15 +268,16 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure]
     cache_key = _filter_axes_cache_key(axes_snapshot, spec)
     if cache_key in _filter_axes_cache:
         # Convert cached names back to AxisSpec objects
-        valid_names_by_axis: dict[StructuralAxis, set[str]] = {}
+        valid_names_by_axis: dict[str, set[str]] = {}
+        cached = _filter_axes_cache[cache_key]
         for axis in StructuralAxis:
-            valid_names_by_axis[axis] = set(_filter_axes_cache[cache_key][axis.value])
+            valid_names_by_axis[axis.value] = set(cached[axis.value])
 
         filtered_snapshot = []
         for axis_spec in axes_snapshot:
             if axis_spec.name in valid_names_by_axis.get(
-                axis_spec.axis_kind, set()
-            ) or not valid_names_by_axis.get(axis_spec.axis_kind):
+                axis_spec.axis_kind.value, set()
+            ) or not valid_names_by_axis.get(axis_spec.axis_kind.value):
                 filtered_snapshot.append(axis_spec)
         return filtered_snapshot
 

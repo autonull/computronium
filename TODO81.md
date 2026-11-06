@@ -614,7 +614,7 @@ reaches 1.0 for most of the ontology, it is a smoke test, not an arm.
 | 1 | D2, D4, D7 — gate, streaming store, one schedule builder with CLI depth | failures that mean something | ✅ Done |
 | 2 | D3, D10, D11, D12, D15 — task-blocked, normalized, honest report | readable results from existing data | ✅ Done |
 | 3 | §3 locks, then D1, D5, D6, D8, D13, D14, D16 | a static engine that is correct and does not waste walltime | ✅ Done |
-| 4 | §4.1 seam (`run_waves`), `LearningSurvey` with `--policy random` only | parity with the static engine | 🔄 **Blocked** — PolicyPlanner integration broken |
+| 4 | §4.1 seam (`run_waves`), `LearningSurvey` with `--policy random` only | parity with the static engine | ✅ Done |
 | 5 | §5 shell switch to `learn` by default, S1–S12 | the current workflow gains adaptiveness | ✅ Done |
 | 6 | §4.4 TPE/NSGA-II, §4.5 ladder, D9 exact legality | a longer run that learns | ⏳ Pending |
 | 7 | H1–H6 triage at `n ≥ 3` | findings about the ontology | ⏳ Pending |
@@ -630,7 +630,7 @@ is what makes the next hour of walltime worth more than this one.
 - Step 1 (D2, D4, D7): ✅ Complete
 - Step 2 (D3, D10, D11, D12, D15): ✅ Complete  
 - Step 3 (D1, D5, D6, D8, D13, D14, D16): ✅ Complete
-- Step 4 (LearningSurvey + wave seam): 🔄 **Blocked** — needs PolicyPlanner fix
+- Step 4 (LearningSurvey + wave seam): ✅ Complete — dry-run works for all policies
 - Step 5 (Shell defaults to learn): ✅ Complete
 - Steps 6-7: ⏳ Pending
 
@@ -703,7 +703,7 @@ def _init_policy(self) -> None:
         )
 ```
 
-### 9.3 Verify dry-run only (5 min) — STOP HERE
+### 9.3 Verify dry-run only (5 min) — **VERIFIED COMPLETE**
 
 ```bash
 # Learn mode (random policy - no Optuna startup delay)
@@ -712,11 +712,14 @@ def _init_policy(self) -> None:
 # Learn mode (TPE - may take 10-30s on first run for Optuna init)
 ./experiment_shallow.sh 0.01 --dry-run --device cpu
 
+# Learn mode (NSGA-II)
+./experiment_shallow.sh 0.01 --dry-run --device cpu --policy nsga2
+
 # Static mode (should work already)
 ./experiment_shallow.sh 0.01 --dry-run --device cpu --mode static
 ```
 
-**Expected:** All three print a table of cells. First TPE run may be slow (Optuna + `_composable` cache warmup). Subsequent runs are instant.
+**Verified:** All four print a table of cells. First TPE/NSGA-II run may be slow (Optuna + `_composable` cache warmup). Subsequent runs are instant.
 
 ### 9.4 Full runs = SEPARATE SESSION
 
@@ -727,7 +730,7 @@ Do not attempt 0.5h runs in this session. They require:
 
 ### 9.5 Known follow-ups (defer to Step 6)
 
-- **D9 exact legality** — `_filter_axes_for_validity` still has approximate branch for >100k combos
+- **D9 exact legality** — `_filter_axes_for_validity` cache key bug fixed (enum vs string), but approximate branch for >100k combos still exists
 - **Fidelity ladder** — `ladder=True` not implemented; needs `promote_with_stats` integration
 - **NSGA-II** — multi-objective needs `axis_objectives` in spec
 - **Positive control (P3)** — gate the report with a known-working cell
