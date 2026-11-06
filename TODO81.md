@@ -614,7 +614,7 @@ reaches 1.0 for most of the ontology, it is a smoke test, not an arm.
 | 1 | D2, D4, D7 — gate, streaming store, one schedule builder with CLI depth | failures that mean something | ✅ Done |
 | 2 | D3, D10, D11, D12, D15 — task-blocked, normalized, honest report | readable results from existing data | ✅ Done |
 | 3 | §3 locks, then D1, D5, D6, D8, D13, D14, D16 | a static engine that is correct and does not waste walltime | ✅ Done |
-| 4 | §4.1 seam (`plan_wave`/`run_waves`), `LearningSurvey` with `--policy random` only | parity with the static engine | 🔄 In Progress (basic module created) |
+| 4 | §4.1 seam (`run_waves`), `LearningSurvey` with `--policy random` only | parity with the static engine | 🔄 **Blocked** — PolicyPlanner integration broken |
 | 5 | §5 shell switch to `learn` by default, S1–S12 | the current workflow gains adaptiveness | ✅ Done |
 | 6 | §4.4 TPE/NSGA-II, §4.5 ladder, D9 exact legality | a longer run that learns | ⏳ Pending |
 | 7 | H1–H6 triage at `n ≥ 3` | findings about the ontology | ⏳ Pending |
@@ -630,6 +630,108 @@ is what makes the next hour of walltime worth more than this one.
 - Step 1 (D2, D4, D7): ✅ Complete
 - Step 2 (D3, D10, D11, D12, D15): ✅ Complete  
 - Step 3 (D1, D5, D6, D8, D13, D14, D16): ✅ Complete
-- Step 4 (LearningSurvey basic module): 🔄 In Progress
+- Step 4 (LearningSurvey + wave seam): 🔄 **Blocked** — needs PolicyPlanner fix
 - Step 5 (Shell defaults to learn): ✅ Complete
 - Steps 6-7: ⏳ Pending
+
+---
+
+## 9. One-session finish plan (Step 4 completion)
+
+**Goal:** `./experiment_shallow.sh 0.01 --dry-run --device cpu` works for both `--mode static` and `--mode learn`
+
+### 9.1 Fix `PolicyPlanner.propose()` in `wave.py` (15 min)
+
+Current code incorrectly constructs `ProposalContext`. Replace `PolicyPlanner.propose()`:
+
+```python
+def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
+    self._seen.update(seen)
+    from computronium.experiment.execution.policy import ProposalContext
+    from computronium.experiment.execution.search_space import ShapeResolver
+    from computronium.experiment.kernel.evaluate import task_shape
+
+    ctx = ProposalContext(
+        search_space=self.search_space,
+        spec=self.spec,
+        run_id="learning_survey",
+        n_propose=n,
+        task=self.tasks[0] if self.tasks else None,
+        shape=task_shape,  # use real shape resolver
+        deadline=None,
+    )
+    proposals = list(self._policy.propose(ctx))
+
+    cells: list[tuple[Coordinate, Schedule]] = []
+    for prop in proposals:
+        if len(cells) >= n:
+            break
+        coord = prop.coordinate
+        if not _check_coord_compatibility(coord):
+            continue
+        task = getattr(prop, "task", self.tasks[0] if self.tasks else "digits")
+        schedule = schedule_for(self.spec, task, self.fidelity)
+        measurement_key = coord.measurement_key(schedule)
+        if measurement_key in self._seen:
+            continue
+        self._seen.add(measurement_key)
+        cells.append((coord, schedule))
+    return cells
+```
+
+### 9.2 Fix `_init_policy()` to use `DiverseRandomPolicy` for startup (5 min)
+
+```python
+def _init_policy(self) -> None:
+    from computronium.experiment.execution.policy import (
+        ModelBasedPolicy, UniformRandomPolicy, DiverseRandomPolicy
+    )
+    axes_config = {axis.value: list(self.search_space.primitives(axis))
+                   for axis in StructuralAxis
+                   if self.search_space.primitives(axis)}
+
+    if self.policy_name == "random":
+        self._policy = UniformRandomPolicy(axes_config, seed=self.seed)
+    else:
+        sampler = "tpe" if self.policy_name == "tpe" else "nsga2"
+        self._policy = ModelBasedPolicy(
+            axes_config,
+            sampler=sampler,
+            seed=self.seed,
+            n_startup_trials=self.n_startup_trials,
+        )
+```
+
+### 9.3 Verify dry-run works (5 min)
+
+```bash
+./experiment_shallow.sh 0.01 --dry-run --device cpu        # learn (TPE)
+./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random  # random baseline
+./experiment_shallow.sh 0.01 --dry-run --device cpu --mode static   # static
+```
+
+### 9.4 If dry-run works, run 0.5h learning (30 min)
+
+```bash
+./experiment_shallow.sh 0.5 --device cpu --policy random  # baseline
+./experiment_shallow.sh 0.5 --device cpu                   # TPE
+```
+
+### 9.5 Acceptance checklist for session end
+
+| Check | Command | Expected |
+|-------|---------|----------|
+| Static dry-run | `./experiment_shallow.sh 0.01 --dry-run --mode static --device cpu` | Table of cells, no hang |
+| Learn dry-run (random) | `./experiment_shallow.sh 0.01 --dry-run --policy random --device cpu` | Wave-0 cells, no hang |
+| Learn dry-run (TPE) | `./experiment_shallow.sh 0.01 --dry-run --device cpu` | Wave-0 cells, no hang |
+| Static 0.1h | `./experiment_shallow.sh 0.1 --mode static --device cpu` | Completes, writes store |
+| Learn 0.1h (random) | `./experiment_shallow.sh 0.1 --policy random --device cpu` | Completes, writes store |
+| Learn 0.5h (TPE) | `./experiment_shallow.sh 0.5 --device cpu` | Completes, reports waves |
+
+### 9.6 Known follow-ups (defer to Step 6)
+
+- **D9 exact legality** — `_filter_axes_for_validity` still has approximate branch for >100k combos
+- **Fidelity ladder** — `ladder=True` not implemented; needs `promote_with_stats` integration
+- **NSGA-II** — multi-objective needs `axis_objectives` in spec
+- **Positive control (P3)** — gate the report with a known-working cell
+- **Warm-start (`--promote-from`)** — `_init_resume` replays top records through `policy.observe`
