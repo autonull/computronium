@@ -832,6 +832,7 @@ def run_waves(
     run_id: str | None = None,
     dry_run: bool = False,
     wave0_cells: list[tuple[Coordinate, Schedule]] | None = None,
+    ladder: bool = False,
 ) -> RunSummary:
     """Execute waves until budget exhausted.
 
@@ -858,6 +859,28 @@ def run_waves(
     provenance = _build_provenance(spec, run_id)
 
     if dry_run and wave0_cells is not None:
+        if ladder:
+            # Ladder dry-run: show cells for all three fidelities
+            ladder_fidelities = ["L0", "L1", "L2"]
+            ladder_cells = []
+            ladder_budget_split = {"L0": 0.6, "L1": 0.3, "L2": 0.1}
+            for fid in ladder_fidelities:
+                n_fid = max(1, int(len(wave0_cells) * ladder_budget_split[fid]))
+                for coord, _ in wave0_cells[:n_fid]:
+                    schedule = schedule_for(spec, coord.task if hasattr(coord, 'task') else (spec.task_names[0] if spec.task_names else "digits"), fid)
+                    ladder_cells.append((coord, schedule))
+            return RunSummary(
+                run_id=run_id,
+                store_path=store_path,
+                cells_evaluated=0,
+                cells_passed=0,
+                cells_failed=0,
+                cells_skipped=0,
+                walltime_s=0.0,
+                report={},
+                waves_completed=0,
+                budget_split=ladder_budget_split,
+            )
         return RunSummary(
             run_id=run_id,
             store_path=store_path,

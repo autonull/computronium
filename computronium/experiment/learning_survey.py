@@ -208,7 +208,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
     startup_cells = planner.propose(n_startup * workers, seen=set())
 
     if dry_run:
-        return {
+        result = {
             "cells": startup_cells,
             "n": len(startup_cells),
             "tasks": list(tasks),
@@ -217,6 +217,10 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             "workers": workers,
             "wave": 0,
         }
+        if ladder:
+            result["budget_split"] = {"L0": 0.6, "L1": 0.3, "L2": 0.1}
+            result["ladder"] = True
+        return result
 
     # 6. Run waves via shared executor
     summary = run_waves(
@@ -230,6 +234,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         cpu_threads=cpu_threads,
         device_str=device_str,
         dry_run=False,
+        ladder=ladder,
     )
 
     # 7. Update cost model with measured costs
@@ -471,13 +476,41 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
             if args.dry_run_format == "json":
                 print(json.dumps(result, default=str, indent=2))
             elif args.dry_run_format == "table":
-                _pretty_print_dry_run(
-                    result,
-                    hours=args.hours,
-                    fidelity=args.fidelity,
-                    model=result["model"],
-                    workers=result["workers"],
-                )
+                if result.get("ladder"):
+                    # Ladder dry-run: show budget split per fidelity
+                    budget_split = result.get("budget_split", {})
+                    ladder_seeds = {"L0": 1, "L1": 3, "L2": 5}
+                    ladder_epochs = {"L0": 1, "L1": 5, "L2": 20}
+                    print("\n=== LearningSurvey Ladder Dry-Run ===")
+                    print(
+                        f"Budget: {args.hours}h ({int(args.hours * 3600)}s) | "
+                        f"Starting Fidelity: {args.fidelity} | Tasks: {', '.join(result.get('tasks', []))}"
+                    )
+                    print(f"Ladder budget split: L0={budget_split.get('L0', 0.6)*100:.0f}% "
+                          f"L1={budget_split.get('L1', 0.3)*100:.0f}% "
+                          f"L2={budget_split.get('L2', 0.1)*100:.0f}%")
+                    print(f"Estimated cells: {result.get('n', 0)} across {result.get('workers', 0)} workers")
+                    print()
+                    cells = result.get("cells", [])
+                    for fid in ["L0", "L1", "L2"]:
+                        fid_count = int(result.get("n", 0) * budget_split.get(fid, 0))
+                        print(f"--- {fid} ({fid_count} cells, n_seeds={ladder_seeds[fid]}, epochs={ladder_epochs[fid]}) ---")
+                        for i, (coord, _schedule) in enumerate(cells[:5], 1):
+                            print(
+                                f"  {i}  {coord.substrate:<15} {coord.geometry:<15} {coord.dynamics:<20} "
+                                f"{coord.plasticity:<15} {coord.credit:<20} {coord.update:<15}"
+                            )
+                        if fid_count > 5:
+                            print(f"  ... {fid_count - 5} more cells")
+                        print()
+                else:
+                    _pretty_print_dry_run(
+                        result,
+                        hours=args.hours,
+                        fidelity=args.fidelity,
+                        model=result["model"],
+                        workers=result["workers"],
+                    )
             else:  # summary
                 n = result.get("n", 0)
                 tasks_str = ", ".join(result.get("tasks", []))
@@ -485,11 +518,22 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
                 total_est = model.startup_s + n * model.cost_per_cell_s / max(
                     1, result["workers"]
                 )
-                print(
-                    f"Dry-run: {n} cells | {args.fidelity} | {tasks_str} | "
-                    f"~{model.cost_per_cell_s:.1f}s/cell ({model.source}) | "
-                    f"~{total_est:.0f}s total"
-                )
+                if result.get("ladder"):
+                    budget_split = result.get("budget_split", {})
+                    print(
+                        f"Dry-run (ladder): {n} cells | L0/L1/L2 | {tasks_str} | "
+                        f"split: L0={budget_split.get('L0',0.6)*100:.0f}% "
+                        f"L1={budget_split.get('L1',0.3)*100:.0f}% "
+                        f"L2={budget_split.get('L2',0.1)*100:.0f}% | "
+                        f"~{model.cost_per_cell_s:.1f}s/cell ({model.source}) | "
+                        f"~{total_est:.0f}s total"
+                    )
+                else:
+                    print(
+                        f"Dry-run: {n} cells | {args.fidelity} | {tasks_str} | "
+                        f"~{model.cost_per_cell_s:.1f}s/cell ({model.source}) | "
+                        f"~{total_est:.0f}s total"
+                    )
         else:
             print(json.dumps(result, default=str, indent=2))
 
