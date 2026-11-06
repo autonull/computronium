@@ -1,5 +1,11 @@
 # TODO81 — `SimpleSurvey` stays static; `LearningSurvey` becomes the default
 
+> **Status: closed as history.** The implementation campaign it planned is done (D9 exact legality
+> optimized, full-run blockers fixed, dry-run verified for every policy/ladder/warm-start mode).
+> **Remaining work from §11 and §12 has been reorganized into [`TODO82.md`](TODO82.md)** — the
+> master plan — which supersedes this file for forward work. Keep this file as the record of how
+> the kernel was built.
+
 **Motivation.** `./experiment_shallow.sh 0.5` produced 1277 PASS cells in
 `experiment_0.5h.duckdb`: 9 substrates, 4 geometries, 8 dynamics, 7 plasticities,
 10 credits, 11 updates. Every arm in the report has `n=1` and `std=0`; ~40% of
