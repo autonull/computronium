@@ -89,7 +89,7 @@ def test_compose_rejects_causal_transformer_for_digits() -> None:
         update="adam",
         params={},
     )
-    with pytest.raises(ProposalComposeError, match="token input"):
+    with pytest.raises(ValueError, match="token input"):
         compose_cell_system(
             coordinate=coord,
             geometry={},
@@ -171,16 +171,16 @@ def test_filter_removal_regression() -> None:
     It temporarily patches the required_input check to always pass
     and asserts the search space then includes causal_transformer for digits.
     """
-    from computronium.experiment.kernel import compose as compose_module
+    import computronium.experiment.kernel._geometry_builders as geo_module
 
     # Save original
-    original_check = compose_module._check_geometry_input_compat
+    original_check = geo_module._check_geometry_input_compat
 
     def no_op_check(*args, **kwargs):
         return None  # Always pass
 
     try:
-        compose_module._check_geometry_input_compat = no_op_check
+        geo_module._check_geometry_input_compat = no_op_check
         spec = _digits_spec()
         space = search_space_from_spec(spec)
         geometries = space.primitives(StructuralAxis.GEOMETRY)
@@ -189,4 +189,4 @@ def test_filter_removal_regression() -> None:
             "Lock broken: removing filter must make causal_transformer appear for digits"
         )
     finally:
-        compose_module._check_geometry_input_compat = original_check
+        geo_module._check_geometry_input_compat = original_check

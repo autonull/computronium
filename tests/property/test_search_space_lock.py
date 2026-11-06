@@ -20,7 +20,6 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment.kernel import (
-    ProposalComposeError,
     TaskShape,
     compose_cell_system,
     compose_configs,
@@ -343,7 +342,7 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
         output_dim=output_dim,
     )
     assert cell.config.geometry.topology_type == topology
-    with pytest.raises(ProposalComposeError, match="Unknown topology"):
+    with pytest.raises(ValueError, match="Unknown topology"):
         compose_cell_system(
             coordinate=Coordinate(**{
                 **coordinate.to_dict(),

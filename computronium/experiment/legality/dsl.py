@@ -1070,14 +1070,18 @@ def evaluate(expr: Expr, ctx: CoordinateContext | CampaignContext) -> bool:  # r
 def references_params(expr: Expr) -> bool:
     """Whether an expression reads a hyperparameter.
 
-    A rule that reads ``params.*`` cannot be decided from the structural axes
+    A rule that reads ``params.*`` or ``output_dim`` cannot be decided from the structural axes
     alone: the parameter is only known once the cell is composed. The search
     space and the gate both have to tell such a rule from one that does not,
     so the question is asked here, once, rather than answered twice and
     differently.
     """
-    if isinstance(expr, Var) and expr.name.startswith("params."):
+    if isinstance(expr, Var) and (expr.name.startswith("params.") or expr.name == "output_dim"):
         return True
+    if isinstance(expr, HasKey):
+        obj = expr.obj
+        if isinstance(obj, Var) and obj.name == "params":
+            return True
     for field_name in ("expr", "left", "right", "obj", "key"):
         child = getattr(expr, field_name, None)
         if isinstance(child, Expr) and references_params(child):

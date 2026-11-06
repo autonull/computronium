@@ -822,9 +822,18 @@ class SystemConfig:
             "ntm",
             "causal_transformer",
         }
+        settling_dynamics = {
+            "energy_minimization",
+            "predictive_settling",
+            "error_predictive_coding",
+            "pc_alm",
+            "diffusion",
+            "spike_integration",
+            "lazy",
+        }
         self._forbid_when(
             condition=self.geometry.topology_type in nonlayered,
-            forbidden_values={"instantaneous"},
+            forbidden_values=settling_dynamics,
             axis_name="dynamics.dynamics_type",
             actual_value=self.dynamics.dynamics_type,
             context=f"{self.geometry.topology_type!r} geometry cannot host settling dynamics",

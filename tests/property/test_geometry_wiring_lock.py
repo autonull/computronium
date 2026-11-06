@@ -25,6 +25,7 @@ from pathlib import Path
 
 import computronium.ontology.geometry as geometry_module
 from computronium import _LAZY
+from computronium.experiment.schema.geometry_keys import TOPOLOGY_KEYS
 from computronium.ontology.geometry import (
     GeometryConfig,
     geometry_from_config,
@@ -75,7 +76,7 @@ def _dispatch_aliases() -> set[str]:
     text: the dispatcher is table-driven, so a regex over its body found
     nothing and the lock silently degraded to "covers 0 classes" (§0.6).
     """
-    return set(geometry_module._GEOMETRY_BACKENDS)
+    return set(TOPOLOGY_KEYS.keys())
 
 
 def test_dispatch_aliases_resolve_to_geometry_classes() -> None:
@@ -107,8 +108,10 @@ def test_every_geometry_class_is_registered() -> None:
     """The registry is derived from ``@geometry_backend`` — a class that
     forgets the decorator is the drift §5.4 exists to remove, and it is
     invisible to every other assertion here (nothing dispatches to it)."""
+    from computronium.ontology.geometry import _GEOMETRY_REGISTRY
+
     registered = {
-        backend.cls.__name__ for backend in geometry_module._GEOMETRY_BACKENDS.values()
+        entry.cls.__name__ for entry in _GEOMETRY_REGISTRY.all().values()
     }
     classes = _geometry_classes()
     assert registered == classes, (
@@ -120,9 +123,11 @@ def test_registry_entries_come_from_this_module() -> None:
     """A builder must be a class here or a module-level ``_make_*`` builder
     beside it — never an import from somewhere that can register a topology
     the wiring lock cannot see."""
-    for alias, backend in geometry_module._GEOMETRY_BACKENDS.items():
-        assert backend.cls.__module__ == geometry_module.__name__, alias
-        assert backend.build.__module__ == geometry_module.__name__, alias
+    from computronium.ontology.geometry import _GEOMETRY_REGISTRY
+
+    for alias, entry in _GEOMETRY_REGISTRY.all().items():
+        assert entry.cls.__module__ == geometry_module.__name__, alias
+        assert entry.build.__module__ == geometry_module.__name__, alias
 
 
 def test_geometry_classes_are_exported_everywhere() -> None:

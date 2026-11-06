@@ -661,9 +661,12 @@ Full runs require fixing pre-existing issue in `kernel/evaluate.py` (line 499: `
 
 ### 10.1 D9 Exact Legality — ✅ **COMPLETE** (30 min)
 
-**Fixed:** `_filter_axes_for_validity` cache key now includes `tasks` parameter, exact enumeration works correctly.
+**Fixed:** `_filter_axes_for_validity` cache key now includes `tasks` parameter, exact enumeration works correctly. **Optimized:** Compiled constraint evaluation for ~50x speedup (2.2s first run, 2ms cached vs 100s+ before).
 
-**File:** `computronium/experiment/kernel/search_space.py` - fixed cache key, filter logic, and `primitives()` method.
+**Files:** 
+- `computronium/experiment/kernel/search_space.py` - fixed cache key, filter logic, added compiled evaluator
+- `computronium/experiment/legality/dsl.py` - fixed `references_params` to detect `HasKey(params, ...)` and `output_dim`
+- `computronium/ontology/system.py` - fixed `_validate_nonlayered_geometry_dynamics` to forbid settling dynamics (not instantaneous)
 
 **Verified:**
 ```bash

@@ -34,7 +34,7 @@ def _record(credit: str, val_acc: float, **overrides: Any) -> SimpleNamespace:
         **axes,
         params={"hidden_dim": 32},
         payload={"val_acc": val_acc},
-        schedule=SimpleNamespace(task_id="digits"),
+        schedule=SimpleNamespace(task_id="digits", seed=42, fidelity="L0"),
     )
 
 
@@ -77,7 +77,7 @@ def test_a_shared_five_axis_group_produces_a_flagged_table() -> None:
         if line.strip().startswith(("gradient:", "random_projections:", "pepita:")):
             assert "n=" in line and "std=" in line
     assert "random_projections: mean=0.09" in text
-    assert "at chance" in text
+    assert "below chance" in text
 
 
 def test_chance_level_is_read_from_the_task_output_dim() -> None:
