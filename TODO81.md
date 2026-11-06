@@ -636,19 +636,18 @@ is what makes the next hour of walltime worth more than this one.
 
 ---
 
-## 9. One-session finish plan (Step 4 completion)
+## 9. One-session finish plan (Step 4 completion) — MINIMAL
 
 **Goal:** `./experiment_shallow.sh 0.01 --dry-run --device cpu` works for both `--mode static` and `--mode learn`
 
-### 9.1 Fix `PolicyPlanner.propose()` in `wave.py` (15 min)
+### 9.1 Fix `PolicyPlanner.propose()` in `wave.py` (10 min)
 
-Current code incorrectly constructs `ProposalContext`. Replace `PolicyPlanner.propose()`:
+Replace the `propose()` method (around line 508) with:
 
 ```python
 def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
     self._seen.update(seen)
     from computronium.experiment.execution.policy import ProposalContext
-    from computronium.experiment.execution.search_space import ShapeResolver
     from computronium.experiment.kernel.evaluate import task_shape
 
     ctx = ProposalContext(
@@ -657,7 +656,7 @@ def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]
         run_id="learning_survey",
         n_propose=n,
         task=self.tasks[0] if self.tasks else None,
-        shape=task_shape,  # use real shape resolver
+        shape=task_shape,  # real ShapeResolver
         deadline=None,
     )
     proposals = list(self._policy.propose(ctx))
@@ -681,6 +680,8 @@ def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]
 
 ### 9.2 Fix `_init_policy()` to use `DiverseRandomPolicy` for startup (5 min)
 
+In `_init_policy()` (around line 480), add import and use `DiverseRandomPolicy`:
+
 ```python
 def _init_policy(self) -> None:
     from computronium.experiment.execution.policy import (
@@ -702,33 +703,29 @@ def _init_policy(self) -> None:
         )
 ```
 
-### 9.3 Verify dry-run works (5 min)
+### 9.3 Verify dry-run only (5 min) — STOP HERE
 
 ```bash
-./experiment_shallow.sh 0.01 --dry-run --device cpu        # learn (TPE)
-./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random  # random baseline
-./experiment_shallow.sh 0.01 --dry-run --device cpu --mode static   # static
+# Learn mode (random policy - no Optuna startup delay)
+./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random
+
+# Learn mode (TPE - may take 10-30s on first run for Optuna init)
+./experiment_shallow.sh 0.01 --dry-run --device cpu
+
+# Static mode (should work already)
+./experiment_shallow.sh 0.01 --dry-run --device cpu --mode static
 ```
 
-### 9.4 If dry-run works, run 0.5h learning (30 min)
+**Expected:** All three print a table of cells. First TPE run may be slow (Optuna + `_composable` cache warmup). Subsequent runs are instant.
 
-```bash
-./experiment_shallow.sh 0.5 --device cpu --policy random  # baseline
-./experiment_shallow.sh 0.5 --device cpu                   # TPE
-```
+### 9.4 Full runs = SEPARATE SESSION
 
-### 9.5 Acceptance checklist for session end
+Do not attempt 0.5h runs in this session. They require:
+- `_composable` cache fully populated (first run = slow)
+- Optuna study initialization
+- Actual training time
 
-| Check | Command | Expected |
-|-------|---------|----------|
-| Static dry-run | `./experiment_shallow.sh 0.01 --dry-run --mode static --device cpu` | Table of cells, no hang |
-| Learn dry-run (random) | `./experiment_shallow.sh 0.01 --dry-run --policy random --device cpu` | Wave-0 cells, no hang |
-| Learn dry-run (TPE) | `./experiment_shallow.sh 0.01 --dry-run --device cpu` | Wave-0 cells, no hang |
-| Static 0.1h | `./experiment_shallow.sh 0.1 --mode static --device cpu` | Completes, writes store |
-| Learn 0.1h (random) | `./experiment_shallow.sh 0.1 --policy random --device cpu` | Completes, writes store |
-| Learn 0.5h (TPE) | `./experiment_shallow.sh 0.5 --device cpu` | Completes, reports waves |
-
-### 9.6 Known follow-ups (defer to Step 6)
+### 9.5 Known follow-ups (defer to Step 6)
 
 - **D9 exact legality** — `_filter_axes_for_validity` still has approximate branch for >100k combos
 - **Fidelity ladder** — `ladder=True` not implemented; needs `promote_with_stats` integration
