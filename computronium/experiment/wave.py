@@ -170,6 +170,42 @@ def _check_coord_compatibility(coord: Coordinate) -> bool:
     return not violations
 
 
+def _make_positive_control_cell(
+    spec: RunSpec,
+    fidelity: str,
+) -> tuple[Coordinate, Schedule] | None:
+    """Create a known-working cell for positive control (P3).
+
+    Uses digital/feedforward/instantaneous/null/gradient/euclidean on digits task,
+    which is a canonical configuration known to train successfully.
+    """
+    from computronium.experiment.schema.coordinate import Coordinate, Schedule
+    from computronium.experiment.kernel.search_space import schedule_for
+
+    # Known good coordinate: digital substrate, feedforward geometry, instantaneous dynamics,
+    # null plasticity, gradient credit (Backprop), euclidean update
+    coord = Coordinate(
+        substrate="digital",
+        geometry="feedforward",
+        dynamics="instantaneous",
+        plasticity="null",
+        credit="gradient",
+        update="euclidean",
+        params={},
+    )
+
+    # Verify compatibility
+    if not _check_coord_compatibility(coord):
+        logger.warning("Positive control coordinate failed compatibility check")
+        return None
+
+    # Use the first task (typically "digits")
+    task = spec.task_names[0] if spec.task_names else "digits"
+    schedule = schedule_for(spec, task, fidelity)
+
+    return (coord, schedule)
+
+
 def _build_provenance(
     spec: RunSpec, run_id: str, data_origin: DataOrigin = DataOrigin.EXPLORATION
 ) -> Provenance:
@@ -466,6 +502,7 @@ class PolicyPlanner:
         policy: str = "tpe",
         n_startup_trials: int = 3,
         resume_from: str | None = None,
+        promote_top: int = 20,
     ):
         self.spec = spec
         self.fidelity = fidelity
@@ -474,6 +511,7 @@ class PolicyPlanner:
         self.search_space = search_space
         self.policy_name = policy
         self.n_startup_trials = n_startup_trials
+        self.promote_top = promote_top
 
         self._seen: set[str] = set()
         self._wave_count = 0
@@ -508,14 +546,17 @@ class PolicyPlanner:
 
             valid_records.sort(key=_norm_val, reverse=True)
 
-            for record in valid_records[:20]:
+            top_n = min(self.promote_top, len(valid_records))
+            for record in valid_records[:top_n]:
                 self._policy.observe(record)
                 self._seen.add(record.measurement_key)
 
             logger.info(
-                "Warm-started policy with %d records from %s",
-                len(valid_records),
+                "Warm-started policy with %d records from %s (top %d of %d)",
+                top_n,
                 resume_from,
+                top_n,
+                len(valid_records),
             )
         except Exception as exc:
             logger.warning("Could not warm-start from %s: %s", resume_from, exc)
@@ -901,8 +942,51 @@ def run_waves(
     budget_remaining = budget_seconds
     fidelity_walltime: dict[str, float] = {}
 
-    # Positive control (P3): gate the report
-    # TODO: Implement positive control cell evaluation
+    # Create run in store before evaluation
+    from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.evidence.store._models import StoreConfig
+    store_config = StoreConfig(path=Path(store_path))
+    with RecordStore(store_config) as init_store:
+        init_store.create_run(run_id, spec)
+
+    # Positive control (P3): gate the report with a known-working cell
+    positive_control_results: list = []
+    positive_control_cell = _make_positive_control_cell(spec, fidelity)
+    if positive_control_cell is not None:
+        logger.info("Running positive control: %s/%s/%s/%s/%s/%s on %s",
+                    positive_control_cell[0].substrate,
+                    positive_control_cell[0].geometry,
+                    positive_control_cell[0].dynamics,
+                    positive_control_cell[0].plasticity,
+                    positive_control_cell[0].credit,
+                    positive_control_cell[0].update,
+                    positive_control_cell[1].task_id)
+        pc_start = time.monotonic()
+        pc_eval = _evaluate_cells_parallel(
+            cells=[positive_control_cell],
+            fidelity=fidelity,
+            store_path=store_path,
+            provenance=provenance,
+            max_workers=1,
+            verbose=verbose,
+            budget_seconds=min(300, budget_remaining),
+            cpu_threads=cpu_threads,
+            device_str=device_str,
+            run_id=None,
+            spec=None,
+        )
+        pc_elapsed = time.monotonic() - pc_start
+        positive_control_results.extend(pc_eval.results)
+        all_results.extend(pc_eval.results)
+        budget_remaining -= pc_elapsed
+        total_elapsed += pc_elapsed
+        fidelity_walltime[fidelity] = fidelity_walltime.get(fidelity, 0.0) + pc_elapsed
+        for record in pc_eval.results:
+            planner.observe(record)
+        gate = positive_control_results[0].status.gate_verdict.value if positive_control_results else "N/A"
+        val_acc = positive_control_results[0].payload.get("val_acc", "N/A") if positive_control_results else "N/A"
+        logger.info("Positive control: gate=%s, val_acc=%s",
+                    gate, f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc)
 
     while budget_remaining > 0:
         wave += 1

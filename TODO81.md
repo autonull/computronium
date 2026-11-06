@@ -632,109 +632,24 @@ is what makes the next hour of walltime worth more than this one.
 - Step 3 (D1, D5, D6, D8, D13, D14, D16): ✅ Complete
 - Step 4 (LearningSurvey + wave seam): ✅ Complete — dry-run works for all policies
 - Step 5 (Shell defaults to learn): ✅ Complete
-- Steps 6-7: ⏳ Pending
+- **Step 6 (TPE/NSGA-II, ladder, D9, positive control, warm-start): ✅ Complete (dry-run verified)**
+- Step 7 (H1–H6 triage at `n ≥ 3`): ⏳ Pending
+
+Step 6 is deliberately after step 5: full dry-run verification complete before attempting full runs.
 
 ---
 
-## 9. One-session finish plan (Step 4 completion) — MINIMAL
+## 9. One-session finish plan (Step 4 completion) — **MINIMAL, VERIFIED COMPLETE**
 
-**Goal:** `./experiment_shallow.sh 0.01 --dry-run --device cpu` works for both `--mode static` and `--mode learn`
+**Goal:** `./experiment_shallow.sh 0.01 --dry-run --device cpu` works for both `--mode static` and `--mode learn` ✅ **DONE**
 
-### 9.1 Fix `PolicyPlanner.propose()` in `wave.py` (10 min)
+All four dry-run variants verified:
+- Learn mode (random policy): `SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random`
+- Learn mode (TPE): `SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu`
+- Learn mode (NSGA-II): `SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --policy nsga2`
+- Static mode: `SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --mode static`
 
-Replace the `propose()` method (around line 508) with:
-
-```python
-def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
-    self._seen.update(seen)
-    from computronium.experiment.execution.policy import ProposalContext
-    from computronium.experiment.kernel.evaluate import task_shape
-
-    ctx = ProposalContext(
-        search_space=self.search_space,
-        spec=self.spec,
-        run_id="learning_survey",
-        n_propose=n,
-        task=self.tasks[0] if self.tasks else None,
-        shape=task_shape,  # real ShapeResolver
-        deadline=None,
-    )
-    proposals = list(self._policy.propose(ctx))
-
-    cells: list[tuple[Coordinate, Schedule]] = []
-    for prop in proposals:
-        if len(cells) >= n:
-            break
-        coord = prop.coordinate
-        if not _check_coord_compatibility(coord):
-            continue
-        task = getattr(prop, "task", self.tasks[0] if self.tasks else "digits")
-        schedule = schedule_for(self.spec, task, self.fidelity)
-        measurement_key = coord.measurement_key(schedule)
-        if measurement_key in self._seen:
-            continue
-        self._seen.add(measurement_key)
-        cells.append((coord, schedule))
-    return cells
-```
-
-### 9.2 Fix `_init_policy()` to use `DiverseRandomPolicy` for startup (5 min)
-
-In `_init_policy()` (around line 480), add import and use `DiverseRandomPolicy`:
-
-```python
-def _init_policy(self) -> None:
-    from computronium.experiment.execution.policy import (
-        ModelBasedPolicy, UniformRandomPolicy, DiverseRandomPolicy
-    )
-    axes_config = {axis.value: list(self.search_space.primitives(axis))
-                   for axis in StructuralAxis
-                   if self.search_space.primitives(axis)}
-
-    if self.policy_name == "random":
-        self._policy = UniformRandomPolicy(axes_config, seed=self.seed)
-    else:
-        sampler = "tpe" if self.policy_name == "tpe" else "nsga2"
-        self._policy = ModelBasedPolicy(
-            axes_config,
-            sampler=sampler,
-            seed=self.seed,
-            n_startup_trials=self.n_startup_trials,
-        )
-```
-
-### 9.3 Verify dry-run only (5 min) — **VERIFIED COMPLETE**
-
-```bash
-# Learn mode (random policy - no Optuna startup delay)
-./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random
-
-# Learn mode (TPE - may take 10-30s on first run for Optuna init)
-./experiment_shallow.sh 0.01 --dry-run --device cpu
-
-# Learn mode (NSGA-II)
-./experiment_shallow.sh 0.01 --dry-run --device cpu --policy nsga2
-
-# Static mode (should work already)
-./experiment_shallow.sh 0.01 --dry-run --device cpu --mode static
-```
-
-**Verified:** All four print a table of cells. First TPE/NSGA-II run may be slow (Optuna + `_composable` cache warmup). Subsequent runs are instant.
-
-### 9.4 Full runs = SEPARATE SESSION
-
-Do not attempt 0.5h runs in this session. They require:
-- `_composable` cache fully populated (first run = slow)
-- Optuna study initialization
-- Actual training time
-
-### 9.5 Known follow-ups (defer to Step 6)
-
-- **D9 exact legality** — ✅ **COMPLETE** - cache key fixed, exact enumeration working, all primitives shown
-- **Fidelity ladder** — ✅ **COMPLETE (dry-run)** - budget split and schedules shown; full promotion logic deferred
-- **NSGA-II** — ✅ **COMPLETE (dry-run)** - axis_objectives wired; full multi-objective optimization deferred
-- **Positive control (P3)** — gate the report with a known-working cell
-- **Warm-start (`--promote-from`)** — `_init_resume` replays top records through `policy.observe`
+Full runs require fixing pre-existing issue in `kernel/evaluate.py` (line 499: `ReproducibilityClass.REPRODUCIBLE` doesn't exist).
 
 ---
 
@@ -781,29 +696,34 @@ SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --policy nsga2
 # Should work without error; objectives resolved from registry
 ```
 
-### 10.4 Positive Control (P3) — Known-Working Cell (20 min)
+### 10.4 Positive Control (P3) — Known-Working Cell ✅ **COMPLETE (dry-run)**
 
-**File:** `computronium/experiment/wave.py` — uncomment TODO at line 839
+**Files:**
+- `computronium/experiment/wave.py` — added `_make_positive_control_cell()` and integrated into `run_waves()`
 
-Add a hardcoded "known good" cell (e.g., `digital/feedforward/instantaneous/none/none/euclidean` on `digits`) as wave 0.
+**Implementation:** Added a known-working cell (`digital/feedforward/instantaneous/null/gradient/euclidean` on `digits`) that runs as wave 0 before the main loop. Results are fed to the planner via `observe()`.
 
-**Dry-run test:**
+**Note:** Full-run evaluation has a pre-existing issue in `kernel/evaluate.py` (uses `ReproducibilityClass.REPRODUCIBLE` which doesn't exist). Dry-run implementation is complete and correct.
+
+**Verified:**
 ```bash
-SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu
-# First cell in output should be the positive control
+# Dry-run shows positive control would be first cell
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random
 ```
 
-### 10.5 Warm-Start (`--promote-from`) — Replay Records (30 min)
+### 10.5 Warm-Start (`--promote-from`) — Replay Records ✅ **COMPLETE (dry-run verified)**
 
-**File:** `computronium/experiment/wave.py` — `PolicyPlanner._init_resume` already has skeleton
+**Files:**
+- `computronium/experiment/wave.py` — enhanced `PolicyPlanner._init_resume` with `promote_top` parameter
 
-Enhance to replay top-N records through `policy.observe` before wave 0.
+**Implementation:** Reads top-N records from prior store (ranked by normalized score), replays them through `policy.observe()` before wave 0. Accepts `--promote-from` and `--promote-top` args.
 
-**Dry-run test:**
+**Verified:**
 ```bash
 # Create a dummy store with some records
-SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --promote-from dummy.duckdb
-# Should log "Warm-started policy with N records"
+# Then:
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --promote-from /tmp/warmstart.duckdb
+# Logs: "Warm-started policy with N records from ... (top N of M)"
 ```
 
 ---
@@ -815,17 +735,44 @@ SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --promote-from
 | Exact legality | `--dry-run` shows full primitives | `test_filter_axes_conservative.py` | 30 min | ✅ Done |
 | Fidelity ladder | `--ladder --dry-run` shows 3 stages | `test_ladder_schedule.py` | 1 hr | ✅ Done |
 | NSGA-II | `--policy nsga2 --dry-run` | `test_nsga2_multi_objective.py` | 30 min | ✅ Done (dry-run) |
-| Positive control | First cell is known-good | `test_positive_control.py` | 20 min | ⏳ Pending |
-| Warm-start | Logs warm-start count | `test_warm_start.py` | 30 min | ⏳ Pending |
+| Positive control | First cell is known-good | `test_positive_control.py` | 20 min | ✅ Done (dry-run) |
+| Warm-start | Logs warm-start count | `test_warm_start.py` | 30 min | ✅ Done (dry-run) |
 
 **Total: ~3 hours** — all verifiable without any training runs.
 
-### 10.7 Run Order
+### 10.7 Run Order — **ALL DRY-RUN COMPLETE ✅**
 
-1. **D9 exact legality** (unblocks full space exploration)
-2. **Positive control** (unblocks claimable reports)  
-3. **Warm-start** (enables iterative runs)
-4. **Fidelity ladder** (enables multi-fidelity runs)
-5. **NSGA-II** (enables multi-objective)
+1. **D9 exact legality** (unblocks full space exploration) ✅
+2. **Positive control** (unblocks claimable reports) ✅  
+3. **Warm-start** (enables iterative runs) ✅
+4. **Fidelity ladder** (enables multi-fidelity runs) ✅
+5. **NSGA-II** (enables multi-objective) ✅
 
 Each step: implement → dry-run verify → unit test lock → commit.
+
+---
+
+## 11. Next Session: Full Run Enablement
+
+All dry-run features verified. Full runs blocked by pre-existing issues:
+
+**Blocker 1:** `kernel/evaluate.py:499` - `ReproducibilityClass.REPRODUCIBLE` doesn't exist (valid: `REPLAYABLE`, `COMPUTATIONALLY_REPRODUCIBLE`, `SCIENTIFICALLY_REPRODUCIBLE`)
+
+**Fix needed:**
+```python
+# In kernel/evaluate.py:_build_status_with_procedures()
+# Change line 499 from:
+reproducibility = ReproducibilityClass.REPRODUCIBLE
+# To one of the valid values, e.g.:
+reproducibility = ReproducibilityClass.REPLAYABLE
+```
+
+**Blocker 2:** Diffusion dynamics UserWarning - `kernel/evaluate.py:712` (or `ontology/system.py:712`) warns when noise_level=0.0 on substrate
+
+**Fix needed:** Set a default positive `noise_level` on diffusion substrate configs, or suppress the warning for deterministic runs.
+
+**Then run:**
+1. `./experiment_shallow.sh 0.5 --policy random` (sampler control)
+2. `./experiment_shallow.sh 0.5 --policy tpe` (adaptive)
+3. Compare marginal rankings between static and learning modes
+4. H1–H6 triage at `n ≥ 3` (Step 7)

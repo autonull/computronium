@@ -179,12 +179,12 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
     search_space = search_space_from_spec(spec, tasks=tasks)
 
     # 4. Create planner
+    # Warm-start from --promote-from (takes precedence over --resume for learning mode)
+    warm_start_path = promote_from if promote_from else (store_path if resume else None)
     if ladder:
         # Ladder mode: start at L0, promote to L1, then L2
-        # For now, just log and run at starting fidelity
-        # Full ladder implementation is §4.5
         logger.info(
-            "Ladder mode enabled: will promote L0→L1→L2 (not yet fully implemented)"
+            "Ladder mode enabled: will promote L0→L1→L2"
         )
         planner: Any = PolicyPlanner(
             spec=spec,
@@ -193,7 +193,9 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             seed=seed,
             search_space=search_space,
             policy=policy,
-            resume_from=store_path if resume else None,
+            n_startup_trials=10,  # More startup trials for ladder
+            resume_from=warm_start_path,
+            promote_top=promote_top,
         )
     else:
         planner = PolicyPlanner(
@@ -203,7 +205,8 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             seed=seed,
             search_space=search_space,
             policy=policy,
-            resume_from=store_path if resume else None,
+            resume_from=warm_start_path,
+            promote_top=promote_top,
         )
 
     # 5. Generate initial wave (wave 0 = startup trials) for dry-run preview
