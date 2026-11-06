@@ -361,6 +361,16 @@ def _random_explore(
     return cells[:n]
 
 
+def _collect_measured_keys(store_path: str) -> set[str]:
+    """Collect all measurement_keys from an existing store for resume."""
+    from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.evidence.store._models import StoreConfig
+
+    with RecordStore(StoreConfig(path=Path(store_path))) as store:
+        records = store.query_records()
+        return {r.measurement_key for r in records}
+
+
 def _generate_valid_cells(
     n: int,
     fidelity: str,
@@ -370,10 +380,25 @@ def _generate_valid_cells(
     search_space,
     promote_from: str | None = None,
     promote_top: int = 20,
+    resume_from: str | None = None,
 ) -> list[tuple[Coordinate, Schedule]]:
-    """Generate N valid cells with optional importance sampling from prior runs."""
+    """Generate N valid cells with optional importance sampling from prior runs.
+
+    If resume_from is provided, skips cells already measured in that store.
+    """
     cells: list[tuple[Coordinate, Schedule]] = []
     seen: set[str] = set()
+
+    # Resume: collect already-measured keys from the target store
+    if resume_from:
+        try:
+            measured_keys = _collect_measured_keys(resume_from)
+            seen.update(measured_keys)
+            logger.info(
+                "Resume: skipping %d already-measured cells", len(measured_keys)
+            )
+        except Exception as exc:
+            logger.warning("Could not read resume store %s: %s", resume_from, exc)
 
     # 1. Exploitation: bias toward prior winners (if prior run exists)
     if promote_from:
@@ -545,6 +570,7 @@ def _generate_cells(
     promote_top: int,
     model: CostModel,
     workers: int,
+    resume_from: str | None = None,
 ) -> list[tuple[Coordinate, Schedule]]:
     """Generate cells for the survey."""
     search_space = search_space_from_spec(spec, tasks=tasks)
@@ -571,6 +597,7 @@ def _generate_cells(
         search_space,
         promote_from,
         promote_top,
+        resume_from,
     )
 
     logger.info("Generated %d valid cells", len(cells))
@@ -918,6 +945,9 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
     objectives: tuple[str, ...] = (),
     verbose: bool = False,
     cpu_threads: int = 1,
+    resume: bool = False,
+    ladder: bool = False,
+    policy: str = "tpe",
 ) -> dict[str, Any]:
     """Run a SimpleSurvey experiment.
 
@@ -941,6 +971,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         objectives: Objective names.
         verbose: Verbose progress output.
         cpu_threads: Torch threads per worker (1 avoids CPU oversubscription).
+        resume: If True, skip cells already measured in store_path.
 
     Returns:
         If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str],
@@ -987,6 +1018,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         promote_top=promote_top,
         model=model,
         workers=workers,
+        resume_from=store_path if resume else None,
     )
 
     if dry_run:
@@ -1328,6 +1360,22 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
         default=None,
         help="DuckDB store path (default: experiments/experiment_YYYYMMDD_HHMMSS.duckdb)",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from existing store, skip measured cells",
+    )
+    parser.add_argument(
+        "--ladder",
+        action="store_true",
+        help="Run fidelity ladder L0→L1→L2 (learning mode only)",
+    )
+    parser.add_argument(
+        "--policy",
+        default="tpe",
+        choices=["tpe", "nsga2", "random"],
+        help="Sampler policy (learning mode only)",
+    )
     parser.add_argument("--promote-from", default=None)
     parser.add_argument("--promote-top", type=int, default=20)
     parser.add_argument("--seed", type=int, default=42)
@@ -1462,6 +1510,9 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
             objectives=objectives,
             verbose=verbose,
             cpu_threads=args.cpu_threads,
+            resume=args.resume,
+            ladder=args.ladder,
+            policy=args.policy,
         )
 
         if args.dry_run:

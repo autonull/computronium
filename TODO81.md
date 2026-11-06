@@ -94,7 +94,7 @@ it. `S` = static path only, `L` = learning path only, `B` = both.
 | D2 | Trainability gate skipped whenever `param_budget == 0` (the default) | `search_space.py:738` | B | §2 D2 | ✅ Done |
 | D3 | Ablation groups mix tasks; `[at chance]` inherits one arm's chance line | `report.py:1044`, `:1221` | B | §2 D3 | ✅ Done |
 | D4 | Records persist only after the whole run; a timeout loses everything | `simple_survey.py:876` | B | §2 D4 | ✅ Done |
-| D5 | A repeat run at the same seed re-measures every cell | `simple_survey.py:836` | S | §2 D5 | ⏳ Pending |
+| D5 | A repeat run at the same seed re-measures every cell | `simple_survey.py:836` | S | §2 D5 | ✅ Done |
 | D6 | `max_scan=50000` can return fewer cells than the budget paid for | `simple_survey.py:295` | S | §2 D6 | ✅ Done |
 | D7 | Two `Schedule` builders; three dead parameters; CLI depth unreachable | §0.3, `:280`, `:375` | B | §2 D7 | ✅ Done |
 | D8 | `_mutate_around` can emit duplicates and measured cells | `simple_survey.py:221` | S | §2 D8 | ✅ Done |
@@ -613,9 +613,9 @@ reaches 1.0 for most of the ontology, it is a smoke test, not an arm.
 |---|---|---|---|
 | 1 | D2, D4, D7 — gate, streaming store, one schedule builder with CLI depth | failures that mean something | ✅ Done |
 | 2 | D3, D10, D11, D12, D15 — task-blocked, normalized, honest report | readable results from existing data | ✅ Done |
-| 3 | §3 locks, then D1, D5, D6, D8, D13, D14, D16 | a static engine that is correct and does not waste walltime | 🔄 In Progress (D1, D6, D8, D13, D14, D16 done; D5 pending) |
-| 4 | §4.1 seam (`plan_wave`/`run_waves`), `LearningSurvey` with `--policy random` only | parity with the static engine | ⏳ Pending |
-| 5 | §5 shell switch to `learn` by default, S1–S12 | the current workflow gains adaptiveness | ⏳ Pending |
+| 3 | §3 locks, then D1, D5, D6, D8, D13, D14, D16 | a static engine that is correct and does not waste walltime | ✅ Done |
+| 4 | §4.1 seam (`plan_wave`/`run_waves`), `LearningSurvey` with `--policy random` only | parity with the static engine | 🔄 In Progress (basic module created) |
+| 5 | §5 shell switch to `learn` by default, S1–S12 | the current workflow gains adaptiveness | ✅ Done |
 | 6 | §4.4 TPE/NSGA-II, §4.5 ladder, D9 exact legality | a longer run that learns | ⏳ Pending |
 | 7 | H1–H6 triage at `n ≥ 3` | findings about the ontology | ⏳ Pending |
 
@@ -629,5 +629,7 @@ is what makes the next hour of walltime worth more than this one.
 **Progress Summary:**
 - Step 1 (D2, D4, D7): ✅ Complete
 - Step 2 (D3, D10, D11, D12, D15): ✅ Complete  
-- Step 3: D1, D6, D8, D13, D14, D16 ✅ Complete; D5 (resume) ⏳ Pending
-- Step 4-7: ⏳ Pending
+- Step 3 (D1, D5, D6, D8, D13, D14, D16): ✅ Complete
+- Step 4 (LearningSurvey basic module): 🔄 In Progress
+- Step 5 (Shell defaults to learn): ✅ Complete
+- Steps 6-7: ⏳ Pending
