@@ -776,3 +776,109 @@ All dry-run features verified. Full runs blocked by pre-existing issues:
 2. `./experiment_shallow.sh 0.5 --policy tpe` (adaptive)
 3. Compare marginal rankings between static and learning modes
 4. H1–H6 triage at `n ≥ 3` (Step 7)
+
+---
+
+## 12. High-Impact Optimization Opportunities (Post-Full-Run)
+
+### 12.1 Optimize `iter_candidates` void constraint evaluation — HIGH IMPACT
+
+**Problem:** `iter_candidates()` in `search_space.py:819` uses the slow interpreter-based `evaluate()` for void constraints on EVERY candidate during actual experiment runs (not just dry-run). The same compiled evaluator pattern used in `_filter_axes_for_validity` (10.1) should be applied here.
+
+**Current:** ~100s+ for full space traversal with void constraints
+**Target:** <5s using compiled lambdas
+
+**Files:** `computronium/experiment/kernel/search_space.py` — add `_compile_expr` to `iter_candidates`, separate task-indep/dep constraints
+
+---
+
+### 12.2 Cache `harvest_schema()` — HIGH IMPACT
+
+**Problem:** `harvest_schema()` in `schema/harvest.py:509` is called multiple times without caching (in `_walk`, `compose_configs`, `RunSpec.harvested`, etc.). Schema is static per run.
+
+**Fix:** Add `@lru_cache(maxsize=1)` or module-level singleton pattern.
+
+**Files:** `computronium/experiment/schema/harvest.py`
+
+---
+
+### 12.3 Optimize `_composable` cache key — MEDIUM IMPACT
+
+**Problem:** `_composable()` cache key includes `param_budget` and 5 hyperparameters, causing cache misses when budget/params vary. The heavy `compose_configs()` call is re-executed.
+
+**Options:**
+- Add lighter pre-filter (void constraints + structural checks) before `_composable`
+- Split cache: structural validity (cheap, shared) + param-budget validity (expensive, specific)
+- Pre-compute valid tuples per (task, param_budget) bucket
+
+**Files:** `computronium/experiment/kernel/search_space.py`
+
+---
+
+### 12.4 Batch DuckDB writes in `_evaluate_cells_parallel` — MEDIUM IMPACT
+
+**Problem:** `wave.py:754` calls `store.append(record)` for each record individually. DuckDB performs better with batched inserts.
+
+**Fix:** Accumulate records in batch (e.g., 10-50) and use single transaction.
+
+**Files:** `computronium/experiment/wave.py`, `computronium/experiment/kernel/storage.py`
+
+---
+
+### 12.5 Improve cost model with per-primitive timing — MEDIUM IMPACT
+
+**Problem:** `CostModel` in `wave.py:65` only considers device/fidelity/workers, not cell configuration (substrate, geometry, dynamics). Actual cell cost varies 10x+.
+
+**Fix:** Add `per_primitive` dict to `CostModel`, update `_save_cost_model`/`_load_cost_model`, use in planner for better budget allocation.
+
+**Files:** `computronium/experiment/wave.py`, `computronium/experiment/kernel/resources.py`
+
+---
+
+### 12.6 TPE/NSGA-II proposer optimization — MEDIUM IMPACT
+
+**Problem:** `PolicyPlanner.propose()` takes 2-3s for 100 candidates (observed). TPE creates new Optuna study each time; NSGA-II has overhead.
+
+**Options:**
+- Reuse Optuna study across proposals
+- Warm-start sampler with prior observations
+- Limit candidate pool size for large spaces
+
+**Files:** `computronium/experiment/wave.py` (PolicyPlanner), `computronium/experiment/execution/optuna_adapter.py`
+
+---
+
+### 12.7 Persistent worker pool for evaluation — LOW-MEDIUM IMPACT
+
+**Problem:** `ProcessPoolExecutor` in `_evaluate_cells_parallel` recreates workers for each wave. Worker startup adds ~1-2s overhead per wave.
+
+**Fix:** Use persistent worker pool across waves, or `multiprocessing.Pool` with `maxtasksperchild`.
+
+**Files:** `computronium/experiment/wave.py`
+
+---
+
+### 12.8 Parallel void constraint evaluation — LOW IMPACT
+
+**Problem:** Void constraints in `iter_candidates` are evaluated sequentially. Could use `ThreadPoolExecutor` for I/O-bound or `ProcessPoolExecutor` for CPU-bound evaluation.
+
+**Note:** Compiled evaluator (12.1) may make this unnecessary — evaluate after 12.1.
+
+**Files:** `computronium/experiment/kernel/search_space.py`
+
+---
+
+### Priority Order (Impact × Effort)
+
+| # | Optimization | Impact | Effort | Priority |
+|---|--------------|--------|--------|----------|
+| 12.1 | Compiled void constraints in iter_candidates | ★★★★★ | ★★☆☆☆ | P0 |
+| 12.2 | Cache harvest_schema | ★★★★★ | ★☆☆☆☆ | P0 |
+| 12.3 | Optimize _composable cache | ★★★★☆ | ★★★☆☆ | P1 |
+| 12.4 | Batch DuckDB writes | ★★★★☆ | ★★☆☆☆ | P1 |
+| 12.5 | Per-primitive cost model | ★★★☆☆ | ★★★☆☆ | P2 |
+| 12.6 | TPE/NSGA-II proposer | ★★★☆☆ | ★★★☆☆ | P2 |
+| 12.7 | Persistent worker pool | ★★☆☆☆ | ★★☆☆☆ | P3 |
+| 12.8 | Parallel void eval | ★★☆☆☆ | ★★☆☆☆ | P3 |
+
+**Estimated Total:** ~4-6 hours for P0-P1 items, verifiable via dry-run + unit tests.
