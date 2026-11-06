@@ -711,65 +711,66 @@ def _evaluate_cells_parallel(
     startup_s = 0.0
 
     store_config = StoreConfig(path=Path(store_path))
-    store = RecordStore(store_config)
-    if run_id and spec:
-        store.create_run(run_id, spec)
 
-    def _sigterm_handler(signum, frame):
-        logger.info("SIGTERM received, closing store after current record...")
-        store.close()
-        sys.exit(130)
+    # Use context manager for store to ensure proper initialization and cleanup
+    with RecordStore(store_config) as store:
+        if run_id and spec:
+            store.create_run(run_id, spec)
 
-    old_sigterm = signal.signal(signal.SIGTERM, _sigterm_handler)
-    old_sigint = signal.signal(signal.SIGINT, _sigterm_handler)
+        def _sigterm_handler(signum, frame):
+            logger.info("SIGTERM received, closing store after current record...")
+            # The context manager will handle cleanup on exit
+            sys.exit(130)
 
-    logger.info("Evaluating up to %d cells with %d workers...", n_total, max_workers)
+        old_sigterm = signal.signal(signal.SIGTERM, _sigterm_handler)
+        old_sigint = signal.signal(signal.SIGINT, _sigterm_handler)
 
-    try:
-        with ProcessPoolExecutor(
-            max_workers=max_workers,
-            initializer=_init_worker,
-            initargs=(cpu_threads, device_str),
-        ) as pool:
+        logger.info("Evaluating up to %d cells with %d workers...", n_total, max_workers)
 
-            def _submit_next() -> None:
-                cell = next(queue, None)
-                if cell is not None:
-                    pending[
-                        pool.submit(
-                            _evaluate_one, cell, fidelity, store_path, provenance
-                        )
-                    ] = cell
+        try:
+            with ProcessPoolExecutor(
+                max_workers=max_workers,
+                initializer=_init_worker,
+                initargs=(cpu_threads, device_str),
+            ) as pool:
 
-            for _ in range(min(max_workers, n_total)):
-                _submit_next()
+                def _submit_next() -> None:
+                    cell = next(queue, None)
+                    if cell is not None:
+                        pending[
+                            pool.submit(
+                                _evaluate_one, cell, fidelity, store_path, provenance
+                            )
+                        ] = cell
 
-            while pending:
-                for future in wait(pending, return_when=FIRST_COMPLETED).done:
-                    del pending[future]
-                    record = future.result()
-                    results.append(record)
+                for _ in range(min(max_workers, n_total)):
+                    _submit_next()
 
-                    store.append(record)
+                while pending:
+                    for future in wait(pending, return_when=FIRST_COMPLETED).done:
+                        del pending[future]
+                        record = future.result()
+                        results.append(record)
 
-                    if not startup_s:
-                        startup_s = max(
-                            0.0,
-                            (time.monotonic() - started)
-                            - float(record.payload.get("walltime_s", 0.0)),
-                        )
+                        store.append(record)
 
-                    i = len(results)
-                    if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
-                        _log_progress(i, n_total, record)
+                        if not startup_s:
+                            startup_s = max(
+                                0.0,
+                                (time.monotonic() - started)
+                                - float(record.payload.get("walltime_s", 0.0)),
+                            )
 
-                    if deadline is None or time.monotonic() < deadline:
-                        _submit_next()
+                        i = len(results)
+                        if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
+                            _log_progress(i, n_total, record)
 
-    finally:
-        signal.signal(signal.SIGTERM, old_sigterm)
-        signal.signal(signal.SIGINT, old_sigint)
-        store.close()
+                        if deadline is None or time.monotonic() < deadline:
+                            _submit_next()
+
+        finally:
+            signal.signal(signal.SIGTERM, old_sigterm)
+            signal.signal(signal.SIGINT, old_sigint)
 
     elapsed = time.monotonic() - started
     skipped = n_total - len(results)
@@ -941,6 +942,7 @@ def run_waves(
     wave = 0
     budget_remaining = budget_seconds
     fidelity_walltime: dict[str, float] = {}
+    evaluation = None
 
     # Create run in store before evaluation
     from computronium.experiment.evidence.store import RecordStore
@@ -1091,7 +1093,7 @@ def run_waves(
         cells_evaluated=len(all_results),
         cells_passed=passed,
         cells_failed=failed,
-        cells_skipped=evaluation.skipped if evaluation.results else 0,
+        cells_skipped=evaluation.skipped if evaluation and evaluation.results else 0,
         walltime_s=total_elapsed,
         report=report,
         waves_completed=wave,

@@ -496,7 +496,7 @@ def _build_status_with_procedures(
     if replay_hash and deterministic:
         reproducibility = ReproducibilityClass.REPLAYABLE
     elif replay_hash:
-        reproducibility = ReproducibilityClass.REPRODUCIBLE
+        reproducibility = ReproducibilityClass.COMPUTATIONALLY_REPRODUCIBLE
     else:
         reproducibility = ReproducibilityClass.UNVERIFIED
 

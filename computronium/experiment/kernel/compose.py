@@ -391,7 +391,8 @@ def _build_substrate_config(
     accepted = set(axis_spec.accepted_params) if axis_spec is not None else set()
     kwargs = {key: value for key, value in (params or {}).items() if key in accepted}
     if dynamics in {"diffusion", "spike_integration", "pc_alm"}:
-        kwargs.setdefault("noise_level", 0.05)
+        # Force noise_level for stochastic dynamics — override any 0.0 default
+        kwargs["noise_level"] = kwargs.get("noise_level", 0.05) or 0.05
     return factory(**kwargs)
 
 

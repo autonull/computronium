@@ -2,5 +2,12 @@
   "cpu/L0": {
     "cost_per_cell_s": 4.544,
     "startup_s": 7.47
+  },
+  "cpu/L0/13": {
+    "cost_per_cell_s": 61.759,
+    "per_task": {
+      "digits": 0.128
+    },
+    "startup_s": 0.0
   }
 }
