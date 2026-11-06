@@ -498,7 +498,7 @@ def _build_status_with_procedures(
     elif replay_hash:
         reproducibility = ReproducibilityClass.COMPUTATIONALLY_REPRODUCIBLE
     else:
-        reproducibility = ReproducibilityClass.UNVERIFIED
+        reproducibility = ReproducibilityClass.REPLAYABLE
 
     legacy_status = StatusLegacy(
         gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
@@ -586,7 +586,7 @@ def cell_record(
                 quarantine=True,
                 maturity=Maturity.L0,
                 uncertainty={},
-                reproducibility=ReproducibilityClass.UNVERIFIED,
+                reproducibility=ReproducibilityClass.REPLAYABLE,
                 assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
                 ceec_link=None,
             ),

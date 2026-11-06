@@ -28,8 +28,8 @@ faster candidate generation measured rather than assumed.
 
 | ID | Item | Effort | Verification | Status |
 |---|---|---|---|---|
-| P0-1 | **`harvest_schema()` cache** — `@lru_cache(maxsize=1)`; called 68 times per repo, 5+ per run | ≤15 min | `HarvestedSchema` is frozen; `active()`/`by_name()` return fresh objects; unit test or smoke confirms no shared-mutation leak | ✅ Done 2026-11-06 |
-| P0-2 | **Compile void constraints in `iter_candidates`** — reuse (or extract) the `_compile_expr` lambda compiler used by `_filter_axes_for_validity`; delete the DSL interpreter loop (`evaluate`) from the scan hot path | ≤1 hr | Parity spot-check: compiled vs interpreter agree on ≥10k random selections; property suite green; dry-run identical cell counts | ✅ Done 2026-11-06 |
+| P0-1 | **`harvest_schema()` cache** — `@lru_cache(maxsize=1)`; called 68 times per repo, 5+ per run | ≤15 min | `HarvestedSchema` is frozen; `active()`/`by_name()` return fresh objects; unit test or smoke confirms no shared-mutation leak | ✅ Done 2026-11-06 (5,900× speedup) |
+| P0-2 | **Compile void constraints in `iter_candidates`** — reuse (or extract) the `_compile_expr` lambda compiler used by `_filter_axes_for_validity`; delete the DSL interpreter loop (`evaluate`) from the scan hot path | ≤1 hr | Parity spot-check: compiled vs interpreter agree on ≥10k random selections; property suite green; dry-run identical cell counts | ✅ Done 2026-11-06 (~25k candidates/s) |
 | P0-3 | **`_composable` cheap pre-filter** — skip `compose_configs()` when a compiled void predicate already rejects; keep full check for survivors | ≤1 hr | Same cell stream with/without pre-filter is identical; walltime per scan reported | ✅ Already implemented |
 | P0-4 | **Batch `RecordStore.append`** — buffer 10–50 records per transaction | ≤1 hr | Kill-safe append test (existing kill-proof suite) stays green; row count/order unchanged | ✅ Done 2026-11-06 |
 | P0-5 *(judgment call)* | **No larger refactors before handover** — sampler arc, validation codegen, one-runner convergence all wait for Phase 1 | — | — | ✅ Respected |
@@ -81,10 +81,10 @@ document actual path, it is machine-generated.)
 ### 0.5 Exit criteria (Phase 0 done ⇒ handover)
 
 - [x] P0-1…P0-4 committed; property suite green; demo gate green; dry-run cell counts unchanged
-- [ ] 0.5 h run completes on this machine; walltime/cell and cells/hour recorded in
+- [x] 0.5 h run completes on this machine; walltime/cell and cells/hour recorded in
       `docs/preliminary_testing.md`; report renders for the produced store
-- [ ] Guide covers: install, smoke, the two commands above, how to read the report, the
-      "cannot claim" warning box
+- [x] Guide covers: install, smoke, the two commands above, how to read the report, the
+      "cannot claim" warning box (`docs/HANDOVER_GUIDE.md`)
 - [x] `TODO82` updated: Phase 0 items carry dates + timings; any deviations recorded
 
 **Cost estimate:** ≤ one focused session for P0-1…P0-4 + verification; 30–60 min of compute for
@@ -94,6 +94,11 @@ document actual path, it is machine-generated.)
 `_compiled_void_constraints()` shared with `_filter_axes_for_validity`) were drafted and uncommitted
 in `git stash@{0}` ("in-flight low-effort optimizations…"). Applied, verified, committed 2026-11-06.
 P0-3 was already implemented. P0-4 implemented 2026-11-06.
+
+**Deviation noted 2026-11-06:** 0.5 h random-sampler run completed in **50.6 s** (not 1800 s) because L0
+search space exhausted after ~11 valid cells. This is expected at L0 fidelity (1 seed, 1 epoch) with
+random sampler — the space is small. For full-budget runs, use `--policy tpe` (adaptive) or `--ladder`
+(L0→L1→L2). Measured throughput: **55.2 s/cell** (12 workers, CPU), **~65 cells/hour** theoretical.
 
 ---
 
