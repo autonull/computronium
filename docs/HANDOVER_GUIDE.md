@@ -40,36 +40,49 @@ uv run python -c "import optuna, scipy, torchvision, pytest"
 
 ```bash
 # Quick verification that the pipeline runs end-to-end
-./experiment_shallow.sh 0.05 --policy random
+./experiment_shallow.sh 0.05 --policy tpe
 ```
 
 **Expected output:**
 - Positive control PASS (val_acc ~0.76 on xor)
-- 10–11 cells evaluated in ~50 s
+- Multiple waves of cells evaluated (continues until budget exhausted)
 - Store created at `experiments/experiment_<timestamp>.duckdb`
 - Exit code 0
 
 **If this fails:** Run `./experiment_shallow.sh --doctor` for diagnostics.
 
+> **Note:** Smoke test uses `--policy tpe` (adaptive) so it actually runs for the full budget.
+> `--policy random` exhausts the L0 search space in ~50 s and is for CI/regression only.
+
 ---
 
 ## 3. Standard Preliminary Runs
 
-### A. Sampler Control (Random Policy) — 30 min budget
+### A. Exploratory Run (TPE Sampler) — 30 min budget ⭐ **PRIMARY TEST**
+```bash
+./experiment_shallow.sh 0.5 --policy tpe
+```
+- Optuna TPE sampler adapts and explores the search space
+- **Consumes full 0.5h budget** (proposes new cells continuously)
+- 11 parallel workers on this machine
+- Use for: preliminary testing, crash/bug detection, throughput measurement
+
+### B. Deterministic Regression (Random Policy) — exhausts in ~1 min
 ```bash
 ./experiment_shallow.sh 0.5 --policy random
 ```
 - Deterministic cell ordering (seed=42)
-- Exhausts L0 search space in ~50 s (11 cells)
-- Use for: regression testing, CI, deterministic baselines
+- **Exhausts L0 search space in ~50 s (only ~11 valid cells at L0)**
+- Use for: CI, regression testing, deterministic baselines only
+- **NOT suitable for time-budgeted exploratory runs**
 
-### B. Adaptive (TPE Sampler) — 60 min budget
+### C. Fidelity Ladder (L0 → L1 → L2) — single invocation
 ```bash
-./experiment_shallow.sh 1.0 --policy tpe
+./experiment_shallow.sh 1.0 --ladder
 ```
-- Optuna TPE sampler explores more of the search space
-- Will consume full budget (continues proposing new cells)
-- Use for: broader exploration, finding promising regions
+- Runs L0 (screen), promotes to L1 (confirm), promotes to L2 (publish)
+- Only L2 cells are claim-eligible
+- Consumes full budget across three fidelity levels
 
 ### C. Fidelity Ladder (L0 → L1 → L2) — single invocation
 ```bash

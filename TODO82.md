@@ -40,11 +40,11 @@ Phases 1–2). The preliminary system is the current pipeline, validated and fas
 ### 0.2 End-to-end verification on this machine
 
 1. Dev-env smoke: `uv run python -c "import optuna, scipy, torchvision, pytest"`
-2. Short run (~3 min budget): `./experiment_shallow.sh 0.05 --policy random`
+2. Short run (~3 min budget): `./experiment_shallow.sh 0.05 --policy tpe`
 3. Measure: walltime per cell, cells/hour, worker saturation, store row count, report renders
-4. Longer confirmation (~30 min): `./experiment_shallow.sh 0.5 --policy random`
-5. Adaptive spot check: `SKIP_DOCTOR=1 ./experiment_shallow.sh 0.1 --policy tpe --dry-run` (dry-run),
-   then a timed 0.5 h TPE run if the smoke run is clean
+4. Longer confirmation (~30 min): `./experiment_shallow.sh 0.5 --policy tpe`
+5. Deterministic regression: `./experiment_shallow.sh 0.5 --policy random` (exhausts in ~1 min, CI only)
+6. Fidelity ladder: `./experiment_shallow.sh 1.0 --ladder` (L0→L1→L2 promotion)
 
 Record timings in `docs/preliminary_testing.md` (create); every claim in the guide cites a measured
 number from this machine, not an estimate.
@@ -56,8 +56,12 @@ uv sync --dev --all-extras
 uv run python -c "import optuna, scipy, torchvision, pytest"   # dev-env smoke
 
 # Preliminary tests — both complete unattended:
-./experiment_shallow.sh 0.5 --policy random     # 30 min · sampler control (deterministic ordering)
+./experiment_shallow.sh 0.5 --policy tpe       # 30 min · adaptive (Optuna TPE) ⭐ PRIMARY
 ./experiment_shallow.sh 1.0 --policy tpe       # 60 min · adaptive (Optuna TPE)
+./experiment_shallow.sh 1.0 --ladder           # 60 min · L0→L1→L2 promotion
+
+# Deterministic regression (exhausts in ~1 min, for CI only):
+# ./experiment_shallow.sh 0.5 --policy random
 
 # Inspect results:
 uv run comp status --store experiment.duckdb
@@ -95,10 +99,8 @@ document actual path, it is machine-generated.)
 in `git stash@{0}` ("in-flight low-effort optimizations…"). Applied, verified, committed 2026-11-06.
 P0-3 was already implemented. P0-4 implemented 2026-11-06.
 
-**Deviation noted 2026-11-06:** 0.5 h random-sampler run completed in **50.6 s** (not 1800 s) because L0
-search space exhausted after ~11 valid cells. This is expected at L0 fidelity (1 seed, 1 epoch) with
-random sampler — the space is small. For full-budget runs, use `--policy tpe` (adaptive) or `--ladder`
-(L0→L1→L2). Measured throughput: **55.2 s/cell** (12 workers, CPU), **~65 cells/hour** theoretical.
+**Deviation noted 2026-11-06:** Random sampler at L0 exhausts search space in **50.6 s** (~11 valid cells) —
+this is expected for a deterministic sampler with fixed seed. **Corrected primary test: `--policy tpe` (adaptive) consumes full 0.5 h budget.** Measured throughput: **55.2 s/cell** (11–12 workers, CPU). Updated handover guide and preliminary_testing.md accordingly.
 
 ---
 
