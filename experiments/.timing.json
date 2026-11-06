@@ -1,0 +1,6 @@
+{
+  "cpu/L0": {
+    "cost_per_cell_s": 4.544,
+    "startup_s": 7.47
+  }
+}
