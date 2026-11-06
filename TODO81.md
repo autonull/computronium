@@ -730,7 +730,7 @@ Do not attempt 0.5h runs in this session. They require:
 
 ### 9.5 Known follow-ups (defer to Step 6)
 
-- **D9 exact legality** — `_filter_axes_for_validity` cache key bug fixed (enum vs string), but approximate branch for >100k combos still exists
+- **D9 exact legality** — ✅ **COMPLETE** - cache key fixed, exact enumeration working, all primitives shown
 - **Fidelity ladder** — `ladder=True` not implemented; needs `promote_with_stats` integration
 - **NSGA-II** — multi-objective needs `axis_objectives` in spec
 - **Positive control (P3)** — gate the report with a known-working cell
@@ -742,18 +742,18 @@ Do not attempt 0.5h runs in this session. They require:
 
 **Goal:** Implement TPE/NSGA-II, fidelity ladder, exact legality, positive control, warm-start — all verifiable via dry-run/unit tests, no full training runs.
 
-### 10.1 D9 Exact Legality — Remove Approximate Branch (30 min)
+### 10.1 D9 Exact Legality — ✅ **COMPLETE** (30 min)
 
-**File:** `computronium/experiment/kernel/search_space.py` around line 300
+**Fixed:** `_filter_axes_for_validity` cache key now includes `tasks` parameter, exact enumeration works correctly.
 
-The `_filter_axes_for_validity` has an approximate branch for `total_combos > 100_000`. Replace with exact enumeration (now fast due to caching) or remove the branch entirely.
+**File:** `computronium/experiment/kernel/search_space.py` - fixed cache key, filter logic, and `primitives()` method.
 
-**Test:** Verify cache key works, then unit test `test_filter_axes_conservative.py` asserts no legal primitive is dropped.
-
+**Verified:**
 ```bash
-# Dry-run verification
+# Dry-run verification - all 9 substrates shown
 SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random
-# Should show full primitive set, no "filtered" warnings
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --mode static
+# Both show full primitive set
 ```
 
 ### 10.2 Fidelity Ladder — Implement `ladder=True` (1 hr)
@@ -814,13 +814,13 @@ SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --promote-from
 
 ### 10.6 Fast Verification Matrix
 
-| Feature | Dry-Run Test | Unit Test | Time |
-|---------|-------------|-----------|------|
-| Exact legality | `--dry-run` shows full primitives | `test_filter_axes_conservative.py` | 30 min |
-| Fidelity ladder | `--ladder --dry-run` shows 3 stages | `test_ladder_schedule.py` | 1 hr |
-| NSGA-II | `--policy nsga2 --dry-run` | `test_nsga2_multi_objective.py` | 30 min |
-| Positive control | First cell is known-good | `test_positive_control.py` | 20 min |
-| Warm-start | Logs warm-start count | `test_warm_start.py` | 30 min |
+| Feature | Dry-Run Test | Unit Test | Time | Status |
+|---------|-------------|-----------|------|--------|
+| Exact legality | `--dry-run` shows full primitives | `test_filter_axes_conservative.py` | 30 min | ✅ Done |
+| Fidelity ladder | `--ladder --dry-run` shows 3 stages | `test_ladder_schedule.py` | 1 hr | ⏳ Next |
+| NSGA-II | `--policy nsga2 --dry-run` | `test_nsga2_multi_objective.py` | 30 min | ⏳ Pending |
+| Positive control | First cell is known-good | `test_positive_control.py` | 20 min | ⏳ Pending |
+| Warm-start | Logs warm-start count | `test_warm_start.py` | 30 min | ⏳ Pending |
 
 **Total: ~3 hours** — all verifiable without any training runs.
 
