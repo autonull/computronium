@@ -620,13 +620,15 @@ def _log_progress(i: int, n_total: int, record: Any) -> None:
     )
 
 
-def _init_worker(cpu_threads: int) -> None:
-    """Pin one worker's torch to ``cpu_threads``.
+def _init_worker(cpu_threads: int, device: str) -> None:
+    """Pin one worker's torch to ``cpu_threads`` and disable CUDA for cpu mode.
 
     N processes each spawning a full thread pool oversubscribe the machine and
     make every cell many times slower; the probe measured 77s/cell with four
     free-threaded workers against 4s/cell at one thread apiece.
     """
+    if device == "cpu":
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
     if cpu_threads > 0:
         import torch
 
@@ -655,6 +657,7 @@ def _evaluate_cells_parallel(
     verbose: bool,
     budget_seconds: int | None = None,
     cpu_threads: int = 1,
+    device_str: str = "cpu",
 ) -> _Evaluation:
     """Evaluate cells in parallel, stopping when the budget is spent.
 
@@ -675,7 +678,7 @@ def _evaluate_cells_parallel(
     with ProcessPoolExecutor(
         max_workers=max_workers,
         initializer=_init_worker,
-        initargs=(cpu_threads,),
+        initargs=(cpu_threads, device_str),
     ) as pool:
 
         def _submit_next() -> None:
@@ -790,6 +793,12 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         "model": CostModel, "workers": int}
         If evaluation: {"run_id": str, "store_path": str, "cells_evaluated": int, ...}
     """
+
+    # Resolve device string for worker init and CUDA control
+    from computronium.core.utils.device import get_device
+
+    device_str = get_device(device).type
+
     # 1. Build RunSpec
     params = _SpecParams(
         hours=hours,
@@ -849,6 +858,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         verbose=verbose,
         budget_seconds=spec.budget_seconds,
         cpu_threads=cpu_threads,
+        device_str=device_str,
     )
     results = evaluation.results
 
@@ -1220,6 +1230,10 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
     except Exception as e:
         print(_format_error(f"Failed to resolve device: {e}", "Try --device cpu"))
         sys.exit(1)
+
+    # Disable CUDA visibility for cpu mode BEFORE any torch.cuda access
+    if device_str == "cpu":
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     # Run self-test if requested
     if run_self_test:
