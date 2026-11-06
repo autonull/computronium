@@ -735,3 +735,101 @@ Do not attempt 0.5h runs in this session. They require:
 - **NSGA-II** — multi-objective needs `axis_objectives` in spec
 - **Positive control (P3)** — gate the report with a known-working cell
 - **Warm-start (`--promote-from`)** — `_init_resume` replays top records through `policy.observe`
+
+---
+
+## 10. Optimized Step 6 Plan — FAST COMPLETION
+
+**Goal:** Implement TPE/NSGA-II, fidelity ladder, exact legality, positive control, warm-start — all verifiable via dry-run/unit tests, no full training runs.
+
+### 10.1 D9 Exact Legality — Remove Approximate Branch (30 min)
+
+**File:** `computronium/experiment/kernel/search_space.py` around line 300
+
+The `_filter_axes_for_validity` has an approximate branch for `total_combos > 100_000`. Replace with exact enumeration (now fast due to caching) or remove the branch entirely.
+
+**Test:** Verify cache key works, then unit test `test_filter_axes_conservative.py` asserts no legal primitive is dropped.
+
+```bash
+# Dry-run verification
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --policy random
+# Should show full primitive set, no "filtered" warnings
+```
+
+### 10.2 Fidelity Ladder — Implement `ladder=True` (1 hr)
+
+**Files:** 
+- `computronium/experiment/wave.py` — add promotion logic in `run_waves`
+- `computronium/experiment/learning_survey.py` — wire `--ladder` flag
+
+**Dry-run test strategy:**
+```bash
+# Ladder mode should schedule L0→L1→L2 transitions in dry-run output
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --ladder
+# Output should show 3 fidelity stages with different n_seeds/epochs
+```
+
+**Implementation:**
+- In `run_waves`, track fidelity stage per cell
+- After L0 wave, call `promote_with_stats` on results
+- Promoted cells get L1 schedule; rest stay L0
+- Budget split: 60/30/10 reported as achieved
+
+### 10.3 NSGA-II Multi-Objective — Add `axis_objectives` (30 min)
+
+**File:** `computronium/experiment/schema/run_spec.py` — add `axis_objectives` field to `RunSpec`
+
+**Dry-run test:**
+```bash
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --policy nsga2
+# Should work without error; objectives resolved from registry
+```
+
+### 10.4 Positive Control (P3) — Known-Working Cell (20 min)
+
+**File:** `computronium/experiment/wave.py` — uncomment TODO at line 839
+
+Add a hardcoded "known good" cell (e.g., `digital/feedforward/instantaneous/none/none/euclidean` on `digits`) as wave 0.
+
+**Dry-run test:**
+```bash
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu
+# First cell in output should be the positive control
+```
+
+### 10.5 Warm-Start (`--promote-from`) — Replay Records (30 min)
+
+**File:** `computronium/experiment/wave.py` — `PolicyPlanner._init_resume` already has skeleton
+
+Enhance to replay top-N records through `policy.observe` before wave 0.
+
+**Dry-run test:**
+```bash
+# Create a dummy store with some records
+SKIP_DOCTOR=1 ./experiment_shallow.sh 0.01 --dry-run --device cpu --promote-from dummy.duckdb
+# Should log "Warm-started policy with N records"
+```
+
+---
+
+### 10.6 Fast Verification Matrix
+
+| Feature | Dry-Run Test | Unit Test | Time |
+|---------|-------------|-----------|------|
+| Exact legality | `--dry-run` shows full primitives | `test_filter_axes_conservative.py` | 30 min |
+| Fidelity ladder | `--ladder --dry-run` shows 3 stages | `test_ladder_schedule.py` | 1 hr |
+| NSGA-II | `--policy nsga2 --dry-run` | `test_nsga2_multi_objective.py` | 30 min |
+| Positive control | First cell is known-good | `test_positive_control.py` | 20 min |
+| Warm-start | Logs warm-start count | `test_warm_start.py` | 30 min |
+
+**Total: ~3 hours** — all verifiable without any training runs.
+
+### 10.7 Run Order
+
+1. **D9 exact legality** (unblocks full space exploration)
+2. **Positive control** (unblocks claimable reports)  
+3. **Warm-start** (enables iterative runs)
+4. **Fidelity ladder** (enables multi-fidelity runs)
+5. **NSGA-II** (enables multi-objective)
+
+Each step: implement → dry-run verify → unit test lock → commit.
