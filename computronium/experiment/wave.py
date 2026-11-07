@@ -179,8 +179,8 @@ def _make_positive_control_cell(
     Uses digital/feedforward/instantaneous/null/gradient/euclidean on digits task,
     which is a canonical configuration known to train successfully.
     """
-    from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.kernel.search_space import schedule_for
+    from computronium.experiment.schema.coordinate import Coordinate
 
     # Known good coordinate: digital substrate, feedforward geometry, instantaneous dynamics,
     # null plasticity, gradient credit (Backprop), euclidean update
@@ -724,7 +724,9 @@ def _evaluate_cells_parallel(
         old_sigterm = signal.signal(signal.SIGTERM, _sigterm_handler)
         old_sigint = signal.signal(signal.SIGINT, _sigterm_handler)
 
-        logger.info("Evaluating up to %d cells with %d workers...", n_total, max_workers)
+        logger.info(
+            "Evaluating up to %d cells with %d workers...", n_total, max_workers
+        )
 
         try:
             with ProcessPoolExecutor(
@@ -784,13 +786,30 @@ def _evaluate_cells_parallel(
     return _Evaluation(results, elapsed, startup_s, skipped)
 
 
-def _generate_report(store_path: str, run_id: str) -> dict:
-    from computronium.experiment.surface.report import ReportGenerator
+def _generate_report(store_path: str, run_id: str) -> dict[str, Any]:
+    from computronium.experiment.surface.report import ReportGenerator, RunSummary as ReportRunSummary
 
     store_config = StoreConfig(path=Path(store_path))
     with RecordStore(store_config) as store:
         generator = ReportGenerator(store)
-        return generator.run_summary(run_id)
+        result: ReportRunSummary | None = generator.run_summary(run_id)
+        if result is None:
+            return {}
+        # Convert ReportRunSummary to dict
+        return {
+            "run_id": result.run_id,
+            "spec": result.spec,
+            "spec_version": result.spec_version,
+            "status": result.status,
+            "budget_consumed_s": result.budget_consumed_s,
+            "replay_hash": result.replay_hash,
+            "started_at": result.started_at,
+            "finished_at": result.finished_at,
+            "record_count": result.record_count,
+            "claim_eligible_cells": result.claim_eligible_cells,
+            "promoted_count": result.promoted_count,
+            "declared_cells": result.declared_cells,
+        }
 
 
 def _pretty_print_dry_run(
@@ -860,6 +879,174 @@ class RunSummary:
     budget_split: dict[str, float]
 
 
+def _run_ladder_promotion(
+    spec: RunSpec,
+    planner: Planner,
+    all_results: list,
+    store_path: str,
+    provenance: Provenance,
+    workers: int,
+    cpu_threads: int,
+    device_str: str,
+    run_id: str,
+    l1_budget: int,
+    l2_budget: int,
+    total_elapsed: float,
+    fidelity_walltime: dict[str, float],
+    verbose: bool,
+) -> tuple[float, list, float]:
+    """Run fidelity ladder promotion: L0 -> L1 -> L2.
+
+    Promotes top-performing cells to higher fidelity (more seeds, more epochs).
+    Budget split: L0=60%, L1=30%, L2=10% of total budget.
+    """
+    from computronium.experiment.kernel.search_space import schedule_for
+
+    # Get PASS records with val_acc, group by coordinate (cell_key)
+    pass_records = [
+        r
+        for r in all_results
+        if r.status.gate_verdict.value == "PASS"
+        and r.payload.get("val_acc") is not None
+    ]
+    if not pass_records:
+        logger.info("Ladder: no PASS records to promote")
+        return total_elapsed, all_results, l1_budget + l2_budget
+
+    # Group by cell_key, keep best val_acc per cell
+    from computronium.experiment.schema.record import Record
+
+    best_by_cell: dict[str, tuple[float, Record]] = {}
+    for record in pass_records:
+        cell_key = record.cell_key
+        val_acc = record.payload.get("val_acc", 0.0)
+        if cell_key not in best_by_cell or val_acc > best_by_cell[cell_key][0]:
+            best_by_cell[cell_key] = (val_acc, record)
+
+    # Sort by val_acc descending
+    sorted_cells = sorted(best_by_cell.items(), key=lambda x: x[1][0], reverse=True)
+
+    # Ladder budget allocation (passed in as reserved)
+    ladder_budget = {"L1": l1_budget, "L2": l2_budget}
+
+    # L0 already done, promote to L1 then L2
+    for target_fid in ["L1", "L2"]:
+        fid_budget = ladder_budget[target_fid]
+        if fid_budget <= 0:
+            break
+
+        # Number of cells to promote (based on budget)
+        measured_cost = (
+            total_elapsed * workers / len(all_results) if all_results else 60.0
+        )
+        n_promote = max(1, min(20, int(fid_budget * workers / max(1.0, measured_cost))))
+
+        # Take top n_promote cells
+        promote_candidates = sorted_cells[:n_promote]
+
+        # Create new schedules for target fidelity, expanding each cell into n_seeds replicates
+        cells_to_promote = []
+        for cell_key, (val_acc, record) in promote_candidates:
+            # Reconstruct Coordinate from Record fields
+            from computronium.experiment.schema.coordinate import Coordinate
+
+            coord = Coordinate(
+                substrate=record.substrate,
+                geometry=record.geometry,
+                dynamics=record.dynamics,
+                plasticity=record.plasticity,
+                credit=record.credit,
+                update=record.update,
+                params=record.params,
+            )
+            task_id = record.schedule.task_id
+            new_schedule = schedule_for(spec, task_id, target_fid)
+            # Expand into n_seeds replicates with different seeds
+            base_seed = new_schedule.seed
+            n_replicates = new_schedule.n_seeds
+            for rep_idx in range(n_replicates):
+                rep_schedule = Schedule(
+                    fidelity=new_schedule.fidelity,
+                    seed=base_seed + rep_idx,
+                    n_seeds=new_schedule.n_seeds,
+                    epochs=new_schedule.epochs,
+                    batch_limit=new_schedule.batch_limit,
+                    budget_id=f"{new_schedule.budget_id}_rep{rep_idx}",
+                    task_id=new_schedule.task_id,
+                    param_budget=new_schedule.param_budget,
+                    device=new_schedule.device,
+                    deterministic=new_schedule.deterministic,
+                    num_workers=new_schedule.num_workers,
+                    precision=new_schedule.precision,
+                    checkpoint_every_n=new_schedule.checkpoint_every_n,
+                    early_stopping_patience=new_schedule.early_stopping_patience,
+                )
+                cells_to_promote.append((coord, rep_schedule))
+
+        if not cells_to_promote:
+            continue
+
+        logger.info(
+            "=== Ladder promotion to %s (%d cells, budget %.0fs) ===",
+            target_fid,
+            len(cells_to_promote),
+            fid_budget,
+        )
+
+        # Evaluate promoted cells
+        wave_start = time.monotonic()
+        evaluation = _evaluate_cells_parallel(
+            cells=cells_to_promote,
+            fidelity=target_fid,
+            store_path=store_path,
+            provenance=provenance,
+            max_workers=workers,
+            verbose=verbose,
+            budget_seconds=fid_budget,
+            cpu_threads=cpu_threads,
+            device_str=device_str,
+            run_id=run_id,
+            spec=spec,
+        )
+
+        wave_elapsed = time.monotonic() - wave_start
+        total_elapsed += wave_elapsed
+        fidelity_walltime[target_fid] = (
+            fidelity_walltime.get(target_fid, 0.0) + wave_elapsed
+        )
+
+        all_results.extend(evaluation.results)
+
+        # Feed results to planner for future proposals
+        for rec in evaluation.results:
+            planner.observe(rec)
+
+        # Update sorted_cells for next fidelity promotion
+        new_pass = [
+            r
+            for r in evaluation.results
+            if r.status.gate_verdict.value == "PASS"
+            and r.payload.get("val_acc") is not None
+        ]
+        for record in new_pass:
+            cell_key = record.cell_key
+            val_acc = record.payload.get("val_acc", 0.0)
+            if cell_key not in best_by_cell or val_acc > best_by_cell[cell_key][0]:
+                best_by_cell[cell_key] = (val_acc, record)
+        sorted_cells = sorted(best_by_cell.items(), key=lambda x: x[1][0], reverse=True)
+
+        logger.info(
+            "Ladder %s: %.1fs/cell, %d results",
+            target_fid,
+            wave_elapsed * workers / len(evaluation.results)
+            if evaluation.results
+            else 0,
+            len(evaluation.results),
+        )
+
+    return total_elapsed, all_results, l1_budget + l2_budget
+
+
 def run_waves(
     spec: RunSpec,
     planner: Planner,
@@ -909,7 +1096,13 @@ def run_waves(
             for fid in ladder_fidelities:
                 n_fid = max(1, int(len(wave0_cells) * ladder_budget_split[fid]))
                 for coord, _ in wave0_cells[:n_fid]:
-                    schedule = schedule_for(spec, coord.task if hasattr(coord, 'task') else (spec.task_names[0] if spec.task_names else "digits"), fid)
+                    schedule = schedule_for(
+                        spec,
+                        coord.task
+                        if hasattr(coord, "task")
+                        else (spec.task_names[0] if spec.task_names else "digits"),
+                        fid,
+                    )
                     ladder_cells.append((coord, schedule))
             return RunSummary(
                 run_id=run_id,
@@ -939,13 +1132,23 @@ def run_waves(
     all_results: list = []
     total_elapsed = 0.0
     wave = 0
-    budget_remaining = budget_seconds
-    fidelity_walltime: dict[str, float] = {}
+
+    # Ladder budget reservation: L0=60%, L1=30%, L2=10%
+    if ladder:
+        l0_budget = budget_seconds * 0.6
+        l1_budget = budget_seconds * 0.3
+        l2_budget = budget_seconds * 0.1
+        budget_remaining = l0_budget
+        fidelity_walltime = {"L0": 0.0, "L1": 0.0, "L2": 0.0}
+    else:
+        budget_remaining = budget_seconds
+        fidelity_walltime: dict[str, float] = {}
     evaluation = None
 
     # Create run in store before any evaluation
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.evidence.store._models import StoreConfig
+
     store_config = StoreConfig(path=Path(store_path))
     with RecordStore(store_config) as init_store:
         init_store.create_run(run_id, spec)
@@ -954,14 +1157,16 @@ def run_waves(
     positive_control_results: list = []
     positive_control_cell = _make_positive_control_cell(spec, fidelity)
     if positive_control_cell is not None:
-        logger.info("Running positive control: %s/%s/%s/%s/%s/%s on %s",
-                    positive_control_cell[0].substrate,
-                    positive_control_cell[0].geometry,
-                    positive_control_cell[0].dynamics,
-                    positive_control_cell[0].plasticity,
-                    positive_control_cell[0].credit,
-                    positive_control_cell[0].update,
-                    positive_control_cell[1].task_id)
+        logger.info(
+            "Running positive control: %s/%s/%s/%s/%s/%s on %s",
+            positive_control_cell[0].substrate,
+            positive_control_cell[0].geometry,
+            positive_control_cell[0].dynamics,
+            positive_control_cell[0].plasticity,
+            positive_control_cell[0].credit,
+            positive_control_cell[0].update,
+            positive_control_cell[1].task_id,
+        )
         pc_start = time.monotonic()
         pc_eval = _evaluate_cells_parallel(
             cells=[positive_control_cell],
@@ -970,7 +1175,7 @@ def run_waves(
             provenance=provenance,
             max_workers=1,
             verbose=verbose,
-            budget_seconds=min(300, budget_remaining),
+            budget_seconds=int(min(300, budget_remaining)),
             cpu_threads=cpu_threads,
             device_str=device_str,
             run_id=run_id,
@@ -984,10 +1189,21 @@ def run_waves(
         fidelity_walltime[fidelity] = fidelity_walltime.get(fidelity, 0.0) + pc_elapsed
         for record in pc_eval.results:
             planner.observe(record)
-        gate = positive_control_results[0].status.gate_verdict.value if positive_control_results else "N/A"
-        val_acc = positive_control_results[0].payload.get("val_acc", "N/A") if positive_control_results else "N/A"
-        logger.info("Positive control: gate=%s, val_acc=%s",
-                    gate, f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc)
+        gate = (
+            positive_control_results[0].status.gate_verdict.value
+            if positive_control_results
+            else "N/A"
+        )
+        val_acc = (
+            positive_control_results[0].payload.get("val_acc", "N/A")
+            if positive_control_results
+            else "N/A"
+        )
+        logger.info(
+            "Positive control: gate=%s, val_acc=%s",
+            gate,
+            f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
+        )
 
     while budget_remaining > 0:
         wave += 1
@@ -1017,7 +1233,7 @@ def run_waves(
             provenance=provenance,
             max_workers=workers,
             verbose=verbose,
-            budget_seconds=budget_remaining,
+            budget_seconds=int(budget_remaining),
             cpu_threads=cpu_threads,
             device_str=device_str,
             run_id=run_id,
@@ -1066,6 +1282,44 @@ def run_waves(
         if evaluation.skipped > 0:
             logger.info("Budget exhausted mid-wave")
             break
+
+    report = _generate_report(store_path, run_id)
+
+    passed = sum(1 for r in all_results if r.status.gate_verdict.value == "PASS")
+    failed = len(all_results) - passed
+
+    total_walltime = sum(fidelity_walltime.values())
+    budget_split = {}
+    for fid, wt in fidelity_walltime.items():
+        budget_split[fid] = wt / total_walltime if total_walltime > 0 else 0.0
+
+    logger.info(
+        "Done: %d evaluated, %d passed, %d failed, %.1fs elapsed, %d waves",
+        len(all_results),
+        passed,
+        failed,
+        total_elapsed,
+        wave,
+    )
+
+    # Fidelity ladder promotion: L0 -> L1 -> L2
+    if ladder and l1_budget > 0:
+        total_elapsed, all_results, budget_remaining = _run_ladder_promotion(
+            spec=spec,
+            planner=planner,
+            all_results=all_results,
+            store_path=store_path,
+            provenance=provenance,
+            workers=workers,
+            cpu_threads=cpu_threads,
+            device_str=device_str,
+            run_id=run_id,
+            l1_budget=int(l1_budget),
+            l2_budget=int(l2_budget),
+            total_elapsed=total_elapsed,
+            fidelity_walltime=fidelity_walltime,
+            verbose=verbose,
+        )
 
     report = _generate_report(store_path, run_id)
 

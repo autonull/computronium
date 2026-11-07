@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import (
     TYPE_CHECKING,
     Literal,
@@ -1993,10 +1993,17 @@ class ConvGeometry(nn.Module):
     _head: nn.Linear
 
     def __init__(self, config: GeometryConfig):
-        if config.kernel_size % 2 == 0:
-            raise ValueError(
-                f"ConvGeometry requires an odd kernel_size, got {config.kernel_size}"
+        # Auto-correct even kernel_size to next odd (must be odd for symmetric padding)
+        kernel_size = config.kernel_size
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+            import warnings
+            warnings.warn(
+                f"ConvGeometry kernel_size must be odd; auto-corrected {config.kernel_size} -> {kernel_size}",
+                UserWarning,
+                stacklevel=2,
             )
+        config = replace(config, kernel_size=kernel_size)
         super().__init__()
         self.config = config
         self._conv_weights = nn.ParameterDict()

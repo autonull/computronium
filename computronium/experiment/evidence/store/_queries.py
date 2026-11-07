@@ -248,7 +248,7 @@ class _QueryMixin(_StoreBase):
         if require_replay_hash:
             query += " AND json_extract(payload, '$.replay_hash') IS NOT NULL"
         if require_normalized_metric:
-            query += " AND (json_extract(payload, '$.val_acc') IS NOT NULL OR json_extract(payload, '$.normalized_val_acc') IS NOT NULL)"
+            query += " AND (json_extract(payload, '$.val_acc') IS NOT NULL OR json_extract(payload, '$.normalized_metric') IS NOT NULL)"
 
         query += f" GROUP BY {_REPLICATION_COLUMNS}"
         query += " HAVING COUNT(DISTINCT CAST(schedule.seed AS INTEGER)) >= ?"

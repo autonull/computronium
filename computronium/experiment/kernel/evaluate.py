@@ -467,6 +467,7 @@ def _build_status_with_procedures(
     *,
     replay_hash: str | None = None,
     deterministic: bool = False,
+    schedule: object | None = None,
 ) -> Status:
     """Build schema Status with assessment procedure metadata (WP5).
 
@@ -500,13 +501,17 @@ def _build_status_with_procedures(
     else:
         reproducibility = ReproducibilityClass.REPLAYABLE
 
+    # Determine maturity from schedule fidelity
+    fidelity_to_maturity = {"L0": Maturity.L0, "L1": Maturity.L1, "L2": Maturity.L2}
+    maturity = fidelity_to_maturity.get(schedule.fidelity, Maturity.L0) if schedule else Maturity.L0
+    
     legacy_status = StatusLegacy(
         gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
         defect=_defect(complete, within_ceiling, param_count, param_budget),
         cause=FailureCause.UNKNOWN if passed else FailureCause.CONSTRAINT_VIOLATION,
         severity=Severity.LOW if passed else Severity.MEDIUM,
         quarantine=not passed,
-        maturity=Maturity.L0,
+        maturity=maturity,
         uncertainty={},
         reproducibility=reproducibility,
         assessment_procedure_version=procedure_version,
@@ -573,6 +578,8 @@ def cell_record(
         )
     except EvaluationError as exc:
         cause = FailureCause(exc.cause)
+        fidelity_to_maturity = {"L0": Maturity.L0, "L1": Maturity.L1, "L2": Maturity.L2}
+        maturity = fidelity_to_maturity.get(schedule.fidelity, Maturity.L0)
         return Record.create(
             run_id=provenance.links.get("run_id", str(uuid.uuid4())),
             coordinate=coordinate,
@@ -584,7 +591,7 @@ def cell_record(
                 cause=cause,
                 severity=Severity.HIGH,
                 quarantine=True,
-                maturity=Maturity.L0,
+                maturity=maturity,
                 uncertainty={},
                 reproducibility=ReproducibilityClass.REPLAYABLE,
                 assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
@@ -617,6 +624,13 @@ def cell_record(
         "param_budget": schedule.param_budget,
         "replay_hash": replay_hash,
     }
+    # Add normalized metric (val_acc normalized against task baseline)
+    from computronium.domains._task_registry import get_baseline, normalize_score
+    task_id = evaluation.task_id
+    val_acc = evaluation.metrics.get("val_acc", 0.0)
+    baseline = get_baseline(task_id)
+    normalized_metric = normalize_score(val_acc, task_id, baseline)
+    payload["normalized_metric"] = normalized_metric
     if evaluation.checkpoint_path:
         payload["checkpoint_path"] = evaluation.checkpoint_path
     if evaluation.convergence_curve:
@@ -632,6 +646,7 @@ def cell_record(
         schedule.param_budget,
         replay_hash=replay_hash,
         deterministic=schedule.deterministic,
+        schedule=schedule,
     )
 
     return Record.create(

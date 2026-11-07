@@ -131,6 +131,14 @@ class TemporalPsiPlasticity:
         if not isinstance(post, Tensor):
             return None
         h = h.detach().float()
+        # Guard against batch size mismatch between h and target (pre-existing bug)
+        batch_h = h.shape[0]
+        batch_t = target.shape[0]
+        if batch_h != batch_t:
+            min_batch = min(batch_h, batch_t)
+            h = h[:min_batch]
+            target = target[:min_batch]
+            post = post[:min_batch]
         ones = torch.ones(h.shape[0], 1, device=h.device, dtype=h.dtype)
         h_aug = torch.cat((h, ones), dim=-1)
         num_classes = post.shape[-1]

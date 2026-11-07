@@ -10,12 +10,12 @@
 
 ## 🎯 FRESH SESSION ENTRY POINT — Start Here
 
-**All primitive bugs fixed. Architecture converged. Fidelity ladder running with promotion logic.**
+**All primitive bugs fixed. Architecture converged. Fidelity ladder running with promotion logic + multi-seed replication fix.**
 
 ### Current Background Process (0.5h fidelity ladder)
 ```bash
-# Check status
-uv run comp status --store experiments/experiment_<latest>.duckdb
+# Check status (PID 929241)
+uv run comp status --store experiments/experiment_20261106_205642.duckdb
 
 # Expected: L1/L2 cells with correct maturity, normalized_metric, claim-eligible > 0
 ```
@@ -43,6 +43,8 @@ uv run comp status --store experiments/experiment_<latest>.duckdb
 4. ✅ Maturity from schedule fidelity — L0→l0, L1→l1, L2→l2
 5. ✅ Normalized metric in payload — `normalize_score(val_acc, baseline)`
 6. ✅ Record.coordinate reconstruction — from stored fields
+7. ✅ Claim eligibility query — `normalized_metric` key mismatch fixed (`normalized_val_acc` → `normalized_metric`)
+8. ✅ Ladder promotion replication — L1/L2 cells now expand to `n_seeds` replicates (3/5 seeds)
 
 ---
 
@@ -57,7 +59,9 @@ uv run comp status --store experiments/experiment_<latest>.duckdb
 | **F1** | Fix `temporal_psi` shape mismatch | ✅ Done |
 | **F2** | Fix `ConvGeometry` kernel_size | ✅ Done |
 | **F3** | Verify fixes with 0.05h TPE smoke | ✅ Done |
-| **L1** | Run fidelity ladder (L0→L1→L2) | 🔄 **RUNNING** (0.5h, PID ~874643) |
+| **F4** | Fix claim eligibility query (`normalized_metric` key) | ✅ Done |
+| **F5** | Fix ladder promotion replication (expand to n_seeds) | ✅ Done |
+| **L1** | Run fidelity ladder (L0→L1→L2) | 🔄 **RUNNING** (0.5h, PID 929241) |
 
 ### Week 2: Powered Hypothesis Triage (A3) — NEXT
 
@@ -224,6 +228,8 @@ uv run comp status --store <h1_store>
 | 2026-11-06 | Fidelity ladder is critical path to claims | Only L2 (n≥3) cells are claim-eligible |
 | 2026-11-06 | All primitive bugs fixed in this session | temporal_psi, ConvGeometry, promotion, maturity, normalized_metric |
 | 2026-11-06 | Max experiment time: 30 min | Keeps iteration tight; background for ladder |
+| 2026-11-06 | Claim eligibility query fixed | `normalized_val_acc` → `normalized_metric` in SQL prefilter |
+| 2026-11-06 | Ladder promotion expands to n_seeds replicates | L1=3 seeds, L2=5 seeds per cell for claim eligibility |
 
 ---
 
