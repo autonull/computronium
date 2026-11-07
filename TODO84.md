@@ -61,12 +61,11 @@
   --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","mean_norm","muon","elastic_consolidation","natural_gradient"]}'
 # Result: 62 cells evaluated (48 L0 + 9 L1 + 5 L2), 46 passed, 16 failed, ladder promotion worked, exit code 0
 
-# H2: Dynamics × Substrate on digits (4×3 = 12 combos) ⚠️ BUDGET ENFORCEMENT ISSUE
+# H2: Dynamics × Substrate on digits (4×3 = 12 combos) ✅ FIXED
 ./experiment_shallow.sh 0.5 --ladder --policy tpe --device cpu --workers 6 \
   --axes '{"dynamics":["instantaneous","energy_minimization","lazy","error_predictive_coding"],"substrate":["digital","memristive","optical"]}'
 # Fixed neuromorphic validation bug in system.py (_validate_neuromorphic_substrate_dynamics)
-# First run stuck at 44/48 past budget; second run killed after 50min at 44/48
-# Need to investigate budget enforcement in wave.py
+# Fixed budget enforcement in wave.py: added deadline cancellation of pending futures + per-cell timeouts
 
 # H3: Plasticity × Credit on digits (4×4 = 16 combos) ❌ WORKER CRASH
 ./experiment_shallow.sh 0.5 --ladder --policy tpe --device cpu --workers 6 \

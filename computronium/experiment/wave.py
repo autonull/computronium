@@ -709,6 +709,7 @@ def _evaluate_cells_parallel(
     device_str: str = "cpu",
     run_id: str | None = None,
     spec: RunSpec | None = None,
+    cell_timeout_seconds: float | None = None,
 ) -> _Evaluation:
     n_total = len(cells)
     results: list = []
@@ -764,9 +765,29 @@ def _evaluate_cells_parallel(
                     _submit_next()
 
                 while pending:
-                    for future in wait(pending, return_when=FIRST_COMPLETED).done:
+                    now = time.monotonic()
+                    if deadline is not None and now >= deadline:
+                        logger.warning(
+                            "Budget deadline reached (%.0fs), cancelling %d pending cells",
+                            budget_seconds,
+                            len(pending),
+                        )
+                        for fut in pending:
+                            fut.cancel()
+                        # Wait for cancellations to complete
+                        for fut in pending:
+                            with contextlib.suppress(Exception):
+                                fut.result()
+                        break
+
+                    done_futures = wait(pending, return_when=FIRST_COMPLETED).done
+                    for future in done_futures:
                         del pending[future]
-                        record = future.result()
+                        try:
+                            record = future.result(timeout=cell_timeout_seconds)
+                        except Exception as exc:
+                            logger.warning("Cell evaluation raised: %s", exc)
+                            continue
                         results.append(record)
 
                         store.append(record)
@@ -1013,6 +1034,9 @@ def _run_ladder_promotion(
             fid_budget,
         )
 
+        # Per-cell timeout based on fidelity (L1: 5min, L2: 10min)
+        fidelity_timeout = {"L1": 300.0, "L2": 600.0}.get(target_fid, 300.0)
+
         # Evaluate promoted cells
         wave_start = time.monotonic()
         evaluation = _evaluate_cells_parallel(
@@ -1027,6 +1051,7 @@ def _run_ladder_promotion(
             device_str=device_str,
             run_id=run_id,
             spec=spec,
+            cell_timeout_seconds=fidelity_timeout,
         )
 
         wave_elapsed = time.monotonic() - wave_start
@@ -1200,6 +1225,7 @@ def run_waves(
             device_str=device_str,
             run_id=run_id,
             spec=spec,
+            cell_timeout_seconds=300.0,
         )
         pc_elapsed = time.monotonic() - pc_start
         positive_control_results.extend(pc_eval.results)
@@ -1244,6 +1270,9 @@ def run_waves(
             logger.info("No more cells to evaluate")
             break
 
+        # Per-cell timeout based on fidelity (L0: 3min, L1: 5min, L2: 10min)
+        fidelity_timeout = {"L0": 180.0, "L1": 300.0, "L2": 600.0}.get(fidelity, 180.0)
+
         # Evaluate wave
         wave_start = time.monotonic()
         evaluation = _evaluate_cells_parallel(
@@ -1258,6 +1287,7 @@ def run_waves(
             device_str=device_str,
             run_id=run_id,
             spec=spec,
+            cell_timeout_seconds=fidelity_timeout,
         )
 
         wave_elapsed = time.monotonic() - wave_start
