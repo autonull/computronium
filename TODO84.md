@@ -158,7 +158,8 @@ From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix all pre-existing test failures: NTM, RandomProjections, integration regexes |
+| `HEAD` | Fix test expectation: priors registry has 5 entries (not 28) |
+| `eee8bc91` | Fix test expectation: priors registry has 5 entries (not 28) |
 | `9f07a70d` | Fix all pre-existing test failures: NTM, RandomProjections, integration regexes |
 | `60fe60cd` | Fix integration test: update error message regex for PC-ALM credit validation |
 | `fc062fb6` | Update TODO84.md: add test_policy_generation_lock fix to commit history |
