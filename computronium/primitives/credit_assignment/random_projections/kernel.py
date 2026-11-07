@@ -11,6 +11,7 @@ Kernel ladder: reference → Triton (custom FA kernel).
 from typing import Any
 
 import torch
+import zlib
 
 from computronium.acceleration.availability import triton_rung_available
 from computronium.acceleration.fa_kernels import (
@@ -53,12 +54,14 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
 
         return reference_step(case)
 
-    # Initialize deterministic feedback weights (same as RandomProjectionsCredit)
-    torch.manual_seed(seed)
+    # Initialize deterministic feedback weights (same as RandomProjectionsCredit._init_feedback_weights)
+    # Uses per-weight seed based on CRC32 of weight name
     feedback_weights = []
     for name in weight_names:
         param = geometry.params[name]
-        fb = torch.randn_like(param) * feedback_scale
+        gen = torch.Generator(device=param.device)
+        gen.manual_seed(zlib.crc32(name.encode()))
+        fb = torch.randn_like(param, generator=gen) * feedback_scale
         feedback_weights.append(fb)
 
     # Compute output error via autograd (same as reference)

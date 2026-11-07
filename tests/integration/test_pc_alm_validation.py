@@ -441,7 +441,7 @@ class TestPCALMConfiguration:
             update=ParameterUpdateConfig.euclidean(),
         )
 
-        with pytest.raises(ValueError, match="geometry does not support"):
+        with pytest.raises(ValueError, match="geometry cannot host settling dynamics"):
             config.validate()
 
     def test_pcalm_beta_matching_warning(self):

@@ -3620,6 +3620,10 @@ class NtmGeometry(nn.Module):
         self._reset_buffers()
 
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        # Handle sequence input (B, T, input_dim) directly via episode
+        if x.dim() == 3 and x.shape[-1] == self.config.input_dim:
+            logits, _mem = self.episode(x)
+            return logits
         # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
         if x.dim() > 2:
             x = x.flatten(1)
