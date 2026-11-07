@@ -91,16 +91,18 @@
 
 ## 📋 WEEK 3-4: Sampler Comparison + Artifacts
 
-| ID | Task | Dependency | Time |
-|---|---|---|---|
-| **S1** | Static vs TPE identical budget | H1 done | 30 min |
-| **A1** | Publish credit_vs_update comparison | H1 done | 30 min |
-| **B5** | Gate calibration spec | — | 1 hr |
-| **B6** | Drift detection alert | — | 30 min |
-| **B7** | Metric coverage warnings | — | 30 min |
-| **B8** | `capabilities` command | — | 30 min |
-| **B9** | Sampler arc: delete `propose()` | — | 1 hr |
-| **B10** | Validation codegen from registries | — | 2 hr |
+| ID | Task | Dependency | Time | Status |
+|---|---|---|---|---|
+| **S1** | Static vs TPE identical budget | H1 done | 30 min | ✅ Done |
+| **A1** | Publish credit_vs_update comparison | H1 done | 30 min | ✅ Done |
+| **B5** | Gate calibration spec | — | 1 hr | ⏳ |
+| **B6** | Drift detection alert | — | 30 min | ⏳ |
+| **B7** | Metric coverage warnings | — | 30 min | ⏳ |
+| **B8** | `capabilities` command | — | 30 min | ⏳ |
+| **B9** | Sampler arc: delete `propose()` | — | 1 hr | ⏳ |
+| **B10** | Validation codegen from registries | — | 2 hr | ⏳ |
+
+> S1/A1 artifacts in `docs/artifacts/credit_vs_update_comparison.md`
 
 ---
 
