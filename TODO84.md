@@ -158,7 +158,9 @@ From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix TPE sampler: add min_samples_per_combo to prevent COMBO_INSUFFICIENT_SAMPLES |
+| `HEAD` | Fix test_policy_generation_lock: add DiverseRandomPolicy to test fixtures |
+| `d91cdfe9` | Fix test_policy_generation_lock: add DiverseRandomPolicy to test fixtures |
+| `3f51e370` | Fix TPE sampler: add min_samples_per_combo to prevent COMBO_INSUFFICIENT_SAMPLES |
 | `131b528b` | Fix registry exports: add reference_forward, kernel_*, and cases module public functions |
 | `f1427a53` | Update TODO84.md: document OmegaConf register_new_resolver fix |
 | `7e31373a` | Fix OmegaConf resolver: use register_new_resolver with replace=True (OmegaConf 2.3+) |
