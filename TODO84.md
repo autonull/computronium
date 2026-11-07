@@ -111,14 +111,14 @@
 
 ---
 
-## 📦 RELEASE 1.1 PREP (Week 5)
+## 📦 RELEASE 1.1 PREP (Week 5) ✅ COMPLETE
 
-| ID | Task | Time |
-|---|---|---|
-| **R1** | `CONTRIBUTING.md` with run gates | 30 min |
-| **R2** | Release notes (`cf9356c5`..HEAD) | 30 min |
-| **R3** | Tag `v1.1.0` | 5 min |
-| **R4** | Clean checkout demo | 10 min |
+| ID | Task | Time | Status |
+|---|---|---|---|
+| **R1** | `CONTRIBUTING.md` with run gates | 30 min | ✅ Done |
+| **R2** | Release notes (`cf9356c5`..HEAD) | 30 min | ✅ Done |
+| **R3** | Tag `v1.1.0` | 5 min | ✅ Done |
+| **R4** | Clean checkout demo | 10 min | ✅ Done |
 
 ---
 
@@ -135,7 +135,9 @@
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | B10: Validation codegen from registries |
+| `HEAD` | R1/R2: Add CONTRIBUTING.md with run gates and release notes v1.1.0 |
+| `c34a1b9f` | R1/R2: Add CONTRIBUTING.md with run gates and release notes v1.1.0 |
+| `238d2efa` | Week 3-4 complete: All tasks (S1, A1, B5-B10) done |
 | `05f8f620` | B10: Validation codegen from registries |
 | `1d6b0c5f` | B9: Sampler arc - replace propose() with iterator protocol |
 | `96f6dd79` | B6/B7/B8: Monitoring alerts + capabilities command |
@@ -145,12 +147,14 @@
 | `f3152134` | Fix budget enforcement in wave.py: deadline cancellation + per-cell timeouts |
 | `ef12224e` | Fix neuromorphic substrate validation bug in _validate_neuromorphic_substrate_dynamics |
 | `8f90baa5` | Fix B1/B2/B3: substrate-dynamics compat filter, Jacobian isfinite guards, remove shell timeout |
-| `64d42708` | Fix fidelity ladder promotion + claim eligibility query |
-| `4e8a3563` | Move magic numbers to constants in wave.py |
+| `36eafc73` | Refactor TODO84.md: consolidate blockers, combine H1-H3 with ladder, remove redundant verification |
+| `7b2a0534` | Add TODO84.md: Stabilization sprint + hypothesis triage plan |
+| `646f2457` | Update TODO83.md: ladder test running, H1/H2/H3 queued for CPU |
 | `9c37e25a` | Fix ProcessPoolExecutor start method to 'spawn' |
-| `646f2457` | Update TODO83.md |
+| `4e8a3563` | Move magic numbers to constants in wave.py |
+| `64d42708` | Fix fidelity ladder promotion + claim eligibility query |
+| `c0bdc75f` | docs: Update TODO83.md with fresh session entry point and execution status |
 | `338` | Fix diagnostics default device = "auto" |
 | `339` | Fix diagnostics CUDA check for auto device |
-| `7b2a0534` | Add TODO84.md |
 
 *Generated 2026-11-07. Supersedes TODO83.md.*
