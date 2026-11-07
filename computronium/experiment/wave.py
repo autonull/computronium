@@ -736,11 +736,19 @@ def _evaluate_cells_parallel(
             "Evaluating up to %d cells with %d workers...", n_total, max_workers
         )
 
+        # Force 'spawn' start method to avoid forkserver issues with PyTorch (scipy sets forkserver)
+        import multiprocessing as mp
+        try:
+            mp.set_start_method("spawn", force=True)
+        except RuntimeError:
+            pass  # Already set
+
         try:
             with ProcessPoolExecutor(
                 max_workers=max_workers,
                 initializer=_init_worker,
                 initargs=(cpu_threads, device_str),
+                mp_context=mp.get_context("spawn"),
             ) as pool:
 
                 def _submit_next() -> None:
