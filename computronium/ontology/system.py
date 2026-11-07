@@ -1035,15 +1035,14 @@ class SystemConfig:
 
     def _validate_neuromorphic_substrate_dynamics(self) -> None:
         """Neuromorphic substrate requires temporal dynamics."""
-        if self.substrate.precision == "float16" and self.substrate.sparsity > 0.9:
+        if self.substrate.substrate_type == "neuromorphic":
             if self.dynamics.dynamics_type not in {
                 "spike_integration",
                 "energy_minimization",
                 "diffusion",
             }:
                 raise ValueError(
-                    f"Neuromorphic substrate (precision={self.substrate.precision}, "
-                    f"sparsity={self.substrate.sparsity}) requires temporal dynamics "
+                    f"Neuromorphic substrate requires temporal dynamics "
                     f"(spike_integration, energy_minimization, or diffusion), "
                     f"got {self.dynamics.dynamics_type!r}"
                 )

@@ -51,22 +51,28 @@
 
 ---
 
-## 🧪 SESSION 2: Hypothesis Triage with Ladder (3h)
+## 🧪 SESSION 2: Hypothesis Triage with Ladder (3h) — IN PROGRESS
 
 **Run all hypothesis axes WITH ladder promotion (--ladder) to get L1/L2 claim-grade data in one pass.**
 
 ```bash
-# H1: Credit × Update on digits (5×6 = 30 combos, ladder: L0→L1→L2)
+# H1: Credit × Update on digits (5×6 = 30 combos, ladder: L0→L1→L2) ✅ DONE
 ./experiment_shallow.sh 0.5 --ladder --policy tpe --device cpu --workers 6 \
   --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","mean_norm","muon","elastic_consolidation","natural_gradient"]}'
+# Result: 62 cells evaluated (48 L0 + 9 L1 + 5 L2), 46 passed, 16 failed, ladder promotion worked, exit code 0
 
-# H2: Dynamics × Substrate on digits (4×3 = 12 combos)
+# H2: Dynamics × Substrate on digits (4×3 = 12 combos) ⚠️ BUDGET ENFORCEMENT ISSUE
 ./experiment_shallow.sh 0.5 --ladder --policy tpe --device cpu --workers 6 \
   --axes '{"dynamics":["instantaneous","energy_minimization","lazy","error_predictive_coding"],"substrate":["digital","memristive","optical"]}'
+# Fixed neuromorphic validation bug in system.py (_validate_neuromorphic_substrate_dynamics)
+# First run stuck at 44/48 past budget; second run killed after 50min at 44/48
+# Need to investigate budget enforcement in wave.py
 
-# H3: Plasticity × Credit on digits (4×4 = 16 combos)
+# H3: Plasticity × Credit on digits (4×4 = 16 combos) ❌ WORKER CRASH
 ./experiment_shallow.sh 0.5 --ladder --policy tpe --device cpu --workers 6 \
   --axes '{"plasticity":["null","temporal_psi","rule_state","fast_weights"],"credit":["gradient","homeostatic","pc_alm","target_inversion"]}'
+# Crashed at 16/42: "process in the process pool was terminated abruptly"
+# Known issue: worker pool restart on crash (deferred per TODO84)
 ```
 
 **Success criteria per run:** 6+ cells reach L1/L2 with 3/5 seed replication, `power_achieved` verdicts, claim-eligible > 0.
