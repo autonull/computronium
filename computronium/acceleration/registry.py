@@ -55,6 +55,23 @@ def register_module(
         "reference_step": getattr(reference_mod, reference_fn),
     }
 
+    # Export with actual function names for direct access
+    if kernel_fn != "step":
+        exports[f"kernel_{kernel_fn}"] = getattr(kernel_mod, kernel_fn)
+    if reference_fn != "step":
+        exports[f"reference_{reference_fn}"] = getattr(reference_mod, reference_fn)
+
+    # Optionally export forward aliases if they exist
+    if hasattr(kernel_mod, "forward"):
+        exports["kernel_forward"] = kernel_mod.forward
+    if hasattr(reference_mod, "forward"):
+        exports["reference_forward"] = reference_mod.forward
+
+    # Export all public functions from cases module
+    for name in dir(cases_mod):
+        if not name.startswith("_"):
+            exports[name] = getattr(cases_mod, name)
+
     # Optionally export is_available from kernel module
     if hasattr(kernel_mod, "is_available"):
         exports["is_available"] = kernel_mod.is_available

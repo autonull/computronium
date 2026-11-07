@@ -225,9 +225,13 @@ Axis combinations with < 3 cells (min_samples=3):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix OmegaConf resolver: use register_new_resolver with replace=True (OmegaConf 2.3+) |
+| `HEAD` | Fix registry exports: add reference_forward, kernel_*, and cases module public functions |
+| `f1427a53` | Update TODO84.md: document OmegaConf register_new_resolver fix |
 | `7e31373a` | Fix OmegaConf resolver: use register_new_resolver with replace=True (OmegaConf 2.3+) |
-| `69c6d467` | Fix UserWarnings: OmegaConf resolver, per-element-displacement step_size sampling, ConvGeometry kernel_size log level |
+| `69c6d467` | Fix UserWarnings: OmegaConf resolver deprecation, per-element-displacement step_size sampling, ConvGeometry kernel_size log level |
+| `c5d20b47` | Fix digital substrate binary precision causing bool tensor matmul errors; update TODO84.md |
+| `059c208d` | Update TODO84.md: add additional COMBO_INSUFFICIENT_SAMPLES from Dynamics×Substrate run |
+| `92ae3098` | Update TODO84.md: add ConvGeometry kernel_size warning, new COMBO_INSUFFICIENT_SAMPLES, commit history |
 | `d4b52121` | Fix omegaconf resolver deprecation; fix alerts.py GateVerdict.FAIL_ typo; fix experiment_shallow.sh warning handling; update TODO84.md with UserWarnings and alerts |
 | `c34a1b9f` | R1/R2: Add CONTRIBUTING.md with run gates and release notes v1.1.0 |
 | `238d2efa` | Week 3-4 complete: All tasks (S1, A1, B5-B10) done |
