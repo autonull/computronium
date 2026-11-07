@@ -25,6 +25,7 @@ import pytest
 from computronium.experiment.execution import (
     POLICY_CATALOG,
     Budget,
+    DiverseRandomPolicy,
     EvolutionPolicy,
     ModelBasedPolicy,
     Policy,
@@ -77,6 +78,7 @@ _SPEC = _spec()
 # One instance per catalog entry, so the lock runs over the shipped policies
 # rather than over a stand-in that shares their names.
 _POLICIES: dict[str, Policy] = {
+    "diverse_random": DiverseRandomPolicy(seed=0),
     "evolution": EvolutionPolicy(seed=0),
     "model_based": ModelBasedPolicy(
         seed=0, objectives=("validation_accuracy",), spec=_SPEC

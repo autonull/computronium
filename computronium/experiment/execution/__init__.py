@@ -77,6 +77,7 @@ __all__ = [
     "ReportStage",
     "RoundController",
     "RoundRobinGridPolicy",
+    "DiverseRandomPolicy",
     "ScheduleStage",
     "SearchSpace",
     "ShapeResolver",
@@ -229,6 +230,7 @@ _symbol_to_module: dict[str, str] = {
     "PipelineState": "pipeline",
     # policy
     "POLICY_CATALOG": "policy",
+    "DiverseRandomPolicy": "policy",
     "EvolutionPolicy": "policy",
     "ModelBasedPolicy": "policy",
     "Policy": "policy",
