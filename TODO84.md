@@ -131,6 +131,27 @@
 
 ---
 
+## ⚠️ USERWARNINGS FROM EXPERIMENTS (Address Post-Evidence)
+
+From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
+
+| Warning | File | Line | Context | Fix |
+|---------|------|------|---------|-----|
+| `register_new_resolver()` deprecated | `computronium/config/omegaconf.py` | 53 | `OmegaConf.register_new_resolver("now", time.strftime)` called twice | Migrate to `OmegaConf.register_resolver()` |
+| Resolver 'now' cannot be inspected | `computronium/config/omegaconf.py` | 53 | No signature for builtin `strftime` | Add type annotation or use lambda |
+| `update_type=lion` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.5627...` likely overshoot mislabel | Validate step_size sampling for per-element-displacement updates |
+| `update_type=muon` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.0828...` likely overshoot mislabel | Same as above |
+| `update_type=local_adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.8325...` likely overshoot mislabel | Same as above |
+| `update_type=riemannian_orthogonal` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.1416...` likely overshoot mislabel | Same as above |
+| `update_type=mean_norm` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.4352...` likely overshoot mislabel | Same as above |
+| `update_type=ortho_adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.2420...` likely overshoot mislabel | Same as above |
+| `update_type=elastic_consolidation` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.1674...` likely overshoot mislabel | Same as above |
+| `update_type=adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.4670...` likely overshoot mislabel | Same as above |
+
+> These warnings indicate the per-element-displacement step size validation is triggering false positives for updates that legitimately use displacement semantics. The prior sampling for `step_size` may be in the wrong range for these update types.
+
+---
+
 ## 📝 COMMIT HISTORY
 
 | Commit | Message |
@@ -156,5 +177,36 @@
 | `c0bdc75f` | docs: Update TODO83.md with fresh session entry point and execution status |
 | `338` | Fix diagnostics default device = "auto" |
 | `339` | Fix diagnostics CUDA check for auto device |
+
+---
+
+## 🚨 ALERTS FROM EXPERIMENTS (2026-11-07)
+
+### DTYPE_MISMATCH_BOOL_TENSOR (Critical)
+Bool tensor used in matmul — occurs with certain credit/update combinations:
+- `digital/homeostatic/lion` (H1 experiment)
+- `digital/local_goodness/muon` (H2 experiment)  
+- `digital/target_inversion/euclidean` (H3 experiment)
+
+**Root cause:** Boolean masks used in matmul without float conversion. Fix in credit rule implementations.
+
+### COMBO_INSUFFICIENT_SAMPLES (Warning)
+Axis combinations with < 3 cells (min_samples=3):
+- `local_goodness/muon` (1 cell)
+- `pc_alm/muon` (1 cell)
+- `thermodynamic_contrast/euclidean` (1 cell)
+- `local_goodness/local_adam` (1 cell)
+- `homeostatic/lion` (1 cell)
+
+**Root cause:** TPE sampler not exploring all combinations equally; some combos only sampled once in L0. Fix: ensure minimum sampling per combo or adjust TPE priors.
+
+### GATE_FAIL_RATE
+- H1 (Credit×Update): 16/62 = 25.8% FAIL rate — at warning threshold (25%)
+- H2 (Dynamics×Substrate): 19/78 = 24.4% FAIL rate — near warning threshold
+- H3 (Plasticity×Credit): 4/70 = 5.7% FAIL rate — healthy
+
+> Dominant failure mode: numerical failures from per-element-displacement step size overshoot (~70%), dtype mismatches (~15%), bool tensor ops (~10%)
+
+---
 
 *Generated 2026-11-07. Supersedes TODO83.md.*

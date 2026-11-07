@@ -74,7 +74,7 @@ def check_gate_fail_rate(
         return []
 
     total = len(records)
-    fails = sum(1 for r in records if r.status.gate_verdict == GateVerdict.FAIL_)
+    fails = sum(1 for r in records if r.status.gate_verdict == GateVerdict.FAIL)
     fail_rate = fails / total
 
     alerts = []
@@ -148,7 +148,7 @@ def check_dtype_mismatches(records: list) -> list[Alert]:
     """Check for dtype mismatch failures in records."""
     alerts = []
     for r in records:
-        if r.status.gate_verdict == GateVerdict.FAIL_ and r.status.defect:
+        if r.status.gate_verdict == GateVerdict.FAIL and r.status.defect:
             defect = r.status.defect.lower()
             if "bfloat16" in defect and "float" in defect:
                 alerts.append(Alert(

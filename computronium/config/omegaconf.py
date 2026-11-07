@@ -50,7 +50,8 @@ def _register_resolvers() -> None:
     already registered; any other exception surfaces for debugging.
     """
     try:
-        OmegaConf.register_new_resolver("now", time.strftime)
+        # Use register_resolver with a lambda that accepts the format string
+        OmegaConf.register_resolver("now", lambda fmt: time.strftime(fmt))
     except ValueError:
         pass
     except Exception:  # broad: best-effort

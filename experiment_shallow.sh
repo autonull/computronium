@@ -302,14 +302,14 @@ import sys
 sys.path.insert(0, '.')
 from computronium.experiment.simple_survey import _default_store_path
 print(_default_store_path())
-" 2>&1)
+" 2>/dev/null | tail -1)
     else
         STORE_PATH=$(uv run python -c "
 import sys
 sys.path.insert(0, '.')
 from computronium.experiment.simple_survey import _default_store_path
 print(_default_store_path())
-" 2>&1)
+" 2>/dev/null | tail -1)
     fi
 fi
 
@@ -324,9 +324,9 @@ if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
     if [[ ! -f "${PYTHON_EXE}" ]]; then
         PYTHON_EXE="python3"
     fi
-    "${PYTHON_EXE}" -c "import ${MODULE}; print('Module loaded OK')" 2>&1
+    "${PYTHON_EXE}" -c "import ${MODULE}; print('Module loaded OK')" 2>/dev/null | tail -1
 else
-    uv run python -c "import ${MODULE}; print('Module loaded OK')" 2>&1
+    uv run python -c "import ${MODULE}; print('Module loaded OK')" 2>/dev/null | tail -1
 fi
 
 # Build command
@@ -400,43 +400,35 @@ if [[ "${LADDER}" == true ]]; then
 fi
 
 # Resolve device and worker count for banner
-if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
-    PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
-    if [[ ! -f "${PYTHON_EXE}" ]]; then
-        PYTHON_EXE="python3"
+# Suppress warnings by filtering stderr and taking only the last line of stdout
+_resolve_device() {
+    local device_arg="${1}"
+    if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
+        PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
+        [[ ! -f "${PYTHON_EXE}" ]] && PYTHON_EXE="python3"
+        "${PYTHON_EXE}" -c "
+import torch
+from computronium.core.utils.device import get_device
+d = get_device('${device_arg}')
+print(d.type)
+" 2>/dev/null | tail -1
+    else
+        uv run python -c "
+import torch
+from computronium.core.utils.device import get_device
+d = get_device('${device_arg}')
+print(d.type)
+" 2>/dev/null | tail -1
     fi
-    RESOLVED_DEVICE=$("${PYTHON_EXE}" -c "
-import torch
-from computronium.core.utils.device import get_device
-d = get_device('${DEVICE}')
-print(d.type)
-" 2>&1)
-    RESOLVED_WORKERS=$("${PYTHON_EXE}" -c "
-import torch
-import os
-try:
-    import psutil
-    available_gb = psutil.virtual_memory().available / (1024**3)
-    max_by_memory = max(1, int(available_gb / 2))
-except:
-    max_by_memory = 999
-if '${MAX_WORKERS}' == 'auto':
-    if '${RESOLVED_DEVICE}' == 'cuda':
-        print(torch.cuda.device_count() or 1)
-    else:
-        cores = os.cpu_count() or 4
-        print(min(cores, max_by_memory))
-else:
-    print('${MAX_WORKERS}')
-" 2>&1)
-else
-    RESOLVED_DEVICE=$(uv run python -c "
-import torch
-from computronium.core.utils.device import get_device
-d = get_device('${DEVICE}')
-print(d.type)
-" 2>&1)
-    RESOLVED_WORKERS=$(uv run python -c "
+}
+
+_resolve_workers() {
+    local device="${1}"
+    local max_workers="${2}"
+    if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
+        PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
+        [[ ! -f "${PYTHON_EXE}" ]] && PYTHON_EXE="python3"
+        "${PYTHON_EXE}" -c "
 import torch
 import os
 try:
@@ -445,16 +437,39 @@ try:
     max_by_memory = max(1, int(available_gb / 2))
 except:
     max_by_memory = 999
-if '${MAX_WORKERS}' == 'auto':
-    if '${RESOLVED_DEVICE}' == 'cuda':
+if '${max_workers}' == 'auto':
+    if '${device}' == 'cuda':
         print(torch.cuda.device_count() or 1)
     else:
         cores = os.cpu_count() or 4
         print(min(cores, max_by_memory))
 else:
-    print('${MAX_WORKERS}')
-" 2>&1)
-fi
+    print('${max_workers}')
+" 2>/dev/null | tail -1
+    else
+        uv run python -c "
+import torch
+import os
+try:
+    import psutil
+    available_gb = psutil.virtual_memory().available / (1024**3)
+    max_by_memory = max(1, int(available_gb / 2))
+except:
+    max_by_memory = 999
+if '${max_workers}' == 'auto':
+    if '${device}' == 'cuda':
+        print(torch.cuda.device_count() or 1)
+    else:
+        cores = os.cpu_count() or 4
+        print(min(cores, max_by_memory))
+else:
+    print('${max_workers}')
+" 2>/dev/null | tail -1
+    fi
+}
+
+RESOLVED_DEVICE=$(_resolve_device "${DEVICE}")
+RESOLVED_WORKERS=$(_resolve_workers "${RESOLVED_DEVICE}" "${MAX_WORKERS}")
 
 # Engine and sampler strings for banner
 ENGINE_STR="static (SimpleSurvey)"
