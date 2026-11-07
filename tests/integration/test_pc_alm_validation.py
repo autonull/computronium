@@ -484,7 +484,7 @@ class TestPCALMConfiguration:
 
         with pytest.raises(
             ValueError,
-            match="PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit",
+            match="credit.credit_type='random_projections' requires one of \\['pc_alm', 'thermodynamic_contrast'\\]",
         ):
             config.validate()
 
