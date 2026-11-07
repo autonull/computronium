@@ -494,7 +494,7 @@ class ParameterUpdateConfig:
         from computronium.experiment.legality.dsl import expr_from_string
 
         return {
-            "step_size": {"domain": (1e-5, 1.0, "log")},
+            "step_size": {"domain": (1e-5, 0.1, "log")},
             "momentum": {"domain": (0.0, 0.99, "linear")},
             "ortho_steps": {
                 "domain": (0, 10, "int"),

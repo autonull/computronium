@@ -108,7 +108,9 @@ class OptunaDistributionAdapter:
         distributions: dict[str, BaseDistribution] = {}
         for hyper in active.specs:
             key = f"{hyper.axis_name}.{hyper.name}"
-            if swept and key not in swept:
+            # Only sample hyperparameters explicitly declared in the spec.
+            # If spec is provided but has empty hyperparameters, sample nothing.
+            if spec is not None and key not in swept:
                 continue
             narrowed = (
                 None

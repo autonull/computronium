@@ -43,6 +43,11 @@ __all__ = [
 logger = get_logger()
 
 
+def _now_resolver(fmt: str) -> str:
+    """Resolver for ``${now:%Y%m%d}`` style timestamps in OmegaConf."""
+    return time.strftime(fmt)
+
+
 def _register_resolvers() -> None:
     """Register OmegaConf custom resolvers. Safe to call multiple times.
 
@@ -50,8 +55,7 @@ def _register_resolvers() -> None:
     already registered; any other exception surfaces for debugging.
     """
     try:
-        # Use register_resolver with a lambda that accepts the format string
-        OmegaConf.register_resolver("now", lambda fmt: time.strftime(fmt))
+        OmegaConf.register_resolver("now", _now_resolver)
     except ValueError:
         pass
     except Exception:  # broad: best-effort

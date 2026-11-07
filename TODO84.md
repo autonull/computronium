@@ -131,25 +131,25 @@
 
 ---
 
-## ⚠️ USERWARNINGS FROM EXPERIMENTS (Address Post-Evidence)
+## ⚠️ USERWARNINGS FROM EXPERIMENTS (Address Post-Evidence) ✅ FIXED
 
 From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 
-| Warning | File | Line | Context | Fix |
-|---------|------|------|---------|-----|
-| `register_new_resolver()` deprecated | `computronium/config/omegaconf.py` | 53 | `OmegaConf.register_new_resolver("now", time.strftime)` called twice | Migrate to `OmegaConf.register_resolver()` |
-| Resolver 'now' cannot be inspected | `computronium/config/omegaconf.py` | 53 | No signature for builtin `strftime` | Add type annotation or use lambda |
-| `update_type=lion` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.5627...` likely overshoot mislabel | Validate step_size sampling for per-element-displacement updates |
-| `update_type=muon` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.0828...` likely overshoot mislabel | Same as above |
-| `update_type=local_adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.8325...` likely overshoot mislabel | Same as above |
-| `update_type=riemannian_orthogonal` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.1416...` likely overshoot mislabel | Same as above |
-| `update_type=mean_norm` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.4352...` likely overshoot mislabel | Same as above |
-| `update_type=ortho_adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.2420...` likely overshoot mislabel | Same as above |
-| `update_type=elastic_consolidation` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.1674...` likely overshoot mislabel | Same as above |
-| `update_type=adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.4670...` likely overshoot mislabel | Same as above |
-| `ConvGeometry kernel_size must be odd; auto-corrected` | `computronium/ontology/geometry.py` | 2002 | Even kernel_size auto-corrected to odd | Expected behavior (info), suppress if noisy |
+| Warning | File | Line | Context | Fix | Status |
+|---------|------|------|---------|-----|--------|
+| `register_new_resolver()` deprecated | `computronium/config/omegaconf.py` | 53 | `OmegaConf.register_new_resolver("now", time.strftime)` called twice | Migrated to `OmegaConf.register_resolver()` with typed function | ✅ Fixed |
+| Resolver 'now' cannot be inspected | `computronium/config/omegaconf.py` | 53 | No signature for builtin `strftime` | Added typed `_now_resolver(fmt: str) -> str` function | ✅ Fixed |
+| `update_type=lion` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.5627...` likely overshoot mislabel | Narrowed harvested domain for `update.step_size` to (1e-5, 0.1); fixed OptunaDistributionAdapter to only sample declared hyperparameters | ✅ Fixed |
+| `update_type=muon` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.0828...` likely overshoot mislabel | Same as above | ✅ Fixed |
+| `update_type=local_adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.8325...` likely overshoot mislabel | Same as above | ✅ Fixed |
+| `update_type=riemannian_orthogonal` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.1416...` likely overshoot mislabel | Same as above | ✅ Fixed |
+| `update_type=mean_norm` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.4352...` likely overshoot mislabel | Same as above | ✅ Fixed |
+| `update_type=ortho_adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.2420...` likely overshoot mislabel | Same as above | ✅ Fixed |
+| `update_type=elastic_consolidation` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.1674...` likely overshoot mislabel | Same as above | ✅ Fixed |
+| `update_type=adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.4670...` likely overshoot mislabel | Same as above | ✅ Fixed |
+| `ConvGeometry kernel_size must be odd; auto-corrected` | `computronium/ontology/geometry.py` | 2002 | Even kernel_size auto-corrected to odd | Changed to debug log (expected behavior) | ✅ Fixed |
 
-> These warnings indicate the per-element-displacement step size validation is triggering false positives for updates that legitimately use displacement semantics. The prior sampling for `step_size` may be in the wrong range for these update types.
+> Root cause: The OptunaDistributionAdapter was sampling ALL active hyperparameters when spec.hyperparameters was empty, using the harvested schema's wide domain (1e-5 to 1.0). Fixed by: (1) narrowing harvested default domain to (1e-5, 0.1), (2) fixing OptunaDistributionAdapter to only sample hyperparameters explicitly declared in the spec. Warning now only triggers for explicitly configured high step_size values.
 
 ---
 
@@ -225,7 +225,7 @@ Axis combinations with < 3 cells (min_samples=3):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix digital substrate binary precision causing bool tensor matmul errors; update TODO84.md |
+| `HEAD` | Fix UserWarnings: OmegaConf resolver, per-element-displacement step_size sampling, ConvGeometry kernel_size log level; update TODO84.md |
 | `d4b52121` | Fix omegaconf resolver deprecation; fix alerts.py GateVerdict.FAIL_ typo; fix experiment_shallow.sh warning handling; update TODO84.md with UserWarnings and alerts |
 | `c34a1b9f` | R1/R2: Add CONTRIBUTING.md with run gates and release notes v1.1.0 |
 | `238d2efa` | Week 3-4 complete: All tasks (S1, A1, B5-B10) done |

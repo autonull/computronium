@@ -1997,11 +1997,12 @@ class ConvGeometry(nn.Module):
         kernel_size = config.kernel_size
         if kernel_size % 2 == 0:
             kernel_size += 1
-            import warnings
-            warnings.warn(
-                f"ConvGeometry kernel_size must be odd; auto-corrected {config.kernel_size} -> {kernel_size}",
-                UserWarning,
-                stacklevel=2,
+            from computronium.core.logging import get_logger
+
+            get_logger().debug(
+                "ConvGeometry kernel_size must be odd; auto-corrected %s -> %s",
+                config.kernel_size,
+                kernel_size,
             )
         config = replace(config, kernel_size=kernel_size)
         super().__init__()
