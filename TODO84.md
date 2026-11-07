@@ -147,6 +147,7 @@ From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 | `update_type=ortho_adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.2420...` likely overshoot mislabel | Same as above |
 | `update_type=elastic_consolidation` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.1674...` likely overshoot mislabel | Same as above |
 | `update_type=adam` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.4670...` likely overshoot mislabel | Same as above |
+| `ConvGeometry kernel_size must be odd; auto-corrected` | `computronium/ontology/geometry.py` | 2002 | Even kernel_size auto-corrected to odd | Expected behavior (info), suppress if noisy |
 
 > These warnings indicate the per-element-displacement step size validation is triggering false positives for updates that legitimately use displacement semantics. The prior sampling for `step_size` may be in the wrong range for these update types.
 
@@ -197,6 +198,7 @@ Axis combinations with < 3 cells (min_samples=3):
 - `thermodynamic_contrast/euclidean` (1 cell)
 - `local_goodness/local_adam` (1 cell)
 - `homeostatic/lion` (1 cell)
+- `homeostatic/mean_norm` (2 cells) — *new from 0.25h Credit×Update run*
 
 **Root cause:** TPE sampler not exploring all combinations equally; some combos only sampled once in L0. Fix: ensure minimum sampling per combo or adjust TPE priors.
 
