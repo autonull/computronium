@@ -211,4 +211,37 @@ Axis combinations with < 3 cells (min_samples=3):
 
 ---
 
+### Additional COMBO_INSUFFICIENT_SAMPLES (from 2026-11-07 Dynamics×Substrate 0.1h run)
+- `thermodynamic_contrast/spectral_constrained` (1 cell)
+- `pc_alm/adam` (1 cell)
+
+---
+
+## 📝 COMMIT HISTORY (Updated)
+
+| Commit | Message |
+|--------|---------|
+| `HEAD` | Fix omegaconf resolver deprecation; fix alerts.py GateVerdict.FAIL_ typo; fix experiment_shallow.sh warning handling; update TODO84.md with UserWarnings and alerts |
+| `d4b52121` | Fix omegaconf resolver deprecation; fix alerts.py GateVerdict.FAIL_ typo; fix experiment_shallow.sh warning handling; update TODO84.md with UserWarnings and alerts |
+| `c34a1b9f` | R1/R2: Add CONTRIBUTING.md with run gates and release notes v1.1.0 |
+| `238d2efa` | Week 3-4 complete: All tasks (S1, A1, B5-B10) done |
+| `05f8f620` | B10: Validation codegen from registries |
+| `1d6b0c5f` | B9: Sampler arc - replace propose() with iterator protocol |
+| `96f6dd79` | B6/B7/B8: Monitoring alerts + capabilities command |
+| `4e29258e` | B5: Gate calibration spec from H1/H2/H3 failure analysis |
+| `e62f3434` | S1+A1 complete: Static vs TPE comparison + credit_vs_update artifact |
+| `088052cc` | Session 2 complete: All three hypothesis experiments (H1, H2, H3) pass with ladder promotion |
+| `f3152134` | Fix budget enforcement in wave.py: deadline cancellation + per-cell timeouts |
+| `ef12224e` | Fix neuromorphic substrate validation bug in _validate_neuromorphic_substrate_dynamics |
+| `8f90baa5` | Fix B1/B2/B3: substrate-dynamics compat filter, Jacobian isfinite guards, remove shell timeout |
+| `36eafc73` | Refactor TODO84.md: consolidate blockers, combine H1-H3 with ladder, remove redundant verification |
+| `7b2a0534` | Add TODO84.md: Stabilization sprint + hypothesis triage plan |
+| `646f2457` | Update TODO83.md: ladder test running, H1/H2/H3 queued for CPU |
+| `9c37e25a` | Fix ProcessPoolExecutor start method to 'spawn' |
+| `4e8a3563` | Move magic numbers to constants in wave.py |
+| `64d42708` | Fix fidelity ladder promotion + claim eligibility query |
+| `c0bdc75f` | docs: Update TODO83.md with fresh session entry point and execution status |
+| `338` | Fix diagnostics default device = "auto" |
+| `339` | Fix diagnostics CUDA check for auto device |
+
 *Generated 2026-11-07. Supersedes TODO83.md.*
