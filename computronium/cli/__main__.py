@@ -78,6 +78,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "catalog": ("computronium.experiment.documentation.catalog", "main", ()),
     "method-card": ("computronium.experiment.documentation.method_cards", "main", ()),
     "faq": ("computronium.experiment.documentation.faq", "main", ()),
+    "capabilities": ("computronium.cli.commands.capabilities", "app", ()),
     "plugin": ("computronium.plugins", "main", ()),
     "benchmark-contrib": ("computronium.benchmarks.contributions.cli", "main", ()),
 }
@@ -129,6 +130,7 @@ _SUMMARIES: dict[str, str] = {
     "catalog": "Experiment catalog: query runs/records with axis filters (Phase F2)",
     "method-card": "Method cards: auto-generated docs for ontology primitives (Phase F2)",
     "faq": "FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)",
+    "capabilities": "List and verify registered capabilities (Gate 1/2)",
     "plugin": "Plugin management: custom objectives, substrates, dynamics (Phase F3)",
     "benchmark-contrib": "Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3)",
 }
