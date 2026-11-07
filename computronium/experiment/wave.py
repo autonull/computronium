@@ -780,7 +780,11 @@ def _evaluate_cells_parallel(
                                 fut.result()
                         break
 
-                    done_futures = wait(pending, return_when=FIRST_COMPLETED).done
+                    # Use timeout to periodically check deadline even if no futures complete
+                    wait_timeout = 10.0
+                    if deadline is not None:
+                        wait_timeout = min(wait_timeout, max(0.1, deadline - now))
+                    done_futures = wait(pending, return_when=FIRST_COMPLETED, timeout=wait_timeout).done
                     for future in done_futures:
                         del pending[future]
                         try:

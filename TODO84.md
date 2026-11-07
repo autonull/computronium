@@ -51,7 +51,7 @@
 
 ---
 
-## 🧪 SESSION 2: Hypothesis Triage with Ladder (3h) — IN PROGRESS
+## 🧪 SESSION 2: Hypothesis Triage with Ladder (3h) ✅ COMPLETE
 
 **Run all hypothesis axes WITH ladder promotion (--ladder) to get L1/L2 claim-grade data in one pass.**
 
@@ -61,17 +61,18 @@
   --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","mean_norm","muon","elastic_consolidation","natural_gradient"]}'
 # Result: 62 cells evaluated (48 L0 + 9 L1 + 5 L2), 46 passed, 16 failed, ladder promotion worked, exit code 0
 
-# H2: Dynamics × Substrate on digits (4×3 = 12 combos) ✅ FIXED
+# H2: Dynamics × Substrate on digits (4×3 = 12 combos) ✅ COMPLETE
 ./experiment_shallow.sh 0.5 --ladder --policy tpe --device cpu --workers 6 \
   --axes '{"dynamics":["instantaneous","energy_minimization","lazy","error_predictive_coding"],"substrate":["digital","memristive","optical"]}'
 # Fixed neuromorphic validation bug in system.py (_validate_neuromorphic_substrate_dynamics)
 # Fixed budget enforcement in wave.py: added deadline cancellation of pending futures + per-cell timeouts
+# Result: 78 cells evaluated (29 L0 + 48 L1 + 1 L2), 59 passed, 19 failed, 20 skipped, exit code 0, walltime 978s
 
-# H3: Plasticity × Credit on digits (4×4 = 16 combos) ❌ WORKER CRASH
+# H3: Plasticity × Credit on digits (4×4 = 16 combos) ✅ COMPLETE
 ./experiment_shallow.sh 0.5 --ladder --policy tpe --device cpu --workers 6 \
   --axes '{"plasticity":["null","temporal_psi","rule_state","fast_weights"],"credit":["gradient","homeostatic","pc_alm","target_inversion"]}'
-# Crashed at 16/42: "process in the process pool was terminated abruptly"
-# Known issue: worker pool restart on crash (deferred per TODO84)
+# Worker crash fixed by budget enforcement + per-cell timeouts in wave.py
+# Result: 70 cells evaluated (13 L0 + 27 L1 + 30 L2), 66 passed, 4 failed, 30 skipped, exit code 0, walltime 396s
 ```
 
 **Success criteria per run:** 6+ cells reach L1/L2 with 3/5 seed replication, `power_achieved` verdicts, claim-eligible > 0.
