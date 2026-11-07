@@ -137,7 +137,7 @@ From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 
 | Warning | File | Line | Context | Fix | Status |
 |---------|------|------|---------|-----|--------|
-| `register_new_resolver()` deprecated | `computronium/config/omegaconf.py` | 53 | `OmegaConf.register_new_resolver("now", time.strftime)` called twice | Migrated to `OmegaConf.register_resolver()` with typed function | ✅ Fixed |
+| `register_new_resolver()` deprecated | `computronium/config/omegaconf.py` | 53 | `OmegaConf.register_new_resolver("now", time.strftime)` called twice | Migrated to `OmegaConf.register_new_resolver()` with typed function and `replace=True` | ✅ Fixed |
 | Resolver 'now' cannot be inspected | `computronium/config/omegaconf.py` | 53 | No signature for builtin `strftime` | Added typed `_now_resolver(fmt: str) -> str` function | ✅ Fixed |
 | `update_type=lion` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.5627...` likely overshoot mislabel | Narrowed harvested domain for `update.step_size` to (1e-5, 0.1); fixed OptunaDistributionAdapter to only sample declared hyperparameters | ✅ Fixed |
 | `update_type=muon` per-element-displacement step_size in gradient-relative lr range | `computronium/ontology/system.py` | 722 | `step_size=0.0828...` likely overshoot mislabel | Same as above | ✅ Fixed |
@@ -225,7 +225,9 @@ Axis combinations with < 3 cells (min_samples=3):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix UserWarnings: OmegaConf resolver, per-element-displacement step_size sampling, ConvGeometry kernel_size log level; update TODO84.md |
+| `HEAD` | Fix OmegaConf resolver: use register_new_resolver with replace=True (OmegaConf 2.3+) |
+| `7e31373a` | Fix OmegaConf resolver: use register_new_resolver with replace=True (OmegaConf 2.3+) |
+| `69c6d467` | Fix UserWarnings: OmegaConf resolver, per-element-displacement step_size sampling, ConvGeometry kernel_size log level |
 | `d4b52121` | Fix omegaconf resolver deprecation; fix alerts.py GateVerdict.FAIL_ typo; fix experiment_shallow.sh warning handling; update TODO84.md with UserWarnings and alerts |
 | `c34a1b9f` | R1/R2: Add CONTRIBUTING.md with run gates and release notes v1.1.0 |
 | `238d2efa` | Week 3-4 complete: All tasks (S1, A1, B5-B10) done |
