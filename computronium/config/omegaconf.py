@@ -51,13 +51,11 @@ def _now_resolver(fmt: str) -> str:
 def _register_resolvers() -> None:
     """Register OmegaConf custom resolvers. Safe to call multiple times.
 
-    Only swallows ``ValueError`` raised when a resolver of the same name is
-    already registered; any other exception surfaces for debugging.
+    Uses ``register_new_resolver`` (OmegaConf 2.3+) with ``replace=True`` to
+    avoid deprecation warnings and handle re-registration gracefully.
     """
     try:
-        OmegaConf.register_resolver("now", _now_resolver)
-    except ValueError:
-        pass
+        OmegaConf.register_new_resolver("now", _now_resolver, replace=True)
     except Exception:  # broad: best-effort
         logger.exception("Failed to register OmegaConf resolver 'now'")
 
