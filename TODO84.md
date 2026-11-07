@@ -183,13 +183,17 @@ From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 
 ## 🚨 ALERTS FROM EXPERIMENTS (2026-11-07)
 
-### DTYPE_MISMATCH_BOOL_TENSOR (Critical)
+### DTYPE_MISMATCH_BOOL_TENSOR (Critical) ✅ FIXED
 Bool tensor used in matmul — occurs with certain credit/update combinations:
 - `digital/homeostatic/lion` (H1 experiment)
 - `digital/local_goodness/muon` (H2 experiment)  
 - `digital/target_inversion/euclidean` (H3 experiment)
 
-**Root cause:** Boolean masks used in matmul without float conversion. Fix in credit rule implementations.
+**Root cause:** Digital substrate precision hyperparameter included "binary" which maps to `torch.bool`. When sampled, the forward operator converts activations to bool, causing matmul to fail with "addmm_impl_cpu_ not implemented for 'Bool'".
+
+**Fix:** Removed "binary" from digital substrate precision domain in `computronium/ontology/substrate/_substrate.py:254`. Binary precision is only meaningful for neuromorphic/memristive substrates.
+
+**Verified:** All H1/H2/H3 ladder experiments (2026-11-07) now complete without bool tensor alerts.
 
 ### COMBO_INSUFFICIENT_SAMPLES (Warning)
 Axis combinations with < 3 cells (min_samples=3):
@@ -221,7 +225,7 @@ Axis combinations with < 3 cells (min_samples=3):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix omegaconf resolver deprecation; fix alerts.py GateVerdict.FAIL_ typo; fix experiment_shallow.sh warning handling; update TODO84.md with UserWarnings and alerts |
+| `HEAD` | Fix digital substrate binary precision causing bool tensor matmul errors; update TODO84.md |
 | `d4b52121` | Fix omegaconf resolver deprecation; fix alerts.py GateVerdict.FAIL_ typo; fix experiment_shallow.sh warning handling; update TODO84.md with UserWarnings and alerts |
 | `c34a1b9f` | R1/R2: Add CONTRIBUTING.md with run gates and release notes v1.1.0 |
 | `238d2efa` | Week 3-4 complete: All tasks (S1, A1, B5-B10) done |

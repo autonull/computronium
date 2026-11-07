@@ -251,7 +251,7 @@ class SubstrateConfig:
             "noise_level": {"domain": (0.0, 1.0, "log")},
             "sparsity": {"domain": (0.0, 0.99, "linear")},
             "precision": {
-                "domain": ["float32", "float16", "bfloat16", "int8", "int4", "binary"]
+                "domain": ["float32", "float16", "bfloat16", "int8", "int4"]
             },
             # Structural: the run chooses its device, not the search.
             "device": {"domain": ["cpu", "cuda", "mps", "fpga"], "kind": "structural"},
