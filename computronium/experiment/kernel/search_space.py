@@ -160,6 +160,71 @@ def _void_cache_key(coordinate: Coordinate) -> tuple[str, ...]:
     )
 
 
+def _is_substrate_dynamics_compatible(substrate: str, dynamics: str) -> bool:
+    """Check if a substrate-dynamics combination is valid.
+
+    This is a defense-in-depth check that mirrors the void constraints in
+    CONSTRAINTS_REGISTRY. It catches invalid combinations that might slip
+    through the compiled constraint evaluation.
+
+    Args:
+        substrate: Substrate primitive name
+        dynamics: Dynamics primitive name
+
+    Returns:
+        True if the combination is valid, False otherwise.
+    """
+    # Neuromorphic substrate requires temporal dynamics
+    if substrate == "neuromorphic":
+        if dynamics not in {"spike_integration", "energy_minimization", "diffusion"}:
+            return False
+
+    # Quantum substrate requires compatible dynamics
+    if substrate == "quantum":
+        if dynamics not in {"energy_minimization", "instantaneous", "diffusion"}:
+            return False
+
+    # Ternary substrate incompatible with pc_alm
+    if substrate == "ternary" and dynamics == "pc_alm":
+        return False
+
+    return True
+
+
+def _is_geometry_dynamics_compatible(geometry: str, dynamics: str) -> bool:
+    """Check if a geometry-dynamics combination is valid.
+
+    Mirrors void constraints: recurrent geometry requires settling dynamics,
+    non-layered geometries require instantaneous dynamics.
+    """
+    # Recurrent geometry requires settling dynamics
+    if geometry in {"recurrent", "recurrent_attractor"}:
+        if dynamics not in {
+            "energy_minimization",
+            "predictive_settling",
+            "error_predictive_coding",
+            "pc_alm",
+            "diffusion",
+            "instantaneous",
+        }:
+            return False
+
+    # Non-layered geometries require instantaneous dynamics
+    if geometry in {
+        "attention",
+        "spatial_lattice",
+        "graph",
+        "conv",
+        "nca",
+        "ntm",
+        "causal_transformer",
+    }:
+        if dynamics != "instantaneous":
+            return False
+
+    return True
+
+
 class VoidCache:
     """Persists void combinations across experiment runs.
 
@@ -929,6 +994,19 @@ def iter_candidates(  # ruff: ignore[complex-structure]
                 if use_void_cache and void_cache:
                     void_cache.record_void(coordinate)
                 continue
+
+        # Explicit substrate-dynamics compatibility filter (defense-in-depth for
+        # void constraints that may not be evaluated correctly)
+        if not _is_substrate_dynamics_compatible(coordinate.substrate, coordinate.dynamics):
+            if use_void_cache and void_cache:
+                void_cache.record_void(coordinate)
+            continue
+
+        # Explicit geometry-dynamics compatibility filter
+        if not _is_geometry_dynamics_compatible(coordinate.geometry, coordinate.dynamics):
+            if use_void_cache and void_cache:
+                void_cache.record_void(coordinate)
+            continue
 
         if (
             check_composable

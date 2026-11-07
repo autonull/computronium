@@ -50,6 +50,11 @@ def spectral_radius_from_jacobian_tensor(
         Spectral radius ρ(J)
     """
     jac = _full_jacobian_tensor(step_fn, x)
+
+    # Guard against non-finite values in Jacobian
+    if not torch.isfinite(jac).all():
+        return float("nan")
+
     return float(torch.linalg.eigvals(jac).abs().max().item())
 
 
@@ -69,6 +74,11 @@ def dominant_singular_value_tensor(
         Maximum singular value σ_max(J)
     """
     jac = _full_jacobian_tensor(step_fn, x)
+
+    # Guard against non-finite values in Jacobian
+    if not torch.isfinite(jac).all():
+        return float("nan")
+
     _u, s, _vh = torch.linalg.svd(jac)
     return float(s[0].item())
 
@@ -108,6 +118,17 @@ def jacobian_spectral_metrics(
     metrics: dict[str, float] = {}
 
     jac = _full_jacobian_tensor(step_fn, x)
+
+    # Guard against non-finite values in Jacobian
+    if not torch.isfinite(jac).all():
+        return {
+            "spectral_radius": float("nan"),
+            "max_singular_value": float("nan"),
+            "min_singular_value": float("nan"),
+            "lyapunov_exponent": float("nan"),
+            "stability_margin": float("nan"),
+            "nonnormality": float("nan"),
+        }
 
     # Use randomized SVD for large matrices
     if use_lowrank_for_large and (jac.shape[0] > 512 or jac.shape[1] > 512):
@@ -154,6 +175,17 @@ def drift_metrics(
         return {}
 
     jac = _full_jacobian_tensor(step_fn, x)
+
+    # Guard against non-finite values in Jacobian
+    if not torch.isfinite(jac).all():
+        return {
+            "drift_spectral_radius": float("nan"),
+            "drift_max_singular_value": float("nan"),
+            "drift_nonnormality": float("nan"),
+            "settle_step_size": step_size,
+            "contraction_rate": float("nan"),
+        }
+
     eye = torch.eye(jac.shape[0], device=jac.device, dtype=jac.dtype)
     drift = (jac - eye) / step_size
 

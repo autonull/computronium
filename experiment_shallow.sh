@@ -497,19 +497,7 @@ echo ""
 echo "🚀 Executing: ${CMD[*]}"
 echo ""
 
-# Run with timeout (add 10 min grace) — Python deadline is the real stop
-GRACE_SECONDS=600
-BUDGET_SECONDS=$(python3 -c "print(int(float('${HOURS}') * 3600))" 2>/dev/null || awk -v h="${HOURS}" 'BEGIN {print int(h * 3600)}')
-TOTAL_TIMEOUT=$((BUDGET_SECONDS + GRACE_SECONDS))
-
-if command -v timeout &> /dev/null; then
-    TIMEOUT_CMD=(timeout "${TOTAL_TIMEOUT}")
-else
-    TIMEOUT_CMD=()
-    echo "⚠️  'timeout' command not found; running without hard timeout"
-fi
-
-# S1: Wrap execution so the 124 branch, failure hints and post-run summary are reachable under set -e
+# S1: Wrap execution so failure hints and post-run summary are reachable under set -e
 EXIT_CODE=0
 
 # Run the experiment
@@ -519,19 +507,12 @@ if [[ "${DRY_RUN}" == true ]]; then
     EXIT_CODE=$?
     echo ">>> Dry-run exit code: $EXIT_CODE"
 else
-    echo ">>> Starting experiment (timeout: ${TOTAL_TIMEOUT}s, budget enforced by Python)..."
-    if [[ ${#TIMEOUT_CMD[@]} -gt 0 ]]; then
-        stdbuf -oL -eL "${TIMEOUT_CMD[@]}" "${CMD[@]}" 2>&1
-    else
-        stdbuf -oL -eL "${CMD[@]}" 2>&1
-    fi
+    echo ">>> Starting experiment (budget enforced by Python)..."
+    stdbuf -oL -eL "${CMD[@]}" 2>&1
     EXIT_CODE=$?
     echo ">>> Experiment exit code: $EXIT_CODE"
 
-    if [[ $EXIT_CODE -eq 124 ]]; then
-        echo ""
-        echo "⏱️  Experiment timed out after ${TOTAL_TIMEOUT}s (budget + grace)"
-    elif [[ $EXIT_CODE -eq 127 ]]; then
+    if [[ $EXIT_CODE -eq 127 ]]; then
         echo ""
         echo "❌ Command not found. Ensure 'uv' is available." >&2
         exit 127
