@@ -66,3 +66,4 @@ computronium/experiment/execution/dashboard/templates/static/js/*.map
 *.webm
 
 checkpoint_epoch_*.pt
+experiments/.timing.json

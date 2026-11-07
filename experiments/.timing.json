@@ -17,10 +17,24 @@
     },
     "startup_s": 0.0
   },
-  "cuda/L0/1": {
-    "cost_per_cell_s": 42.369,
+  "cpu/L0/6": {
+    "cost_per_cell_s": 128.352,
     "per_task": {
-      "xor": 50.468
+      "xor": 32.61
+    },
+    "startup_s": 0.0
+  },
+  "cuda/L0/1": {
+    "cost_per_cell_s": 20.301,
+    "per_task": {
+      "xor": 14.541
+    },
+    "startup_s": 0.0
+  },
+  "cuda/L0/2": {
+    "cost_per_cell_s": 41.908,
+    "per_task": {
+      "xor": 44.404
     },
     "startup_s": 0.0
   }

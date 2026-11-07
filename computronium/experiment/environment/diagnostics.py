@@ -137,6 +137,12 @@ def check_torch(device: str = "auto") -> tuple[bool, str, bool, dict]:
         except Exception as e:
             cuda_info["cuda_check_error"] = str(e)
             return False, f"torch.cuda.is_available() crashed: {e}", False, cuda_info
+    elif device == "auto":
+        try:
+            cuda_available = torch.cuda.is_available()
+        except Exception as e:
+            cuda_info["cuda_check_error"] = str(e)
+            cuda_available = False
 
     if cuda_available:
         try:
@@ -238,7 +244,7 @@ def check_dry_run(device: str = "cpu", hours: float = 0.001) -> tuple[bool, str,
 
 
 def run_diagnostics(
-    device: str = "cpu",
+    device: str = "auto",
     hours: float = 0.001,
     min_python: tuple[int, int] = (3, 14),
 ) -> DiagnosticsResult:
