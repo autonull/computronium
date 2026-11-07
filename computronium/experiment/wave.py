@@ -519,6 +519,7 @@ class PolicyPlanner:
         search_space,
         policy: str = "tpe",
         n_startup_trials: int = 3,
+        min_samples_per_combo: int = 3,
         resume_from: str | None = None,
         promote_top: int = 20,
     ):
@@ -529,6 +530,7 @@ class PolicyPlanner:
         self.search_space = search_space
         self.policy_name = policy
         self.n_startup_trials = n_startup_trials
+        self.min_samples_per_combo = min_samples_per_combo
         self.promote_top = promote_top
 
         self._seen: set[str] = set()
@@ -596,6 +598,7 @@ class PolicyPlanner:
                 n_startup_trials=self.n_startup_trials,
                 spec=self.spec,
                 axis_objectives=self.spec.axis_objectives,
+                min_samples_per_combo=self.min_samples_per_combo,
             )
 
     def _get_legal_primitives(self) -> dict[str, list[str]]:

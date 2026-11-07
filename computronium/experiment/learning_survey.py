@@ -194,6 +194,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             search_space=search_space,
             policy=policy,
             n_startup_trials=10,  # More startup trials for ladder
+            min_samples_per_combo=3,
             resume_from=warm_start_path,
             promote_top=promote_top,
         )
@@ -205,6 +206,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             seed=seed,
             search_space=search_space,
             policy=policy,
+            min_samples_per_combo=3,
             resume_from=warm_start_path,
             promote_top=promote_top,
         )
