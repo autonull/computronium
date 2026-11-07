@@ -1,0 +1,162 @@
+[
+  {
+    "name": "substrate_geometry_compatibility",
+    "expression": "Not(expr=And(left=Eq(left=Var(name='substrate'), right=Const(value='digital')), right=In(left=Var(name='geometry'), right=Const(value=['analog', 'photonic', 'quantum']))))",
+    "description": "Digital substrate incompatible with analog-only geometries"
+  },
+  {
+    "name": "dynamics_plasticity_compatibility",
+    "expression": "Not(expr=And(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weights'))))",
+    "description": "Instantaneous dynamics cannot use fast-weight plasticity"
+  },
+  {
+    "name": "credit_update_compatibility",
+    "expression": "Not(expr=And(left=Eq(left=Var(name='credit'), right=Const(value='backprop')), right=NotIn(left=Var(name='update'), right=Const(value=['euclidean', 'muon', 'natural_gradient', 'riemannian_orthogonal']))))",
+    "description": "Backprop credit requires Euclidean or compatible update rule"
+  },
+  {
+    "name": "recurrent_geometry_dynamics",
+    "expression": "Or(left=Not(expr=In(left=Var(name='geometry'), right=Const(value=['recurrent', 'recurrent_attractor']))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'predictive_settling', 'error_predictive_coding', 'pc_alm', 'diffusion', 'instantaneous'])))",
+    "description": "Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics"
+  },
+  {
+    "name": "nonlayered_geometry_dynamics",
+    "expression": "Or(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Not(expr=In(left=Var(name='geometry'), right=Const(value=['attention', 'spatial_lattice', 'graph', 'conv', 'nca', 'ntm', 'causal_transformer']))))",
+    "description": "Non-layered geometries (attention, spatial_lattice, graph, conv, nca, ntm, causal_transformer) require instantaneous dynamics"
+  },
+  {
+    "name": "tile_mesh_dynamics",
+    "expression": "Or(left=Not(expr=In(left=Var(name='geometry'), right=Const(value=['tile_mesh', 'tile']))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'pc_alm', 'instantaneous'])))",
+    "description": "Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics"
+  },
+  {
+    "name": "nca_ntm_geometry",
+    "expression": "Or(left=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous')), right=Not(expr=In(left=Var(name='geometry'), right=Const(value=['nca', 'ntm']))))",
+    "description": "NCA/NTM geometries require instantaneous dynamics"
+  },
+  {
+    "name": "nca_ntm_fast_weight_plasticity",
+    "expression": "Not(expr=And(left=In(left=Var(name='geometry'), right=Const(value=['nca', 'ntm'])), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weights'))))",
+    "description": "NCA/NTM geometries have per-cell activations incompatible with fast-weight plasticity"
+  },
+  {
+    "name": "tile_fast_weight_plasticity",
+    "expression": "Not(expr=And(left=In(left=Var(name='geometry'), right=Const(value=['tile', 'tile_mesh'])), right=Eq(left=Var(name='plasticity'), right=Const(value='fast_weights'))))",
+    "description": "Tile geometries with fast_weights require layout-aware modulation"
+  },
+  {
+    "name": "diffusion_dynamics_credit",
+    "expression": "Not(expr=And(left=Eq(left=Var(name='dynamics'), right=Const(value='diffusion')), right=In(left=Var(name='credit'), right=Const(value=['gradient', 'backprop']))))",
+    "description": "Diffusion dynamics produce non-differentiable state; gradient/backprop credit unsupported"
+  },
+  {
+    "name": "diffusion_dynamics_geometry",
+    "expression": "Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='diffusion'))), right=In(left=Var(name='geometry'), right=Const(value=['recurrent', 'recurrent_attractor'])))",
+    "description": "Diffusion dynamics requires recurrent geometry"
+  },
+  {
+    "name": "spike_integration_credit",
+    "expression": "Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='spike_integration'))), right=In(left=Var(name='credit'), right=Const(value=['temporal_trace', 'spiking', 'target_inversion', 'target_prop'])))",
+    "description": "Spike integration dynamics requires temporal trace or target inversion credit"
+  },
+  {
+    "name": "predictive_settling_credit",
+    "expression": "Or(left=Not(expr=In(left=Var(name='dynamics'), right=Const(value=['predictive_settling', 'error_predictive_coding']))), right=In(left=Var(name='credit'), right=Const(value=['thermodynamic_contrast', 'equilibrium', 'local_goodness', 'forward_only'])))",
+    "description": "Predictive settling/error predictive coding dynamics requires thermodynamic_contrast, local_goodness, or forward_only credit"
+  },
+  {
+    "name": "pc_alm_dynamics",
+    "expression": "And(left=Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))), right=In(left=Var(name='credit'), right=Const(value=['pc_alm', 'thermodynamic_contrast']))), right=Or(left=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))), right=In(left=Var(name='geometry'), right=Const(value=['feedforward', 'recurrent', 'tile_mesh']))))",
+    "description": "PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit and layered geometry"
+  },
+  {
+    "name": "residual_connections",
+    "expression": "Or(left=Not(expr=HasKey(obj=Var(name='params'), key=Const(value='residual'))), right=Eq(left=Var(name='geometry'), right=Const(value='feedforward')))",
+    "description": "Residual connections (residual=True) require feedforward geometry"
+  },
+  {
+    "name": "nca_instantaneous_target_inversion",
+    "expression": "Not(expr=And(left=And(left=Eq(left=Var(name='geometry'), right=Const(value='nca')), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=Eq(left=Var(name='credit'), right=Const(value='target_inversion'))))",
+    "description": "NCA geometry with instantaneous dynamics incompatible with target_inversion credit (cell-mode activations)"
+  },
+  {
+    "name": "nca_instantaneous_homeostatic",
+    "expression": "Not(expr=And(left=And(left=Eq(left=Var(name='geometry'), right=Const(value='nca')), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=Eq(left=Var(name='credit'), right=Const(value='homeostatic'))))",
+    "description": "NCA geometry with instantaneous dynamics incompatible with homeostatic credit (cell-mode activations)"
+  },
+  {
+    "name": "nca_instantaneous_pc_alm",
+    "expression": "Not(expr=And(left=And(left=Eq(left=Var(name='geometry'), right=Const(value='nca')), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=Eq(left=Var(name='credit'), right=Const(value='pc_alm'))))",
+    "description": "NCA geometry with instantaneous dynamics incompatible with pc_alm credit (cell-mode activations)"
+  },
+  {
+    "name": "tile_mesh_pc_alm_dynamics",
+    "expression": "Not(expr=And(left=Eq(left=Var(name='geometry'), right=Const(value='tile_mesh')), right=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))))",
+    "description": "tile_mesh geometry with pc_alm dynamics has layer width mismatch"
+  },
+  {
+    "name": "recurrent_instantaneous_gradient_credit",
+    "expression": "Not(expr=And(left=And(left=In(left=Var(name='geometry'), right=Const(value=['recurrent', 'recurrent_attractor'])), right=Eq(left=Var(name='dynamics'), right=Const(value='instantaneous'))), right=In(left=Var(name='credit'), right=Const(value=['gradient', 'backprop']))))",
+    "description": "Recurrent geometry with instantaneous dynamics incompatible with gradient/backprop credit (weights disconnected from loss)"
+  },
+  {
+    "name": "thermodynamic_contrast_dynamics",
+    "expression": "Or(left=Not(expr=In(left=Var(name='credit'), right=Const(value=['thermodynamic_contrast', 'equilibrium']))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'predictive_settling', 'error_predictive_coding', 'lazy', 'pc_alm'])))",
+    "description": "Thermodynamic contrast/equilibrium credit requires energy-based or PC-family dynamics"
+  },
+  {
+    "name": "neuromorphic_substrate_dynamics",
+    "expression": "Or(left=Not(expr=Eq(left=Var(name='substrate'), right=Const(value='neuromorphic'))), right=In(left=Var(name='dynamics'), right=Const(value=['spike_integration', 'energy_minimization', 'diffusion'])))",
+    "description": "Neuromorphic substrate requires temporal dynamics (spike_integration, energy_minimization, or diffusion)"
+  },
+  {
+    "name": "quantum_substrate_dynamics",
+    "expression": "Or(left=Not(expr=Eq(left=Var(name='substrate'), right=Const(value='quantum'))), right=In(left=Var(name='dynamics'), right=Const(value=['energy_minimization', 'instantaneous', 'diffusion'])))",
+    "description": "Quantum substrate requires energy_minimization, instantaneous, or diffusion dynamics"
+  },
+  {
+    "name": "ternary_substrate_dynamics",
+    "expression": "Or(left=Not(expr=Eq(left=Var(name='substrate'), right=Const(value='ternary'))), right=Not(expr=Eq(left=Var(name='dynamics'), right=Const(value='pc_alm'))))",
+    "description": "Ternary substrate weight quantization causes numerical instability with pc_alm dynamics"
+  },
+  {
+    "name": "local_contrastive_geometry",
+    "expression": "Or(left=Not(expr=In(left=Var(name='credit'), right=Const(value=['local_goodness', 'forward_only', 'pepita', 'local_contrastive']))), right=In(left=Var(name='geometry'), right=Const(value=['feedforward', 'feedforward_dag'])))",
+    "description": "Local contrastive/goodness/forward_only/pepita credit requires feedforward geometry"
+  },
+  {
+    "name": "attention_geometry_compatibility",
+    "expression": "Not(expr=And(left=Eq(left=Var(name='geometry'), right=Const(value='attention')), right=In(left=Var(name='credit'), right=Const(value=['pepita', 'local_goodness', 'local_contrastive', 'forward_only']))))",
+    "description": "Attention geometry incompatible with pepita, local_goodness, local_contrastive, forward_only credit"
+  },
+  {
+    "name": "gradient_credit_beta_clamp",
+    "expression": "Not(expr=And(left=In(left=Var(name='credit'), right=Const(value=['gradient', 'backprop'])), right=Ge(left=Var(name='params.beta'), right=Const(value=1.0))))",
+    "description": "Gradient/backprop credit with beta >= 1.0 has zero pseudo-gradient"
+  },
+  {
+    "name": "max_hidden_dim",
+    "expression": "Le(left=Var(name='params.hidden_dim'), right=Const(value=8192))",
+    "description": "Hidden dimension exceeds hardware limits"
+  },
+  {
+    "name": "max_layers",
+    "expression": "Le(left=Var(name='params.num_layers'), right=Const(value=64))",
+    "description": "Layer count exceeds hardware limits"
+  },
+  {
+    "name": "max_steps",
+    "expression": "Le(left=Var(name='params.max_steps'), right=Const(value=1000))",
+    "description": "Settling steps exceed budget"
+  },
+  {
+    "name": "classification_requires_classifier_head",
+    "expression": "Or(left=Not(expr=Eq(left=Var(name='task'), right=Const(value='classification'))), right=Gt(left=Var(name='output_dim'), right=Const(value=1)))",
+    "description": "Classification tasks require output_dim matching num_classes"
+  },
+  {
+    "name": "language_modeling_requires_causal",
+    "expression": "Or(left=Not(expr=Eq(left=Var(name='task'), right=Const(value='language_modeling'))), right=In(left=Var(name='geometry'), right=Const(value=['causal_transformer', 'recurrent'])))",
+    "description": "Language modeling requires causal attention or recurrent geometry"
+  }
+]

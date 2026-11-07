@@ -1,0 +1,92 @@
+{
+  "optical": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "sparse": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "neuromorphic": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": true,
+    "pc_alm": false,
+    "energy_minimization": true,
+    "error_predictive_coding": false,
+    "spike_integration": true,
+    "instantaneous": false
+  },
+  "digital": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "quantum": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": true,
+    "pc_alm": false,
+    "energy_minimization": true,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "ternary": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": false,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "memristive": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "complex": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "analog": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  }
+}

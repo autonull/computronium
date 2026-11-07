@@ -1,0 +1,112 @@
+{
+  "causal_transformer": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": false,
+    "pc_alm": false,
+    "energy_minimization": false,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "recurrent": {
+    "predictive_settling": true,
+    "lazy": false,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "tile": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "attention": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": false,
+    "pc_alm": false,
+    "energy_minimization": false,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "ntm": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": false,
+    "pc_alm": false,
+    "energy_minimization": false,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "conv": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": false,
+    "pc_alm": false,
+    "energy_minimization": false,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "graph": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": false,
+    "pc_alm": false,
+    "energy_minimization": false,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "spatial_lattice": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": false,
+    "pc_alm": false,
+    "energy_minimization": false,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "feedforward": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  },
+  "nca": {
+    "predictive_settling": false,
+    "lazy": false,
+    "diffusion": false,
+    "pc_alm": false,
+    "energy_minimization": false,
+    "error_predictive_coding": false,
+    "spike_integration": false,
+    "instantaneous": true
+  },
+  "tile_mesh": {
+    "predictive_settling": true,
+    "lazy": true,
+    "diffusion": true,
+    "pc_alm": true,
+    "energy_minimization": true,
+    "error_predictive_coding": true,
+    "spike_integration": true,
+    "instantaneous": true
+  }
+}
