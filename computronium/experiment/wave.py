@@ -259,10 +259,14 @@ def _build_provenance(
 
 
 class Planner(Protocol):
-    """Protocol for cell planners (static or policy-driven)."""
+    """Protocol for cell planners (static or policy-driven).
 
-    def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
-        """Propose up to n cells, skipping those in `seen`."""
+    Planners are iterable streams of (Coordinate, Schedule) pairs.
+    Use `iter(planner)` to get a fresh iterator for each wave.
+    """
+
+    def __iter__(self):
+        """Return an iterator of (Coordinate, Schedule) for the next wave."""
         ...
 
     def observe(self, record: Any) -> None:
@@ -301,6 +305,7 @@ class StaticPlanner:
         self._page_size = 50000
         self._exploitation_done = False
         self._top_coords: list[Coordinate] = []
+        self._wave_size = 0
         self._init_resume()
 
     def _init_resume(self) -> None:
@@ -473,22 +478,27 @@ class StaticPlanner:
 
         return cells[:n]
 
-    def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
-        self._seen.update(seen)
-
-        cells: list[tuple[Coordinate, Schedule]] = []
-
+    def __iter__(self):
+        """Iterator of (Coordinate, Schedule) for exploration/exploitation."""
+        # Exploitation phase: mutate around promoted coordinates
         if not self._exploitation_done and self.promote_from:
             self._top_coords = self._load_promotion_coords()
             if self._top_coords:
-                cells.extend(self._mutate_around(self._top_coords, n // 2))
+                yield from self._mutate_around(self._top_coords, self._wave_size // 2)
             self._exploitation_done = True
 
-        remaining = n - len(cells)
-        if remaining > 0:
-            cells.extend(self._random_explore(remaining))
+        # Exploration phase: random exploration
+        yield from self._random_explore(self._wave_size)
 
-        return cells[:n]
+    def _set_wave_size(self, n: int) -> None:
+        """Set the number of cells to yield this wave."""
+        self._wave_size = n
+
+    def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
+        """Legacy batch interface (deprecated)."""
+        self._set_wave_size(n)
+        self._seen.update(seen)
+        return list(iter(self))
 
     def observe(self, record: Any) -> None:
         pass
@@ -523,6 +533,7 @@ class PolicyPlanner:
 
         self._seen: set[str] = set()
         self._wave_count = 0
+        self._wave_size = 0
         self._policy: Any = None
         self._init_policy()
         self._init_resume(resume_from)
@@ -595,8 +606,8 @@ class PolicyPlanner:
                 legal[axis.value] = list(primitives)
         return legal
 
-    def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
-        self._seen.update(seen)
+    def __iter__(self):
+        """Iterator of (Coordinate, Schedule) from the policy."""
         from computronium.experiment.execution.policy import ProposalContext
         from computronium.experiment.kernel.evaluate import task_shape
 
@@ -604,16 +615,15 @@ class PolicyPlanner:
             search_space=self.search_space,
             spec=self.spec,
             run_id="learning_survey",
-            n_propose=n,
+            n_propose=self._wave_size,
             task=self.tasks[0] if self.tasks else None,
-            shape=task_shape,  # real ShapeResolver
+            shape=task_shape,
             deadline=None,
         )
-        proposals = list(self._policy.propose(ctx))
+        proposals = self._policy.propose(ctx)
 
-        cells: list[tuple[Coordinate, Schedule]] = []
         for prop in proposals:
-            if len(cells) >= n:
+            if len(self._seen) >= self._wave_size:
                 break
             coord = prop.coordinate
             if not _check_coord_compatibility(coord):
@@ -624,8 +634,17 @@ class PolicyPlanner:
             if measurement_key in self._seen:
                 continue
             self._seen.add(measurement_key)
-            cells.append((coord, schedule))
-        return cells
+            yield (coord, schedule)
+
+    def _set_wave_size(self, n: int) -> None:
+        """Set the number of cells to yield this wave."""
+        self._wave_size = n
+
+    def propose(self, n: int, *, seen: set[str]) -> list[tuple[Coordinate, Schedule]]:
+        """Legacy batch interface (deprecated)."""
+        self._set_wave_size(n)
+        self._seen.update(seen)
+        return list(iter(self))
 
     def observe(self, record: Any) -> None:
         self._policy.observe(record)
@@ -1269,7 +1288,8 @@ def run_waves(
             n_wave = min(MAX_WAVE_CELLS, workers * 2)
 
         # Propose cells
-        cells = planner.propose(n_wave, seen=set())
+        planner._set_wave_size(n_wave)
+        cells = list(iter(planner))
         if not cells:
             logger.info("No more cells to evaluate")
             break
