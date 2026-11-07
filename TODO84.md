@@ -89,20 +89,25 @@
 
 ---
 
-## 📋 WEEK 3-4: Sampler Comparison + Artifacts
+## 📋 WEEK 3-4: Sampler Comparison + Artifacts ✅ COMPLETE
 
 | ID | Task | Dependency | Time | Status |
 |---|---|---|---|---|
 | **S1** | Static vs TPE identical budget | H1 done | 30 min | ✅ Done |
 | **A1** | Publish credit_vs_update comparison | H1 done | 30 min | ✅ Done |
-| **B5** | Gate calibration spec | — | 1 hr | ⏳ |
-| **B6** | Drift detection alert | — | 30 min | ⏳ |
-| **B7** | Metric coverage warnings | — | 30 min | ⏳ |
-| **B8** | `capabilities` command | — | 30 min | ⏳ |
-| **B9** | Sampler arc: delete `propose()` | — | 1 hr | ⏳ |
-| **B10** | Validation codegen from registries | — | 2 hr | ⏳ |
+| **B5** | Gate calibration spec | — | 1 hr | ✅ Done |
+| **B6** | Drift detection alert | — | 30 min | ✅ Done |
+| **B7** | Metric coverage warnings | — | 30 min | ✅ Done |
+| **B8** | `capabilities` command | — | 30 min | ✅ Done |
+| **B9** | Sampler arc: delete `propose()` | — | 1 hr | ✅ Done |
+| **B10** | Validation codegen from registries | — | 2 hr | ✅ Done |
 
-> S1/A1 artifacts in `docs/artifacts/credit_vs_update_comparison.md`
+> S1/A1 artifacts in `docs/artifacts/credit_vs_update_comparison.md`  
+> B5 spec in `docs/specs/gate_calibration.md`  
+> B6/B7 alerts in `computronium/experiment/monitoring/alerts.py`  
+> B8 command: `comp capabilities {list,verify,matrix}`  
+> B9: Planner protocol uses `__iter__` instead of `propose()`  
+> B10 artifacts in `docs/generated/` via `python -m computronium.experiment.validation.generate`
 
 ---
 
@@ -130,7 +135,16 @@
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix B1/B2/B3: substrate-dynamics compat filter, Jacobian isfinite guards, remove shell timeout |
+| `HEAD` | B10: Validation codegen from registries |
+| `05f8f620` | B10: Validation codegen from registries |
+| `1d6b0c5f` | B9: Sampler arc - replace propose() with iterator protocol |
+| `96f6dd79` | B6/B7/B8: Monitoring alerts + capabilities command |
+| `4e29258e` | B5: Gate calibration spec from H1/H2/H3 failure analysis |
+| `e62f3434` | S1+A1 complete: Static vs TPE comparison + credit_vs_update artifact |
+| `088052cc` | Session 2 complete: All three hypothesis experiments (H1, H2, H3) pass with ladder promotion |
+| `f3152134` | Fix budget enforcement in wave.py: deadline cancellation + per-cell timeouts |
+| `ef12224e` | Fix neuromorphic substrate validation bug in _validate_neuromorphic_substrate_dynamics |
+| `8f90baa5` | Fix B1/B2/B3: substrate-dynamics compat filter, Jacobian isfinite guards, remove shell timeout |
 | `64d42708` | Fix fidelity ladder promotion + claim eligibility query |
 | `4e8a3563` | Move magic numbers to constants in wave.py |
 | `9c37e25a` | Fix ProcessPoolExecutor start method to 'spawn' |
