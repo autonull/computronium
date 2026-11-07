@@ -10,21 +10,21 @@
 
 ## 🎯 FRESH SESSION ENTRY POINT — Start Here
 
-**All primitive bugs fixed. Architecture converged. Fidelity ladder running with promotion logic + multi-seed replication fix.**
+**All primitive bugs fixed. Architecture converged. Fidelity ladder complete. H1 ran on CPU (20 records). Ladder test running (0.1h).**
 
-### Current Background Process (0.5h fidelity ladder)
+### Current Background Process (0.1h fidelity ladder test)
 ```bash
-# Check status (PID 929241)
-uv run comp status --store experiments/experiment_20261106_205642.duckdb
+# Check status (PID 1089510)
+uv run comp status --store /tmp/test_ladder2.duckdb
 
-# Expected: L1/L2 cells with correct maturity, normalized_metric, claim-eligible > 0
+# Expected: L1/L2 cells with 3/5 seed replication, claim-eligible > 0
 ```
 
 ### Immediate Next Actions (When Ladder Completes)
 1. **Verify claim-eligible > 0** — First claim-grade evidence in computronium history
-2. **Run H1** — Credit × Update on digits (30 min background)
-3. **Run H2** — Dynamics × Substrate on digits (30 min background)
-4. **Run H3** — Plasticity × Credit on digits (30 min background)
+2. **Run H1** — Credit × Update on digits (0.5h, --device cpu)
+3. **Run H2** — Dynamics × Substrate on digits (0.5h, --device cpu)
+3. **Run H3** — Plasticity × Credit on digits (0.5h, --device cpu)
 
 ---
 
@@ -45,6 +45,7 @@ uv run comp status --store experiments/experiment_20261106_205642.duckdb
 6. ✅ Record.coordinate reconstruction — from stored fields
 7. ✅ Claim eligibility query — `normalized_metric` key mismatch fixed (`normalized_val_acc` → `normalized_metric`)
 8. ✅ Ladder promotion replication — L1/L2 cells now expand to `n_seeds` replicates (3/5 seeds)
+9. ✅ ProcessPoolExecutor forkserver hang — force 'spawn' start method (scipy sets forkserver)
 
 ---
 
@@ -61,17 +62,18 @@ uv run comp status --store experiments/experiment_20261106_205642.duckdb
 | **F3** | Verify fixes with 0.05h TPE smoke | ✅ Done |
 | **F4** | Fix claim eligibility query (`normalized_metric` key) | ✅ Done |
 | **F5** | Fix ladder promotion replication (expand to n_seeds) | ✅ Done |
-| **L1** | Run fidelity ladder (L0→L1→L2) | 🔄 **RUNNING** (0.5h, PID 929241) |
+| **L1** | Run fidelity ladder (L0→L1→L2) | ✅ Done (54 cells, 39 pass) |
 
-### Week 2: Powered Hypothesis Triage (A3) — NEXT
+### Week 2: Powered Hypothesis Triage (A3) — IN PROGRESS
 
 | ID | Task | Time | Command / Action | Success Criteria |
 |---|---|---|---|---|
-| **H1** | Credit × Update on digits (n≥3) | 30 min | `./experiment_shallow.sh 0.5 --policy tpe --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","mean_norm","muon","elastic_consolidation","natural_gradient"]}'` | 6+ cells at L1/L2, verdicts with `power_achieved` |
-| **H2** | Dynamics × Substrate on digits | 30 min | `./experiment_shallow.sh 0.5 --policy tpe --axes '{"dynamics":["instantaneous","energy_minimization","lazy","error_predictive_coding"],"substrate":["digital","memristive","optical"]}'` | 6+ cells at L1/L2 |
-| **H3** | Plasticity × Credit on digits | 30 min | `./experiment_shallow.sh 0.5 --policy tpe --axes '{"plasticity":["null","temporal_psi","rule_state","fast_weights"],"credit":["gradient","homeostatic","pc_alm","target_inversion"]}'` | 6+ cells at L1/L2 |
+| **H1** | Credit × Update on digits (n≥3) | 30 min | `./experiment_shallow.sh 0.5 --policy tpe --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","mean_norm","muon","elastic_consolidation","natural_gradient"]}' --device cpu` | 6+ cells at L1/L2, verdicts with `power_achieved` |
+| **H2** | Dynamics × Substrate on digits | 30 min | `./experiment_shallow.sh 0.5 --policy tpe --axes '{"dynamics":["instantaneous","energy_minimization","lazy","error_predictive_coding"],"substrate":["digital","memristive","optical"]}' --device cpu` | 6+ cells at L1/L2 |
+| **H3** | Plasticity × Credit on digits | 30 min | `./experiment_shallow.sh 0.5 --policy tpe --axes '{"plasticity":["null","temporal_psi","rule_state","fast_weights"],"credit":["gradient","homeostatic","pc_alm","target_inversion"]}' --device cpu` | 6+ cells at L1/L2 |
+| **L2** | Fidelity ladder replication test | 10 min | `./experiment_shallow.sh 0.1 --ladder --policy tpe --device cpu` | L1/L2 cells with 3/5 seeds, claim-eligible > 0 |
 
-> **Each H* is 30 min background. Run sequentially. Collect verdicts.**
+> **L2 RUNNING (PID 1089510). Then run H1/H2/H3 sequentially on CPU. Collect verdicts.**
 
 ---
 
@@ -230,23 +232,28 @@ uv run comp status --store <h1_store>
 | 2026-11-06 | Max experiment time: 30 min | Keeps iteration tight; background for ladder |
 | 2026-11-06 | Claim eligibility query fixed | `normalized_val_acc` → `normalized_metric` in SQL prefilter |
 | 2026-11-06 | Ladder promotion expands to n_seeds replicates | L1=3 seeds, L2=5 seeds per cell for claim eligibility |
+| 2026-11-06 | ProcessPoolExecutor uses 'spawn' not 'forkserver' | scipy sets forkserver which hangs with PyTorch workers |
+| 2026-11-06 | Experiments run on CPU for stability | CUDA + multiprocessing hangs; CPU works reliably |
 
 ---
 
 ## Quick Reference: Commands to Run Now
 
 ```bash
-# 1. Check fidelity ladder completion
-uv run comp status --store experiments/experiment_$(ls -t experiments/experiment_*.duckdb | head -1 | xargs basename | sed 's/.duckdb//').duckdb
+# 1. Check ladder test completion
+uv run comp status --store /tmp/test_ladder2.duckdb
 
-# 2. Verify claim-eligible cells
-uv run comp report --store <same_store> --format text
+# 2. Verify claim-eligible cells from ladder
+uv run comp report --store /tmp/test_ladder2.duckdb --format text
 
-# 3. Run H1 (Credit × Update)
-nohup ./experiment_shallow.sh 0.5 --policy tpe --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","mean_norm","muon","elastic_consolidation","natural_gradient"]}' > logs/h1_$(date +%s).log 2>&1 &
+# 3. Run H1 (Credit × Update) on CPU
+nohup ./experiment_shallow.sh 0.5 --policy tpe --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","mean_norm","muon","elastic_consolidation","natural_gradient"]}' --device cpu > logs/h1_$(date +%s).log 2>&1 &
 
-# 4. While H1 runs, check H1 progress
-uv run comp status --store <h1_store>
+# 4. Run H2 (Dynamics × Substrate) on CPU
+nohup ./experiment_shallow.sh 0.5 --policy tpe --axes '{"dynamics":["instantaneous","energy_minimization","lazy","error_predictive_coding"],"substrate":["digital","memristive","optical"]}' --device cpu > logs/h2_$(date +%s).log 2>&1 &
+
+# 5. Run H3 (Plasticity × Credit) on CPU
+nohup ./experiment_shallow.sh 0.5 --policy tpe --axes '{"plasticity":["null","temporal_psi","rule_state","fast_weights"],"credit":["gradient","homeostatic","pc_alm","target_inversion"]}' --device cpu > logs/h3_$(date +%s).log 2>&1 &
 ```
 
 ---
