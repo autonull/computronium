@@ -47,6 +47,14 @@ logger = get_logger(__name__)
 
 
 # ============================================================
+# Constants
+# ============================================================
+
+MAX_PROMOTE_CELLS: int = 20
+MAX_WAVE_CELLS: int = 64
+
+
+# ============================================================
 # Cost Model
 # ============================================================
 
@@ -928,6 +936,8 @@ def _run_ladder_promotion(
 
     # Ladder budget allocation (passed in as reserved)
     ladder_budget = {"L1": l1_budget, "L2": l2_budget}
+    # Replication factor per fidelity (n_seeds)
+    ladder_replicates = {"L1": 3, "L2": 5}
 
     # L0 already done, promote to L1 then L2
     for target_fid in ["L1", "L2"]:
@@ -936,10 +946,12 @@ def _run_ladder_promotion(
             break
 
         # Number of cells to promote (based on budget)
+        # Each promoted cell expands to n_seeds replicates, so divide budget by replication factor
         measured_cost = (
             total_elapsed * workers / len(all_results) if all_results else 60.0
         )
-        n_promote = max(1, min(20, int(fid_budget * workers / max(1.0, measured_cost))))
+        n_replicates = ladder_replicates.get(target_fid, 1)
+        n_promote = max(1, min(MAX_PROMOTE_CELLS, int(fid_budget * workers / max(1.0, measured_cost * n_replicates))))
 
         # Take top n_promote cells
         promote_candidates = sorted_cells[:n_promote]
@@ -1213,10 +1225,10 @@ def run_waves(
         if all_results:
             measured_cost = total_elapsed * workers / len(all_results)
             n_wave = max(
-                1, min(64, int(budget_remaining * workers / max(1.0, measured_cost)))
+                1, min(MAX_WAVE_CELLS, int(budget_remaining * workers / max(1.0, measured_cost)))
             )
         else:
-            n_wave = min(64, workers * 2)
+            n_wave = min(MAX_WAVE_CELLS, workers * 2)
 
         # Propose cells
         cells = planner.propose(n_wave, seen=set())
