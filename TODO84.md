@@ -158,7 +158,9 @@ From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Fix test_policy_generation_lock: add DiverseRandomPolicy to test fixtures |
+| `HEAD` | Fix integration test: update error message regex for PC-ALM credit validation |
+| `60fe60cd` | Fix integration test: update error message regex for PC-ALM credit validation |
+| `fc062fb6` | Update TODO84.md: add test_policy_generation_lock fix to commit history |
 | `d91cdfe9` | Fix test_policy_generation_lock: add DiverseRandomPolicy to test fixtures |
 | `3f51e370` | Fix TPE sampler: add min_samples_per_combo to prevent COMBO_INSUFFICIENT_SAMPLES |
 | `131b528b` | Fix registry exports: add reference_forward, kernel_*, and cases module public functions |
