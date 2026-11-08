@@ -111,3 +111,18 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 ---
 
 **Start:** Run experiment with 2-4 axes. Fix what breaks. Repeat.
+
+---
+
+## 🔍 FIXABLE vs FILTERED (From Runs 1-9)
+
+| Combo | Status | Fix Type | Notes |
+|-------|--------|----------|-------|
+| Tile/Tile_mesh + vision | **FIXED** | Input flattening (3 lines) | Works now, 0.96 accuracy |
+| NTM + vision | **FIXED** | Input flattening in forward_with_intermediates | Works now |
+| Attention + vision | **FIXED** | Input flattening in forward_with_intermediates | Works now |
+| Graph + vision | Filtered | No edge_index from vision data | Needs k-NN graph construction or patch-graph |
+| Causal_transformer + vision | Filtered | Expects 1D tokens, gets 3D images | Needs ViT-style patch embedding |
+| Ternary + energy_minimization + thermodynamic_contrast/pepita | **Runtime failures (6)** | Not validation - actual training crash | High-value target: debug straight-through estimator with energy_minimization |
+
+**Priority for next session:** Ternary + energy_minimization failures (Run 7) - they pass validation but crash at runtime. Likely straight-through estimator breaking gradients in energy_minimization settle.
