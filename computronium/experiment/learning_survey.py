@@ -230,6 +230,9 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             result["ladder"] = True
         return result
 
+    # Clear _seen so wave loop starts fresh (startup cells already in store)
+    planner._seen.clear()
+
     # 6. Run waves via shared executor
     summary = run_waves(
         spec=spec,
