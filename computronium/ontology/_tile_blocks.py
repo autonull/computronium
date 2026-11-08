@@ -167,8 +167,10 @@ def tile_settle_block_acts(
     params: Mapping[str, Tensor] = geometry.params  # type: ignore[attr-defined]
     blocks = assemble_transition_blocks(view, params)
     biases = assemble_transition_biases(view, params)
-    z = geometry._input_projection(x)  # type: ignore[attr-defined]
-    acts = [x, z]
+    # Flatten input for input projection (expects [B, input_dim])
+    x_flat = x.flatten(1) if x.dim() > 2 else x
+    z = geometry._input_projection(x_flat)  # type: ignore[attr-defined]
+    acts = [x_flat, z]
     for k in range(1, len(view.layer_spans)):
         z = op(z, blocks[k])
         bias = biases[k]

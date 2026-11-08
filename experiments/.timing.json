@@ -53,9 +53,9 @@
     "startup_s": 0.0
   },
   "cpu/L0/8": {
-    "cost_per_cell_s": 11.004,
+    "cost_per_cell_s": 13.373,
     "per_task": {
-      "digits": 2.764
+      "digits": 4.923
     },
     "startup_s": 0.0
   },

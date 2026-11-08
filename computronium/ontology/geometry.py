@@ -3712,6 +3712,9 @@ class NtmGeometry(nn.Module):
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
+        # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
+        if x.dim() > 2:
+            x = x.flatten(1)
         if x.dim() != 2:
             raise ValueError(
                 "forward_with_intermediates expects one (B, input_dim) step"
