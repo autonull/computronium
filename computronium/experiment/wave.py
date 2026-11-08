@@ -704,12 +704,23 @@ def _evaluate_one(
 def _log_progress(i: int, n_total: int, record: Any) -> None:
     gate = record.status.gate_verdict.value
     val_acc = record.payload.get("val_acc", "N/A")
+    param_count = record.payload.get("param_count", "N/A")
+    if isinstance(param_count, int):
+        if param_count >= 1_000_000:
+            param_str = f"{param_count / 1_000_000:.2f}M"
+        elif param_count >= 1_000:
+            param_str = f"{param_count / 1_000:.2f}K"
+        else:
+            param_str = str(param_count)
+    else:
+        param_str = str(param_count)
     logger.info(
-        "  [%d/%d] %s | val_acc=%s | %s/%s/%s/%s/%s/%s",
+        "  [%d/%d] %s | val_acc=%s | params=%s | %s/%s/%s/%s/%s/%s",
         i,
         n_total,
         gate,
         f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
+        param_str,
         record.substrate,
         record.geometry,
         record.dynamics,

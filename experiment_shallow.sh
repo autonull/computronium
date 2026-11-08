@@ -253,7 +253,7 @@ fi
 # Skip by default to avoid overhead; run with --doctor to force
 if [[ "${SELF_TEST}" == false && "${DOCTOR_MODE}" == false && "${SKIP_DOCTOR:-1}" == "1" ]]; then
     # Check if we've run doctor before in this session
-    DOCTOR_MARKER="/tmp/computronium_doctor_ran_$$"
+    DOCTOR_MARKER="/tmp/computronium_doctor_ran"
     if [[ ! -f "${DOCTOR_MARKER}" ]]; then
         echo ">>> Running quick diagnostics (use --doctor to run explicitly, SKIP_DOCTOR=0 to force)..."
         run_doctor
