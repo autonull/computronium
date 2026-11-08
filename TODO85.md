@@ -58,6 +58,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 |---------|-----|------|
 | Worker crash mid-cell | Add per-cell timeout + deadline check | `wave.py` |
 | Ternary fails gate | LR scaling by weight_bits; straight-through estimator | `substrate.py`, `update.py` |
+| Ternary + energy_minimization crashes | TWN ternary thresholding (0.7*E[|W|]); energy uses kernel.effective_weights() | `substrate.py`, `_dynamics.py` |
 | Neuromorphic + non-temporal crashes | Compatibility filter in search space | `search_space.py` |
 | Jacobian SVD NaN | isfinite guard + fallback | `jacobian.py` |
 | Search space too large | Filter incompatible at harvest | `search_space.py` |
@@ -80,6 +81,9 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 6 | credit: gradient,homeostatic; update: euclidean,lion; substrate: digital; plasticity: null | 130s | 0 | 0 | nca/instantaneous/gradient/euclid (0.96) | Fixed tile/NTM/attention input flattening; geometry coverage 5→9/11 |
 | 7 | credit: gradient,thermodynamic_contrast,pepita; update: euclidean,muon,lion; substrate: digital,ternary; plasticity: null; dynamics: instantaneous,energy_minimization | 124s | 6 | 6 (ternary+energy_min+thermo/pepita) | ternary/recur/energy_min/thermo/lion | Ternary substrate validation needs work |
 | 8 | credit: gradient,thermodynamic_contrast; update: euclidean,muon; substrate: digital; plasticity: null,rule_state; dynamics: instantaneous,energy_minimization | 174s | 0 | 0 | recur/energy_min/rule_state/grad/muon (0.97) | rule_state + muon works |
+| 9 | credit: gradient,thermodynamic_contrast,pepita; update: euclidean,lion,muon; substrate: digital,ternary; plasticity: null; dynamics: instantaneous,energy_minimization | 385s | 0 | 0 | ternary/feedforward/energy_min/thermo/euclid (0.11) | Fixed ternary STE quantization (TWN scaling) + energy computation with effective weights |
+| 10 | credit: gradient,thermodynamic_contrast,temporal_trace; update: euclidean,lion; substrate: digital,neuromorphic; plasticity: null,rule_state; dynamics: instantaneous,spike_integration | 170s | 0 | 0 | neuromorphic/feedforward/spike_integration/temporal_trace (0.09) | Neuromorphic + rule_state + spike_integration works |
+| 11 | credit: gradient,homeostatic,pc_alm; update: euclidean,lion; substrate: digital,ternary; plasticity: null,rule_state; dynamics: instantaneous,energy_minimization | 334s | 0 | 0 | ternary/recurrent/energy_min/pc_alm/euclid (0.10) | Homeostatic + PC-ALM credit with ternary/energy_minimization works |
 
 ---
 
@@ -123,6 +127,6 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | Attention + vision | **FIXED** | Input flattening in forward_with_intermediates | Works now |
 | Graph + vision | Filtered | No edge_index from vision data | Needs k-NN graph construction or patch-graph |
 | Causal_transformer + vision | Filtered | Expects 1D tokens, gets 3D images | Needs ViT-style patch embedding |
-| Ternary + energy_minimization + thermodynamic_contrast/pepita | **Runtime failures (6)** | Not validation - actual training crash | High-value target: debug straight-through estimator with energy_minimization |
+| Ternary + energy_minimization + thermodynamic_contrast/pepita | **FIXED** | TWN ternary quantization + substrate-effective energy | Was: straight-through estimator broke energy_minimization settle. Fix: proper ternary thresholding (0.7*E[|W|]) + energy uses kernel.effective_weights() |
 
-**Priority for next session:** Ternary + energy_minimization failures (Run 7) - they pass validation but crash at runtime. Likely straight-through estimator breaking gradients in energy_minimization settle.
+**Priority for next session:** Test neuromorphic + spike_integration, memristive substrate, and rule_state plasticity. Expand geometry coverage (conv, attention, tile_mesh).

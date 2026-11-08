@@ -345,19 +345,29 @@ class TestSubstrateSettleTernaryRouting:
 
         kernel_acts = kernel.step(init_acts, 0.0, None, None)[0]  # ruff: ignore[unused-variable]
 
-        # Verify effective weights are ternary
+        # Verify effective weights are ternary (3 values: -alpha, 0, +alpha)
         eff_weights = kernel.effective_weights()
         for w in eff_weights:
             unique = torch.unique(w.round(decimals=3))
-            max_val = SubstrateConfig.ternary().weight_bounds[1]
-            expected_vals = torch.tensor([-max_val, 0.0, max_val])
-            for val in unique:
-                assert any(abs(val - ev) < 0.01 for ev in expected_vals), (
-                    f"Weight value {val} not in ternary set {-max_val, 0, +max_val}"
+            # TWN ternary quantization produces exactly 3 values: -alpha, 0, +alpha
+            assert len(unique) <= 3, (
+                f"Expected ternary weights (3 values), got {len(unique)}: {unique}"
+            )
+            # Check symmetry: values should be symmetric around 0
+            if len(unique) == 3:
+                assert abs(unique[0] + unique[2]) < 0.01, (
+                    f"Weights not symmetric: {unique}"
                 )
+            elif len(unique) == 2:
+                # Could be {-alpha, +alpha} or {-alpha, 0} or {0, +alpha}
+                assert (
+                    abs(unique[0] + unique[1]) < 0.01
+                    or unique[0] == 0
+                    or unique[1] == 0
+                ), f"Unexpected values: {unique}"
 
     @pytest.mark.xfail(
-        reason="Ternary quantization to {-1,0,1} with init_scale=0.1 causes numerical instability",
+        reason="Ternary quantization uses TWN-style thresholding, reference must match substrate",
     )
     def test_ternary_equivalence_vs_reference(self):
         """Kernel settle on TernarySubstrate matches reference with same quantization."""
@@ -371,19 +381,20 @@ class TestSubstrateSettleTernaryRouting:
         params = extract_layered_params(geometry)
         assert params is not None
 
-        def quantize_ternary(w, max_val=1.0):
-            return torch.sign(w) * max_val
-
-        q_weights = tuple(quantize_ternary(w) for w in params.weights)
+        # Use substrate's quantization for reference to match kernel
+        q_weights = tuple(substrate.quantize_weights(w) for w in params.weights)
+        q_recurrent = (
+            substrate.quantize_weights(params.recurrent_weight)
+            if params.recurrent_weight is not None
+            else None
+        )
 
         ref_acts = _reference_settle(
             init_acts=init_acts,
             weights=q_weights,
             biases=params.biases,
             activations=params.activations,
-            recurrent_weight=quantize_ternary(params.recurrent_weight)
-            if params.recurrent_weight is not None
-            else None,
+            recurrent_weight=q_recurrent,
             beta=0.0,
             target=None,
             max_steps=20,

@@ -850,7 +850,11 @@ class StateDynamics(Protocol):
 # ============================================================
 
 
-def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:
+def _compute_hopfield_energy(
+    all_acts: list[Tensor],
+    geometry: Geometry,
+    effective_weights: tuple[Tensor, ...] | None = None,
+) -> Tensor:
     """Compute Hopfield energy for the current state.
 
     E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
@@ -858,6 +862,13 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
 
     Tile meshes answer through their block-view energy when the acts carry
     the settled block layout.
+
+    Args:
+        all_acts: List of activations [input, hidden1, ..., output]
+        geometry: Network geometry
+        effective_weights: Optional substrate-quantized weights (same order as
+            geometry's feedforward weights). If provided, used for interaction
+            energy instead of raw geometry.params.
     """
     # Fast path for tile geometries
     if _is_tile_geometry(geometry, all_acts):
@@ -885,11 +896,20 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     total_energy = total_energy + sum(0.5 * (h**2).sum() for h in acts)
 
     # Interaction energy: -sum h^T * W * h_prev
+    # Use effective_weights if provided, otherwise fall back to geometry.params
+    params_for_interaction = geometry.params
+    if effective_weights is not None:
+        # Create a params dict with effective weights
+        params_for_interaction = dict(geometry.params)
+        for i, w_name in enumerate(weight_names):
+            if i < len(effective_weights):
+                params_for_interaction[w_name] = effective_weights[i]
+
     total_energy = total_energy - _compute_interaction_energy(
-        acts, weight_names, geometry.params, num_hidden, num_ff_weights, all_acts
+        acts, weight_names, params_for_interaction, num_hidden, num_ff_weights, all_acts
     )
 
-    # Bias energy: -sum h^T * b
+    # Bias energy: -sum h^T * b (biases not quantized by substrate)
     total_energy = total_energy - _compute_bias_energy(
         acts, bias_names, geometry.params, num_hidden, num_ff_biases
     )
@@ -1106,6 +1126,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         self._velocity: list[Tensor] | None = None
         self._free_energy_history: list[float] | None = None
         self._settle_steps_used: int = 0
+        self._last_kernel: SubstrateSettleKernel | None = None
 
     def settle(  # ruff: ignore[too-many-statements]
         self,
@@ -1128,6 +1149,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         if kernel is None:
             raise RuntimeError("settle kernel was not initialised")
+
+        # Store kernel for use in compute_energy (effective weights)
+        self._last_kernel = kernel
 
         # Execute the appropriate settling path
         if use_compiled:
@@ -1412,7 +1436,13 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
     ) -> None:
         """Track free energy and check convergence criteria."""
         if self._free_energy_history is not None or on_step is not None:
-            energy_val = _compute_hopfield_energy(acts, geometry).item()
+            # Use effective weights from kernel if available (for substrate quantization)
+            effective_weights = None
+            if self._last_kernel is not None:
+                effective_weights = self._last_kernel.effective_weights()
+            energy_val = _compute_hopfield_energy(
+                acts, geometry, effective_weights
+            ).item()
             # Clamp energy to prevent numerical explosions (TODO39 P0.3) - symmetric clamp
             max_e = self.config.max_energy
             clamped_val = max(-max_e, min(energy_val, max_e))
@@ -1462,7 +1492,11 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             return torch.tensor(0.0)
         if isinstance(acts, list):
             # Use hidden + output layers
-            energy_val = _compute_hopfield_energy(acts, geometry)
+            # Use effective weights from kernel if available (for substrate quantization)
+            effective_weights = None
+            if self._last_kernel is not None:
+                effective_weights = self._last_kernel.effective_weights()
+            energy_val = _compute_hopfield_energy(acts, geometry, effective_weights)
             max_e = self.config.max_energy
             clamped = energy_val.clamp(-max_e, max_e)
             if not torch.allclose(clamped, energy_val):

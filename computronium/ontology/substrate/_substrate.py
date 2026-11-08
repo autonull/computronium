@@ -250,9 +250,7 @@ class SubstrateConfig:
         return {
             "noise_level": {"domain": (0.0, 1.0, "log")},
             "sparsity": {"domain": (0.0, 0.99, "linear")},
-            "precision": {
-                "domain": ["float32", "float16", "bfloat16", "int8", "int4"]
-            },
+            "precision": {"domain": ["float32", "float16", "bfloat16", "int8", "int4"]},
             # Structural: the run chooses its device, not the search.
             "device": {"domain": ["cpu", "cuda", "mps", "fpga"], "kind": "structural"},
         }
@@ -835,12 +833,24 @@ class TernarySubstrate:
         self.config = config or SubstrateConfig.ternary()
 
     def quantize_weights(self, w: Tensor) -> Tensor:
-        # STE ternary quantization: sign(w) * |w|_max
+        # STE ternary quantization with TWN-style scaling (Li et al., 2016)
         # During forward: quantize; during backward: pass-through gradient
         if self.config.weight_bounds is not None:
             max_val = self.config.weight_bounds[1]
-            # Straight-Through Estimator
-            w_quant = torch.sign(w) * max_val
+            # TWN ternary quantization: threshold at 0.7 * E[|w|]
+            # Scale non-zero weights by their mean magnitude
+            w_abs_mean = w.abs().mean()
+            threshold = 0.7 * w_abs_mean
+            # Compute scaling factor for non-zero weights
+            mask = w.abs() > threshold
+            alpha = w[mask].abs().mean() if mask.any() else max_val
+            alpha = min(alpha, max_val)
+            # Quantize: sign(w) * alpha for |w| > threshold, else 0
+            w_quant = torch.where(
+                w.abs() > threshold,
+                torch.sign(w) * alpha,
+                torch.zeros_like(w),
+            )
             # STE: forward quantized, backward identity
             w = w_quant.detach() + (w - w.detach())
         return w
