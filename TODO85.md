@@ -1,112 +1,126 @@
-# TODO85 — Continuous Experiment/Improve Cycle (Post-TODO84)
+# TODO85 — Results-Now Strategy (Post-TODO84)
 
-**Status:** Supersedes TODO84.md. All blockers fixed, all tests pass (883/883), system ready for continuous evidence-gathering.
-**Machine:** 16 cores, RTX 3080 10 GB, 31 GB RAM, Linux 7.3.1-1-cachyos
-**Codebase:** computronium main (commit `3adf259e` → latest)
-**Constraint:** Each experiment ≤30 min walltime. Stay general, versatile, hypothesis-agnostic.
+**Status:** Supersedes TODO84. All blockers fixed, all tests pass (883/883).
+**Constraint:** Produce publishable evidence ASAP. No exploration. No "learning cycles." Ship results.
 
 ---
 
-## 🔄 EXPERIMENT CYCLE TEMPLATE (≤30 min each)
+## 🎯 STRATEGY: THREE PARALLEL TRACKS, NO DEVIATION
+
+| Track | Goal | Time/Week | Success Metric |
+|-------|------|-----------|----------------|
+| **A: Evidence** | Run ladder experiments that answer specific questions | 60% | ≥3 claim-grade cells per question |
+| **B: Fix Blockers** | Fix anything that breaks Track A | 20% | 0 worker crashes, 0 flaky tests |
+| **C: Ship** | Auto-generate paper figures, release artifacts | 20% | 1 figure/week, v1.2.0 ready |
+
+**No track runs alone. Every session = A + (B if needed) + C.**
+
+---
+
+## 📋 QUESTION BACKLOG (Priority Order — Answer These)
+
+| # | Question | Experiment (≤30 min) | Track A Command |
+|---|----------|---------------------|-----------------|
+| 1 | **Why ternary fails?** | Digital vs Ternary × weight_bits × LR | `./experiment_shallow.sh 0.3 --ladder --policy tpe --device cpu -w 4 --tasks digits --axes '{"substrate":["digital","ternary"],"credit":["gradient"],"update":["euclidean"]}' --hyperparams '{"substrate.weight_bits":[4,8,16,32],"dynamics.step_size":[1e-3,1e-2,1e-1]}' --skip-doctor` |
+| 2 | **Gradient vs other credits?** | All credits × Digital × digits/fashion | `./experiment_shallow.sh 0.3 --ladder --policy tpe --device cpu -w 4 --tasks digits,fashion --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean"],"substrate":["digital"]}' --skip-doctor` |
+| 3 | **Lion vs Euclidean vs Muon?** | All updates × Gradient × Digital | `./experiment_shallow.sh 0.3 --ladder --policy tpe --device cpu -w 4 --tasks digits,fashion,mnist --axes '{"credit":["gradient"],"update":["euclidean","lion","muon","natural_gradient"],"substrate":["digital"]}' --skip-doctor` |
+| 4 | **Plasticity value?** | null vs rule_state vs temporal_psi × Gradient | `./experiment_shallow.sh 0.3 --ladder --policy tpe --device cpu -w 4 --tasks digits --axes '{"plasticity":["null","rule_state","temporal_psi"],"credit":["gradient"],"update":["euclidean"],"substrate":["digital","ternary"]}' --skip-doctor` |
+| 5 | **Dynamics × Substrate?** | All dynamics × Digital/Ternary | `./experiment_shallow.sh 0.3 --ladder --policy tpe --device cpu -w 4 --tasks digits --axes '{"dynamics":["instantaneous","energy_minimization","lazy","error_predictive_coding"],"substrate":["digital","ternary"],"credit":["gradient"],"update":["euclidean"]}' --skip-doctor` |
+| 6 | **Full matrix (paper figure)** | Credit×Update×Substrate×Plasticity | `./experiment_shallow.sh 1.0 --ladder --policy tpe --device cpu -w 6 --tasks digits --axes '{"credit":["gradient","homeostatic","pc_alm","target_inversion","thermodynamic_contrast"],"update":["euclidean","lion","muon"],"substrate":["digital","ternary"],"plasticity":["null","rule_state"]}' --skip-doctor` |
+
+**Run in order. Stop when you have 3 claim-grade cells per question. Move to next.**
+
+---
+
+## ⚡ SESSION PROTOCOL (Copy-Paste-Run)
 
 ```bash
-# 1. HYPOTHESIZE: Pick 1-3 axes to vary (credit, update, substrate, dynamics, plasticity, geometry, task)
-# 2. RUN: 0.1-0.5h ladder experiment with TPE
-# 3. ANALYZE: comp report + comp coverage + look for patterns
-# 4. IMPROVE: Fix bugs, add metrics, refine search space, update docs
-# 5. COMMIT: Log findings, update TODO85.md, push
-```
-
-### Standard Command (adapt axes/hyperparams as needed)
-```bash
-./experiment_shallow.sh 0.2 --ladder --policy tpe --device cpu --workers 4 \
-  --tasks digits \
-  --axes '{"axis1":["val1","val2"],"axis2":["valA","valB"],"axis3":["valX"]}' \
-  --hyperparams '{"param1":[v1,v2],"param2":[v3]}' \
-  --skip-doctor
-```
-
-### Analysis Commands
-```bash
-uv run comp report --store <latest>.duckdb --format text
-uv run comp coverage report --store <latest>.duckdb
-uv run comp dashboard --store <latest>.duckdb --console  # Ctrl+C to exit
-```
-
----
-
-## 🎯 GENERAL EXPERIMENT DIRECTIONS (Mix & Match)
-
-| Direction | Axes to Vary | Hyperparams to Sweep | Questions |
-|-----------|-------------|---------------------|-----------|
-| **Credit × Update** | credit, update | step_size, lr | Which credit/update pairs generalize? |
-| **Substrate Robustness** | substrate, credit | weight_bits, init_scale | Where does quantization hurt? |
-| **Dynamics Compatibility** | dynamics, substrate, credit | step_size, energy_weight | Which dynamics work on which substrates? |
-| **Plasticity Effects** | plasticity, credit, update | psi_scale, rule_lr | When does plasticity help/hurt? |
-| **Geometry × Task** | geometry, task | hidden_dims, kernel_size | Architecture-task fit? |
-| **Optimizer Comparison** | update, credit | lr, momentum, weight_decay | Lion vs Muon vs Euclidean vs NGD? |
-| **Fidelity Scaling** | (use --ladder) | n_seeds, epochs | L0→L1→L2 promotion efficiency? |
-| **Sampler Efficiency** | (use --policy tpe/nsga2/random) | n_startup_trials | TPE vs Random vs NSGA-II? |
-
----
-
-## 🛠️ SYSTEM IMPROVEMENT BACKLOG (Pick 1 per cycle)
-
-| Area | Quick Wins (≤30 min) | Deeper Work |
-|------|---------------------|-------------|
-| **Ternary Substrate** | Add LR auto-scaling by weight_bits | Straight-through estimator, noise metrics |
-| **CUDA Multi-Worker** | Verify spawn + single GPU per worker | torch.distributed, context isolation |
-| **Search Space** | Add incompatibility filter at harvest | Pruning, min_samples_per_combo ordering |
-| **Metrics** | Add gradient norm, weight norm, energy | Jacobian spectrum, loss landscape |
-| **Dashboard** | Fix console exit, add heatmap view | Real-time updates, export |
-| **Reproducibility** | Auto-generate run.json with git SHA | Hyperparameter importance, seed tracking |
-
----
-
-## 📋 CYCLE LOG (Append each iteration)
-
-| Cycle | Experiment (axes/hyperparams) | Walltime | Key Finding | Improvement Made |
-|-------|------------------------------|----------|-------------|------------------|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
-| ... | | | | |
-
----
-
-## 🚀 QUICK START (Copy-Paste-Adapt)
-
-```bash
-# Pick axes (1-3), hyperparams (optional), run:
-./experiment_shallow.sh 0.2 --ladder --policy tpe --device cpu --workers 4 \
-  --tasks digits \
-  --axes '{"credit":["gradient","homeostatic"],"update":["euclidean","lion"],"substrate":["digital","ternary"]}' \
-  --skip-doctor
-
-# Analyze:
+# 1. PICK NEXT UNANSWERED QUESTION FROM BACKLOG
+# 2. RUN EXACT COMMAND FROM TABLE (adapt time/workers only)
+# 3. ANALYZE (30 sec):
 uv run comp report --store experiments/experiment_$(ls -t experiments/*.duckdb | head -1).duckdb --format text
-uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*.duckdb | head -1).duckdb
-
-# Log cycle in TODO85.md, commit, repeat.
+# 4. LOG RESULT IN THIS FILE (see Cycle Log below)
+# 5. IF BROKEN → TRACK B FIX (≤15 min), THEN RE-RUN
+# 6. AUTO-GENERATE FIGURE (Track C):
+uv run comp heatmap --store <latest>.duckdb --x credit --y update --z val_acc --out fig_q{N}.png
+# 7. COMMIT + PUSH
 ```
 
 ---
 
-## 📝 COMMIT HISTORY (Baseline from TODO84)
+## 🔧 TRACK B: BLOCKER FIXES (Only When Track A Breaks)
+
+| Blocker | Fix | Time |
+|---------|-----|------|
+| Worker crash | Add deadline/timeout in wave.py | 15 min |
+| Flaky test | Fix test, not code | 10 min |
+| Ternary gradient quality | Add LR scaling by weight_bits | 20 min |
+| CUDA multi-worker | Spawn + single GPU context | 30 min |
+| Search space too large | Add incompatibility filter at harvest | 20 min |
+
+**Fix only what blocks current question. No preventive work.**
+
+---
+
+## 📊 TRACK C: SHIP ARTIFACTS (Every Session)
+
+| Artifact | Command | Destination |
+|----------|---------|-------------|
+| Heatmap | `uv run comp heatmap --store X --x A --y B --z val_acc --out fig.png` | `docs/figures/` |
+| Ladder promotion | `uv run comp ladder --store X --out ladder.png` | `docs/figures/` |
+| Comparison | `uv run comp compare --stores X Y --metric val_acc --by credit --out comp.csv` | `docs/data/` |
+| Release note | `git log --oneline --since="1 week ago" > RELEASE_NOTES.md` | root |
+
+**One artifact per question answered. Accumulate toward paper.**
+
+---
+
+## 📝 CYCLE LOG (Fill In As You Go)
+
+| Q# | Question | Walltime | Claim-Grade Cells | Key Finding | Artifact | Fixed |
+|----|----------|----------|-------------------|-------------|----------|-------|
+| 1 | | | | | | |
+| 2 | | | | | | |
+| 3 | | | | | | |
+| 4 | | | | | | |
+| 5 | | | | | | |
+| 6 | | | | | | |
+
+---
+
+## 🚫 EXPLICITLY FORBIDDEN
+
+- ❌ "Explore" or "see what happens"
+- ❌ Running experiments not in the backlog
+- ❌ Fixing things that aren't breaking current experiment
+- ❌ Adding features not needed for current question
+- ❌ Meetings, planning, retrospectives
+- ❌ Any cycle > 30 min walltime
+
+---
+
+## 📦 COMMIT HISTORY (Baseline)
 
 | Commit | Message |
 |--------|---------|
 | `3adf259e` | Fix planner _seen not cleared between startup trials and wave loop |
-| `3744b6da` | Improve experiment_shallow.sh: add --skip-doctor flag and skip doctor by default |
-| `eee8bc91` | Fix test expectation: priors registry has 5 entries (not 28) |
-| `9f07a70d` | Fix all pre-existing test failures: NTM, RandomProjections, integration regexes |
-| `60fe60cd` | Fix integration test: update error message regex for PC-ALM credit validation |
-| `fc062fb6` | Update TODO84.md: add test_policy_generation_lock fix to commit history |
-| `d91cdfe9` | Fix test_policy_generation_lock: add DiverseRandomPolicy to test fixtures |
-| `3f51e370` | Fix TPE sampler: add min_samples_per_combo to prevent COMBO_INSUFFICIENT_SAMPLES |
-| `131b528b` | Fix registry exports: add reference_forward, kernel_*, and cases module public functions |
-| ... | (see TODO84.md for full history) |
+| `3744b6da` | Improve experiment_shallow.sh: add --skip-doctor flag |
+| `9f07a70d` | Fix all pre-existing test failures |
+| `60fe60cd` | Fix integration test regex |
+| `3f51e370` | Fix TPE sampler: min_samples_per_combo |
+| `131b528b` | Fix registry exports |
+| ... | (see TODO84.md) |
 
 ---
 
-> **Principle:** Run → Observe → Improve → Repeat. No fixed hypothesis. Let data guide.
+## 🏁 START NOW
+
+```bash
+# Question 1: Why ternary fails?
+./experiment_shallow.sh 0.3 --ladder --policy tpe --device cpu -w 4 --tasks digits \
+  --axes '{"substrate":["digital","ternary"],"credit":["gradient"],"update":["euclidean"]}' \
+  --hyperparams '{"substrate.weight_bits":[4,8,16,32],"dynamics.step_size":[1e-3,1e-2,1e-1]}' \
+  --skip-doctor
+```
+
+**Run it. Analyze. Log. Fix if broken. Generate figure. Commit. Next question.**
