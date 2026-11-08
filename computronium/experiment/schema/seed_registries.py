@@ -1129,6 +1129,37 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Geometry-Dynamics-Credit: non-layered geometries with instantaneous dynamics
+    # cannot use gradient/backprop credit because instantaneous pass doesn't properly
+    # compute gradients through output projection/head weights.
+    # Non-layered geometries: conv, attention, tile_mesh, tile, nca, ntm, spatial_lattice, graph, causal_transformer
+    ConstraintSpec(
+        name="nonlayered_instantaneous_gradient_credit",
+        kind=ConstraintKind.VOID,
+        description="Non-layered geometries with instantaneous dynamics incompatible with gradient/backprop credit (output projection gradients disconnected)",
+        predicate=not_(
+            and_(
+                in_(
+                    var("geometry"),
+                    const([
+                        "conv",
+                        "attention",
+                        "tile_mesh",
+                        "tile",
+                        "nca",
+                        "ntm",
+                        "spatial_lattice",
+                        "graph",
+                        "causal_transformer",
+                    ]),
+                ),
+                eq(var("dynamics"), const("instantaneous")),
+                in_(var("credit"), const(["gradient", "backprop"])),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Credit-Dynamics: thermodynamic contrast needs energy/PC-family/lazy/pc_alm dynamics
     ConstraintSpec(
         name="thermodynamic_contrast_dynamics",
@@ -1188,6 +1219,22 @@ CONSTRAINTS = [
         predicate=or_(
             not_(eq(var("substrate"), const("ternary"))),
             not_(eq(var("dynamics"), const("pc_alm"))),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Substrate-Geometry-Dynamics: sparse substrate with recurrent + energy_minimization
+    # causes numerical instability (non-finite metrics)
+    ConstraintSpec(
+        name="sparse_recurrent_energy_minimization",
+        kind=ConstraintKind.VOID,
+        description="Sparse substrate with recurrent geometry and energy_minimization dynamics causes numerical instability",
+        predicate=not_(
+            and_(
+                eq(var("substrate"), const("sparse")),
+                eq(var("geometry"), const("recurrent")),
+                eq(var("dynamics"), const("energy_minimization")),
+            )
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",

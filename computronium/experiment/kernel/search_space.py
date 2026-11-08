@@ -233,8 +233,11 @@ def _is_geometry_task_compatible(geometry: str, task_shape: TaskShape) -> bool:
     Some geometries require specific input structures (e.g., NTM needs 1D,
     Graph needs graph structure, Tile needs specific spatial dims).
     """
-    input_shape = task_shape.input_shape
-    ndim = len(input_shape)
+    input_shape = task_shape.input_dim
+    if isinstance(input_shape, int):
+        ndim = 1
+    else:
+        ndim = len(input_shape)
 
     # Graph geometry requires graph structure (edge_index) - not standard vision tasks
     if geometry == "graph":

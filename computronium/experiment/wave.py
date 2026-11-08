@@ -807,10 +807,10 @@ def _evaluate_cells_parallel(
                         )
                         for fut in pending:
                             fut.cancel()
-                        # Wait for cancellations to complete
+                        # Wait for cancellations to complete with timeout
                         for fut in pending:
                             with contextlib.suppress(Exception):
-                                fut.result()
+                                fut.result(timeout=5.0)
                         break
 
                     # Use timeout to periodically check deadline even if no futures complete
@@ -822,6 +822,9 @@ def _evaluate_cells_parallel(
                         del pending[future]
                         try:
                             record = future.result(timeout=cell_timeout_seconds)
+                        except TimeoutError:
+                            logger.warning("Cell evaluation timed out after %.1fs", cell_timeout_seconds)
+                            continue
                         except Exception as exc:
                             logger.warning("Cell evaluation raised: %s", exc)
                             continue
