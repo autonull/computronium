@@ -48,7 +48,7 @@ CPU_THREADS="1"
 # Handle --help/-h immediately
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
     cat <<'EOF'
-Usage: experiment_shallow.sh <hours> [--mode static|learn] [--static] [--learn] [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda] [--param-budget N] [--n-seeds N] [--epochs N] [--batch-limit N] [--axes JSON] [--hyperparams JSON] [--objectives LIST] [--verbose] [--self-test] [--doctor] [--resume] [--policy tpe|nsga2|random] [--ladder] [--cpu-threads N]
+Usage: experiment_shallow.sh <hours> [--mode static|learn] [--static] [--learn] [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda] [--param-budget N] [--n-seeds N] [--epochs N] [--batch-limit N] [--axes JSON] [--hyperparams JSON] [--objectives LIST] [--verbose] [--self-test] [--doctor] [--skip-doctor] [--resume] [--policy tpe|nsga2|random] [--ladder] [--cpu-threads N]
 
 Runs an experiment with a time budget in hours.
 Default mode is "learn" (LearningSurvey with TPE sampler and fidelity ladder).
@@ -79,6 +79,7 @@ Options:
   --verbose, -v             Verbose progress output
   --self-test               Run environment self-test before experiment
   --doctor                  Run environment diagnostics only, no experiment
+  --skip-doctor             Skip automatic diagnostics (runs once per session by default)
   --resume                  Resume from existing store, skip measured cells (static mode)
   --cpu-threads N           Torch threads per worker (default: 1)
   --help, -h                Show this help
@@ -207,6 +208,10 @@ while [[ $# -gt 0 ]]; do
             DOCTOR_MODE=true
             shift
             ;;
+        --skip-doctor)
+            SKIP_DOCTOR=1
+            shift
+            ;;
         --resume)
             RESUME=true
             shift
@@ -244,11 +249,17 @@ if [[ "${DOCTOR_MODE}" == true ]]; then
     exit 0
 fi
 
-# Run doctor automatically if first run to diagnose issues (unless self-test enabled)
-if [[ "${SELF_TEST}" == false && -z "${SKIP_DOCTOR:-}" ]]; then
-    echo ">>> Running quick diagnostics (use SKIP_DOCTOR=1 to skip)..."
-    run_doctor
-    echo ""
+# Run doctor automatically if first run to diagnose issues (unless explicitly skipped)
+# Skip by default to avoid overhead; run with --doctor or set SKIP_DOCTOR=0 to force
+if [[ "${SELF_TEST}" == false && "${DOCTOR_MODE}" == false && "${SKIP_DOCTOR:-1}" != "0" ]]; then
+    # Check if we've run doctor before in this session
+    DOCTOR_MARKER="/tmp/computronium_doctor_ran_$$"
+    if [[ ! -f "${DOCTOR_MARKER}" ]]; then
+        echo ">>> Running quick diagnostics (use --doctor to run explicitly, SKIP_DOCTOR=0 to force)..."
+        run_doctor
+        echo ""
+        touch "${DOCTOR_MARKER}"
+    fi
 fi
 
 # Check uv is available
