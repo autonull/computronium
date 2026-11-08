@@ -611,19 +611,32 @@ class PolicyPlanner:
 
     def __iter__(self):
         """Iterator of (Coordinate, Schedule) from the policy."""
+        from itertools import cycle
+
         from computronium.experiment.execution.policy import ProposalContext
         from computronium.experiment.kernel.evaluate import task_shape
 
+        # Use task_cycle from spec if available, else fall back to tasks
+        task_cycle = (
+            self.spec.task_cycle
+            if self.spec.task_cycle
+            else (self.tasks if self.tasks else ["digits"])
+        )
+        task_cycler = cycle(task_cycle)
+
+        # Get all proposals for the wave at once (better TPE diversity)
         ctx = ProposalContext(
             search_space=self.search_space,
             spec=self.spec,
             run_id="learning_survey",
             n_propose=self._wave_size,
-            task=self.tasks[0] if self.tasks else None,
+            task=task_cycle[0]
+            if task_cycle
+            else "digits",  # base task for search space
             shape=task_shape,
             deadline=None,
         )
-        proposals = self._policy.propose(ctx)
+        proposals = list(self._policy.propose(ctx))
 
         for prop in proposals:
             if len(self._seen) >= self._wave_size:
@@ -631,7 +644,7 @@ class PolicyPlanner:
             coord = prop.coordinate
             if not _check_coord_compatibility(coord):
                 continue
-            task = getattr(prop, "task", self.tasks[0] if self.tasks else "digits")
+            task = next(task_cycler)
             schedule = schedule_for(self.spec, task, self.fidelity)
             measurement_key = coord.measurement_key(schedule)
             if measurement_key in self._seen:
@@ -772,6 +785,7 @@ def _evaluate_cells_parallel(
 
         # Force 'spawn' start method to avoid forkserver issues with PyTorch (scipy sets forkserver)
         import multiprocessing as mp
+
         try:
             mp.set_start_method("spawn", force=True)
         except RuntimeError:
@@ -817,13 +831,18 @@ def _evaluate_cells_parallel(
                     wait_timeout = 10.0
                     if deadline is not None:
                         wait_timeout = min(wait_timeout, max(0.1, deadline - now))
-                    done_futures = wait(pending, return_when=FIRST_COMPLETED, timeout=wait_timeout).done
+                    done_futures = wait(
+                        pending, return_when=FIRST_COMPLETED, timeout=wait_timeout
+                    ).done
                     for future in done_futures:
                         del pending[future]
                         try:
                             record = future.result(timeout=cell_timeout_seconds)
                         except TimeoutError:
-                            logger.warning("Cell evaluation timed out after %.1fs", cell_timeout_seconds)
+                            logger.warning(
+                                "Cell evaluation timed out after %.1fs",
+                                cell_timeout_seconds,
+                            )
                             continue
                         except Exception as exc:
                             logger.warning("Cell evaluation raised: %s", exc)
@@ -864,7 +883,10 @@ def _evaluate_cells_parallel(
 
 
 def _generate_report(store_path: str, run_id: str) -> dict[str, Any]:
-    from computronium.experiment.surface.report import ReportGenerator, RunSummary as ReportRunSummary
+    from computronium.experiment.surface.report import (
+        ReportGenerator,
+        RunSummary as ReportRunSummary,
+    )
 
     store_config = StoreConfig(path=Path(store_path))
     with RecordStore(store_config) as store:
@@ -1020,7 +1042,13 @@ def _run_ladder_promotion(
             total_elapsed * workers / len(all_results) if all_results else 60.0
         )
         n_replicates = ladder_replicates.get(target_fid, 1)
-        n_promote = max(1, min(MAX_PROMOTE_CELLS, int(fid_budget * workers / max(1.0, measured_cost * n_replicates))))
+        n_promote = max(
+            1,
+            min(
+                MAX_PROMOTE_CELLS,
+                int(fid_budget * workers / max(1.0, measured_cost * n_replicates)),
+            ),
+        )
 
         # Take top n_promote cells
         promote_candidates = sorted_cells[:n_promote]
@@ -1299,7 +1327,11 @@ def run_waves(
         if all_results:
             measured_cost = total_elapsed * workers / len(all_results)
             n_wave = max(
-                1, min(MAX_WAVE_CELLS, int(budget_remaining * workers / max(1.0, measured_cost)))
+                1,
+                min(
+                    MAX_WAVE_CELLS,
+                    int(budget_remaining * workers / max(1.0, measured_cost)),
+                ),
             )
         else:
             n_wave = min(MAX_WAVE_CELLS, workers * 2)
@@ -1487,6 +1519,7 @@ def _build_spec(params: _SpecParams) -> RunSpec:
         profile="survey",
         task=params.tasks[0] if params.tasks else "auto",
         tasks=tuple(params.tasks) if params.tasks else (),
+        task_cycle=list(params.tasks) if params.tasks else [],
         objectives=params.objectives or ("validation_accuracy", "energy_per_step"),
         fidelity=params.fidelity,
         n_seeds=n_seeds,
