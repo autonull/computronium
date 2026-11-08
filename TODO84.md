@@ -158,7 +158,8 @@ From 2026-11-07 experiment runs (H1/H2/H3 ladder promotions):
 
 | Commit | Message |
 |--------|---------|
-| `HEAD` | Improve experiment_shallow.sh: add --skip-doctor flag and skip doctor by default |
+| `HEAD` | Fix planner _seen not cleared between startup trials and wave loop |
+| `3adf259e` | Fix planner _seen not cleared between startup trials and wave loop |
 | `3744b6da` | Improve experiment_shallow.sh: add --skip-doctor flag and skip doctor by default |
 | `eee8bc91` | Fix test expectation: priors registry has 5 entries (not 28) |
 | `9f07a70d` | Fix all pre-existing test failures: NTM, RandomProjections, integration regexes |
