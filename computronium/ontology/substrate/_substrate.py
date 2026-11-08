@@ -127,7 +127,7 @@ class SubstrateConfig:
         cls,
         *,
         noise_level: float = 0.01,
-        sparsity: float = 0.95,
+        sparsity: float = 0.0,
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
