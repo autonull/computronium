@@ -3,6 +3,13 @@
     "cost_per_cell_s": 4.544,
     "startup_s": 7.47
   },
+  "cpu/L0/1": {
+    "cost_per_cell_s": 6.006,
+    "per_task": {
+      "digits": 1.24
+    },
+    "startup_s": 0.0
+  },
   "cpu/L0/12": {
     "cost_per_cell_s": 55.16,
     "per_task": {
@@ -17,10 +24,38 @@
     },
     "startup_s": 0.0
   },
+  "cpu/L0/2": {
+    "cost_per_cell_s": 10.676,
+    "per_task": {
+      "digits": 4.441
+    },
+    "startup_s": 0.0
+  },
+  "cpu/L0/3": {
+    "cost_per_cell_s": 2.2,
+    "per_task": {
+      "digits": 1.299
+    },
+    "startup_s": 0.0
+  },
+  "cpu/L0/4": {
+    "cost_per_cell_s": 2.836,
+    "per_task": {
+      "digits": 1.895
+    },
+    "startup_s": 0.0
+  },
   "cpu/L0/6": {
     "cost_per_cell_s": 128.352,
     "per_task": {
       "xor": 32.61
+    },
+    "startup_s": 0.0
+  },
+  "cpu/L0/8": {
+    "cost_per_cell_s": 11.004,
+    "per_task": {
+      "digits": 2.764
     },
     "startup_s": 0.0
   },

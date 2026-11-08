@@ -337,7 +337,7 @@ def _update_task_metrics(
     """Update metrics with task-specific evaluation."""
     try:
         task_metrics = task.evaluate(
-            cell.system.geometry, split=TaskSplit.VAL, max_batches=schedule.batch_limit
+            cell.system, split=TaskSplit.VAL, max_batches=schedule.batch_limit
         )
         metrics.update(task_metrics.to_dict())
     except Exception as exc:  # ruff: ignore[blind-except] - evaluation must not fail the cell

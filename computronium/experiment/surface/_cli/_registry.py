@@ -56,7 +56,7 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
             asyncio.run(
                 run_console_dashboard(
                     store_path=args.store,
-                    run_queue=run_queue,
+                    campaign_queue=run_queue,
                     update_interval=args.update_interval,
                 )
             )

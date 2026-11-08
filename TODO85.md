@@ -72,9 +72,11 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 
 | Run | Axes | Walltime | Crashes | Gate Failures | Worst Combo | Fix Applied |
 |-----|------|----------|---------|---------------|-------------|-------------|
-| 1 | | | | | | |
-| 2 | | | | | | |
-| 3 | | | | | | |
+| 1 | credit: gradient,homeostatic; update: euclidean,lion; substrate: digital; plasticity: null | 223s | 0 | 0 | nca/instantaneous/gradient/euclidean (0.89) | Fixed geometry-task compatibility filter in search_space.py |
+| 2 | credit: gradient,homeostatic; update: euclidean,lion; substrate: digital,ternary; plasticity: null,rule_state | 131s | 0 | 8 (ternary combos) | ternary/recurrent/instantaneous/rule_state | Added JointSystem __call__, training mode support |
+| 3 | credit: gradient,thermodynamic_contrast; update: euclidean,lion; substrate: digital; plasticity: null; dynamics: instantaneous,energy_minimization | 124s | 0 | 0 | nca/instantaneous/gradient/euclidean (0.95) | 8 workers default, SKIP_DOCTOR=1 |
+| 4 | credit: gradient,target_inversion,pepita; update: euclidean,muon; substrate: digital; plasticity: null; geometry: feedforward,recurrent,conv | 97s | 0 | 0 | feedforward/instantaneous/gradient/muon (0.99) | Muon update, spike_integration dynamics work |
+| 5 | credit: gradient,temporal_trace; update: euclidean,lion; substrate: digital,neuromorphic; plasticity: null; dynamics: instantaneous,spike_integration | 61s | 0 | 0 | neuromorphic/feedforward/spike_integration/temporal_trace (0.16) | Neuromorphic + spike_integration works |
 
 ---
 

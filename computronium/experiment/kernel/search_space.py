@@ -218,10 +218,49 @@ def _is_geometry_dynamics_compatible(geometry: str, dynamics: str) -> bool:
         "nca",
         "ntm",
         "causal_transformer",
+        "tile",
+        "tile_mesh",
     }:
         if dynamics != "instantaneous":
             return False
 
+    return True
+
+
+def _is_geometry_task_compatible(geometry: str, task_shape: TaskShape) -> bool:
+    """Check if a geometry is compatible with a task's input shape.
+
+    Some geometries require specific input structures (e.g., NTM needs 1D,
+    Graph needs graph structure, Tile needs specific spatial dims).
+    """
+    input_shape = task_shape.input_shape
+    ndim = len(input_shape)
+
+    # NTM requires 1D flattened input (batch, features) - not spatial
+    if geometry == "ntm":
+        return ndim == 1
+
+    # Graph geometry requires graph structure (edge_index) - not standard vision tasks
+    if geometry == "graph":
+        return False  # Vision tasks don't provide graph structure
+
+    # Tile/Tile_mesh have specific spatial requirements and config issues with vision tasks
+    if geometry in {"tile", "tile_mesh"}:
+        return False  # Disable for now due to input_dim config issues
+
+    # Attention expects 1D sequence input (B, L, D) or flattened
+    if geometry == "attention":
+        return ndim == 1
+
+    # Conv and NCA require spatial input (2D+)
+    if geometry in {"conv", "nca", "spatial_lattice"}:
+        return ndim >= 2
+
+    # Causal transformer expects 1D sequence
+    if geometry == "causal_transformer":
+        return ndim == 1
+
+    # Feedforward and recurrent accept any input (they flatten)
     return True
 
 
@@ -1007,6 +1046,14 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             if use_void_cache and void_cache:
                 void_cache.record_void(coordinate)
             continue
+
+        # Explicit geometry-task compatibility filter
+        if shape is not None:
+            task_shape = shape(task)
+            if not _is_geometry_task_compatible(coordinate.geometry, task_shape):
+                if use_void_cache and void_cache:
+                    void_cache.record_void(coordinate)
+                continue
 
         if (
             check_composable

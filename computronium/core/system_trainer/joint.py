@@ -193,6 +193,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
         credit: TC
         update: TU
         _kernel_backend: KernelBackend | None = None
+        _training: bool = True
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             """Execute one training step through the family-neutral pipeline."""
@@ -246,6 +247,24 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
             from computronium.core.pipeline import run_forward
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
+
+        def __call__(self, x: Tensor) -> Tensor:
+            return self.forward(x)
+
+        @property
+        def training(self) -> bool:
+            """PyTorch compatibility: training mode flag."""
+            return getattr(self, "_training", True)
+
+        def train(self, mode: bool = True) -> _JointSystem:
+            """Set training mode. Compatibility with PyTorch nn.Module interface."""
+            object.__setattr__(self, "_training", mode)
+            return self
+
+        def eval(self) -> _JointSystem:
+            """Set evaluation mode. Compatibility with PyTorch nn.Module interface."""
+            object.__setattr__(self, "_training", False)
+            return self
 
         def attach_kernel_backend(self, backend: KernelBackend) -> None:
             """Attach a kernel backend for accelerated training.

@@ -24,7 +24,7 @@ MODE="learn"          # static | learn
 POLICY="tpe"          # tpe | nsga2 | random (learn mode only)
 FIDELITY="L0"
 TASKS="auto"
-MAX_WORKERS="auto"
+MAX_WORKERS="8"
 STORE_PATH=""
 PROMOTE_FROM=""
 PROMOTE_TOP=20
@@ -250,8 +250,8 @@ if [[ "${DOCTOR_MODE}" == true ]]; then
 fi
 
 # Run doctor automatically if first run to diagnose issues (unless explicitly skipped)
-# Skip by default to avoid overhead; run with --doctor or set SKIP_DOCTOR=0 to force
-if [[ "${SELF_TEST}" == false && "${DOCTOR_MODE}" == false && "${SKIP_DOCTOR:-1}" != "0" ]]; then
+# Skip by default to avoid overhead; run with --doctor to force
+if [[ "${SELF_TEST}" == false && "${DOCTOR_MODE}" == false && "${SKIP_DOCTOR:-1}" == "1" ]]; then
     # Check if we've run doctor before in this session
     DOCTOR_MARKER="/tmp/computronium_doctor_ran_$$"
     if [[ ! -f "${DOCTOR_MARKER}" ]]; then
