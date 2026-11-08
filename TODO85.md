@@ -77,6 +77,9 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 3 | credit: gradient,thermodynamic_contrast; update: euclidean,lion; substrate: digital; plasticity: null; dynamics: instantaneous,energy_minimization | 124s | 0 | 0 | nca/instantaneous/gradient/euclidean (0.95) | 8 workers default, SKIP_DOCTOR=1 |
 | 4 | credit: gradient,target_inversion,pepita; update: euclidean,muon; substrate: digital; plasticity: null; geometry: feedforward,recurrent,conv | 97s | 0 | 0 | feedforward/instantaneous/gradient/muon (0.99) | Muon update, spike_integration dynamics work |
 | 5 | credit: gradient,temporal_trace; update: euclidean,lion; substrate: digital,neuromorphic; plasticity: null; dynamics: instantaneous,spike_integration | 61s | 0 | 0 | neuromorphic/feedforward/spike_integration/temporal_trace (0.16) | Neuromorphic + spike_integration works |
+| 6 | credit: gradient,homeostatic; update: euclidean,lion; substrate: digital; plasticity: null | 130s | 0 | 0 | nca/instantaneous/gradient/euclid (0.96) | Fixed tile/NTM/attention input flattening; geometry coverage 5→9/11 |
+| 7 | credit: gradient,thermodynamic_contrast,pepita; update: euclidean,muon,lion; substrate: digital,ternary; plasticity: null; dynamics: instantaneous,energy_minimization | 124s | 6 | 6 (ternary+energy_min+thermo/pepita) | ternary/recur/energy_min/thermo/lion | Ternary substrate validation needs work |
+| 8 | credit: gradient,thermodynamic_contrast; update: euclidean,muon; substrate: digital; plasticity: null,rule_state; dynamics: instantaneous,energy_minimization | 174s | 0 | 0 | recur/energy_min/rule_state/grad/muon (0.97) | rule_state + muon works |
 
 ---
 
