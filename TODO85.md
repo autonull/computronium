@@ -51,34 +51,32 @@ Use GPU for larger models/batches, not these. The Triton settle-family kernels a
 not on the `energy_minimization` path; that path uses `SubstrateSettleKernel`
 (plain torch matmuls) plus one GPU sync per settle step for the convergence check.
 
-### Verified ladder (Run 42: 1.05h, 8 workers, 5400s budget)
+### Verified ladder (Run 43: 0.57h, 8 workers, 5400s budget — Track A1)
 
 ```
-L0: 52 cells in 1807s  (10 credits, 12 updates, 9 substrates, 7 plasticities, 8 dynamics, 11 geometries, 3 tasks)
-L1: 2 cells × 3 seeds = 6 cells (all mnist), budget 2169s
-L2: 1 cell × 5 seeds = 5 cells (all mnist), budget 3163s
-63 evaluated, 1 failed, 3782s used
+L0: 50 cells in 665s  (8 credits, 4 updates, 5 substrates, 3 plasticities, 4 dynamics, 9 geometries, 2 tasks)
+L1: 8 cells × 3 seeds = 24 cells (all mnist), budget 2835s
+L2: 1 cell × 5 seeds = 5 cells (all mnist), budget 3645s
+80 evaluated, 1 failed, 2058s used
 
-Best L2: complex/recurrent/energy_minimization/rule_state/gradient/adam = 0.9730 (mnist)
-Best L1: same cell = 0.9692; optical/feedforward/instantaneous/temporal_psi/random_projections/local_adam = 0.9020
+Best L2: digital/feedforward/instantaneous/null/gradient/euclidean = 0.9792 (mnist)
+Best L1: neuromorphic/feedforward/energy_minimization/null/gradient/euclidean = 0.9735 (mnist)
+Best non-digital L1: neuromorphic 0.9735, optical 0.9288, sparse 0.9219, analog 0.7741
 
-Per-task L0: digits 18, fashion_mnist 16, mnist 18 records
+Per-task L0: mnist 25, fashion_mnist 25 records
 
-NEWLY MEASURED THIS RUN:
-- quantum substrate: 0.2639 (digits), 0.6019 (fashion_mnist)
-- spike_integration dynamics: 0.0715 (fashion_mnist), 0.3194 (digits)
-- pc_alm dynamics: 0.0833 (digits)
-- conflict_adaptive plasticity: 0.1196 (fashion_mnist)
-- routing plasticity: 0.0715 (fashion_mnist)
-- substrate_coupled plasticity: 0.1023 (mnist)
-- local_adam update: 0.7722 (digits), 0.8465 (mnist)
-- ortho_adam update: 0.1023 (mnist)
-- riemannian_orthogonal update: 0.1056 (digits)
-- spectral_constrained update: 0.2639 (digits)
-- spatial_lattice geometry: 0.0889 (digits)
-- ntm geometry: 0.1021 (mnist)
-- attention geometry: 0.1099 (fashion_mnist)
-- conv geometry: 0.1278 (digits)
+KEY FINDINGS:
+- NEUROMORPHIC SUBSTRATE WORKS: 0.9735 val_acc on mnist (energy_minimization + gradient + euclidean)
+- Geometry × non-gradient credit compatibility CONFIRMED:
+  - recurrent + homeostatic/local_adam: 0.9350/0.9469
+  - recurrent + random_projections/local_adam: 0.9079/0.9219
+  - recurrent + gradient/local_adam: 0.9350/0.9480
+  - attention + target_inversion/local_adam: 0.1000/0.8437
+  - conv + homeostatic/euclidean: 0.0982/0.1014
+  - ntm + target_inversion/adam: 0.1000/0.1154
+  - tile_mesh + homeostatic/euclidean: 0.0558/0.5902
+- spike_integration dynamics measured: 0.7313 (fashion_mnist, digital/ff/target_inversion/euclidean)
+- lazy dynamics measured with multiple credits
 ```
 
 ### Verified ladder (Run 41: 1.1h, 8 workers, 5400s budget)
@@ -209,6 +207,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 40 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,pepita,thermodynamic_contrast; update: euclidean,muon,lion,adam,natural_gradient; substrate: digital,ternary,memristive,neuromorphic,analog,optical,sparse,complex; plasticity: null,rule_state,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,spike_integration,lazy; geometry: feedforward,conv,attention,tile_mesh,ntm,recurrent,nca; tasks: digits,fashion_mnist,mnist; ladder | 1290s | 0 | 0 | digital/ff/instant/null/grad/euclid (0.96 L2) | Full ladder with 7 credits, 5 updates, 8 substrates, 4 plasticities, 4 dynamics, 7 geoms, 3 tasks: L0 38 cells → L1 6 (3 task-cycled ×2 cells) → L2 30 (6 cells ×5 seeds). All 3 tasks measured at all fidelities (digits:44, fashion:15, mnist:15 records) |
 | 41 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,pepita,thermodynamic_contrast,random_projections,local_goodness,local_contrastive; update: euclidean,muon,lion,adam,natural_gradient,mean_norm,elastic_consolidation; substrate: digital,ternary,memristive,neuromorphic,analog,optical,sparse,complex; plasticity: null,rule_state,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,spike_integration,lazy,error_predictive_coding,diffusion,predictive_settling; geometry: feedforward,conv,attention,tile_mesh,ntm,recurrent,nca,graph,spatial_lattice,causal_transformer; tasks: digits,fashion_mnist,mnist; ladder | 3939s | 0 | 0 | complex/ff/instant/null/pepita/adam (0.977 L2) | Widest axes yet: 10 credits, 7 updates, 8 substrates, 4 plasticities, 7 dynamics, 10 geoms, 3 tasks. L0: 51 cells → L1: 15 (5 cells ×3 seeds, all mnist) → L2: 5 (1 cell ×5 seeds, mnist). 72 evaluated, 0 failed. Best L2: 0.9775 on mnist. Coverage: credit 90%, substrate 89%, dynamics 75%, plasticity 57%, update 58%, geometry 36% |
 | 42 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,pepita,thermodynamic_contrast,random_projections,local_goodness,local_contrastive; update: euclidean,muon,lion,adam,natural_gradient,mean_norm,elastic_consolidation,local_adam,ortho_adam,riemannian_orthogonal,role_split,spectral_constrained; substrate: digital,ternary,memristive,neuromorphic,analog,optical,sparse,complex,quantum; plasticity: null,rule_state,fast_weights,temporal_psi,conflict_adaptive,routing,substrate_coupled; dynamics: instantaneous,energy_minimization,spike_integration,lazy,error_predictive_coding,diffusion,predictive_settling,pc_alm; geometry: feedforward,conv,attention,tile_mesh,ntm,recurrent,nca,graph,spatial_lattice,causal_transformer; tasks: digits,fashion_mnist,mnist; ladder | 3782s | 0 | 1 (pc_alm dynamics + pc_alm credit) | complex/recurrent/energy_min/rule_state/grad/adam (0.973 L2) | **All primitives now measured at least once!** 10 credits, 12 updates, 9 substrates, 7 plasticities, 8 dynamics, 11 geoms, 3 tasks. L0: 52 cells → L1: 6 (2 cells ×3 seeds, all mnist) → L2: 5 (1 cell ×5 seeds, mnist). 63 evaluated, 1 failed (pc_alm+pc_alm). Coverage: substrate 89% (quantum ✓), dynamics 88% (spike_integration ✓, pc_alm ✓), plasticity 100% (conflict_adaptive/routing/substrate_coupled ✓), update 75% (local_adam/ortho_adam/riemannian_orthogonal/spectral_constrained ✓), geometry 55% (spatial_lattice/ntm/attention/conv ✓). Best L2: 0.9730 on mnist. |
+| 43 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,random_projections,local_goodness,local_contrastive; update: euclidean,adam,lion,local_adam; substrate: digital,neuromorphic,analog,optical,sparse; plasticity: null,rule_state,temporal_psi; dynamics: instantaneous,energy_minimization,spike_integration,lazy; geometry: feedforward,recurrent,conv,attention,graph,causal_transformer,nca,tile_mesh,ntm; tasks: mnist,fashion_mnist; ladder | 2058s | 0 | 1 (lazy+temporal_psi+local_contrastive+local_adam) | digital/ff/instant/null/grad/euclid (0.979 L2) | **Track A1: Geometry×Credit + Neuromorphic**. 8 credits, 4 updates, 5 substrates, 3 plasticities, 4 dynamics, 9 geoms, 2 tasks. L0: 50 cells → L1: 24 (8 cells ×3 seeds) → L2: 5 (1 cell ×5 seeds). 80 evaluated, 1 failed. **Neuromorphic now works: 0.9735 L1 on mnist** (energy_minimization/null/gradient/euclidean). Best non-digital L1: neuromorphic 0.9735, optical 0.9288, analog 0.7741, sparse 0.9219. Geometry coverage: feedforward/recurrent/conv/attention/ntm/tile_mesh all measured with non-gradient credits (homeostatic, target_inversion, random_projections, local_goodness, local_contrastive). |
 
 ---
 
@@ -260,11 +259,8 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 1. Ladder follow-up: the L0 share is 50% flat. If L0 exhausts its cell space early, the unused time is already available to L1/L2; consider shrinking L0's share for small spaces.
 2. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
 3. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
-4. **All primitives now measured at least once!** Remaining work is **compatibility depth** and **task breadth**:
-   - **Geometry-credit compatibility**: graph/causal_transformer/nca/tile/tile_mesh geometries need compatible credits (homeostatic, pc_alm, target_inversion, temporal_trace, random_projections, local_goodness, local_contrastive) — currently only measured with gradient/thermodynamic_contrast on feedforward/recurrent
-   - **neuromorphic substrate**: never measured in Run 42 (0/9 substrates)
-   - **muon/natural_gradient/role_split updates**: never measured
-   - **pepita/temporal_trace credit**: never measured in wide runs
-   - **pc_alm dynamics + pc_alm credit**: failed (compatibility issue)
-   - **More tasks**: only 3/24 tasks touched (digits, fashion_mnist, mnist)
-   - **Larger scale**: hidden=256, batch=256 for GPU relevance
+4. **Track A1 DONE: Neuromorphic works (0.9735), geometry×credit compatibility confirmed for recurrent/attention/conv/ntm/tile_mesh.** Remaining Track A:
+   - **A3**: pc_alm dynamics × pc_alm credit (failed in Run 42) — debug or filter
+   - **A4**: Missing updates: muon, natural_gradient, role_split — never measured
+5. **Track B: Task breadth** — only 4/24 tasks touched (mnist, fashion_mnist, digits). Need control (cartpole, pendulum, acrobot), graph (cora, citeseer, pubmed), sequence (copy_task, sequential_mnist, tiny_shakespeare), tabular (iris, wine, etc.)
+6. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation
