@@ -694,7 +694,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "val_acc",
+                "accuracy",
                 "task",
             ),
             TaskObjective(
@@ -727,7 +727,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "val_acc",
+                "accuracy",
                 "task",
             ),
             TaskObjective(
@@ -760,7 +760,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "val_acc",
+                "accuracy",
                 "task",
             ),
             TaskObjective(
@@ -793,7 +793,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "val_acc",
+                "accuracy",
                 "task",
             ),
             TaskObjective(
@@ -968,12 +968,12 @@ class TaskRegistry:
                     "maximize",
                     "minmax",
                     1.0,
-                    False,
+                    True,
                     "val_acc",
                     "task",
                 ),
                 TaskObjective(
-                    "validation_loss", "minimize", "log", 0.5, False, "val_loss", "task"
+                    "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
                 ),
             ),
             description=f"Auto-generated enrichment for {name}",

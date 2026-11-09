@@ -252,7 +252,7 @@ def evaluate_cell(
 
     metrics = _collect_all_metrics(trainer, history, cell, task, schedule, coordinate)
     _post_training_metrics(metrics, cell, task, schedule, coordinate, walltime_s)
-    _validate_metrics_finite(metrics, coordinate)
+    _validate_metrics_finite(metrics, coordinate, schedule.task_id)
 
     convergence_curve = _extract_convergence_curve(schedule, history)
 
@@ -315,7 +315,7 @@ def _post_training_metrics(
     _update_task_metrics(task, metrics, cell, schedule, coordinate)
 
     # Derived metric: energy_efficiency = primary_metric / energy_per_sample
-    _add_energy_efficiency(metrics, coordinate.task)
+    _add_energy_efficiency(metrics, schedule.task_id)
 
 
 def _set_seeds(seed: int, deterministic: bool) -> None:
@@ -394,7 +394,9 @@ def _add_energy_efficiency(metrics: dict[str, float], task_id: str) -> None:
         metrics["energy_efficiency"] = float(primary_val) / float(energy_per_sample)
 
 
-def _validate_metrics_finite(metrics: dict[str, float], coordinate: Coordinate) -> None:
+def _validate_metrics_finite(
+    metrics: dict[str, float], coordinate: Coordinate, task_id: str
+) -> None:
     """Fail the cell only when a training metric is non-finite.
 
     Auxiliary diagnostics (energy proxies, spectral probes) divide by quantities
@@ -406,7 +408,7 @@ def _validate_metrics_finite(metrics: dict[str, float], coordinate: Coordinate) 
     nonfinite = sorted(k for k, v in metrics.items() if not math.isfinite(v))
     if not nonfinite:
         return
-    core = _core_metric_keys(coordinate.task)
+    core = _core_metric_keys(task_id)
     fatal = [k for k in nonfinite if k in core]
     if fatal:
         msg = f"non-finite training metrics {fatal} for {coordinate.cell_key()[:12]}"
