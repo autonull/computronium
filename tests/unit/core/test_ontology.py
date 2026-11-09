@@ -746,7 +746,7 @@ class TestOntologyConfigs:
     def test_state_dynamics_config(self):
         config = StateDynamicsConfig.energy_minimization()
         assert config.dynamics_type == "energy_minimization"
-        assert config.max_steps == 30
+        assert config.max_steps == 10
 
     def test_credit_assignment_config(self):
         config = CreditAssignmentConfig(

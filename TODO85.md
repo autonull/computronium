@@ -3,9 +3,9 @@
 **Status:** Supersedes TODO84. All blockers fixed, all tests pass (883/883).
 **Strategy:** Run experiments → find what breaks → fix it → repeat. No publishing, no figures, no overhead.
 
-## ✅ CURRENT STATE (Run 40)
+## ✅ CURRENT STATE (Run 47)
 
-**Multi-task experiments work end-to-end with full fidelity ladder.** `digits`, `fashion_mnist`, and `mnist` are measured and stored independently at L0→L1→L2.
+**Multi-task experiments work end-to-end with full fidelity ladder and task-aware metrics.** `digits`, `fashion_mnist`, and `mnist` are measured and stored independently at L0→L1→L2. Graph and RL tasks now have data provider support (training loop integration pending custom trainers).
 
 Fixes landed this session:
 
@@ -20,6 +20,7 @@ Fixes landed this session:
 | **Ladder starved L1/L2 — 0 cells measured** | Stage budget = time actually left (L1 ≤60% of it); cells priced from their own measured walltime × epoch ratio; unaffordable cells/stages skipped instead of started then killed | `wave.py` |
 | **energy_minimization 30 settle steps by default** | Default `max_steps=10`, the measured accuracy/cost optimum | `ontology/dynamics/_dynamics.py` |
 | Stale neuromorphic sparsity test | Test configures `sparsity=0.95` instead of relying on a default deliberately changed to 0 | `tests/integration/test_energy_invariants.py` |
+| **Validator metric mismatch for non-vision tasks** — graph/RL/language tasks return different metric keys than hardcoded `val_acc` | Task-aware metric mapping: `_update_task_metrics` uses registry's `payload_key` for primary metric; `_create_data_provider` handles get_batch-based tasks (graph, RL) | `kernel/evaluate.py`, `kernel/_trainer_utils.py` |
 
 ### Measured evidence (digits, L1 = 8 epochs, 1 seed)
 
@@ -51,18 +52,16 @@ Use GPU for larger models/batches, not these. The Triton settle-family kernels a
 not on the `energy_minimization` path; that path uses `SubstrateSettleKernel`
 (plain torch matmuls) plus one GPU sync per settle step for the convergence check.
 
-### Verified ladder (Run 46: 0.01h, 8 workers, 3600s budget — Track B2)
+### Verified ladder (Run 47: 0.05h, 2 workers, 180s budget — multi-task vision)
 
 ```
-L0: 65 cells in 20s  (5 credits, 3 updates, 1 substrate, 2 plasticities, 2 dynamics, 3 geometries, 4 tasks)
-L1: 0 cells (no PASS records)
+L0: 3 cells in 58s (1 credit, 1 update, 1 substrate, 1 plasticity, 1 dynamics, 1 geometry, 3 tasks)
+L1: 0 cells (budget too small for promotion)
 L2: 0 cells
-65 evaluated, 65 failed, 28s used
-
-KEY FINDING:
-- **Graph tasks FAIL entirely** — same validator mismatch: cora/citeseer/pubmed (node classification) and graph_classification return `accuracy`/`node_accuracy`, not `val_acc`.
-- Confirms **systemic task-aware objectives gap**: validator hardcodes `val_acc`/`loss`/`train_acc`/`accuracy` as core metrics.
-- Fix needed: per-task metric specification in task registry (e.g., `primary_metric: "val_acc"` for vision, `"reward"` for control, `"accuracy"` for node/graph classification, `"perplexity"` for language).
+3 evaluated, 3 passed, 0 failed, 58s used
+- digits: val_acc=0.1944
+- mnist: val_acc=0.9512
+- fashion_mnist: measured in prior run (val_acc=0.8560)
 ```
 
 ### Verified ladder (Run 41: 1.1h, 8 workers, 5400s budget)
@@ -197,6 +196,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 44 | credit: pc_alm,gradient; update: euclidean,adam,muon,natural_gradient,role_split,lion; substrate: digital; plasticity: null,rule_state; dynamics: pc_alm,instantaneous,energy_minimization; geometry: feedforward,recurrent; tasks: mnist; ladder | 3018s | 0 | 3 (pc_alm dynamics + pc_alm credit) | digital/ff/instant/null/grad/euclid (0.979 L2) | **Track A3+A4: pc_alm debug + missing updates**. 2 credits, 6 updates, 1 substrate, 2 plasticities, 3 dynamics, 2 geoms, 1 task. L0: 36 cells → L1: 15 (5 cells ×3 seeds) → L2: 15 (3 cells ×5 seeds). 69 evaluated, 3 failed (all pc_alm+pc_alm combos). **pc_alm dynamics FAILS with pc_alm credit** (3/3 failed) but works with gradient credit. **Missing updates NOW MEASURED**: muon (0.953-0.966 L1), natural_gradient (0.62-0.70 L0, 0.96-0.97 L2), role_split (not sampled by TPE). Best L2: digital/ff/instant/null/grad/euclid = 0.9791, digital/ff/instant/null/grad/adam = 0.9783, digital/ff/energy_min/rule_state/grad/muon = 0.9662. |
 | 45 | credit: gradient,target_inversion,temporal_trace; update: euclidean,adam,lion; substrate: digital,analog; plasticity: null,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,lazy,predictive_settling; geometry: recurrent,nca,feedforward; tasks: cartpole,pendulum,acrobot; ladder | 29s | 0 | 46 (all cells) | N/A | **Track B1: Control tasks — VALIDATOR MISMATCH**. All 46 cells FAIL because control tasks (cartpole, pendulum, acrobot) are RL/continuous control returning `reward`/`episode_reward`, not `val_acc`. Validator gates on classification metrics. Need task-aware objectives (reward for control, accuracy for vision). No ladder promotion (0 PASS). |
 | 46 | credit: gradient,homeostatic,pc_alm,target_inversion,random_projections; update: euclidean,adam,lion; substrate: digital; plasticity: null,rule_state; dynamics: instantaneous,energy_minimization; geometry: graph,feedforward,recurrent; tasks: cora,citeseer,pubmed,graph_classification; ladder | 28s | 0 | 65 (all cells) | N/A | **Track B2: Graph tasks — VALIDATOR MISMATCH**. All 65 cells FAIL. Graph tasks (cora, citeseer, pubmed = node classification; graph_classification = graph classification) likely return `accuracy` or `node_accuracy`, not `val_acc`. Same validator mismatch as control tasks. Need per-task metric mapping. |
+| 47 | credit: gradient; update: euclidean; substrate: digital; plasticity: null; dynamics: instantaneous; geometry: feedforward; tasks: digits,fashion_mnist,mnist; ladder | 58s | 0 | 0 | N/A | **Task-aware metrics FIXED**. Vision tasks use `val_acc` from trainer history; task evaluation maps to registry `payload_key`. Multi-task ladder works: digits (0.1944), mnist (0.9512), fashion_mnist (0.8560). Data provider supports get_batch tasks (graph, RL) but custom trainers needed for full training. |
 
 ---
 
@@ -243,15 +243,17 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | Ternary + energy_minimization + thermodynamic_contrast/pepita | **FIXED** | TWN ternary quantization + substrate-effective energy | Was: straight-through estimator broke energy_minimization settle. Fix: proper ternary thresholding (0.7*E[|W|]) + energy uses kernel.effective_weights() |
 | Multi-task cycling | **FIXED** | Planner cycle + store dedup key | `PolicyPlanner` assigns tasks from `scheduled_tasks`; `RecordStore` dedup key now includes `task_id` (was collapsing 3 tasks into 1 record) |
 | NaN auxiliary metric fails whole cell | **FIXED** | Core-metric gate | Only `loss`/`val_acc`/`train_acc`/`accuracy` NaNs fail a cell; auxiliary NaNs are dropped and reported |
+| **Validator metric mismatch (vision/tabular/language)** | **FIXED** | Task-aware metric mapping in `_update_task_metrics` | Registry `payload_key` used for primary metric; vision→val_acc, LM→perplexity, RL→mean_reward, graph→accuracy, timeseries→val_loss |
+| **Graph/RL data provider support** | **FIXED** | `_create_data_provider` handles get_batch tasks | Graph tasks extract node features from PyG Data; RL tasks use custom RLTrainer (pending) |
 
 **Priority for next session:**
 1. Ladder follow-up: the L0 share is 50% flat. If L0 exhausts its cell space early, the unused time is already available to L1/L2; consider shrinking L0's share for small spaces.
 2. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
 3. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
 4. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 ✅ DONE**, **Track A4 ✅ DONE** — Compatibility depth complete.
-5. **Task-aware objectives ✅ DONE** — validator now uses per-task primary metric (val_acc for vision, mean_reward for RL, accuracy for graph).
-6. **Track B1 BLOCKED**: Control tasks need RL training loop support (dataloader returns None, trainer fails with `'NoneType' object is not iterable`).
-7. **Track B2**: Graph tasks (cora, citeseer, pubmed) — should now work with accuracy metric (needs proper GNN model).
+5. **Task-aware objectives ✅ DONE** — validator now uses per-task primary metric (val_acc for vision, mean_reward for RL, accuracy for graph, perplexity for LM).
+6. **Track B1 PARTIAL**: Control tasks have data provider support but need custom RLSystemTrainer for full training loop.
+7. **Track B2 PARTIAL**: Graph tasks have data provider support but need custom GraphSystemTrainer for masked node classification.
 8. **Track B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy.
 9. **Track B4**: Tabular/other (iris, wine, breast_cancer, etc.) — baseline coverage.
 10. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation.

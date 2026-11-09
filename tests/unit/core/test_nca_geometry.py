@@ -147,7 +147,7 @@ class TestNcaCreditUpdateComposition:
             update=ParameterUpdateConfig.euclidean(),
         )
         with pytest.raises(
-            ValueError, match="requires one of \\['instantaneous'\\].*NCA geometry"
+            ValueError, match="nca.*geometry cannot host settling dynamics"
         ):
             config.validate()
 

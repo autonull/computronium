@@ -314,7 +314,7 @@ class TestSystemSpecRoundTrip:
 
         # Check dynamics config
         assert spec["dynamics"]["dynamics_type"] == "energy_minimization"
-        assert spec["dynamics"]["max_steps"] == 30
+        assert spec["dynamics"]["max_steps"] == 10
         assert spec["dynamics"]["beta"] == 0.5
 
         # Check credit config

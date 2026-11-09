@@ -368,7 +368,38 @@ def _update_task_metrics(
         task_metrics = task.evaluate(
             cell.system, split=TaskSplit.VAL, max_batches=schedule.batch_limit
         )
-        metrics.update(task_metrics.to_dict())
+        task_metrics_dict = task_metrics.to_dict()
+
+        # Map task evaluation metric keys to the registry's expected payload keys.
+        # The task registry defines payload_key for each objective; we use that
+        # for the primary metric to ensure consistency with the trainer's history.
+        try:
+            from computronium.experiment.registry.task_registry import get_task_registry
+
+            registry = get_task_registry()
+            task_spec = registry.get(schedule.task_id)
+            # Map primary metric: task eval returns "accuracy"/"mean_reward"/etc.,
+            # but registry expects specific payload_key (e.g., "val_acc" for vision).
+            primary_obj_name = task_spec.primary_objective
+            for obj in task_spec.objectives:
+                if obj.name == primary_obj_name and obj.payload_key:
+                    # The task evaluation uses a domain-specific key (e.g., "accuracy",
+                    # "perplexity", "mean_reward"). Map it to the registry's payload_key.
+                    # We find which key in task_metrics_dict corresponds to the primary objective.
+                    domain_key = _primary_domain_metric_key(task.domain_type)
+                    if domain_key in task_metrics_dict:
+                        # Only set if not already present from trainer history
+                        if obj.payload_key not in metrics:
+                            metrics[obj.payload_key] = task_metrics_dict[domain_key]
+                    break
+        except Exception:
+            # Fallback: use task metrics as-is
+            pass
+
+        # Add all task metrics (non-primary ones keep their original keys)
+        for key, value in task_metrics_dict.items():
+            if key not in metrics:  # Don't overwrite history metrics (e.g., val_acc)
+                metrics[key] = value
     except Exception as exc:  # ruff: ignore[blind-except] - evaluation must not fail the cell
         logger.warning(
             "task.evaluate() failed for %s: %s | coordinate=%s | geometry=%s | substrate=%s | dynamics=%s | credit=%s | update=%s | plasticity=%s",
@@ -383,6 +414,30 @@ def _update_task_metrics(
             coordinate.plasticity,
             exc_info=True,
         )
+
+
+def _primary_domain_metric_key(domain_type: Any) -> str:
+    """Get the metric key that a task's evaluate() returns for its primary metric."""
+    from computronium.domains.base import DomainType
+
+    if isinstance(domain_type, str):
+        try:
+            domain_type = DomainType(domain_type)
+        except ValueError:
+            return "accuracy"
+    match domain_type:
+        case DomainType.VISION | DomainType.TABULAR:
+            return "accuracy"
+        case DomainType.GRAPH:
+            return "accuracy"
+        case DomainType.LM | DomainType.LANGUAGE:
+            return "perplexity"
+        case DomainType.RL:
+            return "mean_reward"
+        case DomainType.TIMESERIES:
+            return "mse"
+        case _:
+            return "accuracy"
 
 
 def _add_energy_efficiency(metrics: dict[str, float], task_id: str) -> None:

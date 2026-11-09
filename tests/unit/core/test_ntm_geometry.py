@@ -174,7 +174,7 @@ class TestNtmCreditUpdateComposition:
         # before the ntm-specific message; either rejection is correct.
         with pytest.raises(
             ValueError,
-            match=r"requires one of \['instantaneous'\].*NTM geometry",
+            match=r"ntm.*geometry cannot host settling dynamics",
         ):
             config.validate()
 

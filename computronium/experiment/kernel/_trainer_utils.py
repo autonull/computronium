@@ -118,13 +118,17 @@ def _create_trainer(
     """Create trainer, optionally resuming from checkpoint."""
     from pathlib import Path
 
+    batch_size = config.limit_train_batches or 32  # fallback
+    train_data = _create_data_provider(task, "train", batch_size, config.limit_train_batches)
+    val_data = _create_data_provider(task, "val", batch_size, config.limit_val_batches)
+
     if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
         # Resume from checkpoint
         trainer = trainer_class.from_checkpoint(
             resume_checkpoint_path,
             system=cell.system,
-            train_data=task.get_dataloader("train"),
-            val_data=_val_batches(task, config.limit_val_batches),
+            train_data=train_data,
+            val_data=val_data,
             max_epochs=config.max_epochs,
         )
         if checkpoint_callback is not None:
@@ -133,8 +137,8 @@ def _create_trainer(
         trainer = trainer_class(
             cell.system,
             config,
-            task.get_dataloader("train"),
-            val_data=_val_batches(task, config.limit_val_batches),
+            train_data,
+            val_data=val_data,
             checkpoint_callback=checkpoint_callback,
         )
     return trainer
@@ -202,17 +206,63 @@ def _val_batches(task: Any, limit: int | None) -> Any | None:
 
     try:
         loader = task.get_dataloader(TaskSplit.VAL)
-    except (LookupError, ValueError, NotImplementedError) as exc:
+        if loader is not None:
+            return _bounded_batches(loader, limit) if limit else loader
+    except (LookupError, ValueError, NotImplementedError, AttributeError) as exc:
         from computronium.core.logging import get_logger
 
         logger = get_logger(__name__)
-        logger.info("task %s declares no validation split: %s", task.name, exc)
+        logger.info("task %s declares no validation DataLoader: %s", task.name, exc)
+
+    # Try get_batch for tasks without DataLoaders
+    try:
+        batch_size = 32  # default, will be overridden by _create_trainer
+        return _create_data_provider(task, "val", batch_size, limit)
+    except (NotImplementedError, AttributeError):
         return None
-    return _bounded_batches(loader, limit) if limit else loader
 
 
 def _sample_inputs(task: Any, device: str) -> torch.Tensor:
     """One flattened training batch, on ``device``."""
-    sample_x, _ = next(iter(task.get_dataloader("train")))
+    try:
+        sample_x, _ = next(iter(task.get_dataloader("train")))
+    except (TypeError, StopIteration):
+        # Task doesn't use DataLoader (e.g., graph, RL); use get_batch
+        sample_x, _ = task.get_batch("train", batch_size=32)
     flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
     return flat
+
+
+def _create_data_provider(task: Any, split: str, batch_size: int, limit: int | None):
+    """Create an iterable data provider for a task.
+
+    Handles both standard DataLoader tasks and get_batch-based tasks
+    (graph, RL, etc.) by returning a generator that yields batches.
+    """
+    from itertools import islice
+
+    # Try DataLoader first
+    try:
+        loader = task.get_dataloader(split)
+        if loader is not None:
+            return islice(iter(loader), limit) if limit else loader
+    except (TypeError, StopIteration, NotImplementedError, AttributeError):
+        pass
+
+    # Fall back to get_batch for tasks without DataLoaders
+    def batch_generator():
+        batches_yielded = 0
+        max_batches = limit if limit is not None else 10**9
+        while batches_yielded < max_batches:
+            try:
+                x, y = task.get_batch(split, batch_size)
+                # For graph tasks: get_batch returns (Data, labels); extract node features
+                if hasattr(x, "x") and hasattr(x, "edge_index"):
+                    # PyG Data object: use node features as input
+                    x = x.x
+                yield x, y
+                batches_yielded += 1
+            except (StopIteration, NotImplementedError):
+                break
+
+    return batch_generator()
