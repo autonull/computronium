@@ -42,11 +42,10 @@ Validate that findings transfer to larger models and GPU.
 
 ### ✅ DONE: Track A1 + A2 — Geometry × Credit + Neuromorphic (Run 43)
 ### ✅ DONE: Track A3 + A4 — pc_alm Debug + Missing Updates (Run 44)
-### ❌ BLOCKED: Track B1 — Control Tasks (Run 45) — Need task-aware objectives fix
-### ❌ BLOCKED: Track B2 — Graph Tasks (Run 46) — Same validator mismatch
+### ✅ DONE: Task-aware objectives fix (validator now uses per-task primary metric)
 
-### NEXT PRIORITY: Fix task-aware objectives (validator metric mapping per task domain)
-Then: Track B3 (Sequence), B4 (Tabular), Track C (Scale)
+### NEXT PRIORITY: Fix RL training loop (dataloader issue)
+Then: Track B2 (Graph tasks), B3 (Sequence), B4 (Tabular), Track C (Scale)
 ```bash
 ./experiment_shallow.sh 1.0 --policy tpe --device cpu --workers 8 \
   --tasks mnist --ladder \
@@ -98,8 +97,9 @@ Then: Track B3 (Sequence), B4 (Tabular), Track C (Scale)
 - [x] **A4**: muon/natural_gradient measured — DONE (muon 0.953-0.966 L1, natural_gradient 0.62-0.70 L0/0.96-0.97 L2). role_split not sampled (low TPE prior).
 
 ### Track B: Task Breadth
-- [x] **B1**: Control tasks — validator metric fix DONE (now uses `mean_reward`). BLOCKED: RL tasks need training loop support (dataloader returns None, trainer fails with `'NoneType' object is not iterable`)
-- [ ] **B2**: Graph tasks (cora, citeseer, pubmed, graph_classification) — may work with accuracy (node classification)
+- [x] **Task-aware objectives**: validator now uses per-task primary metric (val_acc for vision, mean_reward for RL, accuracy for graph)
+- [ ] **B1**: Control tasks — validator metric fix DONE (now uses `mean_reward`). BLOCKED: RL tasks need training loop support (dataloader returns None, trainer fails with `'NoneType' object is not iterable`)
+- [ ] **B2**: Graph tasks (cora, citeseer, pubmed, graph_classification) — should work with accuracy (node classification)
 - [ ] **B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy
 - [ ] **B4**: Tabular/other (iris, wine, breast_cancer, xor, circles, spiral) — baseline coverage
 - [ ] ≥12/24 tasks have ≥1 measured cell
@@ -134,6 +134,7 @@ Then: Track B3 (Sequence), B4 (Tabular), Track C (Scale)
 | 44 | A3+A4 | pc_alm debug + missing updates | 69 cells, 3 fail | **A3 DONE**: pc_alm dynamics + pc_alm credit FAILS (3/3); pc_alm + gradient WORKS. **A4 DONE**: muon ✓ (0.953-0.966 L1), natural_gradient ✓ (0.62-0.70 L0, 0.96-0.97 L2), role_split not sampled by TPE. |
 | 45 | B1 | Control tasks (cartpole, pendulum, acrobot) | 46 cells, 46 fail | **B1 BLOCKED**: Validator expects `val_acc` (classification), but control tasks return `reward`/`episode_reward` (RL metrics). Need task-aware objectives per domain. |
 | 46 | B2 | Graph tasks (cora, citeseer, pubmed, graph_classification) | 65 cells, 65 fail | **B2 BLOCKED**: Same validator mismatch — graph tasks return `accuracy`/`node_accuracy`, not `val_acc`. Confirms systemic task-aware objectives gap. |
+| — | Fix | Task-aware objectives | N/A | **DONE**: Validator now uses per-task primary metric from registry: vision=val_acc, RL=mean_reward, graph=accuracy, tabular=val_acc, sequence=accuracy/perplexity. Updated 4 graph tasks to use 'accuracy' key. Added tests. |
 | — | — | — | — | — |
 
 ---

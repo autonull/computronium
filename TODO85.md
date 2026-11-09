@@ -249,11 +249,9 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 2. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
 3. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
 4. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 ✅ DONE**, **Track A4 ✅ DONE** — Compatibility depth complete.
-5. **Track B BLOCKED**: Need task-aware objectives fix (validator metric mapping per task domain):
-   - Vision (mnist, fashion_mnist, digits, cifar): `val_acc` ✓
-   - Control (cartpole, pendulum, acrobot): `reward` / `episode_reward`
-   - Graph node classification (cora, citeseer, pubmed): `accuracy` / `node_accuracy`
-   - Graph classification (graph_classification): `accuracy`
-   - Sequence (copy_task, sequential_mnist, tiny_shakespeare): `accuracy` / `perplexity`
-   - Tabular (iris, wine, breast_cancer, etc.): `accuracy`
-6. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation
+5. **Task-aware objectives ✅ DONE** — validator now uses per-task primary metric (val_acc for vision, mean_reward for RL, accuracy for graph).
+6. **Track B1 BLOCKED**: Control tasks need RL training loop support (dataloader returns None, trainer fails with `'NoneType' object is not iterable`).
+7. **Track B2**: Graph tasks (cora, citeseer, pubmed) — should now work with accuracy metric (needs proper GNN model).
+8. **Track B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy.
+9. **Track B4**: Tabular/other (iris, wine, breast_cancer, etc.) — baseline coverage.
+10. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation.
