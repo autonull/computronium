@@ -1,153 +1,144 @@
-# TODO86 — Strategic Plan: From Primitive Coverage to Scientific Discovery
+# TODO86 — Scale & Coverage (Post-TODO85)
 
-**Status:** Run 43 complete. Track A1 (Geometry×Credit) and A2 (Neuromorphic) **DONE**. System runs wide multi-task ladder experiments reliably.
+**Status:** System fixed and experimentally sound. Now: validate at scale, cover remaining task types.
 
-**Philosophy:** The system works. Now make it *discover* — find what combinations actually work, why, and at what scale.
-
----
-
-## 🎯 THREE STRATEGIC TRACKS
-
-### Track A: Compatibility Depth (2-3 runs)
-Find which primitive combinations *actually work well together* on vision tasks.
-
-| Priority | Experiment | Why |
-|----------|------------|-----|
-| A1 | **Geometry × Credit matrix** on `mnist`/`fashion_mnist` | Graph/causal_transformer/nca/tile/tile_mesh need non-gradient credits (homeostatic, pc_alm, target_inversion, temporal_trace, random_projections, local_goodness, local_contrastive). Currently only tested with gradient on feedforward/recurrent. |
-| A2 | **neuromorphic substrate** full sweep | 0/9 substrates measured in Run 42. Needs spike_integration + temporal_trace/target_inversion credit. |
-| A3 | **pc_alm dynamics × pc_alm credit** debug | Failed in Run 42 (compatibility). Fix or filter. |
-| A4 | **Missing updates**: muon, natural_gradient, role_split | Never measured. Add to next wide run. |
-
-### Track B: Task Breadth (2-3 runs)
-Expand beyond 3 vision tasks to the full 24-task registry.
-
-| Priority | Experiment | Why |
-|----------|------------|-----|
-| B1 | **Control/RL tasks**: cartpole, pendulum, acrobot | Test recurrent/nca geometries + energy_minimization/lazy dynamics on continuous control |
-| B2 | **Graph tasks**: cora, citeseer, pubmed, graph_classification | Test graph geometry + compatible credits |
-| B3 | **Sequence tasks**: copy_task, sequential_mnist, tiny_shakespeare | Test ntm/recurrent + temporal_trace/target_inversion credit |
-| B4 | **Tabular/other**: iris, wine, breast_cancer, xor, circles, spiral | Baseline coverage |
-
-### Track C: Scale & Hardware (1-2 runs)
-Validate that findings transfer to larger models and GPU.
-
-| Priority | Experiment | Why |
-|----------|------------|-----|
-| C1 | **hidden=256, batch=256** on best L2 combos | GPU only wins at scale. Test: complex/recurrent/energy_min/rule_state/grad/adam, optical/ff/instant/temporal_psi/random_projections/local_adam |
-| C2 | **Longer training**: 50-100 epochs on promoted cells | L1=8 epochs, L2=20 seeds is thin. Real training needs more epochs. |
+**Baseline (Run 48):** 72 cells, 72 PASS, L0→L1→L2 working, best L2 0.9775 on mnist.
 
 ---
 
-## 📋 EXPERIMENT QUEUE (Ready to Run)
+## 🎯 PHASE 1: GPU Scale Validation (Track C)
 
-### ✅ DONE: Track A1 + A2 — Geometry × Credit + Neuromorphic (Run 43)
-### ✅ DONE: Track A3 + A4 — pc_alm Debug + Missing Updates (Run 44)
-### ✅ DONE: Task-aware objectives fix (validator now uses per-task primary metric)
+**Goal:** Prove GPU speedup at scale (hidden=256, batch=256, epochs=50) on best combos.
 
-### NEXT PRIORITY: Fix RL training loop (dataloader issue)
-Then: Track B2 (Graph tasks), B3 (Sequence), B4 (Tabular), Track C (Scale)
-```bash
-./experiment_shallow.sh 1.0 --policy tpe --device cpu --workers 8 \
-  --tasks mnist --ladder \
-  --axes '{
-    "credit":["pc_alm","gradient"],
-    "update":["euclidean","adam","muon","natural_gradient","role_split","lion"],
-    "substrate":["digital"],
-    "plasticity":["null","rule_state"],
-    "dynamics":["pc_alm","instantaneous","energy_minimization"],
-    "geometry":["feedforward","recurrent"]
-  }' --skip-doctor
-```
+| Experiment | Axes | Budget | Purpose |
+|------------|------|--------|---------|
+| C1 | digital/ff/instant/null/grad/euclid (best L2) | 2h | GPU vs CPU baseline at scale |
+| C2 | digital/ff/energy_min/null/grad/adam (2nd best L2) | 2h | GPU with settling at scale |
+| C3 | digital/ff/instant/null/pepita/adam (best non-grad credit) | 1h | Credit variety at scale |
+| C4 | memristive/ff/energy_min/null/grad/adam | 1h | Non-digital substrate at scale |
 
-### Run After (Track B1): Control Tasks
-```bash
-./experiment_shallow.sh 1.0 --policy tpe --device cpu --workers 8 \
-  --tasks cartpole,pendulum,acrobot --ladder \
-  --axes '{
-    "credit":["gradient","target_inversion","temporal_trace"],
-    "update":["euclidean","adam","lion"],
-    "substrate":["digital","analog"],
-    "plasticity":["null","fast_weights","temporal_psi"],
-    "dynamics":["instantaneous","energy_minimization","lazy","predictive_settling"],
-    "geometry":["recurrent","nca","feedforward"]
-  }' --skip-doctor
-```
+**Prerequisites:**
+- Benchmark single cell: `hidden=256, batch=256, epochs=1` CPU vs CUDA
+- If GPU not faster, investigate: settle loop sync, compilation, kernel launch overhead
 
 ---
 
-## 🔬 SCIENTIFIC QUESTIONS TO ANSWER
+## 🎯 PHASE 2: RL/Control Tasks (Track B1)
 
-| Question | How to Answer |
-|----------|---------------|
-| **Which credit × geometry pairs work?** | Run A1, analyze val_acc heatmap per (credit, geometry) |
-| **Does neuromorphic + spike_integration beat digital?** | Compare neuromorphic/spike_integration/temporal_trace vs digital/instantaneous/gradient on same geometry |
-| **Does energy_minimization help at scale?** | Run C1: compare energy_minimization vs instantaneous at hidden=256, epochs=50 |
-| **Do advanced updates (muon, natural_gradient) help?** | Run A4: compare adam vs muon vs natural_gradient on same cells |
-| **Which plasticity helps recurrent geometries?** | Track A1: rule_state vs temporal_psi vs fast_weights on recurrent/nca |
-| **Do findings transfer across tasks?** | Track B: run best vision combos on control/graph/sequence tasks |
+**Goal:** Full training loop for cartpole, pendulum, acrobot.
+
+**Blockers:**
+- Data provider works (get_batch), returns `reward`/`episode_reward`
+- Validator expects `val_acc` → need task-aware objective mapping (registry `payload_key`)
+- Need `RLSystemTrainer` implementing:
+  - Episode rollout with system forward
+  - Return/advantage computation
+  - Policy gradient / actor-critic weight update
+
+**Experiments:**
+| Experiment | Axes | Budget | Purpose |
+|------------|------|--------|---------|
+| B1a | digital/ff/instant/null/grad/euclid | 0.5h | Cartpole baseline |
+| B1b | digital/ff/instant/null/grad/euclid | 0.5h | Pendulum baseline |
+| B1c | digital/recurrent/energy_min/null/grad/adam | 1h | Recurrent + energy_min on control |
 
 ---
 
-## 📊 SUCCESS METRICS (Per Track)
+## 🎯 PHASE 3: Graph Tasks (Track B2)
 
-### Track A: Compatibility Depth
-- [x] **A1**: ≥80% of (credit × geometry) pairs measured with ≥3 seeds — DONE (recurrent/attention/conv/ntm/tile_mesh all measured with non-gradient credits)
-- [x] **A2**: neuromorphic substrate has ≥5 measured cells with val_acc > 0.5 — DONE (0.9735 L1 on mnist, multiple cells)
-- [x] **A3**: pc_alm dynamics either works or cleanly filtered — DONE (fails with pc_alm credit, works with gradient; filter pc_alm+pc_alm combo)
-- [x] **A4**: muon/natural_gradient measured — DONE (muon 0.953-0.966 L1, natural_gradient 0.62-0.70 L0/0.96-0.97 L2). role_split not sampled (low TPE prior).
+**Goal:** Full training for cora/citeseer/pubmed (node classification) + graph_classification.
 
-### Track B: Task Breadth
-- [x] **Task-aware objectives**: validator now uses per-task primary metric (val_acc for vision, mean_reward for RL, accuracy for graph)
-- [ ] **B1**: Control tasks — validator metric fix DONE (now uses `mean_reward`). BLOCKED: RL tasks need training loop support (dataloader returns None, trainer fails with `'NoneType' object is not iterable`)
-- [ ] **B2**: Graph tasks (cora, citeseer, pubmed, graph_classification) — should work with accuracy (node classification)
-- [ ] **B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy
-- [ ] **B4**: Tabular/other (iris, wine, breast_cancer, xor, circles, spiral) — baseline coverage
-- [ ] ≥12/24 tasks have ≥1 measured cell
-- [ ] ≥3 non-vision tasks have val_acc > random baseline
-- [ ] Graph tasks work with graph geometry + compatible credit
+**Blockers:**
+- Data provider extracts node features from PyG Data
+- Need `GraphSystemTrainer` with:
+  - Masked node classification (train/val/test masks)
+  - Neighbor sampling / full-graph forward
+  - Graph-level readout for graph_classification
 
-### Track C: Scale & Hardware
-- [ ] hidden=256, batch=256, epochs=50 runs without OOM
-- [ ] GPU speedup > 1.5× vs CPU at that scale
-- [ ] Best L2 combo maintains val_acc > 0.95 at scale
+**Experiments:**
+| Experiment | Axes | Budget | Purpose |
+|------------|------|--------|---------|
+| B2a | digital/ff/instant/null/grad/euclid | 0.5h | Cora baseline |
+| B2b | digital/conv/instant/homeostatic/euclid | 0.5h | Conv geometry on graph |
+| B2c | digital/graph/instant/grad/euclid | 1h | Native graph geometry |
+
+---
+
+## 🎯 PHASE 4: Sequence Tasks (Track B3)
+
+**Tasks:** copy_task, sequential_mnist, tiny_shakespeare
+
+**Metric:** perplexity (LM) or accuracy (classification)
+
+**Experiments:**
+| Experiment | Axes | Budget | Purpose |
+|------------|------|--------|---------|
+| B3a | digital/ff/instant/null/grad/euclid | 0.5h | Copy task |
+| B3b | digital/recurrent/instant/grad/euclid | 0.5h | Sequential MNIST |
+| B3c | digital/causal_transformer/instant/grad/euclid | 1h | Tiny Shakespeare (needs patch embedding) |
+
+---
+
+## 🎯 PHASE 5: Tabular Baselines (Track B4)
+
+**Tasks:** iris, wine, breast_cancer, digits (sklearn), covtype
+
+**Experiments:**
+| Experiment | Axes | Budget | Purpose |
+|------------|------|--------|---------|
+| B4a | digital/ff/instant/null/grad/euclid | 0.3h | Full tabular sweep |
 
 ---
 
 ## 🛠️ INFRASTRUCTURE IMPROVEMENTS (Parallel)
 
-| Improvement | File | Effort |
-|-------------|------|--------|
-| L0 share auto-tuning | `wave.py` | 1-2 hrs |
-| energy_minimization convergence doc/fix | `ontology/dynamics/_dynamics.py` | 30 min |
-| GPU convergence check off hot path | `kernel/evaluate.py` + Triton kernels | 2-4 hrs |
-| Task-aware scheduling (not round-robin) | `wave.py` | 1-2 hrs |
-| Coverage heatmap report | `comp coverage report` | 1 hr |
+| Item | Description | Priority |
+|------|-------------|----------|
+| Compiled settle for energy_minimization | Move convergence check off hot path; batch horizon with `compiled=True` | High — enables GPU speedup |
+| RLSystemTrainer | Episode rollout + policy gradient | High — unblocks B1 |
+| GraphSystemTrainer | Masked node classification + graph readout | High — unblocks B2 |
+| CausalTransformer patch embedding | ViT-style for vision; 1D token handling for sequence | Medium — unblocks B3 |
+| Timing cache per (device, fidelity, workers, task) | Already works; verify at scale | Low |
+| Claim eligibility | n>=3, replay_hash, normalized_metric, PASS — currently 0; investigate | Medium |
 
 ---
 
-## 📈 TRACKING
+## 🔄 EXPERIMENT LOOP (Same as TODO85)
 
-| Run | Track | Axes | Result | Key Finding |
-|-----|-------|------|--------|-------------|
-| 42 | A | All primitives | 63 cells, 1 fail | **All primitives measured**; quantum/spike_integration/pc_alm/conflict_adaptive/routing/substrate_coupled/local_adam/etc. now have data |
-| 43 | A1+A2 | Geometry×Credit + Neuromorphic | 80 cells, 1 fail | **A1 DONE**: Geometry×non-gradient credit compatibility confirmed (recurrent/attention/conv/ntm/tile_mesh all measured). **A2 DONE**: Neuromorphic works — 0.9735 val_acc on mnist (energy_minimization/null/gradient/euclidean). Spike_integration measured (0.7313). Best non-digital: neuromorphic 0.9735, optical 0.9288, sparse 0.9219, analog 0.7741. |
-| 44 | A3+A4 | pc_alm debug + missing updates | 69 cells, 3 fail | **A3 DONE**: pc_alm dynamics + pc_alm credit FAILS (3/3); pc_alm + gradient WORKS. **A4 DONE**: muon ✓ (0.953-0.966 L1), natural_gradient ✓ (0.62-0.70 L0, 0.96-0.97 L2), role_split not sampled by TPE. |
-| 45 | B1 | Control tasks (cartpole, pendulum, acrobot) | 46 cells, 46 fail | **B1 BLOCKED**: Validator expects `val_acc` (classification), but control tasks return `reward`/`episode_reward` (RL metrics). Need task-aware objectives per domain. |
-| 46 | B2 | Graph tasks (cora, citeseer, pubmed, graph_classification) | 65 cells, 65 fail | **B2 BLOCKED**: Same validator mismatch — graph tasks return `accuracy`/`node_accuracy`, not `val_acc`. Confirms systemic task-aware objectives gap. |
-| — | Fix | Task-aware objectives | N/A | **DONE**: Validator now uses per-task primary metric from registry: vision=val_acc, RL=mean_reward, graph=accuracy, tabular=val_acc, sequence=accuracy/perplexity. Updated 4 graph tasks to use 'accuracy' key. Added tests. |
-| — | — | — | — | — |
+```bash
+# 1. RUN (1-2h, TPE, GPU for C*, CPU for B*)
+./experiment_shallow.sh 1.5 --policy tpe --device cuda --workers 4 \
+  --tasks <task_list> \
+  --axes '<axis_json>' \
+  --ladder --skip-doctor
+
+# 2. ANALYZE (30s)
+uv run comp report --store experiments/<latest>.duckdb --format text
+uv run comp coverage report --store experiments/<latest>.duckdb
+
+# 3. FIX (≤15 min) — infrastructure only, not preventive
+# 4. VERIFY (0.02h, no ladder)
+# 5. COMMIT + LOG
+```
 
 ---
 
-## 🚫 STILL NOT DOING
+## 📋 PRIORITY ORDER
+
+1. **C1** — GPU scale on best combo (validates Track C)
+2. **B1a** — RLSystemTrainer + Cartpole (unblocks Track B1)
+3. **B2a** — GraphSystemTrainer + Cora (unblocks Track B2)
+4. **C2-C4** — Remaining GPU scale combos
+5. **B1b-B1c, B2b-B2c** — RL/Graph variety
+6. **B3, B4** — Sequence + Tabular coverage
+
+---
+
+## 🚫 NO (Same as TODO85)
 
 - Paper figures
 - Publishing artifacts
 - Hypothesis backlogs
 - Preventive fixes
 - Meetings/retrospectives
-- Cycles > 30 min per fix iteration
-
----
-
-**Start:** Fix task-aware objectives (add `primary_metric` to task registry, update validator to use per-task metric). Then run Track B3 (Sequence tasks) and B4 (Tabular). Then Track C (Scale).
+- Cycles > 30 min
