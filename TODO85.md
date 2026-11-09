@@ -51,25 +51,18 @@ Use GPU for larger models/batches, not these. The Triton settle-family kernels a
 not on the `energy_minimization` path; that path uses `SubstrateSettleKernel`
 (plain torch matmuls) plus one GPU sync per settle step for the convergence check.
 
-### Verified ladder (Run 44: 0.84h, 8 workers, 3600s budget — Track A3+A4)
+### Verified ladder (Run 45: 0.01h, 8 workers, 3600s budget — Track B1)
 
 ```
-L0: 36 cells in 1313s  (2 credits, 6 updates, 1 substrate, 2 plasticities, 3 dynamics, 2 geometries, 1 task)
-L1: 5 cells × 3 seeds = 15 cells, budget 1366s
-L2: 3 cells × 5 seeds = 15 cells, budget 1469s
-69 evaluated, 3 failed, 3018s used
+L0: 46 cells in 23s  (3 credits, 3 updates, 2 substrates, 3 plasticities, 4 dynamics, 3 geometries, 3 tasks)
+L1: 0 cells (no PASS records)
+L2: 0 cells
+46 evaluated, 46 failed, 29s used
 
-Best L2: digital/feedforward/instantaneous/null/gradient/euclidean = 0.9791
-Best L2: digital/feedforward/instantaneous/null/gradient/adam = 0.9783
-Best L2: digital/feedforward/energy_minimization/rule_state/gradient/muon = 0.9662
-
-KEY FINDINGS:
-- **pc_alm dynamics + pc_alm credit = FAILS** (3/3 combos failed at L0)
-- **pc_alm dynamics + gradient credit = WORKS** (val_acc ~0.10-0.19 at L0)
-- **muon update MEASURED**: 0.953-0.966 L1 on mnist (energy_minimization + gradient)
-- **natural_gradient update MEASURED**: 0.62-0.70 L0, 0.96-0.97 L2 (instantaneous + gradient)
-- **role_split update**: not sampled by TPE (likely low prior)
-- Best combos remain gradient credit + adam/euclidean/muon updates
+KEY FINDING:
+- **Control tasks (cartpole, pendulum, acrobot) FAIL entirely** — validator expects `val_acc` (classification), but control tasks return `reward`/`episode_reward` (RL metrics).
+- This is a **task-aware objectives gap**: the system assumes classification metrics for all tasks.
+- Fix needed: per-task objective specification (reward for control, accuracy for vision, perplexity for language, etc.)
 ```
 
 ### Verified ladder (Run 41: 1.1h, 8 workers, 5400s budget)
@@ -202,6 +195,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 42 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,pepita,thermodynamic_contrast,random_projections,local_goodness,local_contrastive; update: euclidean,muon,lion,adam,natural_gradient,mean_norm,elastic_consolidation,local_adam,ortho_adam,riemannian_orthogonal,role_split,spectral_constrained; substrate: digital,ternary,memristive,neuromorphic,analog,optical,sparse,complex,quantum; plasticity: null,rule_state,fast_weights,temporal_psi,conflict_adaptive,routing,substrate_coupled; dynamics: instantaneous,energy_minimization,spike_integration,lazy,error_predictive_coding,diffusion,predictive_settling,pc_alm; geometry: feedforward,conv,attention,tile_mesh,ntm,recurrent,nca,graph,spatial_lattice,causal_transformer; tasks: digits,fashion_mnist,mnist; ladder | 3782s | 0 | 1 (pc_alm dynamics + pc_alm credit) | complex/recurrent/energy_min/rule_state/grad/adam (0.973 L2) | **All primitives now measured at least once!** 10 credits, 12 updates, 9 substrates, 7 plasticities, 8 dynamics, 11 geoms, 3 tasks. L0: 52 cells → L1: 6 (2 cells ×3 seeds, all mnist) → L2: 5 (1 cell ×5 seeds, mnist). 63 evaluated, 1 failed (pc_alm+pc_alm). Coverage: substrate 89% (quantum ✓), dynamics 88% (spike_integration ✓, pc_alm ✓), plasticity 100% (conflict_adaptive/routing/substrate_coupled ✓), update 75% (local_adam/ortho_adam/riemannian_orthogonal/spectral_constrained ✓), geometry 55% (spatial_lattice/ntm/attention/conv ✓). Best L2: 0.9730 on mnist. |
 | 43 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,random_projections,local_goodness,local_contrastive; update: euclidean,adam,lion,local_adam; substrate: digital,neuromorphic,analog,optical,sparse; plasticity: null,rule_state,temporal_psi; dynamics: instantaneous,energy_minimization,spike_integration,lazy; geometry: feedforward,recurrent,conv,attention,graph,causal_transformer,nca,tile_mesh,ntm; tasks: mnist,fashion_mnist; ladder | 2058s | 0 | 1 (lazy+temporal_psi+local_contrastive+local_adam) | digital/ff/instant/null/grad/euclid (0.979 L2) | **Track A1: Geometry×Credit + Neuromorphic**. 8 credits, 4 updates, 5 substrates, 3 plasticities, 4 dynamics, 9 geoms, 2 tasks. L0: 50 cells → L1: 24 (8 cells ×3 seeds) → L2: 5 (1 cell ×5 seeds). 80 evaluated, 1 failed. **Neuromorphic now works: 0.9735 L1 on mnist** (energy_minimization/null/gradient/euclidean). Best non-digital L1: neuromorphic 0.9735, optical 0.9288, analog 0.7741, sparse 0.9219. Geometry coverage: feedforward/recurrent/conv/attention/ntm/tile_mesh all measured with non-gradient credits (homeostatic, target_inversion, random_projections, local_goodness, local_contrastive). |
 | 44 | credit: pc_alm,gradient; update: euclidean,adam,muon,natural_gradient,role_split,lion; substrate: digital; plasticity: null,rule_state; dynamics: pc_alm,instantaneous,energy_minimization; geometry: feedforward,recurrent; tasks: mnist; ladder | 3018s | 0 | 3 (pc_alm dynamics + pc_alm credit) | digital/ff/instant/null/grad/euclid (0.979 L2) | **Track A3+A4: pc_alm debug + missing updates**. 2 credits, 6 updates, 1 substrate, 2 plasticities, 3 dynamics, 2 geoms, 1 task. L0: 36 cells → L1: 15 (5 cells ×3 seeds) → L2: 15 (3 cells ×5 seeds). 69 evaluated, 3 failed (all pc_alm+pc_alm combos). **pc_alm dynamics FAILS with pc_alm credit** (3/3 failed) but works with gradient credit. **Missing updates NOW MEASURED**: muon (0.953-0.966 L1), natural_gradient (0.62-0.70 L0, 0.96-0.97 L2), role_split (not sampled by TPE). Best L2: digital/ff/instant/null/grad/euclid = 0.9791, digital/ff/instant/null/grad/adam = 0.9783, digital/ff/energy_min/rule_state/grad/muon = 0.9662. |
+| 45 | credit: gradient,target_inversion,temporal_trace; update: euclidean,adam,lion; substrate: digital,analog; plasticity: null,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,lazy,predictive_settling; geometry: recurrent,nca,feedforward; tasks: cartpole,pendulum,acrobot; ladder | 29s | 0 | 46 (all cells) | N/A | **Track B1: Control tasks — VALIDATOR MISMATCH**. All 46 cells FAIL because control tasks (cartpole, pendulum, acrobot) are RL/continuous control returning `reward`/`episode_reward`, not `val_acc`. Validator gates on classification metrics. Need task-aware objectives (reward for control, accuracy for vision). No ladder promotion (0 PASS). |
 
 ---
 
@@ -253,6 +247,8 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 1. Ladder follow-up: the L0 share is 50% flat. If L0 exhausts its cell space early, the unused time is already available to L1/L2; consider shrinking L0's share for small spaces.
 2. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
 3. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
-4. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 DONE** (pc_alm+pc_alm fails, gradient+pc_alm works), **Track A4 PARTIAL** (muon ✓, natural_gradient ✓, role_split not sampled).
-5. **Track B: Task breadth** — only 4/24 tasks touched (mnist, fashion_mnist, digits). Next: control (cartpole, pendulum, acrobot), graph (cora, citeseer, pubmed), sequence (copy_task, sequential_mnist, tiny_shakespeare), tabular (iris, wine, etc.)
-6. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation
+4. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 ✅ DONE** (pc_alm+pc_alm fails, gradient+pc_alm works), **Track A4 ✅ DONE** (muon ✓, natural_gradient ✓, role_split not sampled).
+5. **Track B1 BLOCKED**: Control tasks need task-aware objectives (reward, not accuracy). Fix validator/objectives per task domain.
+6. **Track B2**: Graph tasks (cora, citeseer, pubmed) — may work with current accuracy metric (node classification)
+7. **Track B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy
+8. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation
