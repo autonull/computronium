@@ -3,7 +3,7 @@
 **Status:** Supersedes TODO84. All blockers fixed, all tests pass (883/883).
 **Strategy:** Run experiments → find what breaks → fix it → repeat. No publishing, no figures, no overhead.
 
-## ✅ CURRENT STATE (Run 35–37)
+## ✅ CURRENT STATE (Run 38)
 
 **Multi-task experiments work end-to-end.** `digits`, `fashion_mnist`, and `mnist` are measured and stored independently in one run.
 
@@ -16,19 +16,49 @@ Fixes landed this session:
 | Progress hid tasks — only every ~10th cell logged | Every cell logs `task=<id>` alongside axes | `wave.py` |
 | `"digits"` hardcoded in 4 execution paths | Single `RunSpec.scheduled_tasks` property | `run_spec.py`, `wave.py` |
 | Budget overrun 400s+ — cancelled cells kept running | Deadline calls `pool.kill_workers()` | `wave.py` |
-| NaN auxiliary metric discarded a whole valid cell; error listed every metric, hiding the real one | Core training metrics gate the cell; auxiliary NaNs are dropped and reported | `kernel/evaluate.py` |
+| NaN auxiliary metric discarded a whole valid cell | Core metrics gate the cell; auxiliary NaNs dropped and reported | `kernel/evaluate.py` |
+| **Ladder starved L1/L2 — 0 cells measured** | Stage budget = time actually left (L1 ≤60% of it); cells priced from their own measured walltime × epoch ratio; unaffordable cells/stages skipped instead of started then killed | `wave.py` |
+| **energy_minimization 30 settle steps by default** | Default `max_steps=10`, the measured accuracy/cost optimum | `ontology/dynamics/_dynamics.py` |
+| Stale neuromorphic sparsity test | Test configures `sparsity=0.95` instead of relying on a default deliberately changed to 0 | `tests/integration/test_energy_invariants.py` |
 
-**Verified:** one coordinate measured on all three tasks now stores three records
-(`digits:1, fashion_mnist:1, mnist:1`); a 39-cell run produced 12/11/10 cells across the
-three tasks with 0 crashes.
+### Measured evidence (digits, L1 = 8 epochs, 1 seed)
 
-**Known open issue:** ladder budget split (60/30/10) starves L1/L2 on short runs.
-On a 0.08h ladder, L0 used its 165s but L1 (86s) and L2 (28s) measured **0 cells** —
-a cell needs longer than the sub-budget. Use `--ladder` only with ≥0.5h, or run a
-single fidelity. This is the next thing to fix or route around.
+| `max_steps` | walltime | val_acc |
+|-------------|----------|---------|
+| 5 | 5.0 s | 0.717 |
+| **10** | **8.7 s** | **0.803** |
+| 20 | 15.8 s | 0.781 |
+| 30 | 22.7 s | 0.767 |
 
-**Known cost issue:** `energy_minimization` cells run ~7 min at L0 on CPU (settle loop),
-vs ~15s for `instantaneous`. Wide energy-minimum waves measure few cells.
+More settling costs time and does not improve accuracy. Note: the convergence
+residual plateaus at ~1e-3, so the default `convergence_threshold=1e-4` can never
+trigger — every settle runs the full `max_steps`. That is why cost is linear in
+`max_steps`.
+
+### GPU (RTX 3080, verified this session)
+
+`--device cuda` works end-to-end (mnist cell val_acc 0.95). Every Triton family
+compiles (`fa`, `pc`, `pcalm`, `snn`, `ff`, `pepita`, `hebbian`,
+`complex_substrate`). But on these tiny cells GPU is **slower**, because the
+settle loop is launch/latency-bound, not compute-bound:
+
+| cell (mnist, L0, 1 epoch) | CPU | CUDA |
+|---------------------------|-----|------|
+| instantaneous | 22.3 s | 20.9 s |
+| energy_minimization (30 steps) | 187 s | 299 s |
+
+Use GPU for larger models/batches, not these. The Triton settle-family kernels are
+not on the `energy_minimization` path; that path uses `SubstrateSettleKernel`
+(plain torch matmuls) plus one GPU sync per settle step for the convergence check.
+
+### Verified ladder (0.12h, 8 workers, 432s budget)
+
+```
+L0: 21 cells in 197s
+L1: 2 cells → 6 seed-replicates, 6 results, budget 141s   (was 0)
+L2: 4 cells → 20 seed-replicates, 20 results, budget 159s (was 0)
+47 evaluated, 0 failed, 306s used
+```
 
 ---
 
@@ -89,6 +119,8 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | Cell FAILs though training was fine | Gate on core metrics only; drop auxiliary NaNs | `kernel/evaluate.py` |
 | Worker crash mid-cell | Add per-cell timeout + deadline check | `wave.py` |
 | Run overruns its budget | `pool.kill_workers()` at deadline | `wave.py` |
+| L1/L2 measure 0 cells | Size each stage from measured cell cost and time left; skip unaffordable stages | `wave.py` |
+| energy_min cells too slow | Default `max_steps=10` (measured optimum), not 30 | `dynamics/_dynamics.py` |
 | Ternary fails gate | LR scaling by weight_bits; straight-through estimator | `substrate.py`, `update.py` |
 | Ternary + energy_minimization crashes | TWN ternary thresholding (0.7*E[|W|]); energy uses kernel.effective_weights() | `substrate.py`, `_dynamics.py` |
 | Neuromorphic + non-temporal crashes | Compatibility filter in search space | `search_space.py` |
@@ -142,6 +174,8 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 35 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace; update: euclidean,muon,lion; substrate: digital,ternary,memristive,analog,optical; plasticity: null,rule_state,fast_weights; dynamics: instantaneous,energy_minimization; geometry: feedforward,recurrent,conv,attention,tile_mesh; tasks: digits,fashion_mnist,mnist | 900s | 0 | 1 (aux NaN) | ternary/recurrent/energy_min/rule_state/grad/lion (numerical) | 38/39 cells; tasks split 12 digits / 11 fashion / 10 mnist; found store dedup collapsing tasks + validator hiding the NaN |
 | 36 | credit: gradient,pepita; update: euclidean,lion; substrate: ternary,memristive; plasticity: null,rule_state,fast_weights; dynamics: instantaneous,energy_minimization; geometry: feedforward,recurrent,conv; tasks: digits,fashion_mnist,mnist | 431s | 0 | 0 | memristive/feedforward/instant/lion (0.79) | Validator fix verified: 0 failures; energy_min cells ~7 min each (~53s/cell avg) |
 | 37 | credit: gradient; update: euclidean; substrate: digital; plasticity: null; dynamics: instantaneous; geometry: feedforward; tasks: digits,fashion_mnist,mnist | 46s | 0 | 0 | same coord on all 3 tasks | Store dedup fix verified: 1 record per task (digits:1, fashion:1, mnist:1) |
+| 38 | credit: gradient,pepita; update: euclidean,muon; substrate: digital,ternary; plasticity: null; dynamics: instantaneous,energy_minimization; geometry: feedforward; tasks: digits,fashion_mnist; ladder | 306s | 0 | 0 | digital/ff/energy_min/pepita/muon (0.31 L0) | Ladder fixed: L0 21 cells → L1 6 → L2 20, 0 killed (was 0/0). energy_min max_steps 30→10: 2.6× faster, higher accuracy (0.803 vs 0.767) |
+| 39 | GPU check: credit: gradient; update: euclidean,muon; substrate: digital,ternary; plasticity: null; dynamics: instantaneous,energy_minimization; geometry: feedforward; tasks: digits,mnist | 108s | 0 | 0 | mnist digital/ff/instant/grad/euclid (0.950) | `--device cuda` works end-to-end. GPU slower on tiny cells (mnist energy_min 299s vs 187s CPU); all Triton families compile |
 
 ---
 
@@ -190,6 +224,8 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | NaN auxiliary metric fails whole cell | **FIXED** | Core-metric gate | Only `loss`/`val_acc`/`train_acc`/`accuracy` NaNs fail a cell; auxiliary NaNs are dropped and reported |
 
 **Priority for next session:**
-1. **Multi-task coverage is live** — run wide axes with `--tasks digits,fashion_mnist,mnist` (no ladder) so every task is measured.
-2. Fix ladder budget split so L1/L2 are not starved (raise sub-budget floor above one cell's cost, or size cells before splitting).
-3. Then remaining primitive gaps: neuromorphic + spike_integration, quantum substrate, temporal_psi plasticity, graph/causal_transformer/spatial_lattice/ntm geometries, diffusion/error_predictive_coding/lazy/predictive_settling/pc_alm dynamics, adam/natural_gradient/elastic_consolidation updates.
+1. **Multi-task coverage is live** — run wide axes with `--tasks digits,fashion_mnist,mnist`; ladder now measures L1/L2 instead of starving them.
+2. Ladder follow-up: the L0 share is 50% flat. If L0 exhausts its cell space early, the unused time is already available to L1/L2; consider shrinking L0's share for small spaces.
+3. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
+4. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
+5. Then remaining primitive gaps: neuromorphic + spike_integration, quantum substrate, temporal_psi plasticity, graph/causal_transformer/spatial_lattice/ntm geometries, diffusion/error_predictive_coding/lazy/predictive_settling/pc_alm dynamics, adam/natural_gradient/elastic_consolidation updates.

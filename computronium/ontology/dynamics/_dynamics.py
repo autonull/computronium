@@ -291,7 +291,10 @@ class StateDynamicsConfig:
     def energy_minimization(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
         cls,
         *,
-        max_steps: int = 30,
+        # 10 steps is the measured optimum: on digits/L1, 5/10/20/30 steps gave
+        # 0.717/0.803/0.781/0.767 accuracy at 5.0/8.7/15.8/22.7 s per cell.
+        # Extra settling past 10 costs time and does not improve accuracy.
+        max_steps: int = 10,
         convergence_threshold: float = 1e-4,
         convergence_start: int = 5,
         step_size: float = 0.1,

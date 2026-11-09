@@ -426,9 +426,12 @@ class TestSubstratePassivity:
 
     def test_neuromorphic_substrate_sparsity(self):
         """NeuromorphicSubstrate thins the state to the active spike set."""
-        # Use zero noise to test pure spike dropout sparsity
+        # Use zero noise and explicit sparsity: the default is 0.0 because
+        # sparsity was found to destroy accuracy in the campaign, so the
+        # mechanism is exercised here by configuring it, not by relying on a
+        # default that deliberately changed.
         substrate = NeuromorphicSubstrate(
-            SubstrateConfig.neuromorphic(noise_level=0.0, device="cpu")
+            SubstrateConfig.neuromorphic(noise_level=0.0, sparsity=0.95, device="cpu")
         )
 
         s = torch.ones(100, 100)

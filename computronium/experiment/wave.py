@@ -979,8 +979,7 @@ def _run_ladder_promotion(
     cpu_threads: int,
     device_str: str,
     run_id: str,
-    l1_budget: int,
-    l2_budget: int,
+    budget_remaining: float,
     total_elapsed: float,
     fidelity_walltime: dict[str, float],
     verbose: bool,
@@ -988,7 +987,10 @@ def _run_ladder_promotion(
     """Run fidelity ladder promotion: L0 -> L1 -> L2.
 
     Promotes top-performing cells to higher fidelity (more seeds, more epochs).
-    Budget split: L0=60%, L1=30%, L2=10% of total budget.
+    Stages are sized from measured per-cell cost and the time actually left
+    after L0, not from a fixed split: L1 may reserve at most 60% of the
+    remaining budget, and L2 takes whatever is left after L1. A stage that
+    cannot afford one cell is skipped and its budget carries forward.
     """
     from computronium.experiment.kernel.search_space import schedule_for
 
@@ -1001,7 +1003,7 @@ def _run_ladder_promotion(
     ]
     if not pass_records:
         logger.info("Ladder: no PASS records to promote")
-        return total_elapsed, all_results, l1_budget + l2_budget
+        return total_elapsed, all_results, budget_remaining
 
     # Group by cell_key, keep best val_acc per cell
     from computronium.experiment.schema.record import Record
@@ -1016,33 +1018,97 @@ def _run_ladder_promotion(
     # Sort by val_acc descending
     sorted_cells = sorted(best_by_cell.items(), key=lambda x: x[1][0], reverse=True)
 
-    # Ladder budget allocation (passed in as reserved)
-    ladder_budget = {"L1": l1_budget, "L2": l2_budget}
-    # Replication factor per fidelity (n_seeds)
-    ladder_replicates = {"L1": 3, "L2": 5}
+    # Cost model: a record is one seed, so its measured walltime is the cost of
+    # one replicate. Scaling by the target epoch count prices each cell from its
+    # own dynamics and task instead of a global average that mixes them.
+    COST_SAFETY = 1.25
+
+    def _expected_replicate_cost(record: Any, target_fid: str) -> float:
+        """One replicate's cost: this record's measured time scaled by epochs.
+
+        A record is one seed, so its own walltime is the per-replicate rate.
+        Keying on the record (not a task median) keeps instantaneous and
+        energy-minimization cells from being priced as each other.
+        """
+        measured = float(record.payload.get("walltime_s") or 0.0)
+        if measured <= 0.0:
+            measured = 60.0
+        target = schedule_for(spec, record.schedule.task_id, target_fid)
+        return (
+            measured
+            * max(1, target.epochs)
+            / max(1, record.schedule.epochs)
+            * COST_SAFETY
+        )
 
     # L0 already done, promote to L1 then L2
     for target_fid in ["L1", "L2"]:
-        fid_budget = ladder_budget[target_fid]
+        # Size each stage from the time actually left. L1 may reserve at most
+        # 60% of it so L2 keeps a share; L2 takes everything that remains.
+        share = 0.6 if target_fid == "L1" else 1.0
+        fid_budget = int(max(0.0, budget_remaining) * share)
         if fid_budget <= 0:
+            logger.info("Ladder: no budget left for %s", target_fid)
             break
 
-        # Number of cells to promote (based on budget)
-        # Each promoted cell expands to n_seeds replicates, so divide budget by replication factor
-        measured_cost = (
-            total_elapsed * workers / len(all_results) if all_results else 60.0
-        )
-        n_replicates = ladder_replicates.get(target_fid, 1)
-        n_promote = max(
-            1,
-            min(
-                MAX_PROMOTE_CELLS,
-                int(fid_budget * workers / max(1.0, measured_cost * n_replicates)),
-            ),
-        )
+        expected = [
+            (cell_key, val_acc, record, _expected_replicate_cost(record, target_fid))
+            for cell_key, (val_acc, record) in sorted_cells
+        ]
+        if not expected:
+            continue
 
-        # Take top n_promote cells
-        promote_candidates = sorted_cells[:n_promote]
+        # A promoted cell expands into n_seeds replicate cells that run in
+        # parallel. The stage walltime is ceil(replicates / workers) rounds of
+        # the slowest selected replicate.
+        target_n_seeds = schedule_for(
+            spec, expected[0][2].schedule.task_id, target_fid
+        ).n_seeds
+
+        # Candidates are ranked by accuracy, but a cell the stage cannot afford
+        # is not a candidate: promoting it measures nothing.
+        affordable = [entry for entry in expected if entry[3] <= fid_budget]
+        if not affordable:
+            logger.info(
+                "Ladder: skipping %s — cheapest cell needs ~%.0fs, budget is %.0fs",
+                target_fid,
+                min(cost for *_, cost in expected),
+                fid_budget,
+            )
+            continue
+
+        n_promote = 0
+        slowest = 0.0
+        for _cell_key, _val_acc, _record, cost in affordable:
+            if n_promote >= MAX_PROMOTE_CELLS:
+                break
+            tentative = max(slowest, cost)
+            replicates = (n_promote + 1) * target_n_seeds
+            if (-(-replicates // workers)) * tentative > fid_budget:
+                break
+            slowest = tentative
+            n_promote += 1
+
+        if n_promote == 0:
+            logger.info(
+                "Ladder: skipping %s — one cell needs ~%.0fs, budget is %.0fs",
+                target_fid,
+                affordable[0][3],
+                fid_budget,
+            )
+            continue
+
+        promote_candidates = [
+            (cell_key, (val_acc, record))
+            for cell_key, val_acc, record, _cost in affordable[:n_promote]
+        ]
+        logger.info(
+            "Ladder %s: promoting %d cell(s), ~%.0fs per replicate, budget %.0fs",
+            target_fid,
+            n_promote,
+            slowest,
+            fid_budget,
+        )
 
         # Create new schedules for target fidelity, expanding each cell into n_seeds replicates
         cells_to_promote = []
@@ -1115,6 +1181,7 @@ def _run_ladder_promotion(
 
         wave_elapsed = time.monotonic() - wave_start
         total_elapsed += wave_elapsed
+        budget_remaining -= wave_elapsed
         fidelity_walltime[target_fid] = (
             fidelity_walltime.get(target_fid, 0.0) + wave_elapsed
         )
@@ -1148,7 +1215,7 @@ def _run_ladder_promotion(
             len(evaluation.results),
         )
 
-    return total_elapsed, all_results, l1_budget + l2_budget
+    return total_elapsed, all_results, budget_remaining
 
 
 def run_waves(
@@ -1232,12 +1299,10 @@ def run_waves(
     total_elapsed = 0.0
     wave = 0
 
-    # Ladder budget reservation: L0=60%, L1=30%, L2=10%
+    # Ladder: L0 explores on half the budget; L1/L2 size themselves from the
+    # measured cell cost and the time actually left (see _run_ladder_promotion).
     if ladder:
-        l0_budget = budget_seconds * 0.6
-        l1_budget = budget_seconds * 0.3
-        l2_budget = budget_seconds * 0.1
-        budget_remaining = l0_budget
+        budget_remaining = budget_seconds * 0.5
         fidelity_walltime = {"L0": 0.0, "L1": 0.0, "L2": 0.0}
     else:
         budget_remaining = budget_seconds
@@ -1412,7 +1477,7 @@ def run_waves(
     )
 
     # Fidelity ladder promotion: L0 -> L1 -> L2
-    if ladder and l1_budget > 0:
+    if ladder and budget_remaining > 0:
         total_elapsed, all_results, budget_remaining = _run_ladder_promotion(
             spec=spec,
             planner=planner,
@@ -1423,8 +1488,8 @@ def run_waves(
             cpu_threads=cpu_threads,
             device_str=device_str,
             run_id=run_id,
-            l1_budget=int(l1_budget),
-            l2_budget=int(l2_budget),
+            # Everything the L0 loop did not spend is available to L1/L2.
+            budget_remaining=max(0.0, budget_seconds - total_elapsed),
             total_elapsed=total_elapsed,
             fidelity_walltime=fidelity_walltime,
             verbose=verbose,
