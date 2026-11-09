@@ -3,9 +3,11 @@
 **Status:** Supersedes TODO84. All blockers fixed, all tests pass (883/883).
 **Strategy:** Run experiments → find what breaks → fix it → repeat. No publishing, no figures, no overhead.
 
-## ✅ CURRENT STATE (Run 47)
+## ✅ CURRENT STATE (Run 48)
 
 **Multi-task experiments work end-to-end with full fidelity ladder and task-aware metrics.** `digits`, `fashion_mnist`, and `mnist` are measured and stored independently at L0→L1→L2. Graph and RL tasks now have data provider support (training loop integration pending custom trainers).
+
+**Run 48 (this session):** Adaptive L0 share (30%) + reachable convergence threshold (1e-3) validated. L0 47 cells → L1 9 cells → L2 15 cells. 72 evaluated, 72 PASS, 0 FAIL. Best L2: 0.9775 on mnist. Budget split: L0 31.5% / L1 10.7% / L2 57.8%.
 
 Fixes landed this session:
 
@@ -199,6 +201,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 45 | credit: gradient,target_inversion,temporal_trace; update: euclidean,adam,lion; substrate: digital,analog; plasticity: null,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,lazy,predictive_settling; geometry: recurrent,nca,feedforward; tasks: cartpole,pendulum,acrobot; ladder | 29s | 0 | 46 (all cells) | N/A | **Track B1: Control tasks — VALIDATOR MISMATCH**. All 46 cells FAIL because control tasks (cartpole, pendulum, acrobot) are RL/continuous control returning `reward`/`episode_reward`, not `val_acc`. Validator gates on classification metrics. Need task-aware objectives (reward for control, accuracy for vision). No ladder promotion (0 PASS). |
 | 46 | credit: gradient,homeostatic,pc_alm,target_inversion,random_projections; update: euclidean,adam,lion; substrate: digital; plasticity: null,rule_state; dynamics: instantaneous,energy_minimization; geometry: graph,feedforward,recurrent; tasks: cora,citeseer,pubmed,graph_classification; ladder | 28s | 0 | 65 (all cells) | N/A | **Track B2: Graph tasks — VALIDATOR MISMATCH**. All 65 cells FAIL. Graph tasks (cora, citeseer, pubmed = node classification; graph_classification = graph classification) likely return `accuracy` or `node_accuracy`, not `val_acc`. Same validator mismatch as control tasks. Need per-task metric mapping. |
 | 47 | credit: gradient; update: euclidean; substrate: digital; plasticity: null; dynamics: instantaneous; geometry: feedforward; tasks: digits,fashion_mnist,mnist; ladder | 58s | 0 | 0 | N/A | **Task-aware metrics FIXED**. Vision tasks use `val_acc` from trainer history; task evaluation maps to registry `payload_key`. Multi-task ladder works: digits (0.1944), mnist (0.9512), fashion_mnist (0.8560). Data provider supports get_batch tasks (graph, RL) but custom trainers needed for full training. |
+| 48 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,pepita,thermodynamic_contrast; update: euclidean,lion,adam; substrate: digital,ternary,memristive; plasticity: null,rule_state; dynamics: instantaneous,energy_minimization; geometry: all; tasks: digits,fashion_mnist,mnist; ladder | 3512s | 0 | 0 | N/A | **Adaptive L0 share (30%) + reachable convergence (1e-3) FIXED**. L0 47 cells (31.5% budget) → L1 9 cells (10.7%) → L2 15 cells (57.8%). 72 evaluated, 72 PASS. Best L2: 0.9775 on mnist (digital/ff/instant/null/pepita/adam). All 3 tasks at L0. |
 
 ---
 
