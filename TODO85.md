@@ -3,23 +3,32 @@
 **Status:** Supersedes TODO84. All blockers fixed, all tests pass (883/883).
 **Strategy:** Run experiments → find what breaks → fix it → repeat. No publishing, no figures, no overhead.
 
-## ✅ CURRENT STATE (Run 34+)
+## ✅ CURRENT STATE (Run 35–37)
 
-**Multi-task experiments work.** All three vision tasks (`digits`, `fashion_mnist`, `mnist`) are measured in one run.
+**Multi-task experiments work end-to-end.** `digits`, `fashion_mnist`, and `mnist` are measured and stored independently in one run.
 
 Fixes landed this session:
 
 | Defect | Fix | File |
 |--------|-----|------|
+| **Store collapsed tasks: dedup key was `(cell_key, seed, fidelity)`** — same coordinate on 3 tasks kept only the last record. This is why runs looked "all digits". | Task added to dedup key and lookup | `evidence/store/_transactions.py` |
 | Task never cycled — planner used `tasks[0]` for the whole wave | Persistent `_task_cycle`/`_task_index` on `PolicyPlanner` | `wave.py` |
 | Progress hid tasks — only every ~10th cell logged | Every cell logs `task=<id>` alongside axes | `wave.py` |
 | `"digits"` hardcoded in 4 execution paths | Single `RunSpec.scheduled_tasks` property | `run_spec.py`, `wave.py` |
 | Budget overrun 400s+ — cancelled cells kept running | Deadline calls `pool.kill_workers()` | `wave.py` |
+| NaN auxiliary metric discarded a whole valid cell; error listed every metric, hiding the real one | Core training metrics gate the cell; auxiliary NaNs are dropped and reported | `kernel/evaluate.py` |
+
+**Verified:** one coordinate measured on all three tasks now stores three records
+(`digits:1, fashion_mnist:1, mnist:1`); a 39-cell run produced 12/11/10 cells across the
+three tasks with 0 crashes.
 
 **Known open issue:** ladder budget split (60/30/10) starves L1/L2 on short runs.
 On a 0.08h ladder, L0 used its 165s but L1 (86s) and L2 (28s) measured **0 cells** —
 a cell needs longer than the sub-budget. Use `--ladder` only with ≥0.5h, or run a
 single fidelity. This is the next thing to fix or route around.
+
+**Known cost issue:** `energy_minimization` cells run ~7 min at L0 on CPU (settle loop),
+vs ~15s for `instantaneous`. Wide energy-minimum waves measure few cells.
 
 ---
 
@@ -76,7 +85,10 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 
 | Symptom | Fix | File |
 |---------|-----|------|
+| Only one task appears in results | `task_id` must be in the store dedup key | `evidence/store/_transactions.py` |
+| Cell FAILs though training was fine | Gate on core metrics only; drop auxiliary NaNs | `kernel/evaluate.py` |
 | Worker crash mid-cell | Add per-cell timeout + deadline check | `wave.py` |
+| Run overruns its budget | `pool.kill_workers()` at deadline | `wave.py` |
 | Ternary fails gate | LR scaling by weight_bits; straight-through estimator | `substrate.py`, `update.py` |
 | Ternary + energy_minimization crashes | TWN ternary thresholding (0.7*E[|W|]); energy uses kernel.effective_weights() | `substrate.py`, `_dynamics.py` |
 | Neuromorphic + non-temporal crashes | Compatibility filter in search space | `search_space.py` |
@@ -127,6 +139,9 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 32 | credit: gradient,pepita,thermodynamic_contrast; update: euclidean,muon,lion; substrate: digital,ternary,memristive; plasticity: null,rule_state,fast_weights; dynamics: instantaneous,energy_minimization; geometry: feedforward,recurrent,tile_mesh; tasks: digits,fashion_mnist,mnist,kmnist | 210s | 0 | 0 | memristive/feedforward/pepita/muon (0.98) | 4 tasks declared; all cells on digits (task cycling issue); fast_weights + thermo works |
 | 33 | credit: gradient,pepita,thermodynamic_contrast,target_inversion,temporal_trace; update: euclidean,muon,lion; substrate: digital,ternary,memristive,analog,optical,sparse,complex; plasticity: null,rule_state,fast_weights; dynamics: instantaneous,energy_minimization; geometry: feedforward,recurrent,conv,attention,tile_mesh,nca; tasks: digits,fashion_mnist,mnist | 407s | 0 | 0 | optical/recur/energy_min/fast_weights/thermo/muon (0.94) | 7/9 substrates work; complex/tile_mesh/instant/rule_state/target_inv/lion (0.93); only digits tested (budget); NCA not measured |
 | 34 | credit: gradient,pepita,thermodynamic_contrast; update: euclidean,muon; substrate: digital,ternary,memristive; plasticity: null; dynamics: instantaneous,energy_minimization; geometry: feedforward,recurrent; tasks: digits,fashion_mnist,mnist | 663s | 0 | 0 | ternary/feedforward/instant/null/grad/euclid (0.96) | TASK CYCLING FIXED: all 3 tasks evaluated (digits:6, fashion:3, mnist:2); 3 substrates, 2 geometries, 2 dynamics, 3 credits, 2 updates |
+| 35 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace; update: euclidean,muon,lion; substrate: digital,ternary,memristive,analog,optical; plasticity: null,rule_state,fast_weights; dynamics: instantaneous,energy_minimization; geometry: feedforward,recurrent,conv,attention,tile_mesh; tasks: digits,fashion_mnist,mnist | 900s | 0 | 1 (aux NaN) | ternary/recurrent/energy_min/rule_state/grad/lion (numerical) | 38/39 cells; tasks split 12 digits / 11 fashion / 10 mnist; found store dedup collapsing tasks + validator hiding the NaN |
+| 36 | credit: gradient,pepita; update: euclidean,lion; substrate: ternary,memristive; plasticity: null,rule_state,fast_weights; dynamics: instantaneous,energy_minimization; geometry: feedforward,recurrent,conv; tasks: digits,fashion_mnist,mnist | 431s | 0 | 0 | memristive/feedforward/instant/lion (0.79) | Validator fix verified: 0 failures; energy_min cells ~7 min each (~53s/cell avg) |
+| 37 | credit: gradient; update: euclidean; substrate: digital; plasticity: null; dynamics: instantaneous; geometry: feedforward; tasks: digits,fashion_mnist,mnist | 46s | 0 | 0 | same coord on all 3 tasks | Store dedup fix verified: 1 record per task (digits:1, fashion:1, mnist:1) |
 
 ---
 
@@ -171,7 +186,8 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | Graph + vision | Filtered | No edge_index from vision data | Needs k-NN graph construction or patch-graph |
 | Causal_transformer + vision | Filtered | Expects 1D tokens, gets 3D images | Needs ViT-style patch embedding |
 | Ternary + energy_minimization + thermodynamic_contrast/pepita | **FIXED** | TWN ternary quantization + substrate-effective energy | Was: straight-through estimator broke energy_minimization settle. Fix: proper ternary thresholding (0.7*E[|W|]) + energy uses kernel.effective_weights() |
-| Multi-task cycling | **FIXED** | PolicyPlanner now cycles task_cycle | PolicyPlanner.__iter__ now uses single ProposalContext with full wave_size and assigns tasks from task_cycle to proposals |
+| Multi-task cycling | **FIXED** | Planner cycle + store dedup key | `PolicyPlanner` assigns tasks from `scheduled_tasks`; `RecordStore` dedup key now includes `task_id` (was collapsing 3 tasks into 1 record) |
+| NaN auxiliary metric fails whole cell | **FIXED** | Core-metric gate | Only `loss`/`val_acc`/`train_acc`/`accuracy` NaNs fail a cell; auxiliary NaNs are dropped and reported |
 
 **Priority for next session:**
 1. **Multi-task coverage is live** — run wide axes with `--tasks digits,fashion_mnist,mnist` (no ladder) so every task is measured.

@@ -365,12 +365,36 @@ def _add_energy_efficiency(metrics: dict[str, float]) -> None:
 
 
 def _validate_metrics_finite(metrics: dict[str, float], coordinate: Coordinate) -> None:
-    """Validate all metrics are finite."""
+    """Fail the cell only when a training metric is non-finite.
+
+    Auxiliary diagnostics (energy proxies, spectral probes) divide by quantities
+    a degenerate-but-trained cell can legitimately zero. A NaN there is dropped
+    and reported, not used to discard an otherwise valid measurement.
+    """
     import math
 
-    if not all(math.isfinite(v) for v in metrics.values()):
-        msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
+    nonfinite = sorted(k for k, v in metrics.items() if not math.isfinite(v))
+    if not nonfinite:
+        return
+    core = {
+        "loss",
+        "val_loss",
+        "train_loss",
+        "val_acc",
+        "train_acc",
+        "accuracy",
+    }
+    fatal = [k for k in nonfinite if k in core]
+    if fatal:
+        msg = f"non-finite training metrics {fatal} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)
+    for key in nonfinite:
+        del metrics[key]
+    logger.warning(
+        "Dropped non-finite auxiliary metrics %s for %s",
+        nonfinite,
+        coordinate.cell_key()[:12],
+    )
 
 
 def _compute_substrate_objectives(
@@ -503,8 +527,12 @@ def _build_status_with_procedures(
 
     # Determine maturity from schedule fidelity
     fidelity_to_maturity = {"L0": Maturity.L0, "L1": Maturity.L1, "L2": Maturity.L2}
-    maturity = fidelity_to_maturity.get(schedule.fidelity, Maturity.L0) if schedule else Maturity.L0
-    
+    maturity = (
+        fidelity_to_maturity.get(schedule.fidelity, Maturity.L0)
+        if schedule
+        else Maturity.L0
+    )
+
     legacy_status = StatusLegacy(
         gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
         defect=_defect(complete, within_ceiling, param_count, param_budget),
@@ -626,6 +654,7 @@ def cell_record(
     }
     # Add normalized metric (val_acc normalized against task baseline)
     from computronium.domains._task_registry import get_baseline, normalize_score
+
     task_id = evaluation.task_id
     val_acc = evaluation.metrics.get("val_acc", 0.0)
     baseline = get_baseline(task_id)

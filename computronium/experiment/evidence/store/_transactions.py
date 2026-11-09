@@ -316,13 +316,19 @@ class _TransactionMixin(_StoreBase):
             "ceec_link": status.ceec_link,
         }
 
-    def _dedup_key(self, record: Record) -> tuple[str, int, str]:
-        """Compute the deduplication key: (cell_key, seed, fidelity).
+    def _dedup_key(self, record: Record) -> tuple[str, int, str, str]:
+        """Compute the deduplication key: (cell_key, seed, fidelity, task).
 
-        This key identifies a unique cell measurement across runs/rounds,
-        ignoring budget_id which differs across rounds.
+        Task is part of the key: one coordinate measured on three tasks is
+        three measurements, not one overwritten three times. Budget_id stays
+        out because it differs across rounds.
         """
-        return (record.cell_key, record.schedule.seed, record.schedule.fidelity)
+        return (
+            record.cell_key,
+            record.schedule.seed,
+            record.schedule.fidelity,
+            record.schedule.task_id,
+        )
 
     def _build_insert_values(self, record: Record) -> list:
         """Build the VALUES list for INSERT statement from a Record."""
@@ -348,11 +354,13 @@ class _TransactionMixin(_StoreBase):
         ]
 
     def append(self, record: Record) -> Record:
-        """Upsert a record on (cell_key, seed, fidelity) composite key.
+        """Upsert a record on (cell_key, seed, fidelity, task) composite key.
 
         Keeps the latest record (highest maturity/epochs) for the same
-        cell_key+seed+fidelity within a run. This deduplicates across rounds
-        where budget_id differs but the structural identity is the same.
+        cell_key+seed+fidelity+task within a run. This deduplicates across
+        rounds where budget_id differs but the structural identity is the same.
+        Different tasks are different measurements and never displace each
+        other.
 
         Returns the stored record with assigned seq.
         """
@@ -362,8 +370,8 @@ class _TransactionMixin(_StoreBase):
         """Upsert multiple records in a single transaction.
 
         Buffers 10-50 records per transaction for throughput. Each record is
-        upserted on (cell_key, seed, fidelity) composite key, keeping the
-        latest record for the same cell_key+seed+fidelity within a run.
+        upserted on (cell_key, seed, fidelity, task) composite key, keeping the
+        latest record for the same cell_key+seed+fidelity+task within a run.
 
         Args:
             records: List of records to append. Must not be empty.
@@ -384,21 +392,24 @@ class _TransactionMixin(_StoreBase):
             results = []
             for record in records:
                 # Check for existing record with same dedup key
-                cell_key, seed, fidelity = self._dedup_key(record)
+                cell_key, seed, fidelity, task_id = self._dedup_key(record)
                 row = self._conn.execute(
                     """
                     SELECT record_id FROM records
                     WHERE run_id = ? AND cell_key = ?
                       AND CAST(schedule.seed AS INTEGER) = ?
                       AND CAST(schedule.fidelity AS TEXT) = ?
+                      AND CAST(schedule.task_id AS TEXT) = ?
                     ORDER BY seq DESC
                     LIMIT 1
                     """,
-                    [record.run_id, cell_key, seed, fidelity],
+                    [record.run_id, cell_key, seed, fidelity, task_id],
                 ).fetchone()
                 if row:
                     # Upsert: delete old, insert new (keeps latest)
-                    self._conn.execute("DELETE FROM records WHERE record_id = ?", [row[0]])
+                    self._conn.execute(
+                        "DELETE FROM records WHERE record_id = ?", [row[0]]
+                    )
 
                 # Insert record - seq is assigned by DEFAULT nextval('record_seq')
                 try:
