@@ -51,18 +51,21 @@ Use GPU for larger models/batches, not these. The Triton settle-family kernels a
 not on the `energy_minimization` path; that path uses `SubstrateSettleKernel`
 (plain torch matmuls) plus one GPU sync per settle step for the convergence check.
 
+### Verified ladder (Run 41: 1.1h, 8 workers, 5400s budget)
+
+```
+L0: 51 cells in 2692s  (10 credits, 7 updates, 8 substrates, 4 plasticities, 7 dynamics, 10 geometries, 3 tasks)
+L1: 5 cells × 3 seeds = 15 cells (all mnist), budget 1620s
+L2: 1 cell × 5 seeds = 5 cells (all mnist), budget 1900s
+72 evaluated, 0 failed, 3939s used
+
+Best L2: complex/feedforward/instantaneous/null/pepita/adam = 0.9775 (mnist)
+Best L1: same cell = 0.9760; digital/recurrent/energy_minimization/temporal_psi/gradient/euclidean = 0.9552
+
+Per-task L0: digits 18, fashion_mnist 16, mnist 18 records
+```
+
 ### Verified ladder (Run 40: 0.36h, 8 workers, 1800s budget)
-
-```
-L0: 38 cells in 894s  (7 credits, 5 updates, 8 substrates, 4 plasticities, 4 dynamics, 7 geometries, 3 tasks)
-L1: 2 cells × 3 tasks = 6 cells → 6 seed-replicates each, budget 437s
-L2: 6 cells × 5 seeds = 30 cells, budget 611s
-74 evaluated, 0 failed, 1290s used
-
-Per-task records: digits 44, fashion_mnist 15, mnist 15
-```
-
-### Verified ladder (Run 38: 0.12h, 8 workers, 432s budget)
 
 ```
 L0: 21 cells in 197s
@@ -188,6 +191,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 38 | credit: gradient,pepita; update: euclidean,muon; substrate: digital,ternary; plasticity: null; dynamics: instantaneous,energy_minimization; geometry: feedforward; tasks: digits,fashion_mnist; ladder | 306s | 0 | 0 | digital/ff/energy_min/pepita/muon (0.31 L0) | Ladder fixed: L0 21 cells → L1 6 → L2 20, 0 killed (was 0/0). energy_min max_steps 30→10: 2.6× faster, higher accuracy (0.803 vs 0.767) |
 | 39 | GPU check: credit: gradient; update: euclidean,muon; substrate: digital,ternary; plasticity: null; dynamics: instantaneous,energy_minimization; geometry: feedforward; tasks: digits,mnist | 108s | 0 | 0 | mnist digital/ff/instant/grad/euclid (0.950) | `--device cuda` works end-to-end. GPU slower on tiny cells (mnist energy_min 299s vs 187s CPU); all Triton families compile |
 | 40 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,pepita,thermodynamic_contrast; update: euclidean,muon,lion,adam,natural_gradient; substrate: digital,ternary,memristive,neuromorphic,analog,optical,sparse,complex; plasticity: null,rule_state,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,spike_integration,lazy; geometry: feedforward,conv,attention,tile_mesh,ntm,recurrent,nca; tasks: digits,fashion_mnist,mnist; ladder | 1290s | 0 | 0 | digital/ff/instant/null/grad/euclid (0.96 L2) | Full ladder with 7 credits, 5 updates, 8 substrates, 4 plasticities, 4 dynamics, 7 geoms, 3 tasks: L0 38 cells → L1 6 (3 task-cycled ×2 cells) → L2 30 (6 cells ×5 seeds). All 3 tasks measured at all fidelities (digits:44, fashion:15, mnist:15 records) |
+| 41 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,pepita,thermodynamic_contrast,random_projections,local_goodness,local_contrastive; update: euclidean,muon,lion,adam,natural_gradient,mean_norm,elastic_consolidation; substrate: digital,ternary,memristive,neuromorphic,analog,optical,sparse,complex; plasticity: null,rule_state,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,spike_integration,lazy,error_predictive_coding,diffusion,predictive_settling; geometry: feedforward,conv,attention,tile_mesh,ntm,recurrent,nca,graph,spatial_lattice,causal_transformer; tasks: digits,fashion_mnist,mnist; ladder | 3939s | 0 | 0 | complex/ff/instant/null/pepita/adam (0.977 L2) | Widest axes yet: 10 credits, 7 updates, 8 substrates, 4 plasticities, 7 dynamics, 10 geoms, 3 tasks. L0: 51 cells → L1: 15 (5 cells ×3 seeds, all mnist) → L2: 5 (1 cell ×5 seeds, mnist). 72 evaluated, 0 failed. Best L2: 0.9775 on mnist. Coverage: credit 90%, substrate 89%, dynamics 75%, plasticity 57%, update 58%, geometry 36% |
 
 ---
 
@@ -218,7 +222,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 
 ---
 
-**Start:** Multi-task ladder is live. Run wide axes with `--tasks digits,fashion_mnist,mnist --ladder`. Fix what breaks. Repeat.
+**Start:** Multi-task ladder is live with wide axes. Run experiments targeting remaining primitive gaps (quantum, spike_integration, pc_alm, graph/causal_transformer/ntm, conflict_adaptive plasticity, advanced updates). Fix what breaks. Repeat.
 
 ---
 
@@ -239,4 +243,11 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 1. Ladder follow-up: the L0 share is 50% flat. If L0 exhausts its cell space early, the unused time is already available to L1/L2; consider shrinking L0's share for small spaces.
 2. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
 3. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
-4. Then remaining primitive gaps: neuromorphic + spike_integration, quantum substrate, temporal_psi plasticity, graph/causal_transformer/spatial_lattice/ntm geometries, diffusion/error_predictive_coding/lazy/predictive_settling/pc_alm dynamics, adam/natural_gradient/elastic_consolidation updates.
+4. Remaining primitive gaps:
+   - **quantum substrate** (never measured)
+   - **spike_integration dynamics** (never measured)
+   - **pc_alm dynamics** (never measured)
+   - **graph/causal_transformer/ntm/tile/attention/conv/nca geometries** (partially measured; need compatible credits)
+   - **conflict_adaptive/routing/substrate_coupled plasticity** (never measured)
+   - **local_adam/ortho_adam/riemannian_orthogonal/role_split/spectral_constrained updates** (never measured)
+   - **temporal_trace credit** (never measured in wide runs)
