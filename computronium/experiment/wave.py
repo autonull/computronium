@@ -207,8 +207,8 @@ def _make_positive_control_cell(
         logger.warning("Positive control coordinate failed compatibility check")
         return None
 
-    # Use the first task (typically "digits")
-    task = spec.task_names[0] if spec.task_names else "digits"
+    # The run's own first task; a run always names at least one.
+    task = spec.task_names[0]
     schedule = schedule_for(spec, task, fidelity)
 
     return (coord, schedule)
@@ -235,8 +235,8 @@ def _build_provenance(
                     text=True,
                 ).strip()
 
-    dataset = spec.dataset if spec.dataset != "unknown" else "digits"
-    dataset_version = spec.dataset_version if spec.dataset_version != "1.0" else "1.0"
+    dataset = spec.dataset if spec.dataset != "unknown" else spec.task_names[0]
+    dataset_version = spec.dataset_version
 
     return Provenance(
         env={
@@ -537,6 +537,8 @@ class PolicyPlanner:
         self._wave_count = 0
         self._wave_size = 0
         self._policy: Any = None
+        self._task_cycle = list(spec.scheduled_tasks)
+        self._task_index = 0
         self._init_policy()
         self._init_resume(resume_from)
 
@@ -611,28 +613,18 @@ class PolicyPlanner:
 
     def __iter__(self):
         """Iterator of (Coordinate, Schedule) from the policy."""
-        from itertools import cycle
-
         from computronium.experiment.execution.policy import ProposalContext
         from computronium.experiment.kernel.evaluate import task_shape
 
-        # Use task_cycle from spec if available, else fall back to tasks
-        task_cycle = (
-            self.spec.task_cycle
-            if self.spec.task_cycle
-            else (self.tasks if self.tasks else ["digits"])
-        )
-        task_cycler = cycle(task_cycle)
+        base_task = self._task_cycle[0]
 
-        # Get all proposals for the wave at once (better TPE diversity)
+        # One context for the whole wave keeps the sampler's diversity.
         ctx = ProposalContext(
             search_space=self.search_space,
             spec=self.spec,
             run_id="learning_survey",
             n_propose=self._wave_size,
-            task=task_cycle[0]
-            if task_cycle
-            else "digits",  # base task for search space
+            task=base_task,
             shape=task_shape,
             deadline=None,
         )
@@ -644,7 +636,8 @@ class PolicyPlanner:
             coord = prop.coordinate
             if not _check_coord_compatibility(coord):
                 continue
-            task = next(task_cycler)
+            task = self._task_cycle[self._task_index % len(self._task_cycle)]
+            self._task_index += 1
             schedule = schedule_for(self.spec, task, self.fidelity)
             measurement_key = coord.measurement_key(schedule)
             if measurement_key in self._seen:
@@ -728,12 +721,13 @@ def _log_progress(i: int, n_total: int, record: Any) -> None:
     else:
         param_str = str(param_count)
     logger.info(
-        "  [%d/%d] %s | val_acc=%s | params=%s | %s/%s/%s/%s/%s/%s",
+        "  [%d/%d] %s | val_acc=%s | params=%s | task=%s | %s/%s/%s/%s/%s/%s",
         i,
         n_total,
         gate,
         f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
         param_str,
+        record.schedule.task_id,
         record.substrate,
         record.geometry,
         record.dynamics,
@@ -815,16 +809,14 @@ def _evaluate_cells_parallel(
                     now = time.monotonic()
                     if deadline is not None and now >= deadline:
                         logger.warning(
-                            "Budget deadline reached (%.0fs), cancelling %d pending cells",
+                            "Budget deadline reached (%.0fs), killing %d in-flight cells",
                             budget_seconds,
                             len(pending),
                         )
                         for fut in pending:
                             fut.cancel()
-                        # Wait for cancellations to complete with timeout
-                        for fut in pending:
-                            with contextlib.suppress(Exception):
-                                fut.result(timeout=5.0)
+                        pool.kill_workers()
+                        pending.clear()
                         break
 
                     # Use timeout to periodically check deadline even if no futures complete
@@ -859,8 +851,7 @@ def _evaluate_cells_parallel(
                             )
 
                         i = len(results)
-                        if verbose or i % max(1, n_total // 10) == 0 or i == n_total:
-                            _log_progress(i, n_total, record)
+                        _log_progress(i, n_total, record)
 
                         if deadline is None or time.monotonic() < deadline:
                             _submit_next()
@@ -1208,14 +1199,9 @@ def run_waves(
             ladder_budget_split = {"L0": 0.6, "L1": 0.3, "L2": 0.1}
             for fid in ladder_fidelities:
                 n_fid = max(1, int(len(wave0_cells) * ladder_budget_split[fid]))
-                for coord, _ in wave0_cells[:n_fid]:
-                    schedule = schedule_for(
-                        spec,
-                        coord.task
-                        if hasattr(coord, "task")
-                        else (spec.task_names[0] if spec.task_names else "digits"),
-                        fid,
-                    )
+                tasks = spec.scheduled_tasks
+                for i, (coord, _) in enumerate(wave0_cells[:n_fid]):
+                    schedule = schedule_for(spec, tasks[i % len(tasks)], fid)
                     ladder_cells.append((coord, schedule))
             return RunSummary(
                 run_id=run_id,

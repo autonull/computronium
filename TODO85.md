@@ -3,15 +3,35 @@
 **Status:** Supersedes TODO84. All blockers fixed, all tests pass (883/883).
 **Strategy:** Run experiments → find what breaks → fix it → repeat. No publishing, no figures, no overhead.
 
+## ✅ CURRENT STATE (Run 34+)
+
+**Multi-task experiments work.** All three vision tasks (`digits`, `fashion_mnist`, `mnist`) are measured in one run.
+
+Fixes landed this session:
+
+| Defect | Fix | File |
+|--------|-----|------|
+| Task never cycled — planner used `tasks[0]` for the whole wave | Persistent `_task_cycle`/`_task_index` on `PolicyPlanner` | `wave.py` |
+| Progress hid tasks — only every ~10th cell logged | Every cell logs `task=<id>` alongside axes | `wave.py` |
+| `"digits"` hardcoded in 4 execution paths | Single `RunSpec.scheduled_tasks` property | `run_spec.py`, `wave.py` |
+| Budget overrun 400s+ — cancelled cells kept running | Deadline calls `pool.kill_workers()` | `wave.py` |
+
+**Known open issue:** ladder budget split (60/30/10) starves L1/L2 on short runs.
+On a 0.08h ladder, L0 used its 165s but L1 (86s) and L2 (28s) measured **0 cells** —
+a cell needs longer than the sub-budget. Use `--ladder` only with ≥0.5h, or run a
+single fidelity. This is the next thing to fix or route around.
+
 ---
 
 ## 🔄 THE LOOP (≤30 min per iteration)
 
 ```bash
-# 1. RUN experiment (ladder, 0.2-0.5h, TPE, CPU, 4-6 workers)
-./experiment_shallow.sh 0.3 --ladder --policy tpe --device cpu -w 4 --tasks digits \
+# 1. RUN experiment (0.3-0.5h, TPE, CPU, 8 workers)
+./experiment_shallow.sh 0.3 --policy tpe --device cpu --workers 8 \
+  --tasks digits,fashion_mnist,mnist \
   --axes '{"credit":["gradient","homeostatic","pc_alm"],"update":["euclidean","lion"],"substrate":["digital","ternary"],"plasticity":["null","rule_state"]}' \
   --skip-doctor
+# Add --ladder only when budget >= 0.5h
 
 # 2. ANALYZE (30 sec) — look for:
 #    - Worker crashes / timeouts
@@ -27,8 +47,8 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 #    - Poor performance → add hyperparam sweep / LR scaling
 #    - Missing combos → fix search space filter
 
-# 4. VERIFY fix with quick re-run (0.05h dry-run)
-./experiment_shallow.sh 0.05 --ladder --policy tpe --device cpu -w 2 --tasks digits --skip-doctor --dry-run
+# 4. VERIFY fix with quick re-run (0.02h, no ladder — ladder starves L1/L2)
+./experiment_shallow.sh 0.02 --policy tpe --device cpu --workers 2 --tasks digits,fashion_mnist,mnist --skip-doctor
 
 # 5. COMMIT fix + experiment log
 # 6. REPEAT with different axes
@@ -153,4 +173,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | Ternary + energy_minimization + thermodynamic_contrast/pepita | **FIXED** | TWN ternary quantization + substrate-effective energy | Was: straight-through estimator broke energy_minimization settle. Fix: proper ternary thresholding (0.7*E[|W|]) + energy uses kernel.effective_weights() |
 | Multi-task cycling | **FIXED** | PolicyPlanner now cycles task_cycle | PolicyPlanner.__iter__ now uses single ProposalContext with full wave_size and assigns tasks from task_cycle to proposals |
 
-**Priority for next session:** Test neuromorphic + spike_integration, quantum substrate, temporal_psi plasticity, graph/causal_transformer/spatial_lattice/ntm geometries, diffusion/error_predictive_coding/lazy/predictive_settling/pc_alm dynamics, homeostatic/local_goodness/local_contrastive/random_projections/pc_alm/temporal_trace credits, adam/natural_gradient/elastic_consolidation updates. Expand task coverage (fashion_mnist, mnist, kmnist, cifar10).
+**Priority for next session:**
+1. **Multi-task coverage is live** — run wide axes with `--tasks digits,fashion_mnist,mnist` (no ladder) so every task is measured.
+2. Fix ladder budget split so L1/L2 are not starved (raise sub-budget floor above one cell's cost, or size cells before splitting).
+3. Then remaining primitive gaps: neuromorphic + spike_integration, quantum substrate, temporal_psi plasticity, graph/causal_transformer/spatial_lattice/ntm geometries, diffusion/error_predictive_coding/lazy/predictive_settling/pc_alm dynamics, adam/natural_gradient/elastic_consolidation updates.

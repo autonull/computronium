@@ -360,6 +360,11 @@ class RunSpec(BaseModel):
         return tuple(dict.fromkeys(n for n in (self.task, *self.tasks) if n))
 
     @property
+    def scheduled_tasks(self) -> tuple[str, ...]:
+        """The tasks a run cycles through: ``task_cycle`` when declared, else every task."""
+        return tuple(self.task_cycle) if self.task_cycle else self.task_names
+
+    @property
     def stage_names(self) -> tuple[str, ...]:
         """The stage sequence; ``None`` means the canonical S1-S11 order."""
         if self.stages is not None:
