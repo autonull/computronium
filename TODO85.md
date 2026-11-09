@@ -51,18 +51,18 @@ Use GPU for larger models/batches, not these. The Triton settle-family kernels a
 not on the `energy_minimization` path; that path uses `SubstrateSettleKernel`
 (plain torch matmuls) plus one GPU sync per settle step for the convergence check.
 
-### Verified ladder (Run 45: 0.01h, 8 workers, 3600s budget — Track B1)
+### Verified ladder (Run 46: 0.01h, 8 workers, 3600s budget — Track B2)
 
 ```
-L0: 46 cells in 23s  (3 credits, 3 updates, 2 substrates, 3 plasticities, 4 dynamics, 3 geometries, 3 tasks)
+L0: 65 cells in 20s  (5 credits, 3 updates, 1 substrate, 2 plasticities, 2 dynamics, 3 geometries, 4 tasks)
 L1: 0 cells (no PASS records)
 L2: 0 cells
-46 evaluated, 46 failed, 29s used
+65 evaluated, 65 failed, 28s used
 
 KEY FINDING:
-- **Control tasks (cartpole, pendulum, acrobot) FAIL entirely** — validator expects `val_acc` (classification), but control tasks return `reward`/`episode_reward` (RL metrics).
-- This is a **task-aware objectives gap**: the system assumes classification metrics for all tasks.
-- Fix needed: per-task objective specification (reward for control, accuracy for vision, perplexity for language, etc.)
+- **Graph tasks FAIL entirely** — same validator mismatch: cora/citeseer/pubmed (node classification) and graph_classification return `accuracy`/`node_accuracy`, not `val_acc`.
+- Confirms **systemic task-aware objectives gap**: validator hardcodes `val_acc`/`loss`/`train_acc`/`accuracy` as core metrics.
+- Fix needed: per-task metric specification in task registry (e.g., `primary_metric: "val_acc"` for vision, `"reward"` for control, `"accuracy"` for node/graph classification, `"perplexity"` for language).
 ```
 
 ### Verified ladder (Run 41: 1.1h, 8 workers, 5400s budget)
@@ -196,6 +196,7 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | 43 | credit: gradient,homeostatic,pc_alm,target_inversion,temporal_trace,random_projections,local_goodness,local_contrastive; update: euclidean,adam,lion,local_adam; substrate: digital,neuromorphic,analog,optical,sparse; plasticity: null,rule_state,temporal_psi; dynamics: instantaneous,energy_minimization,spike_integration,lazy; geometry: feedforward,recurrent,conv,attention,graph,causal_transformer,nca,tile_mesh,ntm; tasks: mnist,fashion_mnist; ladder | 2058s | 0 | 1 (lazy+temporal_psi+local_contrastive+local_adam) | digital/ff/instant/null/grad/euclid (0.979 L2) | **Track A1: Geometry×Credit + Neuromorphic**. 8 credits, 4 updates, 5 substrates, 3 plasticities, 4 dynamics, 9 geoms, 2 tasks. L0: 50 cells → L1: 24 (8 cells ×3 seeds) → L2: 5 (1 cell ×5 seeds). 80 evaluated, 1 failed. **Neuromorphic now works: 0.9735 L1 on mnist** (energy_minimization/null/gradient/euclidean). Best non-digital L1: neuromorphic 0.9735, optical 0.9288, analog 0.7741, sparse 0.9219. Geometry coverage: feedforward/recurrent/conv/attention/ntm/tile_mesh all measured with non-gradient credits (homeostatic, target_inversion, random_projections, local_goodness, local_contrastive). |
 | 44 | credit: pc_alm,gradient; update: euclidean,adam,muon,natural_gradient,role_split,lion; substrate: digital; plasticity: null,rule_state; dynamics: pc_alm,instantaneous,energy_minimization; geometry: feedforward,recurrent; tasks: mnist; ladder | 3018s | 0 | 3 (pc_alm dynamics + pc_alm credit) | digital/ff/instant/null/grad/euclid (0.979 L2) | **Track A3+A4: pc_alm debug + missing updates**. 2 credits, 6 updates, 1 substrate, 2 plasticities, 3 dynamics, 2 geoms, 1 task. L0: 36 cells → L1: 15 (5 cells ×3 seeds) → L2: 15 (3 cells ×5 seeds). 69 evaluated, 3 failed (all pc_alm+pc_alm combos). **pc_alm dynamics FAILS with pc_alm credit** (3/3 failed) but works with gradient credit. **Missing updates NOW MEASURED**: muon (0.953-0.966 L1), natural_gradient (0.62-0.70 L0, 0.96-0.97 L2), role_split (not sampled by TPE). Best L2: digital/ff/instant/null/grad/euclid = 0.9791, digital/ff/instant/null/grad/adam = 0.9783, digital/ff/energy_min/rule_state/grad/muon = 0.9662. |
 | 45 | credit: gradient,target_inversion,temporal_trace; update: euclidean,adam,lion; substrate: digital,analog; plasticity: null,fast_weights,temporal_psi; dynamics: instantaneous,energy_minimization,lazy,predictive_settling; geometry: recurrent,nca,feedforward; tasks: cartpole,pendulum,acrobot; ladder | 29s | 0 | 46 (all cells) | N/A | **Track B1: Control tasks — VALIDATOR MISMATCH**. All 46 cells FAIL because control tasks (cartpole, pendulum, acrobot) are RL/continuous control returning `reward`/`episode_reward`, not `val_acc`. Validator gates on classification metrics. Need task-aware objectives (reward for control, accuracy for vision). No ladder promotion (0 PASS). |
+| 46 | credit: gradient,homeostatic,pc_alm,target_inversion,random_projections; update: euclidean,adam,lion; substrate: digital; plasticity: null,rule_state; dynamics: instantaneous,energy_minimization; geometry: graph,feedforward,recurrent; tasks: cora,citeseer,pubmed,graph_classification; ladder | 28s | 0 | 65 (all cells) | N/A | **Track B2: Graph tasks — VALIDATOR MISMATCH**. All 65 cells FAIL. Graph tasks (cora, citeseer, pubmed = node classification; graph_classification = graph classification) likely return `accuracy` or `node_accuracy`, not `val_acc`. Same validator mismatch as control tasks. Need per-task metric mapping. |
 
 ---
 
@@ -247,8 +248,12 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 1. Ladder follow-up: the L0 share is 50% flat. If L0 exhausts its cell space early, the unused time is already available to L1/L2; consider shrinking L0's share for small spaces.
 2. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
 3. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
-4. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 ✅ DONE** (pc_alm+pc_alm fails, gradient+pc_alm works), **Track A4 ✅ DONE** (muon ✓, natural_gradient ✓, role_split not sampled).
-5. **Track B1 BLOCKED**: Control tasks need task-aware objectives (reward, not accuracy). Fix validator/objectives per task domain.
-6. **Track B2**: Graph tasks (cora, citeseer, pubmed) — may work with current accuracy metric (node classification)
-7. **Track B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy
-8. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation
+4. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 ✅ DONE**, **Track A4 ✅ DONE** — Compatibility depth complete.
+5. **Track B BLOCKED**: Need task-aware objectives fix (validator metric mapping per task domain):
+   - Vision (mnist, fashion_mnist, digits, cifar): `val_acc` ✓
+   - Control (cartpole, pendulum, acrobot): `reward` / `episode_reward`
+   - Graph node classification (cora, citeseer, pubmed): `accuracy` / `node_accuracy`
+   - Graph classification (graph_classification): `accuracy`
+   - Sequence (copy_task, sequential_mnist, tiny_shakespeare): `accuracy` / `perplexity`
+   - Tabular (iris, wine, breast_cancer, etc.): `accuracy`
+6. **Track C: Scale** — hidden=256, batch=256, epochs=50 on best combos for GPU validation

@@ -43,20 +43,10 @@ Validate that findings transfer to larger models and GPU.
 ### ✅ DONE: Track A1 + A2 — Geometry × Credit + Neuromorphic (Run 43)
 ### ✅ DONE: Track A3 + A4 — pc_alm Debug + Missing Updates (Run 44)
 ### ❌ BLOCKED: Track B1 — Control Tasks (Run 45) — Need task-aware objectives fix
+### ❌ BLOCKED: Track B2 — Graph Tasks (Run 46) — Same validator mismatch
 
-### Next Run (Track B2): Graph Tasks
-```bash
-./experiment_shallow.sh 1.0 --policy tpe --device cpu --workers 8 \
-  --tasks cora,citeseer,pubmed,graph_classification --ladder \
-  --axes '{
-    "credit":["gradient","homeostatic","pc_alm","target_inversion","random_projections"],
-    "update":["euclidean","adam","lion"],
-    "substrate":["digital"],
-    "plasticity":["null","rule_state"],
-    "dynamics":["instantaneous","energy_minimization"],
-    "geometry":["graph","feedforward","recurrent"]
-  }' --skip-doctor
-```
+### NEXT PRIORITY: Fix task-aware objectives (validator metric mapping per task domain)
+Then: Track B3 (Sequence), B4 (Tabular), Track C (Scale)
 ```bash
 ./experiment_shallow.sh 1.0 --policy tpe --device cpu --workers 8 \
   --tasks mnist --ladder \
@@ -143,6 +133,7 @@ Validate that findings transfer to larger models and GPU.
 | 43 | A1+A2 | Geometry×Credit + Neuromorphic | 80 cells, 1 fail | **A1 DONE**: Geometry×non-gradient credit compatibility confirmed (recurrent/attention/conv/ntm/tile_mesh all measured). **A2 DONE**: Neuromorphic works — 0.9735 val_acc on mnist (energy_minimization/null/gradient/euclidean). Spike_integration measured (0.7313). Best non-digital: neuromorphic 0.9735, optical 0.9288, sparse 0.9219, analog 0.7741. |
 | 44 | A3+A4 | pc_alm debug + missing updates | 69 cells, 3 fail | **A3 DONE**: pc_alm dynamics + pc_alm credit FAILS (3/3); pc_alm + gradient WORKS. **A4 DONE**: muon ✓ (0.953-0.966 L1), natural_gradient ✓ (0.62-0.70 L0, 0.96-0.97 L2), role_split not sampled by TPE. |
 | 45 | B1 | Control tasks (cartpole, pendulum, acrobot) | 46 cells, 46 fail | **B1 BLOCKED**: Validator expects `val_acc` (classification), but control tasks return `reward`/`episode_reward` (RL metrics). Need task-aware objectives per domain. |
+| 46 | B2 | Graph tasks (cora, citeseer, pubmed, graph_classification) | 65 cells, 65 fail | **B2 BLOCKED**: Same validator mismatch — graph tasks return `accuracy`/`node_accuracy`, not `val_acc`. Confirms systemic task-aware objectives gap. |
 | — | — | — | — | — |
 
 ---
@@ -158,4 +149,4 @@ Validate that findings transfer to larger models and GPU.
 
 ---
 
-**Start:** Run Track B2 (Graph tasks: cora, citeseer, pubmed, graph_classification) with graph geometry + compatible credits. May work with existing accuracy metric. Fix what breaks. Repeat.
+**Start:** Fix task-aware objectives (add `primary_metric` to task registry, update validator to use per-task metric). Then run Track B3 (Sequence tasks) and B4 (Tabular). Then Track C (Scale).
