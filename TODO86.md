@@ -98,7 +98,7 @@ Then: Track B3 (Sequence), B4 (Tabular), Track C (Scale)
 - [x] **A4**: muon/natural_gradient measured — DONE (muon 0.953-0.966 L1, natural_gradient 0.62-0.70 L0/0.96-0.97 L2). role_split not sampled (low TPE prior).
 
 ### Track B: Task Breadth
-- [ ] **B1**: Control tasks (cartpole, pendulum, acrobot) — BLOCKED: need task-aware objectives (reward metric)
+- [x] **B1**: Control tasks — validator metric fix DONE (now uses `mean_reward`). BLOCKED: RL tasks need training loop support (dataloader returns None, trainer fails with `'NoneType' object is not iterable`)
 - [ ] **B2**: Graph tasks (cora, citeseer, pubmed, graph_classification) — may work with accuracy (node classification)
 - [ ] **B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy
 - [ ] **B4**: Tabular/other (iris, wine, breast_cancer, xor, circles, spiral) — baseline coverage

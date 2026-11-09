@@ -48,6 +48,7 @@ from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
     PARAM_BUDGET_TOLERANCE,
 )
+from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.ontology.substrate._substrate import SubstrateConfig
 from computronium.ontology.substrate.spec import (
     SubstrateSpec,
@@ -90,6 +91,34 @@ logger = get_logger(__name__)
 # free-threaded CPython — several workers ask for the same task at once.
 _TASK_CACHE: dict[tuple[str, str, int], Any] = {}
 _TASK_LOCK: Final[threading.Lock] = threading.Lock()
+
+
+def _primary_metric_key(task_id: str) -> str:
+    """Get the payload key for the task's primary objective."""
+    try:
+        registry = get_task_registry()
+        spec = registry.get(task_id)
+        for obj in spec.objectives:
+            if obj.name == spec.primary_objective:
+                return obj.payload_key
+    except Exception:
+        pass
+    return "val_acc"
+
+
+def _core_metric_keys(task_id: str) -> set[str]:
+    """Get the set of core metric keys for a task (those that gate cell validity)."""
+    try:
+        registry = get_task_registry()
+        spec = registry.get(task_id)
+        keys = set()
+        for obj in spec.objectives:
+            if obj.is_measured and obj.payload_key:
+                keys.add(obj.payload_key)
+        keys.update({"loss", "val_loss", "train_loss"})
+        return keys
+    except Exception:
+        return {"loss", "val_loss", "train_loss", "val_acc", "train_acc", "accuracy"}
 
 
 class EvaluationError(RuntimeError):
@@ -285,8 +314,8 @@ def _post_training_metrics(
     # Domain-specific evaluation (perplexity, f1_score, bleu_score, mean_reward, etc.)
     _update_task_metrics(task, metrics, cell, schedule, coordinate)
 
-    # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
-    _add_energy_efficiency(metrics)
+    # Derived metric: energy_efficiency = primary_metric / energy_per_sample
+    _add_energy_efficiency(metrics, coordinate.task)
 
 
 def _set_seeds(seed: int, deterministic: bool) -> None:
@@ -356,12 +385,13 @@ def _update_task_metrics(
         )
 
 
-def _add_energy_efficiency(metrics: dict[str, float]) -> None:
+def _add_energy_efficiency(metrics: dict[str, float], task_id: str) -> None:
     """Add derived energy_efficiency metric if components exist."""
-    val_acc = metrics.get("val_acc")
+    primary_key = _primary_metric_key(task_id)
+    primary_val = metrics.get(primary_key)
     energy_per_sample = metrics.get("energy_per_sample")
-    if val_acc is not None and energy_per_sample is not None and energy_per_sample > 0:
-        metrics["energy_efficiency"] = float(val_acc) / float(energy_per_sample)
+    if primary_val is not None and energy_per_sample is not None and energy_per_sample > 0:
+        metrics["energy_efficiency"] = float(primary_val) / float(energy_per_sample)
 
 
 def _validate_metrics_finite(metrics: dict[str, float], coordinate: Coordinate) -> None:
@@ -376,14 +406,7 @@ def _validate_metrics_finite(metrics: dict[str, float], coordinate: Coordinate) 
     nonfinite = sorted(k for k, v in metrics.items() if not math.isfinite(v))
     if not nonfinite:
         return
-    core = {
-        "loss",
-        "val_loss",
-        "train_loss",
-        "val_acc",
-        "train_acc",
-        "accuracy",
-    }
+    core = _core_metric_keys(coordinate.task)
     fatal = [k for k in nonfinite if k in core]
     if fatal:
         msg = f"non-finite training metrics {fatal} for {coordinate.cell_key()[:12]}"
@@ -652,14 +675,16 @@ def cell_record(
         "param_budget": schedule.param_budget,
         "replay_hash": replay_hash,
     }
-    # Add normalized metric (val_acc normalized against task baseline)
+    # Add normalized metric (primary_metric normalized against task baseline)
     from computronium.domains._task_registry import get_baseline, normalize_score
 
     task_id = evaluation.task_id
-    val_acc = evaluation.metrics.get("val_acc", 0.0)
+    primary_key = _primary_metric_key(task_id)
+    primary_val = evaluation.metrics.get(primary_key, 0.0)
     baseline = get_baseline(task_id)
-    normalized_metric = normalize_score(val_acc, task_id, baseline)
+    normalized_metric = normalize_score(primary_val, task_id, baseline)
     payload["normalized_metric"] = normalized_metric
+    payload["primary_metric"] = primary_key
     if evaluation.checkpoint_path:
         payload["checkpoint_path"] = evaluation.checkpoint_path
     if evaluation.convergence_curve:

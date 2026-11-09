@@ -28,6 +28,7 @@ from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore
 from computronium.experiment.evidence.store._models import StoreConfig
 from computronium.experiment.kernel.evaluate import cell_record, task_shape
+from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.kernel.search_space import (
     iter_candidates,
     schedule_for,
@@ -44,6 +45,19 @@ from computronium.experiment.schema.run_spec import RunSpec
 from computronium.ontology.system import check_compatibility_matrix
 
 logger = get_logger(__name__)
+
+
+def _primary_metric_key(task_id: str) -> str:
+    """Get the payload key for the task's primary objective."""
+    try:
+        registry = get_task_registry()
+        spec = registry.get(task_id)
+        for obj in spec.objectives:
+            if obj.name == spec.primary_objective:
+                return obj.payload_key
+    except Exception:
+        pass
+    return "val_acc"
 
 
 # ============================================================
@@ -333,23 +347,15 @@ class StaticPlanner:
                 records = store.query_records(
                     gate_verdict=GateVerdict.PASS_, quarantine=False
                 )
-            valid_records = [r for r in records if r.payload.get("val_acc") is not None]
+            valid_records = [r for r in records if r.payload.get("normalized_metric") is not None]
             if not valid_records:
                 logger.warning(
-                    "Promotion requested but no PASS records with val_acc found"
+                    "Promotion requested but no PASS records with normalized_metric found"
                 )
                 return []
 
-            from computronium.domains._task_registry import (
-                get_baseline,
-                normalize_score,
-            )
-
             def _norm_val(record):
-                task_id = record.schedule.task_id
-                val_acc = record.payload.get("val_acc", 0.0)
-                baseline = get_baseline(task_id)
-                return normalize_score(val_acc, task_id, baseline)
+                return record.payload.get("normalized_metric", 0.0)
 
             valid_records.sort(key=_norm_val, reverse=True)
 
@@ -709,7 +715,9 @@ def _evaluate_one(
 
 def _log_progress(i: int, n_total: int, record: Any) -> None:
     gate = record.status.gate_verdict.value
-    val_acc = record.payload.get("val_acc", "N/A")
+    task_id = record.schedule.task_id
+    primary_key = _primary_metric_key(task_id)
+    primary_val = record.payload.get(primary_key, "N/A")
     param_count = record.payload.get("param_count", "N/A")
     if isinstance(param_count, int):
         if param_count >= 1_000_000:
@@ -721,13 +729,14 @@ def _log_progress(i: int, n_total: int, record: Any) -> None:
     else:
         param_str = str(param_count)
     logger.info(
-        "  [%d/%d] %s | val_acc=%s | params=%s | task=%s | %s/%s/%s/%s/%s/%s",
+        "  [%d/%d] %s | %s=%s | params=%s | task=%s | %s/%s/%s/%s/%s/%s",
         i,
         n_total,
         gate,
-        f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
+        primary_key,
+        f"{primary_val:.4f}" if isinstance(primary_val, float) else primary_val,
         param_str,
-        record.schedule.task_id,
+        task_id,
         record.substrate,
         record.geometry,
         record.dynamics,
@@ -994,28 +1003,28 @@ def _run_ladder_promotion(
     """
     from computronium.experiment.kernel.search_space import schedule_for
 
-    # Get PASS records with val_acc, group by coordinate (cell_key)
+    # Get PASS records with normalized_metric, group by coordinate (cell_key)
     pass_records = [
         r
         for r in all_results
         if r.status.gate_verdict.value == "PASS"
-        and r.payload.get("val_acc") is not None
+        and r.payload.get("normalized_metric") is not None
     ]
     if not pass_records:
         logger.info("Ladder: no PASS records to promote")
         return total_elapsed, all_results, budget_remaining
 
-    # Group by cell_key, keep best val_acc per cell
+    # Group by cell_key, keep best normalized_metric per cell
     from computronium.experiment.schema.record import Record
 
     best_by_cell: dict[str, tuple[float, Record]] = {}
     for record in pass_records:
         cell_key = record.cell_key
-        val_acc = record.payload.get("val_acc", 0.0)
-        if cell_key not in best_by_cell or val_acc > best_by_cell[cell_key][0]:
-            best_by_cell[cell_key] = (val_acc, record)
+        norm_metric = record.payload.get("normalized_metric", 0.0)
+        if cell_key not in best_by_cell or norm_metric > best_by_cell[cell_key][0]:
+            best_by_cell[cell_key] = (norm_metric, record)
 
-    # Sort by val_acc descending
+    # Sort by normalized_metric descending
     sorted_cells = sorted(best_by_cell.items(), key=lambda x: x[1][0], reverse=True)
 
     # Cost model: a record is one seed, so its measured walltime is the cost of
@@ -1052,8 +1061,8 @@ def _run_ladder_promotion(
             break
 
         expected = [
-            (cell_key, val_acc, record, _expected_replicate_cost(record, target_fid))
-            for cell_key, (val_acc, record) in sorted_cells
+            (cell_key, norm_metric, record, _expected_replicate_cost(record, target_fid))
+            for cell_key, (norm_metric, record) in sorted_cells
         ]
         if not expected:
             continue
@@ -1197,13 +1206,13 @@ def _run_ladder_promotion(
             r
             for r in evaluation.results
             if r.status.gate_verdict.value == "PASS"
-            and r.payload.get("val_acc") is not None
+            and r.payload.get("normalized_metric") is not None
         ]
         for record in new_pass:
             cell_key = record.cell_key
-            val_acc = record.payload.get("val_acc", 0.0)
-            if cell_key not in best_by_cell or val_acc > best_by_cell[cell_key][0]:
-                best_by_cell[cell_key] = (val_acc, record)
+            norm_metric = record.payload.get("normalized_metric", 0.0)
+            if cell_key not in best_by_cell or norm_metric > best_by_cell[cell_key][0]:
+                best_by_cell[cell_key] = (norm_metric, record)
         sorted_cells = sorted(best_by_cell.items(), key=lambda x: x[1][0], reverse=True)
 
         logger.info(
@@ -1359,15 +1368,18 @@ def run_waves(
             if positive_control_results
             else "N/A"
         )
-        val_acc = (
-            positive_control_results[0].payload.get("val_acc", "N/A")
+        pc_task_id = positive_control_cell[1].task_id
+        primary_key = _primary_metric_key(pc_task_id)
+        primary_val = (
+            positive_control_results[0].payload.get(primary_key, "N/A")
             if positive_control_results
             else "N/A"
         )
         logger.info(
-            "Positive control: gate=%s, val_acc=%s",
+            "Positive control: gate=%s, %s=%s",
             gate,
-            f"{val_acc:.4f}" if isinstance(val_acc, float) else val_acc,
+            primary_key,
+            f"{primary_val:.4f}" if isinstance(primary_val, float) else primary_val,
         )
 
     while budget_remaining > 0:
