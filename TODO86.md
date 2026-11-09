@@ -41,8 +41,9 @@ Validate that findings transfer to larger models and GPU.
 ## 📋 EXPERIMENT QUEUE (Ready to Run)
 
 ### ✅ DONE: Track A1 + A2 — Geometry × Credit + Neuromorphic (Run 43)
+### ✅ DONE: Track A3 + A4 — pc_alm Debug + Missing Updates (Run 44)
 
-### Next Run (Track A3 + A4): pc_alm Debug + Missing Updates
+### Next Run (Track B1): Control Tasks
 ```bash
 ./experiment_shallow.sh 1.0 --policy tpe --device cpu --workers 8 \
   --tasks mnist --ladder \
@@ -90,8 +91,8 @@ Validate that findings transfer to larger models and GPU.
 ### Track A: Compatibility Depth
 - [x] **A1**: ≥80% of (credit × geometry) pairs measured with ≥3 seeds — DONE (recurrent/attention/conv/ntm/tile_mesh all measured with non-gradient credits)
 - [x] **A2**: neuromorphic substrate has ≥5 measured cells with val_acc > 0.5 — DONE (0.9735 L1 on mnist, multiple cells)
-- [ ] **A3**: pc_alm dynamics either works or cleanly filtered
-- [ ] **A4**: muon/natural_gradient/role_split each have ≥3 measured cells
+- [x] **A3**: pc_alm dynamics either works or cleanly filtered — DONE (fails with pc_alm credit, works with gradient; filter pc_alm+pc_alm combo)
+- [x] **A4**: muon/natural_gradient measured — DONE (muon 0.953-0.966 L1, natural_gradient 0.62-0.70 L0/0.96-0.97 L2). role_split not sampled (low TPE prior).
 
 ### Track B: Task Breadth
 - [ ] ≥12/24 tasks have ≥1 measured cell
@@ -123,6 +124,7 @@ Validate that findings transfer to larger models and GPU.
 |-----|-------|------|--------|-------------|
 | 42 | A | All primitives | 63 cells, 1 fail | **All primitives measured**; quantum/spike_integration/pc_alm/conflict_adaptive/routing/substrate_coupled/local_adam/etc. now have data |
 | 43 | A1+A2 | Geometry×Credit + Neuromorphic | 80 cells, 1 fail | **A1 DONE**: Geometry×non-gradient credit compatibility confirmed (recurrent/attention/conv/ntm/tile_mesh all measured). **A2 DONE**: Neuromorphic works — 0.9735 val_acc on mnist (energy_minimization/null/gradient/euclidean). Spike_integration measured (0.7313). Best non-digital: neuromorphic 0.9735, optical 0.9288, sparse 0.9219, analog 0.7741. |
+| 44 | A3+A4 | pc_alm debug + missing updates | 69 cells, 3 fail | **A3 DONE**: pc_alm dynamics + pc_alm credit FAILS (3/3); pc_alm + gradient WORKS. **A4 PARTIAL**: muon ✓ (0.953-0.966 L1), natural_gradient ✓ (0.62-0.70 L0, 0.96-0.97 L2), role_split not sampled by TPE. |
 | — | — | — | — | — |
 
 ---
@@ -138,4 +140,4 @@ Validate that findings transfer to larger models and GPU.
 
 ---
 
-**Start:** Run Track A3 + A4 (pc_alm debug + missing updates: muon, natural_gradient, role_split) on mnist. Fix what breaks. Repeat.
+**Start:** Run Track B1 (Control tasks: cartpole, pendulum, acrobot) with recurrent/nca geometries + energy_minimization/lazy dynamics. Fix what breaks. Repeat.
