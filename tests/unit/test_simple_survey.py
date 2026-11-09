@@ -160,11 +160,12 @@ def test_estimate_cell_count_never_zero():
 
 def test_cost_model_round_trip(tmp_path, monkeypatch):
     """A measurement survives to the next run through the cache."""
-    monkeypatch.setattr(simple_survey, "TIMING_CACHE", tmp_path / ".timing.json")
-    measured = simple_survey.CostModel(9.25, 5.5, measured=True)
+    from computronium.experiment import wave
+    monkeypatch.setattr(wave, "TIMING_CACHE", tmp_path / ".timing.json")
+    measured = wave.CostModel(9.25, 5.5, measured=True, workers=1)
 
-    simple_survey._save_cost_model("cpu", "L0", measured)
-    loaded = simple_survey._load_cost_model("cpu", "L0")
+    wave._save_cost_model("cpu", "L0", measured)
+    loaded = wave._load_cost_model("cpu", "L0", workers=1)
 
     assert loaded.measured is True
     assert loaded.cost_per_cell_s == pytest.approx(9.25)
@@ -173,13 +174,14 @@ def test_cost_model_round_trip(tmp_path, monkeypatch):
 
 def test_cost_model_missing_falls_back_to_defaults(tmp_path, monkeypatch):
     """No cache entry means the documented fallback table, not a crash."""
-    monkeypatch.setattr(simple_survey, "TIMING_CACHE", tmp_path / "absent.json")
+    from computronium.experiment import wave
+    monkeypatch.setattr(wave, "TIMING_CACHE", tmp_path / "absent.json")
 
-    model = simple_survey._load_cost_model("cpu", "L0")
+    model = wave._load_cost_model("cpu", "L0", workers=1)
 
     assert model.measured is False
-    assert model.cost_per_cell_s == simple_survey.DEFAULT_COSTS["L0"]
-    assert model.startup_s == simple_survey.DEFAULT_STARTUP_S
+    assert model.cost_per_cell_s == wave.DEFAULT_COSTS["L0"]
+    assert model.startup_s == wave.DEFAULT_STARTUP_S
 
 
 def test_digital_flag_pins_substrate():

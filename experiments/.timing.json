@@ -25,10 +25,10 @@
     "startup_s": 0.0
   },
   "cpu/L0/2": {
-    "cost_per_cell_s": 38.795,
+    "cost_per_cell_s": 24.958,
     "per_task": {
-      "digits": 0.511,
-      "mnist": 20.165
+      "digits": 0.182,
+      "fashion_mnist": 24.814
     },
     "startup_s": 0.0
   },
