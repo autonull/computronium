@@ -21,6 +21,8 @@ Fixes landed this session:
 | **energy_minimization 30 settle steps by default** | Default `max_steps=10`, the measured accuracy/cost optimum | `ontology/dynamics/_dynamics.py` |
 | Stale neuromorphic sparsity test | Test configures `sparsity=0.95` instead of relying on a default deliberately changed to 0 | `tests/integration/test_energy_invariants.py` |
 | **Validator metric mismatch for non-vision tasks** — graph/RL/language tasks return different metric keys than hardcoded `val_acc` | Task-aware metric mapping: `_update_task_metrics` uses registry's `payload_key` for primary metric; `_create_data_provider` handles get_batch-based tasks (graph, RL) | `kernel/evaluate.py`, `kernel/_trainer_utils.py` |
+| **L0 share 50% flat — small spaces starve L1/L2** | Adaptive L0 share: 30% for spaces < 1000 primitives, 50% otherwise | `wave.py` |
+| **energy_minimization convergence unreachable (1e-4 vs ~1e-3 plateau)** | Raise default `convergence_threshold` to 1e-3 (measured reachable) | `ontology/dynamics/_dynamics.py` |
 
 ### Measured evidence (digits, L1 = 8 epochs, 1 seed)
 
@@ -247,11 +249,11 @@ uv run comp coverage report --store experiments/experiment_$(ls -t experiments/*
 | **Graph/RL data provider support** | **FIXED** | `_create_data_provider` handles get_batch tasks | Graph tasks extract node features from PyG Data; RL tasks use custom RLTrainer (pending) |
 
 **Priority for next session:**
-1. Ladder follow-up: the L0 share is 50% flat. If L0 exhausts its cell space early, the unused time is already available to L1/L2; consider shrinking L0's share for small spaces.
-2. energy_minimization: default is now 10 steps. The dead convergence knob (`threshold=1e-4` vs a ~1e-3 residual floor) should either be raised to a reachable value or documented as "step budget only".
-3. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
-4. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 ✅ DONE**, **Track A4 ✅ DONE** — Compatibility depth complete.
-5. **Task-aware objectives ✅ DONE** — validator now uses per-task primary metric (val_acc for vision, mean_reward for RL, accuracy for graph, perplexity for LM).
+1. GPU: only worth it for larger models/batches. The settle loop syncs per step; moving the convergence check off the hot path (or batching the horizon with `compiled=True`) is the prerequisite for GPU speedup. Benchmark a hidden=256, batch=256 cell before claiming any GPU win.
+2. **Track A1 ✅ DONE**, **Track A2 ✅ DONE**, **Track A3 ✅ DONE**, **Track A4 ✅ DONE** — Compatibility depth complete.
+3. **Task-aware objectives ✅ DONE** — validator now uses per-task primary metric (val_acc for vision, mean_reward for RL, accuracy for graph, perplexity for LM).
+4. **L0 share adaptive ✅ DONE** — small spaces now use 30% L0, leaving more budget for L1/L2 promotion.
+5. **energy_minimization convergence reachable ✅ DONE** — threshold raised from 1e-4 to 1e-3 (matches observed ~1e-3 plateau).
 6. **Track B1 PARTIAL**: Control tasks have data provider support but need custom RLSystemTrainer for full training loop.
 7. **Track B2 PARTIAL**: Graph tasks have data provider support but need custom GraphSystemTrainer for masked node classification.
 8. **Track B3**: Sequence tasks (copy_task, sequential_mnist, tiny_shakespeare) — may need perplexity/accuracy.

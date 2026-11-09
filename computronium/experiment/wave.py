@@ -1311,7 +1311,17 @@ def run_waves(
     # Ladder: L0 explores on half the budget; L1/L2 size themselves from the
     # measured cell cost and the time actually left (see _run_ladder_promotion).
     if ladder:
-        budget_remaining = budget_seconds * 0.5
+        # Adaptive L0 share: for small search spaces, shrink L0 to leave more
+        # budget for L1/L2 promotion. The planner yields min(MAX_WAVE_CELLS, space)
+        # cells per wave; if space < 1000, L0 needs < 50% budget.
+        total_space = sum(
+            len(planner.search_space.primitives(axis))
+            for axis in StructuralAxis
+        )
+        # Rough estimate: product of primitives across axes
+        # For small spaces, use 30% instead of 50% for L0
+        l0_share = 0.3 if total_space < 1000 else 0.5
+        budget_remaining = budget_seconds * l0_share
         fidelity_walltime = {"L0": 0.0, "L1": 0.0, "L2": 0.0}
     else:
         budget_remaining = budget_seconds

@@ -295,7 +295,7 @@ class StateDynamicsConfig:
         # 0.717/0.803/0.781/0.767 accuracy at 5.0/8.7/15.8/22.7 s per cell.
         # Extra settling past 10 costs time and does not improve accuracy.
         max_steps: int = 10,
-        convergence_threshold: float = 1e-4,
+        convergence_threshold: float = 1e-3,
         convergence_start: int = 5,
         step_size: float = 0.1,
         beta: float = 0.5,
