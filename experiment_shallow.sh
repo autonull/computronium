@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./experiment_shallow.sh <hours> [--mode static|learn] [--fidelity L0|L1|L2] [--tasks auto|list]
-#                          [--workers N] [--store PATH] [--promote-from PATH]
+#                          [--store PATH] [--promote-from PATH]
 #                          [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda]
 #                          [--verbose] [--self-test] [--doctor] [--resume] [--policy tpe|nsga2|random]
 #                          [--ladder] [--cpu-threads N]
@@ -24,7 +24,6 @@ MODE="learn"          # static | learn
 POLICY="tpe"          # tpe | nsga2 | random (learn mode only)
 FIDELITY="L0"
 TASKS="auto"
-MAX_WORKERS="8"
 STORE_PATH=""
 PROMOTE_FROM=""
 PROMOTE_TOP=20
@@ -48,7 +47,7 @@ CPU_THREADS="1"
 # Handle --help/-h immediately
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
     cat <<'EOF'
-Usage: experiment_shallow.sh <hours> [--mode static|learn] [--static] [--learn] [--fidelity L0|L1|L2] [--tasks auto|list] [--workers N] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda] [--param-budget N] [--n-seeds N] [--epochs N] [--batch-limit N] [--axes JSON] [--hyperparams JSON] [--objectives LIST] [--verbose] [--self-test] [--doctor] [--skip-doctor] [--resume] [--policy tpe|nsga2|random] [--ladder] [--cpu-threads N]
+Usage: experiment_shallow.sh <hours> [--mode static|learn] [--static] [--learn] [--fidelity L0|L1|L2] [--tasks auto|list] [--store PATH] [--promote-from PATH] [--promote-top N] [--seed N] [--dry-run] [--device auto|cpu|cuda] [--param-budget N] [--n-seeds N] [--epochs N] [--batch-limit N] [--axes JSON] [--hyperparams JSON] [--objectives LIST] [--verbose] [--self-test] [--doctor] [--skip-doctor] [--resume] [--policy tpe|nsga2|random] [--ladder] [--cpu-threads N]
 
 Runs an experiment with a time budget in hours.
 Default mode is "learn" (LearningSurvey with TPE sampler and fidelity ladder).
@@ -62,7 +61,6 @@ Options:
   --ladder                  Run L0 → L1 → L2 in one invocation, promoting between stages
   --fidelity L0|L1|L2       Fidelity level (default: L0; ignored if --ladder)
   --tasks auto|list         Comma-separated task names or "auto" (default: auto)
-  --workers N               Max concurrent workers (default: auto = all cores / GPU count)
   --store PATH              DuckDB store path (default: experiments/experiment_<ts>.duckdb)
   --promote-from PATH       Prior store path for importance sampling / warm start
   --promote-top N           Number of top cells to promote (default: 20)
@@ -138,10 +136,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --tasks)
             TASKS="${2:-auto}"
-            shift 2
-            ;;
-        --workers)
-            MAX_WORKERS="${2:-auto}"
             shift 2
             ;;
         --store)
@@ -251,11 +245,11 @@ fi
 
 # Run doctor automatically if first run to diagnose issues (unless explicitly skipped)
 # Skip by default to avoid overhead; run with --doctor to force
-if [[ "${SELF_TEST}" == false && "${DOCTOR_MODE}" == false && "${SKIP_DOCTOR:-1}" == "1" ]]; then
+if [[ "${SELF_TEST}" == false && "${DOCTOR_MODE}" == false && "${SKIP_DOCTOR:-0}" == "1" ]]; then
     # Check if we've run doctor before in this session
     DOCTOR_MARKER="/tmp/computronium_doctor_ran"
     if [[ ! -f "${DOCTOR_MARKER}" ]]; then
-        echo ">>> Running quick diagnostics (use --doctor to run explicitly, SKIP_DOCTOR=0 to force)..."
+        echo ">>> Running quick diagnostics (use --doctor to run explicitly, SKIP_DOCTOR=1 to force)..."
         run_doctor
         echo ""
         touch "${DOCTOR_MARKER}"
@@ -292,9 +286,8 @@ fi
 echo "📁 Project root: ${PROJECT_ROOT}"
 cd "$PROJECT_ROOT"
 
-# Test that uv can run the module
-echo ">>> Testing uv environment..."
-if ! uv run python -c "import sys; print('Python:', sys.version)" 2>&1; then
+# Test that uv can run the module (silent)
+if ! uv run python -c "import sys" 2>/dev/null; then
     echo "⚠️  uv run failed, trying direct python..."
     USE_DIRECT_PYTHON=true
 else
@@ -305,9 +298,7 @@ fi
 if [[ -z "${STORE_PATH}" ]]; then
     if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
         PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
-        if [[ ! -f "${PYTHON_EXE}" ]]; then
-            PYTHON_EXE="python3"
-        fi
+        [[ ! -f "${PYTHON_EXE}" ]] && PYTHON_EXE="python3"
         STORE_PATH=$("${PYTHON_EXE}" -c "
 import sys
 sys.path.insert(0, '.')
@@ -328,16 +319,13 @@ fi
 MODULE="computronium.experiment.learning_survey"
 [[ "${MODE}" == "static" ]] && MODULE="computronium.experiment.simple_survey"
 
-# Test that the module can be loaded
-echo ">>> Testing module import..."
+# Test that the module can be loaded (silent)
 if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
     PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
-    if [[ ! -f "${PYTHON_EXE}" ]]; then
-        PYTHON_EXE="python3"
-    fi
-    "${PYTHON_EXE}" -c "import ${MODULE}; print('Module loaded OK')" 2>/dev/null | tail -1
+    [[ ! -f "${PYTHON_EXE}" ]] && PYTHON_EXE="python3"
+    "${PYTHON_EXE}" -c "import ${MODULE}" 2>/dev/null
 else
-    uv run python -c "import ${MODULE}; print('Module loaded OK')" 2>/dev/null | tail -1
+    uv run python -c "import ${MODULE}" 2>/dev/null
 fi
 
 # Build command
@@ -353,7 +341,6 @@ fi
 
 CMD=( "${RUNNER[@]}" -m "${MODULE}" "${HOURS}"
       --fidelity "${FIDELITY}"
-      --max-workers "${MAX_WORKERS}"
       --store "${STORE_PATH}"
       --seed "${SEED}"
       --device "${DEVICE}"
@@ -410,7 +397,7 @@ if [[ "${LADDER}" == true ]]; then
     CMD+=(--ladder)
 fi
 
-# Resolve device and worker count for banner
+# Resolve device for banner
 # Suppress warnings by filtering stderr and taking only the last line of stdout
 _resolve_device() {
     local device_arg="${1}"
@@ -433,54 +420,7 @@ print(d.type)
     fi
 }
 
-_resolve_workers() {
-    local device="${1}"
-    local max_workers="${2}"
-    if [[ "${USE_DIRECT_PYTHON}" == true ]]; then
-        PYTHON_EXE="${PROJECT_ROOT}/.venv/bin/python"
-        [[ ! -f "${PYTHON_EXE}" ]] && PYTHON_EXE="python3"
-        "${PYTHON_EXE}" -c "
-import torch
-import os
-try:
-    import psutil
-    available_gb = psutil.virtual_memory().available / (1024**3)
-    max_by_memory = max(1, int(available_gb / 2))
-except:
-    max_by_memory = 999
-if '${max_workers}' == 'auto':
-    if '${device}' == 'cuda':
-        print(torch.cuda.device_count() or 1)
-    else:
-        cores = os.cpu_count() or 4
-        print(min(cores, max_by_memory))
-else:
-    print('${max_workers}')
-" 2>/dev/null | tail -1
-    else
-        uv run python -c "
-import torch
-import os
-try:
-    import psutil
-    available_gb = psutil.virtual_memory().available / (1024**3)
-    max_by_memory = max(1, int(available_gb / 2))
-except:
-    max_by_memory = 999
-if '${max_workers}' == 'auto':
-    if '${device}' == 'cuda':
-        print(torch.cuda.device_count() or 1)
-    else:
-        cores = os.cpu_count() or 4
-        print(min(cores, max_by_memory))
-else:
-    print('${max_workers}')
-" 2>/dev/null | tail -1
-    fi
-}
-
 RESOLVED_DEVICE=$(_resolve_device "${DEVICE}")
-RESOLVED_WORKERS=$(_resolve_workers "${RESOLVED_DEVICE}" "${MAX_WORKERS}")
 
 # Engine and sampler strings for banner
 ENGINE_STR="static (SimpleSurvey)"
@@ -510,7 +450,6 @@ printf "║ Depth:          %-48s ║\n" "${DEPTH_STR}"
 printf "║ Time limit:     %-48s ║\n" "${HOURS} hour(s)"
 printf "║ Store:          %-48s ║\n" "${STORE_PATH}"
 printf "║ Device:         %-48s ║\n" "${RESOLVED_DEVICE} (resolved from ${DEVICE})"
-printf "║ Workers:        %-48s ║\n" "${RESOLVED_WORKERS} (resolved from ${MAX_WORKERS})"
 printf "║ Seed:           %-48s ║\n" "${SEED}"
 [[ -n "${PROMOTE_FROM}" ]] && printf "║ Promote from:   %-48s ║\n" "${PROMOTE_FROM}"
 [[ -n "${PROMOTE_FROM}" ]] && printf "║ Promote top:    %-48s ║\n" "${PROMOTE_TOP}"

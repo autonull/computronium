@@ -1025,9 +1025,7 @@ class LoopDriver:
                 ss_between = sum(
                     len(g) * (np.mean(g) - grand_mean) ** 2 for g in group_values
                 )
-                ss_total = sum(
-                    (v - grand_mean) ** 2 for g in group_values for v in g
-                )
+                ss_total = sum((v - grand_mean) ** 2 for g in group_values for v in g)
                 if ss_total > 0:
                     effect_size = ss_between / ss_total
 

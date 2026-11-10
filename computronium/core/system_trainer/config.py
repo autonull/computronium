@@ -77,7 +77,7 @@ class SystemTrainerConfig:
     track_energy: bool = True
     track_flops: bool = True
     track_memory: bool = True
-    log_every_n_steps: int = 10
+    log_every_n_steps: int = 0
     seed: int = 42
     deterministic: bool = False
     resumable: bool = False

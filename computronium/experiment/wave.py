@@ -9,18 +9,18 @@ import contextlib
 import json
 import os
 import random
-import signal
 import sys
 import time
 import uuid
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
+
+    from computronium.experiment.schema.run_spec import Fidelity
 
 import torch
 
@@ -53,7 +53,7 @@ def _primary_metric_key(task_id: str) -> str:
         registry = get_task_registry()
         spec = registry.get(task_id)
         for obj in spec.objectives:
-            if obj.name == spec.primary_objective:
+            if obj.name == spec.primary_objective and obj.payload_key:
                 return obj.payload_key
     except Exception:
         pass
@@ -85,12 +85,14 @@ MAX_PREVIEW_CELLS = 20
 
 @dataclass(frozen=True, slots=True)
 class CostModel:
-    """Per-cell timing used to size a run against its budget."""
+    """Per-cell wall-clock time, used to size a run against its budget.
+
+    Cells run one at a time, so this is the rate at which the budget is spent.
+    """
 
     cost_per_cell_s: float
     startup_s: float
     measured: bool = False
-    workers: int = 1
     per_task: dict[str, float] | None = None
 
     @property
@@ -98,27 +100,24 @@ class CostModel:
         return "measured" if self.measured else "default"
 
 
-def _load_cost_model(device: str, fidelity: str, workers: int) -> CostModel:
+def _load_cost_model(device: str, fidelity: str) -> CostModel:
     try:
-        entry = json.loads(TIMING_CACHE.read_text())[f"{device}/{fidelity}/{workers}"]
+        entry = json.loads(TIMING_CACHE.read_text())[f"{device}/{fidelity}"]
         return CostModel(
             cost_per_cell_s=float(entry["cost_per_cell_s"]),
             startup_s=float(entry["startup_s"]),
             measured=True,
-            workers=workers,
             per_task=entry.get("per_task"),
         )
     except OSError, ValueError, KeyError, TypeError:
-        return CostModel(
-            DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S, workers=workers
-        )
+        return CostModel(DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S)
 
 
 def _save_cost_model(device: str, fidelity: str, model: CostModel) -> None:
     with contextlib.suppress(OSError, ValueError):
         TIMING_CACHE.parent.mkdir(parents=True, exist_ok=True)
         existing = json.loads(TIMING_CACHE.read_text()) if TIMING_CACHE.exists() else {}
-        key = f"{device}/{fidelity}/{model.workers}"
+        key = f"{device}/{fidelity}"
         data: dict[str, Any] = {
             "cost_per_cell_s": round(model.cost_per_cell_s, 3),
             "startup_s": round(model.startup_s, 3),
@@ -150,20 +149,14 @@ def _blend(previous: CostModel, measured: CostModel) -> CostModel:
         cost_per_cell_s=0.5 * (previous.cost_per_cell_s + measured.cost_per_cell_s),
         startup_s=0.5 * (previous.startup_s + measured.startup_s),
         measured=True,
-        workers=measured.workers,
         per_task=per_task,
     )
 
 
-def _estimate_cell_count(budget_seconds: int, model: CostModel, workers: int) -> int:
-    """Cells that fit ``budget_seconds`` at ``workers``-way parallelism.
-
-    The budget pays startup once and serialized cell time thereafter, so the
-    cell count scales with the worker count: dividing by the serial cost alone
-    sized CPU runs for one worker while the pool ran four.
-    """
+def _estimate_cell_count(budget_seconds: int, model: CostModel) -> int:
+    """Cells that fit ``budget_seconds``, paying startup once and cell time after."""
     usable = budget_seconds - model.startup_s
-    return max(1, int(usable * max(1, workers) // model.cost_per_cell_s))
+    return max(1, int(usable // model.cost_per_cell_s))
 
 
 # ============================================================
@@ -276,11 +269,22 @@ class Planner(Protocol):
     """Protocol for cell planners (static or policy-driven).
 
     Planners are iterable streams of (Coordinate, Schedule) pairs.
-    Use `iter(planner)` to get a fresh iterator for each wave.
+    ``run_waves`` resizes the next wave with ``_set_wave_size`` before taking
+    ``iter(planner)``, and reads ``search_space`` to size the ladder stages.
     """
 
-    def __iter__(self):
+    search_space: Any
+
+    def __iter__(self) -> Iterator[tuple[Coordinate, Schedule]]:
         """Return an iterator of (Coordinate, Schedule) for the next wave."""
+        ...
+
+    def _set_wave_size(self, n: int) -> None:
+        """Set how many cells the next wave yields."""
+        ...
+
+    def mark_seen(self, measurement_key: str) -> None:
+        """Declare a cell already measured, so the planner never re-proposes it."""
         ...
 
     def observe(self, record: Any) -> None:
@@ -511,6 +515,9 @@ class StaticPlanner:
     def observe(self, record: Any) -> None:
         pass
 
+    def mark_seen(self, measurement_key: str) -> None:
+        self._seen.add(measurement_key)
+
     def after_wave(self) -> None:
         pass
 
@@ -666,6 +673,9 @@ class PolicyPlanner:
     def observe(self, record: Any) -> None:
         self._policy.observe(record)
 
+    def mark_seen(self, measurement_key: str) -> None:
+        self._seen.add(measurement_key)
+
     def after_wave(self) -> None:
         self._wave_count += 1
         logger.debug("Wave %d completed", self._wave_count)
@@ -684,24 +694,24 @@ class _Evaluation:
     skipped: int
 
 
-def _init_worker(cpu_threads: int, device: str) -> None:
-    if device == "cpu":
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    if cpu_threads > 0:
-        import torch
-
-        torch.set_num_threads(cpu_threads)
-
-
 def _evaluate_one(
     cell: tuple[Coordinate, Schedule],
-    fidelity: str,
-    store_path: str,
     provenance: Provenance,
+    deadline_check: Any,
 ) -> Any:
+    """Evaluate one cell in this process, stopping it if the wave deadline passes."""
     coord, schedule = cell
+    params = {
+        "deadline_check": deadline_check,
+        "deadline_check_every_n_steps": 1,
+    }
     try:
-        return cell_record(coordinate=coord, schedule=schedule, provenance=provenance)
+        return cell_record(
+            coordinate=coord,
+            schedule=schedule,
+            provenance=provenance,
+            params=params,
+        )
     except Exception:
         logger.exception(
             "Cell evaluation failed: %s/%s/%s/%s/%s/%s",
@@ -748,128 +758,67 @@ def _log_progress(i: int, n_total: int, record: Any) -> None:
     )
 
 
-def _evaluate_cells_parallel(
+def _evaluate_cells(
     cells: list[tuple[Coordinate, Schedule]],
-    fidelity: str,
     store_path: str,
     provenance: Provenance,
-    max_workers: int,
-    verbose: bool,
     budget_seconds: int | None = None,
-    cpu_threads: int = 1,
-    device_str: str = "cpu",
-    run_id: str | None = None,
-    spec: RunSpec | None = None,
-    cell_timeout_seconds: float | None = None,
 ) -> _Evaluation:
+    """Evaluate cells one at a time, in this process, until the budget is spent.
+
+    Sequential by construction. Every cell shares one GPU, one dataset cache and
+    one store writer, so fanning out to worker processes only multiplies dataset
+    loads and CUDA contexts on the same device — which is what made a fan-out
+    look like a hang. The deadline is handed to the trainer, so a single long
+    cell stops at the wave boundary instead of overrunning the run.
+    """
     n_total = len(cells)
     results: list = []
     started = time.monotonic()
     deadline = started + budget_seconds if budget_seconds else None
-    queue = iter(cells)
-    pending: dict[Any, tuple[Coordinate, Schedule]] = {}
     startup_s = 0.0
 
-    store_config = StoreConfig(path=Path(store_path))
+    def _before_deadline() -> bool:
+        return deadline is None or time.monotonic() < deadline
 
-    # Use context manager for store to ensure proper initialization and cleanup
-    # Run is already created in run_waves before calling this function
-    with RecordStore(store_config) as store:
+    logger.info("Evaluating %d cell(s) sequentially", n_total)
 
-        def _sigterm_handler(signum, frame):
-            logger.info("SIGTERM received, closing store after current record...")
-            # The context manager will handle cleanup on exit
-            sys.exit(130)
+    with RecordStore(StoreConfig(path=Path(store_path))) as store:
+        for i, cell in enumerate(cells, 1):
+            if not _before_deadline():
+                logger.info("Budget spent, stopping before cell %d", i)
+                break
 
-        old_sigterm = signal.signal(signal.SIGTERM, _sigterm_handler)
-        old_sigint = signal.signal(signal.SIGINT, _sigterm_handler)
+            coord, schedule = cell
+            logger.info(
+                "  cell %d/%d: %s/%s/%s/%s/%s/%s on %s",
+                i,
+                n_total,
+                coord.substrate,
+                coord.geometry,
+                coord.dynamics,
+                coord.plasticity,
+                coord.credit,
+                coord.update,
+                schedule.task_id,
+            )
+            try:
+                record = _evaluate_one(cell, provenance, _before_deadline)
+            except Exception as exc:
+                logger.warning("Cell evaluation failed: %s", exc)
+                continue
 
-        logger.info(
-            "Evaluating up to %d cells with %d workers...", n_total, max_workers
-        )
+            results.append(record)
+            store.append(record)
 
-        # Force 'spawn' start method to avoid forkserver issues with PyTorch (scipy sets forkserver)
-        import multiprocessing as mp
+            if not startup_s:
+                startup_s = max(
+                    0.0,
+                    (time.monotonic() - started)
+                    - float(record.payload.get("walltime_s", 0.0)),
+                )
 
-        try:
-            mp.set_start_method("spawn", force=True)
-        except RuntimeError:
-            pass  # Already set
-
-        try:
-            with ProcessPoolExecutor(
-                max_workers=max_workers,
-                initializer=_init_worker,
-                initargs=(cpu_threads, device_str),
-                mp_context=mp.get_context("spawn"),
-            ) as pool:
-
-                def _submit_next() -> None:
-                    cell = next(queue, None)
-                    if cell is not None:
-                        pending[
-                            pool.submit(
-                                _evaluate_one, cell, fidelity, store_path, provenance
-                            )
-                        ] = cell
-
-                for _ in range(min(max_workers, n_total)):
-                    _submit_next()
-
-                while pending:
-                    now = time.monotonic()
-                    if deadline is not None and now >= deadline:
-                        logger.warning(
-                            "Budget deadline reached (%.0fs), killing %d in-flight cells",
-                            budget_seconds,
-                            len(pending),
-                        )
-                        for fut in pending:
-                            fut.cancel()
-                        pool.kill_workers()
-                        pending.clear()
-                        break
-
-                    # Use timeout to periodically check deadline even if no futures complete
-                    wait_timeout = 10.0
-                    if deadline is not None:
-                        wait_timeout = min(wait_timeout, max(0.1, deadline - now))
-                    done_futures = wait(
-                        pending, return_when=FIRST_COMPLETED, timeout=wait_timeout
-                    ).done
-                    for future in done_futures:
-                        del pending[future]
-                        try:
-                            record = future.result(timeout=cell_timeout_seconds)
-                        except TimeoutError:
-                            logger.warning(
-                                "Cell evaluation timed out after %.1fs",
-                                cell_timeout_seconds,
-                            )
-                            continue
-                        except Exception as exc:
-                            logger.warning("Cell evaluation raised: %s", exc)
-                            continue
-                        results.append(record)
-
-                        store.append(record)
-
-                        if not startup_s:
-                            startup_s = max(
-                                0.0,
-                                (time.monotonic() - started)
-                                - float(record.payload.get("walltime_s", 0.0)),
-                            )
-
-                        i = len(results)
-                        _log_progress(i, n_total, record)
-
-                        if deadline is None or time.monotonic() < deadline:
-                            _submit_next()
-
-        finally:
-            signal.signal(signal.SIGTERM, old_sigterm)
-            signal.signal(signal.SIGINT, old_sigint)
+            _log_progress(len(results), n_total, record)
 
     elapsed = time.monotonic() - started
     skipped = n_total - len(results)
@@ -921,7 +870,6 @@ def _pretty_print_dry_run(
     hours: float,
     fidelity: str,
     model: CostModel,
-    workers: int,
 ) -> None:
     """Pretty-print dry-run results as a table."""
     cells = result.get("cells", [])
@@ -933,7 +881,7 @@ def _pretty_print_dry_run(
         f"Budget: {hours}h ({int(hours * 3600)}s) | Fidelity: {fidelity} | "
         f"Tasks: {', '.join(tasks)}"
     )
-    print(f"Estimated cells: {n} across {workers} workers")
+    print(f"Estimated cells: {n}")
     print()
 
     if not cells:
@@ -954,7 +902,7 @@ def _pretty_print_dry_run(
     if n > MAX_PREVIEW_CELLS:
         print(f"  ... {n - MAX_PREVIEW_CELLS} more cells")
 
-    total_est = model.startup_s + n * model.cost_per_cell_s / max(1, workers)
+    total_est = model.startup_s + n * model.cost_per_cell_s
     print()
     print(
         f"Cost per cell: ~{model.cost_per_cell_s:.1f}s ({model.source}), "
@@ -988,14 +936,9 @@ def _run_ladder_promotion(
     all_results: list,
     store_path: str,
     provenance: Provenance,
-    workers: int,
-    cpu_threads: int,
-    device_str: str,
-    run_id: str,
     budget_remaining: float,
     total_elapsed: float,
     fidelity_walltime: dict[str, float],
-    verbose: bool,
 ) -> tuple[float, list, float]:
     """Run fidelity ladder promotion: L0 -> L1 -> L2.
 
@@ -1076,9 +1019,8 @@ def _run_ladder_promotion(
         if not expected:
             continue
 
-        # A promoted cell expands into n_seeds replicate cells that run in
-        # parallel. The stage walltime is ceil(replicates / workers) rounds of
-        # the slowest selected replicate.
+        # A promoted cell expands into n_seeds replicate cells, run one at a
+        # time, so the stage walltime is the sum of every selected replicate.
         target_n_seeds = schedule_for(
             spec, expected[0][2].schedule.task_id, target_fid
         ).n_seeds
@@ -1096,15 +1038,13 @@ def _run_ladder_promotion(
             continue
 
         n_promote = 0
-        slowest = 0.0
+        planned = 0.0
         for _cell_key, _val_acc, _record, cost in affordable:
             if n_promote >= MAX_PROMOTE_CELLS:
                 break
-            tentative = max(slowest, cost)
-            replicates = (n_promote + 1) * target_n_seeds
-            if (-(-replicates // workers)) * tentative > fid_budget:
+            if planned + cost * target_n_seeds > fid_budget:
                 break
-            slowest = tentative
+            planned += cost * target_n_seeds
             n_promote += 1
 
         if n_promote == 0:
@@ -1121,10 +1061,10 @@ def _run_ladder_promotion(
             for cell_key, val_acc, record, _cost in affordable[:n_promote]
         ]
         logger.info(
-            "Ladder %s: promoting %d cell(s), ~%.0fs per replicate, budget %.0fs",
+            "Ladder %s: promoting %d cell(s), plan ~%.0fs, budget %.0fs",
             target_fid,
             n_promote,
-            slowest,
+            planned,
             fid_budget,
         )
 
@@ -1177,24 +1117,13 @@ def _run_ladder_promotion(
             fid_budget,
         )
 
-        # Per-cell timeout based on fidelity (L1: 5min, L2: 10min)
-        fidelity_timeout = {"L1": 300.0, "L2": 600.0}.get(target_fid, 300.0)
-
         # Evaluate promoted cells
         wave_start = time.monotonic()
-        evaluation = _evaluate_cells_parallel(
+        evaluation = _evaluate_cells(
             cells=cells_to_promote,
-            fidelity=target_fid,
             store_path=store_path,
             provenance=provenance,
-            max_workers=workers,
-            verbose=verbose,
             budget_seconds=fid_budget,
-            cpu_threads=cpu_threads,
-            device_str=device_str,
-            run_id=run_id,
-            spec=spec,
-            cell_timeout_seconds=fidelity_timeout,
         )
 
         wave_elapsed = time.monotonic() - wave_start
@@ -1227,13 +1156,57 @@ def _run_ladder_promotion(
         logger.info(
             "Ladder %s: %.1fs/cell, %d results",
             target_fid,
-            wave_elapsed * workers / len(evaluation.results)
-            if evaluation.results
-            else 0,
+            wave_elapsed / len(evaluation.results) if evaluation.results else 0,
             len(evaluation.results),
         )
 
     return total_elapsed, all_results, budget_remaining
+
+
+def _measure_cost_model(
+    device_str: str,
+    fidelity: str,
+    store_path: str,
+    records: list,
+    prior: CostModel,
+) -> CostModel:
+    """Record what the finished cells actually cost, per task.
+
+    Only complete cells price the cache: a cell cut short by the run deadline is
+    cheap because it stopped, and caching that rate would size the next run for
+    work it cannot finish.
+    """
+    from collections import defaultdict
+
+    task_times: defaultdict[str, list[float]] = defaultdict(list)
+    for record in records:
+        complete = record.payload.get("epochs_completed", 0) >= record.payload.get(
+            "epochs_requested", 0
+        )
+        task_id = record.payload.get("task_id")
+        walltime = record.payload.get("walltime_s")
+        if complete and task_id and walltime:
+            task_times[task_id].append(float(walltime))
+
+    if not task_times:
+        return prior
+
+    per_task = {
+        task_id: sum(times) / len(times) for task_id, times in task_times.items()
+    }
+    measured = CostModel(
+        cost_per_cell_s=max(0.01, sum(per_task.values()) / len(per_task)),
+        startup_s=0.0,
+        measured=True,
+        per_task=per_task,
+    )
+    _save_cost_model(device_str, fidelity, measured)
+    logger.info(
+        "Measured: %.1fs/cell (prior: %.1fs/cell)",
+        measured.cost_per_cell_s,
+        prior.cost_per_cell_s,
+    )
+    return measured
 
 
 def run_waves(
@@ -1241,7 +1214,6 @@ def run_waves(
     planner: Planner,
     *,
     budget_seconds: int,
-    workers: int,
     store_path: str,
     fidelity: str,
     verbose: bool,
@@ -1258,7 +1230,6 @@ def run_waves(
         spec: Run specification.
         planner: Planner instance (StaticPlanner or PolicyPlanner).
         budget_seconds: Total time budget.
-        workers: Number of parallel workers.
         store_path: Path to DuckDB store.
         fidelity: Fidelity level (L0/L1/L2).
         verbose: Verbose progress output.
@@ -1344,12 +1315,13 @@ def run_waves(
     with RecordStore(store_config) as init_store:
         init_store.create_run(run_id, spec)
 
-    # Positive control (P3): gate the report with a known-working cell
+    # Positive control (P3): a known-working cell proves the harness trains.
+    # Always L0 and capped, so validating the pipeline can never eat the run.
     positive_control_results: list = []
-    positive_control_cell = _make_positive_control_cell(spec, fidelity)
+    positive_control_cell = _make_positive_control_cell(spec, "L0")
     if positive_control_cell is not None:
         logger.info(
-            "Running positive control: %s/%s/%s/%s/%s/%s on %s",
+            "Positive control (L0): %s/%s/%s/%s/%s/%s on %s",
             positive_control_cell[0].substrate,
             positive_control_cell[0].geometry,
             positive_control_cell[0].dynamics,
@@ -1359,28 +1331,21 @@ def run_waves(
             positive_control_cell[1].task_id,
         )
         pc_start = time.monotonic()
-        pc_eval = _evaluate_cells_parallel(
+        pc_eval = _evaluate_cells(
             cells=[positive_control_cell],
-            fidelity=fidelity,
             store_path=store_path,
             provenance=provenance,
-            max_workers=1,
-            verbose=verbose,
-            budget_seconds=int(min(300, budget_remaining)),
-            cpu_threads=cpu_threads,
-            device_str=device_str,
-            run_id=run_id,
-            spec=spec,
-            cell_timeout_seconds=300.0,
+            budget_seconds=int(min(60, budget_remaining)),
         )
         pc_elapsed = time.monotonic() - pc_start
         positive_control_results.extend(pc_eval.results)
         all_results.extend(pc_eval.results)
         budget_remaining -= pc_elapsed
         total_elapsed += pc_elapsed
-        fidelity_walltime[fidelity] = fidelity_walltime.get(fidelity, 0.0) + pc_elapsed
+        fidelity_walltime["L0"] = fidelity_walltime.get("L0", 0.0) + pc_elapsed
         for record in pc_eval.results:
             planner.observe(record)
+            planner.mark_seen(record.measurement_key)
         gate = (
             positive_control_results[0].status.gate_verdict.value
             if positive_control_results
@@ -1404,44 +1369,28 @@ def run_waves(
         wave += 1
         logger.info("=== Wave %d (budget remaining: %.0fs) ===", wave, budget_remaining)
 
-        # Size wave based on measured throughput
+        # Propose at most what the remaining budget can afford at the measured rate.
         if all_results:
-            measured_cost = total_elapsed * workers / len(all_results)
+            measured_cost = total_elapsed / len(all_results)
             n_wave = max(
                 1,
-                min(
-                    MAX_WAVE_CELLS,
-                    int(budget_remaining * workers / max(1.0, measured_cost)),
-                ),
+                min(MAX_WAVE_CELLS, int(budget_remaining / max(1.0, measured_cost))),
             )
         else:
-            n_wave = min(MAX_WAVE_CELLS, workers * 2)
+            n_wave = MAX_WAVE_CELLS
 
-        # Propose cells
         planner._set_wave_size(n_wave)
         cells = list(iter(planner))
         if not cells:
             logger.info("No more cells to evaluate")
             break
 
-        # Per-cell timeout based on fidelity (L0: 3min, L1: 5min, L2: 10min)
-        fidelity_timeout = {"L0": 180.0, "L1": 300.0, "L2": 600.0}.get(fidelity, 180.0)
-
-        # Evaluate wave
         wave_start = time.monotonic()
-        evaluation = _evaluate_cells_parallel(
+        evaluation = _evaluate_cells(
             cells=cells,
-            fidelity=fidelity,
             store_path=store_path,
             provenance=provenance,
-            max_workers=workers,
-            verbose=verbose,
             budget_seconds=int(budget_remaining),
-            cpu_threads=cpu_threads,
-            device_str=device_str,
-            run_id=run_id,
-            spec=spec,
-            cell_timeout_seconds=fidelity_timeout,
         )
 
         wave_elapsed = time.monotonic() - wave_start
@@ -1478,7 +1427,7 @@ def run_waves(
             logger.info(
                 "Wave %d measured: %.1fs/cell, %.0fs startup, %d results",
                 wave,
-                wave_elapsed * workers / len(evaluation.results),
+                wave_elapsed / len(evaluation.results),
                 evaluation.startup_s,
                 len(evaluation.results),
             )
@@ -1514,15 +1463,10 @@ def run_waves(
             all_results=all_results,
             store_path=store_path,
             provenance=provenance,
-            workers=workers,
-            cpu_threads=cpu_threads,
-            device_str=device_str,
-            run_id=run_id,
             # Everything the L0 loop did not spend is available to L1/L2.
             budget_remaining=max(0.0, budget_seconds - total_elapsed),
             total_elapsed=total_elapsed,
             fidelity_walltime=fidelity_walltime,
-            verbose=verbose,
         )
 
     report = _generate_report(store_path, run_id)
@@ -1566,7 +1510,7 @@ def run_waves(
 @dataclass(frozen=True, slots=True)
 class _SpecParams:
     hours: float
-    fidelity: str
+    fidelity: Fidelity
     tasks: Sequence[str] | None
     seed: int
     device: str
@@ -1615,24 +1559,6 @@ def _build_spec(params: _SpecParams) -> RunSpec:
         axis_objectives=params.axis_objectives or {},
     )
     return spec
-
-
-def _resolve_max_workers(max_workers: int | str, device: torch.device) -> int:
-    import os
-
-    import psutil
-
-    if max_workers == "auto" or (isinstance(max_workers, int) and max_workers <= 0):
-        if device.type == "cuda":
-            return torch.cuda.device_count() or 1
-        cores = os.cpu_count() or 4
-        try:
-            available_gb = psutil.virtual_memory().available / (1024**3)
-            max_by_memory = max(1, int(available_gb / 2))
-            return min(cores, max_by_memory)
-        except Exception:
-            return cores
-    return int(max_workers)
 
 
 def _default_store_path() -> str:
@@ -1781,7 +1707,6 @@ def _check_torch(device: str = "auto") -> bool:
 
 
 def _test_tensor_ops() -> None:
-    import torch
 
     x = torch.tensor([1.0, 2.0])
     y = x * 2

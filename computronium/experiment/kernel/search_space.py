@@ -211,17 +211,21 @@ def _is_geometry_dynamics_compatible(geometry: str, dynamics: str) -> bool:
         return False
 
     # Non-layered geometries require instantaneous dynamics
-    if geometry in {
-        "attention",
-        "spatial_lattice",
-        "graph",
-        "conv",
-        "nca",
-        "ntm",
-        "causal_transformer",
-        "tile",
-        "tile_mesh",
-    } and dynamics != "instantaneous":
+    if (
+        geometry
+        in {
+            "attention",
+            "spatial_lattice",
+            "graph",
+            "conv",
+            "nca",
+            "ntm",
+            "causal_transformer",
+            "tile",
+            "tile_mesh",
+        }
+        and dynamics != "instantaneous"
+    ):
         return False
 
     return True

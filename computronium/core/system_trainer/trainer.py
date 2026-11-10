@@ -338,7 +338,10 @@ class SystemTrainer:
             if self.step_callback is not None:
                 self.step_callback(metrics)
 
-            if self.global_step % self.config.log_every_n_steps == 0:
+            if (
+                self.config.log_every_n_steps > 0
+                and self.global_step % self.config.log_every_n_steps == 0
+            ):
                 logger.info(
                     "Step %d: loss=%.4f, free_acc=%.4f, energy=%.4f",
                     self.global_step,
@@ -369,6 +372,22 @@ class SystemTrainer:
 
         self.epoch_resources.append(self._resources.record(self.current_epoch))
 
+        if self._resources.deadline_exceeded:
+            # The epoch did not finish: recording it would report an epoch the
+            # run never completed, and validating would overrun the deadline
+            # again. The caller stops; the cell's status reports incompleteness.
+            logger.info(
+                "Epoch %d incomplete: run deadline reached after %d batch(es)",
+                self.current_epoch,
+                self._resources.steps,
+            )
+            return {
+                "epoch": self.current_epoch,
+                "train_loss": avg_loss,
+                "train_acc": avg_acc,
+                "deadline_exceeded": 1.0,
+            }
+
         epoch_record: dict[str, float] = {
             "epoch": self.current_epoch,
             "train_loss": avg_loss,
@@ -384,13 +403,16 @@ class SystemTrainer:
         self._harvest_snapshot_epoch()
         self.current_epoch += 1
 
-        logger.info(
-            "Epoch %d: train_loss=%.4f, train_acc=%.4f, train_energy=%.4f",
-            self.current_epoch,
-            avg_loss,
-            avg_acc,
-            avg_energy,
-        )
+        # Per-epoch progress is opt-in: the survey reports one line per cell, and
+        # an L2 cell of 20 epochs would otherwise bury it.
+        if self.config.log_every_n_steps > 0:
+            logger.info(
+                "Epoch %d: train_loss=%.4f, train_acc=%.4f, train_energy=%.4f",
+                self.current_epoch,
+                avg_loss,
+                avg_acc,
+                avg_energy,
+            )
 
         # Checkpoint if configured
         if (
@@ -608,6 +630,13 @@ class SystemTrainer:
         self._harvest_init()
         while self.current_epoch < self.config.max_epochs:
             self.train_epoch()
+
+            if self._resources.deadline_exceeded:
+                logger.info(
+                    "Training stopped at the run deadline after %d epoch(s)",
+                    self.current_epoch,
+                )
+                break
 
             # Check early stopping after each epoch
             if early_stopping_enabled and self.history:

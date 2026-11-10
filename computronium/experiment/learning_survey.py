@@ -23,12 +23,15 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
 from computronium.domains._task_registry import get_fidelity_tasks
 from computronium.experiment.kernel.search_space import search_space_from_spec
+
+if TYPE_CHECKING:
+    from computronium.experiment.schema.run_spec import Fidelity
 
 # Import shared wave functionality
 from computronium.experiment.wave import (
@@ -39,10 +42,9 @@ from computronium.experiment.wave import (
     _default_store_path,
     _format_error,
     _load_cost_model,
+    _measure_cost_model,
     _pretty_print_dry_run,
-    _resolve_max_workers,
     _run_self_test,
-    _save_cost_model,
     _SpecParams,
     run_waves,
 )
@@ -72,9 +74,8 @@ MAX_WAVE = 64
 
 def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, too-many-locals, too-many-statements] - experiment orchestration inherently complex
     hours: float,
-    fidelity: str = "L0",
+    fidelity: Fidelity = "L0",
     tasks: Sequence[str] | None = None,
-    max_workers: int | str = "auto",
     store_path: str = "experiment.duckdb",
     promote_from: str | None = None,
     promote_top: int = 20,
@@ -101,7 +102,6 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         hours: Time budget in hours; evaluation stops when it is spent.
         fidelity: Fidelity level (L0, L1, L2). Used as starting fidelity if ladder=True.
         tasks: Task names to use (defaults to fidelity-appropriate tasks).
-        max_workers: Number of parallel workers, or ``"auto"``.
         store_path: Path to DuckDB store.
         promote_from: Path to prior store for warm-start (learning mode) or importance sampling.
         promote_top: Number of top cells to promote from prior run.
@@ -117,22 +117,26 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         objectives: Objective names.
         axis_objectives: Axis-aligned objectives for multi-objective optimization (e.g., NSGA-II).
         verbose: Verbose progress output.
-        cpu_threads: Torch threads per worker (1 avoids CPU oversubscription).
+        cpu_threads: Torch threads (1 avoids CPU oversubscription).
         resume: If True, warm-start policy from store_path records.
         ladder: If True, run L0→L1→L2 promotion in one invocation.
         policy: Sampler policy: "tpe", "nsga2", or "random".
 
     Returns:
         If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str],
-        "model": CostModel, "workers": int, "wave": 0}
+        "model": CostModel, "wave": 0}
         If evaluation: {"run_id": str, "store_path": str, "cells_evaluated": int, ...}
     """
 
-    # Resolve device string for worker init and CUDA control
+    # Resolve device string for CUDA control
     device_obj = get_device(device)
     device_str = device_obj.type
 
-    # 1. Build RunSpec
+    # 1. Determine tasks to use (must be before spec building for task_cycle)
+    if tasks is None:
+        tasks = get_fidelity_tasks(fidelity)
+
+    # 2. Build RunSpec
     params = _SpecParams(
         hours=hours,
         fidelity=fidelity,
@@ -149,13 +153,9 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         axis_objectives=axis_objectives,
     )
     spec = _build_spec(params)
+    budget_seconds = int(spec.budget_seconds or 0)
 
-    # 2. Determine tasks to use
-    if tasks is None:
-        tasks = get_fidelity_tasks(fidelity)
-
-    workers = _resolve_max_workers(max_workers, device_obj)
-    model = _load_cost_model(device_str, fidelity, workers)
+    model = _load_cost_model(device_str, fidelity)
 
     # 3. Create search space
     search_space = search_space_from_spec(spec, tasks=tasks)
@@ -191,18 +191,18 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             promote_top=promote_top,
         )
 
-    # 5. Generate initial wave (wave 0 = startup trials) for dry-run preview
-    n_startup = getattr(planner._policy, "n_startup_trials", 3)
-    startup_cells = planner.propose(n_startup * workers, seen=set())
-
+    # 5. Propose the startup wave for the dry-run preview only. Proposing also
+    # marks the cells seen, so previewing before a real run would rob the wave
+    # loop of the very cells it should measure.
     if dry_run:
+        n_startup = getattr(planner._policy, "n_startup_trials", 3)
+        startup_cells = planner.propose(n_startup, seen=set())
         result = {
             "cells": startup_cells,
             "n": len(startup_cells),
             "tasks": list(tasks),
             "fidelity": fidelity,
             "model": model,
-            "workers": workers,
             "wave": 0,
         }
         if ladder:
@@ -210,15 +210,11 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             result["ladder"] = True
         return result
 
-    # Clear _seen so wave loop starts fresh (startup cells already in store)
-    planner._seen.clear()
-
     # 6. Run waves via shared executor
     summary = run_waves(
         spec=spec,
         planner=planner,
-        budget_seconds=spec.budget_seconds,
-        workers=workers,
+        budget_seconds=budget_seconds,
         store_path=store_path,
         fidelity=fidelity,
         verbose=verbose,
@@ -228,45 +224,14 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         ladder=ladder,
     )
 
-    # 7. Update cost model with measured costs
+    # 7. Update the cost cache from the cells that actually finished
     if summary.cells_evaluated > 0:
         from computronium.experiment.evidence.store import RecordStore
         from computronium.experiment.evidence.store._models import StoreConfig
 
-        store_config = StoreConfig(path=Path(store_path))
-        with RecordStore(store_config) as store:
-            records = store.query_records()
-
-        from collections import defaultdict
-
-        task_times: defaultdict[str, list[float]] = defaultdict(list)
-        for r in records:
-            task_id = r.payload.get("task_id")
-            walltime = r.payload.get("walltime_s")
-            if task_id and walltime:
-                task_times[task_id].append(float(walltime))
-
-        per_task = {}
-        for task_id, times in task_times.items():
-            if times:
-                per_task[task_id] = sum(times) / len(times)
-
-        measured = CostModel(
-            cost_per_cell_s=max(
-                0.01, summary.walltime_s * workers / summary.cells_evaluated
-            ),
-            startup_s=0.0,
-            measured=True,
-            workers=workers,
-            per_task=per_task,
-        )
-        logger.info(
-            "Measured: %.1fs/cell, %.0fs startup (prior: %.1fs/cell)",
-            measured.cost_per_cell_s,
-            measured.startup_s,
-            model.cost_per_cell_s,
-        )
-        _save_cost_model(device_str, fidelity, measured)
+        with RecordStore(StoreConfig(path=Path(store_path))) as store:
+            measured_records = store.query_records(run_id=summary.run_id)
+        _measure_cost_model(device_str, fidelity, store_path, measured_records, model)
 
     return {
         "run_id": summary.run_id,
@@ -302,13 +267,10 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
         "--tasks", default="", help="Comma-separated task names (default: auto)"
     )
     parser.add_argument(
-        "--max-workers", default="auto", help="Max workers (int or 'auto')"
-    )
-    parser.add_argument(
         "--cpu-threads",
         type=int,
         default=1,
-        help="Torch threads per worker (default 1)",
+        help="Torch threads (default 1)",
     )
     parser.add_argument(
         "--store",
@@ -434,9 +396,6 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
     # Resolve store path
     store_path = args.store or _default_store_path()
 
-    # Resolve max_workers
-    max_workers = _resolve_max_workers(args.max_workers, device)
-
     tasks = args.tasks.split(",") if args.tasks else None
     axes = _axis_overrides(args.axes, digital=args.digital)
     hyperparameters = json.loads(args.hyperparameters) if args.hyperparameters else None
@@ -448,7 +407,6 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
             hours=args.hours,
             fidelity=args.fidelity,
             tasks=tasks,
-            max_workers=max_workers,
             store_path=store_path,
             promote_from=args.promote_from,
             promote_top=args.promote_top,
@@ -489,9 +447,7 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
                         f"L1={budget_split.get('L1', 0.3) * 100:.0f}% "
                         f"L2={budget_split.get('L2', 0.1) * 100:.0f}%"
                     )
-                    print(
-                        f"Estimated cells: {result.get('n', 0)} across {result.get('workers', 0)} workers"
-                    )
+                    print(f"Estimated cells: {result.get('n', 0)}")
                     print()
                     cells = result.get("cells", [])
                     for fid in ["L0", "L1", "L2"]:
@@ -513,15 +469,12 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
                         hours=args.hours,
                         fidelity=args.fidelity,
                         model=result["model"],
-                        workers=result["workers"],
                     )
             else:  # summary
                 n = result.get("n", 0)
                 tasks_str = ", ".join(result.get("tasks", []))
                 model: CostModel = result["model"]
-                total_est = model.startup_s + n * model.cost_per_cell_s / max(
-                    1, result["workers"]
-                )
+                total_est = model.startup_s + n * model.cost_per_cell_s
                 if result.get("ladder"):
                     budget_split = result.get("budget_split", {})
                     print(

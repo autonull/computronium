@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import time
 from collections.abc import Callable, Mapping
 from dataclasses import field
 from pathlib import Path
@@ -166,12 +165,13 @@ class GraphSystemTrainer:
         self.history.append(metrics)
         self.current_epoch += 1
 
-        logger.info(
-            "Epoch %d: train_loss=%.4f, train_acc=%.4f",
-            self.current_epoch,
-            train_loss,
-            train_acc,
-        )
+        if self.config.log_every_n_steps > 0:
+            logger.info(
+                "Epoch %d: train_loss=%.4f, train_acc=%.4f",
+                self.current_epoch,
+                train_loss,
+                train_acc,
+            )
 
         # Checkpoint if configured
         if (

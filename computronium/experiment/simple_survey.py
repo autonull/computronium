@@ -34,7 +34,7 @@ from computronium.experiment.schema.coordinate import (
     Coordinate,
     Schedule,
 )
-from computronium.experiment.schema.run_spec import RunSpec
+from computronium.experiment.schema.run_spec import Fidelity, RunSpec
 
 # Import shared wave functionality
 from computronium.experiment.wave import (
@@ -46,10 +46,9 @@ from computronium.experiment.wave import (
     _estimate_cell_count,
     _format_error,
     _load_cost_model,
+    _measure_cost_model,
     _pretty_print_dry_run,
-    _resolve_max_workers,
     _run_self_test,
-    _save_cost_model,
     _SpecParams,
     run_waves,
 )
@@ -77,7 +76,6 @@ def _generate_cells(
     promote_from: str | None,
     promote_top: int,
     model: CostModel,
-    workers: int,
     resume_from: str | None = None,
 ) -> list[tuple[Coordinate, Schedule]]:
     """Generate cells for the survey."""
@@ -86,16 +84,16 @@ def _generate_cells(
     import random
 
     random.seed(seed)
-    n_cells = _estimate_cell_count(spec.budget_seconds, model, workers)
+    budget_seconds = int(spec.budget_seconds or 0)
+    n_cells = _estimate_cell_count(budget_seconds, model)
 
     logger.info(
-        "Budget %ds -> ~%d cells (%.1fs/cell %s, %.0fs startup, %d workers)",
-        spec.budget_seconds,
+        "Budget %ds -> ~%d cells (%.1fs/cell %s, %.0fs startup)",
+        budget_seconds,
         n_cells,
         model.cost_per_cell_s,
         model.source,
         model.startup_s,
-        workers,
     )
 
     planner = StaticPlanner(
@@ -117,9 +115,8 @@ def _generate_cells(
 
 def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] - experiment config requires many parameters
     hours: float,
-    fidelity: str = "L0",
+    fidelity: Fidelity = "L0",
     tasks: Sequence[str] | None = None,
-    max_workers: int | str = "auto",
     store_path: str = "experiment.duckdb",
     promote_from: str | None = None,
     promote_top: int = 20,
@@ -145,7 +142,6 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         hours: Time budget in hours; evaluation stops when it is spent.
         fidelity: Fidelity level (L0, L1, L2).
         tasks: Task names to use (defaults to fidelity-appropriate tasks).
-        max_workers: Number of parallel workers, or ``"auto"``.
         store_path: Path to DuckDB store.
         promote_from: Path to prior store for importance sampling.
         promote_top: Number of top cells to promote from prior run.
@@ -160,20 +156,24 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         hyperparameters: Hyperparameter domains.
         objectives: Objective names.
         verbose: Verbose progress output.
-        cpu_threads: Torch threads per worker (1 avoids CPU oversubscription).
+        cpu_threads: Torch threads (1 avoids CPU oversubscription).
         resume: If True, skip cells already measured in store_path.
 
     Returns:
         If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str],
-        "model": CostModel, "workers": int}
+        "model": CostModel}
         If evaluation: {"run_id": str, "store_path": str, "cells_evaluated": int, ...}
     """
 
-    # Resolve device string for worker init and CUDA control
+    # Resolve device string for CUDA control
     device_obj = get_device(device)
     device_str = device_obj.type
 
-    # 1. Build RunSpec
+    # 1. Determine tasks to use, then build the RunSpec from them so the
+    # spec's own task cycle is non-empty.
+    if tasks is None:
+        tasks = get_fidelity_tasks(fidelity)
+
     params = _SpecParams(
         hours=hours,
         fidelity=fidelity,
@@ -189,46 +189,50 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         objectives=objectives,
     )
     spec = _build_spec(params)
+    budget_seconds = int(spec.budget_seconds or 0)
 
-    # 2. Determine tasks to use
-    if tasks is None:
-        tasks = get_fidelity_tasks(fidelity)
+    model = _load_cost_model(device_str, fidelity)
 
-    workers = _resolve_max_workers(max_workers, device_obj)
-    model = _load_cost_model(device_str, fidelity, workers)
-
-    # 3. Generate cells (for dry-run preview)
-    search_space = search_space_from_spec(spec, tasks=tasks)
-    planner = StaticPlanner(
-        spec=spec,
-        fidelity=fidelity,
-        tasks=tasks,
-        seed=seed,
-        search_space=search_space,
-        promote_from=promote_from,
-        promote_top=promote_top,
-        resume_from=store_path if resume else None,
-    )
-
-    n_cells = _estimate_cell_count(spec.budget_seconds, model, workers)
-    cells = planner.propose(n_cells, seen=set())
-
+    # 3. Generate cells. Only the dry run previews here: proposing also marks
+    # the cells seen, so a preview before a real run would leave the wave loop
+    # with nothing new to plan.
     if dry_run:
+        search_space = search_space_from_spec(spec, tasks=tasks)
+        planner = StaticPlanner(
+            spec=spec,
+            fidelity=fidelity,
+            tasks=tasks,
+            seed=seed,
+            search_space=search_space,
+            promote_from=promote_from,
+            promote_top=promote_top,
+            resume_from=store_path if resume else None,
+        )
+        cells = planner.propose(_estimate_cell_count(budget_seconds, model), seen=set())
         return {
             "cells": cells,
             "n": len(cells),
             "tasks": list(tasks),
             "fidelity": fidelity,
             "model": model,
-            "workers": workers,
         }
+
+    planner = StaticPlanner(
+        spec=spec,
+        fidelity=fidelity,
+        tasks=tasks,
+        seed=seed,
+        search_space=search_space_from_spec(spec, tasks=tasks),
+        promote_from=promote_from,
+        promote_top=promote_top,
+        resume_from=store_path if resume else None,
+    )
 
     # 4. Run waves via shared executor
     summary = run_waves(
         spec=spec,
         planner=planner,
-        budget_seconds=spec.budget_seconds,
-        workers=workers,
+        budget_seconds=budget_seconds,
         store_path=store_path,
         fidelity=fidelity,
         verbose=verbose,
@@ -237,45 +241,14 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         dry_run=False,
     )
 
-    # 5. Update cost model with measured costs
+    # 5. Update the cost cache from the cells that actually finished
     if summary.cells_evaluated > 0:
         from computronium.experiment.evidence.store import RecordStore
         from computronium.experiment.evidence.store._models import StoreConfig
 
-        store_config = StoreConfig(path=Path(store_path))
-        with RecordStore(store_config) as store:
-            records = store.query_records()
-
-        from collections import defaultdict
-
-        task_times: defaultdict[str, list[float]] = defaultdict(list)
-        for r in records:
-            task_id = r.payload.get("task_id")
-            walltime = r.payload.get("walltime_s")
-            if task_id and walltime:
-                task_times[task_id].append(float(walltime))
-
-        per_task = {}
-        for task_id, times in task_times.items():
-            if times:
-                per_task[task_id] = sum(times) / len(times)
-
-        measured = CostModel(
-            cost_per_cell_s=max(
-                0.01, summary.walltime_s * workers / summary.cells_evaluated
-            ),
-            startup_s=0.0,
-            measured=True,
-            workers=workers,
-            per_task=per_task,
-        )
-        logger.info(
-            "Measured: %.1fs/cell, %.0fs startup (estimate said %.1fs/cell)",
-            measured.cost_per_cell_s,
-            measured.startup_s,
-            model.cost_per_cell_s,
-        )
-        _save_cost_model(device_str, fidelity, measured)
+        with RecordStore(StoreConfig(path=Path(store_path))) as store:
+            measured_records = store.query_records(run_id=summary.run_id)
+        _measure_cost_model(device_str, fidelity, store_path, measured_records, model)
 
     return {
         "run_id": summary.run_id,
@@ -309,13 +282,10 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
         "--tasks", default="", help="Comma-separated task names (default: auto)"
     )
     parser.add_argument(
-        "--max-workers", default="auto", help="Max workers (int or 'auto')"
-    )
-    parser.add_argument(
         "--cpu-threads",
         type=int,
         default=1,
-        help="Torch threads per worker (default 1)",
+        help="Torch threads (default 1)",
     )
     parser.add_argument(
         "--store",
@@ -442,9 +412,6 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
     # Resolve store path
     store_path = args.store or _default_store_path()
 
-    # Resolve max_workers
-    max_workers = _resolve_max_workers(args.max_workers, device)
-
     tasks = args.tasks.split(",") if args.tasks else None
     axes = _axis_overrides(args.axes, digital=args.digital)
     hyperparameters = json.loads(args.hyperparameters) if args.hyperparameters else None
@@ -456,7 +423,6 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
             hours=args.hours,
             fidelity=args.fidelity,
             tasks=tasks,
-            max_workers=max_workers,
             store_path=store_path,
             promote_from=args.promote_from,
             promote_top=args.promote_top,
@@ -486,15 +452,12 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
                     hours=args.hours,
                     fidelity=args.fidelity,
                     model=result["model"],
-                    workers=result["workers"],
                 )
             else:  # summary
                 n = result.get("n", 0)
                 tasks_str = ", ".join(result.get("tasks", []))
                 model: CostModel = result["model"]
-                total_est = model.startup_s + n * model.cost_per_cell_s / max(
-                    1, result["workers"]
-                )
+                total_est = model.startup_s + n * model.cost_per_cell_s
                 print(
                     f"Dry-run: {n} cells | {args.fidelity} | {tasks_str} | "
                     f"~{model.cost_per_cell_s:.1f}s/cell ({model.source}) | "
