@@ -113,6 +113,37 @@ cat experiments/<latest>.run.json
 - **wine task**: All seeds 0.0 — likely StandardScaler + class mapping issue in TabularTask.
 - **iris task**: High variance — may need more epochs (50+) or more seeds (10+) for stable estimate.
 - **Energy minimization + recurrent**: ~120s/cell at L0 due to settle loop per env step — document as known limitation.
+- **run_experiment.py val_acc=0.0000 bug**: All cells PASS but report zero accuracy (gate checks finite metrics, not learnability). Same root cause as wine/iris — metric extraction broken in async path.
+- **Two experiment engines**: `survey_cli.py` (canonical, fixed) vs `run_experiment.py` (legacy, unfixed). Need deprecation plan.
+
+---
+
+## 🎯 PHASE 6: Consolidate Experiment Entry Points
+
+**Problem:** Two separate experiment execution engines exist:
+
+| Entry Point | Path | Architecture | Status |
+|-------------|------|--------------|--------|
+| `survey_cli.py` | `python -m computronium.experiment.survey_cli` | Sequential, wave-based, planners | **Canonical** (fixed, tested) |
+| `run_experiment.py` | `python scripts/run_experiment.py` | Async, CellStream, LocalBackend | **Legacy** (unfixed bugs) |
+| `experiment.sh` | `./experiment.sh` | Bash wrapper → run_experiment.py | **Legacy** |
+
+**Issues in `run_experiment.py` path (found during quick-verify test):**
+- **val_acc=0.0000 bug**: All cells PASS but report zero accuracy (same as wine/iris issue)
+- **No dry-run composable filtering**: Invalid cells proposed and evaluated
+- **No per-epoch heartbeat**: Silent long runs
+- **No seed-plan expansion**: `--n-seeds 3` writes 1 record, not 3
+- **No task-aware replication key**: Seeds across tasks fuse
+- **Async + LocalBackend**: Different semantics (max_workers=1 but async overhead)
+- **No honest wave sizing**: Uses policy directly, no cost model
+
+**Recommendation:** Deprecate `scripts/run_experiment.py` and `experiment.sh`. All new work uses `survey_cli.py`. 
+
+**Migration:**
+1. Verify `survey_cli.py` covers all `run_experiment.py` use cases (profiles, policies, axes)
+2. Add `--mode learn|static` flag parity for `run_experiment.py --policy`
+3. Delete `scripts/run_experiment.py`, `experiment.sh`, `experiment_shallow.sh` (already deleted)
+4. Update docs/TODOs to reference only `survey_cli.py`
 
 ---
 
