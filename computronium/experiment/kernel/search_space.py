@@ -733,11 +733,13 @@ def _composable(
     )
     from computronium.experiment.kernel.evaluate import _task
 
-    validity_params = frozenset(
-        (k, v)
-        for k, v in coordinate.params.items()
-        if k.split(".", 1)[-1]
-        in {"hidden_dim", "num_layers", "max_steps", "beta", "residual"}
+    validity_params = tuple(
+        sorted(
+            (k, v)
+            for k, v in coordinate.params.items()
+            if k.split(".", 1)[-1]
+            in {"hidden_dim", "num_layers", "max_steps", "beta", "residual"}
+        )
     )
     cache_key = (
         coordinate.substrate,
@@ -757,10 +759,18 @@ def _composable(
     task_shape = shape(task)
     # Get task instance for graph edge_index extraction (cached)
     task_instance = _task(task, "cpu")
+
+    # Extract geometry-specific params from coordinate.params (e.g., geometry.patch_size)
+    geometry_explicit = {
+        k.split(".", 1)[1]: v
+        for k, v in coordinate.params.items()
+        if k.startswith("geometry.")
+    }
+
     try:
         config = compose_configs(
             coordinate=coordinate,
-            geometry={},
+            geometry=geometry_explicit,
             input_shape=task_shape.input_shape,
             output_dim=task_shape.output_dim,
             param_budget=param_budget,
@@ -788,7 +798,7 @@ def _composable(
 
     dry_ok, _dry_reason = _dry_run_trainable(
         coordinate=coordinate,
-        geometry={},
+        geometry=geometry_explicit,
         input_shape=task_shape.input_shape,
         output_dim=task_shape.output_dim,
         param_budget=param_budget,

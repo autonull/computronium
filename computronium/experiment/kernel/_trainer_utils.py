@@ -125,7 +125,7 @@ def _create_trainer(
     # because they have custom training loops that don't use standard data providers.
     from computronium.core.system_trainer import GraphSystemTrainer, RLSystemTrainer
 
-    if trainer_class in (RLSystemTrainer, GraphSystemTrainer):
+    if trainer_class in {RLSystemTrainer, GraphSystemTrainer}:
         train_data = task
         val_data = task  # Use same task for validation (different masks/splits)
     else:
@@ -256,12 +256,24 @@ def _val_batches(task: Any, limit: int | None) -> Any | None:
 def _sample_inputs(task: Any, device: str) -> torch.Tensor:
     """One flattened training batch, on ``device``."""
     try:
-        sample_x, _ = next(iter(task.get_dataloader("train")))
+        batch = next(iter(task.get_dataloader("train")))
     except TypeError, StopIteration:
         # Task doesn't use DataLoader (e.g., graph, RL); use get_batch
-        sample_x, _ = task.get_batch("train", batch_size=32)
+        batch = task.get_batch("train", batch_size=32)
 
-    # Handle graph tasks: sample_x is a PyG Data object
+    # Handle different batch structures
+    if isinstance(batch, tuple) and len(batch) >= 2:
+        sample_x = batch[0]
+    elif isinstance(batch, list):
+        # List of tensors - stack if same shape, else take first
+        if len(batch) > 0 and all(b.shape == batch[0].shape for b in batch):
+            sample_x = torch.stack(batch)
+        else:
+            sample_x = batch[0]
+    else:
+        sample_x = batch
+
+    # Handle graph tasks: sample_x is a PyG Data/Batch object
     if hasattr(sample_x, "x") and hasattr(sample_x, "edge_index"):
         # Return node features as flat input for stability metrics
         flat = sample_x.x.to(device)
