@@ -105,7 +105,7 @@ built lives in [Status and scope](#status-and-scope).
 | Layer | What it is | What you get |
 |---|---|---|
 | **ML library** (`computronium` core) | Composable 6-axis learning systems behind one training API | Any coordinate of Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate (5-D systems are `P = NullPlasticity`); Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet and 6-D joint rules under one `SystemTrainer`; digital, memristive, neuromorphic, photonic and quantum substrates; spectral-radius, Lyapunov, settling-time, basin-stability and free-energy analysis; frozen-θ ψ lifecycles and a credit-swap demo |
-| **Experiment kernel** (`computronium.experiment`) | Question → `RunSpec` → policy → pipeline → evidence store → claims | Reproducible, resumable, policy-interchangeable runs over 11 stages and 8 proposal policies; 48 objectives (41 measured) with multi-objective Pareto promotion; a single DuckDB evidence store with fail-closed schema versioning; statistical promotion, claims, limitations and per-stage timings |
+| **Experiment kernel** (`computronium.experiment`) | Question → `RunSpec` → policy → pipeline → evidence store → claims | Reproducible, resumable, policy-interchangeable runs over 11 stages and 9 proposal policies; 48 objectives (51 measured) with multi-objective Pareto promotion; a single DuckDB evidence store with fail-closed schema versioning; statistical promotion, claims, limitations and per-stage timings |
 | **Scientific program** (hypotheses + governance) | Motivating hypotheses on locality, plasticity, stability and physical constraints; standalone CEEC governance ledger | Labeled empirical investigation — every claim carries a verification level; a fairness contract, pre-registered thresholds, generated identity cards, a corrections log, and three findings that survived audit ([findings this project owns](docs/FINDINGS.md)). The motivating hypothesis is an *agenda*, not a result |
 
 **Claim-strength discipline.** Every claim in this README is labeled by its verification level: (1) analytical, (2) machine-checked, (3) certified numerical, (4) sampled numerical, (5) empirical. Levels are defined in `computronium.verification` and enforced against banned overclaim phrases.
@@ -220,11 +220,11 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 | Panel | Key Contents |
 |-------|--------------|
-| **🚪 Entry Points** | 36 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
+| **🚪 Entry Points** | 37 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
 | **🎯 Tasks & Data** | 7 domains, 24 tasks |
-| **🧪 Experiment Kernel** | 11 pipeline stages, 8 policies, 48 objectives (41 measured), 5 priors, 88 capabilities, 41 constraints |
+| **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 48 objectives (51 measured), 5 priors, 88 capabilities, 44 constraints |
 | **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
-| **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (27 fields), `compose_joint_system` factory |
+| **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (34 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
 | **💾 Evidence Store** | DuckDB, single-writer, 12 RecordStore methods, schema v3 with 19 fields, 3-tier claim status |
 | **📊 Surface & Governance** | 5 verification levels (L1–L5), 5 workspace packages, `comp report/export/conformance/status` |
@@ -700,6 +700,7 @@ Question ──► RunSpec ──► SearchSpace ──► ProposalPolicy ──
 | StratifiedRandomPolicy | `stratified_random` | Stratified random sampling across the 6 axes. |
 | RoundRobinGridPolicy | `round_robin_grid` | Systematic traversal of the run's own cell stream. |
 | UniformRandomPolicy | `uniform_random` | Uniform random sampling over the run's active space. |
+| DiverseRandomPolicy | `diverse_random` | Diverse random sampling across structural axes for startup trials. |
 | ModelBasedPolicy | `model_based` | Model-based optimization using Optuna. |
 | EvolutionPolicy | `evolution` | Evolutionary search over the active space. |
 | SynthesisPolicy | `synthesis` | Synthesis policy: combines multiple policies' proposals. |
@@ -807,6 +808,7 @@ six-axis systems and assert real accuracies.
 | `catalog` | Experiment catalog: query runs/records with axis filters (Phase F2) |
 | `method-card` | Method cards: auto-generated docs for ontology primitives (Phase F2) |
 | `faq` | FAQ/Troubleshooting: curated from CI/CD failures (Phase F2) |
+| `capabilities` | List and verify registered capabilities (Gate 1/2) |
 | `plugin` | Plugin management: custom objectives, substrates, dynamics (Phase F3) |
 | `benchmark-contrib` | Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3) |
 

@@ -48,6 +48,11 @@ also removed the five dead ``_credit_assignment_type`` copies in
 ``models/deployments`` — one of which had already drifted from the other four
 — and the six copies of the git SHA and of the activation lookup, so those
 families cannot drift again.
+
+Re-baselined 2026-11-10 from 549 to the measured 580 with ruff 0.17.4. The 31
+new findings are from ruff 0.17.4 rule changes (primarily new lint rules and
+stricter checks on existing rules); no new code was added. The count must now
+trend down from 580.
 """
 
 from __future__ import annotations
@@ -56,8 +61,8 @@ import re
 import subprocess
 import sys
 
-BASELINE = 549
-RUFF_VERSION = "0.16.10"
+BASELINE = 580
+RUFF_VERSION = "0.17.4"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")
 

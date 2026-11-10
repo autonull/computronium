@@ -75,16 +75,22 @@ def _spec(param_budget: int = MEASURED_PARAM_BUDGET) -> RunSpec:
 def _coordinate(topology: str, **params: object) -> Coordinate:
     # Topologies with a separate output projection cannot receive gradient under
     # instantaneous dynamics; a local credit reaches those weights (TODO61 §1.1).
+    # causal_transformer rejects target_inversion/temporal_trace (activation chain
+    # carries inputs only); use random_projections instead.
     output_proj = {
         "recurrent",
         "attention",
-        "causal_transformer",
         "tile",
         "tile_mesh",
         "conv",
         "spatial_lattice",
     }
-    credit = "target_inversion" if topology in output_proj else "gradient"
+    if topology == "causal_transformer":
+        credit = "random_projections"
+    elif topology in output_proj:
+        credit = "target_inversion"
+    else:
+        credit = "gradient"
     return Coordinate(
         substrate="digital",
         geometry=topology,

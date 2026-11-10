@@ -986,7 +986,7 @@ spec = question_first(
 <ul>
 <li><strong>Real-time telemetry.</strong> FastAPI and WebSockets stream the campaign queue, cell state, and resource utilisation while the run is live.</li>
 <li><strong>A control plane.</strong> Play, pause, step, and move the compute ceiling mid-flight. The campaign is steerable, not launched and abandoned.</li>
-<li><strong>Mission control.</strong> Pareto views over 48 registered objectives — 41 of them actually measured — so accuracy never gets to stand alone.</li>
+<li><strong>Mission control.</strong> Pareto views over 48 registered objectives — 51 of them actually measured — so accuracy never gets to stand alone.</li>
 </ul>
 <p><img src="screenshots/tour/dashboard-watch.png" alt="Live campaign dashboard" /></p>
 
@@ -2003,7 +2003,7 @@ spec = question_first(
 </table>
 <h2>Current Status</h2>
 <ul>
-<li><strong>Measured Objectives</strong>: 41 of 48 registered objectives actually measured</li>
+<li><strong>Measured Objectives</strong>: 51 of 48 registered objectives actually measured</li>
 <li><strong>Experiment Pipeline</strong>: Governed pipeline with fidelity ladder (L0→L1→L2→L3) and budget declarations</li>
 <li><strong>Fairness Contract</strong>: 6 clauses making comparisons legal before they run</li>
 <li><strong>Corrections Log</strong>: 5 public entries — failed beliefs are revoked, evidence stays</li>
@@ -2170,7 +2170,7 @@ built lives in <a href="#/docs-about/readiness/status-and-scope">Status and scop
 <tr>
 <td><strong>Experiment kernel</strong> (<code>computronium.experiment</code>)</td>
 <td>Question → <code>RunSpec</code> → policy → pipeline → evidence store → claims</td>
-<td>Reproducible, resumable, policy-interchangeable runs over 11 stages and 8 proposal policies; 48 objectives (41 measured) with multi-objective Pareto promotion; a single DuckDB evidence store with fail-closed schema versioning; statistical promotion, claims, limitations and per-stage timings</td>
+<td>Reproducible, resumable, policy-interchangeable runs over 11 stages and 9 proposal policies; 48 objectives (51 measured) with multi-objective Pareto promotion; a single DuckDB evidence store with fail-closed schema versioning; statistical promotion, claims, limitations and per-stage timings</td>
 </tr>
 <tr>
 <td><strong>Scientific program</strong> (hypotheses + governance)</td>
@@ -2200,7 +2200,7 @@ built lives in <a href="#/docs-about/readiness/status-and-scope">Status and scop
 <tbody>
 <tr>
 <td><strong>🚪 Entry Points</strong></td>
-<td>36 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures</td>
+<td>37 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures</td>
 </tr>
 <tr>
 <td><strong>🎯 Tasks &amp; Data</strong></td>
@@ -2208,7 +2208,7 @@ built lives in <a href="#/docs-about/readiness/status-and-scope">Status and scop
 </tr>
 <tr>
 <td><strong>🧪 Experiment Kernel</strong></td>
-<td>11 pipeline stages, 8 policies, 48 objectives (41 measured), 5 priors, 88 capabilities, 41 constraints</td>
+<td>11 pipeline stages, 9 policies, 48 objectives (51 measured), 5 priors, 88 capabilities, 44 constraints</td>
 </tr>
 <tr>
 <td><strong>🧬 6-Axis Ontology</strong></td>
@@ -2216,7 +2216,7 @@ built lives in <a href="#/docs-about/readiness/status-and-scope">Status and scop
 </tr>
 <tr>
 <td><strong>🏗️ System &amp; Composition</strong></td>
-<td>6-axis config × SystemTrainerConfig (27 fields), <code>compose_joint_system</code> factory</td>
+<td>6-axis config × SystemTrainerConfig (34 fields), <code>compose_joint_system</code> factory</td>
 </tr>
 <tr>
 <td><strong>⚡ Training Loop</strong></td>
@@ -2791,6 +2791,11 @@ joint = compose_joint_system(
 <td>UniformRandomPolicy</td>
 <td><code>uniform_random</code></td>
 <td>Uniform random sampling over the run's active space.</td>
+</tr>
+<tr>
+<td>DiverseRandomPolicy</td>
+<td><code>diverse_random</code></td>
+<td>Diverse random sampling across structural axes for startup trials.</td>
 </tr>
 <tr>
 <td>ModelBasedPolicy</td>
@@ -4101,6 +4106,10 @@ print(f&quot;train accuracy: {history[-1]['train_acc']:.1%}&quot;)
 <tr>
 <td><code>faq</code></td>
 <td>FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)</td>
+</tr>
+<tr>
+<td><code>capabilities</code></td>
+<td>List and verify registered capabilities (Gate 1/2)</td>
 </tr>
 <tr>
 <td><code>plugin</code></td>

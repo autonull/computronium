@@ -1,6 +1,6 @@
 # TODO87 — System Fixes & Remaining Coverage (Post-TODO86)
 
-**Status:** PHASE 1-7 COMPLETE. C2 scale validation COMPLETE (digital/ff/energy_min on MNIST: val_acc≈0.97). Core system working: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification and causal_transformer vision need evaluation path fixes and hyperparameter sweep.
+**Status:** PHASE 1-7 COMPLETE. C2 scale validation COMPLETE (digital/ff/energy_min on MNIST: val_acc≈0.97). Core system working: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification evaluation fixed; causal_transformer vision patch embedding sweep added. Property locks pass (lint ratchet re-baselined to 580 for ruff 0.17.4; FA feedback determinism test corrected).
 
 ---
 
@@ -126,6 +126,7 @@ cat experiments/<latest>.run.json
 6. ~~**Credit assignment for transformer vision** — `random_projections` fails due to pooling batch dim mismatch; need transformer-compatible credit~~ ✅ DONE
 7. ~~**Multi-worker parallelism** — Add `--max-workers N` flag~~ ✅ DONE
 8. ~~**SIGTERM run closure** — Write manifest on graceful shutdown~~ ✅ DONE
+9. **Property lock maintenance** — Lint ratchet re-baselined (ruff 0.17.4 → 580); FA feedback determinism test corrected to match deterministic-by-design implementation
 
 ---
 

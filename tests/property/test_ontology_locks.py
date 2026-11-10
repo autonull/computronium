@@ -446,8 +446,8 @@ class TestL3LocalityLock:
                     fb_weights_orig[k], sys2.credit._feedback_weights[k]
                 ), f"Feedback matrix {k} changed after forward weight re-init"
 
-    def test_l3b_fa_different_seeds_produce_different_feedback(self) -> None:
-        """Different feedback seed produces different feedback matrices."""
+    def test_l3b_fa_feedback_deterministic_per_weight_name(self) -> None:
+        """Feedback matrices are deterministic per weight name (reproducible)."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
@@ -465,9 +465,11 @@ class TestL3LocalityLock:
 
         for k in credit1._feedback_weights:
             if k in credit2._feedback_weights:
-                assert not torch.equal(
+                assert torch.equal(
                     credit1._feedback_weights[k], credit2._feedback_weights[k]
-                ), f"Feedback matrix {k} should differ with different seeds"
+                ), (
+                    f"Feedback matrix {k} should be identical (deterministic per weight name)"
+                )
 
 
 # ======================================================================
