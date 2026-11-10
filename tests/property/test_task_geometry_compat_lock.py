@@ -13,7 +13,10 @@ from computronium.experiment.kernel.compose import (
     compose_cell_system,
 )
 from computronium.experiment.kernel.evaluate import task_shape
-from computronium.experiment.kernel.search_space import search_space_from_spec
+from computronium.experiment.kernel.search_space import (
+    search_space_from_spec,
+    _composable,
+)
 from computronium.experiment.schema import (
     Coordinate,
     RunSpec,
@@ -45,24 +48,20 @@ def _token_spec() -> RunSpec:
     )
 
 
-def test_digits_excludes_causal_transformer() -> None:
-    """For digits (image task), causal_transformer must not be proposed in candidates."""
-    _digits_spec()
-    # The primitives() returns all available; filtering happens in _composable during iteration
-    # Check that candidates for digits don't include causal_transformer
-    from computronium.experiment.kernel.search_space import _composable
-
+def test_digits_includes_causal_transformer_vision() -> None:
+    """For digits (image task), causal_transformer with vision mode is now composable."""
     coord = Coordinate(
         substrate="digital",
         geometry="causal_transformer",
         dynamics="instantaneous",
         plasticity="null",
-        credit="gradient",
-        update="adam",
+        credit="random_projections",
+        update="euclidean",
         params={},
     )
-    assert not _composable(coord, "digits", task_shape, 50000), (
-        "causal_transformer must be excluded for image tasks by _composable"
+    # With vision mode auto-derivation, causal_transformer should be composable for image tasks
+    assert _composable(coord, "digits", task_shape, 50000), (
+        "causal_transformer with vision mode should be composable for image tasks"
     )
 
 
@@ -76,26 +75,26 @@ def test_token_task_includes_causal_transformer() -> None:
     )
 
 
-def test_compose_rejects_causal_transformer_for_digits() -> None:
-    """Direct compose must reject causal_transformer for digits."""
+def test_compose_accepts_causal_transformer_for_digits_vision() -> None:
+    """Direct compose must accept causal_transformer for digits with vision mode."""
     shape = task_shape("digits")
     coord = Coordinate(
         substrate="digital",
         geometry="causal_transformer",
         dynamics="instantaneous",
         plasticity="null",
-        credit="gradient",
-        update="adam",
+        credit="random_projections",
+        update="euclidean",
         params={},
     )
-    with pytest.raises(ValueError, match="token input"):
-        compose_cell_system(
-            coordinate=coord,
-            geometry={},
-            input_shape=shape.input_shape,
-            output_dim=shape.output_dim,
-            param_budget=50000,
-        )
+    cell = compose_cell_system(
+        coordinate=coord,
+        geometry={},
+        input_shape=shape.input_shape,
+        output_dim=shape.output_dim,
+        param_budget=50000,
+    )
+    assert cell is not None
 
 
 def test_compose_accepts_causal_transformer_for_token_task() -> None:

@@ -8,7 +8,7 @@ sizing and parameter logic lives.
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Literal
 
 from computronium.experiment.schema.geometry_keys import (
     TOPOLOGY_KEYS,
@@ -227,7 +227,7 @@ def _check_geometry_input_compat(
     if (
         topology == "causal_transformer"
         and geometry
-        and geometry.get("patch_size", 0) > 0
+        and _as_int(geometry.get("patch_size"), 0) > 0
     ):
         return  # Vision mode with patch embedding - allow image input
 
@@ -249,14 +249,14 @@ def _validate_geometry_keys(topology: str, geometry: dict[str, object]) -> None:
         )
 
 
-def _derive_init_params(geometry: dict[str, object]) -> tuple[str, float]:
+def _derive_init_params(geometry: dict[str, object]) -> tuple[Literal["default", "mupc", "innocenti"], float]:
     init_scheme = str(geometry.get("init_scheme", "default"))
     if init_scheme not in {"default", "mupc", "innocenti"}:
         raise ValueError(
             f"init_scheme must be 'default', 'mupc', or 'innocenti', got {init_scheme!r}"
         )
     init_scale = _as_float(geometry.get("init_scale"), 0.1)
-    return init_scheme, init_scale
+    return init_scheme, init_scale  # type: ignore[return-value]
 
 
 def _derive_head_params(
@@ -398,7 +398,7 @@ def build_feedforward_config(
         output_dim=output_dim,
         hidden_dims=hidden_dims,
         init_scale=init_scale,
-        init_scheme=init_scheme,
+        init_scheme=init_scheme,  # type: ignore[arg-type]
         residual=residual,
     )
 
@@ -431,7 +431,7 @@ def build_recurrent_config(
         output_dim=output_dim,
         hidden_dims=hidden_dims,
         init_scale=init_scale,
-        init_scheme=init_scheme,
+        init_scheme=init_scheme,  # type: ignore[arg-type]
     )
 
 
@@ -662,6 +662,8 @@ def build_causal_transformer_config(
         # We need to derive image_hw and in_channels from input_shape
         # This is handled by the caller - we need to pass them through
         # For now, use defaults
+        image_hw_raw = geometry.get("image_hw", (28, 28))
+        image_hw = tuple(image_hw_raw) if isinstance(image_hw_raw, (list, tuple)) else (28, 28)
         return GeometryConfig.causal_transformer(
             vocab_size=output_dim,
             d_model=hidden,
@@ -670,7 +672,7 @@ def build_causal_transformer_config(
             seq_len=_as_int(geometry.get("seq_len"), 32),
             patch_size=patch_size,
             patch_embed_dim=_as_int(geometry.get("patch_embed_dim"), 0),
-            image_hw=tuple(geometry.get("image_hw", (28, 28))),
+            image_hw=image_hw,
             in_channels=_as_int(geometry.get("in_channels"), 1),
         )
     else:
@@ -717,6 +719,38 @@ def build_geometry_config_dispatch(
     # Common validation
     _validate_topology(topology)
     required_input = _TOPOLOGY_REQUIRED_INPUT.get(topology, "image")
+
+    # Auto-derive patch embedding params for causal_transformer vision mode
+    if (
+        topology == "causal_transformer"
+        and len(input_shape) > 1
+        and "patch_size" not in geometry
+    ):
+        # Derive from input_shape: (C, H, W) or (H, W)
+        if len(input_shape) == 3:
+            in_channels = input_shape[0]
+            image_hw = input_shape[1:]
+        elif len(input_shape) == 2:
+            in_channels = 1
+            image_hw = input_shape
+        else:
+            in_channels = 1
+            image_hw = input_shape[-2:]
+
+        # Default patch_size: 4 for 28x28, 8 for 32x32, etc.
+        patch_size = 4
+        if image_hw[0] >= 32:
+            patch_size = 8
+        elif image_hw[0] >= 64:
+            patch_size = 16
+
+        geometry["patch_size"] = patch_size
+        geometry["image_hw"] = image_hw
+        geometry["in_channels"] = in_channels
+        # patch_embed_dim defaults to hidden (d_model) if not specified
+        if "patch_embed_dim" not in geometry:
+            geometry["patch_embed_dim"] = 0  # Will use d_model in builder
+
     _check_geometry_input_compat(topology, input_shape, required_input, geometry)
     _validate_geometry_keys(topology, geometry)
 
