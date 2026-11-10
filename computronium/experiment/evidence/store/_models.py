@@ -81,7 +81,7 @@ class StoreConfig:
 
 _REPLICATION_COLUMNS: Final[str] = (
     "cell_key, schedule.fidelity, schedule.n_seeds, schedule.epochs, "
-    "schedule.batch_limit, schedule.budget_id"
+    "schedule.batch_limit, schedule.task_id"
 )
 _REPLICATION_CONDITIONS: Final[tuple[str, ...]] = (
     "cell_key = ?",
@@ -89,7 +89,7 @@ _REPLICATION_CONDITIONS: Final[tuple[str, ...]] = (
     "schedule.n_seeds = ?",
     "schedule.epochs = ?",
     "schedule.batch_limit = ?",
-    "schedule.budget_id = ?",
+    "schedule.task_id = ?",
 )
 
 

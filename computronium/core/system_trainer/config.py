@@ -29,7 +29,9 @@ class SystemTrainerConfig:
         track_energy: Track energy metrics during training
         track_flops: Track FLOPs during training
         track_memory: Track memory usage
-        log_every_n_steps: Logging frequency
+        log_every_n_steps: Per-step logging frequency (0 = silent)
+        log_every_n_epochs: Per-epoch progress frequency (0 = silent; 1 = every
+            epoch, the coarse heartbeat that makes a long cell observable)
         seed: Random seed
         deterministic: Use deterministic algorithms
         resumable: Reseed the global RNG per batch via ``fold_in`` so an
@@ -78,6 +80,7 @@ class SystemTrainerConfig:
     track_flops: bool = True
     track_memory: bool = True
     log_every_n_steps: int = 0
+    log_every_n_epochs: int = 1
     seed: int = 42
     deterministic: bool = False
     resumable: bool = False

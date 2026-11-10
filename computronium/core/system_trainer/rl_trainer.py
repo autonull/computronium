@@ -20,6 +20,7 @@ from computronium.core.system_trainer._early_stopping import (
     EarlyStoppingState,
     check_early_stopping,
 )
+from computronium.core.system_trainer._progress import log_epoch
 from computronium.core.system_trainer._resume import (
     DOMAIN_EPOCH,
     TrainerSnapshot,
@@ -320,13 +321,13 @@ class RLSystemTrainer:
         self.history.append(metrics)
         self.current_epoch += 1
 
-        if self.config.log_every_n_steps > 0:
-            logger.info(
-                "Epoch %d: reward=%.4f, loss=%.4f",
-                self.current_epoch,
-                avg_reward,
-                avg_loss,
-            )
+        log_epoch(
+            self.config,
+            epoch=self.current_epoch,
+            loss=avg_loss,
+            metric_name="mean_reward",
+            metric_value=avg_reward,
+        )
 
         # Checkpoint if configured
         if (

@@ -67,3 +67,6 @@ computronium/experiment/execution/dashboard/templates/static/js/*.map
 
 checkpoint_epoch_*.pt
 experiments/.timing.json
+
+# Run manifests are per-run artifacts, not source
+experiments/*.run.json

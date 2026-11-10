@@ -29,16 +29,15 @@ def dedup_key(record: Record) -> tuple[str, int, str]:
 
 
 def measurement_key(record: Record) -> str:
-    """Compute the measurement key for a record.
+    """Compute the replication key for a record.
 
-    The measurement key includes all schedule parameters except seed,
-    used for grouping records by measurement configuration.
+    Identifies one cell's replication group: the same structural cell, task,
+    fidelity and training depth. Seed is excluded (that is the replicate);
+    ``task_id`` is included because two tasks are two measurements, and a key
+    without it fuses four tasks' seeds into one fictional n=12 group.
 
-    Args:
-        record: The record to compute the key for.
-
-    Returns:
-        String key in format "cell_key|fidelity|n_seeds|epochs|batch_limit|budget_id".
+    Format: ``cell_key|fidelity|n_seeds|epochs|batch_limit|task_id``, matching
+    the store's ``_REPLICATION_COLUMNS`` order.
     """
     return (
         f"{record.cell_key}|"
@@ -46,7 +45,7 @@ def measurement_key(record: Record) -> str:
         f"{record.schedule.n_seeds}|"
         f"{record.schedule.epochs}|"
         f"{record.schedule.batch_limit}|"
-        f"{record.schedule.budget_id}"
+        f"{record.schedule.task_id}"
     )
 
 

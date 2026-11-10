@@ -17,6 +17,7 @@ from computronium.core.system_trainer._early_stopping import (
     EarlyStoppingState,
     check_early_stopping,
 )
+from computronium.core.system_trainer._progress import log_epoch
 from computronium.core.system_trainer._resume import (
     DOMAIN_EPOCH,
     TrainerSnapshot,
@@ -165,13 +166,13 @@ class GraphSystemTrainer:
         self.history.append(metrics)
         self.current_epoch += 1
 
-        if self.config.log_every_n_steps > 0:
-            logger.info(
-                "Epoch %d: train_loss=%.4f, train_acc=%.4f",
-                self.current_epoch,
-                train_loss,
-                train_acc,
-            )
+        log_epoch(
+            self.config,
+            epoch=self.current_epoch,
+            loss=train_loss,
+            metric_name="val_acc",
+            metric_value=metrics.get("val_acc"),
+        )
 
         # Checkpoint if configured
         if (

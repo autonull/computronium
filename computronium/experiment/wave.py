@@ -12,7 +12,7 @@ import random
 import sys
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -187,7 +187,6 @@ def _check_coord_compatibility(coord: Coordinate) -> bool:
 
 def _make_positive_control_cell(
     spec: RunSpec,
-    fidelity: str,
 ) -> tuple[Coordinate, Schedule] | None:
     """Create a known-working cell for positive control (P3).
 
@@ -216,9 +215,11 @@ def _make_positive_control_cell(
 
     # The run's own first task; a run always names at least one.
     task = spec.task_names[0]
-    schedule = schedule_for(spec, task, fidelity)
-
-    return (coord, schedule)
+    schedule = schedule_for(spec, task, "L0")
+    # The control is a one-epoch sanity check, never the run's declared depth:
+    # an explicit --epochs 20 must not turn the control into a 60s-capped
+    # training run that can fail and poison the run's evidence.
+    return (coord, replace(schedule, epochs=1, n_seeds=1))
 
 
 def _build_provenance(
@@ -552,8 +553,6 @@ class PolicyPlanner:
         self._wave_count = 0
         self._wave_size = 0
         self._policy: Any = None
-        self._task_cycle = list(spec.scheduled_tasks)
-        self._task_index = 0
         self._init_policy()
         self._init_resume(resume_from)
 
@@ -627,11 +626,16 @@ class PolicyPlanner:
         return legal
 
     def __iter__(self):
-        """Iterator of (Coordinate, Schedule) from the policy."""
+        """Iterator of (Coordinate, Schedule) from the policy.
+
+        The context is deliberately unscoped: a wave must be able to measure
+        every task the run declared. Scoping it to ``task_cycle[0]`` made a
+        multi-task run measure only its first task, because the policy walks
+        the context's space and the planner then stamped a cycled task onto
+        whatever came back.
+        """
         from computronium.experiment.execution.policy import ProposalContext
         from computronium.experiment.kernel.evaluate import task_shape
-
-        base_task = self._task_cycle[0]
 
         # One context for the whole wave keeps the sampler's diversity.
         ctx = ProposalContext(
@@ -639,25 +643,26 @@ class PolicyPlanner:
             spec=self.spec,
             run_id="learning_survey",
             n_propose=self._wave_size,
-            task=base_task,
+            task=None,
             shape=task_shape,
             deadline=None,
         )
         proposals = list(self._policy.propose(ctx))
 
+        proposed = 0
         for prop in proposals:
-            if len(self._seen) >= self._wave_size:
+            if proposed >= self._wave_size:
                 break
             coord = prop.coordinate
             if not _check_coord_compatibility(coord):
                 continue
-            task = self._task_cycle[self._task_index % len(self._task_cycle)]
-            self._task_index += 1
+            task = prop.schedule.task_id
             schedule = schedule_for(self.spec, task, self.fidelity)
-            measurement_key = coord.measurement_key(schedule)
-            if measurement_key in self._seen:
+            keys = [coord.measurement_key(rep) for rep in schedule.seed_plan]
+            if all(key in self._seen for key in keys):
                 continue
-            self._seen.add(measurement_key)
+            self._seen.update(keys)
+            proposed += 1
             yield (coord, schedule)
 
     def _set_wave_size(self, n: int) -> None:
@@ -741,7 +746,7 @@ def _log_progress(i: int, n_total: int, record: Any) -> None:
     else:
         param_str = str(param_count)
     logger.info(
-        "  [%d/%d] %s | %s=%s | params=%s | task=%s | %s/%s/%s/%s/%s/%s",
+        "  [%d/%d] %s | %s=%s | params=%s | task=%s | seed=%d | %.0fs | %s/%s/%s/%s/%s/%s",
         i,
         n_total,
         gate,
@@ -749,6 +754,8 @@ def _log_progress(i: int, n_total: int, record: Any) -> None:
         f"{primary_val:.4f}" if isinstance(primary_val, float) else primary_val,
         param_str,
         task_id,
+        record.schedule.seed,
+        record.payload.get("walltime_s", 0.0),
         record.substrate,
         record.geometry,
         record.dynamics,
@@ -756,6 +763,24 @@ def _log_progress(i: int, n_total: int, record: Any) -> None:
         record.credit,
         record.update,
     )
+
+
+def _expand_replicates(
+    cells: list[tuple[Coordinate, Schedule]],
+) -> list[tuple[Coordinate, Schedule]]:
+    """One evaluable cell per seed.
+
+    A record's identity is its own single-seed schedule, so a ``n_seeds=3``
+    cell is three measurements, not one measurement labelled 3. Expanding here
+    — the one place every cell passes through — is what lets ``--n-seeds 3``
+    satisfy the claim gate's ``n>=3`` instead of writing one record and
+    reporting a replication it never ran.
+    """
+    return [
+        (coordinate, replicate)
+        for coordinate, schedule in cells
+        for replicate in schedule.seed_plan
+    ]
 
 
 def _evaluate_cells(
@@ -772,6 +797,7 @@ def _evaluate_cells(
     look like a hang. The deadline is handed to the trainer, so a single long
     cell stops at the wave boundary instead of overrunning the run.
     """
+    cells = _expand_replicates(cells)
     n_total = len(cells)
     results: list = []
     started = time.monotonic()
@@ -781,7 +807,7 @@ def _evaluate_cells(
     def _before_deadline() -> bool:
         return deadline is None or time.monotonic() < deadline
 
-    logger.info("Evaluating %d cell(s) sequentially", n_total)
+    logger.info("Evaluating %d single-seed cell(s) sequentially", n_total)
 
     with RecordStore(StoreConfig(path=Path(store_path))) as store:
         for i, cell in enumerate(cells, 1):
@@ -928,6 +954,39 @@ class RunSummary:
     report: dict
     waves_completed: int
     budget_split: dict[str, float]
+
+
+def _close_run(summary: RunSummary, *, fidelity: str, planned_cells: int) -> None:
+    """Close the run row and write the manifest the shell reads after a run.
+
+    A run that returns normally is ``completed`` even when its budget stopped
+    the last wave: the budget is the run's declared bound, not a failure. The
+    manifest answers "did the run spend its budget, and on what" without a
+    DuckDB query.
+    """
+    from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.evidence.store._models import StoreConfig
+
+    with RecordStore(StoreConfig(path=Path(summary.store_path))) as store:
+        store.finish_run(
+            summary.run_id, "completed", budget_consumed_s=summary.walltime_s
+        )
+    manifest = {
+        "run_id": summary.run_id,
+        "status": "completed",
+        "fidelity": fidelity,
+        "walltime_s": round(summary.walltime_s, 1),
+        "cells_planned": planned_cells,
+        "cells_evaluated": summary.cells_evaluated,
+        "cells_passed": summary.cells_passed,
+        "cells_failed": summary.cells_failed,
+        "cells_skipped": summary.cells_skipped,
+        "waves_completed": summary.waves_completed,
+        "budget_split": summary.budget_split,
+    }
+    Path(summary.store_path).with_suffix(".run.json").write_text(
+        json.dumps(manifest, indent=2)
+    )
 
 
 def _run_ladder_promotion(
@@ -1085,27 +1144,8 @@ def _run_ladder_promotion(
             )
             task_id = record.schedule.task_id
             new_schedule = schedule_for(spec, task_id, target_fid)
-            # Expand into n_seeds replicates with different seeds
-            base_seed = new_schedule.seed
-            n_replicates = new_schedule.n_seeds
-            for rep_idx in range(n_replicates):
-                rep_schedule = Schedule(
-                    fidelity=new_schedule.fidelity,
-                    seed=base_seed + rep_idx,
-                    n_seeds=new_schedule.n_seeds,
-                    epochs=new_schedule.epochs,
-                    batch_limit=new_schedule.batch_limit,
-                    budget_id=f"{new_schedule.budget_id}_rep{rep_idx}",
-                    task_id=new_schedule.task_id,
-                    param_budget=new_schedule.param_budget,
-                    device=new_schedule.device,
-                    deterministic=new_schedule.deterministic,
-                    num_workers=new_schedule.num_workers,
-                    precision=new_schedule.precision,
-                    checkpoint_every_n=new_schedule.checkpoint_every_n,
-                    early_stopping_patience=new_schedule.early_stopping_patience,
-                )
-                cells_to_promote.append((coord, rep_schedule))
+            # _evaluate_cells expands the seed plan into one record per seed.
+            cells_to_promote.append((coord, new_schedule))
 
         if not cells_to_promote:
             continue
@@ -1287,6 +1327,7 @@ def run_waves(
     all_results: list = []
     total_elapsed = 0.0
     wave = 0
+    planned_cells = 0
 
     # Ladder: L0 explores on half the budget; L1/L2 size themselves from the
     # measured cell cost and the time actually left (see _run_ladder_promotion).
@@ -1311,6 +1352,11 @@ def run_waves(
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.evidence.store._models import StoreConfig
 
+    # The sequential evaluator runs in this process, so the flag's whole
+    # purpose — bounding CPU threads — applies here and nowhere else.
+    if cpu_threads > 0:
+        torch.set_num_threads(cpu_threads)
+
     store_config = StoreConfig(path=Path(store_path))
     with RecordStore(store_config) as init_store:
         init_store.create_run(run_id, spec)
@@ -1318,8 +1364,9 @@ def run_waves(
     # Positive control (P3): a known-working cell proves the harness trains.
     # Always L0 and capped, so validating the pipeline can never eat the run.
     positive_control_results: list = []
-    positive_control_cell = _make_positive_control_cell(spec, "L0")
+    positive_control_cell = _make_positive_control_cell(spec)
     if positive_control_cell is not None:
+        planned_cells += 1
         logger.info(
             "Positive control (L0): %s/%s/%s/%s/%s/%s on %s",
             positive_control_cell[0].substrate,
@@ -1369,21 +1416,44 @@ def run_waves(
         wave += 1
         logger.info("=== Wave %d (budget remaining: %.0fs) ===", wave, budget_remaining)
 
-        # Propose at most what the remaining budget can afford at the measured rate.
-        if all_results:
-            measured_cost = total_elapsed / len(all_results)
-            n_wave = max(
-                1,
-                min(MAX_WAVE_CELLS, int(budget_remaining / max(1.0, measured_cost))),
-            )
-        else:
-            n_wave = MAX_WAVE_CELLS
+        # Size the wave from cells measured at *this* fidelity. A positive
+        # control record is L0; pricing an L2 wave from it overstates how many
+        # cells fit by the fidelity ratio, and every over-proposed cell is an
+        # Optuna ask that dies at the deadline.
+        fidelity_costs = [
+            float(r.payload.get("walltime_s") or 0.0)
+            for r in all_results
+            if r.payload.get("fidelity") == fidelity
+            and float(r.payload.get("walltime_s") or 0.0) > 0.0
+        ]
+        cost_per_cell = (
+            sum(fidelity_costs) / len(fidelity_costs)
+            if fidelity_costs
+            else DEFAULT_COSTS.get(fidelity, 30.0)
+        )
+        # A proposed cell costs one replicate per seed; records price a single
+        # seed. Divide by the fidelity's seed plan or the wave asks for
+        # n_seeds times the work the budget can pay for.
+        replicates = schedule_for(spec, spec.task_names[0], fidelity).n_seeds
+        cell_cost = cost_per_cell * max(1, replicates)
+        n_wave = max(
+            1, min(MAX_WAVE_CELLS, int(budget_remaining / max(1.0, cell_cost)))
+        )
 
         planner._set_wave_size(n_wave)
+        logger.info(
+            "Proposing up to %d cell(s) at ~%.0fs/cell (%s, %d seed(s))",
+            n_wave,
+            cell_cost,
+            "measured" if fidelity_costs else "default",
+            replicates,
+        )
         cells = list(iter(planner))
+        planned_cells += len(cells)
         if not cells:
             logger.info("No more cells to evaluate")
             break
+        logger.info("Wave %d: %d cell(s) proposed", wave, len(cells))
 
         wave_start = time.monotonic()
         evaluation = _evaluate_cells(
@@ -1436,26 +1506,8 @@ def run_waves(
             logger.info("Budget exhausted mid-wave")
             break
 
-    report = _generate_report(store_path, run_id)
-
-    passed = sum(1 for r in all_results if r.status.gate_verdict.value == "PASS")
-    failed = len(all_results) - passed
-
-    total_walltime = sum(fidelity_walltime.values())
-    budget_split = {}
-    for fid, wt in fidelity_walltime.items():
-        budget_split[fid] = wt / total_walltime if total_walltime > 0 else 0.0
-
-    logger.info(
-        "Done: %d evaluated, %d passed, %d failed, %.1fs elapsed, %d waves",
-        len(all_results),
-        passed,
-        failed,
-        total_elapsed,
-        wave,
-    )
-
-    # Fidelity ladder promotion: L0 -> L1 -> L2
+    # Fidelity ladder promotion: L0 -> L1 -> L2. Runs after the exploration
+    # loop so L1/L2 are sized from the time actually left.
     if ladder and budget_remaining > 0:
         total_elapsed, all_results, budget_remaining = _run_ladder_promotion(
             spec=spec,
@@ -1463,13 +1515,10 @@ def run_waves(
             all_results=all_results,
             store_path=store_path,
             provenance=provenance,
-            # Everything the L0 loop did not spend is available to L1/L2.
             budget_remaining=max(0.0, budget_seconds - total_elapsed),
             total_elapsed=total_elapsed,
             fidelity_walltime=fidelity_walltime,
         )
-
-    report = _generate_report(store_path, run_id)
 
     passed = sum(1 for r in all_results if r.status.gate_verdict.value == "PASS")
     failed = len(all_results) - passed
@@ -1488,7 +1537,7 @@ def run_waves(
         wave,
     )
 
-    return RunSummary(
+    summary = RunSummary(
         run_id=run_id,
         store_path=store_path,
         cells_evaluated=len(all_results),
@@ -1496,10 +1545,14 @@ def run_waves(
         cells_failed=failed,
         cells_skipped=evaluation.skipped if evaluation and evaluation.results else 0,
         walltime_s=total_elapsed,
-        report=report,
+        report={},
         waves_completed=wave,
         budget_split=budget_split,
     )
+    # Close the run before reading it back, so the report describes a finished
+    # run (status, budget consumed) instead of the running row it just left.
+    _close_run(summary, fidelity=fidelity, planned_cells=planned_cells)
+    return replace(summary, report=_generate_report(store_path, run_id))
 
 
 # ============================================================
@@ -1515,8 +1568,8 @@ class _SpecParams:
     seed: int
     device: str
     param_budget: int
-    n_seeds: int
-    epochs: int
+    n_seeds: int | None
+    epochs: int | None
     batch_limit: int
     axes: dict[str, tuple[str, ...]] | None
     hyperparameters: dict[str, Any] | None
@@ -1537,8 +1590,10 @@ def _build_spec(params: _SpecParams) -> RunSpec:
             axis_enum = getattr(StructuralAxis, axis_name.upper())
             axis_selections.append(AxisSelection(axis=axis_enum, primitives=primitives))
 
-    n_seeds = params.n_seeds if params.n_seeds != 1 else None
-    epochs = params.epochs if params.epochs != 1 else None
+    # ``None`` means "follow the fidelity ladder"; an explicit value (including
+    # 1) is the caller's declaration and must survive into the schedule.
+    n_seeds = params.n_seeds
+    epochs = params.epochs
 
     spec = RunSpec(
         profile="survey",

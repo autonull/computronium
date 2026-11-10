@@ -260,7 +260,13 @@ class ProposalContext:
             for seed in schedule.seed_plan
         )
 
-    def cells(self, limit: int | None = None) -> Iterator[tuple[Coordinate, Schedule]]:
+    def cells(
+        self,
+        limit: int | None = None,
+        *,
+        offset: int = 0,
+        max_scan: int | None = None,
+    ) -> Iterator[tuple[Coordinate, Schedule]]:
         """Legal cells from the run's own space, in a deterministic order.
 
         Cells this run has already measured are skipped, so the stream a policy
@@ -271,6 +277,10 @@ class ProposalContext:
 
         Args:
             limit: Stop after this many cells; unbounded when ``None``.
+            offset: Candidates to skip before examining; lets a policy page
+                through the space across proposal calls.
+            max_scan: Candidates to examine in this call. Bounds the work a
+                single proposal pays when most of the factorial is illegal.
 
         Yields:
             ``(coordinate, schedule)`` pairs the run may execute.
@@ -285,6 +295,8 @@ class ProposalContext:
                 cost_model=None,
                 shape=self.shape,
                 check_composable=True,  # Filter invalid combos at search space level
+                offset=offset,
+                max_scan=max_scan,
             )
             if self.fresh(coordinate, schedule, measured)
         )
@@ -637,6 +649,9 @@ class ModelBasedPolicy:
         self._run_id: str | None = None
         self._pending: dict[str, int] = {}
         self._deadline = deadline
+        # Where the next proposal call starts scanning the space. Paging keeps
+        # one call's examination bounded instead of walking the whole factorial.
+        self._scan_start = 0
 
         # Resolve objectives: use axis_objectives if set, otherwise global objectives
         if self._axis_objectives:
@@ -903,6 +918,18 @@ class ModelBasedPolicy:
         records = ctx.records()
         combo_counts = self._count_combos(records)
 
+        # One bounded page of the space per call: examining the whole factorial
+        # (or its 50k page) before the first proposal is silent, minutes-long
+        # work that looks exactly like a hang. The stream is a golden-spaced
+        # walk, so a page still varies every axis at once. Advance only while a
+        # page can still exist: a fixed stride past a small space would empty
+        # every later proposal and end the run with the space unmeasured.
+        span = max(_POOL * 8, ctx.n_propose * 4)
+        total = declared_cell_count(ctx.spec, ctx.search_space)
+        page = list(ctx.cells(limit=span, offset=self._scan_start, max_scan=span))
+        if self._scan_start + span < total:
+            self._scan_start += span
+
         # First pass: ensure minimum sampling per combo
         # Collect all available cells and group by combo
         from collections import defaultdict
@@ -910,8 +937,10 @@ class ModelBasedPolicy:
         cu_to_coords: dict[tuple[str, str], list[tuple[Coordinate, Schedule]]] = (
             defaultdict(list)
         )
-        for coord, sched in ctx.cells():
+        for coord, sched in page:
             cu_to_coords[coord.credit, coord.update].append((coord, sched))
+
+        issued: set[str] = set()
 
         # Yield cells for under-sampled combos first
         proposed_count = 0
@@ -927,6 +956,7 @@ class ModelBasedPolicy:
                     continue
                 distributions = self._distributions(coord)
                 if not distributions:
+                    issued.add(coord.measurement_key(sched))
                     yield Proposal(coord, sched, self._name)
                 else:
                     trial = study.ask(distributions)
@@ -934,7 +964,9 @@ class ModelBasedPolicy:
                     if not ctx.legal(proposed, sched) or not ctx.fresh(proposed, sched):
                         study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
                         continue
-                    self._pending[proposed.measurement_key(sched)] = trial.number
+                    key = proposed.measurement_key(sched)
+                    self._pending[key] = trial.number
+                    issued.add(key)
                     yield Proposal(proposed, sched, self._name)
                 combo_counts[combo] = combo_counts.get(combo, 0) + 1
                 needed -= 1
@@ -942,11 +974,13 @@ class ModelBasedPolicy:
 
         # Second pass: fill remaining slots with TPE-guided proposals
         if proposed_count < ctx.n_propose:
-            for coord, sched in islice(ctx.cells(), ctx.n_propose - proposed_count):
+            for coord, sched in page:
                 # Check deadline before each proposal
                 if not self._check_deadline():
                     logger.info("Deadline expired during proposal loop")
                     break
+                if coord.measurement_key(sched) in issued:
+                    continue
                 if not ctx.fresh(coord, sched):
                     continue
                 distributions = self._distributions(coord)

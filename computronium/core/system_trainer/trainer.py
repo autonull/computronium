@@ -17,6 +17,7 @@ from computronium.core.system_trainer._early_stopping import (
     EarlyStoppingState,
     check_early_stopping,
 )
+from computronium.core.system_trainer._progress import log_epoch
 from computronium.core.system_trainer._resources import EpochResource, EpochResources
 from computronium.core.system_trainer._resume import (
     DOMAIN_EPOCH,
@@ -403,16 +404,17 @@ class SystemTrainer:
         self._harvest_snapshot_epoch()
         self.current_epoch += 1
 
-        # Per-epoch progress is opt-in: the survey reports one line per cell, and
-        # an L2 cell of 20 epochs would otherwise bury it.
-        if self.config.log_every_n_steps > 0:
-            logger.info(
-                "Epoch %d: train_loss=%.4f, train_acc=%.4f, train_energy=%.4f",
-                self.current_epoch,
-                avg_loss,
-                avg_acc,
-                avg_energy,
-            )
+        epoch_time_s = (
+            self.epoch_resources[-1].epoch_time_s if self.epoch_resources else None
+        )
+        log_epoch(
+            self.config,
+            epoch=self.current_epoch,
+            loss=avg_loss,
+            metric_name="val_acc",
+            metric_value=epoch_record.get("val_acc"),
+            epoch_time_s=epoch_time_s,
+        )
 
         # Checkpoint if configured
         if (

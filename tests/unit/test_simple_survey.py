@@ -187,7 +187,9 @@ def test_cost_model_missing_falls_back_to_defaults(tmp_path, monkeypatch):
 
 def test_digital_flag_pins_substrate():
     """--digital restricts the substrate axis and keeps other axes intact."""
-    axes = simple_survey._axis_overrides('{"dynamics": ["lazy"]}', digital=True)
+    from computronium.experiment import wave
+
+    axes = wave._axis_overrides('{"dynamics": ["lazy"]}', digital=True)
 
     assert axes == {"dynamics": ["lazy"], "substrate": ("digital",)}
 
@@ -198,8 +200,10 @@ def test_digital_flag_pins_substrate():
 
 def test_axis_overrides_without_digital_is_passthrough():
     """Without --digital the JSON is used as written."""
-    assert simple_survey._axis_overrides("", digital=False) is None
-    assert simple_survey._axis_overrides('{"dynamics": ["lazy"]}', digital=False) == {
+    from computronium.experiment import wave
+
+    assert wave._axis_overrides("", digital=False) is None
+    assert wave._axis_overrides('{"dynamics": ["lazy"]}', digital=False) == {
         "dynamics": ["lazy"]
     }
 
