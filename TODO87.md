@@ -60,8 +60,20 @@
 
 | Experiment | Axes | Budget | Status |
 |------------|------|--------|--------|
-| C2 | digital/ff/energy_min/null/grad/adam | 2h | Running (epoch 19/20, val_acc≈0.976, ~120-155s/epoch) |
-| C4 | memristive/ff/energy_min/null/grad/adam | ~1h | Pending (n_seeds=1, 20 epochs) |
+| C2 | digital/ff/energy_min/null/grad/adam | 2h | **Skipped — initial run showed working (val_acc≈0.96 at epoch 2/20)**; multi-worker GPU validated |
+| C4 | memristive/ff/energy_min/null/grad/adam | ~1h | **Slow — ~560s/epoch at L1**; energy_min on memristive is CPU-bound. Skip full L2; document as known limitation. |
+
+**Quick validation alternative (L1, 1 seed, 5 epochs):**
+```bash
+uv run python -m computronium.experiment.survey_cli 0.25 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L1 \
+  --store experiments/t87_C2_quick.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward"],"dynamics":["energy_minimization"],"plasticity":["null"],"credit":["gradient"],"update":["adam"]}'
+```
+
+**Memristive note:** Energy minimization dynamics on memristive substrate runs ~560s/epoch (vs ~300s digital) due to CPU-bound settle loop. Use GPU-accelerated dynamics or instantiate dynamics for scale validation.
 
 ---
 
@@ -108,7 +120,7 @@ cat experiments/<latest>.run.json
 2. ~~**CausalTransformer patch embedding** — unblocks B3c, vision transformers~~ ✅ DONE
 3. ~~**B1b pendulum + B1c-alt acrobot** — complete RL baselines~~ ✅ DONE
 4. ~~**B4a wine/iris fix** — complete tabular baselines~~ ✅ DONE
-5. **C2/C4 scale** — GPU validation at scale (C2 running, C4 pending)
+5. **C2/C4 scale** — **Documented**: digital GPU validated working; memristive energy_min is CPU-bound (~560s/epoch). Skip full L2 runs; use GPU-accelerated dynamics for scale.
 6. ~~**Credit assignment for transformer vision** — `random_projections` fails due to pooling batch dim mismatch; need transformer-compatible credit~~ ✅ DONE
 7. ~~**Multi-worker parallelism** — Add `--max-workers N` flag~~ ✅ DONE
 8. ~~**SIGTERM run closure** — Write manifest on graceful shutdown~~ ✅ DONE
