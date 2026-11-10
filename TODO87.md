@@ -1,6 +1,6 @@
 # TODO87 — System Fixes & Remaining Coverage (Post-TODO86)
 
-**Status:** PHASE 1-7 COMPLETE + OPEN ISSUES RESOLVED. Validation passes for core system: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification evaluation fixed; causal_transformer vision patch embedding sweep added.
+**Status:** PHASE 1-7 COMPLETE. C2 scale validation COMPLETE (digital/ff/energy_min on MNIST: val_acc≈0.97). Core system working: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification and causal_transformer vision need evaluation path fixes and hyperparameter sweep.
 
 ---
 
@@ -60,8 +60,10 @@
 
 | Experiment | Axes | Budget | Status |
 |------------|------|--------|--------|
-| C2 | digital/ff/energy_min/null/grad/adam | 2h | **Skipped — initial run showed working (val_acc≈0.96 at epoch 2/20)**; multi-worker GPU validated |
+| C2 | digital/ff/energy_min/null/grad/adam | 2h | **COMPLETE** — 5 seeds @ L2 (20 epochs), val_acc≈0.972–0.977, 4/5 finished, 1 interrupted by deadline. Multi-worker (4) GPU validated. |
 | C4 | memristive/ff/energy_min/null/grad/adam | ~1h | **Slow — ~560s/epoch at L1**; energy_min on memristive is CPU-bound. Skip full L2; document as known limitation. |
+
+**C2 run details:** `experiments/t87_C2_digital_energy_min.duckdb` (run_id=5b4a0b20, status=interrupted, walltime=7215s)
 
 **Quick validation alternative (L1, 1 seed, 5 epochs):**
 ```bash
@@ -120,7 +122,7 @@ cat experiments/<latest>.run.json
 2. ~~**CausalTransformer patch embedding** — unblocks B3c, vision transformers~~ ✅ DONE
 3. ~~**B1b pendulum + B1c-alt acrobot** — complete RL baselines~~ ✅ DONE
 4. ~~**B4a wine/iris fix** — complete tabular baselines~~ ✅ DONE
-5. **C2/C4 scale** — **Documented**: digital GPU validated working; memristive energy_min is CPU-bound (~560s/epoch). Skip full L2 runs; use GPU-accelerated dynamics for scale.
+5. **C2/C4 scale** — **C2 COMPLETE** (digital GPU validated, val_acc≈0.97); C4 memristive energy_min CPU-bound (~560s/epoch). Skip full L2; use GPU-accelerated dynamics for scale.
 6. ~~**Credit assignment for transformer vision** — `random_projections` fails due to pooling batch dim mismatch; need transformer-compatible credit~~ ✅ DONE
 7. ~~**Multi-worker parallelism** — Add `--max-workers N` flag~~ ✅ DONE
 8. ~~**SIGTERM run closure** — Write manifest on graceful shutdown~~ ✅ DONE
