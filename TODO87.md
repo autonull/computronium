@@ -118,32 +118,20 @@ cat experiments/<latest>.run.json
 
 ---
 
-## 🎯 PHASE 6: Consolidate Experiment Entry Points
+## 🎯 PHASE 6: Consolidate Experiment Entry Points — ✅ COMPLETE
 
-**Problem:** Two separate experiment execution engines exist:
+**Done:** Deleted legacy engines, `survey_cli.py` is now the single canonical entry point.
 
-| Entry Point | Path | Architecture | Status |
-|-------------|------|--------------|--------|
-| `survey_cli.py` | `python -m computronium.experiment.survey_cli` | Sequential, wave-based, planners | **Canonical** (fixed, tested) |
-| `run_experiment.py` | `python scripts/run_experiment.py` | Async, CellStream, LocalBackend | **Legacy** (unfixed bugs) |
-| `experiment.sh` | `./experiment.sh` | Bash wrapper → run_experiment.py | **Legacy** |
+| Entry Point | Path | Status |
+|-------------|------|--------|
+| `survey_cli.py` | `python -m computronium.experiment.survey_cli` | ✅ **Canonical** — sequential, wave-based, planners, all fixes |
+| `run_experiment.py` | `python scripts/run_experiment.py` | ❌ **DELETED** |
+| `experiment.sh` | `./experiment.sh` | ❌ **DELETED** |
+| `experiment_shallow.sh` | `./experiment_shallow.sh` | ❌ **DELETED** (commit f26b8ee3) |
 
-**Issues in `run_experiment.py` path (found during quick-verify test):**
-- **val_acc=0.0000 bug**: All cells PASS but report zero accuracy (same as wine/iris issue)
-- **No dry-run composable filtering**: Invalid cells proposed and evaluated
-- **No per-epoch heartbeat**: Silent long runs
-- **No seed-plan expansion**: `--n-seeds 3` writes 1 record, not 3
-- **No task-aware replication key**: Seeds across tasks fuse
-- **Async + LocalBackend**: Different semantics (max_workers=1 but async overhead)
-- **No honest wave sizing**: Uses policy directly, no cost model
+**Feature parity verified:** `survey_cli.py` covers all use cases via explicit flags (`--fidelity`, `--tasks`, `--axes`, `--epochs`, `--n-seeds`, `--policy`, `--mode learn|static`, `--ladder`, `--promote-from`, `--resume`, `--dry-run`, `--doctor`) instead of profile presets.
 
-**Recommendation:** Deprecate `scripts/run_experiment.py` and `experiment.sh`. All new work uses `survey_cli.py`. 
-
-**Migration:**
-1. Verify `survey_cli.py` covers all `run_experiment.py` use cases (profiles, policies, axes)
-2. Add `--mode learn|static` flag parity for `run_experiment.py --policy`
-3. Delete `scripts/run_experiment.py`, `experiment.sh`, `experiment_shallow.sh` (already deleted)
-4. Update docs/TODOs to reference only `survey_cli.py`
+**Verified working:** CUDA, all task domains (vision, RL, graph, sequence, tabular), L0/L1/L2 fidelities, learning/static modes, dry-run, doctor check.
 
 ---
 
