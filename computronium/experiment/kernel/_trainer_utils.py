@@ -36,6 +36,7 @@ def _create_trainer_config(
     deadline_check_every_n_steps = (
         params.get("deadline_check_every_n_steps", 0) if params else 0
     )
+    log_every_n_steps = params.get("log_every_n_steps", 0) if params else 0
 
     return SystemTrainerConfig(
         max_epochs=schedule.epochs,
@@ -45,6 +46,7 @@ def _create_trainer_config(
         limit_val_batches=limit,
         track_flops=True,
         track_memory=True,
+        log_every_n_steps=int(log_every_n_steps),
         deterministic=schedule.deterministic,
         precision=schedule.precision if hasattr(schedule, "precision") else "fp32",
         checkpoint_every_n=schedule.checkpoint_every_n,
@@ -206,11 +208,27 @@ def _collect_trainer_metrics(trainer: SystemTrainer) -> dict[str, float]:
     return metrics
 
 
+class _Reiterable:
+    """A data provider that starts a fresh pass on every iteration.
+
+    The trainer iterates the provider once per epoch. A single-pass
+    iterator (``islice`` over a loader, a bare generator) leaves every
+    epoch after the first with no batches at all — the cell then reports
+    its last, empty epoch's zeroed metrics as its result.
+    """
+
+    def __init__(self, factory: Callable[[], Any]) -> None:
+        self._factory = factory
+
+    def __iter__(self) -> Any:
+        return self._factory()
+
+
 def _bounded_batches(source: Any, limit: int) -> Any:
-    """Yield at most ``limit`` batches from a data provider."""
+    """At most ``limit`` batches per pass over a data provider."""
     from itertools import islice
 
-    return islice(iter(source), limit)
+    return _Reiterable(lambda: islice(iter(source), limit))
 
 
 def _val_batches(task: Any, limit: int | None) -> Any | None:
@@ -256,15 +274,14 @@ def _create_data_provider(task: Any, split: str, batch_size: int, limit: int | N
     """Create an iterable data provider for a task.
 
     Handles both standard DataLoader tasks and get_batch-based tasks
-    (graph, RL, etc.) by returning a generator that yields batches.
+    (graph, RL, etc.). The provider is re-iterable: the trainer walks
+    it once per epoch.
     """
-    from itertools import islice
-
     # Try DataLoader first
     try:
         loader = task.get_dataloader(split)
         if loader is not None:
-            return islice(iter(loader), limit) if limit else loader
+            return _bounded_batches(loader, limit) if limit else loader
     except TypeError, StopIteration, NotImplementedError, AttributeError:
         pass
 
@@ -284,4 +301,4 @@ def _create_data_provider(task: Any, split: str, batch_size: int, limit: int | N
             except StopIteration, NotImplementedError:
                 break
 
-    return batch_generator()
+    return _Reiterable(batch_generator)

@@ -1283,6 +1283,22 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Credit-Geometry: the transformer's activation chain pairs each weight
+    # with the act it consumes, not the act it produces — the credits that
+    # need the (pre, post) pair have no partner act there.
+    ConstraintSpec(
+        name="transformer_pairing_credit",
+        kind=ConstraintKind.VOID,
+        description="Causal transformer incompatible with target_inversion, temporal_trace credit (no post-activation to pair)",
+        predicate=not_(
+            and_(
+                eq(var("geometry"), const("causal_transformer")),
+                in_(var("credit"), const(["target_inversion", "temporal_trace"])),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Credit: gradient/backprop with beta >= 1.0 has zero pseudo-gradient
     ConstraintSpec(
         name="gradient_credit_beta_clamp",

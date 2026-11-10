@@ -9,9 +9,11 @@ import contextlib
 import json
 import os
 import random
+import signal
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -699,10 +701,51 @@ class _Evaluation:
     skipped: int
 
 
+class _ShutdownSignal:
+    """SIGTERM/SIGINT handler: stop the run, then close it like a finished run.
+
+    A run killed mid-wave leaves its store row open and writes no manifest,
+    so the report reads a run that never ended. The handler asks the wave
+    loop to stop and lets the in-flight cell finish its current step; the
+    run is then closed with the status ``interrupted``.
+    """
+
+    def __init__(self) -> None:
+        self.requested = False
+        self._old: dict[int, Any] = {}
+
+    def install(self) -> None:
+        """Install the handlers (a no-op off the main thread)."""
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                self._old[sig] = signal.signal(sig, self._handle)
+            except ValueError, OSError:
+                pass
+
+    def uninstall(self) -> None:
+        """Restore the handlers this object replaced."""
+        for sig, handler in self._old.items():
+            try:
+                signal.signal(sig, handler)
+            except ValueError, OSError:
+                pass
+        self._old.clear()
+
+    def _handle(self, signum: int, frame: Any) -> None:
+        if self.requested:
+            return
+        self.requested = True
+        logger.info(
+            "Received %s: stopping the run, then closing it as interrupted",
+            signal.Signals(signum).name,
+        )
+
+
 def _evaluate_one(
     cell: tuple[Coordinate, Schedule],
     provenance: Provenance,
     deadline_check: Any,
+    log_steps: int = 0,
 ) -> Any:
     """Evaluate one cell in this process, stopping it if the wave deadline passes."""
     coord, schedule = cell
@@ -710,6 +753,8 @@ def _evaluate_one(
         "deadline_check": deadline_check,
         "deadline_check_every_n_steps": 1,
     }
+    if log_steps > 0:
+        params["log_every_n_steps"] = log_steps
     try:
         return cell_record(
             coordinate=coord,
@@ -783,19 +828,91 @@ def _expand_replicates(
     ]
 
 
+def _cell_records(
+    cells: list[tuple[Coordinate, Schedule]],
+    provenance: Provenance,
+    before_deadline: Any,
+    max_workers: int,
+    log_steps: int,
+) -> Iterator[Any]:
+    """Each cell's record, in submission order.
+
+    One worker: the cells run one after another and a cell that starts
+    after the deadline is skipped.
+
+    Several workers: the wave fans out over threads, so the cells share
+    one CUDA context, one dataset cache and one store writer — the
+    fan-out cannot reproduce the process pool's stall (a CUDA context
+    and a dataset lock per child). The cells share the process RNG, so
+    concurrent cells are reproducible only at one worker.
+    """
+    n_total = len(cells)
+
+    def _announce(i: int, cell: tuple[Coordinate, Schedule]) -> None:
+        coord, schedule = cell
+        logger.info(
+            "  cell %d/%d: %s/%s/%s/%s/%s/%s on %s",
+            i,
+            n_total,
+            coord.substrate,
+            coord.geometry,
+            coord.dynamics,
+            coord.plasticity,
+            coord.credit,
+            coord.update,
+            schedule.task_id,
+        )
+
+    def _run(cell: tuple[Coordinate, Schedule]) -> Any:
+        if not before_deadline():
+            return None
+        return _evaluate_one(cell, provenance, before_deadline, log_steps)
+
+    if max_workers <= 1:
+        for i, cell in enumerate(cells, 1):
+            _announce(i, cell)
+            try:
+                record = _run(cell)
+            except Exception as exc:
+                logger.warning("Cell evaluation failed: %s", exc)
+                continue
+            if record is not None:
+                yield record
+        return
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = []
+        for i, cell in enumerate(cells, 1):
+            _announce(i, cell)
+            futures.append(pool.submit(_run, cell))
+        for future in futures:
+            try:
+                record = future.result()
+            except Exception as exc:
+                logger.warning("Cell evaluation failed: %s", exc)
+                continue
+            if record is not None:
+                yield record
+
+
 def _evaluate_cells(
     cells: list[tuple[Coordinate, Schedule]],
     store_path: str,
     provenance: Provenance,
     budget_seconds: int | None = None,
+    max_workers: int = 1,
+    log_steps: int = 0,
+    shutdown: _ShutdownSignal | None = None,
 ) -> _Evaluation:
-    """Evaluate cells one at a time, in this process, until the budget is spent.
+    """Evaluate cells until the budget is spent.
 
-    Sequential by construction. Every cell shares one GPU, one dataset cache and
-    one store writer, so fanning out to worker processes only multiplies dataset
-    loads and CUDA contexts on the same device — which is what made a fan-out
-    look like a hang. The deadline is handed to the trainer, so a single long
-    cell stops at the wave boundary instead of overrunning the run.
+    One worker by default: every cell shares one GPU, one dataset cache
+    and one store writer. ``max_workers`` fans the wave out over
+    threads — one CUDA context, one dataset cache, one writer — so the
+    fan-out cannot reproduce the process pool's stall. The deadline is
+    handed to the trainer, so a single long cell stops at the wave
+    boundary instead of overrunning the run; a shutdown signal stops it
+    the same way.
     """
     cells = _expand_replicates(cells)
     n_total = len(cells)
@@ -805,35 +922,21 @@ def _evaluate_cells(
     startup_s = 0.0
 
     def _before_deadline() -> bool:
+        if shutdown is not None and shutdown.requested:
+            return False
         return deadline is None or time.monotonic() < deadline
 
-    logger.info("Evaluating %d single-seed cell(s) sequentially", n_total)
+    logger.info(
+        "Evaluating %d single-seed cell(s) %s",
+        n_total,
+        "sequentially" if max_workers <= 1 else f"on {max_workers} worker(s)",
+    )
 
     with RecordStore(StoreConfig(path=Path(store_path))) as store:
-        for i, cell in enumerate(cells, 1):
-            if not _before_deadline():
-                logger.info("Budget spent, stopping before cell %d", i)
-                break
-
-            coord, schedule = cell
-            logger.info(
-                "  cell %d/%d: %s/%s/%s/%s/%s/%s on %s",
-                i,
-                n_total,
-                coord.substrate,
-                coord.geometry,
-                coord.dynamics,
-                coord.plasticity,
-                coord.credit,
-                coord.update,
-                schedule.task_id,
-            )
-            try:
-                record = _evaluate_one(cell, provenance, _before_deadline)
-            except Exception as exc:
-                logger.warning("Cell evaluation failed: %s", exc)
-                continue
-
+        records = _cell_records(
+            cells, provenance, _before_deadline, max_workers, log_steps
+        )
+        for record in records:
             results.append(record)
             store.append(record)
 
@@ -956,24 +1059,24 @@ class RunSummary:
     budget_split: dict[str, float]
 
 
-def _close_run(summary: RunSummary, *, fidelity: str, planned_cells: int) -> None:
+def _close_run(
+    summary: RunSummary, *, fidelity: str, planned_cells: int, status: str = "completed"
+) -> None:
     """Close the run row and write the manifest the shell reads after a run.
 
     A run that returns normally is ``completed`` even when its budget stopped
-    the last wave: the budget is the run's declared bound, not a failure. The
-    manifest answers "did the run spend its budget, and on what" without a
-    DuckDB query.
+    the last wave: the budget is the run's declared bound, not a failure. A
+    run stopped by a signal is ``interrupted`` — it did not reach its budget,
+    and the manifest says so without a DuckDB query.
     """
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.evidence.store._models import StoreConfig
 
     with RecordStore(StoreConfig(path=Path(summary.store_path))) as store:
-        store.finish_run(
-            summary.run_id, "completed", budget_consumed_s=summary.walltime_s
-        )
+        store.finish_run(summary.run_id, status, budget_consumed_s=summary.walltime_s)
     manifest = {
         "run_id": summary.run_id,
-        "status": "completed",
+        "status": status,
         "fidelity": fidelity,
         "walltime_s": round(summary.walltime_s, 1),
         "cells_planned": planned_cells,
@@ -998,6 +1101,9 @@ def _run_ladder_promotion(
     budget_remaining: float,
     total_elapsed: float,
     fidelity_walltime: dict[str, float],
+    max_workers: int = 1,
+    log_steps: int = 0,
+    shutdown: _ShutdownSignal | None = None,
 ) -> tuple[float, list, float]:
     """Run fidelity ladder promotion: L0 -> L1 -> L2.
 
@@ -1164,6 +1270,9 @@ def _run_ladder_promotion(
             store_path=store_path,
             provenance=provenance,
             budget_seconds=fid_budget,
+            max_workers=max_workers,
+            log_steps=log_steps,
+            shutdown=shutdown,
         )
 
         wave_elapsed = time.monotonic() - wave_start
@@ -1263,6 +1372,8 @@ def run_waves(
     dry_run: bool = False,
     wave0_cells: list[tuple[Coordinate, Schedule]] | None = None,
     ladder: bool = False,
+    max_workers: int = 1,
+    log_steps: int = 0,
 ) -> RunSummary:
     """Execute waves until budget exhausted.
 
@@ -1278,10 +1389,55 @@ def run_waves(
         run_id: Optional run ID (generated if not provided).
         dry_run: If True, only return wave 0 cells without evaluation.
         wave0_cells: Pre-computed wave 0 cells for dry-run.
+        max_workers: Cells evaluated concurrently within a wave (1 = serial).
+        log_steps: Trainer steps between progress logs (0 = epoch only).
 
     Returns:
         RunSummary with results.
     """
+    shutdown = _ShutdownSignal()
+    shutdown.install()
+    try:
+        return _run_waves(
+            spec=spec,
+            planner=planner,
+            budget_seconds=budget_seconds,
+            store_path=store_path,
+            fidelity=fidelity,
+            verbose=verbose,
+            cpu_threads=cpu_threads,
+            device_str=device_str,
+            run_id=run_id,
+            dry_run=dry_run,
+            wave0_cells=wave0_cells,
+            ladder=ladder,
+            max_workers=max_workers,
+            log_steps=log_steps,
+            shutdown=shutdown,
+        )
+    finally:
+        shutdown.uninstall()
+
+
+def _run_waves(
+    spec: RunSpec,
+    planner: Planner,
+    *,
+    budget_seconds: int,
+    store_path: str,
+    fidelity: str,
+    verbose: bool,
+    cpu_threads: int,
+    device_str: str,
+    run_id: str | None = None,
+    dry_run: bool = False,
+    wave0_cells: list[tuple[Coordinate, Schedule]] | None = None,
+    ladder: bool = False,
+    max_workers: int = 1,
+    log_steps: int = 0,
+    shutdown: _ShutdownSignal | None = None,
+) -> RunSummary:
+    """Execute waves until budget exhausted (the signal handling lives above)."""
     if run_id is None:
         run_id = str(uuid.uuid4())[:8]
 
@@ -1383,6 +1539,9 @@ def run_waves(
             store_path=store_path,
             provenance=provenance,
             budget_seconds=int(min(60, budget_remaining)),
+            max_workers=max_workers,
+            log_steps=log_steps,
+            shutdown=shutdown,
         )
         pc_elapsed = time.monotonic() - pc_start
         positive_control_results.extend(pc_eval.results)
@@ -1413,6 +1572,9 @@ def run_waves(
         )
 
     while budget_remaining > 0:
+        if shutdown is not None and shutdown.requested:
+            logger.info("Shutdown requested: no further waves")
+            break
         wave += 1
         logger.info("=== Wave %d (budget remaining: %.0fs) ===", wave, budget_remaining)
 
@@ -1461,6 +1623,8 @@ def run_waves(
             store_path=store_path,
             provenance=provenance,
             budget_seconds=int(budget_remaining),
+            max_workers=max_workers,
+            log_steps=log_steps,
         )
 
         wave_elapsed = time.monotonic() - wave_start
@@ -1508,7 +1672,11 @@ def run_waves(
 
     # Fidelity ladder promotion: L0 -> L1 -> L2. Runs after the exploration
     # loop so L1/L2 are sized from the time actually left.
-    if ladder and budget_remaining > 0:
+    if (
+        ladder
+        and budget_remaining > 0
+        and not (shutdown is not None and shutdown.requested)
+    ):
         total_elapsed, all_results, budget_remaining = _run_ladder_promotion(
             spec=spec,
             planner=planner,
@@ -1518,6 +1686,9 @@ def run_waves(
             budget_remaining=max(0.0, budget_seconds - total_elapsed),
             total_elapsed=total_elapsed,
             fidelity_walltime=fidelity_walltime,
+            max_workers=max_workers,
+            log_steps=log_steps,
+            shutdown=shutdown,
         )
 
     passed = sum(1 for r in all_results if r.status.gate_verdict.value == "PASS")
@@ -1551,7 +1722,13 @@ def run_waves(
     )
     # Close the run before reading it back, so the report describes a finished
     # run (status, budget consumed) instead of the running row it just left.
-    _close_run(summary, fidelity=fidelity, planned_cells=planned_cells)
+    interrupted = shutdown is not None and shutdown.requested
+    _close_run(
+        summary,
+        fidelity=fidelity,
+        planned_cells=planned_cells,
+        status="interrupted" if interrupted else "completed",
+    )
     return replace(summary, report=_generate_report(store_path, run_id))
 
 

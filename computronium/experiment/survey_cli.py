@@ -96,6 +96,18 @@ def _parser() -> argparse.ArgumentParser:
         "--epochs", type=int, default=None, help="Epochs per cell (default: ladder)"
     )
     parser.add_argument("--batch-limit", type=int, default=0)
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=1,
+        help="Cells evaluated concurrently within a wave (1 = serial)",
+    )
+    parser.add_argument(
+        "--log-steps",
+        type=int,
+        default=0,
+        help="Trainer steps between progress logs (0 = epoch only)",
+    )
     parser.add_argument("--axes", default="", help="JSON: axis -> [primitives]")
     parser.add_argument(
         "--digital", action="store_true", help="Restrict to digital substrate only"
@@ -142,6 +154,10 @@ def _banner(args: argparse.Namespace, device: str, store_path: str) -> None:
         value = getattr(args, flag)
         if value:
             print(f"  {flag.replace('_', ' ').title():<13} {value}")
+    if args.max_workers > 1:
+        print(f"  {'Max workers':<13} {args.max_workers}")
+    if args.log_steps:
+        print(f"  {'Log steps':<13} {args.log_steps}")
     print("=" * 64)
     print()
 
@@ -304,6 +320,8 @@ def _dispatch(
         "resume": args.resume,
         "ladder": args.ladder,
         "policy": args.policy,
+        "max_workers": args.max_workers,
+        "log_steps": args.log_steps,
     }
     if args.mode == "learn":
         return run_learning_survey(**common, axis_objectives=axis_objectives)

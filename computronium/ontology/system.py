@@ -700,6 +700,7 @@ class SystemConfig:
         # Credit-Geometry compatibility
         self._validate_local_contrastive_geometry()
         self._validate_attention_geometry_compatibility()
+        self._validate_transformer_pairing_credit()
 
         # Credit-Dynamics compatibility
         self._validate_thermodynamic_contrast_dynamics()
@@ -1189,6 +1190,29 @@ class SystemConfig:
                     f"Attention geometry incompatible with {self.credit.credit_type!r} credit "
                     f"(known shape mismatch in multi-head attention)"
                 )
+
+    def _validate_transformer_pairing_credit(self) -> None:
+        """Credits that pair a weight with the act it produces need a chain
+        the transformer's does not provide.
+
+        The transformer's activation chain carries one act per weight (the
+        act the weight consumes) plus the logits: the fused QKV widens the
+        error space to 3d before the attention narrows it back, and the
+        vision readout pools the sequence. A credit that pairs each weight
+        with the act it *produces* — the target propagation's transpose
+        feedback, the STDP correlation — therefore has no partner act, and
+        the coordinate cannot train. Reject it here rather than let it
+        crash on a shape mismatch mid-epoch.
+        """
+        if self.credit.credit_type not in {"target_inversion", "temporal_trace"}:
+            return
+        geom_type = getattr(self.geometry, "config", self.geometry).topology_type
+        if geom_type == "causal_transformer":
+            raise ValueError(
+                f"{self.credit.credit_type!r} credit requires a geometry whose "
+                "activation chain pairs each weight with the act it produces; "
+                "the causal_transformer chain carries inputs only"
+            )
 
     # --- Geometry-Substrate Validation Methods ---
 

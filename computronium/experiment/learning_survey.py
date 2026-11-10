@@ -76,6 +76,8 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
     resume: bool = False,
     ladder: bool = False,
     policy: str = "tpe",
+    max_workers: int = 1,
+    log_steps: int = 0,
 ) -> dict[str, Any]:
     """Run a LearningSurvey experiment.
 
@@ -102,6 +104,8 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         resume: If True, warm-start policy from store_path records.
         ladder: If True, run L0→L1→L2 promotion in one invocation.
         policy: Sampler policy: "tpe", "nsga2", or "random".
+        max_workers: Cells evaluated concurrently within a wave (1 = serial).
+        log_steps: Trainer steps between progress logs (0 = epoch only).
 
     Returns:
         If dry_run: {"cells": list[(coord, schedule)], "n": int, "tasks": list[str],
@@ -203,6 +207,8 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         device_str=device_str,
         dry_run=False,
         ladder=ladder,
+        max_workers=max_workers,
+        log_steps=log_steps,
     )
 
     # 7. Update the cost cache from the cells that actually finished

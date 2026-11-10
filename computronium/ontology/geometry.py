@@ -1219,13 +1219,14 @@ class TransformerGeometry(nn.Module):
 
             # Project to d_model if needed
             if self.patch_proj is not None:
+                if intermediates is not None:
+                    intermediates.append(h.reshape(b * nh * nw, -1))
                 h = op(h, self.patch_proj.weight)  # [B, N_patches, d_model]
 
             # Add positional encoding
             t = nh * nw
             h = h + self.pe[:t].unsqueeze(0)
             h = h.reshape(b * t, self.d_model)
-            b, t = b, t
         else:
             # Standard LM mode: x is token ids [B, T]
             b, t = x.shape
@@ -1245,22 +1246,15 @@ class TransformerGeometry(nn.Module):
             h = self._apply_block(
                 cast("_TransformerBlock", block), h, op, b, t, intermediates
             )
-        if intermediates is not None:
-            intermediates.append(h)
 
         if self.patch_size > 0:
             # Vision mode: pool over sequence before head
             h = h.view(b, t, self.d_model).mean(dim=1)  # [B, d_model]
-            if intermediates is not None:
-                intermediates.append(h)
-            logits = op(h, self.head.weight)  # [B, V]
-            if intermediates is not None:
-                intermediates.append(logits)
-        else:
-            # LM mode: apply head to each token
-            logits = op(h, self.head.weight)  # [B*T, V]
-            if intermediates is not None:
-                intermediates.append(logits)
+        if intermediates is not None:
+            intermediates.append(h)  # the readout's input
+        logits = op(h, self.head.weight)  # [B, V] (vision) / [B*T, V] (LM)
+        if intermediates is not None:
+            intermediates.append(logits)
         return logits
 
     def _apply_block(
@@ -1294,73 +1288,15 @@ class TransformerGeometry(nn.Module):
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
-        """Return intermediate activations matching transition_modules.
+        """One act per learnable weight (its input), plus the readout's output.
 
-        Returns one activation per transition module input, plus final logits.
+        The chain is transition-ordered: act ``i`` is the input of the
+        ``i``-th 2-D weight (``params`` order) and the last act is the
+        logits — the contract the local-credit family and the
+        feedback-alignment walk iterate positionally.
         """
-        if substrate is None:
-            from computronium.ontology.substrate import DigitalSubstrate
-
-            substrate = DigitalSubstrate()
-        op = substrate.get_forward_operator()
-
         acts: list[Tensor] = []
-
-        if self.patch_size > 0:
-            # Vision mode: x is [B, C, H, W]
-            b, c, h, w = x.shape
-            ph, pw = self.patch_size, self.patch_size
-            nh, nw = h // ph, w // pw
-
-            # Patchify
-            x_patches = x.view(b, c, nh, ph, nw, pw)
-            x_patches = x_patches.permute(0, 2, 4, 1, 3, 5)
-            x_patches = x_patches.reshape(b, nh * nw, c * ph * pw)
-
-            # Patch embed input
-            acts.append(x_patches.reshape(b * nh * nw, -1))
-            h = op(x_patches, self.patch_embed.weight)
-
-            # Patch proj input (if exists)
-            if self.patch_proj is not None:
-                acts.append(h.reshape(b * nh * nw, -1))
-                h = op(h, self.patch_proj.weight)
-
-            # Add positional encoding
-            t = nh * nw
-            h = h + self.pe[:t].unsqueeze(0)
-            h = h.reshape(b * t, self.d_model)
-        else:
-            # LM mode: x is token ids [B, T]
-            b, t = x.shape
-            dtype = self.embed.weight.dtype
-            x_long = x.long() if x.dtype != torch.long else x
-            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(
-                dtype
-            )
-            flat = onehot.view(b * t, -1)
-            acts.append(flat)
-            h = op(flat, self.embed.weight).view(b, t, self.d_model) + self.pe[:t]
-            h = h.reshape(b * t, self.d_model)
-
-        # Each block input
-        for block in self.blocks:
-            acts.append(h)
-            ln1_h = block.ln1(h)
-            attn_ctx = self._attention(op(ln1_h, block.in_proj.weight), b, t)
-            h = torch.add(h, op(attn_ctx, block.out_proj.weight))
-            ln2_h = block.ln2(h)
-            f1 = torch.nn.functional.gelu(op(ln2_h, block.ffn1.weight))
-            h = torch.add(h, op(f1, block.ffn2.weight))
-
-        if self.patch_size > 0:
-            # Vision mode: pool over sequence before head
-            h = h.view(b, t, self.d_model).mean(dim=1)  # [B, d_model]
-
-        # Head input
-        acts.append(h)
-        logits = op(h, self.head.weight)
-        acts.append(logits)
+        self._apply_stack(x, substrate, acts)
         return acts
 
     def route(self, activations: Tensor) -> Tensor:

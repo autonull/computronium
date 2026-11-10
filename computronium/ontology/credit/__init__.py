@@ -57,6 +57,17 @@ def tf_blocks(geometry: TransformerGeometry) -> list[TransformerBlock]:
     return cast("list[TransformerBlock]", list(geometry.blocks))
 
 
+def _is_transformer(geometry: Geometry) -> bool:
+    """Whether the geometry is the causal transformer.
+
+    The import is local: the ontology's geometry layer imports this
+    module, so a module-level import would close the cycle.
+    """
+    from computronium.ontology.geometry import TransformerGeometry
+
+    return isinstance(geometry, TransformerGeometry)
+
+
 # ============================================================
 # CreditAssignment Configuration
 # ============================================================
@@ -820,7 +831,10 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
             return []
 
         self._sync_feedback_device(geometry)
-        self._init_feedback_weights(geometry, acts[-1].device)
+        if _is_transformer(geometry):
+            self._init_chain_feedback(geometry, weight_names, acts[-1].device)
+        else:
+            self._init_feedback_weights(geometry, acts[-1].device)
         logits = acts[-1]
         if not logits.requires_grad:
             # Settle graph not preserved (e.g. detached settle paths): no
@@ -836,7 +850,38 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
         # contract (B maps act_{k+1} widths down to act_k) holds per edge.
         if (block_geometry := _block_transition_acts(acts, geometry)) is not None:
             return self._block_path(acts, delta_out, block_geometry, batch)
+        if _is_transformer(geometry):
+            return self._transformer_path(acts, weight_names, delta_out, geometry)
         return self._layered_path(acts, weight_names, delta_out, geometry)
+
+    def _init_chain_feedback(
+        self,
+        geometry: Geometry,
+        weight_names: list[str],
+        device: torch.device,
+    ) -> None:
+        """Fixed random feedback shaped by consecutive *error* widths.
+
+        The MLP feedback is weight-shaped because a layer's error width
+        equals the next layer's input width. The transformer's does not:
+        the fused QKV projection widens the error space to 3d before the
+        attention narrows it back to d, so the feedback between two
+        consecutive weights is shaped by their error widths, not by
+        either weight's shape.
+        """
+        if self._feedback_weights:
+            return
+        widths = [geometry.params[name].shape[0] for name in weight_names]
+        for i, name in enumerate(weight_names):
+            if i == 0:
+                continue
+            gen = torch.Generator(device=device).manual_seed(zlib.crc32(name.encode()))
+            fb = torch.randn(widths[i], widths[i - 1], generator=gen, device=device)
+            fb = fb * self.config.feedback_scale
+            if self.config.orthogonal_init:
+                torch.nn.init.orthogonal_(fb, generator=gen)
+                fb = fb * self.config.feedback_scale
+            self._feedback_weights[name] = fb
 
     def _block_path(
         self,
@@ -897,6 +942,67 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
             # Recurrent self-connection at the last hidden layer: its
             # upstream error is the propagated error at that layer.
             grads.append(hidden_err.T @ acts[n_trans - 1] / batch)
+        return grads
+
+    def _transformer_path(
+        self,
+        acts: list[Tensor],
+        weight_names: list[str],
+        delta_out: Tensor,
+        geometry: Geometry,
+    ) -> list[Tensor]:
+        """Feedback alignment over the transformer's op chain.
+
+        The transformer's chain is not width-uniform: the fused QKV
+        projection emits 3d and the attention reduces it back to d, so a
+        weight's output error is NOT the next weight's input act (the
+        MLP chain's ``acts[k+1]`` convention). Each weight therefore
+        carries its own error width (its output width), and the feedback
+        between two consecutive weights is shaped by those widths.
+
+        Vision pools the sequence before the readout: the readout error
+        lives in sample space (B, V) while the hidden acts live in
+        sequence space (B*T, d). The projected sample error is shared by
+        the sample's positions — the mean pool's structure.
+        """
+        n = len(weight_names)
+        if len(acts) < n + 1:
+            return self._inert_zeros(geometry, weight_names)
+        pre = acts[:n]
+        for name, act in zip(weight_names, pre):
+            if geometry.params[name].shape[1] != act.shape[-1]:
+                # The chain does not line up with the weights: the
+                # feedback has no act to correlate with.
+                return self._inert_zeros(geometry, weight_names)
+
+        # err_at[L] = ∂L/∂a_L; err_at[k] = err_at[k+1] @ B_k, where B_k
+        # spans the two consecutive error widths.
+        grads: list[Tensor] = []
+        err = apply_norm([delta_out], self.config.credit_norm)[0]
+        for i in range(n - 1, -1, -1):
+            act = pre[i]
+            grads.append(err.T @ act / act.shape[0])
+            if i == 0:
+                break
+            err = apply_norm(
+                [err @ self._feedback_weights[weight_names[i]]],
+                self.config.credit_norm,
+                [act],
+            )[0]
+            nxt = pre[i - 1]
+            if err.shape[0] != nxt.shape[0]:
+                # Sample-space error entering the sequence stream: the
+                # mean pool shares one readout error across a sample's
+                # positions.
+                if nxt.shape[0] % err.shape[0]:
+                    return self._inert_zeros(geometry, weight_names)
+                err = (
+                    err
+                    .unsqueeze(1)
+                    .expand(-1, nxt.shape[0] // err.shape[0], -1)
+                    .reshape(nxt.shape[0], -1)
+                )
+        grads.reverse()
         return grads
 
     def surrogate_objective(
