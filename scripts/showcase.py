@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Enhanced Showcase Campaign — Single Time-Boxed Loop with Advanced Reporting.
 
-This is a thin wrapper around the canonical runner (run_experiment.py) that
+This is a thin wrapper around the canonical runner (survey_cli.py) that
 adds advanced reporting: coverage matrix, Pareto gallery, stability atlas,
 failure taxonomy, bias detection, and hypothesis generation.
 
