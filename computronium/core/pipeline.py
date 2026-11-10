@@ -110,10 +110,10 @@ def phase_states(
 
 
 def forward_pass(
-    substrate: Substrate, geometry: Geometry, x: Tensor
+    substrate: Substrate, geometry: Geometry, x: Tensor, *args, **kwargs
 ) -> list[Tensor] | Tensor | None:
     """Substrate+geometry forward with state-noise injection."""
-    acts = geometry.forward(x, substrate)
+    acts = geometry.forward(x, substrate, *args, **kwargs)
     if acts is not None:
         acts = substrate.inject_state_noise(acts)
     return acts
@@ -505,12 +505,23 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
 
 
 def run_forward(
-    substrate: Substrate, geometry: Geometry, dynamics: StateDynamics, x: Tensor
+    substrate: Substrate, geometry: Geometry, dynamics: StateDynamics, x: Tensor, *args, **kwargs
 ) -> Tensor:
-    """Inference forward pass (free-phase activity generation, no update)."""
+    """Inference forward pass (free-phase activity generation, no update).
+
+    Extra args/kwargs (e.g., edge_index, batch for graph classification) are
+    forwarded to both geometry.forward and dynamics.settle.
+    """
     state = SystemState(x=x)
-    state.activations = forward_pass(substrate, geometry, x)
-    settled = dynamics.settle(state, geometry, substrate, target=None)
+    state.activations = forward_pass(substrate, geometry, x, *args, **kwargs)
+    # Pass extra args as kwargs to avoid positional conflict with target/on_step
+    # Common graph classification args: edge_index, batch
+    settle_kwargs = dict(kwargs)
+    if len(args) >= 1:
+        settle_kwargs.setdefault("edge_index", args[0])
+    if len(args) >= 2:
+        settle_kwargs.setdefault("batch", args[1])
+    settled = dynamics.settle(state, geometry, substrate, target=None, **settle_kwargs)
     acts = settled.activations
     if acts is None:
         return torch.empty(0)

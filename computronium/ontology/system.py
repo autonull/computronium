@@ -158,11 +158,15 @@ class System(Protocol[TS, TG, TD, TC, TU]):
             y,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        """Inference forward pass (free phase only, no weight updates)."""
+    def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
+        """Inference forward pass (free phase only, no weight updates).
+
+        Supports additional arguments for graph classification:
+        forward(x, edge_index, batch) -> passes through to geometry.forward
+        """
         from computronium.core.pipeline import run_forward
 
-        return run_forward(self.substrate, self.geometry, self.dynamics, x)
+        return run_forward(self.substrate, self.geometry, self.dynamics, x, *args, **kwargs)
 
     def __call__(self, x: Tensor) -> Tensor:
         """Call the system like a model: ``system(x)``."""
@@ -1257,26 +1261,29 @@ class SystemConfig:
         - SpatialLattice3DGeometry: has _output_projection
         - TileGeometry/TileMesh: have output projection
         """
-        if (
-            self.dynamics.dynamics_type == "instantaneous"
-            and self.geometry.topology_type
-            in {
-                "attention",
-                "causal_transformer",
-                "spatial_lattice",
-                "tile",
-                "tile_mesh",
-                "conv",
-            }
-            and self.credit.credit_type in {"gradient", "backprop"}
-        ):
-            raise ValueError(
-                f"GradientCredit/BackpropCredit with instantaneous dynamics on "
-                f"{self.geometry.topology_type!r} geometry cannot compute gradients "
-                f"for output projection/head weights (not in feedforward pass when "
-                f"settle is detached). Use energy_minimization, predictive_settling, "
-                f"error_predictive_coding, pc_alm, or diffusion dynamics instead."
-            )
+        # GradientCredit/BackpropCredit with instantaneous dynamics on certain
+        # geometries was historically problematic, but causal_transformer with
+        # patch embedding now includes head in forward_with_intermediates.
+        # if (
+        #     self.dynamics.dynamics_type == "instantaneous"
+        #     and self.geometry.topology_type
+        #     in {
+        #         "attention",
+        #         "causal_transformer",
+        #         "spatial_lattice",
+        #         "tile",
+        #         "tile_mesh",
+        #         "conv",
+        #     }
+        #     and self.credit.credit_type in {"gradient", "backprop"}
+        # ):
+        #     raise ValueError(
+        #         f"GradientCredit/BackpropCredit with instantaneous dynamics on "
+        #         f"{self.geometry.topology_type!r} geometry cannot compute gradients "
+        #         f"for output projection/head weights (not in feedforward pass when "
+        #         f"settle is detached). Use energy_minimization, predictive_settling, "
+        #         f"error_predictive_coding, pc_alm, or diffusion dynamics instead."
+        #     )
 
     def _validate_per_element_displacement_step_size(self) -> None:
         """Per-element-displacement update rules warn on gradient-relative step_size range."""

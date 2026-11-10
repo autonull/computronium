@@ -818,6 +818,8 @@ class StateDynamics(Protocol):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         """Settle the network to a fixed point (or run single pass).
 
@@ -1141,6 +1143,8 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         """Run settling iterations for full multi-layer EqProp dynamics."""
         if state.x is None:
@@ -1573,6 +1577,8 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         """Predictive coding settling: minimize prediction error."""
         x = state.x
@@ -1999,6 +2005,8 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         x = state.x
         if x is None:
@@ -2188,6 +2196,8 @@ class PCALMDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         """PC-ALM primal-dual settling."""
         x = state.x
@@ -2731,6 +2741,8 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         x = state.x
         if x is None:
@@ -2907,6 +2919,8 @@ class InstantaneousDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         # Single forward pass - no settling. Tile meshes route through the
         # block layout and consume the target in the nudged phase via the
@@ -2917,7 +2931,7 @@ class InstantaneousDynamics(_SettleTelemetry):
         if state.x is not None:
             block_builder = getattr(geometry, "settle_blocks", None)
             if callable(block_builder):
-                acts = list(cast("list[Tensor]", block_builder(state.x, substrate)))
+                acts = list(cast("list[Tensor]", block_builder(state.x, substrate, *args, **kwargs)))
                 if target is not None:
                     acts = [
                         *acts[:-1],
@@ -2928,7 +2942,7 @@ class InstantaneousDynamics(_SettleTelemetry):
                 acts = list(
                     cast(
                         "list[Tensor]",
-                        geometry.forward_with_intermediates(state.x, substrate),
+                        geometry.forward_with_intermediates(state.x, substrate, *args, **kwargs),
                     )
                 )
                 if target is not None and acts:
@@ -3003,6 +3017,8 @@ class DiffusionDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         x = state.x
         if x is None:
@@ -3187,6 +3203,8 @@ class LazyStateDynamics(_SettleTelemetry):
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
+        *args,
+        **kwargs,
     ) -> SettableState:
         """Sequential per-layer settle (Gauss–Seidel sweeps)."""
         params = self._layered(geometry)

@@ -273,10 +273,10 @@ def compose_system[  # ruff: ignore[complex-structure]
                 y,
             )
 
-        def forward(self, x: Tensor) -> Tensor:
+        def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
             from computronium.core.pipeline import run_forward
 
-            return run_forward(self.substrate, self.geometry, self.dynamics, x)
+            return run_forward(self.substrate, self.geometry, self.dynamics, x, *args, **kwargs)
 
         def __call__(self, x: Tensor) -> Tensor:
             """Enable calling the system like a function: model(x)."""

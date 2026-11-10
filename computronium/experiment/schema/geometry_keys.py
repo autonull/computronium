@@ -41,7 +41,10 @@ TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
         "pool_hw",
     }),
     "graph": frozenset({"edge_index"}),
-    "causal_transformer": frozenset({"num_heads", "seq_len"}),
+    "causal_transformer": frozenset({
+        "num_heads", "seq_len", "patch_size", "patch_embed_dim",
+        "image_hw", "in_channels"
+    }),
 }
 
 # Geometry values the task determines; never taken from a swept hyperparameter.

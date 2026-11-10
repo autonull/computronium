@@ -307,8 +307,14 @@ class SystemTrainer:
             # Canonical flat input: systems compose against a flat
             # input_dim (e.g. vision (B, C, H, W) -> (B, C*H*W)); the
             # 4-D raw tensor crashed credit/view reshapes downstream.
+            # Exception: causal_transformer with patch embedding needs 4D input.
             if x.dim() > 2:
-                x = x.reshape(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
+                geometry = getattr(self.system, "geometry", None)
+                if not (
+                    hasattr(geometry, "patch_size")
+                    and getattr(geometry, "patch_size", 0) > 0
+                ):
+                    x = x.reshape(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
 
             # Run train_step with mixed precision
             def _train_step():
@@ -442,7 +448,12 @@ class SystemTrainer:
                 x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
                 y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
                 if x.dim() > 2:
-                    x = x.reshape(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
+                    geometry = getattr(self.system, "geometry", None)
+                    if not (
+                        hasattr(geometry, "patch_size")
+                        and getattr(geometry, "patch_size", 0) > 0
+                    ):
+                        x = x.reshape(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
 
                 logits = self.system.forward(x)
                 ce = torch.nn.functional.cross_entropy(logits, y, reduction="sum")

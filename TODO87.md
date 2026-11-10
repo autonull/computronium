@@ -1,40 +1,28 @@
 # TODO87 — System Fixes & Remaining Coverage (Post-TODO86)
 
-**Status:** Core experiment loop working; geometry/trainer mismatches block graph classification and causal_transformer.
+**Status:** PHASE 1 & 2 COMPLETE. Graph classification and CausalTransformer vision support working. Remaining: baselines, tabular fixes, infrastructure hardening, scale validation.
 
 ---
 
-## 🎯 PHASE 1: Fix Graph Classification Support
+## 🎯 PHASE 1: Fix Graph Classification Support — ✅ COMPLETE
 
 **Problem:** `GraphGeometry.forward(x, substrate)` only supports node classification (single graph, edge_index stored in geometry). Graph classification needs `forward(x, edge_index, batch)` for batched graphs from DataLoader.
 
 **Root cause:** `GraphGeometry` (ontology/geometry.py:2169) has fixed signature. `GraphSystemTrainer` now detects both modes but geometry doesn't.
 
-**Fix options:**
-1. Make `GraphGeometry.forward` polymorphic: detect args (if 3 args → graph classification mode)
-2. Add `GraphClassificationGeometry` as separate primitive
-3. Store edge_index/batch in geometry config at compose time (not viable for batched)
+**Fix implemented:** Made `GraphGeometry.forward` polymorphic with optional `edge_index, batch` params. Added `settle_blocks` for dynamics integration. Updated pipeline to pass extra args through `dynamics.settle`. Added `global_mean_pool` for graph-level readout.
 
-**Recommended:** Option 1 — add optional `edge_index, batch` params to `forward()`, use stored buffers when not provided.
-
-**Validation:** `digital/graph/instant/random_projections/euclid` on `graph_classification` (MUTAG) should PASS at L0.
+**Validation:** `digital/graph/instant/random_projections/euclid` on `graph_classification` (MUTAG) — forward pass and training verified working. Node classification (Cora) backward compatibility confirmed.
 
 ---
 
-## 🎯 PHASE 2: Fix CausalTransformer for Vision (Patch Embedding)
+## 🎯 PHASE 2: Fix CausalTransformer for Vision (Patch Embedding) — ✅ COMPLETE
 
 **Problem:** `causal_transformer` geometry expects 1D token sequence. Vision tasks (MNIST, CIFAR) need patch embedding to convert 2D→1D.
 
-**Status:** B3c blocked; also affects any vision task using causal_transformer.
+**Fix implemented:** Added patch embedding config to `GeometryConfig` (`patch_size`, `patch_embed_dim`, `image_hw`, `in_channels`). Updated `TransformerGeometry` to handle both LM mode (token IDs `[B, T]`) and vision mode (images `[B, C, H, W]` → patches → transformer → pooling → classification). Updated compose pipeline, input compatibility checks, and trainer to preserve 4D input for vision mode.
 
-**Fix:** Add `patch_embedding` config to `CausalTransformerGeometry`:
-- `patch_size`: int (e.g., 4 for 28×28 → 7×7 patches)
-- `embed_dim`: int (projection dim)
-- In `forward()`: rearrange (B, C, H, W) → (B, N_patches, patch_dim) → project → transformer
-
-**Dependencies:** Needs `einops` or manual rearrange.
-
-**Validation:** `digital/causal_transformer/instant/grad/euclid` on MNIST should compose and train.
+**Validation:** `digital/causal_transformer/instant/grad/euclid` on MNIST — composes successfully, forward pass produces `[B, 10]` logits, loss computation works. LM mode backward compatibility confirmed.
 
 ---
 
@@ -60,6 +48,7 @@
 |------|-------------|----------|
 | GraphGeometry polymorphic forward | Support both node + graph classification | High |
 | CausalTransformer patch embedding | Unblocks vision + sequence | High |
+| Multi-worker parallelism | Add `--max-workers N` flag; process-pool evaluation with per-worker CUDA contexts | High |
 | Wine/iris tabular debug | Fix baselines | Medium |
 | Per-step logging CLI flag | `--log-steps N` exposes step-level progress | Low |
 | SIGTERM run closure | Write manifest on graceful shutdown | Low |
@@ -98,18 +87,20 @@ cat experiments/<latest>.run.json
 
 ## 📋 PRIORITY ORDER
 
-1. **GraphGeometry polymorphic forward** — unblocks graph_classification
-2. **CausalTransformer patch embedding** — unblocks B3c, vision transformers
+1. ~~**GraphGeometry polymorphic forward** — unblocks graph_classification~~ ✅ DONE
+2. ~~**CausalTransformer patch embedding** — unblocks B3c, vision transformers~~ ✅ DONE
 3. **B1b pendulum + B1c-alt acrobot** — complete RL baselines
 4. **B4a wine/iris fix** — complete tabular baselines
 5. **C2/C4 scale** — GPU validation at scale
+6. **Credit assignment for transformer vision** — `random_projections` fails due to pooling batch dim mismatch; need transformer-compatible credit
 
 ---
 
 ## ⚠️ OPEN TECHNICAL ISSUES
 
-- **GraphGeometry.forward signature**: Must handle both `(x, substrate)` and `(x, edge_index, batch)` without breaking existing node classification.
-- **CausalTransformer input handling**: Currently expects 1D; needs automatic patchify for 2D/3D inputs.
+- ~~**GraphGeometry.forward signature**: Must handle both `(x, substrate)` and `(x, edge_index, batch)` without breaking existing node classification.~~ ✅ FIXED
+- ~~**CausalTransformer input handling**: Currently expects 1D; needs automatic patchify for 2D/3D inputs.~~ ✅ FIXED
+- **Credit assignment for transformer vision**: `RandomProjectionsCredit` fails because pooling changes batch dimension (B*T → B). Need transformer-aware credit or [CLS] token approach.
 - **wine task**: All seeds 0.0 — likely StandardScaler + class mapping issue in TabularTask.
 - **iris task**: High variance — may need more epochs (50+) or more seeds (10+) for stable estimate.
 - **Energy minimization + recurrent**: ~120s/cell at L0 due to settle loop per env step — document as known limitation.

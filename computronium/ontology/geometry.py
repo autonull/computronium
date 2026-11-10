@@ -32,6 +32,7 @@ from computronium.ontology._tile_blocks import (
 from computronium.ontology._tile_blocks import (
     tile_settle_block_acts as settle_block_acts,
 )
+from torch_geometric.nn import global_mean_pool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -212,6 +213,10 @@ class GeometryConfig:
         attention_dropout: float = 0.0
         # Causal-transformer topology
         seq_len: int = 128
+        patch_size: int = 0
+        patch_embed_dim: int = 0
+        image_hw: tuple[int, int] = (28, 28)
+        in_channels: int = 1
         # SpatialLattice3D topology fields
         lattice_dims: tuple[int, int, int] = (4, 4, 4)
         connectivity_radius: int = 1
@@ -240,6 +245,10 @@ class GeometryConfig:
     attention_dropout: float = 0.0
     # Causal-transformer topology
     seq_len: int = 128
+    patch_size: int = 0
+    patch_embed_dim: int = 0
+    image_hw: tuple[int, int] = (28, 28)
+    in_channels: int = 1
     # SpatialLattice3D topology
     lattice_dims: tuple[int, int, int] = (4, 4, 4)
     connectivity_radius: int = 1
@@ -292,19 +301,52 @@ class GeometryConfig:
         n_layers: int,
         n_heads: int,
         seq_len: int,
+        patch_size: int = 0,
+        patch_embed_dim: int = 0,
+        image_hw: tuple[int, int] = (28, 28),
+        in_channels: int = 1,
     ) -> GeometryConfig:
-        return cls(
-            input_dim=vocab_size,
-            output_dim=vocab_size,
-            hidden_dims=(d_model,),
-            num_layers=n_layers,
-            topology_type="causal_transformer",
-            connectivity=None,
-            recurrent_weight=None,
-            num_heads=n_heads,
-            seq_len=seq_len,
-            required_input="token",
-        )
+        """Create a causal transformer config.
+
+        For standard LM: vocab_size = input_dim = output_dim, patch_size = 0.
+        For vision: patch_size > 0, input_dim = in_channels * patch_size^2,
+                    output_dim = vocab_size (num classes), seq_len = num_patches.
+        """
+        if patch_size > 0:
+            # Vision mode: patch embedding
+            num_patches = (image_hw[0] // patch_size) * (image_hw[1] // patch_size)
+            patch_dim = in_channels * patch_size * patch_size
+            embed_dim = patch_embed_dim if patch_embed_dim > 0 else d_model
+            return cls(
+                input_dim=patch_dim,
+                output_dim=vocab_size,
+                hidden_dims=(d_model,),
+                num_layers=n_layers,
+                topology_type="causal_transformer",
+                connectivity=None,
+                recurrent_weight=None,
+                num_heads=n_heads,
+                seq_len=num_patches,
+                patch_size=patch_size,
+                patch_embed_dim=embed_dim,
+                image_hw=image_hw,
+                in_channels=in_channels,
+                required_input="image",
+            )
+        else:
+            # Standard LM mode
+            return cls(
+                input_dim=vocab_size,
+                output_dim=vocab_size,
+                hidden_dims=(d_model,),
+                num_layers=n_layers,
+                topology_type="causal_transformer",
+                connectivity=None,
+                recurrent_weight=None,
+                num_heads=n_heads,
+                seq_len=seq_len,
+                required_input="token",
+            )
 
     @classmethod
     def recurrent(
@@ -767,7 +809,7 @@ class Geometry(Protocol):
         ...
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate
+        self, x: Tensor, substrate: Substrate, *args, **kwargs
     ) -> list[Tensor]:
         """Return intermediate activations for each layer (optional).
 
@@ -778,12 +820,14 @@ class Geometry(Protocol):
         Args:
             x: Input tensor
             substrate: The substrate providing the forward operator
+            *args: Additional positional arguments (e.g., edge_index for graphs)
+            **kwargs: Additional keyword arguments (e.g., batch for graphs)
 
         Returns:
             List of activations [input, layer1_out, layer2_out, ..., output]
         """
 
-        out = self.forward(x, substrate)
+        out = self.forward(x, substrate, *args, **kwargs)
         return [x, out]
 
 
@@ -944,7 +988,7 @@ class FeedforwardGeometry(nn.Module):
         return self._apply_stack(x, substrate)
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer.
 
@@ -1062,16 +1106,20 @@ class TransformerGeometry(nn.Module):
     ``[B*T, V]`` — the sequence dim folds into the batch so every
     intermediate activity is a 2-D ``(B*T, dim)`` matrix.
 
+    For vision tasks (patch_size > 0): input images ``[B, C, H, W]`` are
+    patchified to ``[B, N_patches, patch_dim]``, projected to ``[B, N_patches, d_model]``,
+    then processed by the transformer. Output logits ``[B, V]`` (class logits).
+
     The transition chain is aligned for the local-credit family:
     ``forward_with_intermediates`` returns one act per Linear INPUT
     (plus the final logits), in the same order as ``params``' 2-D
     weights — exactly the positional pairing ``LocalGoodnessCredit``
     (ff goodness and pepita inverse projections) and
     ``RandomProjectionsCredit`` iterate. The embedding is a bias-free
-    Linear over synthesized one-hot ids, so every learnable weight is a
-    Linear ``(out, in)`` matrix; LayerNorm gains/biases are 1-D and pass
-    through the credit/update contracts untouched (they train only under
-    autograd credit: bp / ff).
+    Linear over synthesized one-hot ids (LM) or patch projections (vision),
+    so every learnable weight is a Linear ``(out, in)`` matrix; LayerNorm
+    gains/biases are 1-D and pass through the credit/update contracts
+    untouched (they train only under autograd credit: bp / ff).
     """
 
     blocks: nn.ModuleList
@@ -1085,7 +1133,28 @@ class TransformerGeometry(nn.Module):
         self.d_model = d
         self.seq_len = config.seq_len
         self.num_heads = config.num_heads
-        self.embed = nn.Linear(config.input_dim, d, bias=False)
+        self.patch_size = getattr(config, "patch_size", 0)
+        self.patch_embed_dim = getattr(config, "patch_embed_dim", 0)
+        self.image_hw = getattr(config, "image_hw", (28, 28))
+        self.in_channels = getattr(config, "in_channels", 1)
+
+        if self.patch_size > 0:
+            # Vision mode: patch embedding
+            patch_dim = self.in_channels * self.patch_size * self.patch_size
+            embed_dim = self.patch_embed_dim if self.patch_embed_dim > 0 else d
+            self.patch_embed = nn.Linear(patch_dim, embed_dim, bias=False)
+            # If embed_dim != d_model, add projection to d_model
+            if embed_dim != d:
+                self.patch_proj = nn.Linear(embed_dim, d, bias=False)
+            else:
+                self.patch_proj = None
+            self.embed = None  # Not used in vision mode
+        else:
+            # Standard LM mode: token embedding
+            self.embed = nn.Linear(config.input_dim, d, bias=False)
+            self.patch_embed = None
+            self.patch_proj = None
+
         self.blocks = nn.ModuleList(
             _TransformerBlock(d) for _ in range(config.num_layers)
         )
@@ -1121,23 +1190,69 @@ class TransformerGeometry(nn.Module):
 
             substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
-        b, t = x.shape
-        dtype = self.embed.weight.dtype
-        onehot = torch.nn.functional.one_hot(x, self.config.input_dim).to(dtype)
-        flat = onehot.view(b * t, -1)
-        if intermediates is not None:
-            intermediates.append(flat)
-        h = op(flat, self.embed.weight).view(b, t, self.d_model) + self.pe[:t]
-        h = h.reshape(b * t, self.d_model)
+
+        if self.patch_size > 0:
+            # Vision mode: x is [B, C, H, W]
+            # Patchify: [B, C, H, W] -> [B, N_patches, patch_dim]
+            b, c, h, w = x.shape
+            assert c == self.in_channels, f"Expected {self.in_channels} channels, got {c}"
+            assert h == self.image_hw[0] and w == self.image_hw[1], f"Expected {self.image_hw}, got ({h}, {w})"
+
+            # Rearrange patches: [B, C, H, W] -> [B, N_patches, C * patch_size^2]
+            # Using einops-like rearrange manually
+            ph, pw = self.patch_size, self.patch_size
+            nh, nw = h // ph, w // pw
+            x_patches = x.view(b, c, nh, ph, nw, pw)
+            x_patches = x_patches.permute(0, 2, 4, 1, 3, 5)  # [B, nh, nw, C, ph, pw]
+            x_patches = x_patches.reshape(b, nh * nw, c * ph * pw)  # [B, N_patches, patch_dim]
+
+            # Project patches to embedding dim
+            if intermediates is not None:
+                intermediates.append(x_patches.reshape(b * nh * nw, -1))
+            h = op(x_patches, self.patch_embed.weight)  # [B, N_patches, embed_dim]
+
+            # Project to d_model if needed
+            if self.patch_proj is not None:
+                h = op(h, self.patch_proj.weight)  # [B, N_patches, d_model]
+
+            # Add positional encoding
+            t = nh * nw
+            h = h + self.pe[:t].unsqueeze(0)
+            h = h.reshape(b * t, self.d_model)
+            b, t = b, t
+        else:
+            # Standard LM mode: x is token ids [B, T]
+            b, t = x.shape
+            dtype = self.embed.weight.dtype
+            # Ensure token IDs are long for one_hot
+            x_long = x.long() if x.dtype != torch.long else x
+            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(dtype)
+            flat = onehot.view(b * t, -1)
+            if intermediates is not None:
+                intermediates.append(flat)
+            h = op(flat, self.embed.weight).view(b, t, self.d_model) + self.pe[:t]
+            h = h.reshape(b * t, self.d_model)
+
         for block in self.blocks:
             h = self._apply_block(
                 cast("_TransformerBlock", block), h, op, b, t, intermediates
             )
         if intermediates is not None:
             intermediates.append(h)
-        logits = op(h, self.head.weight)
-        if intermediates is not None:
-            intermediates.append(logits)
+
+        if self.patch_size > 0:
+            # Vision mode: pool over sequence before head
+            h = h.view(b, t, self.d_model).mean(dim=1)  # [B, d_model]
+            if intermediates is not None:
+                intermediates.append(h)
+            logits = op(h, self.head.weight)  # [B, V]
+            if intermediates is not None:
+                intermediates.append(logits)
+        else:
+            # LM mode: apply head to each token
+            logits = op(h, self.head.weight)  # [B*T, V]
+            if intermediates is not None:
+                intermediates.append(logits)
         return logits
 
     def _apply_block(
@@ -1169,11 +1284,73 @@ class TransformerGeometry(nn.Module):
         return self._apply_stack(x, substrate)
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
+        """Return intermediate activations matching transition_modules.
+
+        Returns one activation per transition module input, plus final logits.
+        """
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+
         acts: list[Tensor] = []
-        logits = self._apply_stack(x, substrate, acts)
-        _ = logits
+
+        if self.patch_size > 0:
+            # Vision mode: x is [B, C, H, W]
+            b, c, h, w = x.shape
+            ph, pw = self.patch_size, self.patch_size
+            nh, nw = h // ph, w // pw
+
+            # Patchify
+            x_patches = x.view(b, c, nh, ph, nw, pw)
+            x_patches = x_patches.permute(0, 2, 4, 1, 3, 5)
+            x_patches = x_patches.reshape(b, nh * nw, c * ph * pw)
+
+            # Patch embed input
+            acts.append(x_patches.reshape(b * nh * nw, -1))
+            h = op(x_patches, self.patch_embed.weight)
+
+            # Patch proj input (if exists)
+            if self.patch_proj is not None:
+                acts.append(h.reshape(b * nh * nw, -1))
+                h = op(h, self.patch_proj.weight)
+
+            # Add positional encoding
+            t = nh * nw
+            h = h + self.pe[:t].unsqueeze(0)
+            h = h.reshape(b * t, self.d_model)
+        else:
+            # LM mode: x is token ids [B, T]
+            b, t = x.shape
+            dtype = self.embed.weight.dtype
+            x_long = x.long() if x.dtype != torch.long else x
+            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(dtype)
+            flat = onehot.view(b * t, -1)
+            acts.append(flat)
+            h = op(flat, self.embed.weight).view(b, t, self.d_model) + self.pe[:t]
+            h = h.reshape(b * t, self.d_model)
+
+        # Each block input
+        for block in self.blocks:
+            acts.append(h)
+            ln1_h = block.ln1(h)
+            attn_ctx = self._attention(op(ln1_h, block.in_proj.weight), b, t)
+            h = torch.add(h, op(attn_ctx, block.out_proj.weight))
+            ln2_h = block.ln2(h)
+            f1 = torch.nn.functional.gelu(op(ln2_h, block.ffn1.weight))
+            h = torch.add(h, op(f1, block.ffn2.weight))
+
+        if self.patch_size > 0:
+            # Vision mode: pool over sequence before head
+            h = h.view(b, t, self.d_model).mean(dim=1)  # [B, d_model]
+
+        # Head input
+        acts.append(h)
+        logits = op(h, self.head.weight)
+        acts.append(logits)
         return acts
 
     def route(self, activations: Tensor) -> Tensor:
@@ -1186,7 +1363,15 @@ class TransformerGeometry(nn.Module):
                 own[name].data.copy_(param)
 
     def transition_modules(self) -> list[nn.Module]:
-        return [self.embed, *self.blocks, self.head]
+        if self.patch_size > 0:
+            mods = []
+            if self.patch_embed is not None:
+                mods.append(self.patch_embed)
+            if self.patch_proj is not None:
+                mods.append(self.patch_proj)
+            return mods + list(self.blocks) + [self.head]
+        else:
+            return [self.embed, *self.blocks, self.head]
 
     def activation_layout(self, batch_size: int) -> ActivationLayout:
         """Return the activation layout for causal transformer geometry.
@@ -1448,7 +1633,7 @@ class RecurrentGeometry(nn.Module):
         return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer."""
         if substrate is None:
@@ -1908,7 +2093,7 @@ class TileGeometry(nn.Module):
         return self._graph.get_boundary_tiles(device_map)
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer."""
         substrate = self._get_substrate(substrate)
@@ -2081,7 +2266,7 @@ class ConvGeometry(nn.Module):
         return features @ self._head.weight.T + self._head.bias
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
@@ -2295,22 +2480,116 @@ class GraphGeometry(nn.Module):
             h = self._aggregate(h)
         return h
 
-    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
-        if substrate is None:
-            from computronium.ontology.substrate import DigitalSubstrate
+    def forward(
+        self,
+        x: Tensor,
+        substrate: Substrate | None = None,
+        edge_index: Tensor | None = None,
+        batch: Tensor | None = None,
+    ) -> Tensor:
+        """Forward pass supporting both node and graph classification.
 
+        Node classification (Planetoid): forward(x, substrate) - uses stored edge_index
+        Graph classification (TUDataset): forward(x, edge_index, batch) - uses provided edge_index and batch
+        """
+        if substrate is None and edge_index is None:
+            from computronium.ontology.substrate import DigitalSubstrate
             substrate = DigitalSubstrate()
-        op = substrate.get_forward_operator()
-        h = self._stack(x, op)
-        return op(h, self._head.weight) + self._head.bias
+
+        # Graph classification mode: edge_index and batch provided
+        if edge_index is not None and batch is not None:
+            # Store original buffers
+            orig_edge_index = self._edge_index
+            orig_deg = self._deg
+
+            # Use provided edge_index and compute degrees (ensure on same device as x)
+            device = x.device
+            self._edge_index = edge_index.to(device)
+            row, _ = self._edge_index
+            num_nodes = int(edge_index.max().item()) + 1
+            deg = torch.zeros(num_nodes, dtype=torch.long, device=device)
+            deg.scatter_add_(0, row, torch.ones_like(row, device=device))
+            self._deg = deg.clamp(min=1)
+
+            try:
+                if substrate is not None:
+                    op = substrate.get_forward_operator()
+                else:
+                    op = lambda a, w: a @ w.T
+                h = self._stack(x, op)
+                # Graph-level pooling: mean over nodes per graph using batch vector
+                h = global_mean_pool(h, batch)
+                return op(h, self._head.weight) + self._head.bias
+            finally:
+                # Restore original buffers
+                self._edge_index = orig_edge_index
+                self._deg = orig_deg
+        else:
+            # Node classification mode: use stored edge_index
+            if substrate is None:
+                from computronium.ontology.substrate import DigitalSubstrate
+                substrate = DigitalSubstrate()
+            op = substrate.get_forward_operator()
+            h = self._stack(x, op)
+            return op(h, self._head.weight) + self._head.bias
 
     def route(self, activations: Tensor) -> Tensor:
         """Single-step routing through the graph (for settling dynamics)."""
         h = self._stack(activations, lambda a, w: a @ w.T)
         return h @ self._head.weight.T + self._head.bias
 
+    def settle_blocks(self, x: Tensor, substrate: Substrate, *args, **kwargs) -> list[Tensor]:
+        """Settle blocks for graph classification - supports edge_index and batch via args/kwargs."""
+        # For graph classification, edge_index and batch may be passed via args/kwargs
+        edge_index = kwargs.get("edge_index")
+        batch = kwargs.get("batch")
+        if edge_index is not None and batch is not None:
+            # Use the same logic as forward for graph classification
+            if substrate is None:
+                from computronium.ontology.substrate import DigitalSubstrate
+                substrate = DigitalSubstrate()
+            op = substrate.get_forward_operator()
+            
+            # Store original buffers
+            orig_edge_index = self._edge_index
+            orig_deg = self._deg
+            
+            # Use provided edge_index and compute degrees
+            device = x.device
+            self._edge_index = edge_index.to(device)
+            row, _ = self._edge_index
+            num_nodes = int(edge_index.max().item()) + 1
+            deg = torch.zeros(num_nodes, dtype=torch.long, device=device)
+            deg.scatter_add_(0, row, torch.ones_like(row, device=device))
+            self._deg = deg.clamp(min=1)
+            
+            try:
+                acts = [x]
+                h = x
+                for i in range(len(self._layer_weights)):
+                    weight = self._layer_weights[f"layer_{i}"]
+                    bias = self._layer_biases[f"layer_{i}"]
+                    h = op(h, weight)
+                    h = h + bias  # ruff: ignore[non-augmented-assignment]
+                    h = torch.relu(h)
+                    h = self._aggregate(h)
+                    acts.append(h)
+                
+                # Graph-level pooling
+                h = global_mean_pool(h, batch)
+                out = op(h, self._head.weight) + self._head.bias
+                acts.append(out)
+                return acts
+            finally:
+                # Restore original buffers
+                self._edge_index = orig_edge_index
+                self._deg = orig_deg
+        else:
+            # Node classification mode: use stored edge_index
+            return self.forward_with_intermediates(x, substrate)
+
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
@@ -2660,7 +2939,7 @@ class AttentionGeometry(nn.Module):
         return out
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
@@ -2986,7 +3265,7 @@ class SpatialLattice3DGeometry(nn.Module):
         return h
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
@@ -3391,7 +3670,7 @@ class NcaGeometry(nn.Module):
         )
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         x_grid, _ = self._reshape_to_grid(x)
         perceived = self.perceive(x_grid)
@@ -3710,7 +3989,7 @@ class NtmGeometry(nn.Module):
         return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate | None = None
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
     ) -> list[Tensor]:
         # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
         if x.dim() > 2:

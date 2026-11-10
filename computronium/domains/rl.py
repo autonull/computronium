@@ -151,6 +151,18 @@ class RLTask(DomainTask):
         total_rewards = []
         total_lengths = []
 
+        # Setup action space handling (same as RLSystemTrainer)
+        from gymnasium.spaces import Box
+        is_continuous = isinstance(self._env.action_space, Box)
+        if is_continuous:
+            assert isinstance(self._env.action_space, Box)
+            high = self._env.action_space.high
+            low = self._env.action_space.low
+            scale = (high - low) / 2.0
+            bias = (high + low) / 2.0
+            action_scale = torch.tensor(scale, device=self.device).float()
+            action_bias = torch.tensor(bias, device=self.device).float()
+
         for _ in range(n_episodes):
             obs, _ = self._env.reset()
             done = False
@@ -161,6 +173,13 @@ class RLTask(DomainTask):
                 obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
                 with torch.no_grad():
                     action_logits = model(obs_tensor)
+
+                if is_continuous:
+                    # Continuous Action Space (Gaussian Policy) - deterministic mean for eval
+                    action_tensor = torch.tanh(action_logits) * action_scale + action_bias
+                    action = action_tensor.cpu().numpy()[0]
+                else:
+                    # Discrete Action Space (Categorical Policy)
                     action = action_logits.argmax(1).item()
 
                 obs, reward, terminated, truncated, _ = self._env.step(action)

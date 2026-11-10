@@ -218,11 +218,14 @@ def _validate_topology(topology: str) -> None:
 
 
 def _check_geometry_input_compat(
-    topology: str, input_shape: tuple[int, ...], required_input: str
+    topology: str, input_shape: tuple[int, ...], required_input: str, geometry: dict[str, object] | None = None
 ) -> None:
-    if required_input == "token" and (len(input_shape) != 1 or input_shape[0] < 100):
-        # Token-only geometries require token input
-        # Conservative: reject all non-token tasks for token-only geometries
+    # For causal_transformer with patch embedding, allow image input
+    if topology == "causal_transformer" and geometry and geometry.get("patch_size", 0) > 0:
+        return  # Vision mode with patch embedding - allow image input
+
+    if required_input == "token" and len(input_shape) != 1:
+        # Token-only geometries require 1D sequence input (seq_len)
         raise ValueError(
             f"Geometry '{topology}' requires token input (integer token IDs), "
             f"but task provides input with shape {input_shape} (expected 1D sequence)"
@@ -646,13 +649,32 @@ def build_causal_transformer_config(
     geometry: dict[str, object],
 ) -> GeometryConfig:
     heads, hidden = _derive_head_params("causal_transformer", geometry, hidden)
-    return GeometryConfig.causal_transformer(
-        vocab_size=input_dim,
-        d_model=hidden,
-        n_layers=depth,
-        n_heads=heads,
-        seq_len=_as_int(geometry.get("seq_len"), 32),
-    )
+    patch_size = _as_int(geometry.get("patch_size"), 0)
+    if patch_size > 0:
+        # Vision mode: input_dim is the product of input_shape (C*H*W)
+        # We need to derive image_hw and in_channels from input_shape
+        # This is handled by the caller - we need to pass them through
+        # For now, use defaults
+        return GeometryConfig.causal_transformer(
+            vocab_size=output_dim,
+            d_model=hidden,
+            n_layers=depth,
+            n_heads=heads,
+            seq_len=_as_int(geometry.get("seq_len"), 32),
+            patch_size=patch_size,
+            patch_embed_dim=_as_int(geometry.get("patch_embed_dim"), 0),
+            image_hw=tuple(geometry.get("image_hw", (28, 28))),
+            in_channels=_as_int(geometry.get("in_channels"), 1),
+        )
+    else:
+        # Standard LM mode
+        return GeometryConfig.causal_transformer(
+            vocab_size=input_dim,
+            d_model=hidden,
+            n_layers=depth,
+            n_heads=heads,
+            seq_len=_as_int(geometry.get("seq_len"), 32),
+        )
 
 
 # Registry of topology builders
@@ -688,7 +710,7 @@ def build_geometry_config_dispatch(
     # Common validation
     _validate_topology(topology)
     required_input = _TOPOLOGY_REQUIRED_INPUT.get(topology, "image")
-    _check_geometry_input_compat(topology, input_shape, required_input)
+    _check_geometry_input_compat(topology, input_shape, required_input, geometry)
     _validate_geometry_keys(topology, geometry)
 
     # Common parameter derivation
