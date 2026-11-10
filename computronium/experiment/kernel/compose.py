@@ -26,7 +26,6 @@ from computronium.experiment.schema.harvest import (
     ActiveSpace,
     harvest_schema,
 )
-from computronium.ontology import GeometryConfig
 from computronium.ontology.credit import Phase
 from computronium.ontology.dynamics import StateDynamicsConfig
 from computronium.ontology.dynamics._state import set_state_field
@@ -37,7 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from computronium.experiment.schema.coordinate import Coordinate
-    from computronium.ontology import System
+    from computronium.ontology import GeometryConfig, System
 
 __all__ = [
     "GRID_CREDITS",
@@ -93,6 +92,27 @@ class ProposalComposeError(ValueError):
     """A proposal's geometry or task could not be resolved to a runnable system."""
 
 
+def _synthetic_batch(batch_size: int, input_shape: tuple[int, ...], output_dim: int):
+    """Create a synthetic batch with appropriate dtype for the input shape."""
+    import torch
+
+    if len(input_shape) == 1:
+        # 1D input: default to float for continuous features (RL, tabular, etc.)
+        # Only use long for token sequences if output_dim suggests vocab size
+        x = torch.randn(batch_size, input_shape[0])
+    elif len(input_shape) == 2:
+        # (H, W) grayscale
+        x = torch.randn(batch_size, 1, *input_shape)
+    elif len(input_shape) == 3:
+        x = torch.randn(batch_size, *input_shape)
+    else:
+        x = torch.randn(batch_size, *input_shape)
+
+    # Target: random labels (always long for classification)
+    y = torch.randint(0, output_dim, (batch_size,))
+    return x, y
+
+
 def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, too-many-return-statements, too-many-locals, complex-structure]
     coordinate: Coordinate,
     geometry: Mapping[str, object],
@@ -143,22 +163,20 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
         system = cell.system
 
         # Create a dummy input batch (batch_size=2 for batch norm etc.)
+        # Prefer real batch from task if available to get correct dtype
         batch_size = 2
-        if len(input_shape) == 1:
-            # Sequence or flat: (seq_len,) or (dim,)
-            x = torch.randint(
-                0, output_dim, (batch_size, input_shape[0]), dtype=torch.long
-            )
-        elif len(input_shape) == 2:
-            # (H, W) grayscale
-            x = torch.randn(batch_size, 1, *input_shape)
-        elif len(input_shape) == 3:
-            x = torch.randn(batch_size, *input_shape)
+        if task is not None and hasattr(task, "get_batch"):
+            try:
+                x, y = task.get_batch("train", batch_size=batch_size)
+                # Ensure batch size matches (task might return different size)
+                if x.shape[0] != batch_size:
+                    x = x[:batch_size]
+                    y = y[:batch_size]
+            except Exception:
+                # Fallback to synthetic batch
+                x, y = _synthetic_batch(batch_size, input_shape, output_dim)
         else:
-            x = torch.randn(batch_size, *input_shape)
-
-        # Target: random labels
-        y = torch.randint(0, output_dim, (batch_size,))
+            x, y = _synthetic_batch(batch_size, input_shape, output_dim)
 
         # Move to CPU (dry-run runs on CPU)
         system = system.to("cpu")  # type: ignore[attr-defined]

@@ -74,7 +74,14 @@ seed-plan expansion landed, so each is a single-seed L2 measurement.)
 |------------|------|--------|---------|--------|
 | B1a | digital/ff/instant/null/grad/euclid | 0.5h | Cartpole baseline | ✅ Done |
 | B1b | digital/ff/instant/null/grad/euclid | 0.5h | Pendulum baseline | ✅ Done |
-| B1c | digital/recurrent/energy_min/null/grad/adam | 1h | Recurrent + energy_min on control | Pending |
+| B1c | digital/recurrent/energy_min/null/grad/adam | 1h | Recurrent + energy_min on control | ⚠️ Works but slow (~120s/cell L0) |
+| B1c-alt | digital/recurrent/instant/random_projections/euclid | 0.1h | Recurrent RL (alt credit) | ✅ Done (12.8 reward @ L0) |
+
+**B1c Findings:**
+- digital/recurrent/energy_minimization/null/gradient/adam on cartpole: composable, but ~120s/cell at L0 (1 epoch) due to settling loop per environment step
+- The energy_minimization settle loop runs multiple iterations per step; for RL with 500 steps/episode, this is prohibitive
+- B1c-alt works: digital/recurrent/instantaneous/random_projections/euclidean on cartpole → 12.8 reward @ L0 (1 epoch, ~1s/cell). Positive control (feedforward+gradient) gets 10.0 reward.
+- Consider: (a) use instantaneous dynamics with compatible credit (random_projections, temporal_trace) for recurrent RL, or (b) accept slow speed and budget accordingly
 
 ---
 
@@ -87,9 +94,17 @@ seed-plan expansion landed, so each is a single-seed L2 measurement.)
 **Experiments:**
 | Experiment | Axes | Budget | Purpose | Status |
 |------------|------|--------|---------|--------|
-| B2a | digital/graph/instant/random_projections/euclid | 0.5h | Cora baseline | ✅ Done |
-| B2b | digital/conv/instant/homeostatic/euclid | 0.5h | Conv geometry on graph | Pending |
-| B2c | digital/graph/instant/grad/euclid | 1h | Native graph geometry | Pending (needs compatible credit) |
+| B2a | digital/graph/instant/random_projections/euclid | 0.5h | Cora baseline | ✅ Done (0.522 acc @ L0) |
+| B2a-ext | digital/graph/instant/random_projections/euclid | 0.1h | Citeseer, PubMed | ✅ Done (0.472/0.504 acc @ L0) |
+| B2b | digital/conv/instant/homeostatic/euclid | 0.5h | Conv geometry on graph | ❌ INVALID — conv produces spatial outputs incompatible with node masks |
+| B2c | digital/graph/instant/grad/euclid | 1h | Native graph geometry | ❌ INVALID — gradient credit not available for graph/instantaneous |
+
+**B2 Findings:**
+- Graph geometry requires non-gradient credits for instantaneous dynamics: random_projections, homeostatic, pc_alm, target_inversion, temporal_trace
+- B2a works: digital/graph/instantaneous/random_projections/euclidean on cora → 0.522 acc @ L0 (1 epoch, ~0s/cell)
+- B2a-ext: citeseer 0.472 acc, pubmed 0.504 acc @ L0
+- Conv geometry on graph tasks fails with shape mismatch: conv treats node features as spatial grid, produces output shape [3880564, 7] vs mask [2708]
+- Valid combos for graph: geometry=graph, dynamics=instantaneous, credit∈{random_projections, homeostatic, pc_alm, target_inversion, temporal_trace}
 
 ---
 
@@ -102,9 +117,17 @@ seed-plan expansion landed, so each is a single-seed L2 measurement.)
 **Experiments:**
 | Experiment | Axes | Budget | Purpose | Status |
 |------------|------|--------|---------|--------|
-| B3a | digital/ff/instant/null/grad/euclid | 0.5h | Copy task | Pending |
-| B3b | digital/recurrent/instant/grad/euclid | 0.5h | Sequential MNIST | Pending |
+| B3a | digital/ff/instant/null/grad/euclid | 0.5h | Copy task | ✅ Done (0.17-0.19 acc @ L0) |
+| B3b | digital/recurrent/instant/grad/euclid | 0.5h | Sequential MNIST | ❌ INVALID — gradient credit not available for recurrent/instantaneous |
+| B3b-alt | digital/recurrent/instant/random_projections/euclid | 0.1h | Sequential MNIST (alt credit) | ✅ Done (0.115-0.122 acc @ L0) |
 | B3c | digital/causal_transformer/instant/grad/euclid | 1h | Tiny Shakespeare (needs patch embedding) | Blocked on patch embedding |
+
+**B3 Findings:**
+- B3a works: digital/feedforward/instantaneous/null/gradient/euclidean on copy_task → ~0.18 acc @ L0 (1 epoch, ~1s/cell). Valid plasticities: null, temporal_psi, substrate_coupled, rule_state, routing (conflict_adaptive fails, fast_weights not proposed)
+- B3b INVALID: recurrent + instantaneous requires non-gradient credit (random_projections, temporal_trace, homeostatic, pc_alm, target_inversion). Gradient credit cannot compute gradients for recurrent weights with instantaneous dynamics.
+- B3b-alt works: digital/recurrent/instantaneous/random_projections/euclidean on sequential_mnist → 0.115-0.122 acc @ L0 (1 epoch, ~7-13s/cell). Positive control (feedforward+gradient) gets 0.93 acc.
+- Valid combos for sequential_mnist: geometry=recurrent, dynamics=instantaneous, credit∈{random_projections, temporal_trace, homeostatic, pc_alm, target_inversion}
+- Alternative for sequential_mnist: use energy_minimization dynamics with gradient credit (works but slow, like B1c)
 
 ---
 
@@ -281,8 +304,11 @@ cat experiments/<latest>.run.json      # budget spent, cells planned/measured
 6. ~~**C3** — PEPITA scale~~ ✓ (0.9746 @ L2)
 7. ~~**C4** — Non-digital substrate at scale~~ ⚠️ (4/20 epochs; 208 s/epoch is the finding)
 8. ~~**B4a** — Tabular sweep~~ ✓ (4 claim-eligible cells; wine/iris flagged)
-9. **B1c, B2b-B2c** — RL/Graph variety (needs task-compatible axes)
-10. **B3** — Sequence coverage (B3c blocked on patch embedding)
+9. ~~**B3a** — Copy task baseline~~ ✓ (0.17-0.19 acc @ L0)
+10. **B1c (alt)** — Recurrent RL with compatible credit (random_projections/temporal_trace)
+11. **B2a (extended)** — Graph geometry on citeseer, pubmed, graph_classification
+12. **B3b (alt)** — Sequential MNIST with recurrent + compatible credit
+13. **B3c** — Tiny Shakespeare (blocked on patch embedding)
 
 ## ⚠️ OPEN ITEMS
 
@@ -311,6 +337,11 @@ cat experiments/<latest>.run.json      # budget spent, cells planned/measured
   no manifest. That is truthful (the run did not finish), but resume still needs
   `--resume`/`--promote-from`; closing on SIGTERM is deferred until an interrupted run
   is actually needed.
+- **Invalid axis combinations in TODO86 plan (corrected above):**
+  - B2b: conv geometry incompatible with graph node classification (shape mismatch)
+  - B2c: gradient credit unavailable for graph/instantaneous
+  - B3b: gradient credit unavailable for recurrent/instantaneous
+  - B1c: recurrent+energy_minimization works but extremely slow (~120s/cell L0)
 
 ---
 

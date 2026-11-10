@@ -60,6 +60,13 @@
     },
     "startup_s": 0.0
   },
+  "cuda/L0": {
+    "cost_per_cell_s": 0.755,
+    "per_task": {
+      "cartpole": 0.755
+    },
+    "startup_s": 0.0
+  },
   "cuda/L0/1": {
     "cost_per_cell_s": 20.301,
     "per_task": {
