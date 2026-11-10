@@ -153,6 +153,7 @@ class RLTask(DomainTask):
 
         # Setup action space handling (same as RLSystemTrainer)
         from gymnasium.spaces import Box
+
         is_continuous = isinstance(self._env.action_space, Box)
         if is_continuous:
             assert isinstance(self._env.action_space, Box)
@@ -176,7 +177,9 @@ class RLTask(DomainTask):
 
                 if is_continuous:
                     # Continuous Action Space (Gaussian Policy) - deterministic mean for eval
-                    action_tensor = torch.tanh(action_logits) * action_scale + action_bias
+                    action_tensor = (
+                        torch.tanh(action_logits) * action_scale + action_bias
+                    )
                     action = action_tensor.cpu().numpy()[0]
                 else:
                     # Discrete Action Space (Categorical Policy)

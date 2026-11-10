@@ -22,9 +22,7 @@ are not comparable with a full epoch's.
 
 from __future__ import annotations
 
-import logging
 import time
-import warnings
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -32,32 +30,6 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
-
-# Suppress fvcore/torch.jit warnings (torch.jit.script deprecated in Python 3.14+)
-# These must be applied early, before fvcore imports
-logging.getLogger("fvcore").setLevel(logging.ERROR)
-logging.getLogger("fvcore.nn.jit_analysis").setLevel(logging.ERROR)
-
-warnings.filterwarnings(
-    "ignore",
-    message=".*torch.jit.script.*",
-    category=FutureWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="Unsupported operator aten::.*",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="The following submodules of the model were never called.*",
-    category=UserWarning,
-)
-# Also suppress fvcore's specific warnings
-warnings.filterwarnings(
-    "ignore",
-    module="fvcore.nn.jit_analysis",
-)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -215,25 +187,29 @@ def _flops_per_batch(system: System, batch_size: int) -> int:
     system without either reports no FLOPs rather than a fabricated number.
     """
     from computronium.core.profiling import (
-        count_flops_fvcore,
+        count_flops,
         estimate_train_step_flops,
     )
 
-    # Try fvcore first for accurate measurement
-    try:
-        # Get input shape from the system's geometry
-        input_shape = _get_input_shape(system)
-        if input_shape:
-            return count_flops_fvcore(system.geometry, (batch_size, *input_shape[1:]))
-    except Exception as exc:
-        logger.debug("fvcore FLOP count failed for %s: %s", type(system).__name__, exc)
-
-    # Fallback to structure-derived estimate
+    # Try structure-derived estimate first (deterministic, no device dependence)
     try:
         return estimate_train_step_flops(system, batch_size)
     except (ValueError, TypeError, AttributeError, KeyError) as exc:
-        logger.debug("no FLOP estimate for %s: %s", type(system).__name__, exc)
-        return 0
+        logger.debug(
+            "structure FLOP estimate failed for %s: %s", type(system).__name__, exc
+        )
+
+    # Fallback to parameter-counting estimate
+    try:
+        input_shape = _get_input_shape(system)
+        if input_shape:
+            return count_flops(system.geometry, (batch_size, *input_shape[1:]))
+    except Exception as exc:
+        logger.debug(
+            "parameter FLOP count failed for %s: %s", type(system).__name__, exc
+        )
+
+    return 0
 
 
 def _get_input_shape(system: System) -> tuple[int, ...] | None:

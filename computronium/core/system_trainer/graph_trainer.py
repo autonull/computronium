@@ -113,7 +113,12 @@ class GraphSystemTrainer:
         self._best_score = -float("inf")
         self._autocast = _autocast_context(self.device, self.config.precision)
 
-        logger.debug("GraphSystemTrainer mode: %s", "graph_classification" if self._is_graph_classification else "node_classification")
+        logger.debug(
+            "GraphSystemTrainer mode: %s",
+            "graph_classification"
+            if self._is_graph_classification
+            else "node_classification",
+        )
 
     def _setup_device(self) -> None:
         if self.config.device == "auto":
@@ -225,7 +230,9 @@ class GraphSystemTrainer:
 
             with self._autocast:
                 # Graph classification: model(x, edge_index, batch) -> graph-level logits
-                out = self.system.forward(data_batch.x, data_batch.edge_index, data_batch.batch)
+                out = self.system.forward(
+                    data_batch.x, data_batch.edge_index, data_batch.batch
+                )
 
             loss = torch.nn.functional.cross_entropy(out, data_batch.y)
 
@@ -327,7 +334,9 @@ class GraphSystemTrainer:
         with torch.no_grad(), self._autocast:
             for data_batch in loader:
                 data_batch = data_batch.to(self.device)
-                out = self.system.forward(data_batch.x, data_batch.edge_index, data_batch.batch)
+                out = self.system.forward(
+                    data_batch.x, data_batch.edge_index, data_batch.batch
+                )
                 loss = torch.nn.functional.cross_entropy(out, data_batch.y)
 
                 pred = out.argmax(dim=1)

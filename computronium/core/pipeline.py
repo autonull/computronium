@@ -505,7 +505,12 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
 
 
 def run_forward(
-    substrate: Substrate, geometry: Geometry, dynamics: StateDynamics, x: Tensor, *args, **kwargs
+    substrate: Substrate,
+    geometry: Geometry,
+    dynamics: StateDynamics,
+    x: Tensor,
+    *args,
+    **kwargs,
 ) -> Tensor:
     """Inference forward pass (free-phase activity generation, no update).
 

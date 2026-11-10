@@ -2931,7 +2931,12 @@ class InstantaneousDynamics(_SettleTelemetry):
         if state.x is not None:
             block_builder = getattr(geometry, "settle_blocks", None)
             if callable(block_builder):
-                acts = list(cast("list[Tensor]", block_builder(state.x, substrate, *args, **kwargs)))
+                acts = list(
+                    cast(
+                        "list[Tensor]",
+                        block_builder(state.x, substrate, *args, **kwargs),
+                    )
+                )
                 if target is not None:
                     acts = [
                         *acts[:-1],
@@ -2942,7 +2947,9 @@ class InstantaneousDynamics(_SettleTelemetry):
                 acts = list(
                     cast(
                         "list[Tensor]",
-                        geometry.forward_with_intermediates(state.x, substrate, *args, **kwargs),
+                        geometry.forward_with_intermediates(
+                            state.x, substrate, *args, **kwargs
+                        ),
                     )
                 )
                 if target is not None and acts:

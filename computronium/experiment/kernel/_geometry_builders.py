@@ -218,10 +218,17 @@ def _validate_topology(topology: str) -> None:
 
 
 def _check_geometry_input_compat(
-    topology: str, input_shape: tuple[int, ...], required_input: str, geometry: dict[str, object] | None = None
+    topology: str,
+    input_shape: tuple[int, ...],
+    required_input: str,
+    geometry: dict[str, object] | None = None,
 ) -> None:
     # For causal_transformer with patch embedding, allow image input
-    if topology == "causal_transformer" and geometry and geometry.get("patch_size", 0) > 0:
+    if (
+        topology == "causal_transformer"
+        and geometry
+        and geometry.get("patch_size", 0) > 0
+    ):
         return  # Vision mode with patch embedding - allow image input
 
     if required_input == "token" and len(input_shape) != 1:

@@ -166,7 +166,9 @@ class System(Protocol[TS, TG, TD, TC, TU]):
         """
         from computronium.core.pipeline import run_forward
 
-        return run_forward(self.substrate, self.geometry, self.dynamics, x, *args, **kwargs)
+        return run_forward(
+            self.substrate, self.geometry, self.dynamics, x, *args, **kwargs
+        )
 
     def __call__(self, x: Tensor) -> Tensor:
         """Call the system like a model: ``system(x)``."""

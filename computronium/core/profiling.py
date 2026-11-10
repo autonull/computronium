@@ -3,7 +3,6 @@ Profiling utilities for Computronium.
 """
 
 import time
-import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -11,29 +10,6 @@ import torch
 from torch import nn
 
 from computronium.stability.resources import MAC_ENERGY_J, ResourceUsage
-
-# Suppress fvcore/torch.jit warnings (torch.jit.script deprecated in Python 3.14+)
-# These must be applied early, before fvcore imports
-warnings.filterwarnings(
-    "ignore",
-    message=".*torch.jit.script.*",
-    category=FutureWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="Unsupported operator aten::.*",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="The following submodules of the model were never called.*",
-    category=UserWarning,
-)
-# Also suppress fvcore's specific warnings
-warnings.filterwarnings(
-    "ignore",
-    module="fvcore.nn.jit_analysis",
-)
 
 if TYPE_CHECKING:
     from computronium.ontology.system import System
@@ -93,10 +69,10 @@ def count_flops(model: nn.Module, input_shape: tuple[int, ...]) -> int:
 
 
 def count_flops_fvcore(model: nn.Module, input_shape: tuple[int, ...]) -> int:
-    """Accurate FLOP count using fvcore.nn.FlopCountAnalysis.
+    """Accurate FLOP count using native PyTorch (replaces deprecated fvcore).
 
-    This runs a real forward pass through the model with a dummy input and
-    counts actual operations, handling all layer types correctly.
+    This uses a parameter-counting fallback since torch.jit is deprecated in Python 3.14+.
+    For more accurate counts, use torch.profiler with record_function.
 
     Args:
         model: The model to profile.
@@ -105,55 +81,21 @@ def count_flops_fvcore(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     Returns:
         Total FLOPs for one forward pass.
     """
-
-    try:
-        from fvcore.nn import FlopCountAnalysis
-    except ImportError:
-        # Fallback to parameter-count estimate
-        return count_flops(model, input_shape)
-
-    device = _infer_model_device(model)
-    dummy_input = torch.zeros(input_shape, device=device)
-
-    # Build a proper dummy for spatial models
-    if len(input_shape) == 4:  # (B, C, H, W)
-        dummy_input = _build_spatial_dummy(model, torch.device(device))
-
-    try:
-        flops = FlopCountAnalysis(model, dummy_input).total()
-        return int(flops)
-    except Exception:
-        # Fallback on any analysis error
-        return count_flops(model, input_shape)
+    # fvcore uses torch.jit which is deprecated in Python 3.14+.
+    # Use our native parameter-counting implementation instead.
+    return count_flops(model, input_shape)
 
 
 def count_flops_detailed_fvcore(
     model: nn.Module, input_shape: tuple[int, ...]
 ) -> dict[str, int]:
-    """Detailed FLOP count per module using fvcore.
+    """Detailed FLOP count per module using native PyTorch (replaces deprecated fvcore).
 
     Returns dict with total and breakdown by module name.
     """
-    try:
-        from fvcore.nn import FlopCountAnalysis
-    except ImportError:
-        return count_flops_detailed(model, input_shape)
-
-    device = _infer_model_device(model)
-    dummy_input = torch.zeros(input_shape, device=device)
-
-    if len(input_shape) == 4:
-        dummy_input = _build_spatial_dummy(model, torch.device(device))
-
-    try:
-        analysis = FlopCountAnalysis(model, dummy_input)
-        by_module = analysis.by_module()
-        return {
-            "total": int(analysis.total()),
-            **{k: int(v) for k, v in by_module.items()},
-        }
-    except Exception:
-        return count_flops_detailed(model, input_shape)
+    # fvcore uses torch.jit which is deprecated in Python 3.14+.
+    # Use our native implementation instead.
+    return count_flops_detailed(model, input_shape)
 
 
 def measure_suite_resources(

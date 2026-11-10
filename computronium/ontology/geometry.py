@@ -1195,8 +1195,12 @@ class TransformerGeometry(nn.Module):
             # Vision mode: x is [B, C, H, W]
             # Patchify: [B, C, H, W] -> [B, N_patches, patch_dim]
             b, c, h, w = x.shape
-            assert c == self.in_channels, f"Expected {self.in_channels} channels, got {c}"
-            assert h == self.image_hw[0] and w == self.image_hw[1], f"Expected {self.image_hw}, got ({h}, {w})"
+            assert c == self.in_channels, (
+                f"Expected {self.in_channels} channels, got {c}"
+            )
+            assert h == self.image_hw[0] and w == self.image_hw[1], (
+                f"Expected {self.image_hw}, got ({h}, {w})"
+            )
 
             # Rearrange patches: [B, C, H, W] -> [B, N_patches, C * patch_size^2]
             # Using einops-like rearrange manually
@@ -1204,7 +1208,9 @@ class TransformerGeometry(nn.Module):
             nh, nw = h // ph, w // pw
             x_patches = x.view(b, c, nh, ph, nw, pw)
             x_patches = x_patches.permute(0, 2, 4, 1, 3, 5)  # [B, nh, nw, C, ph, pw]
-            x_patches = x_patches.reshape(b, nh * nw, c * ph * pw)  # [B, N_patches, patch_dim]
+            x_patches = x_patches.reshape(
+                b, nh * nw, c * ph * pw
+            )  # [B, N_patches, patch_dim]
 
             # Project patches to embedding dim
             if intermediates is not None:
@@ -1226,7 +1232,9 @@ class TransformerGeometry(nn.Module):
             dtype = self.embed.weight.dtype
             # Ensure token IDs are long for one_hot
             x_long = x.long() if x.dtype != torch.long else x
-            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(dtype)
+            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(
+                dtype
+            )
             flat = onehot.view(b * t, -1)
             if intermediates is not None:
                 intermediates.append(flat)
@@ -1327,7 +1335,9 @@ class TransformerGeometry(nn.Module):
             b, t = x.shape
             dtype = self.embed.weight.dtype
             x_long = x.long() if x.dtype != torch.long else x
-            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(dtype)
+            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(
+                dtype
+            )
             flat = onehot.view(b * t, -1)
             acts.append(flat)
             h = op(flat, self.embed.weight).view(b, t, self.d_model) + self.pe[:t]
@@ -2494,6 +2504,7 @@ class GraphGeometry(nn.Module):
         """
         if substrate is None and edge_index is None:
             from computronium.ontology.substrate import DigitalSubstrate
+
             substrate = DigitalSubstrate()
 
         # Graph classification mode: edge_index and batch provided
@@ -2528,6 +2539,7 @@ class GraphGeometry(nn.Module):
             # Node classification mode: use stored edge_index
             if substrate is None:
                 from computronium.ontology.substrate import DigitalSubstrate
+
                 substrate = DigitalSubstrate()
             op = substrate.get_forward_operator()
             h = self._stack(x, op)
@@ -2538,7 +2550,9 @@ class GraphGeometry(nn.Module):
         h = self._stack(activations, lambda a, w: a @ w.T)
         return h @ self._head.weight.T + self._head.bias
 
-    def settle_blocks(self, x: Tensor, substrate: Substrate, *args, **kwargs) -> list[Tensor]:
+    def settle_blocks(
+        self, x: Tensor, substrate: Substrate, *args, **kwargs
+    ) -> list[Tensor]:
         """Settle blocks for graph classification - supports edge_index and batch via args/kwargs."""
         # For graph classification, edge_index and batch may be passed via args/kwargs
         edge_index = kwargs.get("edge_index")
@@ -2547,13 +2561,14 @@ class GraphGeometry(nn.Module):
             # Use the same logic as forward for graph classification
             if substrate is None:
                 from computronium.ontology.substrate import DigitalSubstrate
+
                 substrate = DigitalSubstrate()
             op = substrate.get_forward_operator()
-            
+
             # Store original buffers
             orig_edge_index = self._edge_index
             orig_deg = self._deg
-            
+
             # Use provided edge_index and compute degrees
             device = x.device
             self._edge_index = edge_index.to(device)
@@ -2562,7 +2577,7 @@ class GraphGeometry(nn.Module):
             deg = torch.zeros(num_nodes, dtype=torch.long, device=device)
             deg.scatter_add_(0, row, torch.ones_like(row, device=device))
             self._deg = deg.clamp(min=1)
-            
+
             try:
                 acts = [x]
                 h = x
@@ -2574,7 +2589,7 @@ class GraphGeometry(nn.Module):
                     h = torch.relu(h)
                     h = self._aggregate(h)
                     acts.append(h)
-                
+
                 # Graph-level pooling
                 h = global_mean_pool(h, batch)
                 out = op(h, self._head.weight) + self._head.bias

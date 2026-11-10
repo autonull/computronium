@@ -1,8 +1,8 @@
 {
   "cpu/L0": {
-    "cost_per_cell_s": 0.115,
+    "cost_per_cell_s": 13.004,
     "per_task": {
-      "xor": 0.115
+      "mnist": 13.004
     },
     "startup_s": 0.0
   },
