@@ -257,9 +257,10 @@ def _is_geometry_task_compatible(
                 return True
         return False  # Non-graph tasks don't provide graph structure
 
-    # Causal transformer expects 1D sequence
+    # Causal transformer expects 1D sequence for LM mode, but supports vision mode
+    # with patch embedding for 2D/3D inputs (images)
     if geometry == "causal_transformer":
-        return ndim == 1
+        return True  # Patch embedding configuration determines actual compatibility
 
     # All other geometries can handle vision input (they flatten or process spatially)
     return True

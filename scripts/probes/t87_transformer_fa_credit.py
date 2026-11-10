@@ -73,14 +73,10 @@ def main() -> None:
     )
     system = cell.system
     geometry = system.geometry
-    params = {
-        n: p for n, p in geometry.params.items() if "weight" in n and p.ndim == 2
-    }
+    params = {n: p for n, p in geometry.params.items() if "weight" in n and p.ndim == 2}
 
     state = SystemState(x=x, y=y)
-    settled = system.dynamics.settle(
-        state, geometry, system.substrate, target=y
-    )
+    settled = system.dynamics.settle(state, geometry, system.substrate, target=y)
     settled.loss = torch.nn.functional.cross_entropy(
         settled.activations[-1], y.reshape(-1)
     )

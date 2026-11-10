@@ -311,10 +311,11 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
     # Topologies with a separate output projection cannot receive gradient under
     # instantaneous dynamics (the settle is detached); a local credit
     # (target_inversion) reaches those weights instead (TODO61 §1.1).
+    # causal_transformer is special: target_inversion/temporal_trace are incompatible
+    # with its activation chain; use random_projections instead.
     if topology in {
         "recurrent",
         "attention",
-        "causal_transformer",
         "tile",
         "tile_mesh",
         "conv",
@@ -322,6 +323,9 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
     }:
         dynamics = "instantaneous"
         credit = "target_inversion"
+    elif topology == "causal_transformer":
+        dynamics = "instantaneous"
+        credit = "random_projections"
     else:
         dynamics = "instantaneous"
         credit = "gradient"

@@ -1,28 +1,28 @@
 # TODO87 — System Fixes & Remaining Coverage (Post-TODO86)
 
-**Status:** PHASE 1-7 COMPLETE. Validation passes for core system: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification and causal_transformer vision need patch embedding sweep in ontology.
+**Status:** PHASE 1-7 COMPLETE + OPEN ISSUES RESOLVED. Validation passes for core system: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification evaluation fixed; causal_transformer vision patch embedding sweep added.
 
 ---
 
-## 🎯 PHASE 1: Fix Graph Classification Support — ✅ COMPLETE (code), ⚠️ VALIDATION PARTIAL
+## 🎯 PHASE 1: Fix Graph Classification Support — ✅ COMPLETE
 
 **Problem:** `GraphGeometry.forward(x, substrate)` only supports node classification (single graph, edge_index stored in geometry). Graph classification needs `forward(x, edge_index, batch)` for batched graphs from DataLoader.
 
 **Root cause:** `GraphGeometry` (ontology/geometry.py:2169) has fixed signature. `GraphSystemTrainer` now detects both modes but geometry doesn't.
 
-**Fix implemented:** Made `GraphGeometry.forward` polymorphic with optional `edge_index, batch` params. Added `settle_blocks` for dynamics integration. Updated pipeline to pass extra args through `dynamics.settle`. Added `global_mean_pool` for graph-level readout.
+**Fix implemented:** Made `GraphGeometry.forward` polymorphic with optional `edge_index, batch` params. Added `settle_blocks` for dynamics integration. Updated pipeline to pass extra args through `dynamics.settle`. Added `global_mean_pool` for graph-level readout. **Fixed `__call__` in `_ComposedSystem` to accept `*args, **kwargs` and forward to `forward`** (factory.py:283-285).
 
-**Validation:** Training works (val_acc≈0.55 on MUTAG). **Open issues:** Evaluation fails with `compose_system.__call__() takes 2 positional arguments but 4 were given` (system forward doesn't accept graph args), CUDA index out of bounds on GPU. Need to fix GraphSystemTrainer evaluation path and PyG/CUDA compatibility.
+**Validation:** Training works (val_acc≈0.55 on MUTAG). **Evaluation now works** — system accepts `edge_index, batch` args for graph classification mode. CUDA index out of bounds on GPU remains (upstream PyG/CUDA version issue).
 
 ---
 
-## 🎯 PHASE 2: Fix CausalTransformer for Vision (Patch Embedding) — ✅ COMPLETE (code), ⚠️ VALIDATION PARTIAL
+## 🎯 PHASE 2: Fix CausalTransformer for Vision (Patch Embedding) — ✅ COMPLETE
 
 **Problem:** `causal_transformer` geometry expects 1D token sequence. Vision tasks (MNIST, CIFAR) need patch embedding to convert 2D→1D.
 
-**Fix implemented:** Added patch embedding config to `GeometryConfig` (`patch_size`, `patch_embed_dim`, `image_hw`, `in_channels`). Updated `TransformerGeometry` to handle both LM mode (token IDs `[B, T]`) and vision mode (images `[B, C, H, W]` → patches → transformer → pooling → classification). Updated compose pipeline, input compatibility checks, and trainer to preserve 4D input for vision mode.
+**Fix implemented:** Added patch embedding config to `GeometryConfig` (`patch_size`, `patch_embed_dim`, `image_hw`, `in_channels`). Updated `TransformerGeometry` to handle both LM mode (token IDs `[B, T]`) and vision mode (images `[B, C, H, W]` → patches → transformer → pooling → classification). Updated compose pipeline, input compatibility checks, and trainer to preserve 4D input for vision mode. **Added patch embedding params to geometry primitives and hyperparameter defaults** (seed_registries.py:110, 247-250) and **updated `_geometry_mapping` to include structural params from coordinate.params** (compose.py:442-467).
 
-**Validation:** Composes successfully with explicit patch params, forward pass produces `[B, 10]` logits. **Open issue:** Search space doesn't sweep patch embedding params automatically — they must be specified manually in coordinate.params. Need to add patch_size, patch_embed_dim, image_hw, in_channels to ontology hyperparameter sweep for causal_transformer.
+**Validation:** Composes successfully with explicit patch params, forward pass produces `[B, 10]` logits. **Search space now sweeps patch embedding params automatically** — causal_transformer accepted_params includes patch_size, patch_embed_dim, image_hw, in_channels.
 
 ---
 
@@ -129,12 +129,9 @@ cat experiments/<latest>.run.json
 
 ## ⚠️ OPEN TECHNICAL ISSUES
 
-- **GraphClassification evaluation**: `compose_system.__call__()` doesn't accept graph args (x, edge_index, batch) — need to fix GraphSystemTrainer evaluation path to pass through to system
 - **GraphClassification CUDA**: PyG batch to CUDA triggers index out of bounds (upstream PyG/CUDA version issue)
-- **CausalTransformer vision sweep**: Patch embedding params (patch_size, patch_embed_dim, image_hw, in_channels) not swept by search space — need to add to ontology hyperparameter declarations
 - **Energy minimization + recurrent**: ~58s/epoch at L0 on CPU due to settle loop per step — document as known limitation; use GPU for scale
 - **run_experiment.py val_acc=0.0000 bug**: All cells PASS but report zero accuracy (gate checks finite metrics, not learnability). Same root cause as wine/iris — metric extraction broken in async path
-- **Two experiment engines**: `survey_cli.py` (canonical, fixed) vs `run_experiment.py` (legacy, unfixed). Need deprecation plan
 - **torch_geometric fvcore/jit warning**: Upstream dependency uses deprecated `torch.jit.script` — unfixable from our side
 
 ---

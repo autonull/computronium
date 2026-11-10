@@ -16,6 +16,7 @@ from typing import (
 
 import torch
 from torch import Tensor, nn
+from torch_geometric.nn import global_mean_pool
 
 from computronium.core.tile.topology import TileGraph
 from computronium.ontology._registry import ImplementationRegistry
@@ -32,7 +33,6 @@ from computronium.ontology._tile_blocks import (
 from computronium.ontology._tile_blocks import (
     tile_settle_block_acts as settle_block_acts,
 )
-from torch_geometric.nn import global_mean_pool
 
 if TYPE_CHECKING:
     from collections.abc import Callable

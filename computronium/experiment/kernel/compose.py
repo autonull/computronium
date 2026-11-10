@@ -458,13 +458,28 @@ def _geometry_mapping(
     value the space carries is exactly one composition reads. Geometry
     hyperparameters are named for the keys the normalizer reads, so no
     translation is applied.
+
+    Also includes structural geometry params from ``swept`` that are in
+    ``accepted_params`` but not harvested as searchable hyperparameters
+    (e.g., patch_size for causal_transformer vision mode).
     """
+    from computronium.experiment.schema.geometry_keys import allowed_geometry_keys
+
+    accepted = allowed_geometry_keys(topology)
     harvested = {
         name: value
         for name, value in active.for_axis(StructuralAxis.GEOMETRY, topology).items()
         if f"geometry.{name}" in swept
     }
-    return {**harvested, **geometry}
+    # Also include structural params from swept that are accepted but not harvested
+    structural = {
+        name.removeprefix("geometry."): value
+        for name, value in swept.items()
+        if name.startswith("geometry.") and name.removeprefix("geometry.") in accepted
+    }
+    # Harvested takes precedence (searched values override structural)
+    merged = {**structural, **harvested, **geometry}
+    return merged
 
 
 def _axis_factory(config_cls: Any, primitive: str) -> Any:

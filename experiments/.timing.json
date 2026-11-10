@@ -1,8 +1,8 @@
 {
   "cpu/L0": {
-    "cost_per_cell_s": 0.071,
+    "cost_per_cell_s": 0.058,
     "per_task": {
-      "digits": 0.071
+      "graph_classification": 0.058
     },
     "startup_s": 0.0
   },
@@ -64,9 +64,9 @@
     "startup_s": 0.0
   },
   "cuda/L0": {
-    "cost_per_cell_s": 10.056,
+    "cost_per_cell_s": 16.702,
     "per_task": {
-      "acrobot": 10.056
+      "acrobot": 16.702
     },
     "startup_s": 0.0
   },

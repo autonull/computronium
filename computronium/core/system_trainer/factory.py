@@ -97,6 +97,7 @@ def _geometry_spec_parts(
         "pool_hw",
         "lattice_dims",
         "grid_hw",
+        "image_hw",
     ):
         if isinstance(geometry_dict.get(field), list):
             geometry_dict[field] = tuple(geometry_dict[field])
@@ -280,9 +281,9 @@ def compose_system[  # ruff: ignore[complex-structure]
                 self.substrate, self.geometry, self.dynamics, x, *args, **kwargs
             )
 
-        def __call__(self, x: Tensor) -> Tensor:
-            """Enable calling the system like a function: model(x)."""
-            return self.forward(x)
+        def __call__(self, x: Tensor, *args, **kwargs) -> Tensor:
+            """Enable calling the system like a function: model(x, *args, **kwargs)."""
+            return self.forward(x, *args, **kwargs)
 
         def parameters(self):
             """Return an iterator over all learnable parameters (from geometry)."""
