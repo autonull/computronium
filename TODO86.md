@@ -1,9 +1,16 @@
-# TODO86 — Scale & Coverage (Post-TODO85)
+# TODO86 — Scale & Coverage (Post-TODO85) — **COMPLETE**
 
-**Status:** Harness consolidated to one Python entry point; runs are observable and
-close honestly. Next: finish scale/coverage combos.
+**Status:** Harness consolidated; experiment loop working; coverage experiments run and documented.
 
 **Baseline (Run 48):** 72 cells, 72 PASS, L0→L1→L2 working, best L2 0.9775 on mnist.
+
+**Summary of completed work:**
+- Fixed dry-run dtype bug (RL/tabular tasks)
+- Fixed GraphSystemTrainer for both node + graph classification
+- Validated B1c, B1c-alt, B2a, B2a-ext, B3a, B3b-alt
+- Documented invalid axis combinations (B2b, B2c, B3b, B1c slow)
+
+**Next:** See **TODO87.md** for remaining system fixes and coverage work.
 
 ---
 

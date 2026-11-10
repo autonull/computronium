@@ -1,4 +1,9 @@
-"""GraphSystemTrainer for graph node classification with 5-D composable systems."""
+"""GraphSystemTrainer for graph tasks with 5-D composable systems.
+
+Handles both:
+- Node classification (Planetoid-style): single graph with train/val/test masks
+- Graph classification (TUDataset-style): batched graphs from DataLoader
+"""
 
 from __future__ import annotations
 
@@ -50,16 +55,16 @@ def _autocast_context(device: torch.device, precision: str):
 
 @dataclasses.dataclass
 class GraphSystemTrainer:
-    """Trainer for graph node classification with 5-D composable systems.
+    """Trainer for graph tasks with 5-D composable systems.
 
-    Handles masked node classification (train/val/test masks) and full-graph
-    forward passes. Orchestrates:
-        System.forward(x, edge_index) → masked loss → parameter update
+    Supports two modes:
+    1. Node classification: single graph with train/val/test masks (Planetoid)
+    2. Graph classification: batched graphs from DataLoader (TUDataset)
     """
 
     system: System
     config: SystemTrainerConfig
-    train_data: Any  # GraphTask instance
+    train_data: Any  # GraphTask or GraphClassificationTask instance
     val_data: Any | None = None
     step_callback: StepCallback | None = None
     checkpoint_callback: CheckpointCallback | None = None
@@ -69,6 +74,10 @@ class GraphSystemTrainer:
     global_step: int = field(default=0, init=False)
     history: list[dict[str, float]] = field(default_factory=list, init=False)
     epoch_resources: list[Any] = field(default_factory=list, init=False)
+
+    # Internal: set in __post_init__
+    _data: Any = field(default=None, init=False, repr=False)
+    _is_graph_classification: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._setup_device()
@@ -81,10 +90,19 @@ class GraphSystemTrainer:
         elif hasattr(self.system.geometry, "to"):
             self.system.geometry.to(self.device)
 
-        # Get graph data from train_data (GraphTask)
+        # Get graph data from train_data
         if not self.train_data._setup_done:
             self.train_data.setup()
-        self._data = self.train_data._data.to(self.device)
+
+        # Detect task type: node classification (has _data) vs graph classification (has _train_loader only)
+        if hasattr(self.train_data, "_data") and self.train_data._data is not None:
+            # Node classification mode (Planetoid-style)
+            self._is_graph_classification = False
+            self._data = self.train_data._data.to(self.device)
+        else:
+            # Graph classification mode (TUDataset-style) - uses DataLoader
+            self._is_graph_classification = True
+            self._data = None  # Not used in this mode
 
         # Optimizer
         lr = self.config.extra.get("lr", 1e-2) if self.config.extra else 1e-2
@@ -94,6 +112,8 @@ class GraphSystemTrainer:
         self._best_theta: dict[str, Tensor] | None = None
         self._best_score = -float("inf")
         self._autocast = _autocast_context(self.device, self.config.precision)
+
+        logger.debug("GraphSystemTrainer mode: %s", "graph_classification" if self._is_graph_classification else "node_classification")
 
     def _setup_device(self) -> None:
         if self.config.device == "auto":
@@ -119,11 +139,18 @@ class GraphSystemTrainer:
         )
 
     def train_epoch(self) -> dict[str, float]:
-        """Run one training epoch on the graph."""
+        """Run one training epoch."""
         self.system.geometry.train()
         self._begin_epoch()
 
-        # Forward pass on full graph (edge_index is stored in GraphGeometry)
+        if self._is_graph_classification:
+            return self._train_epoch_graph_classification()
+        else:
+            return self._train_epoch_node_classification()
+
+    def _train_epoch_node_classification(self) -> dict[str, float]:
+        """Run one training epoch for node classification (single graph with masks)."""
+        # Forward pass on full graph
         with self._autocast:
             out = self.system.forward(self._data.x)
 
@@ -185,10 +212,84 @@ class GraphSystemTrainer:
 
         return metrics
 
+    def _train_epoch_graph_classification(self) -> dict[str, float]:
+        """Run one training epoch for graph classification (batched graphs)."""
+        loader = self.train_data.get_dataloader("train")
+
+        total_loss = 0.0
+        total_correct = 0
+        total_samples = 0
+
+        for data_batch in loader:
+            data_batch = data_batch.to(self.device)
+
+            with self._autocast:
+                # Graph classification: model(x, edge_index, batch) -> graph-level logits
+                out = self.system.forward(data_batch.x, data_batch.edge_index, data_batch.batch)
+
+            loss = torch.nn.functional.cross_entropy(out, data_batch.y)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.system.geometry.params.values(), 1.0)
+            self.optimizer.step()
+
+            pred = out.argmax(dim=1)
+            total_loss += loss.item() * data_batch.num_graphs
+            total_correct += (pred == data_batch.y).sum().item()
+            total_samples += data_batch.num_graphs
+
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        train_acc = total_correct / total_samples if total_samples > 0 else 0.0
+
+        metrics = {
+            "epoch": self.current_epoch,
+            "train_loss": avg_loss,
+            "train_acc": train_acc,
+            "loss": avg_loss,
+            "global_step": self.global_step,
+        }
+
+        self.global_step += 1
+
+        # Validation
+        if self.val_data is not None:
+            val_metrics = self.validate()
+            metrics.update(val_metrics)
+
+        self.history.append(metrics)
+        self.current_epoch += 1
+
+        log_epoch(
+            self.config,
+            epoch=self.current_epoch,
+            loss=avg_loss,
+            metric_name="val_acc",
+            metric_value=metrics.get("val_acc"),
+        )
+
+        # Checkpoint if configured
+        if (
+            self.config.checkpoint_every_n > 0
+            and self.current_epoch % self.config.checkpoint_every_n == 0
+        ):
+            self.save_checkpoint()
+            if self.checkpoint_callback is not None:
+                self.checkpoint_callback(self.snapshot())
+
+        return metrics
+
     def validate(self) -> dict[str, float]:
-        """Run validation on validation mask."""
+        """Run validation."""
         self.system.geometry.eval()
 
+        if self._is_graph_classification:
+            return self._validate_graph_classification()
+        else:
+            return self._validate_node_classification()
+
+    def _validate_node_classification(self) -> dict[str, float]:
+        """Validate on node classification (mask-based)."""
         # Use val_data if provided, else use train_data with val_mask
         data = self._data
         if self.val_data is not None and hasattr(self.val_data, "_data"):
@@ -212,6 +313,33 @@ class GraphSystemTrainer:
 
         return {
             "val_loss": loss,
+            "val_acc": acc,
+        }
+
+    def _validate_graph_classification(self) -> dict[str, float]:
+        """Validate on graph classification (DataLoader-based)."""
+        loader = self.train_data.get_dataloader("val")
+
+        total_loss = 0.0
+        total_correct = 0
+        total_samples = 0
+
+        with torch.no_grad(), self._autocast:
+            for data_batch in loader:
+                data_batch = data_batch.to(self.device)
+                out = self.system.forward(data_batch.x, data_batch.edge_index, data_batch.batch)
+                loss = torch.nn.functional.cross_entropy(out, data_batch.y)
+
+                pred = out.argmax(dim=1)
+                total_loss += loss.item() * data_batch.num_graphs
+                total_correct += (pred == data_batch.y).sum().item()
+                total_samples += data_batch.num_graphs
+
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        acc = total_correct / total_samples if total_samples > 0 else 0.0
+
+        return {
+            "val_loss": avg_loss,
             "val_acc": acc,
         }
 
