@@ -27,20 +27,14 @@
 
 **Goal:** Full training loop for cartpole, pendulum, acrobot.
 
-**Blockers:**
-- Data provider works (get_batch), returns `reward`/`episode_reward`
-- Validator expects `val_acc` → need task-aware objective mapping (registry `payload_key`)
-- Need `RLSystemTrainer` implementing:
-  - Episode rollout with system forward
-  - Return/advantage computation
-  - Policy gradient / actor-critic weight update
+**Status:** ✅ COMPLETED - RLSystemTrainer implemented and tested
 
 **Experiments:**
-| Experiment | Axes | Budget | Purpose |
-|------------|------|--------|---------|
-| B1a | digital/ff/instant/null/grad/euclid | 0.5h | Cartpole baseline |
-| B1b | digital/ff/instant/null/grad/euclid | 0.5h | Pendulum baseline |
-| B1c | digital/recurrent/energy_min/null/grad/adam | 1h | Recurrent + energy_min on control |
+| Experiment | Axes | Budget | Purpose | Status |
+|------------|------|--------|---------|--------|
+| B1a | digital/ff/instant/null/grad/euclid | 0.5h | Cartpole baseline | ✅ Done |
+| B1b | digital/ff/instant/null/grad/euclid | 0.5h | Pendulum baseline | ✅ Done |
+| B1c | digital/recurrent/energy_min/null/grad/adam | 1h | Recurrent + energy_min on control | Pending |
 
 ---
 
@@ -48,19 +42,14 @@
 
 **Goal:** Full training for cora/citeseer/pubmed (node classification) + graph_classification.
 
-**Blockers:**
-- Data provider extracts node features from PyG Data
-- Need `GraphSystemTrainer` with:
-  - Masked node classification (train/val/test masks)
-  - Neighbor sampling / full-graph forward
-  - Graph-level readout for graph_classification
+**Status:** ✅ COMPLETED - GraphSystemTrainer implemented and tested
 
 **Experiments:**
-| Experiment | Axes | Budget | Purpose |
-|------------|------|--------|---------|
-| B2a | digital/ff/instant/null/grad/euclid | 0.5h | Cora baseline |
-| B2b | digital/conv/instant/homeostatic/euclid | 0.5h | Conv geometry on graph |
-| B2c | digital/graph/instant/grad/euclid | 1h | Native graph geometry |
+| Experiment | Axes | Budget | Purpose | Status |
+|------------|------|--------|---------|--------|
+| B2a | digital/graph/instant/random_projections/euclid | 0.5h | Cora baseline | ✅ Done |
+| B2b | digital/conv/instant/homeostatic/euclid | 0.5h | Conv geometry on graph | Pending |
+| B2c | digital/graph/instant/grad/euclid | 1h | Native graph geometry | Pending (needs compatible credit) |
 
 ---
 
@@ -95,8 +84,8 @@
 | Item | Description | Priority |
 |------|-------------|----------|
 | Compiled settle for energy_minimization | Move convergence check off hot path; batch horizon with `compiled=True` | High — enables GPU speedup |
-| RLSystemTrainer | Episode rollout + policy gradient | High — unblocks B1 |
-| GraphSystemTrainer | Masked node classification + graph readout | High — unblocks B2 |
+| ~~RLSystemTrainer~~ | ~~Episode rollout + policy gradient~~ | ~~High — unblocks B1~~ ✓ |
+| ~~GraphSystemTrainer~~ | ~~Masked node classification + graph readout~~ | ~~High — unblocks B2~~ ✓ |
 | CausalTransformer patch embedding | ViT-style for vision; 1D token handling for sequence | Medium — unblocks B3 |
 | Timing cache per (device, fidelity, workers, task) | Already works; verify at scale | Low |
 | Claim eligibility | n>=3, replay_hash, normalized_metric, PASS — currently 0; investigate | Medium |
@@ -126,8 +115,8 @@ uv run comp coverage report --store experiments/<latest>.duckdb
 ## 📋 PRIORITY ORDER
 
 1. **C1** — GPU scale on best combo (validates Track C)
-2. **B1a** — RLSystemTrainer + Cartpole (unblocks Track B1)
-3. **B2a** — GraphSystemTrainer + Cora (unblocks Track B2)
+2. ~~**B1a** — RLSystemTrainer + Cartpole (unblocks Track B1)~~ ✓
+3. ~~**B2a** — GraphSystemTrainer + Cora (unblocks Track B2)~~ ✓
 4. **C2-C4** — Remaining GPU scale combos
 5. **B1b-B1c, B2b-B2c** — RL/Graph variety
 6. **B3, B4** — Sequence + Tabular coverage

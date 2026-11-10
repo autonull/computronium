@@ -30,8 +30,8 @@ from computronium.experiment.schema.harvest import (
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 
 if TYPE_CHECKING:
-    from computronium.experiment.legality.dsl import Expr
     from computronium.experiment.kernel.evaluate import TaskShape
+    from computronium.experiment.legality.dsl import Expr
     from computronium.experiment.schema.axis import AxisSpec
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
     from computronium.experiment.schema.run_spec import RunSpec
@@ -112,7 +112,9 @@ def _compile_expr(expr: Expr) -> Callable[[tuple[str, ...]], Any]:  # ruff: igno
             raise ValueError(f"Unknown expr type: {type(expr)}")
 
 
-def _compiled_void_constraints() -> tuple[list[Callable[[tuple[str, ...]], Any]], list[Callable[[tuple[str, ...]], Any]]]:
+def _compiled_void_constraints() -> tuple[
+    list[Callable[[tuple[str, ...]], Any]], list[Callable[[tuple[str, ...]], Any]]
+]:
     """Compiled ``(task-independent, task-dependent)`` void constraint evaluators.
 
     Task-independent constraints never read ``task`` and are checked once per
@@ -198,16 +200,15 @@ def _is_geometry_dynamics_compatible(geometry: str, dynamics: str) -> bool:
     non-layered geometries require instantaneous dynamics.
     """
     # Recurrent geometry requires settling dynamics
-    if geometry in {"recurrent", "recurrent_attractor"}:
-        if dynamics not in {
-            "energy_minimization",
-            "predictive_settling",
-            "error_predictive_coding",
-            "pc_alm",
-            "diffusion",
-            "instantaneous",
-        }:
-            return False
+    if geometry in {"recurrent", "recurrent_attractor"} and dynamics not in {
+        "energy_minimization",
+        "predictive_settling",
+        "error_predictive_coding",
+        "pc_alm",
+        "diffusion",
+        "instantaneous",
+    }:
+        return False
 
     # Non-layered geometries require instantaneous dynamics
     if geometry in {
@@ -220,14 +221,15 @@ def _is_geometry_dynamics_compatible(geometry: str, dynamics: str) -> bool:
         "causal_transformer",
         "tile",
         "tile_mesh",
-    }:
-        if dynamics != "instantaneous":
-            return False
+    } and dynamics != "instantaneous":
+        return False
 
     return True
 
 
-def _is_geometry_task_compatible(geometry: str, task_shape: TaskShape) -> bool:
+def _is_geometry_task_compatible(
+    geometry: str, task_shape: TaskShape, task_id: str | None = None
+) -> bool:
     """Check if a geometry is compatible with a task's input shape.
 
     Some geometries require specific input structures (e.g., NTM needs 1D,
@@ -239,9 +241,17 @@ def _is_geometry_task_compatible(geometry: str, task_shape: TaskShape) -> bool:
     else:
         ndim = len(input_shape)
 
-    # Graph geometry requires graph structure (edge_index) - not standard vision tasks
+    # Graph geometry requires graph structure (edge_index) - only for graph tasks
     if geometry == "graph":
-        return False  # Vision tasks don't provide graph structure
+        # Allow graph geometry for graph domain tasks
+        if task_id is not None:
+            from computronium.experiment.registry.task_registry import get_task_registry
+
+            registry = get_task_registry()
+            task_spec = registry.get(task_id)
+            if task_spec.domain.value == "graph":
+                return True
+        return False  # Non-graph tasks don't provide graph structure
 
     # Causal transformer expects 1D sequence
     if geometry == "causal_transformer":
@@ -340,14 +350,18 @@ def _search_space_cache_key(spec: RunSpec, tasks: Sequence[str] | None) -> tuple
     return (axes_key, tasks_key, objectives_key)
 
 
-def _filter_axes_cache_key(axes_snapshot: list, spec: RunSpec, tasks: Sequence[str] | None = None) -> tuple:
+def _filter_axes_cache_key(
+    axes_snapshot: list, spec: RunSpec, tasks: Sequence[str] | None = None
+) -> tuple:
     """Create a cache key for _filter_axes_for_validity."""
     # Key includes: axis names per axis kind, ALL tasks (not just first)
     axes_key = tuple(
         tuple(sorted(s.name for s in axes_snapshot if s.axis_kind == axis))
         for axis in StructuralAxis
     )
-    task_key = tuple(sorted(tasks or spec.task_names)) if (tasks or spec.task_names) else ()
+    task_key = (
+        tuple(sorted(tasks or spec.task_names)) if (tasks or spec.task_names) else ()
+    )
     return (axes_key, task_key)
 
 
@@ -458,11 +472,14 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure, too-many-state
     cache_key = _filter_axes_cache_key(axes_snapshot, spec, tasks)
     if cache_key in _filter_axes_cache:
         cached = _filter_axes_cache[cache_key]
-        valid_names_by_axis = {axis.value: set(cached[axis.value]) for axis in StructuralAxis}
+        valid_names_by_axis = {
+            axis.value: set(cached[axis.value]) for axis in StructuralAxis
+        }
         return [
             axis_spec
             for axis_spec in axes_snapshot
-            if axis_spec.name in valid_names_by_axis.get(axis_spec.axis_kind.value, set())
+            if axis_spec.name
+            in valid_names_by_axis.get(axis_spec.axis_kind.value, set())
             or not valid_names_by_axis.get(axis_spec.axis_kind.value)
         ]
 
@@ -771,6 +788,7 @@ def _composable(
         input_shape=task_shape.input_shape,
         output_dim=task_shape.output_dim,
         param_budget=param_budget,
+        task=task_instance,
     )
     if not dry_ok:
         _composable_cache[cache_key] = False
@@ -1023,13 +1041,17 @@ def iter_candidates(  # ruff: ignore[complex-structure]
 
         # Explicit substrate-dynamics compatibility filter (defense-in-depth for
         # void constraints that may not be evaluated correctly)
-        if not _is_substrate_dynamics_compatible(coordinate.substrate, coordinate.dynamics):
+        if not _is_substrate_dynamics_compatible(
+            coordinate.substrate, coordinate.dynamics
+        ):
             if use_void_cache and void_cache:
                 void_cache.record_void(coordinate)
             continue
 
         # Explicit geometry-dynamics compatibility filter
-        if not _is_geometry_dynamics_compatible(coordinate.geometry, coordinate.dynamics):
+        if not _is_geometry_dynamics_compatible(
+            coordinate.geometry, coordinate.dynamics
+        ):
             if use_void_cache and void_cache:
                 void_cache.record_void(coordinate)
             continue
@@ -1037,7 +1059,9 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         # Explicit geometry-task compatibility filter
         if shape is not None:
             task_shape = shape(task)
-            if not _is_geometry_task_compatible(coordinate.geometry, task_shape):
+            if not _is_geometry_task_compatible(
+                coordinate.geometry, task_shape, schedule.task_id
+            ):
                 if use_void_cache and void_cache:
                     void_cache.record_void(coordinate)
                 continue

@@ -16,17 +16,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+from computronium.experiment.schema.axis import (
+    AXES_REGISTRIES,
+    StructuralAxis,
+)
 from computronium.experiment.schema.registries import (
     CONSTRAINTS_REGISTRY,
     ConstraintKind,
 )
 from computronium.experiment.schema.seed_registries import seed_all_registries
-from computronium.experiment.schema.axis import (
-    StructuralAxis,
-    AXES_REGISTRIES,
-    get_axis_spec,
-)
-from computronium.experiment.schema.axis import StructuralAxis
 
 
 def generate_substrate_dynamics_matrix() -> dict[str, dict[str, bool]]:
@@ -37,7 +35,7 @@ def generate_substrate_dynamics_matrix() -> dict[str, dict[str, bool]]:
     dynamics = list(AXES_REGISTRIES[StructuralAxis.DYNAMICS].keys())
 
     # Default: all compatible
-    matrix = {s: {d: True for d in dynamics} for s in substrates}
+    matrix = {s: dict.fromkeys(dynamics, True) for s in substrates}
 
     # Apply void constraints
     for constraint in CONSTRAINTS_REGISTRY.values():
@@ -47,7 +45,6 @@ def generate_substrate_dynamics_matrix() -> dict[str, dict[str, bool]]:
         # Parse void constraint to extract incompatible pairs
         # Constraints are logical expressions - we need to evaluate them
         # For now, use the hardcoded known incompatibilities
-        pass
 
     # Known void constraints (from CONSTRAINTS_REGISTRY and search_space.py)
     void_pairs = {
@@ -58,17 +55,14 @@ def generate_substrate_dynamics_matrix() -> dict[str, dict[str, bool]]:
         ("neuromorphic", "error_predictive_coding"): False,
         ("neuromorphic", "pc_alm"): False,
         ("neuromorphic", "diffusion"): True,  # Actually allowed
-
         # Quantum substrate
         ("quantum", "spike_integration"): False,
         ("quantum", "lazy"): False,
         ("quantum", "predictive_settling"): False,
         ("quantum", "error_predictive_coding"): False,
         ("quantum", "pc_alm"): False,
-
         # Ternary substrate incompatible with pc_alm
         ("ternary", "pc_alm"): False,
-
         # Neuromorphic allowed dynamics
         ("neuromorphic", "spike_integration"): True,
         ("neuromorphic", "energy_minimization"): True,
@@ -89,13 +83,17 @@ def generate_geometry_dynamics_matrix() -> dict[str, dict[str, bool]]:
     geometries = list(AXES_REGISTRIES[StructuralAxis.GEOMETRY].keys())
     dynamics = list(AXES_REGISTRIES[StructuralAxis.DYNAMICS].keys())
 
-    matrix = {g: {d: True for d in dynamics} for g in geometries}
+    matrix = {g: dict.fromkeys(dynamics, True) for g in geometries}
 
     # Recurrent geometries require settling dynamics
     recurrent_geoms = {"recurrent", "recurrent_attractor"}
     settling_dynamics = {
-        "energy_minimization", "predictive_settling", "error_predictive_coding",
-        "pc_alm", "diffusion", "instantaneous"
+        "energy_minimization",
+        "predictive_settling",
+        "error_predictive_coding",
+        "pc_alm",
+        "diffusion",
+        "instantaneous",
     }
 
     for geom in recurrent_geoms:
@@ -106,8 +104,13 @@ def generate_geometry_dynamics_matrix() -> dict[str, dict[str, bool]]:
 
     # Non-layered geometries require instantaneous dynamics
     non_layered = {
-        "attention", "spatial_lattice", "graph", "conv", "nca",
-        "ntm", "causal_transformer"
+        "attention",
+        "spatial_lattice",
+        "graph",
+        "conv",
+        "nca",
+        "ntm",
+        "causal_transformer",
     }
 
     for geom in non_layered:
@@ -126,7 +129,7 @@ def generate_credit_update_matrix() -> dict[str, dict[str, bool]]:
     credits = list(AXES_REGISTRIES[StructuralAxis.CREDIT].keys())
     updates = list(AXES_REGISTRIES[StructuralAxis.UPDATE].keys())
 
-    matrix = {c: {u: True for u in updates} for c in credits}
+    matrix = {c: dict.fromkeys(updates, True) for c in credits}
 
     # Known problematic combinations (from gate calibration analysis)
     # homeostatic + euclidean on digital -> BFloat16 mismatch
@@ -174,19 +177,27 @@ def write_outputs(output_dir: Path = Path("docs/generated")) -> None:
 
     # Substrate × Dynamics
     sub_dyn = generate_substrate_dynamics_matrix()
-    (output_dir / "substrate_dynamics_compat.json").write_text(json.dumps(sub_dyn, indent=2))
+    (output_dir / "substrate_dynamics_compat.json").write_text(
+        json.dumps(sub_dyn, indent=2)
+    )
 
     # Geometry × Dynamics
     geom_dyn = generate_geometry_dynamics_matrix()
-    (output_dir / "geometry_dynamics_compat.json").write_text(json.dumps(geom_dyn, indent=2))
+    (output_dir / "geometry_dynamics_compat.json").write_text(
+        json.dumps(geom_dyn, indent=2)
+    )
 
     # Credit × Update
     cred_upd = generate_credit_update_matrix()
-    (output_dir / "credit_update_compat.json").write_text(json.dumps(cred_upd, indent=2))
+    (output_dir / "credit_update_compat.json").write_text(
+        json.dumps(cred_upd, indent=2)
+    )
 
     # Availability predicates
     preds = generate_availability_predicates()
-    (output_dir / "availability_predicates.json").write_text(json.dumps(preds, indent=2))
+    (output_dir / "availability_predicates.json").write_text(
+        json.dumps(preds, indent=2)
+    )
 
     # Void constraints
     voids = generate_void_constraints()

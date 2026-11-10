@@ -161,6 +161,7 @@ def test_estimate_cell_count_never_zero():
 def test_cost_model_round_trip(tmp_path, monkeypatch):
     """A measurement survives to the next run through the cache."""
     from computronium.experiment import wave
+
     monkeypatch.setattr(wave, "TIMING_CACHE", tmp_path / ".timing.json")
     measured = wave.CostModel(9.25, 5.5, measured=True, workers=1)
 
@@ -175,6 +176,7 @@ def test_cost_model_round_trip(tmp_path, monkeypatch):
 def test_cost_model_missing_falls_back_to_defaults(tmp_path, monkeypatch):
     """No cache entry means the documented fallback table, not a crash."""
     from computronium.experiment import wave
+
     monkeypatch.setattr(wave, "TIMING_CACHE", tmp_path / "absent.json")
 
     model = wave._load_cost_model("cpu", "L0", workers=1)

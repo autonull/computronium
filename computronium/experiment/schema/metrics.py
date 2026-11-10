@@ -46,6 +46,12 @@ HISTORY_METRICS: Final[frozenset[str]] = frozenset({
     "val_acc",
     "val_loss",
     "val_ppl",
+    # RL metrics
+    "reward",
+    "mean_reward",
+    "std_reward",
+    # Graph metrics (same as vision but with different keys)
+    "accuracy",
 })
 
 # What a record's payload offers an objective: the history plus the cost the
@@ -178,6 +184,13 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "val_acc_mean": "val_acc_mean",
     "val_acc_std": "val_acc_std",
     "val_acc_n_seeds": "val_acc_n_seeds",
+    # RL objectives
+    "mean_reward": "mean_reward",
+    "std_reward": "std_reward",
+    "mean_length": "mean_length",
+    # Graph objectives
+    "accuracy": "accuracy",
+    "f1_score": "f1_score",
 })
 
 

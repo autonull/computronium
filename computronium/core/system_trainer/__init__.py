@@ -56,6 +56,7 @@ from computronium.core.system_trainer.factory import (
     create_fa_system,
     extract_config,
 )
+from computronium.core.system_trainer.graph_trainer import GraphSystemTrainer
 from computronium.core.system_trainer.joint import (
     compose_joint_system,
     compose_joint_system_from_configs,
@@ -70,6 +71,7 @@ from computronium.core.system_trainer.protocol import (
     TU,
     JointSystem,
 )
+from computronium.core.system_trainer.rl_trainer import RLSystemTrainer
 from computronium.core.system_trainer.spec import (
     compose_joint_system_from_configs as _compose_joint_system_from_configs_spec,
 )
@@ -93,6 +95,8 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "train_on_task",
     "train_task",
     "SystemTrainer",
+    "RLSystemTrainer",
+    "GraphSystemTrainer",
     "DistributedSystemTrainer",
     "DistributedState",
     "StepCallback",
@@ -146,5 +150,5 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "run_continual_learning_suite",
     "run_continual_train_step",
     "_compose_joint_system_from_configs_spec",
-    "_compose_system_from_configs_spec",
+    "_compose_system_from_configs_spec", "make_transition_fn",
 ]

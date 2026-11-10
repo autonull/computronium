@@ -57,7 +57,9 @@ def test_priors_registry_seeded() -> None:
     """Priors registry exists and is seeded with 5 priors (3 dynamics step sizes + 2 geometry sizes)."""
     _seed_registries()
     assert PRIORS_REGISTRY is not None
-    assert len(PRIORS_REGISTRY) >= 5  # dynamics_step_size_default, _diffusion, _predictive_settling, hidden_width, hidden_depth
+    assert (
+        len(PRIORS_REGISTRY) >= 5
+    )  # dynamics_step_size_default, _diffusion, _predictive_settling, hidden_width, hidden_depth
 
 
 def test_policies_registry_seeded() -> None:

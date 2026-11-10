@@ -55,6 +55,8 @@ class SystemTrainerConfig:
         precision: Numerical precision ("fp32", "fp16", "bf16").
             Uses ``torch.autocast`` for mixed precision on CUDA.
         checkpoint_every_n: Save checkpoint every N epochs (0 = disabled).
+        extra: Extra configuration dictionary for domain-specific trainers
+            (e.g., RL, Graph) that don't fit the standard training loop.
         # Distributed training (Phase E1)
         distributed_backend: Literal["none", "ddp", "fsdp"] = "none"
         ddp_backend: str = "nccl"  # nccl, gloo, mpi
@@ -88,6 +90,7 @@ class SystemTrainerConfig:
     async_dataloading: bool = False
     precision: Literal["fp32", "fp16", "bf16"] = "fp32"
     checkpoint_every_n: int = 0
+    extra: dict[str, object] | None = None
     # Early stopping (WS2.4)
     early_stopping_patience: int = 0  # 0 = disabled
     early_stopping_min_delta: float = 0.01  # Minimum improvement (1% default)

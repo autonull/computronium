@@ -10,8 +10,6 @@ from __future__ import annotations
 import os
 import sys
 
-import torch
-
 if "--device" in sys.argv:
     try:
         idx = sys.argv.index("--device")
@@ -22,39 +20,23 @@ if "--device" in sys.argv:
 
 import argparse
 import json
-import random
-import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from typing import Any
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
 from computronium.domains._task_registry import get_fidelity_tasks
-from computronium.experiment.evidence.store import RecordStore
-from computronium.experiment.evidence.store._models import StoreConfig
-from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import search_space_from_spec
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate, DataOrigin, Schedule
-from computronium.experiment.schema.record import GateVerdict
-from computronium.experiment.schema.run_spec import RunSpec
-from computronium.ontology.system import check_compatibility_matrix
 
 # Import shared wave functionality
 from computronium.experiment.wave import (
     CostModel,
     PolicyPlanner,
-    StaticPlanner,
     _axis_overrides,
-    _build_provenance,
     _build_spec,
     _default_store_path,
-    _estimate_cell_count,
     _format_error,
     _load_cost_model,
     _pretty_print_dry_run,
@@ -183,9 +165,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
     warm_start_path = promote_from if promote_from else (store_path if resume else None)
     if ladder:
         # Ladder mode: start at L0, promote to L1, then L2
-        logger.info(
-            "Ladder mode enabled: will promote L0→L1→L2"
-        )
+        logger.info("Ladder mode enabled: will promote L0→L1→L2")
         planner: Any = PolicyPlanner(
             spec=spec,
             fidelity=fidelity,
@@ -272,7 +252,9 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
                 per_task[task_id] = sum(times) / len(times)
 
         measured = CostModel(
-            cost_per_cell_s=max(0.01, summary.walltime_s * workers / summary.cells_evaluated),
+            cost_per_cell_s=max(
+                0.01, summary.walltime_s * workers / summary.cells_evaluated
+            ),
             startup_s=0.0,
             measured=True,
             workers=workers,
@@ -354,7 +336,9 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
     )
     parser.add_argument("--hyperparameters", default="", help="JSON: hyperparameters")
     parser.add_argument("--objectives", default="", help="Comma-separated objectives")
-    parser.add_argument("--axis-objectives", default="", help="JSON: axis -> [objectives]")
+    parser.add_argument(
+        "--axis-objectives", default="", help="JSON: axis -> [objectives]"
+    )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Verbose progress output"
     )
@@ -500,15 +484,21 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
                         f"Budget: {args.hours}h ({int(args.hours * 3600)}s) | "
                         f"Starting Fidelity: {args.fidelity} | Tasks: {', '.join(result.get('tasks', []))}"
                     )
-                    print(f"Ladder budget split: L0={budget_split.get('L0', 0.6)*100:.0f}% "
-                          f"L1={budget_split.get('L1', 0.3)*100:.0f}% "
-                          f"L2={budget_split.get('L2', 0.1)*100:.0f}%")
-                    print(f"Estimated cells: {result.get('n', 0)} across {result.get('workers', 0)} workers")
+                    print(
+                        f"Ladder budget split: L0={budget_split.get('L0', 0.6) * 100:.0f}% "
+                        f"L1={budget_split.get('L1', 0.3) * 100:.0f}% "
+                        f"L2={budget_split.get('L2', 0.1) * 100:.0f}%"
+                    )
+                    print(
+                        f"Estimated cells: {result.get('n', 0)} across {result.get('workers', 0)} workers"
+                    )
                     print()
                     cells = result.get("cells", [])
                     for fid in ["L0", "L1", "L2"]:
                         fid_count = int(result.get("n", 0) * budget_split.get(fid, 0))
-                        print(f"--- {fid} ({fid_count} cells, n_seeds={ladder_seeds[fid]}, epochs={ladder_epochs[fid]}) ---")
+                        print(
+                            f"--- {fid} ({fid_count} cells, n_seeds={ladder_seeds[fid]}, epochs={ladder_epochs[fid]}) ---"
+                        )
                         for i, (coord, _schedule) in enumerate(cells[:5], 1):
                             print(
                                 f"  {i}  {coord.substrate:<15} {coord.geometry:<15} {coord.dynamics:<20} "
@@ -536,9 +526,9 @@ def main() -> None:  # ruff: ignore[too-many-statements, too-many-locals, too-ma
                     budget_split = result.get("budget_split", {})
                     print(
                         f"Dry-run (ladder): {n} cells | L0/L1/L2 | {tasks_str} | "
-                        f"split: L0={budget_split.get('L0',0.6)*100:.0f}% "
-                        f"L1={budget_split.get('L1',0.3)*100:.0f}% "
-                        f"L2={budget_split.get('L2',0.1)*100:.0f}% | "
+                        f"split: L0={budget_split.get('L0', 0.6) * 100:.0f}% "
+                        f"L1={budget_split.get('L1', 0.3) * 100:.0f}% "
+                        f"L2={budget_split.get('L2', 0.1) * 100:.0f}% | "
                         f"~{model.cost_per_cell_s:.1f}s/cell ({model.source}) | "
                         f"~{total_est:.0f}s total"
                     )

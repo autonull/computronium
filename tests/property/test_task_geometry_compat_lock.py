@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment.kernel.compose import (
-    ProposalComposeError,
     compose_cell_system,
 )
 from computronium.experiment.kernel.evaluate import task_shape

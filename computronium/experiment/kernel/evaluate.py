@@ -44,11 +44,11 @@ from computronium.experiment.kernel.compose import (
     ComposedCell,
     compose_cell_system,
 )
+from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
     PARAM_BUDGET_TOLERANCE,
 )
-from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.ontology.substrate._substrate import SubstrateConfig
 from computronium.ontology.substrate.spec import (
     SubstrateSpec,
@@ -235,7 +235,7 @@ def evaluate_cell(
     shape = _task_shape(task)
     cell = _compose_cell(coordinate, geometry, shape, schedule.param_budget, task)
     config = _create_trainer_config(schedule, resolved_device, params)
-    trainer_class = _choose_trainer_class(schedule)
+    trainer_class = _choose_trainer_class(schedule, task)
 
     temp_dir, checkpoint_path_ref, checkpoint_callback = _setup_checkpointing(
         schedule, checkpoint_dir, config
@@ -333,8 +333,23 @@ def _set_seeds(seed: int, deterministic: bool) -> None:
     random.seed(seed)
 
 
-def _choose_trainer_class(schedule: Schedule):
-    """Choose trainer class based on distributed backend."""
+def _choose_trainer_class(schedule: Schedule, task: Any):
+    """Choose trainer class based on task domain and distributed backend."""
+    # Check task domain for specialized trainers
+    domain_type = getattr(task, "domain_type", None)
+    if domain_type is not None:
+        from computronium.domains.base import DomainType
+
+        if domain_type == DomainType.RL:
+            from computronium.core.system_trainer import RLSystemTrainer
+
+            return RLSystemTrainer
+        if domain_type == DomainType.GRAPH:
+            from computronium.core.system_trainer import GraphSystemTrainer
+
+            return GraphSystemTrainer
+
+    # Default: distributed or standard SystemTrainer
     return (
         DistributedSystemTrainer
         if schedule.distributed_backend != "none"
@@ -445,7 +460,11 @@ def _add_energy_efficiency(metrics: dict[str, float], task_id: str) -> None:
     primary_key = _primary_metric_key(task_id)
     primary_val = metrics.get(primary_key)
     energy_per_sample = metrics.get("energy_per_sample")
-    if primary_val is not None and energy_per_sample is not None and energy_per_sample > 0:
+    if (
+        primary_val is not None
+        and energy_per_sample is not None
+        and energy_per_sample > 0
+    ):
         metrics["energy_efficiency"] = float(primary_val) / float(energy_per_sample)
 
 

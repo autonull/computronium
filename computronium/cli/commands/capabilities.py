@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from computronium.experiment.schema.registries import (
+    CAPABILITIES_REGISTRY,
+    CapabilityKind,
+)
 from computronium.experiment.schema.seed_registries import seed_all_registries
-from computronium.experiment.schema.registries import CAPABILITIES_REGISTRY, CapabilityKind
 
 app = typer.Typer(help="Show registered capabilities")
 console = Console()
@@ -18,9 +20,13 @@ console = Console()
 
 @app.command("list")
 def list_capabilities(
-    kind: CapabilityKind | None = typer.Option(None, "--kind", "-k", help="Filter by capability kind"),
+    kind: CapabilityKind | None = typer.Option(
+        None, "--kind", "-k", help="Filter by capability kind"
+    ),
     stage: str | None = typer.Option(None, "--stage", "-s", help="Filter by stage"),
-    format: str = typer.Option("table", "--format", "-f", help="Output format: table, json"),
+    format: str = typer.Option(
+        "table", "--format", "-f", help="Output format: table, json"
+    ),
 ) -> None:
     """List all registered capabilities."""
     seed_all_registries()
@@ -53,7 +59,9 @@ def list_capabilities(
             cap.stage,
             "✓" if cap.required else "✗",
             cap.owner,
-            cap.description[:80] + "..." if len(cap.description) > 80 else cap.description,
+            cap.description[:80] + "..."
+            if len(cap.description) > 80
+            else cap.description,
         )
 
     console.print(table)
@@ -61,7 +69,9 @@ def list_capabilities(
 
 @app.command("verify")
 def verify_capabilities(
-    stage: str | None = typer.Option(None, "--stage", "-s", help="Verify specific stage"),
+    stage: str | None = typer.Option(
+        None, "--stage", "-s", help="Verify specific stage"
+    ),
 ) -> None:
     """Verify capability coverage for a stage or all stages."""
     seed_all_registries()
@@ -81,15 +91,21 @@ def verify_capabilities(
         required = [c for c in stage_caps if c.required]
         optional = [c for c in stage_caps if not c.required]
 
-        console.print(f"\n  [cyan]{stage_name}[/cyan]: {len(stage_caps)} capabilities ({len(required)} required, {len(optional)} optional)")
+        console.print(
+            f"\n  [cyan]{stage_name}[/cyan]: {len(stage_caps)} capabilities ({len(required)} required, {len(optional)} optional)"
+        )
 
         missing_required = []
         for cap in required:
             if cap.verifying_test:
-                console.print(f"    ✓ {cap.capability_id} ({cap.name}) - test: {cap.verifying_test}")
+                console.print(
+                    f"    ✓ {cap.capability_id} ({cap.name}) - test: {cap.verifying_test}"
+                )
             else:
                 missing_required.append(cap)
-                console.print(f"    ⚠ {cap.capability_id} ({cap.name}) - NO VERIFYING TEST")
+                console.print(
+                    f"    ⚠ {cap.capability_id} ({cap.name}) - NO VERIFYING TEST"
+                )
 
         for cap in optional:
             console.print(f"    • {cap.capability_id} ({cap.name}) [optional]")
@@ -97,7 +113,9 @@ def verify_capabilities(
     if stage:
         req = len([c for c in caps if c.required])
         has_test = len([c for c in caps if c.required and c.verifying_test])
-        console.print(f"\n  Required: {req}, With tests: {has_test}, Missing: {req - has_test}")
+        console.print(
+            f"\n  Required: {req}, With tests: {has_test}, Missing: {req - has_test}"
+        )
 
 
 @app.command("matrix")
@@ -119,12 +137,15 @@ def capability_matrix() -> None:
         row = [kind.value]
         for stage in stages:
             count = len([c for c in caps if c.kind == kind and c.stage == stage])
-            req_count = len([c for c in caps if c.kind == kind and c.stage == stage and c.required])
+            req_count = len([
+                c for c in caps if c.kind == kind and c.stage == stage and c.required
+            ])
             cell = f"{count}" + (f" ({req_count} req)" if req_count else "")
-            table.add_row(*row) if stage == stages[0] else table.add_row(*row) if False else None
+            table.add_row(*row) if stage == stages[0] else table.add_row(
+                *row
+            ) if False else None
             # Rich table needs add_row for each row
             # We'll build differently
-        pass
 
     # Rebuild properly
     table = Table(title="Capability Matrix (Kind × Stage)")
@@ -136,7 +157,9 @@ def capability_matrix() -> None:
         cells = []
         for stage in stages:
             count = len([c for c in caps if c.kind == kind and c.stage == stage])
-            req_count = len([c for c in caps if c.kind == kind and c.stage == stage and c.required])
+            req_count = len([
+                c for c in caps if c.kind == kind and c.stage == stage and c.required
+            ])
             cells.append(f"{count}" + (f" ({req_count} req)" if req_count else "0"))
         table.add_row(kind.value, *cells)
 

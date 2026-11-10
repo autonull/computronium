@@ -1076,7 +1076,9 @@ def references_params(expr: Expr) -> bool:
     so the question is asked here, once, rather than answered twice and
     differently.
     """
-    if isinstance(expr, Var) and (expr.name.startswith("params.") or expr.name == "output_dim"):
+    if isinstance(expr, Var) and (
+        expr.name.startswith("params.") or expr.name == "output_dim"
+    ):
         return True
     if isinstance(expr, HasKey):
         obj = expr.obj

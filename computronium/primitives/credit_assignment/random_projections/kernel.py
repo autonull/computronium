@@ -8,10 +8,10 @@ torch.compile rung is NOT applicable (breaks autograd graph).
 Kernel ladder: reference → Triton (custom FA kernel).
 """
 
+import zlib
 from typing import Any
 
 import torch
-import zlib
 
 from computronium.acceleration.availability import triton_rung_available
 from computronium.acceleration.fa_kernels import (

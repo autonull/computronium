@@ -28,11 +28,11 @@ from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import RecordStore
 from computronium.experiment.evidence.store._models import StoreConfig
 from computronium.experiment.kernel.evaluate import cell_record, task_shape
-from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.kernel.search_space import (
     iter_candidates,
     schedule_for,
 )
+from computronium.experiment.registry.task_registry import get_task_registry
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import (
     Coordinate,
@@ -347,7 +347,9 @@ class StaticPlanner:
                 records = store.query_records(
                     gate_verdict=GateVerdict.PASS_, quarantine=False
                 )
-            valid_records = [r for r in records if r.payload.get("normalized_metric") is not None]
+            valid_records = [
+                r for r in records if r.payload.get("normalized_metric") is not None
+            ]
             if not valid_records:
                 logger.warning(
                     "Promotion requested but no PASS records with normalized_metric found"
@@ -885,6 +887,8 @@ def _evaluate_cells_parallel(
 def _generate_report(store_path: str, run_id: str) -> dict[str, Any]:
     from computronium.experiment.surface.report import (
         ReportGenerator,
+    )
+    from computronium.experiment.surface.report import (
         RunSummary as ReportRunSummary,
     )
 
@@ -1061,7 +1065,12 @@ def _run_ladder_promotion(
             break
 
         expected = [
-            (cell_key, norm_metric, record, _expected_replicate_cost(record, target_fid))
+            (
+                cell_key,
+                norm_metric,
+                record,
+                _expected_replicate_cost(record, target_fid),
+            )
             for cell_key, (norm_metric, record) in sorted_cells
         ]
         if not expected:
@@ -1315,8 +1324,7 @@ def run_waves(
         # budget for L1/L2 promotion. The planner yields min(MAX_WAVE_CELLS, space)
         # cells per wave; if space < 1000, L0 needs < 50% budget.
         total_space = sum(
-            len(planner.search_space.primitives(axis))
-            for axis in StructuralAxis
+            len(planner.search_space.primitives(axis)) for axis in StructuralAxis
         )
         # Rough estimate: product of primitives across axes
         # For small spaces, use 30% instead of 50% for L0

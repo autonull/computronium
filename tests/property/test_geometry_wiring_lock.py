@@ -110,9 +110,7 @@ def test_every_geometry_class_is_registered() -> None:
     invisible to every other assertion here (nothing dispatches to it)."""
     from computronium.ontology.geometry import _GEOMETRY_REGISTRY
 
-    registered = {
-        entry.cls.__name__ for entry in _GEOMETRY_REGISTRY.all().values()
-    }
+    registered = {entry.cls.__name__ for entry in _GEOMETRY_REGISTRY.all().values()}
     classes = _geometry_classes()
     assert registered == classes, (
         f"geometry classes not declared with @geometry_backend: {classes - registered}"

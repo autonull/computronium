@@ -125,14 +125,18 @@ class TestPromotionExecutionLock:
     def test_apply_smart_survey_promotion_filters_by_threshold(self) -> None:
         """_apply_smart_survey_promotion filters cells below promotion_threshold."""
         source = inspect.getsource(promotion_module.apply_smart_survey_promotion)
-        filter_source = inspect.getsource(promotion_module._filter_promotions_by_threshold)
+        filter_source = inspect.getsource(
+            promotion_module._filter_promotions_by_threshold
+        )
         assert "promotion_threshold" in source
         assert "norm_acc < threshold" in filter_source
         assert "continue" in filter_source  # Skip cells below threshold
 
     def test_apply_smart_survey_promotion_uses_original_task(self) -> None:
         """_apply_smart_survey_promotion uses original task (not task cycling)."""
-        filter_source = inspect.getsource(promotion_module._filter_promotions_by_threshold)
+        filter_source = inspect.getsource(
+            promotion_module._filter_promotions_by_threshold
+        )
         build_source = inspect.getsource(promotion_module.build_promotion_schedule)
         assert "original_task = entry.record.schedule.task_id" in filter_source
         assert "task_id=task_name" in build_source

@@ -4,6 +4,7 @@ Reinforcement Learning Domain Tasks
 Standard RL environments (CartPole, Pendulum, etc.)
 """
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -83,9 +84,38 @@ class RLTask(DomainTask):
     def get_batch(
         self, split: str | TaskSplit = "train", batch_size: int = 32
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        raise NotImplementedError(
-            "RL Task does not support get_batch directly, use RLTrainer"
-        )
+        """Return a batch of observations for compatibility with standard data providers.
+
+        Note: RL tasks don't have supervised targets. This returns random observations
+        and dummy targets (zeros). For actual RL training, use RLSystemTrainer which
+        handles episode rollout and policy gradient internally.
+        """
+        if self._env is None:
+            self.setup()
+
+        # Generate random observations from the environment's observation space
+        obs_space = self._env.observation_space
+        if hasattr(obs_space, "shape"):
+            low = obs_space.low if hasattr(obs_space, "low") else -1.0
+            high = obs_space.high if hasattr(obs_space, "high") else 1.0
+            # Handle unbounded spaces (e.g., CartPole has inf bounds)
+            low = np.where(np.isfinite(low), low, -1.0)
+            high = np.where(np.isfinite(high), high, 1.0)
+            obs = np.random.uniform(
+                low=low,
+                high=high,
+                size=(batch_size, *obs_space.shape),
+            ).astype(np.float32)
+        else:
+            # Discrete observation space
+            obs = np.random.randint(0, obs_space.n, size=(batch_size,)).astype(
+                np.float32
+            )
+
+        x = torch.from_numpy(obs).to(self.device)
+        # Dummy targets (not used in RL training)
+        y = torch.zeros(batch_size, dtype=torch.long, device=self.device)
+        return x, y
 
     def create_trainer(self, model: nn.Module, **kwargs) -> object:
         from computronium.training.rl import RLTrainer

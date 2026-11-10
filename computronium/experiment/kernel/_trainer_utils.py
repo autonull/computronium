@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -118,9 +119,21 @@ def _create_trainer(
     """Create trainer, optionally resuming from checkpoint."""
     from pathlib import Path
 
-    batch_size = config.limit_train_batches or 32  # fallback
-    train_data = _create_data_provider(task, "train", batch_size, config.limit_train_batches)
-    val_data = _create_data_provider(task, "val", batch_size, config.limit_val_batches)
+    # Specialized trainers (RL, Graph) use the task directly as train_data
+    # because they have custom training loops that don't use standard data providers.
+    from computronium.core.system_trainer import GraphSystemTrainer, RLSystemTrainer
+
+    if trainer_class in (RLSystemTrainer, GraphSystemTrainer):
+        train_data = task
+        val_data = task  # Use same task for validation (different masks/splits)
+    else:
+        batch_size = config.limit_train_batches or 32  # fallback
+        train_data = _create_data_provider(
+            task, "train", batch_size, config.limit_train_batches
+        )
+        val_data = _create_data_provider(
+            task, "val", batch_size, config.limit_val_batches
+        )
 
     if resume_checkpoint_path and Path(resume_checkpoint_path).exists():
         # Resume from checkpoint
@@ -218,7 +231,7 @@ def _val_batches(task: Any, limit: int | None) -> Any | None:
     try:
         batch_size = 32  # default, will be overridden by _create_trainer
         return _create_data_provider(task, "val", batch_size, limit)
-    except (NotImplementedError, AttributeError):
+    except NotImplementedError, AttributeError:
         return None
 
 
@@ -226,10 +239,16 @@ def _sample_inputs(task: Any, device: str) -> torch.Tensor:
     """One flattened training batch, on ``device``."""
     try:
         sample_x, _ = next(iter(task.get_dataloader("train")))
-    except (TypeError, StopIteration):
+    except TypeError, StopIteration:
         # Task doesn't use DataLoader (e.g., graph, RL); use get_batch
         sample_x, _ = task.get_batch("train", batch_size=32)
-    flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
+
+    # Handle graph tasks: sample_x is a PyG Data object
+    if hasattr(sample_x, "x") and hasattr(sample_x, "edge_index"):
+        # Return node features as flat input for stability metrics
+        flat = sample_x.x.to(device)
+    else:
+        flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
     return flat
 
 
@@ -246,7 +265,7 @@ def _create_data_provider(task: Any, split: str, batch_size: int, limit: int | N
         loader = task.get_dataloader(split)
         if loader is not None:
             return islice(iter(loader), limit) if limit else loader
-    except (TypeError, StopIteration, NotImplementedError, AttributeError):
+    except TypeError, StopIteration, NotImplementedError, AttributeError:
         pass
 
     # Fall back to get_batch for tasks without DataLoaders
@@ -262,7 +281,7 @@ def _create_data_provider(task: Any, split: str, batch_size: int, limit: int | N
                     x = x.x
                 yield x, y
                 batches_yielded += 1
-            except (StopIteration, NotImplementedError):
+            except StopIteration, NotImplementedError:
                 break
 
     return batch_generator()

@@ -11,8 +11,6 @@ from __future__ import annotations
 import os
 import sys
 
-import torch
-
 if "--device" in sys.argv:
     try:
         idx = sys.argv.index("--device")
@@ -23,35 +21,26 @@ if "--device" in sys.argv:
 
 import argparse
 import json
-import shutil
-import subprocess  # ruff: ignore[suspicious-subprocess-import] - used for git SHA lookup with validated path
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from typing import Any
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
 from computronium.domains._task_registry import get_fidelity_tasks
-from computronium.experiment.evidence.store import RecordStore
-from computronium.experiment.evidence.store._models import StoreConfig
-from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import search_space_from_spec
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.coordinate import Coordinate, DataOrigin, Provenance, Schedule
-from computronium.experiment.schema.record import GateVerdict
+from computronium.experiment.schema.coordinate import (
+    Coordinate,
+    Schedule,
+)
 from computronium.experiment.schema.run_spec import RunSpec
-from computronium.ontology.system import check_compatibility_matrix
 
 # Import shared wave functionality
 from computronium.experiment.wave import (
     CostModel,
     StaticPlanner,
     _axis_overrides,
-    _build_provenance,
     _build_spec,
     _default_store_path,
     _estimate_cell_count,
@@ -272,7 +261,9 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
                 per_task[task_id] = sum(times) / len(times)
 
         measured = CostModel(
-            cost_per_cell_s=max(0.01, summary.walltime_s * workers / summary.cells_evaluated),
+            cost_per_cell_s=max(
+                0.01, summary.walltime_s * workers / summary.cells_evaluated
+            ),
             startup_s=0.0,
             measured=True,
             workers=workers,

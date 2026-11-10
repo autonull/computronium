@@ -851,10 +851,11 @@ class ModelBasedPolicy:
     def _count_combos(self, records: list[Record]) -> dict[tuple[str, str], int]:
         """Count completed trials per credit×update combo."""
         from collections import defaultdict
+
         counts: dict[tuple[str, str], int] = defaultdict(int)
         for r in records:
             if r.status.gate_verdict.value == "PASS":
-                counts[(r.credit, r.update)] += 1
+                counts[r.credit, r.update] += 1
         return dict(counts)
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
@@ -905,9 +906,12 @@ class ModelBasedPolicy:
         # First pass: ensure minimum sampling per combo
         # Collect all available cells and group by combo
         from collections import defaultdict
-        cu_to_coords: dict[tuple[str, str], list[tuple[Coordinate, Schedule]]] = defaultdict(list)
+
+        cu_to_coords: dict[tuple[str, str], list[tuple[Coordinate, Schedule]]] = (
+            defaultdict(list)
+        )
         for coord, sched in ctx.cells():
-            cu_to_coords[(coord.credit, coord.update)].append((coord, sched))
+            cu_to_coords[coord.credit, coord.update].append((coord, sched))
 
         # Yield cells for under-sampled combos first
         proposed_count = 0

@@ -209,7 +209,7 @@ def test_guard_removal_regression_predictive_settling() -> None:
                     "step_size": 100.0,
                 },
             )
-            dry_ok, dry_reason = _dry_run_trainable(
+            _dry_ok, _dry_reason = _dry_run_trainable(
                 coordinate=coord,
                 geometry={},
                 input_shape=(784,),
@@ -303,7 +303,7 @@ def test_guard_removal_regression_pc_alm() -> None:
                 "rho": 10.0,
             },
         )
-        dry_ok, dry_reason = _dry_run_trainable(
+        _dry_ok, _dry_reason = _dry_run_trainable(
             coordinate=coord,
             geometry={},
             input_shape=(784,),
@@ -441,7 +441,7 @@ def test_guard_removal_regression_error_predictive_coding() -> None:
                 "step_size": 100.0,
             },
         )
-        dry_ok, dry_reason = _dry_run_trainable(
+        _dry_ok, _dry_reason = _dry_run_trainable(
             coordinate=coord,
             geometry={},
             input_shape=(784,),

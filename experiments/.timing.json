@@ -54,7 +54,10 @@
     "startup_s": 0.0
   },
   "cpu/L0/8": {
-    "cost_per_cell_s": 3.428,
+    "cost_per_cell_s": 55.629,
+    "per_task": {
+      "iris": 0.033
+    },
     "startup_s": 0.0
   },
   "cuda/L0/1": {

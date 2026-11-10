@@ -35,7 +35,9 @@ class Deadline:
     started_at: float = 0.0  # When this deadline was created (monotonic)
 
     @classmethod
-    def from_hours(cls, hours: float, *, grace_seconds: float = DEFAULT_GRACE_SECONDS) -> Deadline:
+    def from_hours(
+        cls, hours: float, *, grace_seconds: float = DEFAULT_GRACE_SECONDS
+    ) -> Deadline:
         """Create deadline from hours budget."""
         now = time.monotonic()
         return cls(
@@ -45,7 +47,9 @@ class Deadline:
         )
 
     @classmethod
-    def from_seconds(cls, seconds: float, *, grace_seconds: float = DEFAULT_GRACE_SECONDS) -> Deadline:
+    def from_seconds(
+        cls, seconds: float, *, grace_seconds: float = DEFAULT_GRACE_SECONDS
+    ) -> Deadline:
         """Create deadline from seconds budget."""
         now = time.monotonic()
         return cls(

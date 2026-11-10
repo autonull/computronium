@@ -232,9 +232,6 @@ class _StageMixin(_PipelineBase):
 
         Filters out coordinates that are already measured or rejected.
         """
-        from computronium.experiment.kernel.evaluate import task_shape
-        from computronium.experiment.kernel.search_space import iter_candidates
-        from computronium.experiment.schema.coordinate import Schedule
 
         spec = self._config.run_spec
         fidelity_seeds = spec.fidelity_seeds or {"L0": 1, "L1": 2, "L2": 5}
@@ -297,7 +294,9 @@ class _StageMixin(_PipelineBase):
         ):
             if sched.fidelity != source_fidelity:
                 continue
-            promo_sched = build_promotion_schedule(sched, target_fidelity, sched.task_id, spec)
+            promo_sched = build_promotion_schedule(
+                sched, target_fidelity, sched.task_id, spec
+            )
             key = coord.measurement_key(promo_sched)
             if key in completed_keys or key in rejected_keys:
                 continue

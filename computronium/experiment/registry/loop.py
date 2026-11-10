@@ -1014,23 +1014,22 @@ class LoopDriver:
             else:
                 p_value = 1.0
 
-        elif hyp.test_type == TestType.ANOVA_ONE_WAY:
-            if len(groups) >= 2:
-                group_values = [groups[k] for k in comparison_values if k in groups]
-                if all(len(g) > 0 for g in group_values):
-                    stat, p_value = stats.f_oneway(*group_values)  # type: ignore[misc]
-                    test_statistic = float(stat)
-                    # Eta-squared as effect size
-                    all_vals = np.concatenate(group_values)
-                    grand_mean = np.mean(all_vals)
-                    ss_between = sum(
-                        len(g) * (np.mean(g) - grand_mean) ** 2 for g in group_values
-                    )
-                    ss_total = sum(
-                        (v - grand_mean) ** 2 for g in group_values for v in g
-                    )
-                    if ss_total > 0:
-                        effect_size = ss_between / ss_total
+        elif hyp.test_type == TestType.ANOVA_ONE_WAY and len(groups) >= 2:
+            group_values = [groups[k] for k in comparison_values if k in groups]
+            if all(len(g) > 0 for g in group_values):
+                stat, p_value = stats.f_oneway(*group_values)  # type: ignore[misc]
+                test_statistic = float(stat)
+                # Eta-squared as effect size
+                all_vals = np.concatenate(group_values)
+                grand_mean = np.mean(all_vals)
+                ss_between = sum(
+                    len(g) * (np.mean(g) - grand_mean) ** 2 for g in group_values
+                )
+                ss_total = sum(
+                    (v - grand_mean) ** 2 for g in group_values for v in g
+                )
+                if ss_total > 0:
+                    effect_size = ss_between / ss_total
 
         # Confidence interval for mean difference (approximate)
         if effect_size is not None and p_value is not None:

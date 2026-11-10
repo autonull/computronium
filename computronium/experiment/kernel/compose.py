@@ -6,10 +6,9 @@ single-source config classmethods and registries — no preset tables.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, fields
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
 
 from computronium.core.logging import get_logger
 from computronium.core.pipeline import _task_loss_tensor, forward_pass
@@ -21,7 +20,6 @@ from computronium.core.system_trainer.factory import param_count
 from computronium.experiment.learning.prior import apply_dynamics_step_size
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.geometry_keys import (
-    TOPOLOGY_KEYS,
     allowed_geometry_keys,
 )
 from computronium.experiment.schema.harvest import (
@@ -90,6 +88,7 @@ GRID_UPDATES: tuple[str, ...] = (
     "spectral_constrained",
 )
 
+
 class ProposalComposeError(ValueError):
     """A proposal's geometry or task could not be resolved to a runnable system."""
 
@@ -100,6 +99,7 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
     input_shape: tuple[int, ...],
     output_dim: int,
     param_budget: int,
+    task: Any | None = None,
 ) -> tuple[bool, str]:
     """Run a minimal dry-run to verify the cell can train.
 
@@ -114,6 +114,7 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
         input_shape: The task's input shape.
         output_dim: Number of output classes.
         param_budget: Parameter budget.
+        task: Optional task instance for graph edge_index extraction.
 
     Returns:
         (ok, reason): True if dry-run passes, False with reason if it fails.
@@ -123,6 +124,9 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
     # Only run dry-run for credits that have known failure modes
     credit_name = coordinate.credit
     DRY_RUN_CREDITS: set[str] = {"random_projections", "gradient"}
+    # Skip dry-run for graph geometry (requires full graph data, not dummy batch)
+    if coordinate.geometry == "graph":
+        return True, "graph geometry skipped"
     if credit_name not in DRY_RUN_CREDITS:
         return True, "credit not checked"
 
@@ -134,6 +138,7 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
             input_shape=input_shape,
             output_dim=output_dim,
             param_budget=param_budget,
+            task=task,
         )
         system = cell.system
 
@@ -355,7 +360,9 @@ def build_geometry_config(
         output_dim: Class count, from the task.
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
     """
-    from computronium.experiment.kernel._geometry_builders import build_geometry_config_dispatch
+    from computronium.experiment.kernel._geometry_builders import (
+        build_geometry_config_dispatch,
+    )
 
     return build_geometry_config_dispatch(
         topology=topology,
@@ -530,14 +537,8 @@ def _compose_configs_cached(
 
     Uses flat tuple arguments for the LRU cache (more efficient than dataclass).
     """
-    from computronium.ontology import (
-        CreditAssignmentConfig,
-        ParameterUpdateConfig,
-        StateDynamicsConfig,
-    )
-    from computronium.ontology.system import SystemConfig
     from computronium.experiment.schema.coordinate import Coordinate
-    from computronium.state.transitions import PlasticityConfig
+    from computronium.ontology.system import SystemConfig
 
     coordinate = Coordinate(
         substrate=substrate,
@@ -600,7 +601,9 @@ def _build_geometry_config_from_active(
     )
 
 
-def _build_dynamics_config(active: Any, dynamics_name: str, coordinate: Coordinate) -> Any:
+def _build_dynamics_config(
+    active: Any, dynamics_name: str, coordinate: Coordinate
+) -> Any:
     """Build dynamics config from active space."""
     d_factory = _axis_factory(StateDynamicsConfig, dynamics_name)
     dynamics_step_size = active.values.get(
@@ -617,6 +620,7 @@ def _build_dynamics_config(active: Any, dynamics_name: str, coordinate: Coordina
 def _build_credit_config(active: Any, coordinate: Coordinate) -> Any:
     """Build credit config from active space."""
     from computronium.ontology.credit import CreditAssignmentConfig
+
     c_factory = _axis_factory(CreditAssignmentConfig, coordinate.credit)
     return c_factory(**active.for_axis(StructuralAxis.CREDIT, coordinate.credit))
 
@@ -624,6 +628,7 @@ def _build_credit_config(active: Any, coordinate: Coordinate) -> Any:
 def _build_update_config(active: Any, coordinate: Coordinate) -> Any:
     """Build update config from active space."""
     from computronium.ontology.update import ParameterUpdateConfig
+
     u_factory = _axis_factory(ParameterUpdateConfig, coordinate.update)
     return u_factory(**active.for_axis(StructuralAxis.UPDATE, coordinate.update))
 
@@ -631,6 +636,7 @@ def _build_update_config(active: Any, coordinate: Coordinate) -> Any:
 def _build_plasticity_config(active: Any, coordinate: Coordinate) -> Any:
     """Build plasticity config from active space."""
     from computronium.state.transitions import PlasticityConfig
+
     m_factory = _axis_factory(PlasticityConfig, coordinate.plasticity)
     return m_factory(
         **active.for_axis(StructuralAxis.PLASTICITY, coordinate.plasticity)

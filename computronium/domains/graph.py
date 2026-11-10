@@ -95,7 +95,12 @@ class GraphTask(DomainTask):
         data = self._data.to(self.device)
 
         with torch.no_grad():
-            out = model(data.x, data.edge_index)
+            # Try calling with (x, edge_index) first (for plain GNN modules)
+            # If that fails, call with just x (for System with GraphGeometry)
+            try:
+                out = model(data.x, data.edge_index)
+            except TypeError:
+                out = model(data.x)
 
             if split == TaskSplit.TRAIN:
                 mask = data.train_mask

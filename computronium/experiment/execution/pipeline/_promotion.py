@@ -237,9 +237,9 @@ __all__ = [
     "FIDELITY_ORDER",
     "MIN_PROMOTIONS_PER_TIER",
     "_build_cell_best_map",
-    "build_promotion_schedule",
     "_filter_promotions_by_threshold",
     "_limit_promotions_by_budget",
     "_source_fidelity_for",
     "apply_smart_survey_promotion",
+    "build_promotion_schedule",
 ]

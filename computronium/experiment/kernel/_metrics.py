@@ -7,7 +7,8 @@ in evaluate.py, keeping the main evaluation logic clean and focused.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Mapping
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -21,7 +22,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
-    from computronium.ontology import System
 
 logger = get_logger(__name__)
 

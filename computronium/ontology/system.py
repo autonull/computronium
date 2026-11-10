@@ -750,9 +750,7 @@ class SystemConfig:
         """Raise ValueError if condition is true and actual_value in forbidden_values."""
         if condition and actual_value in forbidden_values:
             ctx = f" ({context})" if context else ""
-            raise ValueError(
-                f"{axis_name}={actual_value!r} is incompatible{ctx}"
-            )
+            raise ValueError(f"{axis_name}={actual_value!r} is incompatible{ctx}")
 
     def _require_all_when(
         self,
@@ -797,7 +795,8 @@ class SystemConfig:
     def _validate_recurrent_geometry_dynamics(self) -> None:
         """Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics."""
         self._require_when(
-            condition=self.geometry.topology_type in {"recurrent", "recurrent_attractor"},
+            condition=self.geometry.topology_type
+            in {"recurrent", "recurrent_attractor"},
             allowed_values={
                 "energy_minimization",
                 "predictive_settling",
@@ -883,7 +882,12 @@ class SystemConfig:
         """Spike integration dynamics requires temporal trace or target inversion credit."""
         self._require_when(
             condition=self.dynamics.dynamics_type == "spike_integration",
-            allowed_values={"temporal_trace", "spiking", "target_inversion", "target_prop"},
+            allowed_values={
+                "temporal_trace",
+                "spiking",
+                "target_inversion",
+                "target_prop",
+            },
             axis_name="credit.credit_type",
             actual_value=self.credit.credit_type,
             context="spike integration dynamics",
@@ -892,8 +896,14 @@ class SystemConfig:
     def _validate_predictive_settling_credit(self) -> None:
         """Predictive settling dynamics requires compatible credit."""
         self._require_when(
-            condition=self.dynamics.dynamics_type in {"predictive_settling", "error_predictive_coding"},
-            allowed_values={"thermodynamic_contrast", "equilibrium", "local_goodness", "forward_only"},
+            condition=self.dynamics.dynamics_type
+            in {"predictive_settling", "error_predictive_coding"},
+            allowed_values={
+                "thermodynamic_contrast",
+                "equilibrium",
+                "local_goodness",
+                "forward_only",
+            },
             axis_name="credit.credit_type",
             actual_value=self.credit.credit_type,
             context=f"{self.dynamics.dynamics_type} dynamics",
