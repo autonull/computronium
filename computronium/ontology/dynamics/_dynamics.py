@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 from computronium.ontology._settle_kernel import (
     LayeredParams,
     SubstrateSettleKernel,
-    _compiled_eqprop_settle,
+    _compiled_eqprop_settle_chunk,
     _one_hot,
     extract_layered_params,
 )
@@ -279,6 +279,7 @@ class StateDynamicsConfig:
     threshold: float = 1.0
     gradient_checkpointing: bool = False
     compiled: bool = False
+    compiled_chunk_size: int = 5
     gain_control: GainControlMode = "none"
     rho: float = 1.0
     prospective_leak: float = 0.0
@@ -303,6 +304,7 @@ class StateDynamicsConfig:
         track_free_energy_per_iter: bool = False,
         gradient_checkpointing: bool = False,
         compiled: bool = False,
+        compiled_chunk_size: int = 5,
         gain_control: GainControlMode = "none",
         max_energy: float = 1e6,
     ) -> StateDynamicsConfig:
@@ -317,6 +319,7 @@ class StateDynamicsConfig:
             track_free_energy_per_iter=track_free_energy_per_iter,
             gradient_checkpointing=gradient_checkpointing,
             compiled=compiled,
+            compiled_chunk_size=compiled_chunk_size,
             gain_control=gain_control,
             max_energy=max_energy,
         )
@@ -1292,21 +1295,46 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         beta: float,
         target: Tensor | None,
     ) -> list[Tensor]:
-        """Compiled fast path: whole settle as one graph."""
-        self._settle_steps_used = self.config.max_steps
-        return list(
-            _compiled_eqprop_settle(
-                cast("list[Tensor]", all_acts),
-                kernel.params.weights,
-                kernel.params.biases,
-                kernel.params.activations,
-                self.config.step_size,
-                beta,
-                target,
-                self.config.max_steps,
-                kernel.params.residual,
+        """Compiled fast path: chunked settle with early stopping.
+
+        Runs the compiled settle loop in chunks of ``compiled_chunk_size`` steps,
+        checking convergence after each chunk on the host. This moves the
+        convergence check off the hot path while preserving early stopping.
+        """
+        self._note_settle_start()
+        chunk_size = min(self.config.compiled_chunk_size, self.config.max_steps)
+        steps_executed = 0
+        acts = all_acts
+        previous_output = acts[-1].detach()
+
+        while steps_executed < self.config.max_steps:
+            remaining = self.config.max_steps - steps_executed
+            current_chunk = min(chunk_size, remaining)
+            acts = list(
+                _compiled_eqprop_settle_chunk(
+                    acts,
+                    kernel.params.weights,
+                    kernel.params.biases,
+                    kernel.params.activations,
+                    self.config.step_size,
+                    beta,
+                    target,
+                    current_chunk,
+                    kernel.params.residual,
+                )
             )
-        )
+            steps_executed += current_chunk
+
+            # Convergence check on host (off hot path)
+            if steps_executed >= self.config.convergence_start:
+                delta = torch.dist(acts[-1], previous_output, p=float("inf")).item()
+                if delta < self.config.convergence_threshold:
+                    self._mark_converged(steps_executed - 1)
+                    break
+            previous_output = acts[-1].detach()
+
+        self._settle_steps_used = steps_executed
+        return acts
 
     def _settle_checkpointed(
         self,

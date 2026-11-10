@@ -83,7 +83,7 @@
 
 | Item | Description | Priority |
 |------|-------------|----------|
-| Compiled settle for energy_minimization | Move convergence check off hot path; batch horizon with `compiled=True` | High — enables GPU speedup |
+| ✅ Compiled settle for energy_minimization | Move convergence check off hot path; batch horizon with `compiled=True` | High — enables GPU speedup |
 | ~~RLSystemTrainer~~ | ~~Episode rollout + policy gradient~~ | ~~High — unblocks B1~~ ✓ |
 | ~~GraphSystemTrainer~~ | ~~Masked node classification + graph readout~~ | ~~High — unblocks B2~~ ✓ |
 | CausalTransformer patch embedding | ViT-style for vision; 1D token handling for sequence | Medium — unblocks B3 |

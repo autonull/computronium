@@ -280,4 +280,55 @@ def _eqprop_settle_loop(
     return acts
 
 
+# ============================================================
+# Chunked compiled settle for energy_minimization with early stopping
+# ============================================================
+
+
+def _eqprop_settle_chunk(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    biases: tuple[Tensor | None, ...],
+    activations: tuple[torch.nn.Module, ...],
+    step_size: float,
+    beta: float,
+    target: Tensor | None,
+    n_steps: int,
+    residual: bool = False,
+) -> list[Tensor]:
+    """Functional replica of the kernel relaxation loop for a fixed chunk of steps.
+
+    Mirrors ``SubstrateSettleKernel.step`` exactly for the common case —
+    no recurrent weight, no momentum, digital forward operator
+    (``op(x, w) == x @ w.T + b``) — including the per-step output nudge
+    and the residual skip (``residual``). Compiled whole (one graph per
+    chunk) by ``_compiled_eqprop_settle_chunk``.
+    """
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        num_hidden = len(acts) - 2
+        for i in range(num_hidden):
+            out = acts[i] @ weights[i].T
+            b = biases[i]
+            if b is not None:
+                out = out + b
+            total = out + acts[i + 2] @ weights[i + 1]
+            if residual and i > 0 and acts[i].shape == acts[i + 1].shape:
+                total = total + acts[i]
+            target_h = activations[i](total) if i < len(activations) else total
+            new_acts.append(acts[i + 1] + step_size * (target_h - acts[i + 1]))
+        out = new_acts[-1] @ weights[len(weights) - 1].T
+        b = biases[len(weights) - 1]
+        if b is not None:
+            out = out + b
+        if beta > 0 and target is not None:
+            out = out + beta * (_one_hot(target, out) - out)
+        new_acts.append(out)
+        acts = new_acts
+    return acts
+
+
+_compiled_eqprop_settle_chunk = torch.compile(_eqprop_settle_chunk, dynamic=False)
+
+# Legacy full-horizon compiled settle (kept for parity tests)
 _compiled_eqprop_settle = torch.compile(_eqprop_settle_loop, dynamic=False)
