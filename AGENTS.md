@@ -180,6 +180,9 @@
    - Positive control FAIL (wrong geometry_hint)
    - NaN/Inf loss (energy clamp/init)
    - All credits fail on one geometry (missing dispatch)
+   - Only one task appears in results (dedup key missing task_id)
+   - L1/L2 measure 0 cells (budget sizing wrong)
+   - Worker crashes / timeouts (process pool + single GPU)
 
 3. **FIX** (≤15 min) — Infrastructure only; suspect low performance = defect
    - Check activation shapes match param shapes
@@ -187,6 +190,9 @@
    - Check geometry compatibility matrix
    - Check device placement (CPU vs CUDA)
    - Check for silent `.to(cpu)` calls
+   - Check dedup key includes `task_id`
+   - Check wave pricing uses measured per-seed cost × seed plan
+   - Check positive control pinned to L0/60s cap
 
 4. **VERIFY** (0.02h) — Quick re-run same config
 
@@ -197,12 +203,19 @@
 | Symptom | Investigate |
 |---------|-------------|
 | val_acc ≈ chance | Forward pass, credit produces zeros, loss not flowing |
-| val_acc drops | Optimizer misconfigured, gradient explosion, weight decay |
+| val_acc drops over epochs | Optimizer misconfigured, gradient explosion, weight decay |
 | "free settle telemetry failed" | `forward_with_intermediates` act count ≠ param count |
 | Positive control FAIL | Task's `geometry_hint` wrong, compatibility check |
 | NaN/Inf loss | `max_energy` clamp, weight init, substrate noise |
 | Credit fails on geometry | Missing `_<geometry>_path` in credit dispatch |
 | Slow (>60s/epoch L0) | CPU-bound settle, no GPU kernel, `.to(cpu)` calls |
+| Only last task in results | Store dedup key missing `task_id` |
+| L1/L2 0 cells | Wave pricing uses L0 positive control, not measured cost |
+| Worker hangs / CUDA OOM | ProcessPoolExecutor + single GPU (use sequential evaluator) |
+| Run overruns budget | Deadline not injected into cell; no `kill_workers()` |
+| Preview duplicates control | `_seen` shared between dry-run and real run |
+| energy_min too slow | Default `max_steps=30`; measured optimum is 10 |
+| Convergence never triggers | `convergence_threshold=1e-4` vs ~1e-3 plateau |
 
 **Question Excluded Possibilities:**
 
@@ -213,6 +226,80 @@
 | "Z needs feature A" | Try alternative B (e.g., positional encoding vs patch embed) |
 | "Substrate S doesn't support D" | Check settle kernel implementation |
 | "Credit C fails on Geometry G" | Check compatibility matrix, add dispatch path |
+| "Graph CUDA is unfixable" | Try `num_workers=0`, `pin_memory=False`, PyG version pin |
+| "Energy min + recurrent = slow" | Check for GPU settle kernel (`_settle_compiled`) |
+| "Transformer vision needs patch embed" | Try positional encoding on flattened patches |
+| "Memristive no energy_min" | Check `SubstrateSettleKernel` for memristive |
+| "Invalid combo in plan" | Verify compatibility in search space (see B2b, B2c, B3b) |
+
+**Harness Reliability Patterns (from TODO85/86):**
+
+| Pattern | Implementation |
+|---------|----------------|
+| Per-epoch heartbeat | `log_every_n_epochs=1` in every trainer; `epoch k/N: loss=… val_acc=… 17s/epoch, ~100s left` |
+| In-cell deadline | `params={"deadline_check": ..., "deadline_check_every_n_steps": 1}`; `train_epoch` returns incomplete epoch without history on deadline |
+| Positive control cap | Pinned to L0, 60s cap, 1 epoch/1 seed; marked `seen` so wave never re-proposes |
+| Honest wave sizing | `n_wave = budget_remaining / (measured_per_seed_cost × seed_plan)` at run's fidelity |
+| Bounded proposal scan | `ModelBasedPolicy` pages 400-cell pages; `scan_start` advances only while pages exist |
+| Explicit depth survives | `n_seeds`/`epochs` = `int | None`; `None`=ladder, explicit `1`=literal |
+| Run lifecycle closed | `finish_run(run_id, "completed", budget_consumed_s)` + `experiments/<store>.run.json` |
+| Seed-plan expansion | `n_seeds=3` → 3 single-seed records; replication key includes `task_id` |
+| Multi-task waves | Proposal context unscoped; each proposal keeps its own task |
+| Serial evaluator | One in-process evaluator; no `ProcessPoolExecutor`, one CUDA context, one dataset cache |
+
+**Search Space / Compatibility Lessons (from TODO86):**
+
+| Invalid Combo | Reason | Valid Alternative |
+|---------------|--------|-------------------|
+| conv geometry + graph node classification | Conv treats node features as spatial grid; shape mismatch | graph geometry |
+| gradient credit + graph/instantaneous | Gradient unavailable for graph with instantaneous dynamics | random_projections, homeostatic, pc_alm, target_inversion, temporal_trace |
+| gradient credit + recurrent/instantaneous | Gradient cannot compute recurrent weight grads with instantaneous | random_projections, temporal_trace, homeostatic, pc_alm, target_inversion |
+| recurrent + energy_minimization | Works but ~120s/cell L0 (settle loop per env step) | Use instantaneous + compatible credit |
+
+**Metric / Task-Aware Evaluation (from TODO85):**
+
+| Issue | Fix |
+|-------|-----|
+| Validator metric mismatch | `_update_task_metrics` uses registry `payload_key` for primary metric |
+| Cross-task claims mix raw `val_acc` | Normalized metric stored; claims should prefer it |
+| wine/iris val_acc=0.0 | Investigate feature normalization / class mapping before treating as baseline |
+| iris high seed variance | Treat as under-powered; rerun with more epochs/seeds |
+| Task never cycled | Persistent `_task_cycle`/`_task_index` on `PolicyPlanner` |
+| Progress hid tasks | Every cell logs `task=<id>` alongside axes |
+
+**Budget / Fidelity Management:**
+
+| Lesson | Practice |
+|--------|----------|
+| Adaptive L0 share | 30% for spaces <1000 primitives, 50% otherwise |
+| Ladder starves L1/L2 | Stage budget = time actually left; cells priced from measured walltime × epoch ratio; unaffordable skipped |
+| Serial budget arithmetic | Budget must cover sum of cell walltime; long-task sweeps need bigger budget or fewer epochs |
+| Per-step logs opt-in | Per-epoch always on (`log_every_n_epochs=1`); per-step needs `log_every_n_steps > 0` |
+| Killed runs not closed | SIGKILL leaves `running` + no manifest; SIGTERM closure deferred until needed |
+
+**Common Fixes (Expanded from TODO85/86/87):**
+
+| Symptom | Fix | File |
+|---------|-----|------|
+| Only one task in results | `task_id` in store dedup key | `evidence/store/_transactions.py` |
+| Cell FAILs though training fine | Gate on core metrics only; drop auxiliary NaNs | `kernel/evaluate.py` |
+| Worker crash mid-cell | Per-cell timeout + deadline check | `wave.py` |
+| Run overruns budget | `kill_workers()` at deadline | `wave.py` |
+| L1/L2 measure 0 cells | Size stage from measured cell cost + time left; skip unaffordable | `wave.py` |
+| energy_min cells too slow | Default `max_steps=10` (measured optimum) | `dynamics/_dynamics.py` |
+| Ternary fails gate | LR scaling by weight_bits; straight-through estimator | `substrate.py`, `update.py` |
+| Ternary + energy_min crashes | TWN ternary thresholding (0.7*E[|W|]); energy uses kernel.effective_weights() | `substrate.py`, `_dynamics.py` |
+| Neuromorphic + non-temporal crashes | Compatibility filter in search space | `search_space.py` |
+| Jacobian SVD NaN | isfinite guard + fallback | `jacobian.py` |
+| Search space too large | Filter incompatible at harvest | `search_space.py` |
+| TPE stuck on one combo | `min_samples_per_combo=3` | `policy.py` |
+| Planner yields 0 cells | Clear `_seen` between startup/wave | `wave.py` |
+| Gate false negative | Fix validation logic | `system.py` |
+| CUDA multi-worker hang | Sequential evaluator, single GPU context | `wave.py` |
+| Positive control ran at run fidelity | Pin to L0, 60s cap, mark seen | `wave.py` |
+| Tasks resolved after spec | Resolve task list before `_build_spec` | `survey_cli.py` |
+| Budget enforced between cells | In-cell deadline, not between cells | `wave.py` |
+| Preview-then-run shared `seen` | Previews only when `dry_run=True` | `wave.py` |
 
 **Success Criteria (per domain):**
 - Vision (MNIST/CIFAR): best val_acc > 0.95
@@ -223,6 +310,7 @@
 - ≥3 credits work per geometry
 - Zero "free settle telemetry failed" warnings
 - 100% positive control PASS rate
+- 4+ claim-eligible cells per multi-task run (n_seeds × tasks)
 
 **Session Log Template (append to TODO):**
 ```
@@ -234,8 +322,20 @@
 **Next Experiment:** <planned command>
 ```
 
+**Experiment Log Table (for multi-run tracking):**
+
+| Run | Axes | Walltime | Crashes | Gate Failures | Worst Combo | Fix Applied |
+|-----|------|----------|---------|---------------|-------------|-------------|
+| N | <axis_json> | <s> | <n> | <n> | <combo> (val_acc) | <file/change> |
+
 **Never:**
 - Accept "this algorithm doesn't work" without verifying implementation
 - Run experiments >15 min without a hypothesis
 - Skip the positive control gate
 - Commit without targeted tests passing
+- Use `ProcessPoolExecutor` on single GPU
+- Price waves from L0 positive control
+- Hardcode task names in execution paths
+- Let auxiliary NaNs discard valid cells
+- Run with `convergence_threshold < 1e-3` for energy_min
+- Accept `max_steps=30` default for energy_min
