@@ -386,3 +386,33 @@
 - Let auxiliary NaNs discard valid cells
 - Run with `convergence_threshold < 1e-3` for energy_min
 - Accept `max_steps=30` default for energy_min
+
+---
+
+## 🔄 META: The Self-Stabilizing Loop
+
+**The SEC methodology is a fixed point of the process it describes.**
+
+| Computronium (system) | SEC Methodology (development) |
+|----------------------|-------------------------------|
+| 6 axes × primitives → search space | 5-step cycle × defect patterns → fix space |
+| Positive control (gate) | Positive control PASS (100% target) |
+| Energy minimization (settle to fixed point) | RUN→ANALYZE→FIX→VERIFY (converge on working config) |
+| Credit assignment (local learning signal) | Defect patterns (symptom → cause) |
+| Harness reliability (heartbeat, deadline) | Test selection by symbol, kill logging, measured pricing |
+| Excluded possibilities (S/G/D/C/U/P) | Question excluded possibilities table |
+| Normalized metrics (ruler-relative) | Per-domain success criteria |
+| Claim eligibility (n≥3, replay hash) | Targeted tests + commit with evidence |
+
+**Why it stabilizes:**
+
+1. **Every anomaly is a signal** — low val_acc ≠ "algorithm failure", it's a defect to locate
+2. **Every assumption is testable** — "unfixable upstream" gets a concrete test
+3. **Every fix has a file** — symptom → fix → file mapping prevents drift
+4. **Every run priced from reality** — no stale L0 positive control pricing
+5. **Context preserved in code** — AGENTS.md rules, not prose in TODOs
+
+**The meta-stabilization:** The SEC methodology was refined by the same cycle it describes:
+> RUN (experiments) → ANALYZE (TODO46/85/86/87 patterns) → FIX (integrate into AGENTS.md) → VERIFY (tests pass) → COMMIT+LOG
+
+This document *is* the fixed point. The methodology describes the process that produced it.
