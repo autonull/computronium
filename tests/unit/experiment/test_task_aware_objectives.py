@@ -3,7 +3,8 @@
 This test ensures the fix for the validator metric mismatch:
 - Vision tasks (mnist, fashion_mnist, digits): primary metric = val_acc
 - RL tasks (cartpole, pendulum, acrobot): primary metric = mean_reward
-- Graph tasks (cora, citeseer, pubmed): primary metric = accuracy
+- Graph tasks (cora, citeseer, pubmed): primary metric = val_acc
+  (GraphSystemTrainer's validate() emits val_acc/val_loss)
 """
 
 from computronium.experiment.kernel.evaluate import (
@@ -30,11 +31,11 @@ class TestTaskAwareObjectives:
             key = _primary_metric_key(task_id)
             assert key == "mean_reward", f"{task_id}: expected mean_reward, got {key}"
 
-    def test_graph_tasks_use_accuracy(self):
-        """Graph node classification tasks should use accuracy as primary metric."""
+    def test_graph_tasks_use_val_acc(self):
+        """Graph node classification tasks should use val_acc as primary metric."""
         for task_id in ("cora", "citeseer", "pubmed", "graph_classification"):
             key = _primary_metric_key(task_id)
-            assert key == "accuracy", f"{task_id}: expected accuracy, got {key}"
+            assert key == "val_acc", f"{task_id}: expected val_acc, got {key}"
 
     def test_core_metric_keys_include_primary(self):
         """Core metrics for each task should include its primary metric key."""
@@ -52,7 +53,7 @@ class TestTaskAwareObjectives:
 
         # Graph task
         graph_keys = _core_metric_keys("cora")
-        assert "accuracy" in graph_keys
+        assert "val_acc" in graph_keys
         assert "loss" in graph_keys
 
     def test_validate_metrics_finite_uses_task_specific_core(self):
@@ -145,13 +146,13 @@ class TestTaskAwareObjectives:
             )
             assert primary_obj.payload_key == "mean_reward"
 
-        # Graph tasks return accuracy
+        # Graph tasks return val_acc (GraphSystemTrainer.validate emits val_acc)
         for task_id in ("cora", "citeseer", "pubmed", "graph_classification"):
             spec = registry.get(task_id)
             primary_obj = next(
                 o for o in spec.objectives if o.name == spec.primary_objective
             )
-            assert primary_obj.payload_key == "accuracy"
+            assert primary_obj.payload_key == "val_acc"
 
     def test_unknown_task_fallbacks_to_val_acc(self):
         """Unknown task should fallback to val_acc for backward compatibility."""

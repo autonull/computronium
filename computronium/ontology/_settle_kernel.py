@@ -12,7 +12,7 @@ mathematical transpose operations, not physical substrate processes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import torch
 from torch import Tensor
@@ -99,6 +99,9 @@ def extract_layered_params(geometry: Geometry) -> LayeredParams | None:
     return None
 
 
+IGNORE_INDEX: Final = -100
+
+
 def _one_hot(target: Tensor, like: Tensor) -> Tensor:
     """Convert class indices to one-hot matching 'like' tensor."""
     if target.dim() == 1:
@@ -106,6 +109,20 @@ def _one_hot(target: Tensor, like: Tensor) -> Tensor:
         out.scatter_(1, target.unsqueeze(1), 1.0)
         return out
     return target
+
+
+def nudged_output(out: Tensor, target: Tensor, beta: float) -> Tensor:
+    """β-nudge output activities toward the target one-hot.
+
+    Entries carrying the CE ignore-index sentinel (``y < 0``) stay free:
+    the task loss ignores them, so their activity must not enter the
+    nudge — a raw ``scatter`` on a negative index would also fail.
+    """
+    if target.dim() != 1:
+        return out + beta * (_one_hot(target, out) - out)
+    onehot = _one_hot(target.clamp_min(0), out)
+    valid = (target >= 0).unsqueeze(-1).to(out.dtype)
+    return out + beta * valid * (onehot - out)
 
 
 class SubstrateSettleKernel:

@@ -2,20 +2,21 @@
 
 **Mission:** Continue the experiment/fix cycle: run experiments (≤15 min each), discover bugs, scrutinize poor-performing algorithms as potential implementation defects, and question excluded possibilities.
 
-**Status:** TODO87 PHASE 1-7 COMPLETE. Recent fixes: task-aware positive control, graph task payload_key='val_acc', TransformerGeometry handles flattened input. Core system working across vision, RL, graph, tabular. Property locks pass (lint=583, FA determinism tests passing).
+**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1/G2/G3 FIXED (2026-11-11): GraphSystemTrainer drives the canonical pipeline (user axis attribution re-established on cora), graph kwargs are geometry-conditional, pc_alm×instantaneous is void. Recent fixes: task-aware positive control, graph task payload_key='val_acc', TransformerGeometry handles flattened input. Core system working across vision, RL, graph, tabular. Property locks pass (lint=583 pre-existing legacy findings only).
 
 **Progress (Session 2026-11-11):**
+- ✅ **G1/G2/G3 FIX PHASE** — graph trainer now drives the canonical pipeline; graph kwargs are geometry-conditional; pc_alm×instantaneous is void. Axis attribution re-established on cora (see session log).
 - ✅ Experiment 1: Predictive Settling with Thermodynamic Contrast / Local Goodness — COMPLETE (expected behavior confirmed)
 - ✅ Experiment 6: Credit Assignment — Cross-Geometry — PARTIAL (budget too tight, key findings logged)
 - ✅ Experiment 7: Substrate Comparison — Digital vs Memristive — COMPLETE (memristive matches digital at ~1.7x slower)
 - ✅ Experiment 8: Plasticity Sweep — Fast Weights / Routing — PARTIAL (fast_weights correctly filtered; routing worse than null)
 - ✅ Experiment 2: Causal Transformer Vision — Credit Sweep — PARTIAL (budget limited; homeostatic ~10% chance, random_projections 68%, gradient/pc_alm not evaluated)
 - ✅ Experiment 3: Causal Transformer Vision — Geometry Parity — **PASS** (causal_transformer 97.1% matches feedforward 97.2% on MNIST)
-- ✅ Experiment 4: Graph Classification — Geometry Sweep — PARTIAL (CUDA PyG issue; 2 cells ran: 57.9% and 55.3% val_acc before sticky error)
-- ✅ Experiment 5: Graph Node Classification — **PASS** (all 24 cells passed: Cora 70-73%, Pubmed 66-68%, Citeseer 61-64%)
+- ⚠️ Experiment 4: Graph Classification — Geometry Sweep — PARTIAL (CUDA PyG issue; 2 cells ran: 57.9% and 55.3%) — **attribution invalid: G1 bypass (re-run needed, batched path now fixed)**
+- ⚠️ Experiment 5: Graph Node Classification — PASS mechanically (Cora 70-73%, Pubmed 66-68%, Citeseer 61-64%) — **attribution invalid: G1 measured plain GNN autograd; superseded by the 2026-11-11 cora attribution re-run (graph+gradient 0.618, graph+random_projections 0.195)**
 - ✅ Experiment 9: Energy Minimization — Dynamics Sweep — PARTIAL (7/8 cells; energy_minimization+gradient 97.0% matches instantaneous 97.2%)
 - ✅ Experiment 10: Causal Transformer Vision — Credit Sweep (gradient, pc_alm) — PARTIAL (gradient 97.1% PASS; pc_alm ~10% FAILS to learn)
-- ✅ Experiment 11: Graph Classification — CPU (L0, MUTAG) — **PASS** (8/8 cells, graph geometry only; val_acc 55-63%; spatial_lattice filtered)
+- ⚠️ Experiment 11: Graph Classification — CPU (L0, MUTAG) — PASS mechanically (8/8 cells, val_acc 55-63%) — **attribution invalid: G1 bypass; re-run needed under the fixed batched path**
 - ✅ Experiment 12: Energy Minimization + predictive_settling — PARTIAL (energy_minimization+gradient 97.1% PASS = instantaneous; predictive_settling filtered; L0 budget tight for energy_min)
 - ✅ Experiment 13: Credit Assignment — Cross-Geometry (10 tasks, 4 geometries) — PARTIAL (~50 cells; gradient best; homeostatic broken; random_projections fails on recurrent+adam; local_contrastive works on ff)
 - ✅ Experiment 14: Causal Transformer Vision — Full Credit Sweep (L1, MNIST) — **PASS** (gradient 97.9% = feedforward; random_projections 70-76%; homeostatic ~10% BROKEN - attention in_proj gets zero gradients)
@@ -895,42 +896,89 @@ check `first >= 0` → `first < _UNSEEN`. Verified: `test_settle_stability_lock.
 Note: `test_pc_alm_nan_guard` failed before this session's experiments — the
 "Property Locks PASSED (11/11)" claim above predates this run's lock re-check.
 
-**🔴 OPEN — G1: GraphSystemTrainer bypasses dynamics/credit/update axes.**
-`_choose_trainer_class` (`experiment/kernel/evaluate.py:336`) routes every
-`DomainType.GRAPH` task to `GraphSystemTrainer`, whose `_train_epoch_node_classification`
-and `_train_epoch_graph_classification` both do plain `loss.backward()` +
-`optimizer.step()` (`graph_trainer.py:174, 240`) — **no dynamics settle, no credit
-pseudo-gradient, no update rule**. Evidence: cora cells bit-identical across
-gradient/random_projections/pc_alm (loss 1.9501→1.3168 identical every epoch);
-graph_classification cells identical across credits AND adam/euclidean. Consequence:
-**every graph-domain survey result so far (Cora 73%, node-classification 24 cells,
-graph-classification cells) measured plain GNN autograd, not the coordinate's
-primitives — axis attribution invalid for all of them.** The earlier "gradient and
-random_projections work identically on graph tasks" was this defect misread as a feature.
-Pipeline probe confirms credits DO produce different updates on cora-shaped input
-(gradient param-delta norms ~2.8e-1 vs random_projections ~6.8e-4).
-
-**🔴 OPEN — G2: Pipeline graph-kwargs path incompatible with both geometry families.**
-`FeedforwardGeometry.forward()` raises TypeError on `edge_index` kwarg (must be
-geometry-conditional); graph-geometry compose requires `edge_index: list[list[int]]`
-(`_geometry_builders.py:641`) while PyG supplies LongTensors. The graph_kwargs
-passthrough added in the 2026-11-10 GRAPH SUPPORT FIX PHASE has never actually
-carried graph data through the pipeline — every graph cell so far took the
-GraphSystemTrainer bypass (G1).
-
-**🟡 OPEN — G3: pc_alm + instantaneous dynamics = chance (10%).** PC-ALM credit is
-primal-dual relaxation-based; with instantaneous dynamics there is no settle to
-relax against, so the credit degenerates. Either filter pc_alm+instantaneous in the
-search-space compatibility matrix, or give pc_alm a settling-dynamics pairing
-before crediting any result to it. Same pattern as homeostatic on causal_transformer.
-
+**🟢 FIXED — G1: GraphSystemTrainer bypasses dynamics/credit/update axes.**
+Both epoch bodies now route through `system.train_step(...)`:
+`_train_epoch_node_classification` masks non-train nodes with `IGNORE_INDEX`
+(-100) so the CE loss/nudge apply to training nodes only;
+`_train_epoch_graph_classification` forwards `edge_index`/`batch` per batch.
+The external `optim.Adam` was deleted — Δθ flows only through the U-axis
+(pipeline parity contract). Files: `core/system_trainer/graph_trainer.py`,
+`core/pipeline.py` (ignore-index accuracy), `ontology/_settle_kernel.py`
+(`nudged_output`: sentinel-aware nudge — the raw one-hot scatter would raise
+on -100), `ontology/dynamics/_dynamics.py` (instant nudge uses it).
+Evidence: cora now path-attributed — graph+gradient **0.618 mean** (0.64/0.46/0.75)
+vs graph+random_projections **0.195 mean** (0.31/0.11/0.16) vs feedforward+gradient
+0.289. All three credits now produce distinct loss trajectories (previously
+bit-identical). Lock: `tests/property/test_graph_pipeline_lock.py` (5 tests:
+train_step spy, param movement, credit-delta divergence, batched graph kwargs,
+geometry-conditional kwargs).
+**🟢 FIXED — G2: Pipeline graph-kwargs path incompatible with both geometry families.**
+`core/pipeline.py` now filters graph kwargs by an explicit geometry capability
+(`accepts_graph_kwargs = True` on `GraphGeometry` only; every other geometry
+never sees `edge_index`/`batch`); `run_forward` normalizes positional graph args
+to kwargs so the filter applies. `experiment/kernel/_geometry_builders.py`
+accepts a LongTensor `edge_index` (PyG form) in addition to nested lists.
+Batched graph-classification epochs verified end-to-end (synthetic PyG `Batch`,
+loss finite, params move) and locked.
+**🟢 FIXED — G3: pc_alm + instantaneous dynamics = chance (10%).**
+Decision: filter, don't special-case. New void constraint
+`pc_alm_credit_dynamics` (`experiment/schema/seed_registries.py`) makes
+`credit=pc_alm` require `dynamics=pc_alm` (the dual-variable carrier — with any
+other dynamics `PCALMCredit.compute_pseudo_gradient` returns [] → zero updates).
+Pairing probe (`experiments/t88_g3_pcalm_pairing.duckdb`, mnist, pc_alm×pc_alm,
+1 epoch): **val_acc 0.3026** vs 10% chance under instantaneous — the credit
+works with its carrier, but at **283 s/epoch** (cell FAILs on the L0 deadline;
+claim needs L1+ budget or GPU settle kernel). Remaining: none for correctness.
 **Next Session Priorities (revised):**
-1. **G1 fix** — route GraphSystemTrainer epochs through `system.train_step(...)`
-   (mask node-classification labels with -100 for ignore_index; geometry-conditional
-   graph kwargs per G2), then re-run the node-classification sweep: axis attribution
-   must be re-established before any graph claim.
-2. **G2 fix** — make pipeline graph-kwargs geometry-conditional and accept tensor
-   edge_index in graph compose/build; add a pipeline-path lock for graph geometry.
-3. **G3** — pc_alm×instantaneous compatibility decision + re-run energy-settling
-   sweep with predictive_settling unfiltered if a compatible pairing exists.
-4. Multi-task credit cross-geometry re-run after G1/G2 (current cora results invalid).
+1. **Graph claims** — cora attribution exists at n=3; promote gradient+graph to a
+   claim-grade run (L1/L2, ≥3 seeds, replay hash) now that pc_alm is filtered and
+   the trainer is pipeline-parity. Note the U-axis Adam default (1e-3) is 10× below
+   the old external Adam (1e-2); graph cells need explicit `--hyperparameters`
+   step_size or more epochs to reach the >0.75 target.
+2. **Graph classification sweep** — the batched path is now correct; re-run MUTAG
+   with graph geometry at L1 to re-establish the 60-63% baseline under real axis
+   attribution (target >0.70 still open).
+3. **pc_alm pairing budget** — 283 s/epoch on MNIST needs GPU settle paths or an
+   L0-sized task before pc_alm credit can be credit-claimable; do not re-run at L0.
+4. **Stale graph payload_key test** — `tests/unit/experiment/test_task_aware_objectives.py`
+   updated to `val_acc` (was asserting the pre-TODO87 `accuracy`).
+
+---
+
+## Session 2026-11-11 (continued — G1/G2/G3 FIX + ATTRIBUTION RE-RUN)
+**Experiment:** cora credit attribution (20 epochs, 3 seeds, digital/instantaneous/adam)
+```
+uv run python -m computronium.experiment.survey_cli 0.15 --mode learn --policy tpe \
+  --device cuda --tasks cora --fidelity L0 \
+  --store experiments/t88_g1_cora_credit_attribution.duckdb --max-workers 1 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward","graph"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam"]}' \
+  --epochs 20 --n-seeds 3
+```
+**Result:** PASS — 12/12 cells, positive control PASS (graph/grad/euclid 0.146 at 1
+epoch). Axis attribution re-established: **graph+gradient 0.618 mean** (0.640 / 0.464 /
+0.750) vs **graph+random_projections 0.195 mean** (0.312 / 0.114 / 0.160) vs
+feedforward+gradient 0.289 (0.198/0.348/0.320). Credits now diverge in every epoch's
+loss (pre-G1 they were bit-identical on cora). 4 claim-eligible cells (n=3); seed
+variance on cora+gradient is high (0.46–0.75) → treat as under-powered.
+**Defects Found:** G1/G2/G3 (see FIX PHASE above); stale graph payload_key test.
+**Fixes Applied:** `core/system_trainer/graph_trainer.py` (pipeline routing, no
+external optimizer), `core/pipeline.py` (ignore-index accuracy + geometry-conditional
+graph kwargs), `ontology/_settle_kernel.py` (`IGNORE_INDEX`, `nudged_output`),
+`ontology/dynamics/_dynamics.py` (sentinel-aware instant nudge),
+`ontology/geometry.py` (`accepts_graph_kwargs`), `experiment/kernel/_geometry_builders.py`
+(Tensor edge_index), `experiment/schema/seed_registries.py` (pc_alm_credit_dynamics void),
+`tests/property/test_graph_pipeline_lock.py` (new, 5 tests),
+`tests/unit/experiment/test_task_aware_objectives.py` (val_acc).
+**Verification:** `test_graph_pipeline_lock` 5/5; targeted suites
+(`test_dynamics`, `test_credit_semantics`, `test_ontology_locks`, `test_pepita_credit_parity`,
+`test_trainer_metric_aggregation`, `test_determinism_extended`, `test_compiled_settle`,
+`test_defect_hunt_locks`, `test_claim_report_lock`, `test_pc_alm_validation`,
+`test_demo_graph_geometry_swap`, `test_param_budget_lock`, `test_legality_boundary_lock`,
+`test_experiment_registries_wiring_lock`, `test_axes_capabilities_totality_lock`,
+`tests/unit/experiment/`) — all green (the 3 pre-existing failures in
+`test_task_aware_objectives` were stale graph `payload_key` assertions, updated here).
+Lint/type: only pre-existing legacy findings.
+**Experiment (G3 probe):** pc_alm×pc_alm, mnist, 1 epoch → val_acc 0.3026, 283 s/epoch
+(FAIL on L0 deadline; correctness confirmed, budget-limited).
+**Next Experiment:** MUTAG graph-classification L1 re-run under real attribution;
+cora+gradient at L1/L2 with explicit step_size for a claim-grade record.

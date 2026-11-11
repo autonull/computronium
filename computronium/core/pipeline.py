@@ -95,6 +95,30 @@ METRIC_SCHEMA: frozenset[str] = frozenset({
     "free_energy",
     "free_accuracy",
 })
+# Graph-classification kwargs a graph geometry consumes; every other geometry
+# must never see them (FeedforwardGeometry.forward has no such parameters).
+_GRAPH_KWARGS: frozenset[str] = frozenset({"edge_index", "batch"})
+
+
+def _graph_kwargs_for(
+    geometry: Geometry, kwargs: dict[str, object]
+) -> dict[str, object]:
+    """Keep the graph kwargs a geometry declares it consumes (G2)."""
+    if not (frozenset(kwargs) & _GRAPH_KWARGS):
+        return kwargs
+    if getattr(geometry, "accepts_graph_kwargs", False):
+        return kwargs
+    return {k: v for k, v in kwargs.items() if k not in _GRAPH_KWARGS}
+
+
+def _accuracy(logits: Tensor, y: Tensor) -> Tensor:
+    """Classification accuracy; ignore-index sentinel entries (y < 0) are
+    excluded from both hits and denominator, so full-batch node
+    classification reports accuracy over the labelled (training) nodes."""
+    pred = logits.argmax(dim=-1)
+    valid = y >= 0
+    hits = ((pred == y) & valid).sum()
+    return hits.to(logits.dtype) / valid.sum().clamp(min=1).to(logits.dtype)
 
 
 def phase_states(
@@ -113,7 +137,7 @@ def forward_pass(
     substrate: Substrate, geometry: Geometry, x: Tensor, *args, **kwargs
 ) -> list[Tensor] | Tensor | None:
     """Substrate+geometry forward with state-noise injection."""
-    acts = geometry.forward(x, substrate, *args, **kwargs)
+    acts = geometry.forward(x, substrate, *args, **_graph_kwargs_for(geometry, kwargs))
     if acts is not None:
         acts = substrate.inject_state_noise(acts)
     return acts
@@ -130,7 +154,7 @@ def task_loss(state: SettableState, y: Tensor) -> Tensor:
     logits = acts[-1] if isinstance(acts, list) else acts
     loss = torch.nn.functional.cross_entropy(logits, y)
     with torch.no_grad():
-        acc = (logits.argmax(dim=-1) == y).float().mean().item()
+        acc = _accuracy(logits, y).item()
     set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
     return loss
 
@@ -148,7 +172,7 @@ def _task_loss_tensor(state: SettableState, y: Tensor) -> tuple[Tensor, Tensor]:
     logits = acts[-1] if isinstance(acts, list) else acts
     loss = torch.nn.functional.cross_entropy(logits, y)
     with torch.no_grad():
-        acc = (logits.argmax(dim=-1) == y).float().mean()
+        acc = _accuracy(logits, y)
     set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
     return loss, acc
 
@@ -542,14 +566,14 @@ def run_forward(
     forwarded to both geometry.forward and dynamics.settle.
     """
     state = SystemState(x=x)
-    state.activations = forward_pass(substrate, geometry, x, *args, **kwargs)
-    # Pass extra args as kwargs to avoid positional conflict with target/on_step
-    # Common graph classification args: edge_index, batch
+    # Common graph classification args: edge_index, batch — normalized to
+    # kwargs so the geometry-conditional filter sees them.
     settle_kwargs = dict(kwargs)
     if len(args) >= 1:
         settle_kwargs.setdefault("edge_index", args[0])
     if len(args) >= 2:
         settle_kwargs.setdefault("batch", args[1])
+    state.activations = forward_pass(substrate, geometry, x, **settle_kwargs)
     settled = dynamics.settle(state, geometry, substrate, target=None, **settle_kwargs)
     acts = settled.activations
     if acts is None:

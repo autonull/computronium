@@ -2320,6 +2320,10 @@ class GraphGeometry(nn.Module):
     compatibility). Multiple layers are stacked with ReLU activations between.
     """
 
+    # Pipeline capability flag: only this geometry consumes graph kwargs
+    # (edge_index, batch); the pipeline filters them for every other geometry.
+    accepts_graph_kwargs = True
+
     _layer_weights: nn.ParameterDict
     _layer_biases: nn.ParameterDict
     _head: nn.Linear

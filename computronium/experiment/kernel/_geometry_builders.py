@@ -10,6 +10,8 @@ from __future__ import annotations
 import math
 from typing import Any, Literal
 
+import torch
+
 from computronium.experiment.schema.geometry_keys import (
     TOPOLOGY_KEYS,
     allowed_geometry_keys,
@@ -630,15 +632,7 @@ def build_graph_config(
     init_scheme: str,
     geometry: dict[str, object],
 ) -> GeometryConfig:
-    edge_index = geometry.get("edge_index")
-    if not (
-        isinstance(edge_index, list)
-        and all(
-            isinstance(e, list) and all(isinstance(v, int) for v in e)
-            for e in edge_index
-        )
-    ):
-        raise ValueError("graph topology requires edge_index: list[list[int]]")
+    edge_index = _as_edge_index(geometry.get("edge_index"))
     hidden_dims = (hidden,) * depth
     return GeometryConfig.graph(
         input_dim=input_dim,
@@ -647,6 +641,24 @@ def build_graph_config(
         hidden_dims=hidden_dims,
         init_scale=init_scale,
     )
+
+
+def _as_edge_index(value: object) -> list[list[int]]:
+    """Normalize edge_index to ``[2, num_edges]`` nested lists.
+
+    Accepts the serialized ``list[list[int]]`` form and the PyG LongTensor
+    the graph loaders supply directly.
+    """
+    if isinstance(value, torch.Tensor):
+        value = value.detach().cpu().tolist()
+    if not (
+        isinstance(value, list)
+        and all(
+            isinstance(e, list) and all(isinstance(v, int) for v in e) for e in value
+        )
+    ):
+        raise ValueError("graph topology requires edge_index: list[list[int]]")
+    return value
 
 
 def build_causal_transformer_config(

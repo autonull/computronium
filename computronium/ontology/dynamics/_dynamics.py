@@ -22,6 +22,7 @@ from computronium.ontology._settle_kernel import (
     SubstrateSettleKernel,
     _one_hot,
     extract_layered_params,
+    nudged_output,
 )
 from computronium.ontology.dynamics._registry import dynamics_backend
 from computronium.ontology.dynamics._relaxation import prediction_relaxation
@@ -3084,8 +3085,7 @@ class InstantaneousDynamics(_SettleTelemetry):
                 if target is not None:
                     acts = [
                         *acts[:-1],
-                        acts[-1]
-                        + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1]),
+                        nudged_output(acts[-1], target, self.config.beta),
                     ]
             else:
                 acts = list(
@@ -3100,8 +3100,7 @@ class InstantaneousDynamics(_SettleTelemetry):
                     # Nudge the output activation toward the target
                     acts = [
                         *acts[:-1],
-                        acts[-1]
-                        + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1]),
+                        nudged_output(acts[-1], target, self.config.beta),
                     ]
         else:
             existing = state.activations

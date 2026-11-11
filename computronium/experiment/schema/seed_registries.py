@@ -1192,6 +1192,20 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Credit-Dynamics: pc_alm credit reads dual_vars written only by PCALMDynamics;
+    # with any other dynamics the dual variables are absent and the credit
+    # degenerates to zero updates (chance-level performance).
+    ConstraintSpec(
+        name="pc_alm_credit_dynamics",
+        kind=ConstraintKind.VOID,
+        description="PC-ALM credit requires pc_alm dynamics (the dual-variables carrier)",
+        predicate=or_(
+            not_(eq(var("credit"), const("pc_alm"))),
+            eq(var("dynamics"), const("pc_alm")),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Substrate-Dynamics: neuromorphic substrate needs temporal dynamics
     ConstraintSpec(
         name="neuromorphic_substrate_dynamics",

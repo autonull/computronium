@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import torch
-from torch import optim
 
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer._early_stopping import (
@@ -29,6 +28,7 @@ from computronium.core.system_trainer._resume import (
     fold_in,
 )
 from computronium.core.system_trainer.config import SystemTrainerConfig
+from computronium.ontology._settle_kernel import IGNORE_INDEX
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -104,10 +104,9 @@ class GraphSystemTrainer:
             self._is_graph_classification = True
             self._data = None  # Not used in this mode
 
-        # Optimizer
-        lr = self.config.extra.get("lr", 1e-2) if self.config.extra else 1e-2
-        self.optimizer = optim.Adam(self.system.geometry.params.values(), lr=lr)
-
+        # Optimizer: none — Δθ flows through the composed update axis inside
+        # ``system.train_step``; an external torch optimizer would bypass the
+        # U-axis entirely (pipeline parity contract).
         self._ema: dict[str, Tensor] = {}
         self._best_theta: dict[str, Tensor] | None = None
         self._best_score = -float("inf")
@@ -154,32 +153,23 @@ class GraphSystemTrainer:
             return self._train_epoch_node_classification()
 
     def _train_epoch_node_classification(self) -> dict[str, float]:
-        """Run one training epoch for node classification (single graph with masks)."""
-        # Forward pass on full graph
-        with self._autocast:
-            out = self.system.forward(self._data.x)
+        """Run one pipeline train step over the full graph (full-batch).
 
-        # Training mask
+        Non-train nodes carry the CE ignore-index sentinel so the task loss
+        and the nudge apply to training nodes only; Δθ flows through the
+        composed pipeline (dynamics settle → credit → update axis), never a
+        raw ``loss.backward()``.
+        """
         train_mask = self._data.train_mask
         if train_mask is None:
             raise ValueError("Graph data missing train_mask")
-
-        # Compute loss on training nodes
-        train_out = out[train_mask]
-        train_y = self._data.y[train_mask]
-        loss = torch.nn.functional.cross_entropy(train_out, train_y)
-
-        # Backward and optimize
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.system.geometry.params.values(), 1.0)
-        self.optimizer.step()
-
-        # Metrics
-        pred = train_out.argmax(dim=1)
-        train_acc = (pred == train_y).float().mean().item()
-        train_loss = loss.item()
-
+        y = self._data.y.masked_fill(~train_mask, IGNORE_INDEX)
+        with self._autocast:
+            step_metrics = self.system.train_step(self._data.x, y)
+        train_loss = step_metrics.get("loss", 0.0)
+        train_acc = step_metrics.get(
+            "free_accuracy", step_metrics.get("nudged_fit_accuracy", 0.0)
+        )
         metrics = {
             "epoch": self.current_epoch,
             "train_loss": train_loss,
@@ -229,22 +219,21 @@ class GraphSystemTrainer:
             data_batch = data_batch.to(self.device)
 
             with self._autocast:
-                # Graph classification: model(x, edge_index, batch) -> graph-level logits
-                out = self.system.forward(
-                    data_batch.x, data_batch.edge_index, data_batch.batch
+                step_metrics = self.system.train_step(
+                    data_batch.x,
+                    data_batch.y,
+                    edge_index=data_batch.edge_index,
+                    batch=data_batch.batch,
                 )
-
-            loss = torch.nn.functional.cross_entropy(out, data_batch.y)
-
-            self.optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.system.geometry.params.values(), 1.0)
-            self.optimizer.step()
-
-            pred = out.argmax(dim=1)
-            total_loss += loss.item() * data_batch.num_graphs
-            total_correct += (pred == data_batch.y).sum().item()
-            total_samples += data_batch.num_graphs
+            num_graphs = data_batch.num_graphs
+            total_loss += step_metrics.get("loss", 0.0) * num_graphs
+            total_correct += (
+                step_metrics.get(
+                    "free_accuracy", step_metrics.get("nudged_fit_accuracy", 0.0)
+                )
+                * num_graphs
+            )
+            total_samples += num_graphs
 
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
         train_acc = total_correct / total_samples if total_samples > 0 else 0.0
