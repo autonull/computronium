@@ -155,3 +155,87 @@
 
 ## Documentation
 - Don't edit README.md directly; in `docs/readme/*`, edit individual sections or the generator script
+
+## Development Skill: Suspicious Experiment Cycle (SEC)
+
+**Name:** SEC — Suspicious Experiment Cycle  
+**Principle:** *Be skeptical of low-performing experiments; this could indicate an implementation defect to fix. Be suspicious of any excluded possibilities that may actually be possible.*
+
+**When to use:** Any time you're validating a system with multiple algorithm/architecture combinations and need to distinguish "this doesn't work" from "this is broken."
+
+**The Cycle (≤30 min total):**
+
+1. **RUN** (≤15 min) — `survey_cli` with focused axes, single fidelity, few seeds
+   ```bash
+   uv run python -m computronium.experiment.survey_cli 0.1 \
+     --mode learn --policy tpe --device cuda \
+     --tasks <task> --fidelity L0 \
+     --axes '<focused_json>' --epochs 3 --n-seeds 1
+   ```
+
+2. **ANALYZE** (30s) — `comp report`, `comp coverage`, check for:
+   - val_acc ≈ chance (forward/credit broken)
+   - val_acc drops over epochs (optimizer/gradient issue)
+   - "free settle telemetry failed" (geometry not layered)
+   - Positive control FAIL (wrong geometry_hint)
+   - NaN/Inf loss (energy clamp/init)
+   - All credits fail on one geometry (missing dispatch)
+
+3. **FIX** (≤15 min) — Infrastructure only; suspect low performance = defect
+   - Check activation shapes match param shapes
+   - Check credit pseudo-gradients are non-zero
+   - Check geometry compatibility matrix
+   - Check device placement (CPU vs CUDA)
+   - Check for silent `.to(cpu)` calls
+
+4. **VERIFY** (0.02h) — Quick re-run same config
+
+5. **COMMIT + LOG** — Update TODO with session log
+
+**Defect Patterns (Symptom → Likely Cause):**
+
+| Symptom | Investigate |
+|---------|-------------|
+| val_acc ≈ chance | Forward pass, credit produces zeros, loss not flowing |
+| val_acc drops | Optimizer misconfigured, gradient explosion, weight decay |
+| "free settle telemetry failed" | `forward_with_intermediates` act count ≠ param count |
+| Positive control FAIL | Task's `geometry_hint` wrong, compatibility check |
+| NaN/Inf loss | `max_energy` clamp, weight init, substrate noise |
+| Credit fails on geometry | Missing `_<geometry>_path` in credit dispatch |
+| Slow (>60s/epoch L0) | CPU-bound settle, no GPU kernel, `.to(cpu)` calls |
+
+**Question Excluded Possibilities:**
+
+| Assumption | Test |
+|------------|------|
+| "X is unfixable upstream" | Try version pins, config flags, workarounds |
+| "Y is CPU-bound" | Profile; check for compiled kernels |
+| "Z needs feature A" | Try alternative B (e.g., positional encoding vs patch embed) |
+| "Substrate S doesn't support D" | Check settle kernel implementation |
+| "Credit C fails on Geometry G" | Check compatibility matrix, add dispatch path |
+
+**Success Criteria (per domain):**
+- Vision (MNIST/CIFAR): best val_acc > 0.95
+- Graph classification: best val_acc > 0.70
+- Node classification (Cora): best val_acc > 0.75
+- RL (Pendulum): mean_reward > -200
+- Tabular (Iris): best val_acc > 0.90
+- ≥3 credits work per geometry
+- Zero "free settle telemetry failed" warnings
+- 100% positive control PASS rate
+
+**Session Log Template (append to TODO):**
+```
+## Session YYYY-MM-DD
+**Experiment:** <command>
+**Result:** <PASS/FAIL, key metrics>
+**Defects Found:** <list>
+**Fixes Applied:** <files changed>
+**Next Experiment:** <planned command>
+```
+
+**Never:**
+- Accept "this algorithm doesn't work" without verifying implementation
+- Run experiments >15 min without a hypothesis
+- Skip the positive control gate
+- Commit without targeted tests passing
