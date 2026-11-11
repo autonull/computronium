@@ -2558,7 +2558,8 @@ class GraphGeometry(nn.Module):
                 h = op(h, weight)
                 h = h + bias  # ruff: ignore[non-augmented-assignment]
                 h = torch.relu(h)
-                acts.append(self._aggregate(h))
+                h = self._aggregate(h)
+                acts.append(h)
             out = op(global_mean_pool(acts[-1], batch), self._head.weight)
             acts.append(out + self._head.bias)
             return acts

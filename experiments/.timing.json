@@ -64,9 +64,9 @@
     "startup_s": 0.0
   },
   "cpu/L1": {
-    "cost_per_cell_s": 2.565,
+    "cost_per_cell_s": 5.695,
     "per_task": {
-      "graph_classification": 2.565
+      "graph_classification": 5.695
     },
     "startup_s": 0.0
   },

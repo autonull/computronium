@@ -16,7 +16,9 @@ from computronium.ontology._utils import (
     _acts_list,
     _block_transition_acts,
     _learnable_weight_names,
+    _pool_acts,
     _propagate_targets,
+    _share_pooled,
     _weight_acts,
     apply_norm,
 )
@@ -2057,7 +2059,7 @@ class TemporalTraceCredit(_SurrogateUndefined):
             return self._timing_stdp_grads(
                 spike_rasters, acts, weight_names, geometry, batch
             )
-        return self._rate_stdp_grads(acts, weight_names, geometry, batch)
+        return self._rate_stdp_grads(acts, weight_names, geometry)
 
     def _timing_stdp_grads(
         self,
@@ -2181,9 +2183,9 @@ class TemporalTraceCredit(_SurrogateUndefined):
         acts: list[Tensor],
         weight_names: list[str],
         geometry: Geometry,
-        batch: int,
     ) -> list[Tensor]:
         """Rate-coded surrogate (fallback): correlate pre/post activity."""
+        pool = _pool_context(geometry)
         grads: list[Tensor] = []
         for pair, name in zip(
             _weight_acts(weight_names, acts, geometry), weight_names, strict=True
@@ -2192,11 +2194,20 @@ class TemporalTraceCredit(_SurrogateUndefined):
                 grads.append(torch.zeros_like(geometry.params[name]))
                 continue
             pre, post = pair
+            if pool is not None and pre.shape[0] != post.shape[0]:
+                # Pooled readout: the readout act is graph-sized, its input
+                # node-sized. Correlate against the pooled input (the
+                # transpose of the mean pool).
+                index, counts = pool
+                if pre.shape[0] != index.numel():
+                    grads.append(torch.zeros_like(geometry.params[name]))
+                    continue
+                pre = _pool_acts([pre], index, counts)[0]
 
             # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
-            causal = post.T @ pre / batch
+            causal = post.T @ pre / pre.shape[0]
             # Anti-causal: pre^T @ post -> [in_dim, out_dim], transpose for weight shape
-            anticausal = pre.T @ post / batch
+            anticausal = pre.T @ post / pre.shape[0]
             anticausal_w = anticausal.T
 
             # STDP: potentiate causal, depress anti-causal
@@ -2281,7 +2292,7 @@ class TargetInversionCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.target_inversion()
 
-    def compute_pseudo_gradient(
+    def compute_pseudo_gradient(  # ruff: ignore[too-many-return-statements]
         self,
         states: Mapping[Phase, SettableState],
         loss: Tensor | None,
@@ -2311,6 +2322,9 @@ class TargetInversionCredit:
         if (block_geometry := _block_transition_acts(acts, geometry)) is not None:
             return self._block_target_grads(acts, y, block_geometry)
 
+        if (pool := _pool_context(geometry)) is not None:
+            return self._graph_target_grads(acts, y, weight_names, geometry, pool)
+
         targets = _propagate_targets(acts, y, weight_names[:n_trans], geometry)
         pairs = _weight_acts(weight_names, acts, geometry)
 
@@ -2330,6 +2344,41 @@ class TargetInversionCredit:
             # pseudo_grad = delta^T @ pre / batch -> [out, in]
             grads.append(delta.T @ pre / pre.shape[0])
 
+        return grads
+
+    def _graph_target_grads(
+        self,
+        acts: list[Tensor],
+        y: Tensor,
+        weight_names: list[str],
+        geometry: Geometry,
+        pool: tuple[Tensor, Tensor],
+    ) -> list[Tensor]:
+        """Target propagation across a pooled readout (graph classification).
+
+        Hidden acts are node-sized while the logits are graph-sized, so the
+        output target lives in graph space and each node's hidden target is
+        its graph's target (the transpose of mean pooling). The head is
+        credited against the pooled mean of the last hidden act.
+        """
+        index, counts = pool
+        if len(acts) != len(weight_names) + 1 or acts[-2].shape[0] != index.numel():
+            return [torch.zeros_like(geometry.params[name]) for name in weight_names]
+        pooled = _pool_acts(acts, index, counts)
+        targets = _propagate_targets(pooled, y, weight_names, geometry)
+        readout = len(weight_names) - 1
+        grads: list[Tensor] = []
+        for i, name in enumerate(weight_names):
+            tgt = targets[i + 1]
+            if tgt is None:
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            if i == readout:
+                delta = acts[i + 1] - tgt
+                grads.append(delta.T @ pooled[i] / delta.shape[0])
+            else:
+                delta = acts[i + 1] - _share_pooled(tgt, index, counts, mean=False)
+                grads.append(delta.T @ acts[i] / acts[i].shape[0])
         return grads
 
     def _block_target_grads(
@@ -2429,14 +2478,15 @@ class HomeostaticCredit(_SurrogateUndefined):
 
         target = self.config.homeostatic_target
         grads = []
-        for pair, name in zip(
-            _weight_acts(weight_names, acts, geometry), weight_names, strict=True
+        for post, name in zip(
+            self._post_activations(acts, weight_names, geometry),
+            weight_names,
+            strict=True,
         ):
-            if pair is None:
-                grads.append(torch.zeros_like(geometry.params[name]))
-                continue
-            _, post = pair
             weight = geometry.params[name]  # [out_dim, in_dim]
+            if post is None:
+                grads.append(torch.zeros_like(weight))
+                continue
 
             # Mean post-activation norm (L2 across features, then mean across batch)
             post_norm = post.norm(dim=1).mean()  # scalar
@@ -2451,6 +2501,26 @@ class HomeostaticCredit(_SurrogateUndefined):
             grads.append(grad)
 
         return grads
+
+    def _post_activations(
+        self, acts: list[Tensor], weight_names: list[str], geometry: Geometry
+    ) -> list[Tensor | None]:
+        """Activation each weight's norm update regulates.
+
+        Layered topologies pair a weight with the next act in the stack when
+        the widths line up. The transformer's fused QKV projection widens to
+        3d, which no act carries: its successor act is the attention context
+        (after the attention narrows back to d), so the transformer path pairs
+        every weight positionally with the act after its input.
+        """
+        if _is_transformer(geometry):
+            if len(acts) < len(weight_names) + 1:
+                return [None] * len(weight_names)
+            return list(acts[1 : len(weight_names) + 1])
+        return [
+            pair[1] if pair is not None else None
+            for pair in _weight_acts(weight_names, acts, geometry)
+        ]
 
 
 class PCALMCredit(_SurrogateUndefined):

@@ -78,6 +78,38 @@ def _propagate_targets(
     return targets
 
 
+def _pool_acts(acts: list[Tensor], index: Tensor, counts: Tensor) -> list[Tensor]:
+    """Mean-pool the node-sized acts onto their graphs.
+
+    A pooled readout (graph classification) feeds a batch-sized readout error
+    into a node-sized act stack. Credits that walk the stack need the same
+    pooling the forward applied; acts whose leading dim is not the node count
+    (the logits) pass through unchanged.
+    """
+    n_nodes = index.numel()
+    pooled: list[Tensor] = []
+    for act in acts:
+        if act.shape[0] != n_nodes:
+            pooled.append(act)
+            continue
+        acc = act.new_zeros(counts.numel(), act.shape[1])
+        acc.index_add_(0, index, act)
+        pooled.append(acc / counts.unsqueeze(1))
+    return pooled
+
+
+def _share_pooled(x: Tensor, index: Tensor, counts: Tensor, *, mean: bool) -> Tensor:
+    """Hand a graph row back to its nodes — the transpose of mean pooling.
+
+    ``mean=True`` divides by the node count (an error at the readout is
+    shared equally, the derivative of the pooled mean); ``mean=False`` is the
+    plain broadcast target propagation needs (each node's target is its
+    graph's target).
+    """
+    rows = x[index]
+    return rows / counts[index].unsqueeze(1) if mean else rows
+
+
 def _weight_acts(
     weight_names: list[str], acts: list[Tensor], geometry: Geometry
 ) -> list[tuple[Tensor, Tensor] | None]:
@@ -345,8 +377,10 @@ __all__ = [
     "_deterministic_generator",
     "_fixed_random_matrix",
     "_learnable_weight_names",
+    "_pool_acts",
     "_propagate_targets",
     "_rms_normalize",
+    "_share_pooled",
     "_spectral_normalize",
     "_weight_acts",
 ]

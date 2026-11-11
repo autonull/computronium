@@ -30,6 +30,26 @@ pooling, mean aggregation with self connection) so the numbers above can be
 checked against the current code:
 
     uv run python scripts/probes/mutag_geometry_probe.py
+
+TODO88 R2 adds harness-parity arms. The harness landed below this probe
+(0.632-0.658 vs 0.711-0.737). Two mechanistic differences are testable with
+plain Adam: the instantaneous dynamics' nudged-phase CE (β=0.1 tightens the
+logit temperature) and the weights-only gradient contract (biases frozen at
+zero). Measured (5 seeds, same split, 200 epochs):
+
+    plain Adam                    0.7158 mean val_acc
+    nudged-CE β=0.1               0.7263
+    frozen biases                 0.7316
+    nudged-CE + frozen biases     0.7368
+
+Both suspects are refuted: the harness's algorithmic knobs do not cost
+accuracy. A grad_clip sweep through the harness (0.1 / 1.0 / 10.0) also
+changed nothing at 1.0 vs 10.0 (clipping was inactive). The real defect was
+in ``GraphGeometry.settle_blocks``: it appended the aggregated act but fed
+the *pre-aggregation* relu output into the next layer, so the pipeline's
+3-layer graph forward aggregated only the last layer. Fixing the settle path
+raised the same harness cells from 0.640 to 0.693 mean (0.684 / 0.711 /
+0.684 at seeds 42-44), inside this probe's seed range.
 """
 
 from __future__ import annotations
@@ -37,6 +57,7 @@ from __future__ import annotations
 import collections
 
 import torch
+from torch import Tensor
 from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
 
@@ -56,7 +77,14 @@ def _load() -> tuple[TUDataset, torch.Tensor, torch.Tensor, torch.Tensor]:
     return dataset, labels, train_idx, val_idx
 
 
-def _train(*, hidden: int = 64, layers: int = 3, seed: int = 0) -> dict[str, float]:
+def _train(
+    *,
+    hidden: int = 64,
+    layers: int = 3,
+    seed: int = 0,
+    nudge_beta: float | None = None,
+    train_biases: bool = True,
+) -> dict[str, float]:
     dataset, _labels, train_idx, val_idx = _load()
     geometry = GraphGeometry(
         GeometryConfig.graph(
@@ -66,16 +94,32 @@ def _train(*, hidden: int = 64, layers: int = 3, seed: int = 0) -> dict[str, flo
             hidden_dims=(hidden,) * layers,
         )
     ).to(DEVICE)
-    optim = torch.optim.Adam(geometry.parameters(), lr=LR)
+    params = (
+        list(geometry.parameters())
+        if train_biases
+        else [
+            p
+            for name, p in geometry.named_parameters()
+            if "weight" in name and p.ndim == 2
+        ]
+    )
+    optim = torch.optim.Adam(params, lr=LR)
     train_loader = DataLoader(dataset[train_idx], batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(dataset[val_idx], batch_size=BATCH_SIZE, shuffle=False)
+
+    def _loss(out: Tensor, y: Tensor) -> Tensor:
+        if nudge_beta is None:
+            return torch.nn.functional.cross_entropy(out, y)
+        # The instantaneous dynamics' nudged phase: out + β(onehot(y) − out)
+        target = torch.nn.functional.one_hot(y, out.shape[-1]).to(out.dtype)
+        return torch.nn.functional.cross_entropy(out + nudge_beta * (target - out), y)
 
     def _epoch(loader: DataLoader, *, train: bool) -> tuple[float, float]:
         total_loss = total_correct = total = 0
         for data in loader:
             data = data.to(DEVICE)
             out = geometry.forward(data.x, edge_index=data.edge_index, batch=data.batch)
-            loss = torch.nn.functional.cross_entropy(out, data.y)
+            loss = _loss(out, data.y)
             if train:
                 optim.zero_grad()
                 loss.backward()
@@ -100,13 +144,23 @@ def main() -> None:
         val_idx
     )
     print(f"majority-class val baseline = {majority:.3f}  (val n={len(val_idx)})")
-    for seed in (0, 1, 2, 3, 4):
-        torch.manual_seed(seed)
-        result = _train(seed=seed)
-        print(
-            f"seed={seed} train_acc={result['train_acc']:.3f} "
-            f"val_acc={result['val_acc']:.3f} val_loss={result['val_loss']:.4f}"
-        )
+    arms = {
+        "plain Adam (reference)": {},
+        "nudged-CE β=0.1": {"nudge_beta": 0.1},
+        "frozen biases": {"train_biases": False},
+        "nudged-CE + frozen biases": {"nudge_beta": 0.1, "train_biases": False},
+    }
+    for label, kwargs in arms.items():
+        values = []
+        for seed in (0, 1, 2, 3, 4):
+            torch.manual_seed(seed)
+            result = _train(seed=seed, **kwargs)
+            values.append(result["val_acc"])
+            print(
+                f"{label:30s} seed={seed} train_acc={result['train_acc']:.3f} "
+                f"val_acc={result['val_acc']:.3f} val_loss={result['val_loss']:.4f}"
+            )
+        print(f"{label:30s} mean val_acc = {sum(values) / len(values):.4f}")
 
 
 if __name__ == "__main__":

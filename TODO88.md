@@ -2,7 +2,16 @@
 
 **Mission:** Continue the experiment/fix cycle: run experiments (≤15 min each), discover bugs, scrutinize poor-performing algorithms as potential implementation defects, and question excluded possibilities.
 
-**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G7 FIXED (2026-11-11): GraphSystemTrainer drives the canonical pipeline (user axis attribution re-established on cora), graph kwargs are geometry-conditional, pc_alm×instantaneous is void, **graph geometry aggregates with `(A + I)` in PyG edge order**, **the MUTAG split is deterministic and stratified**, **FA has a pooled-readout path**, **the three credit dispatchers are one**, and **the cost-model cache no longer deletes other tasks' prices**. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG attribution re-established. Core system working across vision, RL, graph, tabular.
+**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G7 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular.
+
+**Progress (Session 2026-11-11, late — G8/R2/R3/R4):**
+- ✅ **G8 Graph settle path skipped intermediate aggregation** — `GraphGeometry.settle_blocks` appended `self._aggregate(h)` but fed the *pre-aggregation* relu output into the next layer, so the pipeline's multi-layer graph forward aggregated only the last layer (the head saw an aggregated act; the hidden chain did not). `forward`/`forward_with_intermediates`/`_stack` all aggregate between layers. Fixed, locked by `test_settle_blocks_matches_forward`.
+- ✅ **R2 harness-vs-probe gap refuted as an optimizer problem** — a `grad_clip` sweep through the harness (0.1/1.0/10.0, 200 epochs, n=3) returned identical results at 1.0 and 10.0 (clipping inactive); plain-Adam arms with the harness's nudged CE (β=0.1) and frozen biases matched or beat the reference probe (0.726/0.732/0.737 vs 0.716). The residual gap was G8, not the U-axis.
+- ✅ **R3 pooled-readout graph paths** — `TargetInversionCredit` now propagates graph-space targets and broadcasts each node its graph's target; `TemporalTraceCredit` rate mode correlates the head against the pooled hidden act. Both clear a batched MUTAG-shaped readout and move every 2-D weight.
+- ✅ **R4 transformer-aware homeostatic** — `_post_activations` pairs each transformer weight with its successor act, so the fused QKV projection (`[3d, d]`, no act of that width) receives a norm-regulating update instead of zeros. All six vision-transformer weights move.
+- ⚠️ **R5 replay hash is seed-insensitive** (found in the R2 sweep): three cells at seeds 42/43/44 share `replay_hash=0fdeab…` while val_acc differs. A replay hash that ignores the seed does not identify the run; fold into R5.
+- ⚠️ **R8 LM token targets crash `nudged_output`** (found probing R4): teacher-forced targets `[B, T]` meet logits `[B*T, V]`, so `one_hot` allocates `[B, T, V]`. Vision transformers are unaffected (classification targets are `[B]`); LM token training raises during settle.
+
 
 **Progress (Session 2026-11-11, evening — G4–G7):**
 - ✅ **G4 Graph geometry had no self connection** — aggregation was a bare neighbour mean (mean aggregation with `deg.clamp(min=1)`), in `row` order rather than PyG's source→destination order, so `h[i]` never contained `x[i]` and a source-only node collapsed to zero. MUTAG train accuracy plateaued at 0.767 (below the 0.658 majority baseline on val). Fixed: `(A + I)` in-degrees plus self in `_aggregate`, batched setup deduplicated into one `_batched` context manager. Probe: train 0.80–0.83, val 0.711–0.737 across 5 seeds (was 0.60–0.63).
@@ -37,14 +46,15 @@
 | # | Ticket | Why now | Gate / cost | Depends on |
 |---|--------|---------|-------------|------------|
 | R1 | **MUTAG evaluation protocol** — the >0.70 target is measured on 38 held-out graphs (25/13), where 1 graph = 0.026 and the majority baseline is 0.658. Options: (a) 5-fold CV averaged inside the task, (b) a larger TU dataset (PROTEINS 1113 / NCI1 4110) as a second graph-classification task, (c) report the majority baseline beside val_acc in every graph cell. | The "0.70 target" is noise-level today; R1 is what makes any graph-classification claim meaningful. | New task registry row + split wiring; demo gate if a demo ships | — |
-| R2 | **Harness-side U-axis is weaker than plain Adam on MUTAG** — cells land 0.63–0.71 while `scripts/probes/mutag_geometry_probe.py` (plain Adam 1e-2) lands 0.711–0.737 on the same geometry/split. Suspect `grad_clip=1.0` + momentum 0.9 in the Adam step, not the geometry. | Cheap and independent of R1: it decides whether the residual gap is the optimizer or the metric. | lr/clip sweep, ~1 min/cell at 200 epochs (measured) | — |
-| R3 | **`target_inversion` and `temporal_trace` crash on pooled readouts** — same contract break G5 fixed for FA, still open: `mat1 and mat2 (2x4 and 20x16)` and a size-mismatch on a 4-graph PyG batch. Either implement their graph paths (mirror `RandomProjectionsCredit._graph_path`) or void the coordinate for graph-classification tasks. | They are advertised credits; today a legal cell dies at runtime. | 1 lock test each (~0.01 s) | G5 pattern |
-| R4 | **`homeostatic` on causal_transformer** — attention `in_proj.weight` `[192, 64]` has no matching post-activation, so the credit emits zero gradients (~10% val_acc). Needs a transformer-aware path. | Blocks the fourth credit on the transformer axis (vision parity already proven for gradient). | targeted enc/dec probe | — |
-| R5 | **CUDA graph determinism** — graph cells use `index_add_` scatter, so CUDA atomics make two same-seed runs differ at ~1e-9 and diverge to ±1 graph of val_acc by 200 epochs (measured: seed 42 → 0.684 vs 0.658 across runs). Either run graph claims with `--deterministic` (verify `index_add_` support) or state the tolerance in the claim report. | A replay hash that drifts by one graph is not a replay. | one 2× run + `--deterministic` probe | — |
+| R2 | ✅ **CLOSED — harness U-axis gap was not the optimizer.** grad_clip 1.0 vs 10.0 identical; nudged-CE/frozen-bias arms match plain Adam. Root cause was G8 (`settle_blocks` aggregation). Harness 0.640 → 0.693 mean. | Done; do not reopen as an optimizer ticket. | — | G8 |
+| R3 | ✅ **CLOSED — pooled-readout paths shipped** for `target_inversion` and `temporal_trace`; lock `test_credit_readout_paths_lock.py`. | Done. | — | G5 pattern |
+| R4 | ✅ **CLOSED — transformer-aware homeostatic** pairs each weight with its successor act; fused QKV now moves. Lock `test_credit_readout_paths_lock.py`. | Backfill only: homeostatic is error-blind by contract, so nonzero updates do not imply accuracy. | — | — |
+| R5 | **Replay identity** — (a) hashes are seed-insensitive: seeds 42/43/44 shared `replay_hash` in the R2 sweep while val_acc differed; (b) CUDA graph scatter (`index_add_`) atomics drift two same-seed runs by ±1 graph. Either include the seed/device in the hash and run graph claims with `--deterministic`, or state the tolerance in the claim report. | A replay hash that ignores the seed and drifts by one graph is not a replay. | one 2× run + `--deterministic` probe | — |
 | R6 | **Register C hygiene** (unchanged, deferred) — repo-wide lint 583 → 0, pyright strict, full pytest shards + acceptance, `pip-audit`. | Round-close only; never per-commit. | ~10 min | — |
 | R7 | **CUDA PyG graph-classification crash** (`vectorized gather kernel index out of bounds`) — still unverified as upstream; CPU path is the workaround used by every graph run so far. | Question the excluded possibility with a PyG version pin + `num_workers=0`. | ~15 min | — |
+| R8 | **LM token targets crash the nudged phase** — `y` `[B, T]` vs logits `[B*T, V]`: `one_hot` builds `[B, T, V]` and `nudged_output` raises. Flatten token targets (or reshape logits to `[B, T, V]`) in the settle nudge and in the loss path. | Blocks every causal-LM token task; vision transformers pass only because labels are `[B]`. | one lock test on a toy LM cell | — |
 
-**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), stale latency-proxy fixture.
+**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4).
 
 ---
 
@@ -1097,6 +1107,70 @@ Lint: no new findings (39 pre-existing legacy in `wave.py`/`geometry.py`).
 Pyright: no new findings (17 pre-existing in `domains/factory.py`, `credit/__init__.py`,
 `geometry.py` legacy regions).
 
-**Next Experiment:** R1 (MUTAG evaluation protocol: folds or a larger TU dataset) and R2
-(harness U-axis vs plain Adam on MUTAG) from REMAINING WORK — R2 is the cheaper of the two and
-decides whether the residual gap is the optimizer or the metric.
+**Next Experiment:** R1 (MUTAG evaluation protocol: folds or a larger TU dataset) and R5
+(replay identity: seed-insensitive hash + CUDA scatter), from REMAINING WORK.
+
+---
+
+## Session 2026-11-11 (late — G8 / R2 / R3 / R4)
+
+**Experiment 1 — R2: harness U-axis vs plain Adam on MUTAG** (L1, 200 epochs, step_size 0.01)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 --mode learn --policy random \
+  --device cpu --tasks graph_classification --fidelity L1 \
+  --store experiments/t88_r2_mutag_uaxis_clip.duckdb --max-workers 1 \
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous"],
+           "plasticity":["null"],"credit":["gradient"],"update":["adam"]}' \
+  --epochs 200 --n-seeds 3 \
+  --hyperparameters '{"update.grad_clip":{"members":[0.1,1.0,10.0]},"update.step_size":{"members":[0.01]}}'
+```
+**Result:** grad_clip 0.1 → 0.605/0.711/0.632 (0.649); 1.0 → 0.658/0.632/0.632 (0.640);
+10.0 → bit-identical val_acc to 1.0. **Clipping is inactive — the optimizer was not the gap.**
+`scripts/probes/mutag_geometry_probe.py` harness-parity arms (5 seeds): plain Adam 0.7158,
+nudged-CE β=0.1 0.7263, frozen biases 0.7316, both 0.7368 — both harness knobs are refuted.
+Also found: the three seeds shared one `replay_hash` (R5).
+
+**Experiment 2 — G8 root cause + verify** (same cell, post-fix)
+```
+--store experiments/t88_r2b_mutag_settle_fix.duckdb  (same axes, step_size 0.01, n-seeds 3)
+```
+**Result:** 0.684 / 0.711 / 0.684 → **mean 0.693** (was 0.640), val loss 0.673 → 0.581/0.650/0.646.
+Counterfactual: rebuilding layer *i+1* from `acts[i]` diverged from `settle_blocks`
+(0.32), while rebuilding from the pre-aggregation relu output matched exactly — the settle
+path never fed its own aggregated act forward.
+
+**Experiment 3 — R3/R4 lock cells**
+```
+uv run python -m pytest tests/property/test_credit_readout_paths_lock.py \
+  tests/property/test_graph_self_connection_lock.py tests/property/test_graph_pipeline_lock.py -q
+```
+**Result:** PASS — `target_inversion` and `temporal_trace` clear a batched 4-graph readout and move
+both 2-D weights; homeostatic moves all six vision-transformer weights including
+`blocks.0.in_proj.weight`; `settle_blocks` equals `forward` elementwise.
+
+**Defects Found:**
+- **G8** — `GraphGeometry.settle_blocks` reused the pre-aggregation relu output for the next
+  layer while appending the aggregated act, so the pipeline's hidden chain had no message
+  passing (only the final act was aggregated). This was the R2 gap.
+- **R5a** — replay hashes ignore the seed (seeds 42/43/44 share a hash with different val_acc).
+- **R8** — LM token targets `[B, T]` crash `nudged_output` against `[B*T, V]` logits.
+
+**Fixes Applied:**
+- `computronium/ontology/geometry.py` — `settle_blocks` feeds `h = self._aggregate(h)` into the
+  next layer.
+- `computronium/ontology/_utils.py` — `_pool_acts`, `_share_pooled` (transpose of mean pooling).
+- `computronium/ontology/credit/__init__.py` — `TargetInversionCredit._graph_target_grads`,
+  pooled-readout `TemporalTraceCredit._rate_stdp_grads`, transformer-aware
+  `HomeostaticCredit._post_activations`.
+- `scripts/probes/mutag_geometry_probe.py` — R2 arms (nudged CE, frozen biases) + findings.
+- Locks: `tests/property/test_credit_readout_paths_lock.py` (new, 3 tests),
+  `tests/property/test_graph_self_connection_lock.py::test_settle_blocks_matches_forward`.
+
+**Verification:** `test_credit_readout_paths_lock` 3/3, `test_graph_self_connection_lock` 3/3,
+`test_graph_pipeline_lock` 6/6, `test_credit_semantics` + `test_geometry_wiring_lock` +
+`test_dynamics_wiring_lock` + `test_axes_capabilities_totality_lock` 30/30,
+`tests/unit/core -k "graph or credit or pipeline"` 40/40. Lint: no new findings (pre-existing
+`_utils.py` typing import, `geometry.py` `_apply_stack` complexity/branches).
+
+**Next Experiment:** R1 (fold/larger-dataset evaluation protocol) and R5 (seed-aware replay hash,
+CUDA scatter tolerance); R8 is the cheapest fix of the three.

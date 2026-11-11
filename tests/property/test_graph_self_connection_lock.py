@@ -22,6 +22,7 @@ import torch
 
 from computronium.domains.factory import _stratified_split
 from computronium.ontology.geometry import GeometryConfig, GraphGeometry
+from computronium.ontology.substrate import DigitalSubstrate
 
 INPUT_DIM, OUTPUT_DIM = 4, 2
 # PyG edge order: 0 -> 2. Node 0 sends, receives nothing; node 2 receives.
@@ -54,6 +55,37 @@ def test_source_only_node_keeps_own_features() -> None:
     assert torch.allclose(h[1], torch.tensor([0.0, 1.0, 0.0, 0.0])), h[1]
     # Node 2 receives node 0 and keeps itself: mean of the two.
     assert torch.allclose(h[2], torch.tensor([0.5, 0.0, 0.0, 0.0])), h[2]
+
+
+def test_settle_blocks_matches_forward() -> None:
+    """The settle path must apply aggregation between layers, like forward.
+
+    ``settle_blocks`` appended the aggregated act but kept routing the
+    *pre-aggregation* relu output into the next layer, so the pipeline's
+    multi-layer graph forward aggregated only the final layer. The credits
+    read the act stack, so the harness trained a different (weaker) model
+    than ``GraphGeometry.forward``.
+    """
+    geometry = GraphGeometry(
+        GeometryConfig.graph(
+            input_dim=INPUT_DIM,
+            output_dim=OUTPUT_DIM,
+            edge_index=EDGE_INDEX,
+            hidden_dims=(8, 8),
+        )
+    )
+    generator = torch.Generator().manual_seed(0)
+    x = torch.randn(6, INPUT_DIM, generator=generator)
+    edge_index = torch.tensor([[0, 1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 0]])
+    batch = torch.tensor([0, 0, 1, 1, 2, 2])
+    substrate = DigitalSubstrate()
+    acts = geometry.settle_blocks(x, substrate, edge_index=edge_index, batch=batch)
+    logits = geometry.forward(x, edge_index=edge_index, batch=batch)
+    assert torch.allclose(acts[-1], logits, atol=1e-6)
+    op = substrate.get_forward_operator()
+    with geometry._batched(x, edge_index, batch):
+        hidden = geometry._stack(x, op)
+    assert torch.allclose(acts[-2], hidden, atol=1e-6)
 
 
 def test_graph_split_is_deterministic_and_stratified() -> None:
