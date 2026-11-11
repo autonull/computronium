@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import (
     TYPE_CHECKING,
@@ -2372,6 +2373,7 @@ class GraphGeometry(nn.Module):
 
         self._set_param_names()
         self._compute_degrees()
+        self._pool_context: tuple[Tensor, Tensor] | None = None
 
     def _set_param_names(self) -> None:
         for key, weight in self._layer_weights.items():
@@ -2381,13 +2383,55 @@ class GraphGeometry(nn.Module):
         if self._head.bias is not None:
             _set_param_name(self._head.bias, "head_bias")
 
+    def _degrees(self, edge_index: Tensor, num_nodes: int) -> Tensor:
+        """In-degrees with the self connection folded in ``(A + I)``.
+
+        Mean aggregation without a self connection replaces every node's
+        features with its neighbours' mean, so a node's own signal survives
+        only as a weight product and a source-only node collapses to zero.
+        """
+        dst = edge_index[1]
+        deg = torch.zeros(num_nodes, dtype=torch.long, device=dst.device)
+        deg.scatter_add_(0, dst, torch.ones_like(dst))
+        return deg + 1
+
     def _compute_degrees(self) -> None:
-        """Pre-compute neighbor counts for mean aggregation."""
+        """Pre-compute neighbor counts for (A + I) mean aggregation."""
         num_nodes = int(self._edge_index.max().item()) + 1
-        row, _ = self._edge_index
-        deg = torch.zeros(num_nodes, dtype=torch.long)
-        deg.scatter_add_(0, row, torch.ones_like(row))
-        self.register_buffer("_deg", deg.clamp(min=1), persistent=False)
+        self.register_buffer(
+            "_deg", self._degrees(self._edge_index, num_nodes), persistent=False
+        )
+
+    @staticmethod
+    def _graph_counts(batch: Tensor) -> Tensor:
+        """Nodes per graph for a PyG batch vector."""
+        counts = torch.zeros(
+            int(batch.max().item()) + 1, dtype=torch.float32, device=batch.device
+        )
+        counts.scatter_add_(0, batch, torch.ones_like(batch, dtype=torch.float32))
+        return counts
+
+    def pool_context(self) -> tuple[Tensor, Tensor] | None:
+        """``(node → graph index, nodes per graph)`` of the last batched call.
+
+        Persists past the call on purpose: a credit that walks the error back
+        through a pooled readout needs the pooling map, which is not in the
+        activation stack. Node-mode calls clear it.
+        """
+        return self._pool_context
+
+    @contextmanager
+    def _batched(self, x: Tensor, edge_index: Tensor, batch: Tensor):
+        """Scope the edge index, degrees and pooling map to one graph batch."""
+        original = (self._edge_index, self._deg)
+        device = x.device
+        self._edge_index = edge_index.to(device)
+        self._deg = self._degrees(self._edge_index, int(edge_index.max().item()) + 1)
+        self._pool_context = (batch, self._graph_counts(batch))
+        try:
+            yield
+        finally:
+            self._edge_index, self._deg = original
 
     @property
     def num_nodes(self) -> int:
@@ -2417,12 +2461,14 @@ class GraphGeometry(nn.Module):
         return params
 
     def _aggregate(self, h: Tensor) -> Tensor:
-        """Mean aggregation over neighbors: h_out[i] = mean(h[j] for j in N(i))."""
-        row, col = self._edge_index
-        # h[col] gives source node features for each edge
-        # scatter_add aggregates to destination nodes (row)
-        aggr = torch.zeros_like(h)
-        aggr.index_add_(0, row, h[col])
+        """Mean over neighbours and self: ``(A + I)`` in PyG edge order.
+
+        ``edge_index[0]`` sends, ``edge_index[1]`` receives, so a node's new
+        features average its in-neighbours' features with its own.
+        """
+        src, dst = self._edge_index
+        aggr = h.clone()
+        aggr.index_add_(0, dst, h[src])
         return aggr / self._deg.unsqueeze(1).to(h.dtype)
 
     def _stack(self, x: Tensor, op: Callable[[Tensor, Tensor], Tensor]) -> Tensor:
@@ -2461,41 +2507,24 @@ class GraphGeometry(nn.Module):
 
         # Graph classification mode: edge_index and batch provided
         if edge_index is not None and batch is not None:
-            # Store original buffers
-            orig_edge_index = self._edge_index
-            orig_deg = self._deg
-
-            # Use provided edge_index and compute degrees (ensure on same device as x)
-            device = x.device
-            self._edge_index = edge_index.to(device)
-            row, _ = self._edge_index
-            num_nodes = int(edge_index.max().item()) + 1
-            deg = torch.zeros(num_nodes, dtype=torch.long, device=device)
-            deg.scatter_add_(0, row, torch.ones_like(row, device=device))
-            self._deg = deg.clamp(min=1)
-
-            try:
-                if substrate is not None:
-                    op = substrate.get_forward_operator()
-                else:
-                    op = lambda a, w: a @ w.T
-                h = self._stack(x, op)
-                # Graph-level pooling: mean over nodes per graph using batch vector
-                h = global_mean_pool(h, batch)
+            with self._batched(x, edge_index, batch):
+                op = (
+                    substrate.get_forward_operator()
+                    if substrate is not None
+                    else lambda a, w: a @ w.T
+                )
+                h = global_mean_pool(self._stack(x, op), batch)
                 return op(h, self._head.weight) + self._head.bias
-            finally:
-                # Restore original buffers
-                self._edge_index = orig_edge_index
-                self._deg = orig_deg
-        else:
-            # Node classification mode: use stored edge_index
-            if substrate is None:
-                from computronium.ontology.substrate import DigitalSubstrate
 
-                substrate = DigitalSubstrate()
-            op = substrate.get_forward_operator()
-            h = self._stack(x, op)
-            return op(h, self._head.weight) + self._head.bias
+        # Node classification mode: use stored edge_index
+        self._pool_context = None
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+        h = self._stack(x, op)
+        return op(h, self._head.weight) + self._head.bias
 
     def route(self, activations: Tensor) -> Tensor:
         """Single-step routing through the graph (for settling dynamics)."""
@@ -2505,55 +2534,34 @@ class GraphGeometry(nn.Module):
     def settle_blocks(
         self, x: Tensor, substrate: Substrate, *args, **kwargs
     ) -> list[Tensor]:
-        """Settle blocks for graph classification - supports edge_index and batch via args/kwargs."""
-        # For graph classification, edge_index and batch may be passed via args/kwargs
+        """Activity stack for settling: ``[x, h_1, ..., h_L, logits]``.
+
+        Graph classification pools the node stack per graph before the head,
+        so the logits are batch-sized while the hidden acts are node-sized.
+        """
         edge_index = kwargs.get("edge_index")
         batch = kwargs.get("batch")
-        if edge_index is not None and batch is not None:
-            # Use the same logic as forward for graph classification
-            if substrate is None:
-                from computronium.ontology.substrate import DigitalSubstrate
-
-                substrate = DigitalSubstrate()
-            op = substrate.get_forward_operator()
-
-            # Store original buffers
-            orig_edge_index = self._edge_index
-            orig_deg = self._deg
-
-            # Use provided edge_index and compute degrees
-            device = x.device
-            self._edge_index = edge_index.to(device)
-            row, _ = self._edge_index
-            num_nodes = int(edge_index.max().item()) + 1
-            deg = torch.zeros(num_nodes, dtype=torch.long, device=device)
-            deg.scatter_add_(0, row, torch.ones_like(row, device=device))
-            self._deg = deg.clamp(min=1)
-
-            try:
-                acts = [x]
-                h = x
-                for i in range(len(self._layer_weights)):
-                    weight = self._layer_weights[f"layer_{i}"]
-                    bias = self._layer_biases[f"layer_{i}"]
-                    h = op(h, weight)
-                    h = h + bias  # ruff: ignore[non-augmented-assignment]
-                    h = torch.relu(h)
-                    h = self._aggregate(h)
-                    acts.append(h)
-
-                # Graph-level pooling
-                h = global_mean_pool(h, batch)
-                out = op(h, self._head.weight) + self._head.bias
-                acts.append(out)
-                return acts
-            finally:
-                # Restore original buffers
-                self._edge_index = orig_edge_index
-                self._deg = orig_deg
-        else:
-            # Node classification mode: use stored edge_index
+        if edge_index is None or batch is None:
             return self.forward_with_intermediates(x, substrate)
+
+        op = (
+            substrate.get_forward_operator()
+            if substrate is not None
+            else lambda a, w: a @ w.T
+        )
+        with self._batched(x, edge_index, batch):
+            acts = [x]
+            h = x
+            for i in range(len(self._layer_weights)):
+                weight = self._layer_weights[f"layer_{i}"]
+                bias = self._layer_biases[f"layer_{i}"]
+                h = op(h, weight)
+                h = h + bias  # ruff: ignore[non-augmented-assignment]
+                h = torch.relu(h)
+                acts.append(self._aggregate(h))
+            out = op(global_mean_pool(acts[-1], batch), self._head.weight)
+            acts.append(out + self._head.bias)
+            return acts
 
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs

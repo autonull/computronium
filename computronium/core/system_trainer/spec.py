@@ -9,8 +9,10 @@ from computronium.ontology import (
     CreditAssignmentConfig,
     GeometryConfig,
     HomeostaticCredit,
+    LocalContrastiveCredit,
     LocalGoodnessCredit,
     ParameterUpdateConfig,
+    PCALMCredit,
     PepitaCredit,
     RandomProjectionsCredit,
     StateDynamicsConfig,
@@ -69,8 +71,13 @@ def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
     return dynamics_from_config(dynamics)
 
 
-def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # ruff: ignore[too-many-return-statements]
-    """Instantiate the credit implementation named by ``config.credit_type``."""
+def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # ruff: ignore[too-many-return-statements, complex-structure]
+    """Instantiate the credit implementation named by ``config.credit_type``.
+
+    Single dispatcher for the whole trainer family: the axis registry
+    advertises every credit primitive, so a missing case here surfaces as an
+    ``Unknown credit_type`` crash on a legal cell rather than a filtered one.
+    """
     match config.credit_type.lower():
         case "thermodynamic_contrast" | "equilibrium":
             return ThermodynamicContrast(config)
@@ -82,6 +89,8 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             return LocalGoodnessCredit(config)
         case "pepita":
             return PepitaCredit(config)
+        case "local_contrastive" | "per_layer_ff":
+            return LocalContrastiveCredit(config)
         case "temporal_trace" | "spiking":
             return TemporalTraceCredit(config)
         case "target_inversion" | "target_prop":
@@ -90,6 +99,8 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             return HomeostaticCredit(config)
         case "gradient" | "backprop":
             return BackpropCredit(config)
+        case "pc_alm":
+            return PCALMCredit(config)
         case other:
             raise ValueError(f"Unknown credit_type: {other!r}")
 

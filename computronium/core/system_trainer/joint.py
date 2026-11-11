@@ -53,45 +53,13 @@ if TYPE_CHECKING:
     from computronium.state.context import SystemContext
 
 
-def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements, complex-structure]
+def _credit_from_config(config: CreditAssignmentConfig):
     """Instantiate the credit implementation named by ``config.credit_type``."""
-    from computronium.ontology import (
-        BackpropCredit,
-        HomeostaticCredit,
-        LocalContrastiveCredit,
-        LocalGoodnessCredit,
-        PCALMCredit,
-        PepitaCredit,
-        RandomProjectionsCredit,
-        TargetInversionCredit,
-        TemporalTraceCredit,
+    from computronium.core.system_trainer.spec import (
+        _credit_from_config as _spec_credit_from_config,
     )
 
-    match config.credit_type.lower():
-        case "thermodynamic_contrast" | "equilibrium":
-            return ThermodynamicContrast(config)
-        case (
-            "random_projections" | "feedback_alignment" | ("direct_feedback_alignment")
-        ):
-            return RandomProjectionsCredit(config)
-        case "local_goodness" | "forward_only":
-            return LocalGoodnessCredit(config)
-        case "pepita":
-            return PepitaCredit(config)
-        case "local_contrastive" | "per_layer_ff":
-            return LocalContrastiveCredit(config)
-        case "temporal_trace" | "spiking":
-            return TemporalTraceCredit(config)
-        case "target_inversion" | "target_prop":
-            return TargetInversionCredit(config)
-        case "homeostatic":
-            return HomeostaticCredit(config)
-        case "pc_alm":
-            return PCALMCredit(config)
-        case "gradient" | "backprop":
-            return BackpropCredit(config)
-        case other:
-            raise ValueError(f"Unknown credit_type: {other!r}")
+    return _spec_credit_from_config(config)
 
 
 def compose_joint_system[  # ruff: ignore[complex-structure]

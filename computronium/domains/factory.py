@@ -338,6 +338,34 @@ class CopyTask(DomainTask):
         return torch.nn.functional.cross_entropy(outputs, targets)
 
 
+_GRAPH_SPLIT_SEED = 0
+_GRAPH_TRAIN_FRACTION = 0.8
+
+
+def _stratified_split(
+    labels: torch.Tensor, *, seed: int = _GRAPH_SPLIT_SEED
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Deterministic, label-stratified train/val indices.
+
+    Args:
+        labels: One label per example.
+        seed: Split seed, fixed so every run evaluates the same held-out set.
+
+    Returns:
+        Train and validation index tensors.
+    """
+    generator = torch.Generator().manual_seed(seed)
+    train_parts: list[torch.Tensor] = []
+    val_parts: list[torch.Tensor] = []
+    for label in labels.unique():
+        idx = (labels == label).nonzero().flatten()
+        idx = idx[torch.randperm(idx.numel(), generator=generator)]
+        n_train = round(_GRAPH_TRAIN_FRACTION * idx.numel())
+        train_parts.append(idx[:n_train])
+        val_parts.append(idx[n_train:])
+    return torch.cat(train_parts), torch.cat(val_parts)
+
+
 class GraphClassificationTask(DomainTask):
     """Graph classification: Classify entire graphs (not nodes).
 
@@ -391,11 +419,11 @@ class GraphClassificationTask(DomainTask):
         self._input_dim = dataset.num_features
         self._output_dim = dataset.num_classes
 
-        # Split dataset
-        n = len(dataset)
-        n_train = int(0.8 * n)
-        indices = torch.randperm(n)
-        train_idx, val_idx = indices[:n_train], indices[n_train:]
+        # The split is a dataset property, not a training seed: a seed plan
+        # varies initialization and batch order, so an unseeded randperm would
+        # give every seed a different held-out set and make seeds incomparable.
+        labels = torch.cat([data.y.view(-1) for data in dataset])
+        train_idx, val_idx = _stratified_split(labels)
 
         train_ds = dataset[train_idx]
         val_ds = dataset[val_idx]

@@ -275,6 +275,72 @@ def test_graph_classification_routes_graph_kwargs() -> None:
     assert any((after[name] - before[name]).abs().max().item() > 0.0 for name in before)
 
 
+@pytest.mark.timeout(180)
+def test_pooled_readout_credit_trains_and_differs_from_gradient() -> None:
+    """A pooled graph readout keeps FA's error chain intact (G5).
+
+    Node acts are pooled per graph before the head, so a credit that walks the
+    error back through weight-shaped feedback matrices meets a node-sized act
+    stack with a batch-sized error. The fix routes it through the geometry's
+    pooling map; removing that path reproduces the shape crash.
+    """
+    from torch_geometric.data import Batch, Data
+
+    def _batch() -> Batch:
+        generator = torch.Generator().manual_seed(3)
+        graphs = [
+            Data(
+                x=torch.randn(5, INPUT_DIM, generator=generator),
+                y=torch.randint(0, OUTPUT_DIM, (1,), generator=generator),
+                edge_index=torch.tensor([
+                    list(range(5)),
+                    [(i + 1) % 5 for i in range(5)],
+                ]),
+            )
+            for _ in range(4)
+        ]
+        return Batch.from_data_list(graphs)
+
+    data = _batch()
+    deltas: dict[str, dict[str, Tensor]] = {}
+    for credit in ("gradient", "random_projections"):
+        torch.manual_seed(0)
+        system = compose_system_from_configs(
+            SubstrateConfig.digital(),
+            GeometryConfig.graph(
+                input_dim=INPUT_DIM,
+                output_dim=OUTPUT_DIM,
+                edge_index=data.edge_index.tolist(),
+                hidden_dims=HIDDEN_DIMS,
+            ),
+            StateDynamicsConfig.instantaneous(),
+            _credit_config(credit),
+            ParameterUpdateConfig.adam(step_size=1e-2),
+        )
+        before = {
+            name: t.detach().clone() for name, t in system.geometry.params.items()
+        }
+        metrics = system.train_step(
+            data.x, data.y, edge_index=data.edge_index, batch=data.batch
+        )
+        assert torch.isfinite(torch.tensor(metrics["loss"]))
+        deltas[credit] = {
+            name: system.geometry.params[name] - before[name] for name in before
+        }
+
+    moved = [
+        name
+        for name, delta in deltas["random_projections"].items()
+        if delta.abs().max() > 0
+    ]
+    assert moved, "random_projections moved no parameter through a pooled readout"
+    assert any(
+        (deltas["gradient"][name] - deltas["random_projections"][name]).abs().max()
+        > 1e-9
+        for name in moved
+    ), "pooled-readout FA produced gradient-identical deltas"
+
+
 @pytest.mark.timeout(120)
 def test_graph_kwargs_are_geometry_conditional() -> None:
     from computronium.ontology.geometry import FeedforwardGeometry

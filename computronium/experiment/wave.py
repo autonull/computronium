@@ -101,6 +101,26 @@ class CostModel:
     def source(self) -> str:
         return "measured" if self.measured else "default"
 
+    def cost_for(self, task_id: str | None) -> float:
+        """Per-cell cost for a task, falling back to the run-wide estimate.
+
+        Task prices differ by orders of magnitude (a MUTAG cell is ~2 s, an
+        MNIST cell ~250 s), so a single aggregate price mis-states any run it
+        did not measure.
+        """
+        if task_id is not None and self.per_task:
+            return self.per_task.get(task_id, self.cost_per_cell_s)
+        if self.per_task and len(self.per_task) == 1:
+            return next(iter(self.per_task.values()))
+        return self.cost_per_cell_s
+
+    def cost_for_tasks(self, task_ids: Sequence[str]) -> float:
+        """Mean per-cell cost over the tasks a run plans to evaluate."""
+        if not self.per_task:
+            return self.cost_per_cell_s
+        known = [self.per_task[t] for t in task_ids if t in self.per_task]
+        return sum(known) / len(known) if known else self.cost_per_cell_s
+
 
 def _load_cost_model(device: str, fidelity: str) -> CostModel:
     try:
@@ -125,7 +145,11 @@ def _save_cost_model(device: str, fidelity: str, model: CostModel) -> None:
             "startup_s": round(model.startup_s, 3),
         }
         if model.per_task:
-            data["per_task"] = {k: round(v, 3) for k, v in model.per_task.items()}
+            previous = existing.get(key, {}).get("per_task", {})
+            data["per_task"] = {
+                **previous,
+                **{k: round(v, 3) for k, v in model.per_task.items()},
+            }
         existing[key] = data
         TIMING_CACHE.write_text(json.dumps(existing, indent=2, sort_keys=True))
 
@@ -1357,7 +1381,11 @@ def _measure_cost_model(
         cost_per_cell_s=max(0.01, sum(per_task.values()) / len(per_task)),
         startup_s=0.0,
         measured=True,
-        per_task=per_task,
+        # Prices are per task and independent: this run measured only its own
+        # tasks, so the task it did not run keeps the price it already had.
+        # Replacing the map priced the next run of a different task from this
+        # run's unrelated cell time (a 138x under-price on mnist L1).
+        per_task={**(prior.per_task or {}), **per_task},
     )
     _save_cost_model(device_str, fidelity, measured)
     logger.info(

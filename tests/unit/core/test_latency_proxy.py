@@ -91,21 +91,14 @@ def test_proxy_ordering_matches_measured_walltime() -> None:
 
 
 def test_proxy_rejects_non_layered_geometry() -> None:
-    from computronium.ontology import GraphGeometry
+    """A geometry without a layered param view has no per-weight FLOP model.
 
-    torch.manual_seed(0)
-    system = compose_system(
-        substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
-        geometry=GraphGeometry(
-            GeometryConfig.graph(input_dim=8, output_dim=2, edge_index=[[1], [0]])
-        ),
-        dynamics=PredictiveSettlingDynamics(
-            StateDynamicsConfig.predictive_settling(max_steps=2)
-        ),
-        credit=ThermodynamicContrast(
-            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
-        ),
-        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.1)),
-    )
+    The fixture is a geometry that genuinely lacks the view: ``GraphGeometry``
+    answers ``layered_params`` (its node stack is linear), so it is a legal
+    layered input now and cannot stand in for the rejection case.
+    """
+    from types import SimpleNamespace
+
+    system = SimpleNamespace(geometry=object(), dynamics=None)
     with pytest.raises(ValueError, match="layered"):
         estimate_train_step_flops(system, batch_size=4)

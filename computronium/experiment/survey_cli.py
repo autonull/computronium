@@ -197,7 +197,9 @@ def _print_dry_run(result: dict[str, Any], args: argparse.Namespace) -> None:
     if args.dry_run_format == "summary":
         model: CostModel = result["model"]
         n = result.get("n", 0)
-        total = model.startup_s + n * model.cost_per_cell_s
+        tasks = result.get("tasks", [])
+        cell_cost = model.cost_for_tasks(tasks)
+        total = model.startup_s + n * cell_cost
         split = result.get("budget_split")
         split_text = (
             f" | split: L0={split.get('L0', 0.6) * 100:.0f}% "
@@ -207,8 +209,8 @@ def _print_dry_run(result: dict[str, Any], args: argparse.Namespace) -> None:
         )
         print(
             f"Dry-run: {n} cells | {args.fidelity} | "
-            f"{', '.join(result.get('tasks', []))} | "
-            f"~{model.cost_per_cell_s:.1f}s/cell ({model.source}) | "
+            f"{', '.join(tasks)} | "
+            f"~{cell_cost:.1f}s/cell ({model.source}) | "
             f"~{total:.0f}s total{split_text}"
         )
         return

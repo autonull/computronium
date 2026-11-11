@@ -68,6 +68,19 @@ def _is_transformer(geometry: Geometry) -> bool:
     return isinstance(geometry, TransformerGeometry)
 
 
+def _pool_context(geometry: Geometry) -> tuple[Tensor, Tensor] | None:
+    """``(node → graph, nodes per graph)`` when the readout pools nodes.
+
+    A graph readout that mean-pools its node stack before the head breaks the
+    layered FA contract (node-sized acts, batch-sized error). The geometry
+    that does this advertises the pooling map; everything else returns None.
+    """
+    context = getattr(geometry, "pool_context", None)
+    if not callable(context):
+        return None
+    return cast("tuple[Tensor, Tensor] | None", context())
+
+
 # ============================================================
 # CreditAssignment Configuration
 # ============================================================
@@ -814,7 +827,7 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
         self.config = config or CreditAssignmentConfig.random_projections()
         self._feedback_weights: dict[str, Tensor] = {}
 
-    def compute_pseudo_gradient(
+    def compute_pseudo_gradient(  # ruff: ignore[too-many-return-statements]
         self,
         states: Mapping[Phase, SettableState],
         loss: Tensor | None,
@@ -852,7 +865,45 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
             return self._block_path(acts, delta_out, block_geometry, batch)
         if _is_transformer(geometry):
             return self._transformer_path(acts, weight_names, delta_out, geometry)
+        if (pool := _pool_context(geometry)) is not None:
+            return self._graph_path(acts, weight_names, delta_out, geometry, pool)
         return self._layered_path(acts, weight_names, delta_out, geometry)
+
+    def _graph_path(
+        self,
+        acts: list[Tensor],
+        weight_names: list[str],
+        delta_out: Tensor,
+        geometry: Geometry,
+        pool: tuple[Tensor, Tensor],
+    ) -> list[Tensor]:
+        """FA across a pooled readout (graph classification).
+
+        Node activations are pooled per graph before the head, so the error
+        chain splits: the head is credited against the pooled mean, and each
+        node's error is its graph's readout error shared out over the graph's
+        node count — the exact transpose of the mean-pooling forward.
+        """
+        index, counts = pool
+        n_nodes = acts[-2].shape[0]
+        if index.numel() != n_nodes:
+            return self._inert_zeros(geometry, weight_names)
+
+        head_weight = geometry.params[weight_names[-1]]
+        pooled = acts[-2].new_zeros(delta_out.shape[0], acts[-2].shape[1])
+        pooled.index_add_(0, index, acts[-2])
+        pooled = pooled / counts.unsqueeze(1)
+        grads: list[Tensor] = [delta_out.T @ pooled / delta_out.shape[0]]
+        err = (delta_out @ head_weight)[index] / counts[index].unsqueeze(1)
+        for i in range(len(weight_names) - 2, -1, -1):
+            grads.append(err.T @ acts[i] / n_nodes)
+            err = apply_norm(
+                [err @ self._feedback_weights[weight_names[i]]],
+                self.config.credit_norm,
+                [acts[i]],
+            )[0]
+        grads.reverse()
+        return grads
 
     def _init_chain_feedback(
         self,
