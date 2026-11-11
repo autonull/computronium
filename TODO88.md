@@ -2,15 +2,21 @@
 
 **Mission:** Continue the experiment/fix cycle: run experiments (≤15 min each), discover bugs, scrutinize poor-performing algorithms as potential implementation defects, and question excluded possibilities.
 
-**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G7 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular.
+**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G8 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin).
+
+**Progress (Session 2026-11-11 close — R1c/R5/R8):**
+- ✅ **R8 LM token targets** — `TransformerGeometry` folds the sequence into the batch (logits `[B*T, V]`), while `LMTask` returns targets `[B, T]`. `nudged_output` returned the 2-D target and broadcast-failed, and both task-loss paths fed CE a rank-mismatched pair. Fixed with one shared `_align_target_rows` fold applied in `nudged_output`, `task_loss`/`_task_loss_tensor` and `SystemTrainer.validate`; `_one_hot` now builds `[…, V]` one-hots for any target rank. Locks: `tests/property/test_lm_target_alignment_lock.py` (5 tests: nudge, ignore-index, settle, train step, trainer validation).
+- ✅ **R5 replay identity** — the per-cell hash was a hand-written field list that omitted `schedule.seed` (`evaluate.py`), so seeds 42/43/44 of one coordinate shared a hash while val_acc differed. It now hashes `code_sha | dataset_version | coordinate.measurement_key(schedule)`; the measurement key carries seed, task, device and determinism. The CUDA `index_add_` tolerance is stated, not hidden: `LimitationKind.NONDETERMINISTIC_ACCUMULATION` names every non-deterministic CUDA graph cell (one graph = 1/N of the split). Locks: `tests/property/test_cell_identity_lock.py` (4 tests).
+- ✅ **R1(c) graph evaluation protocol** — `GraphClassificationTask.evaluate` reports `majority_baseline` (measured over evaluated labels) and `val_acc_over_majority` beside `accuracy`; the kernel copies task custom metrics into the cell payload. A 0.63 MUTAG cell is now visibly below the 0.658 majority rate instead of merely "near 0.70". Lock: `tests/property/test_graph_eval_protocol_lock.py` (2 tests).
+- ⚠️ **R1(a)/(b) remain** — the 38-graph held-out split still makes the >0.70 target noise-level (one graph = 0.026). Averaged cross-validation (a) or a larger TU dataset (b) is the remaining work; (c) makes today's numbers honest, not higher.
 
 **Progress (Session 2026-11-11, late — G8/R2/R3/R4):**
 - ✅ **G8 Graph settle path skipped intermediate aggregation** — `GraphGeometry.settle_blocks` appended `self._aggregate(h)` but fed the *pre-aggregation* relu output into the next layer, so the pipeline's multi-layer graph forward aggregated only the last layer (the head saw an aggregated act; the hidden chain did not). `forward`/`forward_with_intermediates`/`_stack` all aggregate between layers. Fixed, locked by `test_settle_blocks_matches_forward`.
 - ✅ **R2 harness-vs-probe gap refuted as an optimizer problem** — a `grad_clip` sweep through the harness (0.1/1.0/10.0, 200 epochs, n=3) returned identical results at 1.0 and 10.0 (clipping inactive); plain-Adam arms with the harness's nudged CE (β=0.1) and frozen biases matched or beat the reference probe (0.726/0.732/0.737 vs 0.716). The residual gap was G8, not the U-axis.
 - ✅ **R3 pooled-readout graph paths** — `TargetInversionCredit` now propagates graph-space targets and broadcasts each node its graph's target; `TemporalTraceCredit` rate mode correlates the head against the pooled hidden act. Both clear a batched MUTAG-shaped readout and move every 2-D weight.
 - ✅ **R4 transformer-aware homeostatic** — `_post_activations` pairs each transformer weight with its successor act, so the fused QKV projection (`[3d, d]`, no act of that width) receives a norm-regulating update instead of zeros. All six vision-transformer weights move.
-- ⚠️ **R5 replay hash is seed-insensitive** (found in the R2 sweep): three cells at seeds 42/43/44 share `replay_hash=0fdeab…` while val_acc differs. A replay hash that ignores the seed does not identify the run; fold into R5.
-- ⚠️ **R8 LM token targets crash `nudged_output`** (found probing R4): teacher-forced targets `[B, T]` meet logits `[B*T, V]`, so `one_hot` allocates `[B, T, V]`. Vision transformers are unaffected (classification targets are `[B]`); LM token training raises during settle.
+- ✅ **R5 replay hash was seed-insensitive** (found in the R2 sweep): three cells at seeds 42/43/44 shared `replay_hash=0fdeab…` while val_acc differed. Fixed at close: `_cell_replay_hash` hashes `measurement_key` (seed included); CUDA scatter tolerance is a derived limitation.
+- ✅ **R8 LM token targets crashed `nudged_output`** (found probing R4): teacher-forced targets `[B, T]` met logits `[B*T, V]`, so `one_hot` allocated `[B, T, V]`. Fixed at close: `_align_target_rows` folds the target in the nudge, the task loss and trainer validation.
 
 
 **Progress (Session 2026-11-11, evening — G4–G7):**
@@ -45,16 +51,16 @@
 
 | # | Ticket | Why now | Gate / cost | Depends on |
 |---|--------|---------|-------------|------------|
-| R1 | **MUTAG evaluation protocol** — the >0.70 target is measured on 38 held-out graphs (25/13), where 1 graph = 0.026 and the majority baseline is 0.658. Options: (a) 5-fold CV averaged inside the task, (b) a larger TU dataset (PROTEINS 1113 / NCI1 4110) as a second graph-classification task, (c) report the majority baseline beside val_acc in every graph cell. | The "0.70 target" is noise-level today; R1 is what makes any graph-classification claim meaningful. | New task registry row + split wiring; demo gate if a demo ships | — |
+| R1 | **MUTAG evaluation protocol** — (c) **SHIPPED**: every graph cell now reports `majority_baseline` and `val_acc_over_majority`. Remaining (a) 5-fold CV averaged inside the task, or (b) a larger TU dataset (PROTEINS 1113 / NCI1 4110) as a second graph-classification task. | (c) makes today's numbers readable; (a)/(b) are what raise the measurement resolution so a >0.70 claim means something. | New split wiring + task registry row; demo gate if a demo ships | — |
 | R2 | ✅ **CLOSED — harness U-axis gap was not the optimizer.** grad_clip 1.0 vs 10.0 identical; nudged-CE/frozen-bias arms match plain Adam. Root cause was G8 (`settle_blocks` aggregation). Harness 0.640 → 0.693 mean. | Done; do not reopen as an optimizer ticket. | — | G8 |
 | R3 | ✅ **CLOSED — pooled-readout paths shipped** for `target_inversion` and `temporal_trace`; lock `test_credit_readout_paths_lock.py`. | Done. | — | G5 pattern |
 | R4 | ✅ **CLOSED — transformer-aware homeostatic** pairs each weight with its successor act; fused QKV now moves. Lock `test_credit_readout_paths_lock.py`. | Backfill only: homeostatic is error-blind by contract, so nonzero updates do not imply accuracy. | — | — |
-| R5 | **Replay identity** — (a) hashes are seed-insensitive: seeds 42/43/44 shared `replay_hash` in the R2 sweep while val_acc differed; (b) CUDA graph scatter (`index_add_`) atomics drift two same-seed runs by ±1 graph. Either include the seed/device in the hash and run graph claims with `--deterministic`, or state the tolerance in the claim report. | A replay hash that ignores the seed and drifts by one graph is not a replay. | one 2× run + `--deterministic` probe | — |
+| R5 | ✅ **CLOSED — replay identity.** (a) `_cell_replay_hash` now hashes `code_sha | dataset_version | measurement_key`, so seed/task/device/determinism are in the hash (seeds 42/43/44 no longer collide). (b) CUDA graph scatter remains order-dependent; the tolerance is stated as `LimitationKind.NONDETERMINISTIC_ACCUMULATION` (one graph = 1/N of the split) for every non-deterministic CUDA graph cell. | Locks `test_cell_identity_lock.py` (4 tests). | — | — |
 | R6 | **Register C hygiene** (unchanged, deferred) — repo-wide lint 583 → 0, pyright strict, full pytest shards + acceptance, `pip-audit`. | Round-close only; never per-commit. | ~10 min | — |
 | R7 | **CUDA PyG graph-classification crash** (`vectorized gather kernel index out of bounds`) — still unverified as upstream; CPU path is the workaround used by every graph run so far. | Question the excluded possibility with a PyG version pin + `num_workers=0`. | ~15 min | — |
-| R8 | **LM token targets crash the nudged phase** — `y` `[B, T]` vs logits `[B*T, V]`: `one_hot` builds `[B, T, V]` and `nudged_output` raises. Flatten token targets (or reshape logits to `[B, T, V]`) in the settle nudge and in the loss path. | Blocks every causal-LM token task; vision transformers pass only because labels are `[B]`. | one lock test on a toy LM cell | — |
+| R8 | ✅ **CLOSED — LM token targets fold to the folded logits.** `_align_target_rows` is applied in `nudged_output`, `task_loss`/`_task_loss_tensor` and `SystemTrainer.validate`; `_one_hot` handles any target rank. Lock `test_lm_target_alignment_lock.py` (5 tests). | Blocks no causal-LM token task now. | — | — |
 
-**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4).
+**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4), seed-insensitive cell replay hash (R5a), CUDA scatter tolerance now stated (R5b), LM token-target crash (R8), graph cells without a majority baseline (R1c).
 
 ---
 
@@ -1174,3 +1180,57 @@ both 2-D weights; homeostatic moves all six vision-transformer weights including
 
 **Next Experiment:** R1 (fold/larger-dataset evaluation protocol) and R5 (seed-aware replay hash,
 CUDA scatter tolerance); R8 is the cheapest fix of the three.
+
+---
+
+## Session 2026-11-11 (close — R1c / R5 / R8)
+
+**Experiment:** R5 forensics on the stored R2 sweep (`experiments/t88_r2b_mutag_settle_fix.duckdb`)
+```
+select json_extract_string(schedule,'$.seed'), measurement_key,
+       json_extract_string(payload,'$.replay_hash'), json_extract_string(payload,'$.val_acc')
+from records
+```
+**Result:** Seeds 42/43/44 of one coordinate share a per-cell `replay_hash` (fewer than 16 hex
+chars differ) while val_acc is 0.684/0.711/0.684. Reading the site showed why: `evaluate.py`
+hand-assembled `code_sha | dataset_version | cell_key | fidelity | n_seeds | epochs | batch_limit |
+param_budget | device` — `cell_key` excludes the schedule, and `seed` was never appended. The
+run-level hash was not at fault (it covers the whole measured seed plan by design).
+
+**Defects Found:**
+- **R5a** — per-cell replay hash omitted `schedule.seed` (and `task_id`, `deterministic`,
+  `precision`, `num_workers`), so a replay could not identify the measurement it claimed.
+- **R8** — LM token targets `[B, T]` met folded logits `[B*T, V]`: `nudged_output` returned the
+  2-D target (broadcast error), `task_loss`/`_task_loss_tensor` fed rank-mismatched CE, and
+  `SystemTrainer.validate` had the same mismatch plus a per-sequence (not per-token) denominator.
+- **R1(c)** — graph cells stored `val_acc` with no majority rate, so a 0.63 MUTAG cell (below the
+  0.658 majority baseline) read as "near 0.70".
+
+**Fixes Applied:**
+- `computronium/ontology/_utils.py` — `_align_target_rows`: folds targets whose element count
+  equals the logits' row count; class targets and soft labels pass through.
+- `computronium/ontology/_settle_kernel.py` — `nudged_output` aligns before the nudge and
+  `_one_hot` builds `[…, V]` one-hots for any target rank; ignore-index entries stay free.
+- `computronium/core/pipeline.py` — both task-loss paths align the target before CE/accuracy.
+- `computronium/core/system_trainer/trainer.py` — `validate` aligns and counts tokens (`numel`).
+- `computronium/experiment/kernel/evaluate.py` — `_cell_replay_hash` = SHA256 of
+  `code_sha | dataset_version | measurement_key(schedule)` (single definition of measurement
+  identity, so the seed is in it).
+- `computronium/experiment/evidence/limitations.py` — `NONDETERMINISTIC_ACCUMULATION` states the
+  CUDA graph-scatter tolerance (one graph = 1/N of the split) for non-deterministic CUDA cells.
+- `computronium/domains/factory.py` — `GraphClassificationTask.evaluate` returns
+  `majority_baseline` and `val_acc_over_majority` in `Metrics.custom`; the kernel's
+  `_update_task_metrics` copies them into the payload.
+- Locks: `tests/property/test_lm_target_alignment_lock.py` (5),
+  `tests/property/test_cell_identity_lock.py` (4), `tests/property/test_graph_eval_protocol_lock.py` (2).
+
+**Verification:** New locks 11/11; `test_transformer_geometry` + `test_graph_pipeline_lock` +
+`test_graph_self_connection_lock` + `test_credit_readout_paths_lock` + `test_cell_evaluation_lock`
+23/23; `tests/unit/core -k "loss or trainer or pipeline or graph or transformer"` +
+`test_determinism_extended` 47/47; `test_claim_report_lock` 27/27. Lint: no new findings (pre-existing
+Register C items only); pyright: no new errors (the 25 are the pre-existing graph-`Data` typing set).
+
+**Next Experiment:** R1(a) 5-fold CV inside `GraphClassificationTask` (or R1(b) PROTEINS as a
+second graph task) to raise split resolution; R7 PyG CUDA pin probe if CUDA graph claims are
+needed. Everything else in the table is closed or round-close hygiene (R6).
+

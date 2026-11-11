@@ -33,6 +33,19 @@ def _acts_list(activations: list[Tensor] | Tensor | None) -> list[Tensor]:
     return [activations]
 
 
+def _align_target_rows(out: Tensor, target: Tensor) -> Tensor:
+    """Fold sequence-shaped targets to match the logits' row count.
+
+    ``TransformerGeometry`` folds the sequence dim into the batch, so LM
+    logits are ``[B*T, V]`` while next-token targets stay ``[B, T]``. A
+    target whose element count equals the logits' row count is that folded
+    token target; class targets ``[B]`` and soft labels keep their shape.
+    """
+    if target.dim() > 1 and target.numel() == out.shape[0]:
+        return target.reshape(-1)
+    return target
+
+
 def _block_transition_acts(
     acts: list[Tensor], geometry: Geometry
 ) -> TileBlockGeometry | None:
@@ -372,6 +385,7 @@ __all__ = [
     "ConfigFactory",
     "_EMANormalizer",
     "_acts_list",
+    "_align_target_rows",
     "_block_transition_acts",
     "_clip_grads",
     "_deterministic_generator",

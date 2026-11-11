@@ -48,6 +48,7 @@ class LimitationKind(StrEnum):
     INSUFFICIENT_POWER = "insufficient_power"
     UNPREREGISTERED_CLAIM = "unpreregistered_claim"
     NO_ELIGIBLE_CLAIM = "no_eligible_claim"
+    NONDETERMINISTIC_ACCUMULATION = "nondeterministic_accumulation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,6 +253,39 @@ def _unpreregistered_claim(ctx: _Context) -> tuple[Limitation, ...]:
     )
 
 
+def _nondeterministic_accumulation(ctx: _Context) -> tuple[Limitation, ...]:
+    """CUDA graph scatter is order-dependent, so a replay can move one graph.
+
+    ``GraphGeometry._aggregate`` uses ``index_add_``, whose CUDA atomics do
+    not fix a summation order. The tolerance is the split resolution, not a
+    model difference: one graph of ``N`` held out.
+    """
+    records = [
+        record
+        for record in ctx.records
+        if record.geometry == "graph"
+        and record.schedule.device.startswith("cuda")
+        and not record.schedule.deterministic
+    ]
+    if not records:
+        return ()
+    return (
+        Limitation(
+            kind=LimitationKind.NONDETERMINISTIC_ACCUMULATION,
+            detail=(
+                f"{len(records)} graph cell(s) ran CUDA neighbourhood accumulation; "
+                "its atomics are order-dependent, so a same-seed replay may differ "
+                "by one graph (1/N of the held-out split)"
+            ),
+            count=len(records),
+            evidence=(
+                "records WHERE coordinate.geometry='graph' AND "
+                "schedule.device LIKE 'cuda%' AND NOT schedule.deterministic"
+            ),
+        ),
+    )
+
+
 def _no_eligible_claim(ctx: _Context) -> tuple[Limitation, ...]:
     if ctx.claim_count is None or ctx.claim_count > 0:
         return ()
@@ -275,6 +309,7 @@ _DERIVATIONS: Final[tuple[Callable[[_Context], tuple[Limitation, ...]], ...]] = 
     _unmeasured_objectives,
     _insufficient_power,
     _unpreregistered_claim,
+    _nondeterministic_accumulation,
     _no_eligible_claim,
 )
 

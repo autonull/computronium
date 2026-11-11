@@ -10,6 +10,7 @@ concrete ``DomainTask`` and reads its own ``input_dim``/``output_dim``.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import threading
 import time
@@ -91,6 +92,23 @@ logger = get_logger(__name__)
 # free-threaded CPython — several workers ask for the same task at once.
 _TASK_CACHE: dict[tuple[str, str, int], Any] = {}
 _TASK_LOCK: Final[threading.Lock] = threading.Lock()
+
+
+def _cell_replay_hash(
+    provenance: Provenance, coordinate: Coordinate, schedule: Schedule
+) -> str:
+    """Per-cell replay identity: measurement key plus code/dataset provenance.
+
+    ``measurement_key`` carries the seed, task, device and determinism flag,
+    so two seeds of one coordinate hash differently (R5a); the older
+    hand-assembled field list omitted the seed.
+    """
+    replay_data = "|".join((
+        provenance.code_sha,
+        provenance.dataset_version,
+        coordinate.measurement_key(schedule),
+    ))
+    return hashlib.sha256(replay_data.encode()).hexdigest()[:16]
 
 
 def _primary_metric_key(task_id: str) -> str:
@@ -731,11 +749,8 @@ def cell_record(
     within_ceiling = _within_ceiling(evaluation.param_count, schedule.param_budget)
 
     # Compute replay hash for reproducibility (D10)
-    # Hash over: code_sha, dataset_version, coordinate, schedule
-    import hashlib
-
-    replay_data = f"{provenance.code_sha}|{provenance.dataset_version}|{coordinate.cell_key()}|{schedule.fidelity}|{schedule.n_seeds}|{schedule.epochs}|{schedule.batch_limit}|{schedule.param_budget}|{schedule.device}"
-    replay_hash = hashlib.sha256(replay_data.encode()).hexdigest()[:16]
+    # Hash over: code_sha, dataset_version, coordinate + full schedule
+    replay_hash = _cell_replay_hash(provenance, coordinate, schedule)
 
     payload: dict[str, Any] = {
         "status": "evaluated",

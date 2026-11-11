@@ -458,6 +458,8 @@ class GraphClassificationTask(DomainTask):
     ) -> Metrics:
         was_training = model.training
         model.eval()
+        labels: list[torch.Tensor] = []
+        majority_baseline = 0.0
         try:
             # For graph classification, we need to handle batch differently
             loader = self.get_dataloader(split)
@@ -474,12 +476,27 @@ class GraphClassificationTask(DomainTask):
                     total_loss += loss.item() * dev_batch.num_graphs
                     total_correct += (outputs.argmax(1) == dev_batch.y).sum().item()
                     total_samples += dev_batch.num_graphs
+                    labels.append(dev_batch.y.detach().cpu().view(-1))
             avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
             accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+            # R1: the held-out graph split is small enough that val_acc alone is
+            # unreadable — report the majority-class rate beside it, so a cell
+            # below it is visibly below chance rather than "close to 0.70".
+            if labels:
+                y_all = torch.cat(labels)
+                if y_all.numel():
+                    majority_baseline = y_all.bincount().max().item() / y_all.numel()
         finally:
             if was_training:
                 model.train()
-        return Metrics(loss=avg_loss, accuracy=accuracy)
+        return Metrics(
+            loss=avg_loss,
+            accuracy=accuracy,
+            custom={
+                "majority_baseline": majority_baseline,
+                "val_acc_over_majority": accuracy - majority_baseline,
+            },
+        )
 
 
 class CharNGramTask(DomainTask):

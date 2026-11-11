@@ -27,6 +27,7 @@ from computronium.ontology import (
     Substrate,
     SystemState,
 )
+from computronium.ontology._utils import _align_target_rows
 from computronium.ontology.dynamics import (
     SettableState,
     set_state_field,
@@ -152,6 +153,7 @@ def task_loss(state: SettableState, y: Tensor) -> Tensor:
     if acts is None:
         return torch.tensor(0.0, device=y.device)
     logits = acts[-1] if isinstance(acts, list) else acts
+    y = _align_target_rows(logits, y)
     loss = torch.nn.functional.cross_entropy(logits, y)
     with torch.no_grad():
         acc = _accuracy(logits, y).item()
@@ -170,6 +172,7 @@ def _task_loss_tensor(state: SettableState, y: Tensor) -> tuple[Tensor, Tensor]:
         zero = torch.tensor(0.0, device=y.device)
         return zero, zero
     logits = acts[-1] if isinstance(acts, list) else acts
+    y = _align_target_rows(logits, y)
     loss = torch.nn.functional.cross_entropy(logits, y)
     with torch.no_grad():
         acc = _accuracy(logits, y)

@@ -24,6 +24,7 @@ from computronium.core.system_trainer._resume import (
     TrainerSnapshot,
     fold_in,
 )
+from computronium.ontology._utils import _align_target_rows
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -500,10 +501,11 @@ class SystemTrainer:
                         x = x.reshape(x.size(0), -1)
 
                 logits = self.system.forward(x, **graph_kwargs)
+                y = _align_target_rows(logits, y)
                 ce = torch.nn.functional.cross_entropy(logits, y, reduction="sum")
                 val_ce_sum += ce.item()
                 val_correct += (logits.argmax(-1) == y).sum().item()
-                num_samples += y.size(0)
+                num_samples += y.numel()
 
         denom = max(num_samples, 1)
         val_loss = val_ce_sum / denom

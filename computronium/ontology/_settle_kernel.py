@@ -103,23 +103,39 @@ IGNORE_INDEX: Final = -100
 
 
 def _one_hot(target: Tensor, like: Tensor) -> Tensor:
-    """Convert class indices to one-hot matching 'like' tensor."""
+    """Convert class indices to one-hot matching 'like' tensor.
+
+    ``like.shape[:-1]`` is the target's expected index layout (``[B]``,
+    ``[B, T]``, ``[N]``); ``like.shape[-1]`` is the class dimension.
+    """
+    if target.shape == like.shape:
+        return target
     if target.dim() == 1:
         out = torch.zeros_like(like)
         out.scatter_(1, target.unsqueeze(1), 1.0)
         return out
-    return target
+    flat = target.reshape(-1)
+    out = torch.zeros(
+        (flat.numel(), like.shape[-1]), dtype=like.dtype, device=like.device
+    )
+    out.scatter_(1, flat.unsqueeze(1), 1.0)
+    return out.view(*target.shape, like.shape[-1])
 
 
 def nudged_output(out: Tensor, target: Tensor, beta: float) -> Tensor:
     """β-nudge output activities toward the target one-hot.
 
-    Entries carrying the CE ignore-index sentinel (``y < 0``) stay free:
-    the task loss ignores them, so their activity must not enter the
-    nudge — a raw ``scatter`` on a negative index would also fail.
+    Sequence-shaped token targets ``[B, T]`` fold to the logits' rows
+    ``[B*T, V]`` before the nudge (R8). Entries carrying the CE
+    ignore-index sentinel (``y < 0``) stay free: the task loss ignores
+    them, so their activity must not enter the nudge — a raw ``scatter``
+    on a negative index would also fail.
     """
-    if target.dim() != 1:
-        return out + beta * (_one_hot(target, out) - out)
+    from computronium.ontology._utils import _align_target_rows
+
+    target = _align_target_rows(out, target)
+    if target.shape == out.shape:
+        return out + beta * (target - out)
     onehot = _one_hot(target.clamp_min(0), out)
     valid = (target >= 0).unsqueeze(-1).to(out.dtype)
     return out + beta * valid * (onehot - out)
