@@ -455,3 +455,200 @@ def _eqprop_settle_chunk_simple_noise(  # ruff: ignore[too-many-arguments, too-m
 _compiled_eqprop_settle_chunk_simple_noise = torch.compile(
     _eqprop_settle_chunk_simple_noise, dynamic=False
 )
+
+
+# ============================================================
+# Substrate-specific compiled settle loops for PredictiveSettlingDynamics
+# ============================================================
+
+
+def _layered_settle_loop_digital(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    step_size: float,
+    n_steps: int,
+) -> list[Tensor]:
+    """Digital substrate predictive settling: raw matmul (x @ w.T)."""
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        for i, w in enumerate(weights):
+            h_upper = acts[i + 1]
+            error = acts[i] - h_upper @ w
+            new_acts.append(h_upper + step_size * (error @ w.T))
+        acts = new_acts
+    return acts
+
+
+_compiled_layered_settle_digital = torch.compile(
+    _layered_settle_loop_digital, dynamic=False
+)
+
+
+def _layered_settle_loop_analog(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    step_size: float,
+    n_steps: int,
+    noise_level: float,
+    weight_bounds: tuple[float, float] | None,
+) -> list[Tensor]:
+    """Analog substrate predictive settling: noise injection + weight clamping."""
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        for i, w in enumerate(weights):
+            h_upper = acts[i + 1]
+            # Analog forward: noise injection on input
+            x = acts[i]
+            if noise_level > 0:
+                x = x + torch.randn_like(x) * noise_level
+            # Weight clamping
+            w_eff = w
+            if weight_bounds is not None:
+                w_eff = w_eff.clamp(*weight_bounds)
+            error = x - h_upper @ w_eff
+            # Top-down: mathematical transpose (no noise, no clamping)
+            new_acts.append(h_upper + step_size * (error @ w_eff.T))
+        acts = new_acts
+    return acts
+
+
+_compiled_layered_settle_analog = torch.compile(
+    _layered_settle_loop_analog, dynamic=False
+)
+
+
+def _layered_settle_loop_simple_noise(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    step_size: float,
+    n_steps: int,
+    noise_level: float,
+) -> list[Tensor]:
+    """Substrates with simple noise injection only: Neuromorphic, Optical, Sparse."""
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        for i, w in enumerate(weights):
+            h_upper = acts[i + 1]
+            x = acts[i]
+            if noise_level > 0:
+                x = x + torch.randn_like(x) * noise_level
+            error = x - h_upper @ w
+            new_acts.append(h_upper + step_size * (error @ w.T))
+        acts = new_acts
+    return acts
+
+
+_compiled_layered_settle_simple_noise = torch.compile(
+    _layered_settle_loop_simple_noise, dynamic=False
+)
+
+
+def _layered_settle_loop_memristive(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    step_size: float,
+    n_steps: int,
+    noise_level: float,
+    weight_bounds: tuple[float, float] | None,
+) -> list[Tensor]:
+    """Memristive substrate predictive settling: differential conductance pair + noise."""
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        for i, w in enumerate(weights):
+            h_upper = acts[i + 1]
+            x = acts[i]
+            if noise_level > 0:
+                x = x + torch.randn_like(x) * noise_level
+            # Memristive: differential pair (g+, g-) with quantization
+            if weight_bounds is not None:
+                w = w.clamp(*weight_bounds)
+            g_plus = w.clamp(min=0)
+            g_minus = (-w).clamp(min=0)
+            w_eff = g_plus - g_minus
+            error = x - h_upper @ w_eff
+            # Top-down uses effective weight transpose
+            new_acts.append(h_upper + step_size * (error @ w_eff.T))
+        acts = new_acts
+    return acts
+
+
+_compiled_layered_settle_memristive = torch.compile(
+    _layered_settle_loop_memristive, dynamic=False
+)
+
+
+def _layered_settle_loop_ternary(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    step_size: float,
+    n_steps: int,
+    weight_bits: int = 2,
+) -> list[Tensor]:
+    """Ternary substrate predictive settling: TWN-style weight quantization."""
+    threshold = 0.7  # TWN ternary threshold factor
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        for i, w in enumerate(weights):
+            h_upper = acts[i + 1]
+            # TWN ternary quantization: w_q = sign(w) * E[|w|] * threshold
+            scale = w.abs().mean() * threshold
+            w_q = torch.sign(w) * scale
+            error = acts[i] - h_upper @ w_q
+            new_acts.append(h_upper + step_size * (error @ w_q.T))
+        acts = new_acts
+    return acts
+
+
+_compiled_layered_settle_ternary = torch.compile(
+    _layered_settle_loop_ternary, dynamic=False
+)
+
+
+def _layered_settle_loop_complex(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    step_size: float,
+    n_steps: int,
+) -> list[Tensor]:
+    """Complex substrate predictive settling: complex-valued matmul."""
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        for i, w in enumerate(weights):
+            h_upper = acts[i + 1]
+            # Complex forward: conjugate transpose for top-down
+            error = acts[i] - h_upper @ w
+            new_acts.append(h_upper + step_size * (error @ w.conj().T))
+        acts = new_acts
+    return acts
+
+
+_compiled_layered_settle_complex = torch.compile(
+    _layered_settle_loop_complex, dynamic=False
+)
+
+
+def _layered_settle_loop_quantum(
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    step_size: float,
+    n_steps: int,
+    noise_level: float = 0.0,
+) -> list[Tensor]:
+    """Quantum substrate predictive settling: amplitude encoding with shot noise."""
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        for i, w in enumerate(weights):
+            h_upper = acts[i + 1]
+            x = acts[i]
+            # Quantum: shot noise on measurement
+            if noise_level > 0:
+                x = x + torch.randn_like(x) * noise_level
+            error = x - h_upper @ w
+            new_acts.append(h_upper + step_size * (error @ w.conj().T))
+        acts = new_acts
+    return acts
+
+
+_compiled_layered_settle_quantum = torch.compile(
+    _layered_settle_loop_quantum, dynamic=False
+)

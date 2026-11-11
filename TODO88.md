@@ -466,3 +466,35 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 - Graph classification energy_minimization has tensor shape mismatch (requires graph-native settle kernel).
 - PredictiveSettlingDynamics compiled path still Digital-only (needs similar substrate-specific fixes).
 **Next:** Fix budget estimation for sequential evaluation; investigate graph CUDA issue (CPU/num_workers=0); PredictiveSettlingDynamics substrate-specific compiled paths.
+
+---
+
+## Session 2026-11-11 (PREDICTIVE_SETTLING COMPILED KERNELS PHASE)
+**Experiment:** Compiled Settle Kernels for PredictiveSettlingDynamics on Non-Digital Substrates
+**Analysis:** PredictiveSettlingDynamics only had a compiled fast path for DigitalSubstrate (`_compiled_layered_settle_digital`). All other substrates (Analog, Neuromorphic, Optical, Sparse, Memristive, Ternary, Complex, Quantum) fell back to eager Python loops, causing 5-10x slowdown.
+**Defects Found:**
+1. `_compiled_layered_settle` inlined only DigitalSubstrate's forward operator (raw matmul `x @ w.T`).
+2. No substrate-specific compiled paths existed for Analog, Neuromorphic, Optical, Sparse, Memristive, Ternary, Complex, Quantum substrates.
+3. `compiled` default was False for predictive_settling config.
+4. ComplexSubstrate uses emulated complex format requiring custom complex_linear; incompatible with standard real-valued geometries.
+**Fixes Applied:**
+- `computronium/ontology/_settle_kernel.py`: Added substrate-specific compiled settle loops for PredictiveSettlingDynamics:
+  - `_compiled_layered_settle_digital` (DigitalSubstrate: raw matmul)
+  - `_compiled_layered_settle_analog` (AnalogSubstrate: noise injection + weight clamping)
+  - `_compiled_layered_settle_simple_noise` (NeuromorphicSubstrate, OpticalSubstrate, SparseSubstrate: noise injection only)
+  - `_compiled_layered_settle_memristive` (MemristiveSubstrate: differential conductance pair + noise)
+  - `_compiled_layered_settle_ternary` (TernarySubstrate: TWN-style ternary quantization)
+  - `_compiled_layered_settle_complex` (ComplexSubstrate: complex matmul with conjugate transpose)
+  - `_compiled_layered_settle_quantum` (QuantumSubstrate: amplitude encoding with shot noise)
+- `computronium/ontology/dynamics/_dynamics.py`: Extended `_settle_layered` to dispatch to substrate-specific compiled functions based on substrate type. Set `compiled` default to `True` for `StateDynamicsConfig.predictive_settling`. ComplexSubstrate falls back to eager (pre-existing geometry incompatibility).
+**Verification:**
+- All property locks pass (test_dynamics_wiring_lock, test_task_geometry_compat_lock).
+- Substrate settle equivalence tests pass.
+- End-to-end training works for Digital, Analog, Neuromorphic, Optical, Memristive, Ternary, Quantum, Sparse substrates with compiled predictive_settling.
+- Experiment t88_predictive_settling_test4: Digital, Analog, Optical substrates PASS (val_acc 0.52-0.68); Sparse fails due to PyTorch inductor "closed pool" issue (separate bug).
+**Known Limitations:**
+- ComplexSubstrate has pre-existing incompatibility with real-valued feedforward geometry (emulated complex format [real, imag] vs real weights).
+- SparseSubstrate fails with PyTorch inductor "Attempting to use a closed pool" error when using compiled kernels.
+- Graph geometry predictive_settling needs graph-native settle kernel (fundamental tensor shape mismatch).
+- Spatial_lattice geometry incompatible with layered settle kernel.
+**Next:** Fix PyTorch inductor "closed pool" issue for SparseSubstrate; investigate ComplexSubstrate geometry compatibility; graph CUDA issue (CPU/num_workers=0).

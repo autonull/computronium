@@ -334,7 +334,7 @@ class StateDynamicsConfig:
         beta: float = 0.5,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
-        compiled: bool = False,
+        compiled: bool = True,
     ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="predictive_settling",
@@ -1164,7 +1164,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         # Execute the appropriate settling path
         if use_compiled:
-            assert compiled_path_type is not None, "compiled_path_type must be set when use_compiled=True"
+            assert compiled_path_type is not None, (
+                "compiled_path_type must be set when use_compiled=True"
+            )
             all_acts = self._settle_compiled(
                 all_acts, kernel, beta, target, compiled_path_type
             )
@@ -1819,20 +1821,95 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             [] if self.config.track_free_energy_per_iter else None
         )
 
+        # Determine substrate-specific compiled path
+        substrate_type = type(substrate).__name__
         use_compiled = (
             self.config.compiled
             and layered.recurrent_weight is None
             and not self.config.track_free_energy_per_iter
-            and type(substrate).__name__ == "DigitalSubstrate"
         )
+
         if use_compiled:
-            acts = _compiled_layered_settle(
-                acts,
-                layered.weights,
-                effective_step_size,
-                self.config.max_steps,
+            from computronium.ontology._settle_kernel import (
+                _compiled_layered_settle_analog,
+                _compiled_layered_settle_digital,
+                _compiled_layered_settle_memristive,
+                _compiled_layered_settle_quantum,
+                _compiled_layered_settle_simple_noise,
+                _compiled_layered_settle_ternary,
             )
+
+            if substrate_type == "DigitalSubstrate":
+                acts = _compiled_layered_settle_digital(
+                    acts, layered.weights, effective_step_size, self.config.max_steps
+                )
+            elif substrate_type == "AnalogSubstrate":
+                noise_level = substrate.config.noise_level
+                weight_bounds = substrate.config.weight_bounds
+                acts = _compiled_layered_settle_analog(
+                    acts,
+                    layered.weights,
+                    effective_step_size,
+                    self.config.max_steps,
+                    noise_level,
+                    weight_bounds,
+                )
+            elif substrate_type in (
+                "NeuromorphicSubstrate",
+                "OpticalSubstrate",
+                "SparseSubstrate",
+            ):
+                noise_level = substrate.config.noise_level
+                acts = _compiled_layered_settle_simple_noise(
+                    acts,
+                    layered.weights,
+                    effective_step_size,
+                    self.config.max_steps,
+                    noise_level,
+                )
+            elif substrate_type == "MemristiveSubstrate":
+                noise_level = substrate.config.noise_level
+                weight_bounds = substrate.config.weight_bounds
+                acts = _compiled_layered_settle_memristive(
+                    acts,
+                    layered.weights,
+                    effective_step_size,
+                    self.config.max_steps,
+                    noise_level,
+                    weight_bounds,
+                )
+            elif substrate_type == "TernarySubstrate":
+                acts = _compiled_layered_settle_ternary(
+                    acts,
+                    layered.weights,
+                    effective_step_size,
+                    self.config.max_steps,
+                )
+            elif substrate_type == "ComplexSubstrate":
+                # ComplexSubstrate uses emulated complex format [real, imag] which
+                # requires custom complex_linear operation; fall back to eager
+                # (Note: ComplexSubstrate has pre-existing incompatibility with
+                # standard real-valued geometries; eager path will also fail)
+                acts = self._eager_layered_steps(
+                    acts, layered, op, layer_free_energy, on_step, effective_step_size
+                )
+            elif substrate_type == "QuantumSubstrate":
+                noise_level = getattr(substrate.config, "noise_level", 0.0)
+                acts = _compiled_layered_settle_quantum(
+                    acts,
+                    layered.weights,
+                    effective_step_size,
+                    self.config.max_steps,
+                    noise_level,
+                )
+            else:
+                # Fallback to eager for unknown substrates
+                acts = self._eager_layered_steps(
+                    acts, layered, op, layer_free_energy, on_step, effective_step_size
+                )
             acts = list(acts)
+            # Compiled path runs all steps (no early stopping yet)
+            self._settle_steps_used = self.config.max_steps
         else:
             acts = self._eager_layered_steps(
                 acts, layered, op, layer_free_energy, on_step, effective_step_size
