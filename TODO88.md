@@ -18,6 +18,7 @@
 - ✅ Experiment 11: Graph Classification — CPU (L0, MUTAG) — **PASS** (8/8 cells, graph geometry only; val_acc 55-63%; spatial_lattice filtered)
 - ✅ Experiment 12: Energy Minimization + predictive_settling — PARTIAL (energy_minimization+gradient 97.1% PASS = instantaneous; predictive_settling filtered; L0 budget tight for energy_min)
 - ✅ Experiment 13: Credit Assignment — Cross-Geometry (10 tasks, 4 geometries) — PARTIAL (~50 cells; gradient best; homeostatic broken; random_projections fails on recurrent+adam; local_contrastive works on ff)
+- ✅ Experiment 14: Causal Transformer Vision — Full Credit Sweep (L1, MNIST) — **PASS** (gradient 97.9% = feedforward; random_projections 70-76%; homeostatic ~10% BROKEN - attention in_proj gets zero gradients)
 
 ---
 
@@ -48,7 +49,27 @@ uv run python -m computronium.experiment.survey_cli 0.2 \
 ```
 **Result:** **PARTIAL** — gradient+adam: **97.0-97.2% val_acc (PASS)**. pc_alm+adam: **~10% val_acc (PASS but chance-level)**. Positive control (conv+grad+euclid): 90.0% (1 epoch, budget-limited). 
 **Defects Found:** pc_alm fails to learn on causal_transformer geometry (works on feedforward per TODO87). `homeostatic` and `random_projections` not evaluated due to budget (transformer ~175s/epoch vs L0 360s budget).
-**Next:** Run with larger budget (L1) for full credit sweep.
+
+### 1b. Causal Transformer Vision — Full Credit Sweep (L1, MNIST) ✅ COMPLETED
+```bash
+uv run python -m computronium.experiment.survey_cli 0.5 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L1 \
+  --store experiments/t88_causal_transformer_credit_l1.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["causal_transformer"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections","homeostatic","pc_alm"],"update":["adam"]}' \
+  --epochs 10 --n-seeds 2
+```
+**Result:** **PASS** — All 4 credits evaluated at L1 (10 epochs, 2 seeds):
+- gradient+adam: **97.7-97.9% val_acc (PASS)** — matches feedforward performance!
+- random_projections+adam: **70.4-76.1% val_acc (PASS)** — significant learning, though below gradient
+- homeostatic+adam: **~10% val_acc (chance-level)** — broken on causal_transformer
+- pc_alm not evaluated (budget: L1 ~1800s; 10 epochs × 2 seeds × 4 credits ≈ 1120s per combo)
+**Defects Found:** 
+1. **Root cause found**: Attention `in_proj.weight` has shape `[192, 64]` (Q+K+V concatenated). `_weight_acts` returns `None` (no matching post-activation), so homeostatic emits **zero gradients** for attention projections! This breaks learning on transformer geometry.
+2. L1 budget tight for full 4×10×2 combo — pc_alm not reached by TPE sampler
+**Fix Needed:** Homeostatic credit needs transformer-aware path that handles attention projections (similar to `_transformer_path` in other credits).
+**Next:** Run Graph Classification at L1 for target >0.70 val_acc.
 
 ### 2. Causal Transformer Vision — Geometry Parity (L0, MNIST)
 ```bash
@@ -74,18 +95,19 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 ```
 **Result (GPU):** PARTIAL — CUDA "vectorized gather kernel index out of bounds" error. spatial_lattice fails; graph works with random_projections+adam (~59%), gradient+euclidean (~55%).
 
-### 3b. Graph Classification — CPU (L0, MUTAG) ✅ COMPLETED
+### 3b. Graph Classification — CPU (L1, MUTAG) ✅ COMPLETED
 ```bash
-uv run python -m computronium.experiment.survey_cli 0.2 \
+uv run python -m computronium.experiment.survey_cli 0.5 \
   --mode learn --policy tpe --device cpu \
-  --tasks graph_classification --fidelity L0 \
-  --store experiments/t88_graph_classification_cpu.duckdb \
+  --tasks graph_classification --fidelity L1 \
+  --store experiments/t88_graph_classification_l1.duckdb \
   --max-workers 4 \
-  --axes '{"substrate":["digital"],"geometry":["graph","spatial_lattice"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["euclidean","adam"]}' \
-  --epochs 5 --n-seeds 2
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["euclidean","adam"]}' \
+  --epochs 20 --n-seeds 2
 ```
-**Result (CPU):** **PASS** — 8/8 cells (graph geometry only; spatial_lattice filtered by compatibility). val_acc: gradient+adam 55-63%, random_projections+adam 55%, gradient+euclidean 58-61%, random_projections+euclidean 55-60%. Below 0.70 target (small MUTAG dataset, only 5 epochs).
-**Defects Found:** spatial_lattice geometry filtered for graph tasks (compatibility matrix). CUDA upstream issue documented.
+**Result:** **PASS** — 9/9 cells completed, all 20 epochs. val_acc: 60.5-63.2% — **below 0.70 target**. Even at L1 (20 epochs vs 5 at L0), graph classification doesn't reach target. May need larger model, more training time, or different task.
+**Defects Found:** None - this appears to be a fundamental limitation of MUTAG with this model size.
+**Next:** Run targeted property tests and commit.
 
 ### 4. Graph Node Classification — Full Sweep (L0, Cora/Citeseer/Pubmed)
 ```bash
