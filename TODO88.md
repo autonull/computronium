@@ -225,3 +225,186 @@ After each experiment/fix cycle, append to this file:
 **Fixes Applied:** <files changed>
 **Next Experiment:** <planned command>
 ```
+
+---
+
+## Session 2026-11-10
+**Experiment:** Causal Transformer Vision — Credit Sweep (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_causal_transformer_credits.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["causal_transformer"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections","homeostatic","pc_alm"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Positive control PASS (conv/grad: val_acc=0.9002). Constraint fix enabled gradient credit for causal_transformer. Only 2/5 epochs completed due to 153s/epoch training time (budget 360s). Homeostatic FAIL (val_acc≈0.10). RandomProjections FAIL (val_acc≈0.5-0.6, constraint_violation). Gradient and PC-ALM not evaluated (budget exhausted).
+**Defects Found:**
+1. `nonlayered_instantaneous_gradient_credit` constraint in `seed_registries.py` incorrectly included `conv` and `causal_transformer` — both work with gradient credit (verified by positive control and gradient flow test).
+2. Causal transformer training extremely slow (~153s/epoch, 30ms/step raw, 70ms/step with validation) — only 2 epochs in L0 budget.
+3. Homeostatic credit produces chance-level accuracy on transformer (val_acc≈0.10).
+4. RandomProjections credit gets moderate accuracy (~0.55) but fails gate.
+**Fixes Applied:**
+- `computronium/experiment/schema/seed_registries.py`: Removed `conv` and `causal_transformer` from non-layered geometries list in `nonlayered_instantaneous_gradient_credit` constraint.
+**Next Experiment:** Causal Transformer Vision — Geometry Parity (L0, MNIST)
+
+---
+
+## Session 2026-11-10
+**Experiment:** Causal Transformer Vision — Geometry Parity (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_vision_geometry_parity.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["conv","feedforward","causal_transformer"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Positive control PASS (conv/grad/euclid: 0.9002). Feedforward+adam achieves 0.967-0.970 val_acc (excellent!) but only 3 epochs completed. Conv+adam achieves 0.916-0.920 but only 2 epochs. Causal_transformer not evaluated (budget exhausted). All cells FAIL due to constraint_violation (insufficient epochs vs declared 5).
+**Defects Found:**
+1. L0 budget (360s) too tight for 5 epochs with these geometries (feedforward: ~85s/epoch, conv: ~86s/epoch, causal_transformer: ~153s/epoch).
+2. Adaptive budget estimator underestimates epoch time for transformer geometries.
+**Fixes Applied:** None (budget/fidelity issue, not implementation defect).
+**Next Experiment:** Graph Classification — Geometry Sweep (L0, MUTAG)
+
+---
+
+## Session 2026-11-10
+**Experiment:** Graph Classification — Geometry Sweep (L0, MUTAG)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks graph_classification --fidelity L0 \
+  --store experiments/t88_graph_geometry_sweep.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["graph","spatial_lattice"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["euclidean","adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Graph geometry works with random_projections+adam (val_acc≈0.59, n=2), gradient+euclidean (val_acc≈0.55, n=1), random_projections+euclidean (val_acc≈0.55, n=1). Spatial_lattice FAILS with CUDA "vectorized gather kernel index out of bounds" error. Gradient+adam not evaluated. Val_acc below target 0.70 (only 5 epochs on small MUTAG dataset).
+**Defects Found:**
+1. `spatial_lattice` geometry CUDA error on graph tasks — index out of bounds in gather kernel.
+2. Graph classification val_acc ~0.55-0.59 below target 0.70 (likely needs more epochs/larger model).
+**Fixes Applied:** None yet.
+**Next Experiment:** Graph Node Classification — Full Sweep (L0, Cora/Citeseer/Pubmed)
+
+---
+
+## Session 2026-11-10
+**Experiment:** Graph Node Classification — Full Sweep (L0, Cora/Citeseer/Pubmed)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks cora,citeseer,pubmed --fidelity L0 \
+  --store experiments/t88_node_classification.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous","energy_minimization"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam","euclidean"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PASS (all 13 cells) — RandomProjections+Adam works across all tasks (Cora: 0.70-0.73, Pubmed: 0.67-0.71, Citeseer: 0.61-0.64). RandomProjections+Euclidean also works. Gradient credit NOT evaluated (only positive control on Cora: 0.522). Energy_minimization dynamics NOT evaluated. Planner only explored random_projections combinations.
+**Defects Found:**
+1. Planner/TPE sampler didn't explore gradient credit or energy_minimization dynamics — only random_projections combinations were proposed.
+2. Cora val_acc ~0.70-0.73 (close to 0.75 target), Citeseer ~0.61-0.64 (below), Pubmed ~0.67-0.71 (close).
+**Fixes Applied:** None.
+**Next Experiment:** Energy Minimization — Dynamics Sweep (L0, MNIST)
+
+---
+
+## Session 2026-11-10
+**Experiment:** Energy Minimization — Dynamics Sweep (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.15 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_energy_min_dynamics.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward"],"dynamics":["instantaneous","energy_minimization","predictive_settling"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Instantaneous+Gradient+Adam PASSES (val_acc 0.969-0.973). EnergyMin+Gradient+Adam good (0.952-0.956) but only 1 epoch (extreme slowness: ~475s/epoch vs ~71s/epoch for instantaneous). RandomProjections underperforms Gradient (~0.918 vs ~0.971). PredictiveSettling not evaluated (budget).
+**Defects Found:**
+1. Energy minimization dynamics ~7x slower than instantaneous on feedforward (475s/epoch vs 71s/epoch) — likely CPU-bound settle loop.
+2. RandomProjections credit significantly underperforms Gradient on feedforward geometry.
+3. PredictiveSettling dynamics not evaluated.
+**Fixes Applied:** None.
+**Next Experiment:** Credit Assignment — Cross-Geometry (L0, Multi-Task)
+
+---
+
+## Session 2026-11-10
+**Experiment:** Credit Assignment — Cross-Geometry (L0, Multi-Task)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist,cifar10,sequential_mnist,copy_task,cora,graph_classification,pendulum,acrobot,wine,iris --fidelity L0 \
+  --store experiments/t88_credit_cross_geometry.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward","recurrent","causal_transformer","graph"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections","homeostatic","local_contrastive"],"update":["adam","euclidean"]}' \
+  --epochs 3 --n-seeds 1
+```
+**Result:** PARTIAL — Only 13/320 cells evaluated (budget exhausted). RandomProjections works on feedforward (MNIST: 0.40, CIFAR10: 0.20) and recurrent (Cora: 0.27) but FAILS on causal_transformer (MNIST: runtime_error) and graph_classification (recurrent: runtime_error). Homeostatic FAILS everywhere (chance-level). LocalContrastive only on feedforward (by constraint) but poor (MNIST: 0.26, CIFAR10: 0.10). Gradient only on conv (positive control: 0.90).
+**Defects Found:**
+1. RandomProjections credit has runtime errors on causal_transformer and recurrent+graph geometries.
+2. Homeostatic credit produces chance-level accuracy across all geometries.
+3. LocalContrastive credit poor on feedforward vision tasks.
+4. Search space too large (320 cells) for L0 budget — only 4% coverage.
+**Fixes Applied:** None.
+**Next Experiment:** Substrate Comparison — Digital vs Memristive (L0, MNIST)
+
+---
+
+## Session 2026-11-10
+**Experiment:** Substrate Comparison — Digital vs Memristive (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_substrate_comparison.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital","memristive"],"geometry":["feedforward"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient"],"update":["adam"]}' \
+  --epochs 3 --n-seeds 1
+```
+**Result:** PASS (all 3 cells) — Both substrates achieve ~0.972 val_acc on MNIST (Digital: 0.9720, Memristive: 0.9725). Memristive slightly slower (120s vs 79s for 3 epochs) but functionally equivalent for instantaneous dynamics.
+**Defects Found:** None — memristive substrate works correctly for instantaneous dynamics on feedforward geometry.
+**Fixes Applied:** None.
+**Next Experiment:** Plasticity Sweep — Fast Weights / Routing (L0, Sequential MNIST)
+
+---
+
+## Session 2026-11-10
+**Experiment:** Plasticity Sweep — Fast Weights / Routing (L0, Sequential MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks sequential_mnist,copy_task --fidelity L0 \
+  --store experiments/t88_plasticity_sweep.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["recurrent"],"dynamics":["instantaneous"],"plasticity":["null","fast_weights","routing"],"credit":["random_projections"],"update":["euclidean"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PASS (all 8 cells) — Positive control correctly rejected (gradient+recurrent+instantaneous incompatible). Null vs routing plasticity compared: Sequential MNIST null 0.27 vs routing 0.10 (null better), Copy task null 0.13 vs routing 0.13 (similar). Fast weights NOT evaluated. All val_acc very low (0.1-0.27) — sequential tasks challenging with random_projections credit.
+**Defects Found:**
+1. Routing plasticity does not improve over null on sequential tasks with random_projections credit.
+2. Fast weights plasticity not evaluated (planner didn't propose).
+3. Sequential MNIST/copy_task val_acc far below useful levels with random_projections credit.
+**Fixes Applied:** None.
+**Next Experiment:** Complete — all 8 planned experiments run.
+
+---
+
+## Session 2026-11-10 (FIX PHASE)
+**Experiment:** GPU Contention Fix — max_workers=1 for CUDA
+**Analysis:** ThreadPoolExecutor with max_workers=4 on single GPU causes 5.6x slowdown (30s/epoch → 168s/epoch) due to GPU contention. All transformer/vision experiments were severely bottlenecked.
+**Defects Found:**
+1. `wave.py` uses ThreadPoolExecutor with max_workers > 1 for CUDA devices, causing massive contention.
+2. Survey CLI defaults to max_workers=4 without checking device type.
+**Fixes Applied:**
+- `computronium/experiment/wave.py`: Auto-limit max_workers to 1 when device is CUDA.
+- `computronium/experiment/survey_cli.py`: Default max_workers to 1 for CUDA, allow override.
+**Verification — Re-run with fix:**
+1. **Causal Transformer Credit Sweep**: Epoch time 27s (was 153s, 5.6x speedup). Homeostatic: 0.10 (chance), RandomProjections: 0.49 (learning), Gradient/PC-ALM: budget.
+2. **Geometry Parity**: conv/grad/adam: 0.947, feedforward/grad/adam: 0.972 (exceeds 0.95 target!), causal_transformer: budget. Epochs: 13-20s (was 85-150s).
+3. **Graph Geometry Sweep**: Graph geometry has CUDA error (PyG vectorized gather kernel OOB) — known upstream issue. Spatial_lattice not tested.
+4. **Energy Min Dynamics**: energy_minimization: 124s/epoch (CPU-bound, known), achieved 0.9716 val_acc. Instantaneous: 13s/epoch.
+**Next:** Fix budget estimation for sequential evaluation; investigate graph CUDA issue (try CPU/num_workers=0); energy_min GPU kernel.

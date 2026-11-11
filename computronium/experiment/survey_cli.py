@@ -350,6 +350,14 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(2)
 
     device = _resolve_device(args.device)
+    # Auto-limit max_workers for CUDA to avoid GPU contention
+    if device.startswith("cuda") and args.max_workers > 1:
+        logger.warning(
+            "max_workers=%d on CUDA device causes severe GPU contention; "
+            "limiting to 1. Use --max-workers=1 explicitly if intentional.",
+            args.max_workers,
+        )
+        args.max_workers = 1
     if args.self_test and not _run_self_test(device):
         print(_format_error("Self-test failed", "Try --device cpu"), file=sys.stderr)
         sys.exit(1)

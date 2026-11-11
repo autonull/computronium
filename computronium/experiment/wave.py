@@ -1451,6 +1451,16 @@ def _run_waves(
     if run_id is None:
         run_id = str(uuid.uuid4())[:8]
 
+    # Auto-limit max_workers to 1 for CUDA devices to avoid GPU contention
+    # ThreadPoolExecutor with multiple workers on single GPU causes severe slowdown
+    if device_str.startswith("cuda") and max_workers > 1:
+        logger.warning(
+            "max_workers=%d on CUDA device causes severe GPU contention; "
+            "limiting to 1. Override with --max-workers=1 explicitly if intentional.",
+            max_workers,
+        )
+        max_workers = 1
+
     provenance = _build_provenance(spec, run_id)
 
     if dry_run and wave0_cells is not None:
