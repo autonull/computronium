@@ -1146,7 +1146,7 @@ CONSTRAINTS = [
     # Geometry-Dynamics-Credit: some non-layered geometries with instantaneous dynamics
     # cannot use gradient/backprop credit because instantaneous pass doesn't properly
     # compute gradients through output projection/head weights.
-    # Conv and causal_transformer DO work with gradient credit (verified by positive control and gradient flow test).
+    # Conv, causal_transformer, and graph DO work with gradient credit (verified by positive control and gradient flow test).
     ConstraintSpec(
         name="nonlayered_instantaneous_gradient_credit",
         kind=ConstraintKind.VOID,
@@ -1162,7 +1162,6 @@ CONSTRAINTS = [
                         "nca",
                         "ntm",
                         "spatial_lattice",
-                        "graph",
                     ]),
                 ),
                 eq(var("dynamics"), const("instantaneous")),

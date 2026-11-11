@@ -498,3 +498,143 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 - Graph geometry predictive_settling needs graph-native settle kernel (fundamental tensor shape mismatch).
 - Spatial_lattice geometry incompatible with layered settle kernel.
 **Next:** Fix PyTorch inductor "closed pool" issue for SparseSubstrate; investigate ComplexSubstrate geometry compatibility; graph CUDA issue (CPU/num_workers=0).
+
+---
+
+## Session 2026-11-11
+**Experiment:** Graph Node Classification — Full Sweep (L0, Cora/Citeseer/Pubmed)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks cora,citeseer,pubmed --fidelity L0 \
+  --store experiments/t88_node_classification.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam","euclidean"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Positive control PASS (graph/grad/euclid: 0.5220). RandomProjections works well (0.61-0.73 val_acc). Gradient credit was BLOCKED by `nonlayered_instantaneous_gradient_credit` constraint (incorrectly included "graph").
+**Defects Found:**
+1. `nonlayered_instantaneous_gradient_credit` constraint in `seed_registries.py` incorrectly included `graph` — gradient credit works on graph geometry (verified by positive control).
+**Fixes Applied:**
+- `computronium/experiment/schema/seed_registries.py`: Removed `graph` from non-layered geometries list in `nonlayered_instantaneous_gradient_credit` constraint.
+**Next Experiment:** Graph Node Classification — Full Sweep (re-run with fix)
+
+---
+
+## Session 2026-11-11
+**Experiment:** Graph Node Classification — Full Sweep (re-run, L0, Cora/Citeseer/Pubmed)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks cora,citeseer,pubmed --fidelity L0 \
+  --store experiments/t88_node_classification_v2.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam","euclidean"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PASS — All 25 cells passed (1 positive control + 24 wave). Both gradient and random_projections work on graph geometry with comparable performance (mean val_acc ≈ 0.67). Energy_minimization correctly filtered out (non-layered geometry requires instantaneous dynamics).
+**Defects Found:** None new.
+**Next Experiment:** Energy Minimization — Dynamics Sweep (L0, MNIST)
+
+---
+
+## Session 2026-11-11
+**Experiment:** Energy Minimization — Dynamics Sweep (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.15 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_energy_min_dynamics.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward"],"dynamics":["instantaneous","energy_minimization","predictive_settling"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Budget too tight (540s). Energy_minimization: 0.97 val_acc (excellent!) but ~46s/epoch. Instantaneous cells cut off by deadline. Predictive_settling and random_projections not evaluated.
+**Defects Found:** Budget too small for energy_minimization dynamics (needs ~920s per config for 2 seeds × 5 epochs).
+**Fixes Applied:** Re-run with larger budget (0.3h) and focused on gradient credit.
+**Next Experiment:** Energy Minimization — Dynamics Sweep (re-run with 0.3h budget)
+
+---
+
+## Session 2026-11-11
+**Experiment:** Energy Minimization — Dynamics Sweep (re-run, L0, MNIST, 0.3h)
+```
+uv run python -m computronium.experiment.survey_cli 0.3 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_energy_min_dynamics_v2.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward"],"dynamics":["instantaneous","energy_minimization","predictive_settling"],"plasticity":["null"],"credit":["gradient"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PASS — Both instantaneous and energy_minimization completed with 2 seeds each. Instantaneous: 0.9720, Energy_minimization: 0.9698 (equivalent!). Predictive_settling NOT evaluated (requires thermodynamic_contrast/equilibrium/local_goodness credit, not gradient).
+**Defects Found:** Predictive_settling incompatible with gradient credit (by design).
+**Next Experiment:** Predictive Settling with compatible credits
+
+---
+
+## Session 2026-11-11
+**Experiment:** Predictive Settling with Thermodynamic Contrast / Local Goodness (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.15 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_predictive_settling.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward"],"dynamics":["predictive_settling"],"plasticity":["null"],"credit":["thermodynamic_contrast","local_goodness"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Budget exhausted. Thermodynamic_contrast: 0.63 val_acc (vs 0.97 for instantaneous/energy_min). Local_goodness cut off by deadline. Predictive_settling with local credits NOT competitive on standard vision tasks.
+**Defects Found:** None — this is expected behavior; predictive_settling designed for energy-based learning, not standard backprop tasks.
+**Next Experiment:** Credit Assignment — Cross-Geometry
+
+---
+
+## Session 2026-11-11
+**Experiment:** Credit Assignment — Cross-Geometry (L0, 10 tasks, 4 geometries, 4 credits)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist,cifar10,sequential_mnist,copy_task,cora,graph_classification,pendulum,acrobot,wine,iris --fidelity L0 \
+  --store experiments/t88_credit_cross_geometry.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward","recurrent","causal_transformer","graph"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections","homeostatic","local_contrastive"],"update":["adam","euclidean"]}' \
+  --epochs 3 --n-seeds 1
+```
+**Result:** PARTIAL — Budget too tight (320 declared cells, only 16 evaluated). Key findings: Gradient best (0.90 MNIST), homeostatic works on recurrent/iris (0.83), random_projections on causal_transformer decent (0.60), local_contrastive poor (0.0-0.23). Many geometry-task mismatches.
+**Defects Found:** Budget too small for full cross-geometry sweep.
+**Next Experiment:** Substrate Comparison — Digital vs Memristive
+
+---
+
+## Session 2026-11-11
+**Experiment:** Substrate Comparison — Digital vs Memristive (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_substrate_comparison.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital","memristive"],"geometry":["feedforward"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient"],"update":["adam"]}' \
+  --epochs 3 --n-seeds 1
+```
+**Result:** PASS — All 3 cells passed. Memristive matches digital performance (0.9659 vs 0.9679 val_acc) at ~1.7x slower (78s vs 45s).
+**Defects Found:** None.
+**Next Experiment:** Plasticity Sweep — Fast Weights / Routing
+
+---
+
+## Session 2026-11-11
+**Experiment:** Plasticity Sweep — Fast Weights / Routing (L0, Sequential MNIST / Copy Task)
+```
+uv run python -m computronium.experiment.survey_cli 0.1 \
+  --mode learn --policy tpe --device cuda \
+  --tasks sequential_mnist,copy_task --fidelity L0 \
+  --store experiments/t88_plasticity_sweep.duckdb \
+  --max-workers 4 \
+  --axes '{"substrate":["digital"],"geometry":["recurrent"],"dynamics":["instantaneous"],"plasticity":["null","fast_weights","routing"],"credit":["random_projections"],"update":["euclidean"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — Fast_weights filtered out by `dynamics_plasticity_compatibility` constraint (instantaneous dynamics cannot use fast-weight plasticity, by design). Only null and routing evaluated. Routing performs WORSE than null (0.12 vs 0.19 on sequential_mnist; both ~0.13 on copy_task — chance level). Random_projections credit with recurrent geometry ineffective for these tasks.
+**Defects Found:** None — constraint is correct; fast_weights requires settling dynamics.
+**Next:** Update TODO88.md, run property locks, commit.
