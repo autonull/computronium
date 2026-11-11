@@ -231,6 +231,12 @@
 | "Transformer vision needs patch embed" | Try positional encoding on flattened patches |
 | "Memristive no energy_min" | Check `SubstrateSettleKernel` for memristive |
 | "Invalid combo in plan" | Verify compatibility in search space (see B2b, B2c, B3b) |
+| "Registry populates itself" | Call `seed_all_registries()` at import (D11) |
+| "Factory signature = knobs" | Use availability predicates, not `inspect.signature` (D13) |
+| "Task comes from config fallback" | Task must come from run spec, validated against registry (D14) |
+| "Composition knows topology" | Topology is axis value; merge from geometry mapping (D15) |
+| "Spatial facts from width" | Carry task's `input_shape` through to geometry builder (D16) |
+| "Registered = trainable" | Mark `available=False` with `unavailable_reason` if kernel can't train (D17) |
 
 **Harness Reliability Patterns (from TODO85/86):**
 
@@ -246,6 +252,37 @@
 | Seed-plan expansion | `n_seeds=3` → 3 single-seed records; replication key includes `task_id` |
 | Multi-task waves | Proposal context unscoped; each proposal keeps its own task |
 | Serial evaluator | One in-process evaluator; no `ProcessPoolExecutor`, one CUDA context, one dataset cache |
+
+**Foundational Defects (from TODO46/47):**
+
+| Defect | Symptom | Root Cause | Fix |
+|--------|---------|------------|-----|
+| D11: Registries empty at runtime | No objectives/policies/axes compose | `seed_all_registries()` not called at import | Call at module import in `seed_registries.py` |
+| D12: PRIORS seeded then cleared | 28 priors discarded; step_size falls back | Clear once after import, then register both sources | Order: import → clear → register all |
+| D13: Factory signature ≠ knobs | `step_size` gate decided from dataclass fields | Availability predicates, not reflection | Harvest `accepted_params` at seed time |
+| D14: No run named real task | `task_id="default"`; "unknown task" at eval | Task from run spec, validated vs registry | Fail loud if task not in registry |
+| D15: Composition ignored topology | `topology_type` from geometry, not axis value | Merge axis topology into geometry mapping | `_geometry_mapping` includes topology |
+| D16: Spatial facts guessed from width | `in_channels=3`, `input_hw=(28,28)` hardcoded | Derive from task's `input_shape` (channels first) | Pass `input_shape` through compose chain |
+| D17: Registered ≠ trainable | `tile`/`nca` compose then die at runtime | `available=False` + `unavailable_reason` | Search space filters unavailable |
+| D24: `comp report` crashes empty store | Raw traceback on no data | Handle empty store gracefully | Guard before query |
+| D25: `--dry-run` writes store, silent | Creates `experiment.duckdb`, prints nothing | Dry-run before store create; print plan | Check `dry_run` first |
+| D26: Capability rows name dead tests | "Verified" capability = `pytest: no tests ran` | Fixture must contain case lock exists for | Lock fixture exercises the mechanism |
+
+**Testing / Execution Rules (from TODO47):**
+
+| Rule | Mechanism |
+|------|-----------|
+| Select tests by symbol, not directory | `grep -rn <symbol> tests/ --include=*.py`; run 2–4 files |
+| Kill destroys evidence → log | `pytest -rf --tb=line > log` on any launch that may be interrupted |
+| Prices stale → measure once | Price from one ≤60s measurement, write in ticket |
+| Fake gates indistinguishable | Fixture must fail when mechanism removed |
+| Cheap work seductive → queue by deliverable | Order tickets by unblocking the runnable assertion |
+| Context re-paid → file is the queue | Landed work leaves queue; does not enter it |
+| Correction as interruption → rules in AGENTS.md | Permanent rules in AGENTS, not prose in TODOs |
+| Nothing reports which gate runs | Ticket names gate, cost, dependencies |
+| Killed run yields no verdict | `pytest <dir> --co -q > ids.txt` collects, do not re-run |
+| One shard per round close | Never per commit; never re-run green shard |
+| Lock fixture must contain the case | If removing mechanism cannot fail fixture, lock is a comment |
 
 **Search Space / Compatibility Lessons (from TODO86):**
 
@@ -277,7 +314,7 @@
 | Per-step logs opt-in | Per-epoch always on (`log_every_n_epochs=1`); per-step needs `log_every_n_steps > 0` |
 | Killed runs not closed | SIGKILL leaves `running` + no manifest; SIGTERM closure deferred until needed |
 
-**Common Fixes (Expanded from TODO85/86/87):**
+**Common Fixes (Expanded from TODO85/86/87 + Foundational TODO46/47):**
 
 | Symptom | Fix | File |
 |---------|-----|------|
@@ -300,6 +337,16 @@
 | Tasks resolved after spec | Resolve task list before `_build_spec` | `survey_cli.py` |
 | Budget enforced between cells | In-cell deadline, not between cells | `wave.py` |
 | Preview-then-run shared `seen` | Previews only when `dry_run=True` | `wave.py` |
+| Registries empty at runtime | Call `seed_all_registries()` at import | `seed_registries.py` |
+| PRIORS seeded then cleared | Clear once after import, then register all | `seed_registries.py` |
+| `step_size` gate from signature | Availability predicates, harvest `accepted_params` | `kernel/_geometry_builders.py`, `search_space.py` |
+| Task = "default" | Task from run spec, validated vs registry | `wave.py`, `survey_cli.py` |
+| Composition ignores topology | Merge axis topology into geometry mapping | `compose.py` |
+| Spatial facts hardcoded (3, 28×28) | Derive from task `input_shape` (channels first) | `kernel/_geometry_builders.py` |
+| Registered primitive dies at runtime | `available=False` + `unavailable_reason` | `search_space.py`, `task_registry.py` |
+| `comp report` crashes on empty store | Guard before query | `surface/report.py` |
+| `--dry-run` writes store, silent | Check `dry_run` before store create; print plan | `survey_cli.py` |
+| Capability rows name dead tests | Fixture must fail when mechanism removed | `surface/conformance.py`, test files |
 
 **Success Criteria (per domain):**
 - Vision (MNIST/CIFAR): best val_acc > 0.95
