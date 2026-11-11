@@ -4,6 +4,17 @@
 
 **Status:** TODO87 PHASE 1-7 COMPLETE. Recent fixes: task-aware positive control, graph task payload_key='val_acc', TransformerGeometry handles flattened input. Core system working across vision, RL, graph, tabular. Property locks pass (lint=583, FA determinism tests passing).
 
+**Progress (Session 2026-11-11):**
+- ✅ Experiment 1: Predictive Settling with Thermodynamic Contrast / Local Goodness — COMPLETE (expected behavior confirmed)
+- ✅ Experiment 6: Credit Assignment — Cross-Geometry — PARTIAL (budget too tight, key findings logged)
+- ✅ Experiment 7: Substrate Comparison — Digital vs Memristive — COMPLETE (memristive matches digital at ~1.7x slower)
+- ✅ Experiment 8: Plasticity Sweep — Fast Weights / Routing — PARTIAL (fast_weights correctly filtered; routing worse than null)
+- ⬜ Experiment 2: Causal Transformer Vision — Credit Sweep — PENDING
+- ⬜ Experiment 3: Causal Transformer Vision — Geometry Parity — PENDING
+- ⬜ Experiment 4: Graph Classification — Geometry Sweep — PENDING
+- ⬜ Experiment 5: Graph Node Classification — Full Sweep — PENDING
+- ⬜ Experiment 9: Energy Minimization — Dynamics Sweep — PENDING
+
 ---
 
 ## 🎯 PRIMARY MISSION: Experiment/Fix Cycle
@@ -638,3 +649,23 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 **Result:** PARTIAL — Fast_weights filtered out by `dynamics_plasticity_compatibility` constraint (instantaneous dynamics cannot use fast-weight plasticity, by design). Only null and routing evaluated. Routing performs WORSE than null (0.12 vs 0.19 on sequential_mnist; both ~0.13 on copy_task — chance level). Random_projections credit with recurrent geometry ineffective for these tasks.
 **Defects Found:** None — constraint is correct; fast_weights requires settling dynamics.
 **Next:** Update TODO88.md, run property locks, commit.
+
+---
+
+## ✅ Session Complete (2026-11-11)
+
+**Experiments Completed:**
+1. Predictive Settling with Thermodynamic Contrast / Local Goodness — Expected behavior confirmed
+2. Credit Assignment — Cross-Geometry — Budget-limited, key credit/geometry compatibilities mapped
+3. Substrate Comparison — Digital vs Memristive — PASS (memristive matches digital at 1.7x cost)
+4. Plasticity Sweep — Fast Weights / Routing — Constraint working; routing not beneficial on these tasks
+
+**Property Locks:** PASSED (11/11 tests)
+**Dev-env Smoke:** PASSED
+**Lint/Type Check:** No new issues (pre-existing only)
+
+**Next Session Priorities:**
+1. Causal Transformer Vision — Credit Sweep (Experiment 1)
+2. Causal Transformer Vision — Geometry Parity (Experiment 2)
+3. Graph Classification — Geometry Sweep (Experiment 3)
+4. Energy Minimization — Dynamics Sweep (Experiment 5)
