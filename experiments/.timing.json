@@ -64,9 +64,9 @@
     "startup_s": 0.0
   },
   "cuda/L0": {
-    "cost_per_cell_s": 16.702,
+    "cost_per_cell_s": 0.228,
     "per_task": {
-      "acrobot": 16.702
+      "graph_classification": 0.228
     },
     "startup_s": 0.0
   },

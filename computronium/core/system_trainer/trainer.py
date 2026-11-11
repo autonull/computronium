@@ -304,6 +304,25 @@ class SystemTrainer:
                 x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
                 y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
 
+            # Handle graph classification data (PyG Data object)
+            graph_kwargs: dict[str, Tensor] = {}
+            if (
+                type(x).__name__ == "Data"
+                and hasattr(x, "x")
+                and hasattr(x, "edge_index")
+            ):
+                data = x
+                graph_kwargs = {
+                    "edge_index": data.edge_index.to(self.device),
+                    "batch": data.batch.to(self.device)
+                    if hasattr(data, "batch")
+                    else None,
+                }
+                x = data.x.to(self.device)
+                y = data.y.to(self.device) if y is data.y else y.to(self.device)
+                # Remove None values
+                graph_kwargs = {k: v for k, v in graph_kwargs.items() if v is not None}
+
             # Canonical flat input: systems compose against a flat
             # input_dim (e.g. vision (B, C, H, W) -> (B, C*H*W)); the
             # 4-D raw tensor crashed credit/view reshapes downstream.
@@ -319,7 +338,7 @@ class SystemTrainer:
             # Run train_step with mixed precision
             def _train_step():
                 with self._autocast:
-                    return self.system.train_step(x, y)
+                    return self.system.train_step(x, y, **graph_kwargs)
 
             # Run train_step on compute stream for async path
             if use_async:
@@ -444,18 +463,39 @@ class SystemTrainer:
         num_samples = 0
 
         with torch.no_grad(), self._autocast:
-            for x, y in self.val_data:
-                x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
-                y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
+            for batch_x, batch_y in self.val_data:
+                # Handle graph classification data (PyG Data object)
+                graph_kwargs: dict[str, Tensor] = {}
+                if (
+                    type(batch_x).__name__ == "Data"
+                    and hasattr(batch_x, "x")
+                    and hasattr(batch_x, "edge_index")
+                ):
+                    data = batch_x
+                    graph_kwargs = {
+                        "edge_index": data.edge_index.to(self.device),
+                        "batch": data.batch.to(self.device)
+                        if hasattr(data, "batch")
+                        else None,
+                    }
+                    x = data.x.to(self.device)
+                    y = data.y.to(self.device) if batch_y is data.y else batch_y.to(self.device)
+                    graph_kwargs = {
+                        k: v for k, v in graph_kwargs.items() if v is not None
+                    }
+                else:
+                    x = batch_x.to(self.device)
+                    y = batch_y.to(self.device)
+
                 if x.dim() > 2:
                     geometry = getattr(self.system, "geometry", None)
                     if not (
                         hasattr(geometry, "patch_size")
                         and getattr(geometry, "patch_size", 0) > 0
                     ):
-                        x = x.reshape(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
+                        x = x.reshape(x.size(0), -1)
 
-                logits = self.system.forward(x)
+                logits = self.system.forward(x, **graph_kwargs)
                 ce = torch.nn.functional.cross_entropy(logits, y, reduction="sum")
                 val_ce_sum += ce.item()
                 val_correct += (logits.argmax(-1) == y).sum().item()

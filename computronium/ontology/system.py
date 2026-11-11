@@ -144,8 +144,12 @@ class System(Protocol[TS, TG, TD, TC, TU]):
     update: TU
     _kernel_backend: KernelBackend | None
 
-    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-        """Execute one training step through the family-neutral pipeline."""
+    def train_step(self, x: Tensor, y: Tensor, **graph_kwargs) -> dict[str, float]:
+        """Execute one training step through the family-neutral pipeline.
+
+        Extra keyword arguments (e.g., edge_index, batch for graph classification)
+        are forwarded to geometry.forward and dynamics.settle.
+        """
         from computronium.core.pipeline import run_train_step
 
         return run_train_step(
@@ -156,6 +160,7 @@ class System(Protocol[TS, TG, TD, TC, TU]):
             self.update,
             x,
             y,
+            **graph_kwargs,
         )
 
     def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
@@ -822,11 +827,10 @@ class SystemConfig:
         nonlayered = {
             "attention",
             "spatial_lattice",
-            "graph",
-            "conv",
             "nca",
             "ntm",
-            "causal_transformer",
+            "tile",
+            "tile_mesh",
         }
         settling_dynamics = {
             "energy_minimization",

@@ -27,6 +27,9 @@ from computronium.ontology._tile_blocks import (
     tile_hopfield_energy,
     tile_layered_params,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology._settle_kernel import LayeredParams
 from computronium.ontology._tile_blocks import (
     scatter_block_grads as _scatter_block_grads,
 )
@@ -248,7 +251,6 @@ class GeometryConfig:
     patch_size: int = 0
     patch_embed_dim: int = 0
     image_hw: tuple[int, int] = (28, 28)
-    in_channels: int = 1
     # SpatialLattice3D topology
     lattice_dims: tuple[int, int, int] = (4, 4, 4)
     connectivity_radius: int = 1
@@ -2587,6 +2589,40 @@ class GraphGeometry(nn.Module):
 
     def transition_modules(self) -> list[nn.Module]:
         return [self._head]
+
+    @property
+    def layered_params(self) -> LayeredParams:
+        """Return layered params for settle kernel (R11.1.4)."""
+        from computronium.ontology._settle_kernel import (
+            LayeredParams,
+            group_transitions,
+        )
+
+        # Build module list in order: linears and activations
+        modules: list[nn.Module] = []
+        for i in range(len(self._layer_weights)):
+            weight = self._layer_weights[f"layer_{i}"]
+            bias = self._layer_biases[f"layer_{i}"]
+            # Create a synthetic linear module for transition grouping
+            linear = nn.Linear(weight.shape[1], weight.shape[0], bias=True)
+            linear.weight = weight
+            linear.bias = bias
+            modules.append(linear)
+            modules.append(nn.ReLU())
+        modules.append(self._head)
+
+        linears = [m for m in modules if isinstance(m, nn.Linear)]
+        activations = [m for m in modules if not isinstance(m, nn.Linear)]
+        recurrent = getattr(self, "_recurrent_weight", None)
+
+        return LayeredParams(
+            weights=tuple(layer.weight for layer in linears),
+            biases=tuple(layer.bias for layer in linears),
+            activations=tuple(activations),
+            recurrent_weight=recurrent if isinstance(recurrent, Tensor) else None,
+            transitions=group_transitions(modules),
+            residual=bool(getattr(self, "residual", False)),
+        )
 
     def activation_layout(self, batch_size: int) -> ActivationLayout:
         """Return the activation layout for graph geometry.

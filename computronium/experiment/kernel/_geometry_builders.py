@@ -249,7 +249,9 @@ def _validate_geometry_keys(topology: str, geometry: dict[str, object]) -> None:
         )
 
 
-def _derive_init_params(geometry: dict[str, object]) -> tuple[Literal["default", "mupc", "innocenti"], float]:
+def _derive_init_params(
+    geometry: dict[str, object],
+) -> tuple[Literal["default", "mupc", "innocenti"], float]:
     init_scheme = str(geometry.get("init_scheme", "default"))
     if init_scheme not in {"default", "mupc", "innocenti"}:
         raise ValueError(
@@ -663,7 +665,9 @@ def build_causal_transformer_config(
         # This is handled by the caller - we need to pass them through
         # For now, use defaults
         image_hw_raw = geometry.get("image_hw", (28, 28))
-        image_hw = tuple(image_hw_raw) if isinstance(image_hw_raw, (list, tuple)) else (28, 28)
+        image_hw = (
+            tuple(image_hw_raw) if isinstance(image_hw_raw, (list, tuple)) else (28, 28)
+        )
         return GeometryConfig.causal_transformer(
             vocab_size=output_dim,
             d_model=hidden,

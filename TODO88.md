@@ -160,11 +160,13 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 - [ ] **pip-audit** — Dependency vulnerability scan.
 
 ### Upstream Dependencies (Question, Don't Assume Unfixable)
-- [ ] **GraphClassification CUDA** — Test PyG version pins, DataLoader config.
+- [ ] **GraphClassification CUDA** — Test PyG version pins, DataLoader config. (Instantaneous dynamics works; settling dynamics has tensor shape mismatch)
 - [ ] **torch_geometric fvcore/jit warning** — Check if newer PyG fixes this.
 
 ### Known Limitations (Document, But Revisit)
 - [ ] **Energy minimization + recurrent** — ~58s/epoch at L0 on CPU. Check for GPU kernel.
+- [ ] **Energy minimization on graph geometry** — Fundamental tensor shape mismatch: settle kernel expects uniform batch dimension [B, features], but graph geometry produces [num_nodes, features] for hidden layers and [B, features] for output after pooling. Requires graph-native settle kernel.
+- [ ] **GPU settle kernels for non-Digital substrates** — Memristive/Analog/Neuromorphic/Optical/Quantum/Sparse/Ternary all fall back to eager `SubstrateSettleKernel` (slow). Digital has `torch.compile` fast path. Future: substrate-specific Triton kernels where hardware targets exist.
 
 ---
 
@@ -408,3 +410,30 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 3. **Graph Geometry Sweep**: Graph geometry has CUDA error (PyG vectorized gather kernel OOB) — known upstream issue. Spatial_lattice not tested.
 4. **Energy Min Dynamics**: energy_minimization: 124s/epoch (CPU-bound, known), achieved 0.9716 val_acc. Instantaneous: 13s/epoch.
 **Next:** Fix budget estimation for sequential evaluation; investigate graph CUDA issue (try CPU/num_workers=0); energy_min GPU kernel.
+
+---
+
+## Session 2026-11-10 (GRAPH SUPPORT FIX PHASE)
+**Experiment:** Graph Classification Support Fixes
+**Analysis:** Graph classification tasks failed due to missing graph data (edge_index, batch) passthrough in the training pipeline. The `GraphGeometry` was incorrectly classified as non-layered, preventing settling dynamics. Energy minimization on graph geometry has fundamental tensor shape mismatch.
+**Defects Found:**
+1. Pipeline `run_train_step` didn't accept graph kwargs (edge_index, batch).
+2. `TaskBatches` didn't handle PyG Data objects from graph classification dataloaders.
+3. Trainer didn't extract graph data and pass to `train_step`/`forward`.
+4. `GraphGeometry` was in nonlayered set, forbidding settling dynamics.
+5. `GraphGeometry` lacked `layered_params` property for settle kernel.
+6. `extract_layered_params` didn't handle property descriptors.
+**Fixes Applied:**
+- `computronium/core/pipeline.py`: Added `graph_kwargs` to `_TrainStepContext`, `_PhaseContext`; pass through to `forward_pass` and `dynamics.settle`.
+- `computronium/core/system_trainer/train_task.py`: Added `_is_graph_data` detection; handle PyG Data objects in `TaskBatches`.
+- `computronium/core/system_trainer/trainer.py`: Extract `edge_index`, `batch` from Data objects; pass to `train_step` and `forward`.
+- `computronium/ontology/system.py`: Updated `System.train_step` protocol and `_ComposedSystem.train_step` to accept `**graph_kwargs`.
+- `computronium/ontology/system.py`: Removed `graph`, `conv`, `causal_transformer` from nonlayered geometry validation.
+- `computronium/ontology/geometry.py`: Added `layered_params` property to `GraphGeometry`.
+- `computronium/ontology/_settle_kernel.py`: Fixed `extract_layered_params` to handle `LayeredParams` properties.
+**Verification:**
+- Graph classification with instantaneous dynamics: PASS (val_acc=0.55, epochs=1, 0.48s/cell).
+- Causal transformer vision with gradient credit: PASS (val_acc=0.953, epochs=2, 33-35s/epoch, 5.6x speedup vs pre-fix).
+- Feedforward vision with gradient credit: PASS (val_acc~0.97, epochs=2, ~30s/cell).
+- Energy minimization on graph geometry: Tensor shape mismatch (fundamental architecture issue — settle kernel expects uniform batch dim, graph has [num_nodes, features]).
+**Next:** Energy_min GPU kernel for non-Digital substrates; spatial_lattice geometry; predictive_settling on graph.

@@ -257,8 +257,12 @@ def compose_system[  # ruff: ignore[complex-structure]
 
             return compose_system(substrate, geometry, dynamics, credit, update)
 
-        def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-            """Execute one training step through the family-neutral pipeline."""
+        def train_step(self, x: Tensor, y: Tensor, **graph_kwargs) -> dict[str, float]:
+            """Execute one training step through the family-neutral pipeline.
+
+            Extra keyword arguments (e.g., edge_index, batch for graph classification)
+            are forwarded to geometry.forward and dynamics.settle.
+            """
             # Delegate to kernel backend if attached
             if self._kernel_backend is not None:
                 return self._kernel_backend.train_step(x, y)
@@ -272,6 +276,7 @@ def compose_system[  # ruff: ignore[complex-structure]
                 self.update,
                 x,
                 y,
+                **graph_kwargs,
             )
 
         def forward(self, x: Tensor, *args, **kwargs) -> Tensor:

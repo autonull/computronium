@@ -1152,7 +1152,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         # Common setup
         all_acts, kernel, beta, use_checkpointing, use_compiled = self._setup_settle(
-            state, geometry, substrate, target
+            state, geometry, substrate, target, **kwargs
         )
         if all_acts is None:
             return state
@@ -1184,6 +1184,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
+        **kwargs,
     ) -> tuple[
         list[Tensor] | None,
         SubstrateSettleKernel | None,
@@ -1199,11 +1200,14 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             return None, None, 0.0, False, False
         if callable(block_builder):
             all_acts: list[Tensor] = list(
-                cast("list[Tensor]", block_builder(x, substrate))
+                cast("list[Tensor]", block_builder(x, substrate, **kwargs))
             )
         else:
             all_acts = list(
-                cast("list[Tensor]", geometry.forward_with_intermediates(x, substrate))
+                cast(
+                    "list[Tensor]",
+                    geometry.forward_with_intermediates(x, substrate, **kwargs),
+                )
             )
         if not all_acts:
             return None, None, 0.0, False, False

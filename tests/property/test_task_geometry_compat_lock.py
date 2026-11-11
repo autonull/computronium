@@ -7,15 +7,13 @@ the fixture fail (TODO46 D25).
 
 from __future__ import annotations
 
-import pytest
-
 from computronium.experiment.kernel.compose import (
     compose_cell_system,
 )
 from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import (
-    search_space_from_spec,
     _composable,
+    search_space_from_spec,
 )
 from computronium.experiment.schema import (
     Coordinate,

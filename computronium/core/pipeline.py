@@ -222,6 +222,7 @@ class _PhaseContext:
     plasticity: object | None
     psi: dict[str, Tensor] | None
     context: object | None
+    graph_kwargs: dict[str, Tensor] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +239,7 @@ class _TrainStepContext:
     plasticity: object | None
     psi: dict[str, Tensor] | None
     context: object | None
+    graph_kwargs: dict[str, Tensor] | None = None
 
 
 def _run_phases(ctx: _PhaseContext) -> dict[Phase, SettableState]:
@@ -250,7 +252,11 @@ def _run_phases(ctx: _PhaseContext) -> dict[Phase, SettableState]:
             state.activations = ctx.initial_activations
             target = ctx.y if phase is Phase.NUDGED else None
             settled = ctx.dynamics.settle(
-                state, ctx.geometry, ctx.substrate, target=target
+                state,
+                ctx.geometry,
+                ctx.substrate,
+                target=target,
+                **(ctx.graph_kwargs or {}),
             )
 
             # P-axis: ψ steps ONCE per episode. Default phase is the credit's
@@ -359,12 +365,15 @@ def _compute_free_metrics(
     dynamics: StateDynamics,
     x: Tensor,
     y: Tensor,
+    **graph_kwargs,
 ) -> tuple[Tensor, Tensor, Tensor]:
     """Compute post-update free metrics (target-free)."""
     with torch.no_grad():
         free_state = SystemState(x=x, y=y)
-        free_state.activations = forward_pass(substrate, geometry, x)
-        free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
+        free_state.activations = forward_pass(substrate, geometry, x, **graph_kwargs)
+        free_settled = dynamics.settle(
+            free_state, geometry, substrate, target=None, **graph_kwargs
+        )
         free_loss, _ = _task_loss_tensor(free_settled, y)
         free_energy = dynamics.compute_energy(free_settled, geometry)
         free_accuracy = (free_settled.metrics or {}).get("accuracy", torch.tensor(0.0))
@@ -375,7 +384,9 @@ def _compute_free_metrics(
 
 def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
     """Internal implementation of run_train_step_tensor using context object."""
-    initial_activations = forward_pass(ctx.substrate, ctx.geometry, ctx.x)
+    initial_activations = forward_pass(
+        ctx.substrate, ctx.geometry, ctx.x, **(ctx.graph_kwargs or {})
+    )
     phase_ctx = _PhaseContext(
         credit=ctx.credit,
         dynamics=ctx.dynamics,
@@ -387,6 +398,7 @@ def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
         plasticity=ctx.plasticity,
         psi=ctx.psi,
         context=ctx.context,
+        graph_kwargs=ctx.graph_kwargs,
     )
     states = _run_phases(phase_ctx)
 
@@ -401,7 +413,12 @@ def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
 
     # Post-update, target-free forward+settle for honest learning metrics.
     free_loss, free_energy, free_accuracy = _compute_free_metrics(
-        ctx.substrate, ctx.geometry, ctx.dynamics, ctx.x, ctx.y
+        ctx.substrate,
+        ctx.geometry,
+        ctx.dynamics,
+        ctx.x,
+        ctx.y,
+        **(ctx.graph_kwargs or {}),
     )
 
     metrics: dict[str, Tensor] = {
@@ -435,11 +452,15 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
     plasticity: object | None = None,
     psi: dict[str, Tensor] | None = None,
     context: object | None = None,
+    **graph_kwargs,
 ) -> dict[str, Tensor]:
     """Execute one training step through the 5/6-layer pipeline, returning tensor metrics.
 
     This variant returns tensor metrics (no .item() calls) to enable torch.compile.
     Use run_train_step() for the float-returning public API.
+
+    Extra keyword arguments (e.g., edge_index, batch for graph classification) are
+    forwarded to geometry.forward and dynamics.settle.
     """
     ctx = _TrainStepContext(
         substrate=substrate,
@@ -452,6 +473,7 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
         plasticity=plasticity,
         psi=psi,
         context=context,
+        graph_kwargs=graph_kwargs or None,
     )
     return _run_train_step_tensor_impl(ctx)
 
@@ -468,6 +490,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
     plasticity: object | None = None,
     psi: dict[str, Tensor] | None = None,
     context: object | None = None,
+    **graph_kwargs,
 ) -> dict[str, float]:
     """Execute one training step through the 5/6-layer pipeline.
 
@@ -499,6 +522,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         plasticity=plasticity,
         psi=psi,
         context=context,
+        graph_kwargs=graph_kwargs or None,
     )
     tensor_metrics = _run_train_step_tensor_impl(ctx)
     return {k: _to_float(v) for k, v in tensor_metrics.items()}

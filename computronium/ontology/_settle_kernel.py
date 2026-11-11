@@ -12,7 +12,7 @@ mathematical transpose operations, not physical substrate processes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -88,9 +88,14 @@ def extract_layered_params(geometry: Geometry) -> LayeredParams | None:
             transitions=group_transitions(modules),
             residual=bool(getattr(geometry, "residual", False)),
         )
+    # Check for layered_params property or callable
     assembler = getattr(geometry, "layered_params", None)
+    if isinstance(assembler, LayeredParams):
+        return assembler
     if callable(assembler):
-        return cast("LayeredParams", assembler())
+        result = assembler()
+        if isinstance(result, LayeredParams):
+            return result
     return None
 
 

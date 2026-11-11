@@ -15,7 +15,7 @@ what the documented entry points have.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.trainer import SystemTrainer
@@ -29,6 +29,21 @@ if TYPE_CHECKING:
 
     from computronium.domains.trainer import TaskProtocol
     from computronium.ontology import System
+
+
+def _is_graph_data(batch: Any) -> bool:
+    """Check if batch is a PyTorch Geometric Data object."""
+    return (
+        type(batch).__name__ == "Data"
+        and hasattr(batch, "x")
+        and hasattr(batch, "edge_index")
+    )
+
+
+def _is_pair(batch: Any) -> bool:
+    """Is this batch an ``(inputs, targets)`` pair? Mapping batches are not."""
+    return isinstance(batch, (tuple, list)) and len(batch) == 2
+
 
 __all__ = [
     "FlattenLoader",
@@ -116,15 +131,31 @@ class TaskBatches:
                 self._length = self.batches_per_epoch
         return self._lane
 
-    def __iter__(self) -> Iterator[tuple[Tensor, Tensor]]:
-        if self._resolve() == "loader":
+    def __iter__(self) -> Iterator[tuple[Tensor, Tensor] | tuple[Any, Tensor]]:
+        lane = self._resolve()
+        if lane == "loader":
             loader = self.task.get_dataloader(self.split)  # type: ignore[arg-type]
-            for inputs, targets in loader:  # type: ignore[union-attr]
-                yield _flatten(inputs, self.task.name), targets
+            for batch in loader:  # type: ignore[union-attr]
+                if _is_graph_data(batch):
+                    # Graph classification: yield Data object as inputs, y as targets
+                    yield batch, batch.y
+                elif _is_pair(batch):
+                    inputs, targets = batch
+                    yield _flatten(inputs, self.task.name), targets
+                else:
+                    raise ValueError(
+                        f"Unexpected batch format from {self.task.name!r} loader: {type(batch)}"
+                    )
             return
-        for _ in range(self.batches_per_epoch or 0):
-            inputs, targets = self.task.get_batch(self.split, self.batch_size)
-            yield _flatten(inputs, self.task.name), targets
+        if lane == "get_batch":
+            for _ in range(self.batches_per_epoch or 0):
+                inputs, targets = self.task.get_batch(self.split, self.batch_size)
+                if _is_graph_data(inputs):
+                    yield inputs, targets
+                else:
+                    yield _flatten(inputs, self.task.name), targets
+            return
+        raise ValueError(f"Unknown lane: {lane}")
 
     def __len__(self) -> int:
         self._resolve()
