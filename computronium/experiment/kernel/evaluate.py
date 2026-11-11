@@ -319,9 +319,12 @@ def _post_training_metrics(
     if hasattr(cell.system.geometry, "to"):
         cell.system.geometry.to(resolved_device)
 
-    sample_x = _sample_inputs(task, resolved_device)
-    metrics.update(compute_stability_metrics(cell.system, sample_x))
-    metrics.update(compute_energy_metrics(cell.system, batch_size=sample_x.shape[0]))
+    sample_x, sample_count = _sample_inputs(task, resolved_device)
+    # A PyG batch has no batch-free input, so the free-phase probes (settle
+    # telemetry, Jacobian) are not defined for it; the energy estimate is.
+    if sample_x is not None:
+        metrics.update(compute_stability_metrics(cell.system, sample_x))
+    metrics.update(compute_energy_metrics(cell.system, batch_size=sample_count))
 
     # Substrate-specific objectives
     metrics.update(_compute_substrate_objectives(coordinate, metrics, walltime_s))

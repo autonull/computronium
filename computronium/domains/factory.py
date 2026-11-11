@@ -341,6 +341,16 @@ class CopyTask(DomainTask):
 _GRAPH_SPLIT_SEED = 0
 _GRAPH_TRAIN_FRACTION = 0.8
 
+# One TU dataset per graph-classification task name. The held-out split is a
+# dataset property, so the dataset also fixes measurement resolution: MUTAG's
+# 38 evaluation graphs are 0.026 per graph (majority baseline 0.658), which is
+# why a ">0.70" MUTAG claim cannot be told apart from noise. PROTEINS (1113
+# graphs, 60/40 class balance) holds out 222 graphs — 0.005 per graph.
+GRAPH_CLASSIFICATION_DATASETS: dict[str, str] = {
+    "graph_classification": "MUTAG",
+    "proteins": "PROTEINS",
+}
+
 
 def _stratified_split(
     labels: torch.Tensor, *, seed: int = _GRAPH_SPLIT_SEED
@@ -367,10 +377,10 @@ def _stratified_split(
 
 
 class GraphClassificationTask(DomainTask):
-    """Graph classification: Classify entire graphs (not nodes).
+    """Graph classification: classify entire graphs, not nodes.
 
-    This exercises graph and spatial_lattice geometries.
-    Uses TUDataset (e.g., MUTAG, PROTEINS, ENZYMES).
+    Backed by a TU dataset named in :data:`GRAPH_CLASSIFICATION_DATASETS`.
+    This exercises the graph and spatial_lattice geometries.
     """
 
     def __init__(
@@ -378,7 +388,7 @@ class GraphClassificationTask(DomainTask):
         name: str = "graph_classification",
         device: str = "cpu",
         quick_mode: bool = False,
-        dataset_name: str = "MUTAG",
+        dataset_name: str = GRAPH_CLASSIFICATION_DATASETS["graph_classification"],
         num_workers: int = 0,
         **kwargs,
     ):
@@ -739,9 +749,13 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
                 quick_mode=quick_mode,
                 **kwargs,
             )
-        case "graph_classification":
+        case "graph_classification" | "proteins":
             return GraphClassificationTask(
-                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+                name=task_name,
+                dataset_name=GRAPH_CLASSIFICATION_DATASETS[task_name],
+                device=str(device),
+                quick_mode=quick_mode,
+                **kwargs,
             )
         case _:
             _included_classes, base_name = _parse_split_digits(task_name)

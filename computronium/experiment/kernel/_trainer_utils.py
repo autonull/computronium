@@ -253,8 +253,14 @@ def _val_batches(task: Any, limit: int | None) -> Any | None:
         return None
 
 
-def _sample_inputs(task: Any, device: str) -> torch.Tensor:
-    """One flattened training batch, on ``device``."""
+def _sample_inputs(task: Any, device: str) -> tuple[torch.Tensor | None, int]:
+    """One flattened training batch, on ``device``, and its sample count.
+
+    Returns ``(None, n)`` for a PyG batch: its node matrix is not a batch-free
+    input — the readout is pooled and aggregation needs that batch's edges — so
+    a caller that only has the rows must skip the free-phase probes instead of
+    running node-mode geometry over a foreign edge index.
+    """
     try:
         batch = next(iter(task.get_dataloader("train")))
     except TypeError, StopIteration:
@@ -275,11 +281,9 @@ def _sample_inputs(task: Any, device: str) -> torch.Tensor:
 
     # Handle graph tasks: sample_x is a PyG Data/Batch object
     if hasattr(sample_x, "x") and hasattr(sample_x, "edge_index"):
-        # Return node features as flat input for stability metrics
-        flat = sample_x.x.to(device)
-    else:
-        flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
-    return flat
+        return None, int(getattr(sample_x, "num_graphs", 1))
+    flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
+    return flat, flat.shape[0]
 
 
 def _create_data_provider(task: Any, split: str, batch_size: int, limit: int | None):

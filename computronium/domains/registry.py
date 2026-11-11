@@ -62,6 +62,7 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "pubmed",
     # graph classification
     "graph_classification",
+    "proteins",
     # tabular
     "breast_cancer",
     "iris",
@@ -101,6 +102,7 @@ TASK_COST_CLASS: dict[str, str] = {
     "acrobot": "EXPENSIVE",
     "cartpole": "EXPENSIVE",
     "graph_classification": "EXPENSIVE",
+    "proteins": "MEDIUM",
 }
 
 

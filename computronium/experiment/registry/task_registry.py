@@ -59,6 +59,46 @@ class TaskSpecEnriched:
         return [o for o in self.objectives if not o.is_measured]
 
 
+def _graph_classification_spec(
+    name: str, description: str, tags: tuple[str, ...]
+) -> TaskSpecEnriched:
+    """One TU graph-classification dataset.
+
+    Datasets differ only in split size, so they share one objective set: the
+    resolution of a claim comes from the dataset, not from the objective list.
+    """
+    return TaskSpecEnriched(
+        name=name,
+        domain=DomainType.GRAPH,
+        input_shape=None,  # Variable: one row per node
+        output_dim=2,
+        cost_class=CostClass.MEDIUM,
+        primary_objective="validation_accuracy",
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+        ),
+        geometry_hint="graph",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=tags,
+        description=description,
+    )
+
+
 # Task enrichments with domain, objectives, and cost class
 TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     # Vision tasks
@@ -779,35 +819,18 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         tags=("graph", "node_classification", "citation"),
         description="PubMed citation network node classification",
     ),
-    "graph_classification": TaskSpecEnriched(
-        name="graph_classification",
-        domain=DomainType.GRAPH,
-        input_shape=None,  # Variable
-        output_dim=2,
-        cost_class=CostClass.MEDIUM,
-        primary_objective="validation_accuracy",
-        objectives=(
-            TaskObjective(
-                "validation_accuracy",
-                "maximize",
-                "minmax",
-                1.0,
-                True,
-                "val_acc",
-                "task",
-            ),
-            TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
-            ),
-            TaskObjective(
-                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
-            ),
-        ),
-        geometry_hint="graph",
-        typical_batch_size=32,
-        typical_lr=1e-3,
-        tags=("graph", "graph_classification"),
-        description="Graph classification benchmark",
+    "graph_classification": _graph_classification_spec(
+        "graph_classification",
+        "Graph classification benchmark (MUTAG, 188 graphs)",
+        ("graph", "graph_classification"),
+    ),
+    # R1: a second, larger TU set. MUTAG holds out 38 graphs (0.026/graph,
+    # majority 0.658), so no cell there can carry a ">0.70" claim; PROTEINS
+    # holds out 222 (0.005/graph, majority 0.596).
+    "proteins": _graph_classification_spec(
+        "proteins",
+        "Graph classification — PROTEINS (1113 graphs)",
+        ("graph", "graph_classification", "tu"),
     ),
     "breast_cancer": TaskSpecEnriched(
         name="breast_cancer",

@@ -2,7 +2,13 @@
 
 **Mission:** Continue the experiment/fix cycle: run experiments (≤15 min each), discover bugs, scrutinize poor-performing algorithms as potential implementation defects, and question excluded possibilities.
 
-**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G8 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin).
+**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G9 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin). **Continuation (2026-11-11 late-2):** R1(b) shipped — PROTEINS (1113 graphs, 223 held out) is a second graph-classification task, so a graph cell resolves to 0.005/graph instead of 0.026; R7 closed as **G9** — the "CUDA PyG crash" was our own unbatched graph probe feeding node rows to a foreign edge index, not upstream PyG, and CUDA graph cells now train. Claim-grade PROTEINS: gradient 0.665 ± 0.007, random_projections 0.625 ± 0.011 (majority 0.596, 2 claim-eligible cells); best PROTEINS arm 0.697 (n=5, hidden 128×5, step 0.003) is at the >0.70 target, not above it — R9 stays open.
+
+**Progress (Session 2026-11-11 late-2 — R1b / R7 / G9):**
+- ✅ **R1(b) PROTEINS as a second graph task** — `graph_classification` stays MUTAG; `proteins` maps to PROTEINS (1113 graphs, 3 features, 663/450 class split, 890 train / 223 held out) through one `GRAPH_CLASSIFICATION_DATASETS` map, one `_graph_classification_spec` registry helper (two rows, one objective set) and one `SUPPORTED_TASKS` entry. The held-out split now resolves 0.005/graph against a 0.596 majority rate, instead of MUTAG's 0.026 against 0.658.
+- ✅ **R7 CLOSED — the CUDA graph crash was ours (G9), not PyG** — CUDA graph cells died with `vectorized_gather_kernel: index out of bounds` (sticky `device-side assert`, so every later CUDA cell in the process died too). The index was our static `edge_index`: `_sample_inputs` flattened a PyG batch to `batch.x` and the free-phase probe ran node-mode `forward` over a foreign edge list. Two more graph-batching defects sat behind it: `_batched` sized degrees from `edge_index.max()+1` (PyG appends trailing isolated nodes — measured 1134 rows of degrees against 1201 activations), and `forward_with_intermediates` ignored graph kwargs entirely (no batched aggregation, no pooling). Fixed: probe skips batched-graph inputs (and prices energy per graph, not per node), degrees follow the activation rows, intermediates delegate to `settle_blocks`, and node-mode `forward` rejects a foreign row count with a `ValueError` before any kernel launch. Lock: `tests/property/test_graph_batched_input_lock.py` (4 tests). CUDA proteins: 10-epoch cell 0.6637 vs CPU 0.6637 — device parity, no assert, no telemetry warning.
+- ✅ **Claim-grade PROTEINS run** (L1, 100 epochs, n=3, cuda): gradient 0.6637/0.6726/0.6592 → **mean 0.665**; random_projections 0.6233/0.6143/0.6368 → **mean 0.625**; majority 0.596. 7/7 cells PASS, 2 claim-eligible. Both credits beat the majority rate.
+- ⚠️ **R9 PROTEINS below target at the default cell** — default cell (hidden 64 × 3, step 0.001): gradient 0.665, random_projections 0.625, majority 0.596. Wider/deeper probes (hidden 128 × 5, 100 epochs, cuda): `step_size=0.003` n=3 → 0.6726/0.6996/0.7309 = 0.701; n=5 → 0.6637/0.7130/0.7130/0.6906/0.7040 = **0.697 (sd 0.021)**, i.e. at the target, not above it. `step_size=0.01` n=3 → 0.671. Capacity alone is not the lever and 0.70 is not yet met with margin; the open levers are pooling (mean vs sum) and the readout objective.
 
 **Progress (Session 2026-11-11 close — R1c/R5/R8):**
 - ✅ **R8 LM token targets** — `TransformerGeometry` folds the sequence into the batch (logits `[B*T, V]`), while `LMTask` returns targets `[B, T]`. `nudged_output` returned the 2-D target and broadcast-failed, and both task-loss paths fed CE a rank-mismatched pair. Fixed with one shared `_align_target_rows` fold applied in `nudged_output`, `task_loss`/`_task_loss_tensor` and `SystemTrainer.validate`; `_one_hot` now builds `[…, V]` one-hots for any target rank. Locks: `tests/property/test_lm_target_alignment_lock.py` (5 tests: nudge, ignore-index, settle, train step, trainer validation).
@@ -49,18 +55,24 @@
 
 ## 📌 REMAINING WORK — NEXT SESSION (ordered by what unblocks a claim)
 
+**Order of work now:**
+1. **R9** — PROTEINS pooling/readout arms (claim blocker: 0.697 vs >0.70).
+2. **R6** — Register C hygiene at round close.
+3. Optional: re-run the MUTAG credit sweep (Experiments 3/11 above) under the fixed batched path only if a MUTAG-specific claim is wanted; PROTEINS now carries graph classification.
+
 | # | Ticket | Why now | Gate / cost | Depends on |
 |---|--------|---------|-------------|------------|
-| R1 | **MUTAG evaluation protocol** — (c) **SHIPPED**: every graph cell now reports `majority_baseline` and `val_acc_over_majority`. Remaining (a) 5-fold CV averaged inside the task, or (b) a larger TU dataset (PROTEINS 1113 / NCI1 4110) as a second graph-classification task. | (c) makes today's numbers readable; (a)/(b) are what raise the measurement resolution so a >0.70 claim means something. | New split wiring + task registry row; demo gate if a demo ships | — |
+| R1 | **MUTAG/PROTEINS evaluation protocol** — (c) **SHIPPED** (majority baseline + margin per graph cell); (b) **SHIPPED** — `proteins` (PROTEINS, 1113 graphs) is a second graph-classification task, so the held-out split resolves 0.005/graph against 0.596 majority. Remaining: (a) — **CLOSED as superseded**: fold rotation existed to buy resolution, and (b) buys 6x more of it for one training per cell instead of five. Next ticket is the result, not the protocol: PROTEINS gradient 0.665 / random_projections 0.625 are readable and below the 0.70 target, so the open question is model/protocol (pooling, depth, readout objective), not measurement. | New task row + registry helper; demo gate if a demo ships | — |
 | R2 | ✅ **CLOSED — harness U-axis gap was not the optimizer.** grad_clip 1.0 vs 10.0 identical; nudged-CE/frozen-bias arms match plain Adam. Root cause was G8 (`settle_blocks` aggregation). Harness 0.640 → 0.693 mean. | Done; do not reopen as an optimizer ticket. | — | G8 |
 | R3 | ✅ **CLOSED — pooled-readout paths shipped** for `target_inversion` and `temporal_trace`; lock `test_credit_readout_paths_lock.py`. | Done. | — | G5 pattern |
 | R4 | ✅ **CLOSED — transformer-aware homeostatic** pairs each weight with its successor act; fused QKV now moves. Lock `test_credit_readout_paths_lock.py`. | Backfill only: homeostatic is error-blind by contract, so nonzero updates do not imply accuracy. | — | — |
 | R5 | ✅ **CLOSED — replay identity.** (a) `_cell_replay_hash` now hashes `code_sha | dataset_version | measurement_key`, so seed/task/device/determinism are in the hash (seeds 42/43/44 no longer collide). (b) CUDA graph scatter remains order-dependent; the tolerance is stated as `LimitationKind.NONDETERMINISTIC_ACCUMULATION` (one graph = 1/N of the split) for every non-deterministic CUDA graph cell. | Locks `test_cell_identity_lock.py` (4 tests). | — | — |
 | R6 | **Register C hygiene** (unchanged, deferred) — repo-wide lint 583 → 0, pyright strict, full pytest shards + acceptance, `pip-audit`. | Round-close only; never per-commit. | ~10 min | — |
-| R7 | **CUDA PyG graph-classification crash** (`vectorized gather kernel index out of bounds`) — still unverified as upstream; CPU path is the workaround used by every graph run so far. | Question the excluded possibility with a PyG version pin + `num_workers=0`. | ~15 min | — |
+| R7 | ✅ **CLOSED — not upstream PyG (G9).** The `vectorized gather kernel index out of bounds` was our own static `edge_index` reaching `x[src]`: the free-phase probe flattened a PyG batch to `batch.x` and forwarded it without `edge_index`/`batch`. CPU hid it as a caught warning; CUDA made it a sticky device assert that killed every later CUDA cell. Fixed with the probe skip, activation-row degrees, pooled `forward_with_intermediates`, and a pre-launch node-mode guard. Lock `test_graph_batched_input_lock.py`; CUDA graph cells now train (proteins 0.6637 == CPU). | Done — CUDA is the default device for graph runs now. | — | G9 |
 | R8 | ✅ **CLOSED — LM token targets fold to the folded logits.** `_align_target_rows` is applied in `nudged_output`, `task_loss`/`_task_loss_tensor` and `SystemTrainer.validate`; `_one_hot` handles any target rank. Lock `test_lm_target_alignment_lock.py` (5 tests). | Blocks no causal-LM token task now. | — | — |
+| R9 | **PROTEINS graph accuracy below target** — default cell (hidden 64 × 3, step 0.001) gradient 0.665, random_projections 0.625, majority 0.596, target >0.70. Split resolution is no longer the explanation. Best arm so far: hidden 128 × 5 at `update.step_size=0.003` → n=3 gave 0.701, n=5 gave **0.697 (sd 0.021)** — at the target, not above it. Remaining levers: pooling (mean vs sum), readout objective (nudged CE β), and layer count, each priced at one 35 s cell per seed. | `--hyperparameters '{"geometry.hidden_dim":{"members":[128]},"geometry.num_layers":{"members":[4]},"update.step_size":{"members":[0.003]}}' --n-seeds 5` | ~4 min | R1b, G9 |
 
-**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4), seed-insensitive cell replay hash (R5a), CUDA scatter tolerance now stated (R5b), LM token-target crash (R8), graph cells without a majority baseline (R1c).
+**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4), seed-insensitive cell replay hash (R5a), CUDA scatter tolerance now stated (R5b), LM token-target crash (R8), graph cells without a majority baseline (R1c), unbatched graph probe + foreign-edge-index CUDA assert (G9/R7), graph-measurement resolution (R1b; 5-fold CV R1a superseded by it).
 
 ---
 
@@ -252,7 +264,8 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 | Positive control FAIL | Wrong geometry for task, compatibility check broken | Check `geometry_hint` in task registry, `_check_coord_compatibility` |
 | NaN/Inf loss | Numerical instability, unclamped energy, bad init | Check `max_energy` clamp, weight init, substrate noise |
 | All credits fail on geometry | Credit dispatch missing, geometry not in compatibility matrix | Check `credit_assignment` compatibility, `_transformer_path` etc. |
-| Graph CUDA OOM/index error | PyG batch to CUDA, upstream version mismatch | Try CPU, check PyG/CUDA versions, document limitation |
+| Graph CUDA `vectorized gather kernel index out of bounds` | **ANSWERED 2026-11-11 (G9/R7): not upstream PyG** — a PyG batch was flattened to `batch.x` and forwarded without `edge_index`/`batch`, so node-mode geometry indexed a foreign edge list; CPU caught it as a warning, CUDA as a sticky device assert | Pass graph kwargs through any probe; size degrees from activation rows; never run node-mode geometry on a batch |
+| Graph cell warns `free settle telemetry failed` on CPU | Same defect as the CUDA assert (G9): the probe has node rows only | Skip free-phase probes for batched-graph inputs; they need the batch's edges |
 | Slow training (>60s/epoch L0) | CPU-bound settle loop, no GPU kernel, unnecessary copies | Profile, check `device` placement, check for `.to(cpu)` calls |
 
 ---
@@ -261,7 +274,7 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 
 | Assumption | Why It Might Be Wrong | Test |
 |------------|----------------------|------|
-| "GraphClassification CUDA is unfixable upstream" | May be version pin or DataLoader config | Try `num_workers=0`, `pin_memory=False`, PyG 2.6.x |
+| "GraphClassification CUDA is unfixable upstream" | **ANSWERED 2026-11-11 (G9/R7): it was our probe, not PyG** — `_sample_inputs` flattened a batch to node rows and node-mode geometry indexed a foreign edge list. Fixed; CUDA graph cells now train at CPU parity (proteins 0.6637 == 0.6637) | `num_workers=0` was never the lever |
 | "Energy minimization + recurrent is CPU-bound" | May lack GPU kernel; check if `_settle_compiled` works | Profile `energy_minimization` on recurrent geometry |
 | "Transformer vision needs patch embedding" | Could use positional encoding on flattened patches | Try `patch_size=0` with `seq_len=H*W` for comparison |
 | "Memristive substrate doesn't support energy_min" | May just need GPU settle kernel | Check `SubstrateSettleKernel` for memristive |
@@ -283,7 +296,7 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 - [ ] **pip-audit** — Dependency vulnerability scan.
 
 ### Upstream Dependencies (Question, Don't Assume Unfixable)
-- [ ] **GraphClassification CUDA** — Test PyG version pins, DataLoader config. (Instantaneous dynamics works; settling dynamics has tensor shape mismatch)
+- [x] **GraphClassification CUDA** — **CLOSED 2026-11-11 (G9/R7)**: not upstream. CUDA graph cells train at CPU parity; no version pin or DataLoader change was needed.
 - [ ] **torch_geometric fvcore/jit warning** — Check if newer PyG fixes this.
 
 ### Known Limitations (Document, But Revisit)
@@ -1234,3 +1247,82 @@ Register C items only); pyright: no new errors (the 25 are the pre-existing grap
 second graph task) to raise split resolution; R7 PyG CUDA pin probe if CUDA graph claims are
 needed. Everything else in the table is closed or round-close hygiene (R6).
 
+
+---
+
+## Session 2026-11-11 (late-2 — R1b / R7 / G9 / R9)
+
+**Experiment 1 — R7 repro: is the CUDA graph crash upstream?** (PyG 2.8.0.post1,
+torch 2.14.1+cu130)
+```
+CUDA_LAUNCH_BLOCKING=1 uv run python -m computronium.experiment.survey_cli 0.05 \
+  --mode learn --policy random --device cuda --tasks proteins --fidelity L0 \
+  --store /tmp/opencode/r7c.duckdb --max-workers 1 --n-seeds 1 --epochs 3 \
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous"],
+           "plasticity":["null"],"credit":["gradient"],"update":["adam"]}'
+```
+**Result:** `vectorized_gather_kernel: ind < ind_dim_size` assert, then
+`free settle telemetry failed: CUDA error: device-side assert triggered`, then every
+later cell in the process died. Root cause was ours: `_sample_inputs` flattened a PyG
+batch to `batch.x`, and the free-phase probe called `forward_pass(geometry, x)` with no
+`edge_index`/`batch`, so node-mode geometry indexed a **static** edge list (max id 1045)
+against a batch with 1134–1201 node rows. On CPU the same call raised
+`index 1045 is out of bounds` and `tensor a (1201) vs b (1134)` — caught as warnings.
+
+**Fixes Applied (G9):**
+- `computronium/experiment/kernel/_trainer_utils.py` — `_sample_inputs` returns
+  `(input, count)` and returns `(None, num_graphs)` for a PyG batch; the probe's
+  energy estimate is priced per graph, not per node.
+- `computronium/experiment/kernel/evaluate.py` — `_post_training_metrics` skips the
+  free-phase probes when there is no batch-free input.
+- `computronium/ontology/geometry.py` — `_batched` sizes degrees from `x.shape[0]`
+  (PyG appends trailing isolated nodes after the last edge), `forward_with_intermediates`
+  delegates to `settle_blocks` when given `edge_index`/`batch`, and node-mode `forward`
+  raises a `ValueError` naming the missing kwargs before any kernel launch.
+- Lock: `tests/property/test_graph_batched_input_lock.py` (5 tests: trailing isolated
+  node, intermediates == forward on a batch, node-mode guard, probe skips a PyG batch,
+  probe flattens a tensor batch).
+
+**Verify:** CUDA proteins 10-epoch cell 0.6637 vs CPU 0.6637 (device parity), zero
+asserts, zero telemetry warnings. `test_graph_batched_input_lock` + graph locks 20/20;
+`tests/unit/core -k "graph|registry|task"` + task objectives + cost lock 38/38.
+
+**Experiment 2 — R1(b) PROTEINS claim run** (L1, 100 epochs, n=3, cuda)
+```
+uv run python -m computronium.experiment.survey_cli 0.15 --mode learn --policy random \
+  --device cuda --tasks proteins --fidelity L1 --store experiments/t88_r1b_proteins.duckdb \
+  --max-workers 1 --n-seeds 3 --epochs 100 \
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous"],
+           "plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam"]}'
+```
+**Result:** gradient 0.6637/0.6726/0.6592 → **0.665**; random_projections
+0.6233/0.6143/0.6368 → **0.625**; majority 0.596; 7/7 PASS; 2 claim-eligible cells;
+152 s. The split holds out 223 of 1113 graphs (0.005/graph) and reports the measured
+majority rate beside every cell.
+
+**Experiment 3 — R9 capacity/step probe** (hidden 128 × 5, 100 epochs, n=3, cuda)
+```
+--store experiments/t88_r1b_proteins_capacity.duckdb --hyperparameters \
+  '{"geometry.hidden_dim":{"members":[128]},"geometry.num_layers":{"members":[4]},
+    "update.step_size":{"members":[0.003,0.01]}}'
+```
+**Result:** step 0.003 → 0.6726/0.6996/0.7309 = 0.701; step 0.01 → 0.6278/0.6726/0.7130
+= 0.671. 5-seed confirm (step 0.003, `experiments/t88_r1b_proteins_confirm.duckdb`):
+0.6637/0.7130/0.7130/0.6906/0.7040 = **0.697 (sd 0.021)** — at the 0.70 target, not above
+it, so R9 stays open with pooling and the readout objective as the next levers.
+
+**Defects Found:**
+- **G9** — graph free-phase probe fed node rows to node-mode geometry (CUDA sticky
+  assert kills the process; CPU warning).
+- **G9b** — `_batched` sized degrees from `edge_index.max()+1`; trailing isolated nodes
+  made the degree vector narrower than the activations.
+- **G9c** — `forward_with_intermediates` ignored `edge_index`/`batch`, so the graph act
+  stack had no batched aggregation and no pooled readout.
+
+**Verification:** new lock 5/5; graph + credit + identity locks 15/15; targeted unit
+suites 38/38 + 22/22; lint shows no new findings (factory `too-many-branches` and the
+geometry Register C set are pre-existing); pyright on changed files is at or below the
+HEAD baseline (trainer_utils 12 → 8).
+
+**Next Experiment:** R9 pooling/readout arms at hidden 128 × 5 / step 0.003 (one cell
+≈ 35 s); then R6 round-close hygiene.

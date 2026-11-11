@@ -2422,11 +2422,17 @@ class GraphGeometry(nn.Module):
 
     @contextmanager
     def _batched(self, x: Tensor, edge_index: Tensor, batch: Tensor):
-        """Scope the edge index, degrees and pooling map to one graph batch."""
+        """Scope the edge index, degrees and pooling map to one graph batch.
+
+        Node count comes from the activation rows, not from ``edge_index.max()``:
+        PyG appends trailing isolated nodes after the last edge, and a degree
+        vector sized from the edges alone then broadcasts against a wider
+        activation (``1201 vs 1134``) or leaves those nodes unnormalised.
+        """
         original = (self._edge_index, self._deg)
         device = x.device
         self._edge_index = edge_index.to(device)
-        self._deg = self._degrees(self._edge_index, int(edge_index.max().item()) + 1)
+        self._deg = self._degrees(self._edge_index, x.shape[0])
         self._pool_context = (batch, self._graph_counts(batch))
         try:
             yield
@@ -2518,6 +2524,14 @@ class GraphGeometry(nn.Module):
 
         # Node classification mode: use stored edge_index
         self._pool_context = None
+        if x.shape[0] != self.num_nodes:
+            raise ValueError(
+                f"graph node-mode forward got {x.shape[0]} rows for a "
+                f"{self.num_nodes}-node static edge index; a batched graph input "
+                "must pass edge_index and batch, because an unbatched caller "
+                "feeds node rows to a foreign edge list (an out-of-bounds index "
+                "on CUDA, a caught warning on CPU)"
+            )
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
 
@@ -2571,6 +2585,11 @@ class GraphGeometry(nn.Module):
             from computronium.ontology.substrate import DigitalSubstrate
 
             substrate = DigitalSubstrate()
+        # A batched graph input has no node-mode reading: the readout is pooled
+        # and aggregation needs that batch's edges. Delegate so the act stack
+        # matches ``forward`` instead of aggregating over the static edge list.
+        if kwargs.get("edge_index") is not None and kwargs.get("batch") is not None:
+            return self.settle_blocks(x, substrate, *args, **kwargs)
         op = substrate.get_forward_operator()
         self._move_edge_index(x.device)
 
