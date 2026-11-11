@@ -1,6 +1,6 @@
 # TODO87 — System Fixes & Remaining Coverage (Post-TODO86)
 
-**Status:** PHASE 1-7 COMPLETE. C2 scale validation COMPLETE (digital/ff/energy_min on MNIST: val_acc≈0.97). Core system working: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification evaluation fixed; causal_transformer vision patch embedding sweep added; transformer vision credit assignment working. Property locks pass (lint ratchet at 583 for ruff 0.17.4; FA feedback determinism tests passing).
+**Status:** PHASE 1-7 COMPLETE. C2 scale validation COMPLETE (digital/ff/energy_min on MNIST: val_acc≈0.97). Core system working: FF/MNIST, RL (pendulum, acrobot), tabular (wine, iris). Graph classification evaluation fixed; causal_transformer vision patch embedding sweep added; transformer vision credit assignment working. **Recent fixes:** task-aware positive control (uses geometry_hint), graph task payload_key unified to 'val_acc', TransformerGeometry vision mode handles flattened input. Property locks pass (lint ratchet at 583 for ruff 0.17.4; FA feedback determinism tests passing).
 
 ---
 
@@ -54,6 +54,9 @@
 | SIGTERM run closure | Write manifest on graceful shutdown (`interrupted` status) | Low ✅ DONE |
 | fvcore/jit deprecation | Removed internal fvcore usage; upstream torch_geometric warning remains | Medium ✅ PARTIAL |
 | Lint ratchet | Re-baselined to 583 errors (ruff 0.17.4) | Low ✅ DONE |
+| Task-aware positive control | Positive control uses task's geometry_hint (graph/conv/feedforward) | High ✅ DONE |
+| Graph task payload_key | Changed from 'accuracy' to 'val_acc' for consistency | High ✅ DONE |
+| Transformer vision flattened input | Handles 2D flattened input by reshaping to 4D | High ✅ DONE |
 
 ---
 
