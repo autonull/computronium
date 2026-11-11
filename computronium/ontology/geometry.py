@@ -17,7 +17,7 @@ from typing import (
 
 import torch
 from torch import Tensor, nn
-from torch_geometric.nn import global_mean_pool
+from torch_geometric.nn import global_add_pool, global_mean_pool
 
 from computronium.core.tile.topology import TileGraph
 from computronium.ontology._registry import ImplementationRegistry
@@ -28,6 +28,7 @@ from computronium.ontology._tile_blocks import (
     tile_hopfield_energy,
     tile_layered_params,
 )
+from computronium.ontology._utils import PoolContext
 
 if TYPE_CHECKING:
     from computronium.ontology._settle_kernel import LayeredParams
@@ -173,6 +174,9 @@ def _linear_stack(
 # ============================================================
 
 
+type PoolingMode = Literal["mean", "sum"]
+
+
 @dataclass(frozen=True, slots=True)
 class GeometryConfig:
     """Configuration for network geometry/topology.
@@ -211,6 +215,8 @@ class GeometryConfig:
         input_hw: Input spatial extent (height, width) (conv topology)
         pool_hw: Adaptive average-pool grid before the classifier head
             (conv topology)
+        pooling: Node→graph reduction a pooled readout applies (graph
+            topology): "mean" (per-graph average) or "sum" (per-graph total)
         # Attention topology fields
         num_heads: int = 8
         head_dim: int | None = None
@@ -243,6 +249,7 @@ class GeometryConfig:
     in_channels: int = 1
     input_hw: tuple[int, int] = (28, 28)
     pool_hw: tuple[int, int] = (4, 4)
+    pooling: PoolingMode = "mean"
     # Attention topology
     num_heads: int = 8
     head_dim: int | None = None
@@ -466,6 +473,7 @@ class GeometryConfig:
         hidden_dims: tuple[int, ...] = (64, 64),
         init_scale: float = 0.1,
         init_scheme: InitScheme = "default",
+        pooling: PoolingMode = "mean",
     ) -> GeometryConfig:
         """Create a graph topology config.
 
@@ -476,6 +484,7 @@ class GeometryConfig:
             hidden_dims: Hidden dimensions for each GNN layer
             init_scale: Weight initialization scale
             init_scheme: Weight initialization scheme ("default" or "mupc")
+            pooling: Readout reduction over nodes ("mean" or "sum")
         """
         return cls(
             input_dim=input_dim,
@@ -487,6 +496,7 @@ class GeometryConfig:
             recurrent_weight=None,
             init_scale=init_scale,
             init_scheme=init_scheme,
+            pooling=pooling,
         )
 
     @classmethod
@@ -725,6 +735,10 @@ class GeometryConfig:
             "grid_hw": {
                 "domain": (4, 64, "int"),
                 "availability": expr_from_string('geometry == "nca"'),
+            },
+            "pooling": {
+                "domain": ["mean", "sum"],
+                "availability": expr_from_string('geometry == "graph"'),
             },
         }
 
@@ -2373,7 +2387,7 @@ class GraphGeometry(nn.Module):
 
         self._set_param_names()
         self._compute_degrees()
-        self._pool_context: tuple[Tensor, Tensor] | None = None
+        self._pool_context: PoolContext | None = None
 
     def _set_param_names(self) -> None:
         for key, weight in self._layer_weights.items():
@@ -2411,14 +2425,20 @@ class GraphGeometry(nn.Module):
         counts.scatter_add_(0, batch, torch.ones_like(batch, dtype=torch.float32))
         return counts
 
-    def pool_context(self) -> tuple[Tensor, Tensor] | None:
-        """``(node → graph index, nodes per graph)`` of the last batched call.
+    def pool_context(self) -> PoolContext | None:
+        """``(node → graph, nodes per graph, mean)`` of the last batched call.
 
         Persists past the call on purpose: a credit that walks the error back
         through a pooled readout needs the pooling map, which is not in the
         activation stack. Node-mode calls clear it.
         """
         return self._pool_context
+
+    def _pool(self, h: Tensor, batch: Tensor) -> Tensor:
+        """Reduce the node stack onto its graphs with the configured readout."""
+        if self.config.pooling == "sum":
+            return global_add_pool(h, batch)
+        return global_mean_pool(h, batch)
 
     @contextmanager
     def _batched(self, x: Tensor, edge_index: Tensor, batch: Tensor):
@@ -2433,7 +2453,9 @@ class GraphGeometry(nn.Module):
         device = x.device
         self._edge_index = edge_index.to(device)
         self._deg = self._degrees(self._edge_index, x.shape[0])
-        self._pool_context = (batch, self._graph_counts(batch))
+        self._pool_context = PoolContext(
+            batch, self._graph_counts(batch), mean=self.config.pooling == "mean"
+        )
         try:
             yield
         finally:
@@ -2519,7 +2541,7 @@ class GraphGeometry(nn.Module):
                     if substrate is not None
                     else lambda a, w: a @ w.T
                 )
-                h = global_mean_pool(self._stack(x, op), batch)
+                h = self._pool(self._stack(x, op), batch)
                 return op(h, self._head.weight) + self._head.bias
 
         # Node classification mode: use stored edge_index
@@ -2574,7 +2596,7 @@ class GraphGeometry(nn.Module):
                 h = torch.relu(h)
                 h = self._aggregate(h)
                 acts.append(h)
-            out = op(global_mean_pool(acts[-1], batch), self._head.weight)
+            out = op(self._pool(acts[-1], batch), self._head.weight)
             acts.append(out + self._head.bias)
             return acts
 

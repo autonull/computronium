@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import zlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
@@ -91,36 +92,40 @@ def _propagate_targets(
     return targets
 
 
-def _pool_acts(acts: list[Tensor], index: Tensor, counts: Tensor) -> list[Tensor]:
-    """Mean-pool the node-sized acts onto their graphs.
+@dataclass(frozen=True, slots=True)
+class PoolContext:
+    """Node→graph map of a pooled readout.
 
-    A pooled readout (graph classification) feeds a batch-sized readout error
-    into a node-sized act stack. Credits that walk the stack need the same
-    pooling the forward applied; acts whose leading dim is not the node count
-    (the logits) pass through unchanged.
+    A graph readout reduces its node stack before the head, so the logits are
+    graph-sized while the hidden acts are node-sized. Credits that walk the
+    stack need the same reduction the forward applied; ``mean`` also selects
+    the transpose, because the derivative of a sum pool is a broadcast while
+    the derivative of a mean pool divides by the node count.
     """
-    n_nodes = index.numel()
-    pooled: list[Tensor] = []
-    for act in acts:
-        if act.shape[0] != n_nodes:
-            pooled.append(act)
-            continue
-        acc = act.new_zeros(counts.numel(), act.shape[1])
-        acc.index_add_(0, index, act)
-        pooled.append(acc / counts.unsqueeze(1))
-    return pooled
 
+    index: Tensor
+    counts: Tensor
+    mean: bool = True
 
-def _share_pooled(x: Tensor, index: Tensor, counts: Tensor, *, mean: bool) -> Tensor:
-    """Hand a graph row back to its nodes — the transpose of mean pooling.
+    def pool(self, act: Tensor) -> Tensor:
+        """Reduce one node-sized act onto its graphs."""
+        acc = act.new_zeros(self.counts.numel(), act.shape[1])
+        acc.index_add_(0, self.index, act)
+        return acc / self.counts.unsqueeze(1) if self.mean else acc
 
-    ``mean=True`` divides by the node count (an error at the readout is
-    shared equally, the derivative of the pooled mean); ``mean=False`` is the
-    plain broadcast target propagation needs (each node's target is its
-    graph's target).
-    """
-    rows = x[index]
-    return rows / counts[index].unsqueeze(1) if mean else rows
+    def pool_acts(self, acts: list[Tensor]) -> list[Tensor]:
+        """Pool every node-sized act; other shapes (the logits) pass through."""
+        n_nodes = self.index.numel()
+        return [self.pool(a) if a.shape[0] == n_nodes else a for a in acts]
+
+    def share(self, error: Tensor) -> Tensor:
+        """Hand a graph-rowed error back to its nodes (the pool transpose)."""
+        rows = error[self.index]
+        return rows / self.counts[self.index].unsqueeze(1) if self.mean else rows
+
+    def broadcast(self, graph_rows: Tensor) -> Tensor:
+        """Copy each graph row to its nodes (target propagation, not a gradient)."""
+        return graph_rows[self.index]
 
 
 def _weight_acts(
@@ -383,6 +388,7 @@ class ConfigFactory:
 
 __all__ = [
     "ConfigFactory",
+    "PoolContext",
     "_EMANormalizer",
     "_acts_list",
     "_align_target_rows",
@@ -391,10 +397,8 @@ __all__ = [
     "_deterministic_generator",
     "_fixed_random_matrix",
     "_learnable_weight_names",
-    "_pool_acts",
     "_propagate_targets",
     "_rms_normalize",
-    "_share_pooled",
     "_spectral_normalize",
     "_weight_acts",
 ]

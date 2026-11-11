@@ -16,7 +16,7 @@ from computronium.experiment.schema.geometry_keys import (
     TOPOLOGY_KEYS,
     allowed_geometry_keys,
 )
-from computronium.ontology.geometry import GeometryConfig
+from computronium.ontology.geometry import GeometryConfig, PoolingMode
 
 _TOPOLOGY_REQUIRED_INPUT: dict[str, str] = {
     "feedforward": "image",
@@ -640,7 +640,17 @@ def build_graph_config(
         edge_index=edge_index,
         hidden_dims=hidden_dims,
         init_scale=init_scale,
+        pooling=_as_pooling(geometry.get("pooling")),
     )
+
+
+def _as_pooling(value: object) -> PoolingMode:
+    """Validate the graph readout reduction; unknown values fail loud."""
+    if value is None:
+        return "mean"
+    if value == "mean" or value == "sum":
+        return value
+    raise ValueError(f"graph pooling must be 'mean' or 'sum', got {value!r}")
 
 
 def _as_edge_index(value: object) -> list[list[int]]:

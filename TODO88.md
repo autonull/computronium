@@ -2,13 +2,13 @@
 
 **Mission:** Continue the experiment/fix cycle: run experiments (≤15 min each), discover bugs, scrutinize poor-performing algorithms as potential implementation defects, and question excluded possibilities.
 
-**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G9 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin). **Continuation (2026-11-11 late-2):** R1(b) shipped — PROTEINS (1113 graphs, 223 held out) is a second graph-classification task, so a graph cell resolves to 0.005/graph instead of 0.026; R7 closed as **G9** — the "CUDA PyG crash" was our own unbatched graph probe feeding node rows to a foreign edge index, not upstream PyG, and CUDA graph cells now train. Claim-grade PROTEINS: gradient 0.665 ± 0.007, random_projections 0.625 ± 0.011 (majority 0.596, 2 claim-eligible cells); best PROTEINS arm 0.697 (n=5, hidden 128×5, step 0.003) is at the >0.70 target, not above it — R9 stays open.
+**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G9 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin). **Continuation (2026-11-11 late-2):** R1(b) shipped — PROTEINS (1113 graphs, 223 held out) is a second graph-classification task, so a graph cell resolves to 0.005/graph instead of 0.026; R7 closed as **G9** — the "CUDA PyG crash" was our own unbatched graph probe feeding node rows to a foreign edge index, not upstream PyG, and CUDA graph cells now train. Claim-grade PROTEINS: gradient 0.665 ± 0.007, random_projections 0.625 ± 0.011 (majority 0.596, 2 claim-eligible cells); best PROTEINS arm 0.697 (n=5, hidden 128×5, step 0.003) is at the >0.70 target, not above it. **Continuation (2026-11-11 late-3):** R9 CLOSED — pooling is now a geometry knob (`geometry.pooling`: mean|sum) with a mode-aware `PoolContext` so every pooled-readout credit path uses the forward's transpose; sum pooling was *worse* (0.672 vs 0.691 at 100 epochs), and 200 epochs at the mean-pooled arm crosses the target: **0.7040 ± 0.0071 (n=5)** vs 0.596 majority.
 
 **Progress (Session 2026-11-11 late-2 — R1b / R7 / G9):**
 - ✅ **R1(b) PROTEINS as a second graph task** — `graph_classification` stays MUTAG; `proteins` maps to PROTEINS (1113 graphs, 3 features, 663/450 class split, 890 train / 223 held out) through one `GRAPH_CLASSIFICATION_DATASETS` map, one `_graph_classification_spec` registry helper (two rows, one objective set) and one `SUPPORTED_TASKS` entry. The held-out split now resolves 0.005/graph against a 0.596 majority rate, instead of MUTAG's 0.026 against 0.658.
 - ✅ **R7 CLOSED — the CUDA graph crash was ours (G9), not PyG** — CUDA graph cells died with `vectorized_gather_kernel: index out of bounds` (sticky `device-side assert`, so every later CUDA cell in the process died too). The index was our static `edge_index`: `_sample_inputs` flattened a PyG batch to `batch.x` and the free-phase probe ran node-mode `forward` over a foreign edge list. Two more graph-batching defects sat behind it: `_batched` sized degrees from `edge_index.max()+1` (PyG appends trailing isolated nodes — measured 1134 rows of degrees against 1201 activations), and `forward_with_intermediates` ignored graph kwargs entirely (no batched aggregation, no pooling). Fixed: probe skips batched-graph inputs (and prices energy per graph, not per node), degrees follow the activation rows, intermediates delegate to `settle_blocks`, and node-mode `forward` rejects a foreign row count with a `ValueError` before any kernel launch. Lock: `tests/property/test_graph_batched_input_lock.py` (4 tests). CUDA proteins: 10-epoch cell 0.6637 vs CPU 0.6637 — device parity, no assert, no telemetry warning.
 - ✅ **Claim-grade PROTEINS run** (L1, 100 epochs, n=3, cuda): gradient 0.6637/0.6726/0.6592 → **mean 0.665**; random_projections 0.6233/0.6143/0.6368 → **mean 0.625**; majority 0.596. 7/7 cells PASS, 2 claim-eligible. Both credits beat the majority rate.
-- ⚠️ **R9 PROTEINS below target at the default cell** — default cell (hidden 64 × 3, step 0.001): gradient 0.665, random_projections 0.625, majority 0.596. Wider/deeper probes (hidden 128 × 5, 100 epochs, cuda): `step_size=0.003` n=3 → 0.6726/0.6996/0.7309 = 0.701; n=5 → 0.6637/0.7130/0.7130/0.6906/0.7040 = **0.697 (sd 0.021)**, i.e. at the target, not above it. `step_size=0.01` n=3 → 0.671. Capacity alone is not the lever and 0.70 is not yet met with margin; the open levers are pooling (mean vs sum) and the readout objective.
+- ✅ **R9 CLOSED: PROTEINS > 0.70 met** — default cell (hidden 64 × 3, step 0.001): gradient 0.665, random_projections 0.625, majority 0.596. Pooling is now a geometry knob: at hidden 128 × depth 5, step 0.003, 100 epochs, mean = **0.6906 ± 0.0208** vs sum = **0.6717 ± 0.0296**, so mean stays default. At 200 epochs the mean-pooled arm reaches **0.7040 ± 0.0071 (n=5)** vs 0.596 majority (+0.108), 1 claim-eligible cell. See Session late-3.
 
 **Progress (Session 2026-11-11 close — R1c/R5/R8):**
 - ✅ **R8 LM token targets** — `TransformerGeometry` folds the sequence into the batch (logits `[B*T, V]`), while `LMTask` returns targets `[B, T]`. `nudged_output` returned the 2-D target and broadcast-failed, and both task-loss paths fed CE a rank-mismatched pair. Fixed with one shared `_align_target_rows` fold applied in `nudged_output`, `task_loss`/`_task_loss_tensor` and `SystemTrainer.validate`; `_one_hot` now builds `[…, V]` one-hots for any target rank. Locks: `tests/property/test_lm_target_alignment_lock.py` (5 tests: nudge, ignore-index, settle, train step, trainer validation).
@@ -55,14 +55,17 @@
 
 ## 📌 REMAINING WORK — NEXT SESSION (ordered by what unblocks a claim)
 
-**Order of work now:**
-1. **R9** — PROTEINS pooling/readout arms (claim blocker: 0.697 vs >0.70).
-2. **R6** — Register C hygiene at round close.
-3. Optional: re-run the MUTAG credit sweep (Experiments 3/11 above) under the fixed batched path only if a MUTAG-specific claim is wanted; PROTEINS now carries graph classification.
+**Order of work now (NEXT SESSION — non-graph focus, per user directive):**
+1. **N1** — Credit robustness on non-graph tasks (fixes the Experiment-13 `None`/crash returns: homeostatic on feedforward/recurrent, random_projections+recurrent+adam, local_contrastive epoch truncation, gradient on wine/acrobot). Claim blocker for every non-graph credit claim.
+2. **N2** — Plasticity beyond chance-level tasks: routing vs null with gradient credit on MNIST/feedforward and copy_task/recurrent; fast weights paired with energy_minimization (its compatible dynamics), not instantaneous.
+3. **N3** — Substrate breadth at parity: digital vs memristive vs ternary/sparse on MNIST feedforward (3 seeds), including the GPU settle-kernel gap.
+4. **N4** — Predictive settling reach: find which non-graph geometry supports `predictive_settling` and run it there; it is currently filtered on feedforward.
+5. **R6** — Register C hygiene at round close (after the experiment cycle).
+6. Optional: re-run the MUTAG credit sweep only if a MUTAG-specific claim is wanted; PROTEINS carries graph classification and R9 is closed.
 
 | # | Ticket | Why now | Gate / cost | Depends on |
 |---|--------|---------|-------------|------------|
-| R1 | **MUTAG/PROTEINS evaluation protocol** — (c) **SHIPPED** (majority baseline + margin per graph cell); (b) **SHIPPED** — `proteins` (PROTEINS, 1113 graphs) is a second graph-classification task, so the held-out split resolves 0.005/graph against 0.596 majority. Remaining: (a) — **CLOSED as superseded**: fold rotation existed to buy resolution, and (b) buys 6x more of it for one training per cell instead of five. Next ticket is the result, not the protocol: PROTEINS gradient 0.665 / random_projections 0.625 are readable and below the 0.70 target, so the open question is model/protocol (pooling, depth, readout objective), not measurement. | New task row + registry helper; demo gate if a demo ships | — |
+| R1 | **MUTAG/PROTEINS evaluation protocol** — (c) **SHIPPED** (majority baseline + margin per graph cell); (b) **SHIPPED** — `proteins` (PROTEINS, 1113 graphs) is a second graph-classification task, so the held-out split resolves 0.005/graph against 0.596 majority. Remaining: (a) — **CLOSED as superseded**: fold rotation existed to buy resolution, and (b) buys 6x more of it for one training per cell instead of five. Next ticket is the result, not the protocol: R9 closed it (PROTEINS 0.7040 ± 0.0071 at mean pooling / hidden 128 × depth 5 / 200 epochs, majority 0.596). | New task row + registry helper; demo gate if a demo ships | — |
 | R2 | ✅ **CLOSED — harness U-axis gap was not the optimizer.** grad_clip 1.0 vs 10.0 identical; nudged-CE/frozen-bias arms match plain Adam. Root cause was G8 (`settle_blocks` aggregation). Harness 0.640 → 0.693 mean. | Done; do not reopen as an optimizer ticket. | — | G8 |
 | R3 | ✅ **CLOSED — pooled-readout paths shipped** for `target_inversion` and `temporal_trace`; lock `test_credit_readout_paths_lock.py`. | Done. | — | G5 pattern |
 | R4 | ✅ **CLOSED — transformer-aware homeostatic** pairs each weight with its successor act; fused QKV now moves. Lock `test_credit_readout_paths_lock.py`. | Backfill only: homeostatic is error-blind by contract, so nonzero updates do not imply accuracy. | — | — |
@@ -70,9 +73,13 @@
 | R6 | **Register C hygiene** (unchanged, deferred) — repo-wide lint 583 → 0, pyright strict, full pytest shards + acceptance, `pip-audit`. | Round-close only; never per-commit. | ~10 min | — |
 | R7 | ✅ **CLOSED — not upstream PyG (G9).** The `vectorized gather kernel index out of bounds` was our own static `edge_index` reaching `x[src]`: the free-phase probe flattened a PyG batch to `batch.x` and forwarded it without `edge_index`/`batch`. CPU hid it as a caught warning; CUDA made it a sticky device assert that killed every later CUDA cell. Fixed with the probe skip, activation-row degrees, pooled `forward_with_intermediates`, and a pre-launch node-mode guard. Lock `test_graph_batched_input_lock.py`; CUDA graph cells now train (proteins 0.6637 == CPU). | Done — CUDA is the default device for graph runs now. | — | G9 |
 | R8 | ✅ **CLOSED — LM token targets fold to the folded logits.** `_align_target_rows` is applied in `nudged_output`, `task_loss`/`_task_loss_tensor` and `SystemTrainer.validate`; `_one_hot` handles any target rank. Lock `test_lm_target_alignment_lock.py` (5 tests). | Blocks no causal-LM token task now. | — | — |
-| R9 | **PROTEINS graph accuracy below target** — default cell (hidden 64 × 3, step 0.001) gradient 0.665, random_projections 0.625, majority 0.596, target >0.70. Split resolution is no longer the explanation. Best arm so far: hidden 128 × 5 at `update.step_size=0.003` → n=3 gave 0.701, n=5 gave **0.697 (sd 0.021)** — at the target, not above it. Remaining levers: pooling (mean vs sum), readout objective (nudged CE β), and layer count, each priced at one 35 s cell per seed. | `--hyperparameters '{"geometry.hidden_dim":{"members":[128]},"geometry.num_layers":{"members":[4]},"update.step_size":{"members":[0.003]}}' --n-seeds 5` | ~4 min | R1b, G9 |
+| R9 | ✅ **CLOSED — PROTEINS > 0.70 met at the mean-pooled arm.** Pooling is now a geometry knob (`geometry.pooling: mean\|sum`) with a mode-aware `PoolContext`; sum pooling is worse (0.672 vs 0.691, n=5, 100 epochs), and 200 epochs at mean pooling / hidden 128 × depth 5 / step 0.003 gives **0.7040 ± 0.0071 (n=5)** vs 0.596 majority (+0.108). Claim-eligible, 366 s. Locks: pooled-readout lock parametrized over both modes + sum-forward lock. | Done — do not reopen; alternatives (attention pooling, depth) are exploratory. | — | R1b, G9 |
+| N1 | **Non-graph credit robustness** — Experiment 13 left `None`/crash returns: `homeostatic` on feedforward/recurrent, `random_projections + recurrent + adam`, `local_contrastive` truncating epochs, and `gradient` on wine (0%)/acrobot (-500 reward). Each is a symptom-first SEC case: rerun at L1 with n=3, then fix the dispatch/epoch/loss path. | Targeted `survey_cli` per symptom (~3–6 min each); expected-defect fix budget 15 min each | Wine/acrobot + homeostatic/RP/lc reruns | Experiment 13 |
+| N2 | **Plasticity on a learnable task** — routing was compared to null only under `random_projections` on sequential tasks at chance level (0.10–0.27), which cannot resolve a plasticity effect. Rerun with `gradient`+`adam` on MNIST/feedforward (`plasticity=null,routing`) and copy_task/recurrent; pair `fast_weights` with `energy_minimization` (its compatible dynamics). | L1, 2–3 seeds, 2 tasks (~5 min) | — | Exp 8 |
+| N3 | **Substrate breadth** — memristive matched digital at ~1.7× cost on MNIST/instantaneous; ternary/sparse and the non-Digital GPU settle-kernel gap are unmeasured at parity. Run digital/memristive/ternary/sparse on MNIST feedforward, n=3, then profile a non-Digital settle. | L1, 4 substrates × 3 seeds (~8 min); profile one cell | — | Exp 7 |
+| N4 | **Predictive settling reach** — `predictive_settling` is filtered on feedforward (Experiment 12). Enumerate its legal geometries, then train it on the cheapest one (recurrent/attention) with gradient credit to confirm it learns, not just composes. | One compatibility query + one L1 arm (~5 min) | — | Exp 12 |
 
-**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4), seed-insensitive cell replay hash (R5a), CUDA scatter tolerance now stated (R5b), LM token-target crash (R8), graph cells without a majority baseline (R1c), unbatched graph probe + foreign-edge-index CUDA assert (G9/R7), graph-measurement resolution (R1b; 5-fold CV R1a superseded by it).
+**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4), seed-insensitive cell replay hash (R5a), CUDA scatter tolerance now stated (R5b), LM token-target crash (R8), graph cells without a majority baseline (R1c), unbatched graph probe + foreign-edge-index CUDA assert (G9/R7), graph-measurement resolution (R1b; 5-fold CV R1a superseded by it), PROTEINS >0.70 target (R9 — mean pooling + 200 epochs, 0.7040 ± 0.0071).
 
 ---
 
@@ -1324,5 +1331,74 @@ suites 38/38 + 22/22; lint shows no new findings (factory `too-many-branches` an
 geometry Register C set are pre-existing); pyright on changed files is at or below the
 HEAD baseline (trainer_utils 12 → 8).
 
-**Next Experiment:** R9 pooling/readout arms at hidden 128 × 5 / step 0.003 (one cell
-≈ 35 s); then R6 round-close hygiene.
+**Next Experiment:** non-graph focus (see Session 2026-11-11 late-3).
+
+---
+
+## Session 2026-11-11 (late-3 — R9 pooling arm)
+
+**Fix — pooling is a geometry knob (R9 lever 1).** `GeometryConfig.pooling:
+"mean" | "sum"` flows through `GeometryConfig.graph`, `build_graph_config`, the
+`geometry_keys` vocabulary (`geometry.pooling` is a swept key) and
+`GeometryConfig.hyperparameters()` (graph-only availability). `GraphGeometry._pool`
+applies the configured reduction, and `pool_context()` now returns a typed
+`PoolContext(index, counts, mean)` in `ontology/_utils.py` whose `pool`, `pool_acts`,
+`share` and `broadcast` methods give every pooled-readout credit the forward's exact
+reduction and transpose. This replaces the mean-only `_pool_acts`/`_share_pooled`
+pair, so a sum-pooled graph can no longer be credited as if it were mean-pooled.
+
+**Experiment 1 — pooling arms** (L1, 100 epochs, hidden 128 × depth 5, step 0.003,
+cuda, n=5 each; `experiments/t88_r9_pooling.duckdb`)
+```
+uv run python -m computronium.experiment.survey_cli 0.2 --mode learn --policy random \
+  --device cuda --tasks proteins --fidelity L1 --max-workers 1 --n-seeds 5 --epochs 100 \
+  --axes '{"substrate":["digital"],"geometry":["graph"],"dynamics":["instantaneous"],
+           "plasticity":["null"],"credit":["gradient"],"update":["adam"]}' \
+  --hyperparameters '{"geometry.hidden_dim":{"members":[128]},
+    "geometry.num_layers":{"members":[4]},"update.step_size":{"members":[0.003]},
+    "geometry.pooling":{"members":["mean","sum"]}}'
+```
+**Result:** mean **0.6906 ± 0.0208** (0.6637/0.6906/0.7130/0.6771/0.7085); sum
+**0.6717 ± 0.0296** (0.6323/0.6816/0.7040/0.6502/0.6906); majority 0.596.
+**Sum pooling is worse**, so mean stays the default and pooling is not the lever.
+
+**Experiment 2 — epoch budget at the mean-pooled arm** (same cell, 200 epochs, n=5;
+`experiments/t88_r9_pooling_200ep.duckdb`)
+```
+---same flags, --epochs 200, --hyperparameters '…"geometry.pooling":{"members":["mean"]}'
+```
+**Result:** **0.7040 ± 0.0071** (0.6951/0.7130/0.7040/0.6996/0.7085), majority 0.596,
++0.108 margin, 1 claim-eligible cell (n=5), 366 s. Every seed improved or held against
+its 100-epoch value except seed 44 (0.7130 → 0.7040), mean +0.0135.
+
+**R9 CLOSED.** PROTEINS >0.70 target is met at mean pooling / hidden 128 × depth 5 /
+step 0.003 / 200 epochs. The remaining graph questions (pooling alternatives such as
+attention pooling, depth sweeps) are exploratory, not claim blockers.
+
+**Defects Found:** none new. The `PoolContext` refactor is behaviour-preserving for
+mean pooling (the lock exercises both modes).
+
+**Fixes Applied:**
+- `computronium/ontology/_utils.py` — `PoolContext` (pool/pool_acts/share/broadcast)
+  replaces `_pool_acts` + `_share_pooled`.
+- `computronium/ontology/geometry.py` — `PoolingMode`, `GeometryConfig.pooling`,
+  `GeometryConfig.graph(pooling=…)`, graph-only `pooling` hyperparameter,
+  `GraphGeometry._pool`, typed `pool_context()`.
+- `computronium/ontology/credit/__init__.py` — `_graph_path`, `_rate_stdp_grads` and
+  `_graph_target_grads` consume `PoolContext`, so FA and target propagation follow the
+  configured reduction.
+- `computronium/experiment/kernel/_geometry_builders.py` — `_as_pooling` (fail loud on
+  unknown values) wires `geometry.pooling`.
+- `computronium/experiment/schema/geometry_keys.py` — `pooling` in the graph key
+  vocabulary, so a swept value reaches the builder.
+- `tests/property/test_graph_pipeline_lock.py` — pooled-readout lock parametrized over
+  mean/sum, plus `test_sum_pooling_readout_matches_add_pool` (sum readout ==
+  `global_add_pool` of the node stack; both modes advertise their transpose).
+
+**Verification:** `test_graph_pipeline_lock` 8/8 (mean + sum arms); graph/credit/
+registry locks 16/16 + 60 passed, 4 skipped; ruff clean on changed files (only the
+pre-existing `_utils` Register C findings remain); pyright on changed source files
+shows only pre-existing legacy findings.
+
+**Next Session Focus — non-graph (user directive):** see the ordered non-graph
+tickets N1–N4 in REMAINING WORK. No new graph tickets this cycle.

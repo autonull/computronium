@@ -14,6 +14,8 @@ every graph-domain credit/update attribution bit-identical. The lock:
    ``edge_index``/``batch`` kwargs (dropped), a graph system consumes them.
 """
 
+from typing import Any, Literal
+
 import pytest
 import torch
 from torch import Tensor
@@ -275,14 +277,18 @@ def test_graph_classification_routes_graph_kwargs() -> None:
     assert any((after[name] - before[name]).abs().max().item() > 0.0 for name in before)
 
 
+@pytest.mark.parametrize("pooling", ["mean", "sum"])
 @pytest.mark.timeout(180)
-def test_pooled_readout_credit_trains_and_differs_from_gradient() -> None:
+def test_pooled_readout_credit_trains_and_differs_from_gradient(
+    pooling: Literal["mean", "sum"],
+) -> None:
     """A pooled graph readout keeps FA's error chain intact (G5).
 
     Node acts are pooled per graph before the head, so a credit that walks the
     error back through weight-shaped feedback matrices meets a node-sized act
     stack with a batch-sized error. The fix routes it through the geometry's
-    pooling map; removing that path reproduces the shape crash.
+    pooling map; removing that path reproduces the shape crash. The sum arm
+    also proves the transpose is the pooling mode's, not a mean in disguise.
     """
     from torch_geometric.data import Batch, Data
 
@@ -312,6 +318,7 @@ def test_pooled_readout_credit_trains_and_differs_from_gradient() -> None:
                 output_dim=OUTPUT_DIM,
                 edge_index=data.edge_index.tolist(),
                 hidden_dims=HIDDEN_DIMS,
+                pooling=pooling,
             ),
             StateDynamicsConfig.instantaneous(),
             _credit_config(credit),
@@ -339,6 +346,58 @@ def test_pooled_readout_credit_trains_and_differs_from_gradient() -> None:
         > 1e-9
         for name in moved
     ), "pooled-readout FA produced gradient-identical deltas"
+
+
+@pytest.mark.timeout(60)
+def test_sum_pooling_readout_matches_add_pool() -> None:
+    """Sum pooling reduces the node stack by addition, not by node-count mean."""
+    from dataclasses import replace
+
+    from torch_geometric.data import Batch, Data
+    from torch_geometric.nn import global_add_pool
+
+    from computronium.ontology.geometry import GraphGeometry
+
+    data: Any = Batch.from_data_list([
+        Data(
+            x=torch.randn(nodes, INPUT_DIM),
+            y=torch.zeros(1, dtype=torch.long),
+            edge_index=torch.tensor([
+                list(range(nodes)),
+                [(i + 1) % nodes for i in range(nodes)],
+            ]),
+        )
+        for nodes in (4, 6)
+    ])
+    geometry = GraphGeometry(
+        GeometryConfig.graph(
+            input_dim=INPUT_DIM,
+            output_dim=OUTPUT_DIM,
+            edge_index=data.edge_index.tolist(),
+            hidden_dims=HIDDEN_DIMS,
+        )
+    )
+    with torch.no_grad():
+        mean_acts = geometry.forward_with_intermediates(
+            data.x, edge_index=data.edge_index, batch=data.batch
+        )
+        mean_out = mean_acts[-1]
+        assert geometry.pool_context() is not None
+        mean_context = geometry.pool_context()
+        assert mean_context is not None and mean_context.mean
+        geometry.config = replace(geometry.config, pooling="sum")
+        sum_acts = geometry.forward_with_intermediates(
+            data.x, edge_index=data.edge_index, batch=data.batch
+        )
+        sum_out = sum_acts[-1]
+        sum_context = geometry.pool_context()
+        assert sum_context is not None and not sum_context.mean
+        expected = (
+            global_add_pool(sum_acts[-2], data.batch) @ geometry._head.weight.T
+            + geometry._head.bias
+        )
+    torch.testing.assert_close(sum_out, expected)
+    assert not torch.allclose(mean_out, sum_out)
 
 
 @pytest.mark.timeout(120)

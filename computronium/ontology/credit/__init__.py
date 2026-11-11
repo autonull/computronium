@@ -13,12 +13,11 @@ from torch import Tensor, nn
 
 from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.ontology._utils import (
+    PoolContext,
     _acts_list,
     _block_transition_acts,
     _learnable_weight_names,
-    _pool_acts,
     _propagate_targets,
-    _share_pooled,
     _weight_acts,
     apply_norm,
 )
@@ -70,17 +69,17 @@ def _is_transformer(geometry: Geometry) -> bool:
     return isinstance(geometry, TransformerGeometry)
 
 
-def _pool_context(geometry: Geometry) -> tuple[Tensor, Tensor] | None:
-    """``(node → graph, nodes per graph)`` when the readout pools nodes.
+def _pool_context(geometry: Geometry) -> PoolContext | None:
+    """``(node → graph, nodes per graph, mean)`` when the readout pools nodes.
 
-    A graph readout that mean-pools its node stack before the head breaks the
+    A graph readout that pools its node stack before the head breaks the
     layered FA contract (node-sized acts, batch-sized error). The geometry
     that does this advertises the pooling map; everything else returns None.
     """
     context = getattr(geometry, "pool_context", None)
     if not callable(context):
         return None
-    return cast("tuple[Tensor, Tensor] | None", context())
+    return cast("PoolContext | None", context())
 
 
 # ============================================================
@@ -877,26 +876,23 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
         weight_names: list[str],
         delta_out: Tensor,
         geometry: Geometry,
-        pool: tuple[Tensor, Tensor],
+        pool: PoolContext,
     ) -> list[Tensor]:
         """FA across a pooled readout (graph classification).
 
         Node activations are pooled per graph before the head, so the error
-        chain splits: the head is credited against the pooled mean, and each
-        node's error is its graph's readout error shared out over the graph's
-        node count — the exact transpose of the mean-pooling forward.
+        chain splits: the head is credited against the pooled node stack, and
+        each node's error is its graph's readout error shared out by the pool's
+        transpose (node-count division for a mean pool, broadcast for a sum).
         """
-        index, counts = pool
         n_nodes = acts[-2].shape[0]
-        if index.numel() != n_nodes:
+        if pool.index.numel() != n_nodes:
             return self._inert_zeros(geometry, weight_names)
 
         head_weight = geometry.params[weight_names[-1]]
-        pooled = acts[-2].new_zeros(delta_out.shape[0], acts[-2].shape[1])
-        pooled.index_add_(0, index, acts[-2])
-        pooled = pooled / counts.unsqueeze(1)
+        pooled = pool.pool(acts[-2])
         grads: list[Tensor] = [delta_out.T @ pooled / delta_out.shape[0]]
-        err = (delta_out @ head_weight)[index] / counts[index].unsqueeze(1)
+        err = pool.share(delta_out @ head_weight)
         for i in range(len(weight_names) - 2, -1, -1):
             grads.append(err.T @ acts[i] / n_nodes)
             err = apply_norm(
@@ -2196,13 +2192,11 @@ class TemporalTraceCredit(_SurrogateUndefined):
             pre, post = pair
             if pool is not None and pre.shape[0] != post.shape[0]:
                 # Pooled readout: the readout act is graph-sized, its input
-                # node-sized. Correlate against the pooled input (the
-                # transpose of the mean pool).
-                index, counts = pool
-                if pre.shape[0] != index.numel():
+                # node-sized. Correlate against the pooled input.
+                if pre.shape[0] != pool.index.numel():
                     grads.append(torch.zeros_like(geometry.params[name]))
                     continue
-                pre = _pool_acts([pre], index, counts)[0]
+                pre = pool.pool(pre)
 
             # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
             causal = post.T @ pre / pre.shape[0]
@@ -2352,19 +2346,21 @@ class TargetInversionCredit:
         y: Tensor,
         weight_names: list[str],
         geometry: Geometry,
-        pool: tuple[Tensor, Tensor],
+        pool: PoolContext,
     ) -> list[Tensor]:
         """Target propagation across a pooled readout (graph classification).
 
         Hidden acts are node-sized while the logits are graph-sized, so the
         output target lives in graph space and each node's hidden target is
-        its graph's target (the transpose of mean pooling). The head is
-        credited against the pooled mean of the last hidden act.
+        its graph's target (a broadcast, not the pool transpose). The head is
+        credited against the pooled last hidden act.
         """
-        index, counts = pool
-        if len(acts) != len(weight_names) + 1 or acts[-2].shape[0] != index.numel():
+        if (
+            len(acts) != len(weight_names) + 1
+            or acts[-2].shape[0] != pool.index.numel()
+        ):
             return [torch.zeros_like(geometry.params[name]) for name in weight_names]
-        pooled = _pool_acts(acts, index, counts)
+        pooled = pool.pool_acts(acts)
         targets = _propagate_targets(pooled, y, weight_names, geometry)
         readout = len(weight_names) - 1
         grads: list[Tensor] = []
@@ -2377,7 +2373,7 @@ class TargetInversionCredit:
                 delta = acts[i + 1] - tgt
                 grads.append(delta.T @ pooled[i] / delta.shape[0])
             else:
-                delta = acts[i + 1] - _share_pooled(tgt, index, counts, mean=False)
+                delta = acts[i + 1] - pool.broadcast(tgt)
                 grads.append(delta.T @ acts[i] / acts[i].shape[0])
         return grads
 

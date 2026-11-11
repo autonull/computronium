@@ -92,10 +92,11 @@
     "startup_s": 0.0
   },
   "cuda/L1": {
-    "cost_per_cell_s": 1.786,
+    "cost_per_cell_s": 60.86,
     "per_task": {
       "graph_classification": 1.786,
-      "mnist": 247.157
+      "mnist": 247.157,
+      "proteins": 60.86
     },
     "startup_s": 0.0
   },

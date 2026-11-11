@@ -40,7 +40,7 @@ TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
         "input_hw",
         "pool_hw",
     }),
-    "graph": frozenset({"edge_index"}),
+    "graph": frozenset({"edge_index", "pooling"}),
     "causal_transformer": frozenset({
         "num_heads",
         "seq_len",
