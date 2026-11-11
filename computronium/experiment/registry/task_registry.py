@@ -694,7 +694,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "accuracy",
+                "val_acc",
                 "task",
             ),
             TaskObjective(
@@ -727,7 +727,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "accuracy",
+                "val_acc",
                 "task",
             ),
             TaskObjective(
@@ -760,7 +760,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "accuracy",
+                "val_acc",
                 "task",
             ),
             TaskObjective(
@@ -793,7 +793,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "minmax",
                 1.0,
                 True,
-                "accuracy",
+                "val_acc",
                 "task",
             ),
             TaskObjective(

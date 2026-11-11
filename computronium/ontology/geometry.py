@@ -1192,8 +1192,18 @@ class TransformerGeometry(nn.Module):
         op = substrate.get_forward_operator()
 
         if self.patch_size > 0:
-            # Vision mode: x is [B, C, H, W]
-            # Patchify: [B, C, H, W] -> [B, N_patches, patch_dim]
+            # Vision mode: x is [B, C, H, W] or flattened [B, C*H*W]
+            if x.dim() == 2:
+                # Flattened input: reshape to [B, C, H, W]
+                b, flat_dim = x.shape
+                expected_dim = self.in_channels * self.image_hw[0] * self.image_hw[1]
+                if flat_dim != expected_dim:
+                    raise ValueError(
+                        f"Flattened input dim {flat_dim} != expected {expected_dim} "
+                        f"(in_channels={self.in_channels}, image_hw={self.image_hw})"
+                    )
+                x = x.view(b, self.in_channels, self.image_hw[0], self.image_hw[1])
+            # Now x is [B, C, H, W]
             b, c, h, w = x.shape
             assert c == self.in_channels, (
                 f"Expected {self.in_channels} channels, got {c}"

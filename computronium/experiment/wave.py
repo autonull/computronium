@@ -192,17 +192,27 @@ def _make_positive_control_cell(
 ) -> tuple[Coordinate, Schedule] | None:
     """Create a known-working cell for positive control (P3).
 
-    Uses digital/feedforward/instantaneous/null/gradient/euclidean on digits task,
-    which is a canonical configuration known to train successfully.
+    Uses a task-appropriate geometry based on the task's geometry_hint:
+    - Vision: conv (or feedforward for digits)
+    - Graph: graph
+    - RL: feedforward
+    - Language: causal_transformer
+    - Tabular: feedforward
     """
     from computronium.experiment.kernel.search_space import schedule_for
+    from computronium.experiment.registry.task_registry import get_task_registry
     from computronium.experiment.schema.coordinate import Coordinate
 
-    # Known good coordinate: digital substrate, feedforward geometry, instantaneous dynamics,
-    # null plasticity, gradient credit (Backprop), euclidean update
+    task_name = spec.task_names[0]
+    registry = get_task_registry()
+    task_spec = registry.get(task_name)
+    geometry = task_spec.geometry_hint or "feedforward"
+
+    # Known good coordinate: digital substrate, task-appropriate geometry,
+    # instantaneous dynamics, null plasticity, gradient credit, euclidean update
     coord = Coordinate(
         substrate="digital",
-        geometry="feedforward",
+        geometry=geometry,
         dynamics="instantaneous",
         plasticity="null",
         credit="gradient",
