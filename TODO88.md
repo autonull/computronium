@@ -814,3 +814,123 @@ uv run python -m computronium.experiment.survey_cli 0.25 \
 2. Graph Classification on CPU (work around PyG CUDA issue)
 3. Energy Minimization + predictive_settling sweep
 4. Multi-task credit cross-geometry with larger budget
+
+---
+
+## Session 2026-11-11 (continued — priorities 1–4 + FIX PHASE)
+
+**Experiment:** Causal Transformer Credit Sweep — COMPLETE (L0, MNIST)
+```
+uv run python -m computronium.experiment.survey_cli 0.3 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_causal_transformer_credits_complete.duckdb \
+  --max-workers 1 \
+  --axes '{"substrate":["digital"],"geometry":["causal_transformer"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections","pc_alm"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** **PASS** — All 6 cells. gradient/adam: 97.0/97.2% (full parity with feedforward confirmed).
+random_projections: 68.1/75.1%. pc_alm: 10.1/10.8% (chance — pc_alm inert on instantaneous
+dynamics, same as homeostatic). 184s/cell.
+
+**Experiment:** Graph Classification on CPU (L0, graph_classification)
+```
+uv run python -m computronium.experiment.survey_cli 0.2 \
+  --mode learn --policy tpe --device cpu \
+  --tasks graph_classification --fidelity L0 \
+  --store experiments/t88_graph_classification_cpu.duckdb \
+  --max-workers 1 \
+  --axes '{"substrate":["digital"],"geometry":["graph","spatial_lattice"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["euclidean","adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — All 8 cells PASS at val_acc=0.5789 (below 0.70 target). CUDA PyG issue
+avoided. **But bit-identical val_acc across all credits AND updates — see defect G1.**
+"free settle telemetry failed: index 565 is out of bounds" warnings on graph cells (9 occurrences).
+
+**Experiment:** Energy Min + predictive_settling (L0, MNIST, 5 epochs)
+```
+uv run python -m computronium.experiment.survey_cli 0.3 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist --fidelity L0 \
+  --store experiments/t88_energy_min_predictive_settling.duckdb \
+  --max-workers 1 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward"],"dynamics":["energy_minimization","predictive_settling"],"plasticity":["null"],"credit":["gradient","random_projections"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** **PASS** — energy_min+gradient: 97.1/96.9% (matches instantaneous 97.2%).
+energy_min+random_projections: 93.4/93.2%. predictive_settling filtered by compatibility
+(2 declared cells). 257s/cell for energy_min.
+
+**Experiment:** Multi-task credit cross-geometry (L0, mnist+cora, 0.4 budget)
+```
+uv run python -m computronium.experiment.survey_cli 0.4 \
+  --mode learn --policy tpe --device cuda \
+  --tasks mnist,cora --fidelity L0 \
+  --store experiments/t88_multitask_credit_cross_geometry.duckdb \
+  --max-workers 1 \
+  --axes '{"substrate":["digital"],"geometry":["feedforward","graph"],"dynamics":["instantaneous"],"plasticity":["null"],"credit":["gradient","random_projections","pc_alm"],"update":["adam"]}' \
+  --epochs 5 --n-seeds 2
+```
+**Result:** PARTIAL — All 12 cells PASS, task cycling works. mnist/feedforward: gradient
+97.2% ≠ random_projections 93.5% ≠ pc_alm 9.8% (credits DO differ on vision). **cora
+cells: gradient == random_projections == pc_alm bit-identical (0.3680/0.4280, loss
+1.9501→1.3168 every epoch) — see defect G1.**
+
+---
+
+## 🔴 FIX PHASE 2026-11-11 — Defects Found & Fixed
+
+**FIXED — D88-1: FiniteGuard inert (sentinel −1 vs `torch.minimum` fold).**
+`FiniteGuard` (`computronium/ontology/dynamics/_settle_driver.py`) initialized its
+"never diverged" flag to **-1** but folded divergence with
+`torch.where(diverged, torch.minimum(first_bad, step), first_bad)` — and
+`torch.minimum(-1, step)` is always -1, so a divergence could never be recorded. The
+guard raised **never**, in **all six settle loops** using it (`_dynamics.py` lines
+1446, 1487, 1709, 1955, 2009, 2721 — pc_alm, and other FiniteGuard-based loops): a
+settle that went non-finite returned poisoned activations silently instead of raising.
+Caught by `test_pc_alm_nan_guard` (DID NOT RAISE). Fix: sentinel `-1` → `sys.maxsize`
+(== `torch.iinfo(long).max`; module imports torch lazily under TYPE_CHECKING), raise
+check `first >= 0` → `first < _UNSEEN`. Verified: `test_settle_stability_lock.py`
+8/8, `test_dynamics_wiring_lock.py` + `test_defect_hunt_locks.py` 17/17.
+Note: `test_pc_alm_nan_guard` failed before this session's experiments — the
+"Property Locks PASSED (11/11)" claim above predates this run's lock re-check.
+
+**🔴 OPEN — G1: GraphSystemTrainer bypasses dynamics/credit/update axes.**
+`_choose_trainer_class` (`experiment/kernel/evaluate.py:336`) routes every
+`DomainType.GRAPH` task to `GraphSystemTrainer`, whose `_train_epoch_node_classification`
+and `_train_epoch_graph_classification` both do plain `loss.backward()` +
+`optimizer.step()` (`graph_trainer.py:174, 240`) — **no dynamics settle, no credit
+pseudo-gradient, no update rule**. Evidence: cora cells bit-identical across
+gradient/random_projections/pc_alm (loss 1.9501→1.3168 identical every epoch);
+graph_classification cells identical across credits AND adam/euclidean. Consequence:
+**every graph-domain survey result so far (Cora 73%, node-classification 24 cells,
+graph-classification cells) measured plain GNN autograd, not the coordinate's
+primitives — axis attribution invalid for all of them.** The earlier "gradient and
+random_projections work identically on graph tasks" was this defect misread as a feature.
+Pipeline probe confirms credits DO produce different updates on cora-shaped input
+(gradient param-delta norms ~2.8e-1 vs random_projections ~6.8e-4).
+
+**🔴 OPEN — G2: Pipeline graph-kwargs path incompatible with both geometry families.**
+`FeedforwardGeometry.forward()` raises TypeError on `edge_index` kwarg (must be
+geometry-conditional); graph-geometry compose requires `edge_index: list[list[int]]`
+(`_geometry_builders.py:641`) while PyG supplies LongTensors. The graph_kwargs
+passthrough added in the 2026-11-10 GRAPH SUPPORT FIX PHASE has never actually
+carried graph data through the pipeline — every graph cell so far took the
+GraphSystemTrainer bypass (G1).
+
+**🟡 OPEN — G3: pc_alm + instantaneous dynamics = chance (10%).** PC-ALM credit is
+primal-dual relaxation-based; with instantaneous dynamics there is no settle to
+relax against, so the credit degenerates. Either filter pc_alm+instantaneous in the
+search-space compatibility matrix, or give pc_alm a settling-dynamics pairing
+before crediting any result to it. Same pattern as homeostatic on causal_transformer.
+
+**Next Session Priorities (revised):**
+1. **G1 fix** — route GraphSystemTrainer epochs through `system.train_step(...)`
+   (mask node-classification labels with -100 for ignore_index; geometry-conditional
+   graph kwargs per G2), then re-run the node-classification sweep: axis attribution
+   must be re-established before any graph claim.
+2. **G2 fix** — make pipeline graph-kwargs geometry-conditional and accept tensor
+   edge_index in graph compose/build; add a pipeline-path lock for graph geometry.
+3. **G3** — pc_alm×instantaneous compatibility decision + re-run energy-settling
+   sweep with predictive_settling unfiltered if a compatible pairing exists.
+4. Multi-task credit cross-geometry re-run after G1/G2 (current cora results invalid).

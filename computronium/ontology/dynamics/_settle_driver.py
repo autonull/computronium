@@ -23,6 +23,7 @@ stated in ``TODO34.md`` §5.1.
 """
 
 from collections.abc import Callable, Iterable
+from sys import maxsize
 from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
@@ -78,6 +79,12 @@ class FiniteGuard:
 
     __slots__ = ("_device", "_first_bad")
 
+    # Sentinel for "no step diverged yet". Not -1: the fold below takes
+    # ``torch.minimum(sentinel, step)`` when a step diverges, and minimum of
+    # -1 with any step index would leave the sentinel unchanged forever.
+    # sys.maxsize == torch.iinfo(torch.long).max, without importing torch here.
+    _UNSEEN = maxsize
+
     def __init__(self) -> None:
         self._device: torch.device | None = None
         self._first_bad: dict[str, torch.Tensor] = {}
@@ -95,7 +102,9 @@ class FiniteGuard:
                     for name, flag in self._first_bad.items()
                 }
             if (first_bad := self._first_bad.get(what)) is None:
-                first_bad = torch.full((), -1, dtype=torch.long, device=tensor.device)
+                first_bad = torch.full(
+                    (), self._UNSEEN, dtype=torch.long, device=tensor.device
+                )
             diverged = torch.logical_not(torch.isfinite(tensor).all())
             marker = torch.full((), step, dtype=torch.long, device=tensor.device)
             self._first_bad[what] = torch.where(
@@ -106,7 +115,7 @@ class FiniteGuard:
         """The loop's one host read; raise if any observed step went non-finite."""
         for what, flag in self._first_bad.items():
             first = int(flag)
-            if first >= 0:
+            if first < self._UNSEEN:
                 raise RuntimeError(f"NaN/Inf detected in {what} at step {first}")
 
 
