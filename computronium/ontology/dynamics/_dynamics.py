@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 from computronium.ontology._settle_kernel import (
     LayeredParams,
     SubstrateSettleKernel,
-    _compiled_eqprop_settle_chunk,
     _one_hot,
     extract_layered_params,
 )
@@ -303,7 +302,7 @@ class StateDynamicsConfig:
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
         gradient_checkpointing: bool = False,
-        compiled: bool = False,
+        compiled: bool = True,
         compiled_chunk_size: int = 5,
         gain_control: GainControlMode = "none",
         max_energy: float = 1e6,
@@ -1151,8 +1150,8 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             return state
 
         # Common setup
-        all_acts, kernel, beta, use_checkpointing, use_compiled = self._setup_settle(
-            state, geometry, substrate, target, **kwargs
+        all_acts, kernel, beta, use_checkpointing, use_compiled, compiled_path_type = (
+            self._setup_settle(state, geometry, substrate, target, **kwargs)
         )
         if all_acts is None:
             return state
@@ -1165,7 +1164,10 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         # Execute the appropriate settling path
         if use_compiled:
-            all_acts = self._settle_compiled(all_acts, kernel, beta, target)
+            assert compiled_path_type is not None, "compiled_path_type must be set when use_compiled=True"
+            all_acts = self._settle_compiled(
+                all_acts, kernel, beta, target, compiled_path_type
+            )
         elif use_checkpointing:
             all_acts = self._settle_checkpointed(
                 all_acts, kernel, beta, target, geometry, on_step
@@ -1178,7 +1180,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         # Finalize state
         return self._finalize_settle(state, all_acts, target)
 
-    def _setup_settle(
+    def _setup_settle(  # ruff: ignore[too-many-branches, complex-structure]
         self,
         state: SettableState,
         geometry: Geometry,
@@ -1191,13 +1193,14 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         float,
         bool,
         bool,
+        str | None,  # compiled_path_type: "digital", "analog", "simple_noise", or None
     ]:
         """Common setup for all settling paths."""
         # Get initial activations from geometry
         block_builder = getattr(geometry, "settle_blocks", None)
         x = state.x
         if x is None:
-            return None, None, 0.0, False, False
+            return None, None, 0.0, False, False, None
         if callable(block_builder):
             all_acts: list[Tensor] = list(
                 cast("list[Tensor]", block_builder(x, substrate, **kwargs))
@@ -1210,7 +1213,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
                 )
             )
         if not all_acts:
-            return None, None, 0.0, False, False
+            return None, None, 0.0, False, False, None
 
         # Extract layered params and construct settle kernel
         params = extract_layered_params(geometry)
@@ -1246,24 +1249,39 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         # Determine checkpointing strategy
         use_checkpointing = self._determine_checkpointing(all_acts, geometry)
 
-        # Determine if compiled path can be used
-        # Enabled for EnergyMinimizationDynamics when:
-        # - config.compiled is True
-        # - No momentum (compiled loop doesn't support momentum)
-        # - No recurrent weights (compiled loop doesn't support them)
-        # - Digital substrate (compiled loop uses raw matmul, not substrate operator)
-        # - Not using gradient checkpointing (mutually exclusive)
-        # - Not tracking free energy per iter (compiled loop runs full horizon)
-        use_compiled = (
+        # Determine if compiled path can be used and which type
+        # Base requirements: compiled enabled, no momentum, no recurrent weights,
+        # no checkpointing, no free energy tracking
+        base_compiled = (
             self.config.compiled
             and self.config.momentum == 0.0
             and kernel.params.recurrent_weight is None
-            and type(substrate).__name__ == "DigitalSubstrate"
             and not use_checkpointing
             and not self.config.track_free_energy_per_iter
         )
 
-        return all_acts, kernel, beta, use_checkpointing, use_compiled
+        compiled_path_type = None
+        if base_compiled:
+            substrate_name = type(substrate).__name__
+            if substrate_name == "DigitalSubstrate":
+                compiled_path_type = "digital"
+            elif substrate_name == "AnalogSubstrate":
+                compiled_path_type = "analog"
+            elif substrate_name in {
+                "NeuromorphicSubstrate",
+                "OpticalSubstrate",
+                "SparseSubstrate",
+            }:
+                compiled_path_type = "simple_noise"
+
+        return (
+            all_acts,
+            kernel,
+            beta,
+            use_checkpointing,
+            base_compiled,
+            compiled_path_type,
+        )
 
     def _determine_checkpointing(
         self, all_acts: list[Tensor], geometry: Geometry
@@ -1302,6 +1320,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         kernel: SubstrateSettleKernel,
         beta: float,
         target: Tensor | None,
+        compiled_path_type: str,
     ) -> list[Tensor]:
         """Compiled fast path: chunked settle with early stopping.
 
@@ -1309,6 +1328,12 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         checking convergence after each chunk on the host. This moves the
         convergence check off the hot path while preserving early stopping.
         """
+        from computronium.ontology._settle_kernel import (
+            _compiled_eqprop_settle_chunk,
+            _compiled_eqprop_settle_chunk_analog,
+            _compiled_eqprop_settle_chunk_simple_noise,
+        )
+
         self._note_settle_start()
         chunk_size = min(self.config.compiled_chunk_size, self.config.max_steps)
         steps_executed = 0
@@ -1318,19 +1343,57 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         while steps_executed < self.config.max_steps:
             remaining = self.config.max_steps - steps_executed
             current_chunk = min(chunk_size, remaining)
-            acts = list(
-                _compiled_eqprop_settle_chunk(
-                    acts,
-                    kernel.params.weights,
-                    kernel.params.biases,
-                    kernel.params.activations,
-                    self.config.step_size,
-                    beta,
-                    target,
-                    current_chunk,
-                    kernel.params.residual,
+
+            if compiled_path_type == "analog":
+                substrate = kernel.substrate
+                noise_level = substrate.config.noise_level
+                weight_bounds = substrate.config.weight_bounds
+                acts = list(
+                    _compiled_eqprop_settle_chunk_analog(
+                        acts,
+                        kernel.params.weights,
+                        kernel.params.biases,
+                        kernel.params.activations,
+                        self.config.step_size,
+                        beta,
+                        target,
+                        current_chunk,
+                        noise_level,
+                        weight_bounds,
+                        kernel.params.residual,
+                    )
                 )
-            )
+            elif compiled_path_type == "simple_noise":
+                substrate = kernel.substrate
+                noise_level = substrate.config.noise_level
+                acts = list(
+                    _compiled_eqprop_settle_chunk_simple_noise(
+                        acts,
+                        kernel.params.weights,
+                        kernel.params.biases,
+                        kernel.params.activations,
+                        self.config.step_size,
+                        beta,
+                        target,
+                        current_chunk,
+                        noise_level,
+                        kernel.params.residual,
+                    )
+                )
+            else:  # "digital"
+                acts = list(
+                    _compiled_eqprop_settle_chunk(
+                        acts,
+                        kernel.params.weights,
+                        kernel.params.biases,
+                        kernel.params.activations,
+                        self.config.step_size,
+                        beta,
+                        target,
+                        current_chunk,
+                        kernel.params.residual,
+                    )
+                )
             steps_executed += current_chunk
 
             # Convergence check on host (off hot path)
@@ -2002,7 +2065,7 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         states.append(h)
         return states, h
 
-    def settle(
+    def settle(  # ruff: ignore[complex-structure]
         self,
         state: SettableState,
         geometry: Geometry,

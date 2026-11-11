@@ -195,7 +195,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
         _kernel_backend: KernelBackend | None = None
         _training: bool = True
 
-        def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        def train_step(self, x: Tensor, y: Tensor, **graph_kwargs) -> dict[str, float]:
             """Execute one training step through the family-neutral pipeline."""
             if self._kernel_backend is not None:
                 return self._kernel_backend.train_step(x, y)
@@ -214,6 +214,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 plasticity=self.plasticity,
                 psi=psi,
                 context=self.context,
+                **graph_kwargs,
             )
 
         @property
@@ -350,8 +351,10 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 self.update = system.update
                 self.plasticity = NullPlasticity()
 
-            def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-                return self._system.train_step(x, y)
+            def train_step(
+                self, x: Tensor, y: Tensor, **graph_kwargs
+            ) -> dict[str, float]:
+                return self._system.train_step(x, y, **graph_kwargs)
 
             def forward(self, x: Tensor) -> Tensor:
                 return self._system.forward(x)

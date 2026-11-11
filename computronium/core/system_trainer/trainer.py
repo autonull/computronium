@@ -479,7 +479,11 @@ class SystemTrainer:
                         else None,
                     }
                     x = data.x.to(self.device)
-                    y = data.y.to(self.device) if batch_y is data.y else batch_y.to(self.device)
+                    y = (
+                        data.y.to(self.device)
+                        if batch_y is data.y
+                        else batch_y.to(self.device)
+                    )
                     graph_kwargs = {
                         k: v for k, v in graph_kwargs.items() if v is not None
                     }

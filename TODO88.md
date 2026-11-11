@@ -437,3 +437,32 @@ uv run python -m computronium.experiment.survey_cli 0.1 \
 - Feedforward vision with gradient credit: PASS (val_acc~0.97, epochs=2, ~30s/cell).
 - Energy minimization on graph geometry: Tensor shape mismatch (fundamental architecture issue — settle kernel expects uniform batch dim, graph has [num_nodes, features]).
 **Next:** Energy_min GPU kernel for non-Digital substrates; spatial_lattice geometry; predictive_settling on graph.
+
+---
+## Session 2026-11-10 (ENERGY_MIN COMPILED KERNELS PHASE)
+**Experiment:** Compiled Settle Kernels for Non-Digital Substrates
+**Analysis:** EnergyMinimizationDynamics only had a compiled fast path for DigitalSubstrate. All other substrates (Analog, Neuromorphic, Optical, Sparse, Memristive, Ternary, etc.) fell back to eager Python loops, causing 5-10x slowdown for larger models.
+**Defects Found:**
+1. `_compiled_eqprop_settle_chunk` inlined only DigitalSubstrate's forward operator (raw matmul).
+2. No substrate-specific compiled paths existed for Analog, Neuromorphic, Optical, Sparse substrates.
+3. `compiled` default was False for energy_minimization config.
+4. `train_step` didn't forward `graph_kwargs` for graph classification support.
+**Fixes Applied:**
+- `computronium/ontology/_settle_kernel.py`: Added `_eqprop_settle_chunk_analog` and `_eqprop_settle_chunk_simple_noise` compiled functions with inlined substrate operators (noise injection, weight clamping).
+- `computronium/ontology/dynamics/_dynamics.py`: Extended `_setup_settle` and `_settle_compiled` to dispatch to substrate-specific compiled functions for Analog, Neuromorphic, Optical, Sparse substrates.
+- `computronium/ontology/dynamics/_dynamics.py`: Changed `compiled` default to `True` for `StateDynamicsConfig.energy_minimization`.
+- `computronium/core/system_trainer/joint.py`: Updated `train_step` to accept and forward `**graph_kwargs` for graph classification.
+- `computronium/ontology/geometry.py`: Verified `spatial_lattice` is incompatible with settle kernel (per-site weights + neighbor aggregation); validation already forbids settling dynamics.
+- `computronium/ontology/system.py`: Confirmed GraphGeometry energy_minimization works for node classification; graph classification has fundamental tensor shape mismatch (node-level vs graph-level activations).
+**Verification:**
+- Analog/Neuromorphic/Optical/Sparse energy_minimization: ~5ms/settle (20 steps) on GPU vs ~50-90ms eager (10x speedup).
+- Digital energy_minimization: ~4ms/settle (20 steps) compiled vs ~47ms eager (12x speedup).
+- Property locks pass (test_dynamics_wiring_lock, test_task_geometry_compat_lock).
+- Substrate settle equivalence tests pass.
+- End-to-end training works for all substrates with compiled energy_minimization.
+**Known Limitations:**
+- Memristive/Ternary/Quantum/Complex substrates still use eager path (complex operators not easily compilable).
+- Spatial_lattice geometry fundamentally incompatible with layered settle kernel (requires custom kernel).
+- Graph classification energy_minimization has tensor shape mismatch (requires graph-native settle kernel).
+- PredictiveSettlingDynamics compiled path still Digital-only (needs similar substrate-specific fixes).
+**Next:** Fix budget estimation for sequential evaluation; investigate graph CUDA issue (CPU/num_workers=0); PredictiveSettlingDynamics substrate-specific compiled paths.

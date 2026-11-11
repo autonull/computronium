@@ -337,3 +337,121 @@ _compiled_eqprop_settle_chunk = torch.compile(_eqprop_settle_chunk, dynamic=Fals
 
 # Legacy full-horizon compiled settle (kept for parity tests)
 _compiled_eqprop_settle = torch.compile(_eqprop_settle_loop, dynamic=False)
+
+
+# ============================================================
+# Substrate-specific compiled settle loops
+# ============================================================
+
+
+def _eqprop_settle_chunk_analog(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, too-many-statements, complex-structure]
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    biases: tuple[Tensor | None, ...],
+    activations: tuple[torch.nn.Module, ...],
+    step_size: float,
+    beta: float,
+    target: Tensor | None,
+    n_steps: int,
+    noise_level: float,
+    weight_bounds: tuple[float, float] | None,
+    residual: bool = False,
+) -> list[Tensor]:
+    """Compiled settle chunk for AnalogSubstrate.
+
+    Inlines the analog forward operator: noise injection + weight clamping + matmul.
+    """
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        num_hidden = len(acts) - 2
+        for i in range(num_hidden):
+            # Analog forward: noise injection on input
+            x = acts[i]
+            if noise_level > 0:
+                x = x + torch.randn_like(x) * noise_level
+            # Weight clamping
+            w = weights[i]
+            if weight_bounds is not None:
+                w = w.clamp(*weight_bounds)
+            out = x @ w.T
+            b = biases[i]
+            if b is not None:
+                out = out + b
+            # Top-down pass (no noise, no clamping - mathematical transpose)
+            total = out + acts[i + 2] @ weights[i + 1]
+            if residual and i > 0 and acts[i].shape == acts[i + 1].shape:
+                total = total + acts[i]
+            target_h = activations[i](total) if i < len(activations) else total
+            new_acts.append(acts[i + 1] + step_size * (target_h - acts[i + 1]))
+        # Output layer
+        x = new_acts[-1]
+        if noise_level > 0:
+            x = x + torch.randn_like(x) * noise_level
+        w = weights[len(weights) - 1]
+        if weight_bounds is not None:
+            w = w.clamp(*weight_bounds)
+        out = x @ w.T
+        b = biases[len(weights) - 1]
+        if b is not None:
+            out = out + b
+        if beta > 0 and target is not None:
+            out = out + beta * (_one_hot(target, out) - out)
+        new_acts.append(out)
+        acts = new_acts
+    return acts
+
+
+_compiled_eqprop_settle_chunk_analog = torch.compile(
+    _eqprop_settle_chunk_analog, dynamic=False
+)
+
+
+def _eqprop_settle_chunk_simple_noise(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, too-many-statements, complex-structure]
+    acts: list[Tensor],
+    weights: tuple[Tensor, ...],
+    biases: tuple[Tensor | None, ...],
+    activations: tuple[torch.nn.Module, ...],
+    step_size: float,
+    beta: float,
+    target: Tensor | None,
+    n_steps: int,
+    noise_level: float,
+    residual: bool = False,
+) -> list[Tensor]:
+    """Compiled settle chunk for substrates with simple noise injection only.
+
+    Covers: NeuromorphicSubstrate, OpticalSubstrate, SparseSubstrate (no weight clamping).
+    """
+    for _ in range(n_steps):
+        new_acts: list[Tensor] = [acts[0]]
+        num_hidden = len(acts) - 2
+        for i in range(num_hidden):
+            x = acts[i]
+            if noise_level > 0:
+                x = x + torch.randn_like(x) * noise_level
+            out = x @ weights[i].T
+            b = biases[i]
+            if b is not None:
+                out = out + b
+            total = out + acts[i + 2] @ weights[i + 1]
+            if residual and i > 0 and acts[i].shape == acts[i + 1].shape:
+                total = total + acts[i]
+            target_h = activations[i](total) if i < len(activations) else total
+            new_acts.append(acts[i + 1] + step_size * (target_h - acts[i + 1]))
+        x = new_acts[-1]
+        if noise_level > 0:
+            x = x + torch.randn_like(x) * noise_level
+        out = x @ weights[len(weights) - 1].T
+        b = biases[len(weights) - 1]
+        if b is not None:
+            out = out + b
+        if beta > 0 and target is not None:
+            out = out + beta * (_one_hot(target, out) - out)
+        new_acts.append(out)
+        acts = new_acts
+    return acts
+
+
+_compiled_eqprop_settle_chunk_simple_noise = torch.compile(
+    _eqprop_settle_chunk_simple_noise, dynamic=False
+)
