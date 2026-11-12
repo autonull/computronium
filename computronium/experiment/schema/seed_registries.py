@@ -1349,6 +1349,39 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Credit-Geometry: feedback alignment needs a layered activation chain.
+    # B_k spans two consecutive act widths, so each weight's error width must
+    # be the next act's width. A cell-mode (NCA), spatial (conv, attention,
+    # spatial_lattice) or memory (NTM) act stack breaks that: the layered
+    # contract returns all-zero pseudo-gradients for every weight (measured
+    # on digits 8x8: nca 3, conv 5, attention 38, spatial_lattice 98, ntm 7
+    # weights), so the cell cannot train.
+    ConstraintSpec(
+        name="random_projections_layered_geometry",
+        kind=ConstraintKind.VOID,
+        description=(
+            "Feedback alignment requires a width-aligned layered act chain; "
+            "attention, spatial_lattice, conv, nca and ntm have none "
+            "(all-zero pseudo-gradients)"
+        ),
+        predicate=not_(
+            and_(
+                eq(var("credit"), const("random_projections")),
+                in_(
+                    var("geometry"),
+                    const([
+                        "attention",
+                        "spatial_lattice",
+                        "conv",
+                        "nca",
+                        "ntm",
+                    ]),
+                ),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Credit: gradient/backprop with beta >= 1.0 has zero pseudo-gradient
     ConstraintSpec(
         name="gradient_credit_beta_clamp",

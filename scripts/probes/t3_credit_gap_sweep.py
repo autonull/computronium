@@ -18,16 +18,21 @@ Measured (2026-11-12, 2 epochs, 1 seed, digits 8x8 / MUTAG):
 - attention/gradient **0.9472**, spatial_lattice/gradient **0.9361** — both
   close their geometry's third slot (chance 0.10, majority ~0.10);
 - attention, nca, spatial_lattice x random_projections: **cannot train** —
-  the layered-FA contract returns all-zero pseudo-gradients (14 / 3 / 130
-  weights), so the gap is dispatch, not accuracy;
+  the layered-FA contract returns all-zero pseudo-gradients for every weight
+  (38 / 3 / 98 weights), so the gap is dispatch, not accuracy. TODO89 T7
+  widened the measurement to conv (5 weights) and ntm (7) and declared the
+  rule: `random_projections_layered_geometry` voids all five coordinates.
 - graph/target_inversion 0.6316 at 2 epochs, **0.6842 at 6 epochs** vs 0.6579
   majority (38 val graphs, one graph = 0.026) — marginal, not met;
-  graph/pc_alm 0.3421 (below majority); graph/thermodynamic_contrast raises a
-  Dynamo fake-tensor error on the energy settle.
+  graph/pc_alm 0.3421 (below majority); graph/thermodynamic_contrast is
+  unreachable: the declared `nonlayered_geometry_dynamics` void admits only
+  instantaneous dynamics on graph, and composing it directly breaks the
+  settle shape (a batch-sized head block added to a node-sized hidden act).
 
 Conclusion: attention and spatial_lattice reach 3; nca has only gradient
-(random_projections cannot train); graph has gradient + random_projections
-(target_inversion is one graph above majority, named marginal).
+(random_projections is declared void); graph has gradient + random_projections
+(target_inversion re-measured at n=5 in `t8_graph_third_credit.py`: 0.6842
++/- 0.0204, +1.29 SE over majority — marginal, not met).
 """
 
 from __future__ import annotations
