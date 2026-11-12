@@ -311,19 +311,17 @@ class TestDistributionsComeFromTheHarvest:
     def test_availability_decides_what_is_sampled(self) -> None:
         """A credit-gated knob is sampled only where its predicate holds.
 
-        ``ema_beta`` is declared for one credit primitive and ``train_biases``
-        for another, so swapping the credit axis changes the dimensions: that is
+        ``beta`` is declared for the PC-ALM family and ``train_biases`` for
+        backprop, so swapping the credit axis changes the dimensions: that is
         availability doing the work, not a name comparison.
         """
-        contrastive = OptunaDistributionAdapter.distributions(
-            _coordinate("local_contrastive")
-        )
+        pc_alm = OptunaDistributionAdapter.distributions(_coordinate("pc_alm"))
         gradient = OptunaDistributionAdapter.distributions(_coordinate("gradient"))
 
-        assert "credit.ema_beta" in contrastive
+        assert "credit.beta" in pc_alm
         assert "credit.train_biases" in gradient
-        assert "credit.ema_beta" not in gradient
-        assert "credit.train_biases" not in contrastive
+        assert "credit.beta" not in gradient
+        assert "credit.train_biases" not in pc_alm
 
     def test_a_spec_narrows_and_never_widens(self) -> None:
         from computronium.experiment.schema import Domain, RunSpec, Scale

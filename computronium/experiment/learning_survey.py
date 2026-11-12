@@ -14,6 +14,7 @@ from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
 from computronium.domains._task_registry import get_fidelity_tasks
 from computronium.experiment.kernel.search_space import search_space_from_spec
+from computronium.experiment.simple_survey import _unavailable_declarations
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -26,6 +27,7 @@ from computronium.experiment.wave import (
     _build_spec,
     _load_cost_model,
     _measure_cost_model,
+    _save_cost_model,
     _SpecParams,
     run_waves,
 )
@@ -189,6 +191,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             "fidelity": fidelity,
             "model": model,
             "wave": 0,
+            "unavailable": _unavailable_declarations(spec),
         }
         if ladder:
             result["budget_split"] = {"L0": 0.6, "L1": 0.3, "L2": 0.1}
@@ -218,7 +221,13 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
 
         with RecordStore(StoreConfig(path=Path(store_path))) as store:
             measured_records = store.query_records(run_id=summary.run_id)
-        _measure_cost_model(device_str, fidelity, store_path, measured_records, model)
+        _save_cost_model(
+            device_str,
+            fidelity,
+            _measure_cost_model(
+                device_str, fidelity, store_path, measured_records, model
+            ),
+        )
 
     return {
         "run_id": summary.run_id,

@@ -347,6 +347,12 @@
 | `comp report` crashes on empty store | Guard before query | `surface/report.py` |
 | `--dry-run` writes store, silent | Check `dry_run` before store create; print plan | `survey_cli.py` |
 | Capability rows name dead tests | Fixture must fail when mechanism removed | `surface/conformance.py`, test files |
+| Dataset ordered by class, tail-slice split | Stratify + report majority baseline | `domains/tabular.py` |
+| Credit needs an input channel the pipeline never adds | Mark the row unavailable with the reason | `schema/seed_registries.py` |
+| Graph task proposed on node-mode geometry | Domain-exclusive geometry filter | `kernel/search_space.py` |
+| Explicit `1` read as "unset" (`!= 1`) | Test `is not None`; ladder only on `None` | `kernel/search_space.py` |
+| Budget cut recorded as `constraint_violation` | Cause `timeout`; admission-check the cell's measured cost | `kernel/evaluate.py`, `wave.py` |
+| Dry-run gate scores RL with a supervised loss | Skip RL and one-class heads | `kernel/compose.py` |
 
 **Success Criteria (per domain):**
 - Vision (MNIST/CIFAR): best val_acc > 0.95

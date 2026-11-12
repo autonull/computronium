@@ -239,22 +239,20 @@ def _is_geometry_task_compatible(
     Some geometries require specific input structures (e.g., NTM needs 1D,
     Graph needs graph structure, Tile needs specific spatial dims).
     """
-    input_shape = task_shape.input_dim
-    if isinstance(input_shape, int):
-        ndim = 1
-    else:
-        ndim = len(input_shape)
+    # Graph domain tasks hand the graph trainer an ``edge_index``/``batch`` on
+    # every forward. A node-mode geometry (feedforward, recurrent, ...) takes
+    # only ``x`` and dies on the extra arguments, so the graph domain is
+    # exclusive: graph tasks train on graph geometry, and only there.
+    if task_id is not None:
+        from computronium.experiment.registry.task_registry import get_task_registry
+
+        registry = get_task_registry()
+        task_spec = registry.get(task_id)
+        if task_spec is not None and task_spec.domain.value == "graph":
+            return geometry == "graph"
 
     # Graph geometry requires graph structure (edge_index) - only for graph tasks
     if geometry == "graph":
-        # Allow graph geometry for graph domain tasks
-        if task_id is not None:
-            from computronium.experiment.registry.task_registry import get_task_registry
-
-            registry = get_task_registry()
-            task_spec = registry.get(task_id)
-            if task_spec.domain.value == "graph":
-                return True
         return False  # Non-graph tasks don't provide graph structure
 
     # Causal transformer expects 1D sequence for LM mode, but supports vision mode
@@ -832,18 +830,18 @@ def schedule_for(
     ladder_seeds = {"L0": 1, "L1": 3, "L2": 5}
     ladder_epochs = {"L0": 1, "L1": 5, "L2": 20}
 
-    # n_seeds: explicit > fidelity > ladder
-    if (
-        spec.n_seeds is not None and spec.n_seeds != 1
-    ):  # 1 is the default, so check if explicitly set
+    # n_seeds: explicit > fidelity > ladder. ``None`` means "follow the
+    # ladder"; an explicit 1 is a literal and must survive — treating it as
+    # unset is how ``--n-seeds 1`` ran the L1 ladder's 3 seeds instead.
+    if spec.n_seeds is not None:
         n_seeds = spec.n_seeds
     elif fidelity in fidelity_seeds:
         n_seeds = fidelity_seeds[fidelity]
     else:
         n_seeds = ladder_seeds.get(fidelity, 1)
 
-    # epochs: explicit > fidelity > ladder
-    if spec.epochs is not None and spec.epochs != 1:  # 1 is the default
+    # epochs: explicit > fidelity > ladder (same rule)
+    if spec.epochs is not None:
         epochs = spec.epochs
     elif fidelity in fidelity_epochs:
         epochs = fidelity_epochs[fidelity]

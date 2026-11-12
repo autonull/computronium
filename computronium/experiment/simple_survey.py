@@ -29,6 +29,7 @@ from computronium.experiment.wave import (
     _estimate_cell_count,
     _load_cost_model,
     _measure_cost_model,
+    _save_cost_model,
     _SpecParams,
     run_waves,
 )
@@ -46,6 +47,28 @@ class SimpleSurveyResult:
     cells_passed: int
     cells_failed: int
     walltime_s: float
+
+
+def _unavailable_declarations(spec: RunSpec) -> list[str]:
+    """Declared primitives the registry refuses, each with its recorded reason.
+
+    A declaration narrowed to an unavailable primitive generates no cells; the
+    reason is the actionable half of that outcome and would otherwise be lost.
+    """
+    from computronium.experiment.schema import StructuralAxis, get_axis_spec
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    reasons: list[str] = []
+    for axis in StructuralAxis:
+        for name in spec.selected_primitives(axis):
+            axis_spec = get_axis_spec(axis, name)
+            if axis_spec is not None and not axis_spec.available:
+                reasons.append(
+                    f"{axis.value}.{name}: "
+                    f"{axis_spec.unavailable_reason or 'unavailable'}"
+                )
+    return reasons
 
 
 def _generate_cells(
@@ -199,6 +222,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
             "tasks": list(tasks),
             "fidelity": fidelity,
             "model": model,
+            "unavailable": _unavailable_declarations(spec),
         }
 
     planner = StaticPlanner(
@@ -235,7 +259,13 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
 
         with RecordStore(StoreConfig(path=Path(store_path))) as store:
             measured_records = store.query_records(run_id=summary.run_id)
-        _measure_cost_model(device_str, fidelity, store_path, measured_records, model)
+        _save_cost_model(
+            device_str,
+            fidelity,
+            _measure_cost_model(
+                device_str, fidelity, store_path, measured_records, model
+            ),
+        )
 
     return {
         "run_id": summary.run_id,

@@ -79,10 +79,14 @@ class TabularTask(DomainTask):
         # Normalize
         X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-8)
 
-        # Split train/val
-        n = int(0.8 * len(X))
-        X_train, X_val = X[:n], X[n:]
-        y_train, y_val = y[:n], y[n:]
+        # Stratified, deterministic split. sklearn ships iris/wine ordered by
+        # class, so the tail slice held out ONE class — wine's validation was
+        # 36 class-2 rows against a train set of 12, and every arm read 0.0.
+        from sklearn.model_selection import train_test_split
+
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y, test_size=0.2, random_state=0, stratify=y
+        )
 
         train_ds = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
         val_ds = TensorDataset(torch.from_numpy(X_val), torch.from_numpy(y_val))
@@ -117,6 +121,7 @@ class TabularTask(DomainTask):
         total_loss = 0.0
         total_correct = 0
         total_samples = 0
+        labels: list[torch.Tensor] = []
 
         with torch.no_grad():
             for i, (inputs, targets) in enumerate(loader):
@@ -130,8 +135,24 @@ class TabularTask(DomainTask):
                 total_loss += loss.item() * inputs.size(0)
                 total_correct += (outputs.argmax(1) == targets).sum().item()
                 total_samples += inputs.size(0)
+                labels.append(targets.detach().cpu().view(-1))
 
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
         accuracy = total_correct / total_samples if total_samples > 0 else 0.0
 
-        return Metrics(loss=avg_loss, accuracy=accuracy)
+        # A small held-out split is unreadable alone: report the majority-class
+        # rate beside accuracy so a cell at chance is visibly at chance.
+        majority_baseline = 0.0
+        if labels:
+            y_all = torch.cat(labels)
+            if y_all.numel():
+                majority_baseline = y_all.bincount().max().item() / y_all.numel()
+
+        return Metrics(
+            loss=avg_loss,
+            accuracy=accuracy,
+            custom={
+                "majority_baseline": majority_baseline,
+                "val_acc_over_majority": accuracy - majority_baseline,
+            },
+        )

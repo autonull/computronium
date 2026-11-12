@@ -84,6 +84,10 @@ DEFAULT_STARTUP_S = 10.0
 TIMING_CACHE = Path("experiments") / ".timing.json"
 MAX_PREVIEW_CELLS = 20
 
+# A serial wave admits the next cell only with this much headroom over the
+# previous cell's measured walltime (per-cell variance, store write, warmup).
+_ADMISSION_MARGIN = 1.05
+
 
 @dataclass(frozen=True, slots=True)
 class CostModel:
@@ -862,12 +866,54 @@ def _expand_replicates(
     ]
 
 
+class _SerialAdmission:
+    """Admit a serial wave's next cell only if its measured cost still fits.
+
+    The run deadline is enforced inside a cell too, so a cell started without
+    headroom does not fail fast: it trains a truncated epoch and records the
+    budget cut as a FAIL. Measured on mnist/L1: a seed that needed 216 s was
+    started with 173 s left and reported 9/10 epochs.
+    """
+
+    def __init__(
+        self,
+        before_deadline: Any,
+        deadline_at: float | None,
+        *,
+        clock: Any = time.monotonic,
+    ) -> None:
+        self._before_deadline = before_deadline
+        self._deadline_at = deadline_at
+        self._clock = clock
+        self.last_walltime_s = 0.0
+
+    def fits(self) -> bool:
+        if not self._before_deadline():
+            return False
+        if self._deadline_at is None or self.last_walltime_s <= 0.0:
+            return True
+        headroom = self._deadline_at - self._clock()
+        return headroom >= self.last_walltime_s * _ADMISSION_MARGIN
+
+    def observe(self, record: Any) -> None:
+        self.last_walltime_s = float(record.payload.get("walltime_s", 0.0))
+
+    def needed_s(self) -> float:
+        return self.last_walltime_s * _ADMISSION_MARGIN
+
+    def headroom_s(self) -> float:
+        if self._deadline_at is None:
+            return -1.0
+        return self._deadline_at - self._clock()
+
+
 def _cell_records(
     cells: list[tuple[Coordinate, Schedule]],
     provenance: Provenance,
     before_deadline: Any,
     max_workers: int,
     log_steps: int,
+    deadline_at: float | None = None,
 ) -> Iterator[Any]:
     """Each cell's record, in submission order.
 
@@ -881,6 +927,7 @@ def _cell_records(
     concurrent cells are reproducible only at one worker.
     """
     n_total = len(cells)
+    admission = _SerialAdmission(before_deadline, deadline_at)
 
     def _announce(i: int, cell: tuple[Coordinate, Schedule]) -> None:
         coord, schedule = cell
@@ -905,12 +952,22 @@ def _cell_records(
     if max_workers <= 1:
         for i, cell in enumerate(cells, 1):
             _announce(i, cell)
+            if not admission.fits():
+                logger.info(
+                    "  cell %d/%d skipped: %.1fs needed, %.1fs left",
+                    i,
+                    n_total,
+                    admission.needed_s(),
+                    admission.headroom_s(),
+                )
+                continue
             try:
                 record = _run(cell)
             except Exception as exc:
                 logger.warning("Cell evaluation failed: %s", exc)
                 continue
             if record is not None:
+                admission.observe(record)
                 yield record
         return
 
@@ -968,7 +1025,12 @@ def _evaluate_cells(
 
     with RecordStore(StoreConfig(path=Path(store_path))) as store:
         records = _cell_records(
-            cells, provenance, _before_deadline, max_workers, log_steps
+            cells,
+            provenance,
+            _before_deadline,
+            max_workers,
+            log_steps,
+            deadline_at=deadline,
         )
         for record in records:
             results.append(record)
@@ -1049,6 +1111,8 @@ def _pretty_print_dry_run(
 
     if not cells:
         print("No cells generated (search space may be empty or over-constrained)")
+        for reason in result.get("unavailable", []):
+            print(f"  unavailable: {reason}")
         return
 
     header = (
@@ -1357,12 +1421,16 @@ def _measure_cost_model(
 
     Only complete cells price the cache: a cell cut short by the run deadline is
     cheap because it stopped, and caching that rate would size the next run for
-    work it cannot finish.
+    work it cannot finish. Only cells at the run's own fidelity price it too:
+    the positive control is an L0 record, and its one-epoch walltime under-priced
+    every task's L1 entry (mnist L1: 20.3 s for a 20.3 s/epoch cell).
     """
     from collections import defaultdict
 
     task_times: defaultdict[str, list[float]] = defaultdict(list)
     for record in records:
+        if record.payload.get("fidelity") != fidelity:
+            continue
         complete = record.payload.get("epochs_completed", 0) >= record.payload.get(
             "epochs_requested", 0
         )
@@ -1377,17 +1445,19 @@ def _measure_cost_model(
     per_task = {
         task_id: sum(times) / len(times) for task_id, times in task_times.items()
     }
+    # Prices are per task and independent: this run measured only its own
+    # tasks, so the task it did not run keeps the price it already had.
+    # Replacing the map priced the next run of a different task from this
+    # run's unrelated cell time (a 138x under-price on mnist L1).
+    merged = {**(prior.per_task or {}), **per_task}
     measured = CostModel(
-        cost_per_cell_s=max(0.01, sum(per_task.values()) / len(per_task)),
+        # The run-wide fallback is the merged map's mean, not this run's mean:
+        # a 0.1 s wine cell must not price an unmeasured task at 0.1 s.
+        cost_per_cell_s=max(0.01, sum(merged.values()) / len(merged)),
         startup_s=0.0,
         measured=True,
-        # Prices are per task and independent: this run measured only its own
-        # tasks, so the task it did not run keeps the price it already had.
-        # Replacing the map priced the next run of a different task from this
-        # run's unrelated cell time (a 138x under-price on mnist L1).
-        per_task={**(prior.per_task or {}), **per_task},
+        per_task=merged,
     )
-    _save_cost_model(device_str, fidelity, measured)
     logger.info(
         "Measured: %.1fs/cell (prior: %.1fs/cell)",
         measured.cost_per_cell_s,
@@ -1455,6 +1525,30 @@ def run_waves(
         )
     finally:
         shutdown.uninstall()
+
+
+def _first_wave_price(
+    positive_control_results: list, spec: RunSpec, fidelity: str
+) -> float | None:
+    """A first-wave per-seed price from the control's measured epoch time.
+
+    The control runs one L0 epoch on the run's own task and device, so its
+    per-epoch walltime is a measurement, not the table's default. A wave sized
+    from ``DEFAULT_COSTS`` under-prices a 27 s/epoch transformer cell at 30 s
+    and truncates it: measured on mnist/L1, a 10-epoch cell was priced at 60 s
+    for two seeds and its last epoch was cut at the run deadline.
+    """
+    if not positive_control_results:
+        return None
+    payload = positive_control_results[0].payload
+    walltime = float(payload.get("walltime_s") or 0.0)
+    epochs = float(payload.get("epochs_completed") or 0.0)
+    if walltime <= 0.0 or epochs <= 0.0:
+        return None
+    from computronium.experiment.kernel.search_space import schedule_for
+
+    declared_epochs = schedule_for(spec, spec.task_names[0], fidelity).epochs
+    return walltime / epochs * max(1, declared_epochs)
 
 
 def _run_waves(
@@ -1641,6 +1735,14 @@ def _run_waves(
             if fidelity_costs
             else DEFAULT_COSTS.get(fidelity, 30.0)
         )
+        price_source = "measured"
+        if not fidelity_costs:
+            control_price = _first_wave_price(positive_control_results, spec, fidelity)
+            if control_price is not None:
+                cost_per_cell = control_price
+                price_source = "positive control"
+            else:
+                price_source = "default"
         # A proposed cell costs one replicate per seed; records price a single
         # seed. Divide by the fidelity's seed plan or the wave asks for
         # n_seeds times the work the budget can pay for.
@@ -1655,7 +1757,7 @@ def _run_waves(
             "Proposing up to %d cell(s) at ~%.0fs/cell (%s, %d seed(s))",
             n_wave,
             cell_cost,
-            "measured" if fidelity_costs else "default",
+            price_source,
             replicates,
         )
         cells = list(iter(planner))

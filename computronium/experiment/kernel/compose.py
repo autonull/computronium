@@ -149,6 +149,18 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
         return True, "graph geometry skipped"
     if credit_name not in DRY_RUN_CREDITS:
         return True, "credit not checked"
+    # The gate scores the cell with cross-entropy on a task batch. An RL task
+    # has no supervised label (pendulum's batch y is a dummy index into a
+    # one-wide head), and a regression/one-class head makes CE constant, so the
+    # gate reads its own degenerate loss as "all-zero pseudo-gradients" and
+    # filters every continuous-control cell out of the space.
+    if task is not None:
+        from computronium.domains.base import DomainType
+
+        if getattr(task, "domain_type", None) == DomainType.RL:
+            return True, "RL task: no supervised batch to score"
+    if output_dim < 2:
+        return True, "degenerate head: cross-entropy on one class is constant"
 
     try:  # ruff: ignore[too-many-statements-in-try-clause]
         # Compose the full cell system

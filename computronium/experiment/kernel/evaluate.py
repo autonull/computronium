@@ -387,6 +387,15 @@ def _collect_all_metrics(
     coordinate: Coordinate,
 ) -> dict[str, float]:
     """Collect all metrics from history, trainer, and substrate."""
+    if not history:
+        # No epoch finished. Name the cause the trainer actually recorded: a
+        # run-deadline cut is a timeout, not a training defect.
+        resources = getattr(trainer, "_resources", None)
+        if bool(getattr(resources, "deadline_exceeded", False)):
+            from computronium.experiment.kernel.evaluate import EvaluationError
+
+            msg = "run deadline expired before the first epoch completed"
+            raise EvaluationError("timeout", msg)
     metrics = history_metrics(history)
     metrics.update(_collect_trainer_metrics(trainer))
     return metrics
@@ -653,10 +662,21 @@ def _build_status_with_procedures(
         else Maturity.L0
     )
 
+    # A FAIL names WHY it failed. A run-deadline cut is not a constraint
+    # violation: reading it as one sends the next investigator after a
+    # compatibility bug while the cell simply ran out of budget.
+    cause = FailureCause.UNKNOWN
+    if not passed:
+        cause = (
+            FailureCause.CONSTRAINT_VIOLATION
+            if not within_ceiling
+            else FailureCause.TIMEOUT
+        )
+
     legacy_status = StatusLegacy(
         gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
         defect=_defect(complete, within_ceiling, param_count, param_budget),
-        cause=FailureCause.UNKNOWN if passed else FailureCause.CONSTRAINT_VIOLATION,
+        cause=cause,
         severity=Severity.LOW if passed else Severity.MEDIUM,
         quarantine=not passed,
         maturity=maturity,

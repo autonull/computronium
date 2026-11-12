@@ -2,7 +2,16 @@
 
 **Mission:** Continue the experiment/fix cycle: run experiments (≤15 min each), discover bugs, scrutinize poor-performing algorithms as potential implementation defects, and question excluded possibilities.
 
-**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G9 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin). **Continuation (2026-11-11 late-2):** R1(b) shipped — PROTEINS (1113 graphs, 223 held out) is a second graph-classification task, so a graph cell resolves to 0.005/graph instead of 0.026; R7 closed as **G9** — the "CUDA PyG crash" was our own unbatched graph probe feeding node rows to a foreign edge index, not upstream PyG, and CUDA graph cells now train. Claim-grade PROTEINS: gradient 0.665 ± 0.007, random_projections 0.625 ± 0.011 (majority 0.596, 2 claim-eligible cells); best PROTEINS arm 0.697 (n=5, hidden 128×5, step 0.003) is at the >0.70 target, not above it. **Continuation (2026-11-11 late-3):** R9 CLOSED — pooling is now a geometry knob (`geometry.pooling`: mean|sum) with a mode-aware `PoolContext` so every pooled-readout credit path uses the forward's transpose; sum pooling was *worse* (0.672 vs 0.691 at 100 epochs), and 200 epochs at the mean-pooled arm crosses the target: **0.7040 ± 0.0071 (n=5)** vs 0.596 majority.
+**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G9 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin). **Continuation (2026-11-11 late-2):** R1(b) shipped — PROTEINS (1113 graphs, 223 held out) is a second graph-classification task, so a graph cell resolves to 0.005/graph instead of 0.026; R7 closed as **G9** — the "CUDA PyG crash" was our own unbatched graph probe feeding node rows to a foreign edge index, not upstream PyG, and CUDA graph cells now train. Claim-grade PROTEINS: gradient 0.665 ± 0.007, random_projections 0.625 ± 0.011 (majority 0.596, 2 claim-eligible cells); best PROTEINS arm 0.697 (n=5, hidden 128×5, step 0.003) is at the >0.70 target, not above it. **Continuation (2026-11-11 late-3):** R9 CLOSED — pooling is now a geometry knob (`geometry.pooling`: mean|sum) with a mode-aware `PoolContext` so every pooled-readout credit path uses the forward's transpose; sum pooling was *worse* (0.672 vs 0.691 at 100 epochs), and 200 epochs at the mean-pooled arm crosses the target: **0.7040 ± 0.0071 (n=5)** vs 0.596 majority. **Continuation (2026-11-11 late-4):** N1 CLOSED — six harness defects behind the non-graph credit sweep: **G10** tabular splits held out one class (wine val_acc 0.0 → **0.94–0.97**, n=3), **G11** `local_contrastive` trained on the last 10 pixels as its "label" (now unavailable), **G12** graph tasks paired with node-mode geometry, **G13** explicit `n_seeds`/`epochs` = 1 read as unset, **G14** budget-cut cells mislabeled `constraint_violation` (now `timeout`, with serial admission control and control-derived first-wave pricing), **G15** the supervised dry-run gate filtered every continuous-control RL cell (pendulum measured nothing). Pendulum now trains (−1289 random → −1184 at 400 episodes); `homeostatic`/`random_projections` "failures" resolve to contract-documented error-blindness and episode budget, not dispatch defects.
+
+**Progress (Session 2026-11-11 late-4 — N1):**
+- ✅ **G10 Tabular split held out one class** — `TabularTask.setup` split by slicing `X[:n]`/`X[n:]`, and sklearn ships iris/wine ordered by class. Wine's 36-row validation set was *entirely* class 2 while the train set held 12 class-2 rows: every arm read `val_acc=0.0` (train 0.88–0.90). Iris validation was class 2 only, which is why it swung 0.47–0.77 by seed. Fixed with `train_test_split(test_size=0.2, random_state=0, stratify=y)`; `evaluate` now reports `majority_baseline` and `val_acc_over_majority` beside accuracy (the R1c protocol, applied to tabular). Measured: wine 0.972/0.944/0.944 (n=3, 5 epochs) vs 0.0; iris 0.867/0.867/0.767 vs 0.767/0.467/0.700; majority 0.389 and 0.333.
+- ✅ **G11 `local_contrastive` was training on pixels** — the credit's contract reads its label from the last `label_dim` input features and needs a label-sweep readout; the kernel gives it the task's own width (mnist feedforward: 784 in, no channel). It sliced the last 10 pixels as the "label", trained a contrast against noise, and spent 10 epochs at chance with a *diverging* loss (17 → 3459, val 0.110/0.120). The row is now `available=False` with the reason recorded (`_UNAVAILABLE`), and the dry run prints it. Re-enabling is a feature ticket (label channel + widened input + label-sweep inference), not a knob flip.
+- ✅ **G12 Graph tasks are graph-geometry exclusive** — `_is_geometry_task_compatible` filtered non-graph tasks off graph geometry but not the converse, so the planner proposed `graph_classification` on feedforward/recurrent/causal-transformer geometry. `GraphSystemTrainer` forwards `(x, edge_index, batch)`, so those cells died on the forward signature (5 FAILs in Experiment 13). A graph-domain task now requires `geometry == "graph"`; the dry run for `graph_classification` over `feedforward,graph,recurrent` proposes exactly the one graph cell.
+- ✅ **G13 Explicit depth was read as unset** — `schedule_for` treated `n_seeds != 1` / `epochs != 1` as "explicitly set", so `--n-seeds 1` ran the L1 ladder's **3** seeds (acrobot: "Evaluating 3 single-seed cell(s)" against a 1-seed declaration) and `--epochs 1` ran 5. `RunSpec.n_seeds/epochs` are `int | None`, so the rule is now `is not None`; explicit 1 is a literal, `None` follows the ladder. Lock `test_schedule_depth_lock.py` (3 tests).
+- ✅ **G14 A budget cut was a "constraint violation"** — a cell killed by the run deadline recorded `cause=constraint_violation`, the cause that sends an investigator after a compatibility bug; a serial wave also started a seed with 173 s left for work it had just measured at 216 s (9/10 epochs, FAIL). Fixed: incomplete → `FailureCause.TIMEOUT` (ceiling breach keeps `CONSTRAINT_VIOLATION`; no epochs → `timeout` when the trainer recorded `deadline_exceeded`), `_SerialAdmission` refuses a cell whose measured cost no longer fits (`cells_skipped` instead of a truncated FAIL), and the first wave is priced from the positive control's measured per-epoch time (`_first_wave_price`) instead of the 30 s table default. Measured: "cell 2/2 skipped: 278.2s needed, −2.1s left"; first wave priced 407 s/cell from a 20.4 s/epoch control (was 60 s).
+- ✅ **G15 The dry-run gate filtered every continuous-control RL cell** — `_dry_run_trainable` scores a cell with cross-entropy on a task batch. Pendulum's batch target is a dummy index into a one-wide head, so CE is constant and the gate returned `all-zero pseudo-gradients (no-op)`: the pendulum space held **zero cells** and the run measured only its positive control ("No more cells to evaluate"). The gate now declines RL tasks and degenerate (one-class) heads; `wine` still validates `ok`. Pendulum then trains: −1289.7 random → −1183.8 after 400 episodes.
+- ✅ **N1 symptom resolutions (not defects)** — `homeostatic` is error-blind by contract (recurrent+iris 0.233/0.300/0.333 against a 0.333 majority; transformer+mnist flat 0.1009 for 9 epochs), so chance is the contract, not a dispatch bug; `random_projections+recurrent+adam` on copy_task runs clean (0.188/0.166 at 5 epochs — episode/epoch budget, not a crash); acrobot stays at the −500 step cap for 400 episodes (exploration-limited; the RL success criterion names Pendulum).
 
 **Progress (Session 2026-11-11 late-2 — R1b / R7 / G9):**
 - ✅ **R1(b) PROTEINS as a second graph task** — `graph_classification` stays MUTAG; `proteins` maps to PROTEINS (1113 graphs, 3 features, 663/450 class split, 890 train / 223 held out) through one `GRAPH_CLASSIFICATION_DATASETS` map, one `_graph_classification_spec` registry helper (two rows, one objective set) and one `SUPPORTED_TASKS` entry. The held-out split now resolves 0.005/graph against a 0.596 majority rate, instead of MUTAG's 0.026 against 0.658.
@@ -56,12 +65,13 @@
 ## 📌 REMAINING WORK — NEXT SESSION (ordered by what unblocks a claim)
 
 **Order of work now (NEXT SESSION — non-graph focus, per user directive):**
-1. **N1** — Credit robustness on non-graph tasks (fixes the Experiment-13 `None`/crash returns: homeostatic on feedforward/recurrent, random_projections+recurrent+adam, local_contrastive epoch truncation, gradient on wine/acrobot). Claim blocker for every non-graph credit claim.
-2. **N2** — Plasticity beyond chance-level tasks: routing vs null with gradient credit on MNIST/feedforward and copy_task/recurrent; fast weights paired with energy_minimization (its compatible dynamics), not instantaneous.
-3. **N3** — Substrate breadth at parity: digital vs memristive vs ternary/sparse on MNIST feedforward (3 seeds), including the GPU settle-kernel gap.
-4. **N4** — Predictive settling reach: find which non-graph geometry supports `predictive_settling` and run it there; it is currently filtered on feedforward.
-5. **R6** — Register C hygiene at round close (after the experiment cycle).
-6. Optional: re-run the MUTAG credit sweep only if a MUTAG-specific claim is wanted; PROTEINS carries graph classification and R9 is closed.
+1. **N2** — Plasticity beyond chance-level tasks: routing vs null with gradient credit on MNIST/feedforward and copy_task/recurrent; fast weights paired with energy_minimization (its compatible dynamics), not instantaneous.
+2. **N3** — Substrate breadth at parity: digital vs memristive vs ternary/sparse on MNIST feedforward (3 seeds), including the GPU settle-kernel gap.
+3. **N4** — Predictive settling reach: find which non-graph geometry supports `predictive_settling` and run it there; it is currently filtered on feedforward.
+4. **N5** — Hygiene queue: delete or derive `domains/registry.TASK_COST_CLASS` (it disagrees with the enriched `TaskRegistry`: pendulum/acrobot/cartpole/graph_classification/proteins); `test_smart_survey_lock::test_task_scheduler_cost_classes` fails on the drift.
+5. **N6** — Hygiene queue: `test_state_algebra_lock` reads `computronium/ontology/credit.py`; the module is now the `credit/` package. Update the lock's path.
+6. **N7** — Feature: implement `local_contrastive`'s label channel (widen the input layer by `label_dim`, append the one-hot target, label-sweep readout) and flip G11's availability back.
+7. **R6** — Register C hygiene at round close (after the experiment cycle).
 
 | # | Ticket | Why now | Gate / cost | Depends on |
 |---|--------|---------|-------------|------------|
@@ -74,12 +84,15 @@
 | R7 | ✅ **CLOSED — not upstream PyG (G9).** The `vectorized gather kernel index out of bounds` was our own static `edge_index` reaching `x[src]`: the free-phase probe flattened a PyG batch to `batch.x` and forwarded it without `edge_index`/`batch`. CPU hid it as a caught warning; CUDA made it a sticky device assert that killed every later CUDA cell. Fixed with the probe skip, activation-row degrees, pooled `forward_with_intermediates`, and a pre-launch node-mode guard. Lock `test_graph_batched_input_lock.py`; CUDA graph cells now train (proteins 0.6637 == CPU). | Done — CUDA is the default device for graph runs now. | — | G9 |
 | R8 | ✅ **CLOSED — LM token targets fold to the folded logits.** `_align_target_rows` is applied in `nudged_output`, `task_loss`/`_task_loss_tensor` and `SystemTrainer.validate`; `_one_hot` handles any target rank. Lock `test_lm_target_alignment_lock.py` (5 tests). | Blocks no causal-LM token task now. | — | — |
 | R9 | ✅ **CLOSED — PROTEINS > 0.70 met at the mean-pooled arm.** Pooling is now a geometry knob (`geometry.pooling: mean\|sum`) with a mode-aware `PoolContext`; sum pooling is worse (0.672 vs 0.691, n=5, 100 epochs), and 200 epochs at mean pooling / hidden 128 × depth 5 / step 0.003 gives **0.7040 ± 0.0071 (n=5)** vs 0.596 majority (+0.108). Claim-eligible, 366 s. Locks: pooled-readout lock parametrized over both modes + sum-forward lock. | Done — do not reopen; alternatives (attention pooling, depth) are exploratory. | — | R1b, G9 |
-| N1 | **Non-graph credit robustness** — Experiment 13 left `None`/crash returns: `homeostatic` on feedforward/recurrent, `random_projections + recurrent + adam`, `local_contrastive` truncating epochs, and `gradient` on wine (0%)/acrobot (-500 reward). Each is a symptom-first SEC case: rerun at L1 with n=3, then fix the dispatch/epoch/loss path. | Targeted `survey_cli` per symptom (~3–6 min each); expected-defect fix budget 15 min each | Wine/acrobot + homeostatic/RP/lc reruns | Experiment 13 |
+| N1 | ✅ **CLOSED — six harness defects, not six bad algorithms.** G10 tabular split (wine 0.0 → 0.94–0.97, iris variance collapsed), G11 `local_contrastive` label channel (now unavailable), G12 graph-task geometry exclusivity, G13 explicit depth (`--n-seeds 1` ran 3), G14 budget-cut cause + admission + control pricing, G15 dry-run gate vs RL (pendulum held zero cells). Locks: `test_tabular_split_lock.py`, `test_incompatible_cell_refusal_lock.py`, `test_budget_truncation_lock.py`, `test_schedule_depth_lock.py`, `test_dry_run_gate_scope_lock.py` (25 tests). Remaining non-graph claims are N2–N4. | Done. | — | Experiment 13 |
 | N2 | **Plasticity on a learnable task** — routing was compared to null only under `random_projections` on sequential tasks at chance level (0.10–0.27), which cannot resolve a plasticity effect. Rerun with `gradient`+`adam` on MNIST/feedforward (`plasticity=null,routing`) and copy_task/recurrent; pair `fast_weights` with `energy_minimization` (its compatible dynamics). | L1, 2–3 seeds, 2 tasks (~5 min) | — | Exp 8 |
 | N3 | **Substrate breadth** — memristive matched digital at ~1.7× cost on MNIST/instantaneous; ternary/sparse and the non-Digital GPU settle-kernel gap are unmeasured at parity. Run digital/memristive/ternary/sparse on MNIST feedforward, n=3, then profile a non-Digital settle. | L1, 4 substrates × 3 seeds (~8 min); profile one cell | — | Exp 7 |
 | N4 | **Predictive settling reach** — `predictive_settling` is filtered on feedforward (Experiment 12). Enumerate its legal geometries, then train it on the cheapest one (recurrent/attention) with gradient credit to confirm it learns, not just composes. | One compatibility query + one L1 arm (~5 min) | — | Exp 12 |
+| N5 | **Cost-class drift (hygiene)** — `domains/registry.TASK_COST_CLASS` is a second table no live path reads and it disagrees with the enriched `TaskRegistry` (pendulum/acrobot/cartpole/graph_classification/proteins). `test_smart_survey_lock::test_task_scheduler_cost_classes` fails on it. Delete the table or derive it from the registry. | One edit + one lock | — | — |
+| N6 | **Stale lock path (hygiene)** — `test_state_algebra_lock::test_credit_annotations_name_the_surface` opens `computronium/ontology/credit.py`; the credit module is now a package (`credit/__init__.py`). | One-line path fix | — | — |
+| N7 | **`local_contrastive` label channel (feature)** — the credit's contract needs a label-augmented input and a label-sweep readout; G11 made the row unavailable rather than mis-train. Implement both, then flip `_UNAVAILABLE` and add a claim-grade arm. | Geometry width + trainer data path + inference protocol | — | G11 |
 
-**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4), seed-insensitive cell replay hash (R5a), CUDA scatter tolerance now stated (R5b), LM token-target crash (R8), graph cells without a majority baseline (R1c), unbatched graph probe + foreign-edge-index CUDA assert (G9/R7), graph-measurement resolution (R1b; 5-fold CV R1a superseded by it), PROTEINS >0.70 target (R9 — mean pooling + 200 epochs, 0.7040 ± 0.0071).
+**Closed this session (do not reopen):** graph attribution bypass (G1/G2), pc_alm×instantaneous (G3), MUTAG "model-size limitation" (G4 — it was geometry + split), FA on pooled readouts (G5), credit dispatch drift (G6), cost-cache clobbering (G7), settle-path aggregation (G8), harness-vs-probe U-axis gap (R2), pooled-readout credit crashes (R3), zero-gradient transformer homeostatic (R4), seed-insensitive cell replay hash (R5a), CUDA scatter tolerance now stated (R5b), LM token-target crash (R8), graph cells without a majority baseline (R1c), unbatched graph probe + foreign-edge-index CUDA assert (G9/R7), graph-measurement resolution (R1b; 5-fold CV R1a superseded by it), PROTEINS >0.70 target (R9 — mean pooling + 200 epochs, 0.7040 ± 0.0071), **tabular one-class split (G10 — wine 0.0 was a tail slice over class-ordered data)**, **`local_contrastive` without a label channel (G11 — unavailable until N7)**, **graph task on node-mode geometry (G12)**, **explicit 1 read as unset (G13)**, **budget cut labelled a constraint violation (G14)**, **RL cells filtered by a supervised dry-run gate (G15)**.
 
 ---
 
@@ -1402,3 +1415,118 @@ shows only pre-existing legacy findings.
 
 **Next Session Focus — non-graph (user directive):** see the ordered non-graph
 tickets N1–N4 in REMAINING WORK. No new graph tickets this cycle.
+
+---
+
+## Session 2026-11-11 (late-4 — N1: non-graph credit robustness)
+
+**Experiment 1 — Experiment-13 symptom repro** (L1, mnist/iris/wine/acrobot,
+cuda, `--max-workers 1`). Replaying the FAIL records showed they were not one
+class of failure:
+
+```
+uv run python -m computronium.experiment.survey_cli 0.04 --mode learn --policy random \
+  --device cuda --tasks mnist --fidelity L1 --store /tmp/opencode/n1_recur_homeo.duckdb \
+  --max-workers 1 --n-seeds 1 --epochs 3 \
+  --axes '{"substrate":["digital"],"geometry":["recurrent"],"dynamics":["instantaneous"],
+           "plasticity":["null"],"credit":["homeostatic"],"update":["euclidean"]}'
+```
+**Result:** 4 records for a 1-seed declaration (G13), seeds 42/43 at 0.080/0.112
+(error-blind at chance), seed 44 truncated at 1/3 epochs (G14). The Experiment-13
+`graph_classification` FAILs were `…forward() takes from 2 to 3 positional
+arguments` — the graph task on node-mode geometry (G12), not a credit defect.
+
+**Experiment 2 — tabular tasks** (L1, 5 epochs, n=1 then n=3):
+```
+--tasks wine,iris --axes '{"credit":["gradient"],"update":["adam"],"geometry":["feedforward"],…}'
+```
+**Result (before G10):** wine `val_acc=0.0` on all three seeds with
+`train_acc=0.88–0.90`; iris 0.767/0.467/0.700. **After G10 (stratified split):**
+wine **0.9722/0.9444/0.9444** (majority 0.3889, margin +0.56), iris
+**0.8667/0.8667/0.7667** (majority 0.3333). The wine validation split held one
+class; the "0% credit failure" was a dataset split.
+
+**Experiment 3 — `local_contrastive`** (L1, mnist, feedforward, adam, 10 epochs,
+n=2): `val_acc` 0.110/0.120, loss 17 → 3459 over the epochs. The credit read the
+last 10 pixels as its label (no label channel in the pipeline; params 55.05K =
+784→64 stack, no widened input). G11: row marked unavailable with the reason,
+dry run prints it.
+
+**Experiment 4 — homeostatic and random_projections, post-R4/R9:**
+- `recurrent+homeostatic+adam+iris` (n=3, 5 epochs): 0.2333/0.3000/0.3333 —
+  chance against a 0.333 majority. Error-blind by contract, not a dispatch bug.
+- `causal_transformer+homeostatic+adam+mnist` (10 epochs, n=1): 0.1009 flat,
+  loss 2.2519–2.2522 — R4 moves every weight, but homeostatic never sees the
+  label, so the head cannot learn. Contract, documented on the identity card.
+- `recurrent+random_projections+adam+copy_task` (n=2, 5 epochs):
+  0.1885/0.1660, no crash — episode budget, not a dispatch defect.
+
+**Experiment 5 — RL reach** (gradient+adam, feedforward, L1):
+- acrobot, 40 epochs (400 episodes), n=1: mean_reward −500.0 throughout; the
+  control's own validation is −500. Exploration-limited (the swing-up is not
+  reached), and the RL success criterion names Pendulum.
+- pendulum, 40 epochs, n=1: **−1289.7 random → −1183.8** (epoch curve −1246.8 /
+  −1333.2 / −1366.7 / −1243.8 / −1176.7). Before G15 the space held **zero**
+  cells and the run measured only its positive control.
+
+**Experiment 6 — budget accounting** (0.08 h, mnist, 10 epochs, n=2): first wave
+priced from the control (`~407 s/cell (positive control, 2 seed(s))`), one cell
+started, its second seed **skipped** (`278.2s needed, −2.1s left`), run summary
+`cells_skipped: 1` — no second truncated FAIL. Before: 60 s/cell default,
+two seeds started, the second recorded 9/10 epochs FAIL.
+
+**Defects Found:**
+- **G10** — `TabularTask` split by tail slice over class-ordered sklearn data.
+- **G11** — `local_contrastive` had no label channel; it contrasted against
+  pixels and diverged.
+- **G12** — graph-domain tasks were proposed on node-mode geometry (forward
+  signature crash); the converse filter existed.
+- **G13** — `schedule_for` treated explicit `n_seeds=1`/`epochs=1` as unset.
+- **G14** — a run-deadline cut recorded `constraint_violation`; a serial wave
+  started a seed it could not afford; the first wave was priced from the table
+  default instead of the control's measurement; and `_measure_cost_model`
+  wrote the L0 positive control's one-epoch walltime into the **L1** per-task
+  map (mnist L1: 20.3 s for a 20.3 s/epoch cell), so the cache taught the next
+  run to over-propose; the run-wide fallback was the last run's mean, so a
+  0.1 s wine cell priced every unmeasured task at 0.1 s.
+- **G15** — the dry-run gate scored RL cells with cross-entropy on dummy
+  labels, so every continuous-control cell was filtered (`all-zero
+  pseudo-gradients`).
+
+**Fixes Applied:**
+- `computronium/domains/tabular.py` — stratified deterministic split; `evaluate`
+  reports `majority_baseline` / `val_acc_over_majority`.
+- `computronium/experiment/schema/seed_registries.py` — `_UNAVAILABLE` carries
+  `local_contrastive` with its reason.
+- `computronium/experiment/simple_survey.py` — `_unavailable_declarations` +
+  dry-run payload; `learning_survey.py` returns it too; `wave.py` prints it.
+- `computronium/experiment/kernel/search_space.py` — graph-domain task requires
+  graph geometry; explicit depth `is not None`.
+- `computronium/experiment/kernel/evaluate.py` — FAIL cause `timeout` for an
+  incomplete cell, `constraint_violation` only for a ceiling breach; no-epoch
+  cells report `timeout` when the trainer hit the deadline.
+- `computronium/experiment/wave.py` — `_SerialAdmission` (per-cell cost
+  headroom), `_first_wave_price` (control epoch × declared epochs), price source
+  in the wave log, and `_measure_cost_model` prices only complete cells at the
+  run's own fidelity (the L0 control no longer prices L1), with the run-wide
+  fallback as the merged per-task mean instead of the last run's mean.
+- `computronium/experiment/kernel/compose.py` — dry-run gate declines RL tasks
+  and one-class heads.
+- Locks: `test_tabular_split_lock.py` (3), `test_incompatible_cell_refusal_lock.py`
+  (4), `test_budget_truncation_lock.py` (10), `test_schedule_depth_lock.py` (3),
+  `test_dry_run_gate_scope_lock.py` (4). Two pre-existing locks updated to the
+  new truth: `test_search_space_user_axes_lock` (available credits, not a
+  hardcoded 10), `test_sampler_lock` (pc_alm `credit.beta` vs gradient
+  `credit.train_biases`).
+
+**Verification:** new locks 25/25; `tests/property -k "search_space or schedule
+or budget or tabular or dry_run or credit or cell_evaluation or cell_identity or
+graph_pipeline or graph_batched"` 240 passed, 8 skipped, 5 xfailed (2
+pre-existing failures queued as N5/N6). Live: wine 0.94–0.97, iris 0.77–0.87,
+pendulum −1184 at 400 episodes, `--n-seeds 1` yields one seed, dry-run names the
+unavailable credit. Ruff clean on changed files (pre-existing wave.py Register C
+findings remain; `_cell_records` complexity 16 → 13). Pyright on changed files
+at the HEAD baseline (5 errors, all pre-existing).
+
+**Next Experiment:** N2 (plasticity on a learnable task), then N3 (substrate
+breadth), then N4 (predictive-settling reach).

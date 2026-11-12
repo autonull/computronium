@@ -311,7 +311,21 @@ type PrimitiveRow = tuple[str, str, tuple[str, ...]]
 # Primitives the kernel registers but cannot honour, with the reason recorded
 # (R78). An unavailable row is excluded from every space, so the run stops
 # proposing cells it would only fail.
-_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {}
+_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {
+    # The credit contract requires a label-augmented input stream (last
+    # ``label_dim`` features = the one-hot target) and a label-sweep readout.
+    # The kernel provides neither: geometry width equals the task width, so
+    # ``compute_pseudo_gradient`` sliced the last 10 pixels as its "label" and
+    # trained a contrast against noise (MNIST: 0.11-0.12 for 10 epochs, loss
+    # 17 -> 3459). Available again once the harness appends the label channel
+    # and widens the input layer by ``label_dim``.
+    (StructuralAxis.CREDIT, "local_contrastive"): (
+        "requires a label-augmented input stream (last label_dim features = "
+        "one-hot target); the kernel gives the credit the task's own input "
+        "width, so it would contrast against pixels. Wire the label channel "
+        "and the label-sweep readout first."
+    ),
+}
 
 
 def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...]:

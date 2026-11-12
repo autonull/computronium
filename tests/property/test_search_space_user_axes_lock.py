@@ -77,29 +77,24 @@ class TestSearchSpaceUserAxesLock:
 
     def test_profile_default_credit_axis_is_filtered(self):
         """When user does NOT specify credits, profile default (all available) IS filtered by constraints."""
+        from computronium.experiment.schema import AXES_REGISTRIES
+
         spec = self._make_spec(user_credit_axes=None)
         space = search_space_from_spec(spec, tasks=spec.task_names)
 
-        # Default credits should be filtered by constraints
-        filtered_credits = space.primitives(StructuralAxis.CREDIT)
-        all_available = [
-            "gradient",
-            "random_projections",
-            "pepita",
-            "local_goodness",
-            "thermodynamic_contrast",
-            "target_inversion",
-            "homeostatic",
-            "pc_alm",
-            "local_contrastive",
-            "temporal_trace",
-        ]
-        # With full profile defaults (all substrates, geometries, dynamics, plasticities, updates),
-        # ALL 10 credits have at least one valid combination in the space.
-        # The constraint filter correctly preserves all of them.
-        assert set(filtered_credits) == set(all_available), (
-            f"Expected all 10 credits to have valid combos, got {filtered_credits}"
+        # The default axis is the registry's available rows, so an unavailable
+        # row (local_contrastive: no label channel in the kernel) is absent
+        # before the constraint filter runs.
+        all_available = sorted(
+            name
+            for name, row in AXES_REGISTRIES[StructuralAxis.CREDIT].items()
+            if row.available
         )
+        filtered_credits = space.primitives(StructuralAxis.CREDIT)
+        assert set(filtered_credits) == set(all_available), (
+            f"Expected every available credit, got {filtered_credits}"
+        )
+        assert "local_contrastive" not in filtered_credits
 
     def test_user_specified_plasticity_axis_preserves_all_primitives(self):
         """User-specified plasticity primitives are preserved."""
