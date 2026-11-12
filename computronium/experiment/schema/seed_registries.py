@@ -310,22 +310,9 @@ type PrimitiveRow = tuple[str, str, tuple[str, ...]]
 
 # Primitives the kernel registers but cannot honour, with the reason recorded
 # (R78). An unavailable row is excluded from every space, so the run stops
-# proposing cells it would only fail.
-_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {
-    # The credit contract requires a label-augmented input stream (last
-    # ``label_dim`` features = the one-hot target) and a label-sweep readout.
-    # The kernel provides neither: geometry width equals the task width, so
-    # ``compute_pseudo_gradient`` sliced the last 10 pixels as its "label" and
-    # trained a contrast against noise (MNIST: 0.11-0.12 for 10 epochs, loss
-    # 17 -> 3459). Available again once the harness appends the label channel
-    # and widens the input layer by ``label_dim``.
-    (StructuralAxis.CREDIT, "local_contrastive"): (
-        "requires a label-augmented input stream (last label_dim features = "
-        "one-hot target); the kernel gives the credit the task's own input "
-        "width, so it would contrast against pixels. Wire the label channel "
-        "and the label-sweep readout first."
-    ),
-}
+# proposing cells it would only fail. Empty since N7 wired the label channel
+# (``local_contrastive``); a row returns here only with a measured reason.
+_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {}
 
 
 def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...]:
@@ -1216,6 +1203,30 @@ CONSTRAINTS = [
         predicate=or_(
             not_(eq(var("credit"), const("pc_alm"))),
             eq(var("dynamics"), const("pc_alm")),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Credit-Dynamics: the FF goodness contrast is a *local* rule — its
+    # pseudo-gradient is ∂(G_free − G_nudged)/∂W at the settled activities.
+    # Differentiated through an unrolled energy settle it stops being local:
+    # the graph is W^N (N relaxation steps), so the direction is dominated by
+    # the deep-chain term and the cell diverges. Measured 2026-11-12, mnist /
+    # feedforward / local_goodness / adam, 3 epochs: instantaneous 0.9628,
+    # energy_minimization 0.0892 with free loss 1.87 -> 289.5 -> 2.1e5
+    # (G19/TODO88 N9). The same unroll argument covers the other multi-step
+    # settles; each is voided when it is measured, not by inference.
+    ConstraintSpec(
+        name="local_goodness_energy_minimization",
+        kind=ConstraintKind.VOID,
+        description=(
+            "Forward-Forward goodness credit diverges on energy_minimization: "
+            "differentiating the goodness contrast through an unrolled settle "
+            "is not a local rule (measured loss 1.87 -> 2.1e5, val_acc chance)"
+        ),
+        predicate=or_(
+            not_(in_(var("credit"), const(["local_goodness", "forward_only"]))),
+            not_(eq(var("dynamics"), const("energy_minimization"))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",

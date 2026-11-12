@@ -226,7 +226,6 @@ class TestPrimitiveCompatibilityLock:
             ("equilibrium", "lazy"),
             ("local_goodness", "spike_integration"),
             ("forward_only", "spike_integration"),
-            ("temporal_trace", "instantaneous"),
             ("temporal_trace", "energy_minimization"),
             ("temporal_trace", "lazy"),
             ("temporal_trace", "diffusion"),

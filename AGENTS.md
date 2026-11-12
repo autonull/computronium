@@ -202,7 +202,7 @@
 
 | Symptom | Investigate |
 |---------|-------------|
-| val_acc ≈ chance | Forward pass, credit produces zeros, loss not flowing |
+| val_acc ≈ chance | Forward pass, credit produces zeros, loss not flowing; check `error_blind` first — an error-blind credit (`homeostatic`, `temporal_trace`) measuring chance is its contract, not a bug |
 | val_acc drops over epochs | Optimizer misconfigured, gradient explosion, weight decay |
 | "free settle telemetry failed" | `forward_with_intermediates` act count ≠ param count |
 | Positive control FAIL | Task's `geometry_hint` wrong, compatibility check |
@@ -360,7 +360,9 @@
 - Node classification (Cora): best val_acc > 0.75
 - RL (Pendulum): mean_reward > -200
 - Tabular (Iris): best val_acc > 0.90
-- ≥3 credits work per geometry
+- ≥3 **error-aware** credits work per geometry (`homeostatic` and
+  `temporal_trace` declare `error_blind=True`: they read no label, so they
+  measure chance by contract — never count them toward this criterion)
 - Zero "free settle telemetry failed" warnings
 - 100% positive control PASS rate
 - 4+ claim-eligible cells per multi-task run (n_seeds × tasks)

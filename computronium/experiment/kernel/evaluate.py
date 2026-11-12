@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import torch
 
+from computronium.core.label_channel import probe_input
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import (
     DistributedSystemTrainer,
@@ -323,7 +324,11 @@ def _post_training_metrics(
     # A PyG batch has no batch-free input, so the free-phase probes (settle
     # telemetry, Jacobian) are not defined for it; the energy estimate is.
     if sample_x is not None:
-        metrics.update(compute_stability_metrics(cell.system, sample_x))
+        # A label-channel system reads a widened input; the probe carries a
+        # zero channel (no label information) so settle telemetry still runs.
+        metrics.update(
+            compute_stability_metrics(cell.system, probe_input(cell.system, sample_x))
+        )
     metrics.update(compute_energy_metrics(cell.system, batch_size=sample_count))
 
     # Substrate-specific objectives

@@ -139,6 +139,14 @@ class CreditAssignmentConfig:
             defect is not inherited)
         feedback_lr: EMA rate toward the ridge solution (learned_feedback)
         feedback_update_every: Steps between learned-feedback updates
+        label_dim: Width of the trailing label channel the credit reads as its
+            target (0 = the credit reads no label channel)
+        label_channel: The credit reads its target from the last ``label_dim``
+            input features — a one-hot label the harness appends — instead of
+            from a phase contrast. The kernel widens the input layer by
+            ``label_dim`` and augments every batch; inference sweeps the
+            candidates. Set by the credit's own config classmethod, never
+            swept: the channel width is the task's class count.
     homeostatic_target: Target row-norm for homeostatic synaptic
         scaling (timing-asymmetric STDP)
     homeostatic_scaling: Gate the homeostatic synaptic-scaling term on
@@ -166,6 +174,7 @@ class CreditAssignmentConfig:
     feedback_update_every: int = 1
     train_biases: bool = False
     label_dim: int = 0
+    label_channel: bool = False
     ema_beta: float = 0.99
     stream_norm: bool = True
     contrast_threshold: float = 2.0
@@ -223,6 +232,7 @@ class CreditAssignmentConfig:
             readout_error=True,
             credit_norm="none",
             label_dim=label_dim,
+            label_channel=True,
             ema_beta=ema_beta,
             stream_norm=stream_norm,
             contrast_threshold=contrast_threshold,
@@ -596,6 +606,10 @@ class CreditAssignment(Protocol):
       only these.
     - ``requires_autograd``: True when the rule needs autograd through
       settling (the default detached/no-grad path is bypassed only then).
+    - ``error_blind``: True when no term of the rule reads the target or
+      the loss, so on a supervised task it measures chance *by contract*
+      — this is a declared boundary, not a bug. The success criterion
+      counts error-aware credits (TODO88 N10).
 
     Output is a list of pseudo-gradients, one per learnable weight layer,
     matching the Geometry's parameter structure.
@@ -605,6 +619,7 @@ class CreditAssignment(Protocol):
 
     phases: ClassVar[tuple[Phase, ...]]
     requires_autograd: ClassVar[bool]
+    error_blind: ClassVar[bool]
 
     @abstractmethod
     def compute_pseudo_gradient(
@@ -674,6 +689,7 @@ class ThermodynamicContrast:
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = False
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -798,6 +814,7 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = True
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -1098,6 +1115,7 @@ class LocalGoodnessCredit(LearnedFeedbackMixin):
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = True
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -1396,6 +1414,7 @@ class LocalContrastiveCredit:
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = False
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -1989,6 +2008,7 @@ class TemporalTraceCredit(_SurrogateUndefined):
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
+    error_blind: ClassVar[bool] = True
     requires_autograd: ClassVar[bool] = False
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -2018,6 +2038,9 @@ class TemporalTraceCredit(_SurrogateUndefined):
         validated_limits=(
             "property-locked: W(Δt) = −W(−Δt) antisymmetry, causal > 0, "
             "anti-causal < 0, exponential decay",
+            "error_blind=True: reads no label, so on a supervised task it "
+            "measures chance by contract — mnist recurrent 0.0956/0.1234 "
+            "against a 0.1018/0.1238 null (TODO88 N2c), loss flat at ln 10",
         ),
     )
 
@@ -2257,6 +2280,7 @@ class TargetInversionCredit:
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = True
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -2436,6 +2460,7 @@ class HomeostaticCredit(_SurrogateUndefined):
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    error_blind: ClassVar[bool] = True
     requires_autograd: ClassVar[bool] = False
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -2448,7 +2473,12 @@ class HomeostaticCredit(_SurrogateUndefined):
         pseudo_gradient_def="grad_W = (mean‖post‖₂ − target) · W / ‖W‖_F",
         symmetry_requirements=(),
         approximation_parameters=("homeostatic_target",),
-        validated_limits=(),
+        validated_limits=(
+            "error_blind=True: a constraint controller, not a learning "
+            "signal — measures chance by contract on a supervised task "
+            "(mnist recurrent 0.233/0.300/0.333 vs a 0.333 majority; "
+            "transformer+mnist flat at 0.1009 for 9 epochs, TODO88 N1/R4)",
+        ),
     )
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
@@ -2532,6 +2562,7 @@ class PCALMCredit(_SurrogateUndefined):
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = False
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -2685,6 +2716,7 @@ class PepitaCredit:
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = False
 
     IDENTITY_CARD = AlgorithmIdentityCard(
@@ -2822,6 +2854,7 @@ class GradientCredit:
     """Standard backprop credit (for comparison)."""
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = True
 
     IDENTITY_CARD = AlgorithmIdentityCard(

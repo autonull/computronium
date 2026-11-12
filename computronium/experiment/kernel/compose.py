@@ -6,10 +6,11 @@ single-source config classmethods and registries — no preset tables.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from computronium.core.label_channel import LabelChannelSystem, augmented_input_shape
 from computronium.core.logging import get_logger
 from computronium.core.pipeline import _task_loss_tensor, forward_pass
 from computronium.core.system_trainer import (
@@ -600,12 +601,24 @@ def _compose_configs_cached(
     substrate_name = coordinate.substrate
     dynamics_name = coordinate.dynamics
 
+    ccfg = _build_credit_config(active, coordinate, output_dim)
+    label_dim = ccfg.label_dim if ccfg.label_channel else 0
     gcfg = _build_geometry_config_from_active(
-        active, geometry_dict, coordinate, input_shape, output_dim, param_budget
+        active,
+        geometry_dict,
+        coordinate,
+        augmented_input_shape(input_shape, label_dim),
+        output_dim,
+        param_budget,
     )
+    if label_dim and ccfg.stream_norm:
+        # The credit recomputes a stream-normalized prefix, so the geometry
+        # must normalize the stream it *is*: otherwise the head is trained on
+        # unit-scale features and applied to unbounded ones (G20 — free CE
+        # 223 -> 1121 over 10 epochs while accuracy stalled at 0.52).
+        gcfg = replace(gcfg, stream_norm=True)
 
     dcfg = _build_dynamics_config(active, dynamics_name, coordinate)
-    ccfg = _build_credit_config(active, coordinate)
     ucfg = _build_update_config(active, coordinate)
     substrate_config = _build_substrate_config(
         substrate_name,
@@ -662,12 +675,20 @@ def _build_dynamics_config(
     })
 
 
-def _build_credit_config(active: Any, coordinate: Coordinate) -> Any:
-    """Build credit config from active space."""
+def _build_credit_config(active: Any, coordinate: Coordinate, output_dim: int) -> Any:
+    """Build credit config from active space.
+
+    A credit that declares a ``label_channel`` reads its target from the last
+    ``label_dim`` input features, so the channel width is the task's class
+    count — a fixed 10 would mis-slice a three-class task.
+    """
     from computronium.ontology.credit import CreditAssignmentConfig
 
     c_factory = _axis_factory(CreditAssignmentConfig, coordinate.credit)
-    return c_factory(**active.for_axis(StructuralAxis.CREDIT, coordinate.credit))
+    config = c_factory(**active.for_axis(StructuralAxis.CREDIT, coordinate.credit))
+    if not config.label_channel:
+        return config
+    return replace(config, label_dim=int(output_dim))
 
 
 def _build_update_config(active: Any, coordinate: Coordinate) -> Any:
@@ -795,6 +816,9 @@ def compose_cell_system(
             config.credit,
             config.update,
         )
+    label_dim = config.credit.label_dim if config.credit.label_channel else 0
+    if label_dim:
+        system = LabelChannelSystem(system, output_dim=output_dim, label_dim=label_dim)
     return ComposedCell(
         system=system,
         config=config,

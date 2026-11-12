@@ -209,6 +209,11 @@ class GeometryConfig:
             arXiv:2505.13124). Applied only where a Linear is square
             (hidden→hidden); the input and output projections stay
             unscaled single paths
+        stream_norm: Rescale every post-activation to length sqrt(width)
+            (Hinton's Forward-Forward stream normalization). A credit that
+            normalizes the stream it recomputes requires this: without it
+            the head is trained on unit-scale features and applied to
+            unbounded ones (TODO88 G20)
         conv_channels: Output channels per convolution layer (conv topology)
         kernel_size: Convolution kernel edge length (conv topology)
         in_channels: Input channel count (conv topology)
@@ -244,6 +249,7 @@ class GeometryConfig:
     init_scale: float = _DEFAULT_INIT_SCALE
     init_scheme: InitScheme = "default"
     residual: bool = False
+    stream_norm: bool = False
     conv_channels: tuple[int, ...] = ()
     kernel_size: int = 3
     in_channels: int = 1
@@ -288,6 +294,7 @@ class GeometryConfig:
         init_scale: float = 0.1,
         init_scheme: InitScheme = "default",
         residual: bool = False,
+        stream_norm: bool = False,
     ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
@@ -300,6 +307,7 @@ class GeometryConfig:
             init_scale=init_scale,
             init_scheme=init_scheme,
             residual=residual,
+            stream_norm=stream_norm,
         )
 
     @classmethod
@@ -932,9 +940,14 @@ class FeedforwardGeometry(nn.Module):
         super().__init__()
         self.config = config
         self.residual = config.residual
+        self.stream_norm = config.stream_norm
         self._layers = nn.ModuleList(layers) if layers else nn.ModuleList()
         if not self._layers:
             self._build_layers()
+
+    def _normalize_stream(self, h: Tensor) -> Tensor:
+        """Length sqrt(width) per row — the credit's own stream contract."""
+        return h / (h.norm(dim=-1, keepdim=True) + 1e-12) * h.shape[-1] ** 0.5
 
     def _build_layers(self) -> None:
         dims = (
@@ -995,6 +1008,8 @@ class FeedforwardGeometry(nn.Module):
                     # Out-of-place add: in-place adds on grad-tracking
                     # tensors pin the whole downstream settle graph
                     h = h + h_in  # ruff: ignore[non-augmented-assignment]
+                if self.stream_norm:
+                    h = self._normalize_stream(h)
                 if intermediates is not None:
                     # Add after activation function and skip (post-skip
                     # activities align with settle-kernel acts)
@@ -1036,6 +1051,8 @@ class FeedforwardGeometry(nn.Module):
                 h = layer(h)
                 if self.residual and h.shape == h_in.shape:
                     h = h + h_in  # ruff: ignore[non-augmented-assignment]
+                if self.stream_norm:
+                    h = self._normalize_stream(h)
         return h
 
     def update_params(self, new_params: dict[str, Tensor]) -> None:

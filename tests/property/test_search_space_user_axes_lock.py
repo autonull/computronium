@@ -82,9 +82,9 @@ class TestSearchSpaceUserAxesLock:
         spec = self._make_spec(user_credit_axes=None)
         space = search_space_from_spec(spec, tasks=spec.task_names)
 
-        # The default axis is the registry's available rows, so an unavailable
-        # row (local_contrastive: no label channel in the kernel) is absent
-        # before the constraint filter runs.
+        # The default axis is the registry's available rows, so the profile
+        # default IS filtered: an unavailable row would be absent before the
+        # constraint filter runs (the mechanism N7 left empty).
         all_available = sorted(
             name
             for name, row in AXES_REGISTRIES[StructuralAxis.CREDIT].items()
@@ -94,7 +94,6 @@ class TestSearchSpaceUserAxesLock:
         assert set(filtered_credits) == set(all_available), (
             f"Expected every available credit, got {filtered_credits}"
         )
-        assert "local_contrastive" not in filtered_credits
 
     def test_user_specified_plasticity_axis_preserves_all_primitives(self):
         """User-specified plasticity primitives are preserved."""
