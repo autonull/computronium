@@ -193,7 +193,8 @@ re-derive it; the fold lives in `_fold_cell_targets` and the locks hide it.
 
 **Outside TODO89 scope:** §2b maps the wider surface (axes exercised, tasks
 with no claim, 3 failing acceptance locks, unmeasured objectives). It is not a
-ticket queue; each row names its cheapest action.
+ticket queue; each row names its cheapest action. **TODO90.md** turns §2b into
+breadth tickets (B0–B9) and parks this file's depth items with triggers.
 
 ---
 
