@@ -82,6 +82,20 @@ def _pool_context(geometry: Geometry) -> PoolContext | None:
     return cast("PoolContext | None", context())
 
 
+def _cell_readout_shape(geometry: Geometry) -> tuple[int, int] | None:
+    """``(channels, cells)`` when the readout consumes a flattened cell grid.
+
+    Cell-mode acts live in rows ``[B*H*W, features]`` but the readout runs on
+    ``[B, C*H*W]``, so a layered feedback chain cannot span the two. The
+    geometry that folds its readout error back to cells advertises the split;
+    everything else returns None.
+    """
+    reader = getattr(geometry, "cell_readout_shape", None)
+    if not callable(reader):
+        return None
+    return cast("tuple[int, int]", reader())
+
+
 # ============================================================
 # CreditAssignment Configuration
 # ============================================================
@@ -838,6 +852,9 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
             "channel-liveness required per geometry: inert feedback channel "
             "returns all-zeros indistinguishable from trained failure (see "
             "CreditAssignmentConfig.random_projections docstring)",
+            "cell-mode readout (NCA) folds its sample error back to B*H*W rows: "
+            "digits 8x8, 20 epochs x 3 seeds, 0.8907 +/- 0.0009 vs gradient "
+            "0.9231 +/- 0.0009 (TODO89 T9)",
         ),
     )
 
@@ -885,7 +902,50 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
             return self._transformer_path(acts, weight_names, delta_out, geometry)
         if (pool := _pool_context(geometry)) is not None:
             return self._graph_path(acts, weight_names, delta_out, geometry, pool)
+        if (cells := _cell_readout_shape(geometry)) is not None:
+            return self._cell_path(acts, weight_names, delta_out, geometry, cells)
         return self._layered_path(acts, weight_names, delta_out, geometry)
+
+    def _cell_path(
+        self,
+        acts: list[Tensor],
+        weight_names: list[str],
+        delta_out: Tensor,
+        geometry: Geometry,
+        cells: tuple[int, int],
+    ) -> list[Tensor]:
+        """FA across a cell-mode readout (NCA).
+
+        The readout consumes the sample-mode flattened state, so the readout
+        error (one row per sample) folds back to one row per cell by inverting
+        the flatten. The folded error is the error at the shared cell MLP's
+        output, so the per-cell pseudo-gradients sum into its single weight
+        update. The update mask scales the state's Jacobian by a positive
+        scalar; the fold leaves it out, so only the update's magnitude shifts
+        (the direction is unchanged).
+        """
+        channels, n_cells = cells
+        batch = delta_out.shape[0]
+        if len(weight_names) != 3 or acts[-2].shape != (batch, channels * n_cells):
+            return self._inert_zeros(geometry, weight_names)
+
+        grads: list[Tensor] = [delta_out.T @ acts[-2] / batch]
+        err = apply_norm(
+            [delta_out @ self._feedback_weights[weight_names[-1]]],
+            self.config.credit_norm,
+        )[0]
+        err = err.view(batch, channels, n_cells).permute(0, 2, 1).reshape(-1, channels)
+        rows = err.shape[0]
+        for i in range(len(weight_names) - 2, -1, -1):
+            grads.append(err.T @ acts[i] / rows)
+            if i:
+                err = apply_norm(
+                    [err @ self._feedback_weights[weight_names[i]]],
+                    self.config.credit_norm,
+                    [acts[i]],
+                )[0]
+        grads.reverse()
+        return grads
 
     def _graph_path(
         self,

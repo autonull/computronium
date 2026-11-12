@@ -3519,6 +3519,24 @@ class NcaGeometry(nn.Module):
         h = torch.relu(self._cell_hidden(x))
         return self.config.delta_scale * torch.tanh(self._cell_delta(h))
 
+    def _apply_delta(
+        self, states: Tensor, delta_flat: Tensor, mask: Tensor | None
+    ) -> Tensor:
+        """Apply per-cell deltas under the update mask (one CA update)."""
+        # rows are (B*H*W, C) in (b, h, w) order -> (B, C, H, W)
+        delta = delta_flat.view(*states.shape[:1], *states.shape[-2:], -1).permute(
+            0, 3, 1, 2
+        )
+        m = (
+            mask
+            if mask is not None
+            else (
+                torch.rand(states.shape[0], *states.shape[-2:], device=states.device)
+                < self.config.mask_prob
+            ).to(states.dtype)
+        )
+        return states + delta * m.reshape(-1, 1, *states.shape[-2:])
+
     def step(
         self, states: Tensor, labels: Tensor | None = None, mask: Tensor | None = None
     ) -> Tensor:
@@ -3535,22 +3553,7 @@ class NcaGeometry(nn.Module):
                 f"NcaGeometry expects states (B, C, {self.config.grid_hw[0]}, "
                 f"{self.config.grid_hw[1]}), got {tuple(states.shape)}"
             )
-        # rows are (B*H*W, C) in (b, h, w) order -> (B, C, H, W)
-        delta = (
-            self
-            ._delta(states, labels)
-            .view(*states.shape[:1], *states.shape[-2:], -1)
-            .permute(0, 3, 1, 2)
-        )
-        m = (
-            mask
-            if mask is not None
-            else (
-                torch.rand(states.shape[0], *states.shape[-2:], device=states.device)
-                < self.config.mask_prob
-            ).to(states.dtype)
-        )
-        return states + delta * m.reshape(-1, 1, *states.shape[-2:])
+        return self._apply_delta(states, self._delta(states, labels), mask)
 
     def rollout(
         self,
@@ -3685,12 +3688,22 @@ class NcaGeometry(nn.Module):
             modules.append(self._readout)
         return modules
 
+    def cell_readout_shape(self) -> tuple[int, int]:
+        """``(channels, cells per sample)`` the readout consumes.
+
+        The readout is sample-mode over the flattened post-step grid, so a
+        credit that folds its error back to cells needs the split. Declared
+        here rather than inferred from act shapes.
+        """
+        h, w = self.config.grid_hw
+        return self.config.input_dim, h * w
+
     def activation_layout(self, batch_size: int) -> ActivationLayout:
         """Return the activation layout for NCA geometry.
 
         The first three layers use cell-mode batch [B*H*W, features] because
-        NCA processes each cell independently. The readout layer uses
-        sample-mode batch [B, output_dim] as it projects the flattened grid.
+        NCA processes each cell independently. The flattened state and the
+        readout use sample-mode batch as they span the whole grid.
         """
         h, w = self.config.grid_hw
         c = self.config.input_dim
@@ -3722,6 +3735,14 @@ class NcaGeometry(nn.Module):
                 feature_shape=(c,),
             )
         )
+        # Post-step state (per sample, flattened grid) — the readout's input
+        layers.append(
+            LayerLayout(
+                name="state",
+                batch_mode="sample",
+                feature_shape=(c * h * w,),
+            )
+        )
         # Readout/logits (per sample, flattened grid)
         layers.append(
             LayerLayout(
@@ -3743,14 +3764,16 @@ class NcaGeometry(nn.Module):
         x_grid, _ = self._reshape_to_grid(x)
         perceived = self.perceive(x_grid)
         acts = [perceived]
-        h = torch.relu(self._cell_hidden(perceived))
-        acts.append(h)
+        hidden = torch.relu(self._cell_hidden(perceived))
+        acts.append(hidden)
         delta = self._delta_flat(perceived)
         acts.append(delta)
-        # Add readout logits as final activation if available
-        state_grid = self.step(x_grid)
-        logits = self._apply_readout(state_grid)
-        acts.append(logits)
+        # The readout consumes the flattened post-step state, so that state is
+        # the act the readout weight is credited against. Without it the act
+        # chain skips the weight's input (the FA/credit width contract).
+        state_grid = self._apply_delta(x_grid, delta, None)
+        acts.append(state_grid.flatten(1))
+        acts.append(self._apply_readout(state_grid))
         return acts
 
 

@@ -1351,17 +1351,18 @@ CONSTRAINTS = [
     ),
     # Credit-Geometry: feedback alignment needs a layered activation chain.
     # B_k spans two consecutive act widths, so each weight's error width must
-    # be the next act's width. A cell-mode (NCA), spatial (conv, attention,
-    # spatial_lattice) or memory (NTM) act stack breaks that: the layered
-    # contract returns all-zero pseudo-gradients for every weight (measured
-    # on digits 8x8: nca 3, conv 5, attention 38, spatial_lattice 98, ntm 7
-    # weights), so the cell cannot train.
+    # be the next act's width. A spatial (conv, attention, spatial_lattice) or
+    # memory (NTM) act stack breaks that: the layered contract returns all-zero
+    # pseudo-gradients for every weight (measured on digits 8x8: conv 5,
+    # attention 38, spatial_lattice 98, ntm 7 weights), so the cell cannot
+    # train. NCA is *not* listed: its sample-mode readout has a declared cell
+    # fold (`NcaGeometry.cell_readout_shape`), measured in TODO89 T9.
     ConstraintSpec(
         name="random_projections_layered_geometry",
         kind=ConstraintKind.VOID,
         description=(
             "Feedback alignment requires a width-aligned layered act chain; "
-            "attention, spatial_lattice, conv, nca and ntm have none "
+            "attention, spatial_lattice, conv and ntm have none "
             "(all-zero pseudo-gradients)"
         ),
         predicate=not_(
@@ -1373,7 +1374,6 @@ CONSTRAINTS = [
                         "attention",
                         "spatial_lattice",
                         "conv",
-                        "nca",
                         "ntm",
                     ]),
                 ),

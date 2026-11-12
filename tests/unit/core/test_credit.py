@@ -19,6 +19,7 @@ from computronium.ontology import (
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
+    NcaGeometry,
     ParameterUpdateConfig,
     Phase,
     RandomProjectionsCredit,
@@ -393,6 +394,54 @@ class TestFATheoretical:
             credit.compute_pseudo_gradient({Phase.NUDGED: settled2}, loss2, geometry)
         for name, fb in fb_before.items():
             assert torch.equal(credit._feedback_weights[name], fb)
+
+
+class TestCellModeFA:
+    """NCA's sample-mode readout folds its error back to cell rows (TODO89 T9)."""
+
+    def test_cell_readout_folds_error_to_cells(self, device: torch.device) -> None:
+        """The cell fold credits every shared-MLP weight, and is the mechanism.
+
+        Hiding the declared fold leaves the layered contract with a sample-
+        sized readout error against cell-sized acts, which must fail loud.
+        """
+        torch.manual_seed(0)
+        geometry = NcaGeometry(
+            GeometryConfig.nca(channels=3, hidden=16, grid_hw=(4, 4), output_dim=10)
+        )
+        geometry.to(device)
+        substrate = DigitalSubstrate(SubstrateConfig.digital(device=str(device)))
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+        credit = RandomProjectionsCredit(
+            CreditAssignmentConfig.random_projections(feedback_scale=0.1)
+        )
+
+        x = torch.randn(4, 3 * 4 * 4, device=device)
+        y = torch.randint(0, 10, (4,), device=device)
+
+        def _grads() -> list[Tensor]:
+            with torch.enable_grad():
+                state = SystemState(x=x, y=y)
+                state.activations = substrate.inject_state_noise(
+                    geometry.forward(x, substrate)
+                )
+                settled = dynamics.settle(state, geometry, substrate, target=y)
+                loss = F.cross_entropy(settled.activations[-1], y)
+                return credit.compute_pseudo_gradient(
+                    {Phase.NUDGED: settled}, loss, geometry
+                )
+
+        weight_names = _learnable_weight_names(geometry.params)
+        grads = _grads()
+        assert len(grads) == len(weight_names) == 3
+        for grad, name in zip(grads, weight_names, strict=True):
+            assert grad.shape == geometry.params[name].shape
+            assert torch.isfinite(grad).all()
+        assert all(g.abs().max() > 0 for g in grads)
+
+        geometry.cell_readout_shape = None  # type: ignore[assignment]
+        with pytest.raises(RuntimeError, match="layered FA contract"):
+            _grads()
 
 
 # ============================================================

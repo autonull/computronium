@@ -39,15 +39,13 @@ def _declared_reason(coordinate: Coordinate) -> str | None:
     )
 
 
-def test_random_projections_rejects_nca_digits() -> None:
-    """random_projections + nca on digits must be rejected by dry-run."""
+def test_random_projections_accepts_nca_digits() -> None:
+    """random_projections + nca on digits must pass (cell-mode FA readout)."""
     result = _composable(_nca_random_projections(), "digits", task_shape, 50000)
-    assert result is False, "random_projections + nca must be rejected for digits"
+    assert result is True, "random_projections + nca must be accepted for digits"
 
 
-@pytest.mark.parametrize(
-    "geometry", ["attention", "spatial_lattice", "conv", "nca", "ntm"]
-)
+@pytest.mark.parametrize("geometry", ["attention", "spatial_lattice", "conv", "ntm"])
 def test_feedback_alignment_geometries_are_declared_void(geometry: str) -> None:
     """The measured all-zero geometries are declared, not inferred by dry-run.
 
@@ -72,7 +70,9 @@ def test_declared_row_is_what_prunes_the_coordinate() -> None:
     from computronium.experiment.kernel import search_space as search_space_module
     from computronium.experiment.schema.seed_registries import CONSTRAINTS_REGISTRY
 
-    coordinate = _nca_random_projections()
+    coordinate = _nca_random_projections().to_dict()
+    coordinate["geometry"] = "conv"
+    coordinate = Coordinate(**coordinate)
     spec = CONSTRAINTS_REGISTRY["random_projections_layered_geometry"]
     CONSTRAINTS_REGISTRY.unregister("random_projections_layered_geometry")
     original_dry_run = compose_module._dry_run_trainable
@@ -132,7 +132,7 @@ def test_compose_dry_run_catches_failure() -> None:
     """Direct compose + dry-run must catch the failure."""
     coord = Coordinate(
         substrate="digital",
-        geometry="nca",
+        geometry="conv",
         dynamics="instantaneous",
         plasticity="null",
         credit="random_projections",
