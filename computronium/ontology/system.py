@@ -415,7 +415,6 @@ class SystemConfig:
         self._validate_predictive_settling_credit()
         self._validate_pc_alm_dynamics()
         self._validate_residual_connections()
-        self._validate_nca_instantaneous_target_inversion()
         self._validate_nca_instantaneous_homeostatic()
         self._validate_nca_instantaneous_pc_alm()
         self._validate_tile_mesh_pc_alm_dynamics()
@@ -669,18 +668,6 @@ class SystemConfig:
             raise ValueError(
                 f"Residual connections (residual=True) require feedforward geometry, "
                 f"got topology_type={self.geometry.topology_type!r}"
-            )
-
-    def _validate_nca_instantaneous_target_inversion(self) -> None:
-        """NCA geometry with instantaneous dynamics incompatible with target_inversion credit."""
-        if (
-            self.geometry.topology_type == "nca"
-            and self.dynamics.dynamics_type == "instantaneous"
-            and self.credit.credit_type == "target_inversion"
-        ):
-            raise ValueError(
-                "NCA geometry with instantaneous dynamics incompatible with "
-                "target_inversion credit (cell-mode activations)"
             )
 
     def _validate_nca_instantaneous_homeostatic(self) -> None:

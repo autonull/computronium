@@ -1068,21 +1068,9 @@ CONSTRAINTS = [
         origin="DECLARED",
     ),
     # Geometry-Dynamics-Credit: NCA with instantaneous dynamics is incompatible
-    # with credits that assume sample-mode activations (NCA uses cell-mode [B*H*W, C])
-    ConstraintSpec(
-        name="nca_instantaneous_target_inversion",
-        kind=ConstraintKind.VOID,
-        description="NCA geometry with instantaneous dynamics incompatible with target_inversion credit (cell-mode activations)",
-        predicate=not_(
-            and_(
-                eq(var("geometry"), const("nca")),
-                eq(var("dynamics"), const("instantaneous")),
-                eq(var("credit"), const("target_inversion")),
-            )
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
-    ),
+    # with credits that assume sample-mode activations (NCA uses cell-mode [B*H*W, C]).
+    # ``target_inversion`` is absent: its target folds back to cell rows
+    # (``_fold_cell_targets``), measured in TODO89 T10.
     ConstraintSpec(
         name="nca_instantaneous_homeostatic",
         kind=ConstraintKind.VOID,

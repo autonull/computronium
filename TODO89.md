@@ -1,9 +1,9 @@
 # TODO89 — Claims, not defect counts (Successor to TODO88)
 
-**Status:** 2026-11-12 · base `53c7547a` · T1–T9 closed with measured numbers
-in this session · T6 not triggered · no open ticket. T9 (this session) closed
-the nca FA void by construction: the declared cell fold turns T7's all-zero
-coordinate into a training credit at 0.8907.
+**Status:** 2026-11-12 · base `7110e5f4` · T1–T10 closed with measured numbers
+in this session · T6 not triggered · no open ticket. T10 (this session) turns
+T9's cell fold into a target, giving nca its third error-aware credit at 0.9389
+(above the 0.9231 gradient control).
 
 **Mission:** the instrument is now trustworthy enough that a low number means
 something. TODO88 proved that 20 times over: six "algorithm failures" were
@@ -38,6 +38,7 @@ rule in a closing TODO is prose that expires with the file.
 | T7 | **FA geometry declaration.** `random_projections` returned all-zero pseudo-gradients on five geometries; declare the rule instead of inferring it at dry-run. | **Declared.** Digits 8×8 dry runs report all-zero layered-FA pseudo-gradients for every weight on attention (38), spatial_lattice (98), conv (5), nca (3) and ntm (7); tile, tile_mesh and causal_transformer train (dedicated paths). One VOID row, `random_projections_layered_geometry`, now owns the rule; the dry-run probe stays as the runtime backstop for any geometry the row does not name. **nca removed from the row by T9** (the void was dispatch). | `experiment/schema/seed_registries.py`; lock `test_dry_run_gate_lock.py` (parameterised over the four remaining, plus a removal test that bypasses dry-run and proves the row is the mechanism) |
 | T8 | **Graph third credit.** Re-measure `target_inversion` at n≥3; name the `thermodynamic_contrast` verdict. | **Marginal, not met.** 200 epochs × 5 seeds on MUTAG (38 held-out graphs, resolution 0.0263, majority 0.6579): `target_inversion` **0.6842 ± 0.0204**, margin +0.0263 = **+1.29 SE**; seeds 0.684 / 0.763 / 0.658 / 0.658 / 0.658. Positive control `gradient` **0.7105 ± 0.0000**, +0.0526 = 2 graphs, all five seeds clear. The one-seed 0.6842 was one extra graph. `thermodynamic_contrast` is unreachable by declaration: `nonlayered_geometry_dynamics` admits only instantaneous dynamics on graph, and composing it anyway breaks the settle shape (`560×64 + 32×64`: pooled head block against node-mode hidden acts) — a contract break, not a Dynamo bug. | probe `scripts/probes/t8_graph_third_credit.py` |
 | T9 | **NCA cell-mode FA.** T7's nca void was dispatch, not accuracy: give `random_projections` a declared cell fold. | **Met.** `NcaGeometry.cell_readout_shape()` declares `(channels, cells)`; the credit folds the sample-mode readout error back to `B*H*W` rows and the act chain now carries the post-step state act the readout consumes. Digits 8×8, 20 epochs, 3 seeds, 360 held-out rows (resolution 0.0028, majority 0.1306, chance 0.10): `random_projections` **0.8907 ± 0.0009** (SE; seeds 0.8889 / 0.8917 / 0.8917) vs `gradient` control **0.9231 ± 0.0009**. nca now has **2** error-aware credits; removing the fold raises the layered-FA contract. | probe `scripts/probes/t9_nca_cell_fa.py`; locks `test_credit.py::TestCellModeFA`, `test_dry_run_gate_lock.py`; row edited in `seed_registries.py` |
+| T10 | **NCA third credit.** T9's fold carries an error; the target needs the same fold. | **Met, and above the control.** `_fold_cell_targets` folds the sample-mode one-hot output target back to `B*H*W` rows and passes it through the delta weight's transpose to the hidden act; `TargetInversionCredit` dispatches on `cell_readout_shape`. Same protocol as T9 (digits 8×8, 20 epochs, 3 seeds, 360 held-out rows; resolution 0.0028, majority 0.1306, chance 0.10): `target_inversion` **0.9389 ± 0.0056** (seeds 0.9333 / 0.9500 / 0.9333) vs `gradient` control **0.9231 ± 0.0009** — +0.0158 ≈ +2.8 pooled SE, ≈6 held-out rows. **nca now has 3** error-aware credits. The declaration that voided the coordinate (`nca_instantaneous_target_inversion`, in both the registry and `SystemConfig.validate`) is deleted; removing the fold leaves every target None (all-zero pseudo-gradients), which is the lock. | probe `scripts/probes/t10_nca_cell_target.py` (24.8 s); locks `test_credit.py::TestCellModeTargetInversion`, `test_dry_run_gate_lock.py::test_target_inversion_accepts_nca_digits` |
 
 **Do not reopen (TODO88 §Closed):** G1–G20, R1–R5, R7–R9, N1–N7, N9, N10.
 Each has a measured number and a lock; the numbers are at the mechanism and in
@@ -61,12 +62,19 @@ Counted from PASS records with `error_blind == False`; `homeostatic` and
 | ntm | gradient, pc_alm, target_inversion | 3 | met |
 | attention | pc_alm, target_inversion + **gradient 0.9472** (sweep) | 3 | met |
 | spatial_lattice | pc_alm, target_inversion + **gradient 0.9361** (sweep) | 3 | met |
-| nca | gradient, random_projections | 2 | **gap narrowed (T9):** FA's T7 void was dispatch — the declared cell fold trains it at **0.8907 ± 0.0009** (gradient control 0.9231). The third needs a new error-aware credit for cell-mode acts; `pc_alm`, `target_inversion` and `homeostatic` are void on nca × instantaneous by declaration. |
+| nca | gradient, random_projections, **target_inversion 0.9389** (T10) | 3 | met (T10): the target folds like the T9 error, clearing the 0.9231 gradient control by +0.0158 (≈+2.8 SE, 360 held-out rows). `pc_alm` and `homeostatic` remain void on nca × instantaneous by declaration. |
 | graph | gradient, random_projections | 2 (+1 verdict) | **gap with verdict (T8):** `target_inversion` 0.6842 ± 0.0204 at n=5 × 200 epochs vs 0.6579 majority — +1.29 SE, marginal, not met (gradient control 0.7105, all seeds clear). `pc_alm` 0.3421 (below majority); `thermodynamic_contrast` is unreachable by `nonlayered_geometry_dynamics` and the energy settle cannot represent a pooled readout. |
 
-**Every gap carries a verdict** (nca constructed, T9; graph measured, T8). No
-ticket is open here: the remaining third credit on both geometries is new
-algorithm work, not a defect in TODO89's scope.
+**Every gap carries a verdict** (graph measured, T8). No ticket is open here:
+the remaining third credit on graph is new algorithm work, not a defect in
+TODO89's scope.
+
+**Known duplicate (blocks the next nca credit):** the nca × instantaneous
+`homeostatic` and `pc_alm` voids exist twice — as registry rows and as
+`SystemConfig.validate` methods. This session had to delete both for
+`target_inversion`'s rule. Consolidate onto the registry row (or make
+`validate` consult it) before adding the next cell-mode credit; the duplicate
+is a one-source-of-truth defect and can drift silently.
 
 **Known limit:** continuous RL checkpoint resume restores the system and
 optimiser but not the replay buffer or target networks, so a resumed
@@ -84,7 +92,7 @@ continuous run cold-starts its critic. Open only if resumable RL runs matter.
 | Tabular wine | > 0.90 | 0.94–0.97 | met |
 | Tabular Iris | > 0.90 | **0.9533 ± 0.0163** (n=5 folds) | met |
 | RL (Pendulum) | mean_reward > −200 | **−161.2 ± 25.3** (n=3 seeds, 20 eval episodes each; SE 14.6) | met (margin 1.5 seed-σ) |
-| ≥3 error-aware credits per geometry | per geometry | 9 of 11 geometries | nca (2 after T9) and graph (2 after T8) carry verdicts (§2) |
+| ≥3 error-aware credits per geometry | per geometry | 10 of 11 geometries | graph (2) carries a verdict (§2) |
 | Telemetry warnings | 0 | 0 after G9 | met |
 | Positive control PASS | 100 % | pass on every claimed run | met |
 
@@ -107,33 +115,24 @@ A domain claim additionally writes `configs/preregistrations/<slug>.json`
 
 ## 4b. Remaining work — feature, not tickets
 
-No TODO89 ticket is open. The two breadth gaps would close with new algorithm
-work, so the plan keeps the trigger explicit instead of re-deriving it:
+No TODO89 ticket is open. One breadth gap is left, so the plan keeps the
+trigger explicit instead of re-deriving it:
 
-1. **nca third credit** (now 2 after T9: `gradient`, `random_projections`).
-   The FA fold is done; the gap is a **new error-aware credit for cell-mode
-   acts**. `pc_alm`, `target_inversion` and `homeostatic` are declared void on
-   nca × instantaneous (`nca_instantaneous_*` rows), so the third needs a rule
-   whose signal is defined on `[B*H*W, C]` rows — e.g. a cell-mode target
-   inversion that broadcasts the sample target back to every cell.
-   - **Scan (2026-11-12):** no existing credit fills it. `local_goodness`,
-     `local_contrastive` and `pepita` raise `requires feedforward geometry` on
-     nca; `temporal_trace` trains but is `error_blind` by contract (0.0833 at
-     5 epochs, chance 0.10).
-   - **Acceptance:** a measured arm at the `t9_nca_cell_fa.py` protocol
-     (20 epochs × 3 seeds, 360 held-out rows) clearing the nca/gradient control
-     **0.9231** and majority 0.1306, plus a lock that hides the cell fold.
-2. **graph third credit** (currently 2). `target_inversion` is marginal
-   (+1.29 SE, n=5); closing it needs either a credit that clears the 200-epoch
-   protocol on every seed, or a graph-aware energy settle (pooling before the
-   head, neighbor aggregation inside the settle chain) to unlock
-   `thermodynamic_contrast`. The settle contract's single row space is the
-   blocker, not Dynamo.
+1. **graph third credit** (currently 2: `gradient`, `random_projections`).
+   `target_inversion` is marginal (+1.29 SE, n=5); closing it needs either a
+   credit that clears the 200-epoch protocol on every seed, or a graph-aware
+   energy settle (pooling before the head, neighbor aggregation inside the
+   settle chain) to unlock `thermodynamic_contrast`. The settle contract's
+   single row space is the blocker, not Dynamo. `pc_alm` is 0.3421 (below the
+   0.6579 majority).
    - **Acceptance:** n=5 seeds × 200 epochs on MUTAG, every seed above the
      0.6579 majority by more than 1 σ (38 held-out graphs, resolution 0.0263);
      otherwise the verdict stays `marginal`.
-3. **PROTEINS 0.7040** stays `marginal` until a claim cites that arm; then T6's
+2. **PROTEINS 0.7040** stays `marginal` until a claim cites that arm; then T6's
    paired re-measure (pre-registered if it gates a decision) is the trigger.
+
+**Closed by T10:** the nca third credit (`target_inversion` 0.9389, §1). Do not
+re-derive it; the fold lives in `_fold_cell_targets` and the locks hide it.
 
 ---
 

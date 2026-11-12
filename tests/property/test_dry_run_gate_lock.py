@@ -29,6 +29,12 @@ def _nca_random_projections() -> Coordinate:
     )
 
 
+def _nca_target_inversion() -> Coordinate:
+    coordinate = _nca_random_projections().to_dict()
+    coordinate["credit"] = "target_inversion"
+    return Coordinate(**coordinate)
+
+
 def _declared_reason(coordinate: Coordinate) -> str | None:
     """The first declared void constraint this coordinate violates."""
     from computronium.experiment.kernel import search_space
@@ -43,6 +49,18 @@ def test_random_projections_accepts_nca_digits() -> None:
     """random_projections + nca on digits must pass (cell-mode FA readout)."""
     result = _composable(_nca_random_projections(), "digits", task_shape, 50000)
     assert result is True, "random_projections + nca must be accepted for digits"
+
+
+def test_target_inversion_accepts_nca_digits() -> None:
+    """target_inversion + nca on digits must pass (cell-fold target propagation).
+
+    The declaration that voided this coordinate is deleted; the dry-run probe
+    is the backstop, so a broken fold would still refuse the cell.
+    """
+    coordinate = _nca_target_inversion()
+    assert _declared_reason(coordinate) is None
+    result = _composable(coordinate, "digits", task_shape, 50000)
+    assert result is True, "target_inversion + nca must be accepted for digits"
 
 
 @pytest.mark.parametrize("geometry", ["attention", "spatial_lattice", "conv", "ntm"])

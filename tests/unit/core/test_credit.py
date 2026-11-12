@@ -27,6 +27,7 @@ from computronium.ontology import (
     StateDynamicsConfig,
     SubstrateConfig,
     SystemState,
+    TargetInversionCredit,
     ThermodynamicContrast,
     _learnable_weight_names,
 )
@@ -442,6 +443,51 @@ class TestCellModeFA:
         geometry.cell_readout_shape = None  # type: ignore[assignment]
         with pytest.raises(RuntimeError, match="layered FA contract"):
             _grads()
+
+
+class TestCellModeTargetInversion:
+    """NCA's sample-mode readout folds its targets back to cell rows (T10)."""
+
+    def test_cell_readout_folds_targets_to_cells(self, device: torch.device) -> None:
+        """The fold credits all three weights; hiding it leaves every target None.
+
+        Removing the declared fold must fail the fixture with all-zero
+        pseudo-gradients — the declaration is the mechanism.
+        """
+        torch.manual_seed(0)
+        geometry = NcaGeometry(
+            GeometryConfig.nca(channels=3, hidden=16, grid_hw=(4, 4), output_dim=10)
+        )
+        geometry.to(device)
+        substrate = DigitalSubstrate(SubstrateConfig.digital(device=str(device)))
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+        credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion())
+
+        x = torch.randn(4, 3 * 4 * 4, device=device)
+        y = torch.randint(0, 10, (4,), device=device)
+
+        def _grads() -> list[Tensor]:
+            with torch.enable_grad():
+                state = SystemState(x=x, y=y)
+                state.activations = substrate.inject_state_noise(
+                    geometry.forward(x, substrate)
+                )
+                settled = dynamics.settle(state, geometry, substrate, target=y)
+                return credit.compute_pseudo_gradient(
+                    {Phase.NUDGED: settled}, None, geometry
+                )
+
+        weight_names = _learnable_weight_names(geometry.params)
+        grads = _grads()
+        assert len(grads) == len(weight_names) == 3
+        for grad, name in zip(grads, weight_names, strict=True):
+            assert grad.shape == geometry.params[name].shape
+            assert torch.isfinite(grad).all()
+        assert all(g.abs().max() > 0 for g in grads)
+
+        geometry.cell_readout_shape = None  # type: ignore[assignment]
+        hidden = _grads()
+        assert all(g.abs().max() == 0 for g in hidden)
 
 
 # ============================================================

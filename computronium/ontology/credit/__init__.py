@@ -96,6 +96,38 @@ def _cell_readout_shape(geometry: Geometry) -> tuple[int, int] | None:
     return cast("tuple[int, int]", reader())
 
 
+def _fold_cell_targets(
+    acts: list[Tensor],
+    y: Tensor,
+    weight_names: list[str],
+    geometry: Geometry,
+    cells: tuple[int, int],
+) -> tuple[Tensor, Tensor, Tensor] | None:
+    """One-hot target folded from the readout back onto cell rows.
+
+    Returns ``(output target [B, classes], state target [B*H*W, C], hidden
+    target [B*H*W, hidden])``, or None when the act chain is not the declared
+    cell-mode shape (perceived, hidden, delta, state, logits). The readout
+    consumes the sample-mode flattened state, so its target folds to one row
+    per cell; the delta weight then passes those targets to the hidden act.
+    """
+    channels, n_cells = cells
+    batch = acts[-1].shape[0]
+    if len(acts) != 5 or len(weight_names) != 3:
+        return None
+    if acts[-2].shape != (batch, channels * n_cells):
+        return None
+    out_target = torch.nn.functional.one_hot(y, num_classes=acts[-1].shape[-1]).float()
+    state_target = (
+        (out_target @ geometry.params[weight_names[2]])
+        .view(batch, channels, n_cells)
+        .permute(0, 2, 1)
+        .reshape(-1, channels)
+    )
+    hidden_target = state_target @ geometry.params[weight_names[1]]
+    return out_target, state_target, hidden_target
+
+
 # ============================================================
 # CreditAssignment Configuration
 # ============================================================
@@ -2403,6 +2435,9 @@ class TargetInversionCredit:
         if (pool := _pool_context(geometry)) is not None:
             return self._graph_target_grads(acts, y, weight_names, geometry, pool)
 
+        if (cells := _cell_readout_shape(geometry)) is not None:
+            return self._cell_target_grads(acts, y, weight_names, geometry, cells)
+
         targets = _propagate_targets(acts, y, weight_names[:n_trans], geometry)
         pairs = _weight_acts(weight_names, acts, geometry)
 
@@ -2461,6 +2496,33 @@ class TargetInversionCredit:
                 grads.append(delta.T @ acts[i] / acts[i].shape[0])
         return grads
 
+    def _cell_target_grads(
+        self,
+        acts: list[Tensor],
+        y: Tensor,
+        weight_names: list[str],
+        geometry: Geometry,
+        cells: tuple[int, int],
+    ) -> list[Tensor]:
+        """Target propagation across a cell-mode readout (NCA).
+
+        The readout consumes the sample-mode flattened state, so the output
+        target folds back to one row per cell by inverting the flatten. Each
+        cell row then carries a target through the shared cell MLP: the delta
+        weight's targets are the folded state targets, and the hidden targets
+        are those passed through the delta weight's transpose.
+        """
+        folded = _fold_cell_targets(acts, y, weight_names, geometry, cells)
+        if folded is None:
+            return [torch.zeros_like(geometry.params[name]) for name in weight_names]
+        out_target, state_target, hidden_target = folded
+        rows = state_target.shape[0]
+        return [
+            (acts[1] - hidden_target).T @ acts[0] / rows,
+            (acts[2] - state_target).T @ acts[1] / rows,
+            (acts[-1] - out_target).T @ acts[-2] / out_target.shape[0],
+        ]
+
     def _block_target_grads(
         self, acts: list[Tensor], y: Tensor, geometry: TileBlockGeometry
     ) -> list[Tensor]:
@@ -2493,8 +2555,19 @@ class TargetInversionCredit:
             return torch.tensor(0.0)
         y = nudged_state.y
         weight_names = _learnable_weight_names(geometry.params)
-        targets = _propagate_targets(nudged_acts, y, weight_names, geometry)
         total = torch.tensor(0.0, device=nudged_acts[-1].device)
+        if (cells := _cell_readout_shape(geometry)) is not None:
+            folded = _fold_cell_targets(nudged_acts, y, weight_names, geometry, cells)
+            if folded is not None:
+                out_target, state_target, hidden_target = folded
+                for act, tgt in (
+                    (nudged_acts[1], hidden_target),
+                    (nudged_acts[2], state_target),
+                    (nudged_acts[-1], out_target),
+                ):
+                    total = total + ((act - tgt) ** 2).mean()  # ruff: ignore[non-augmented-assignment]
+            return total
+        targets = _propagate_targets(nudged_acts, y, weight_names, geometry)
         for i in range(1, len(nudged_acts)):
             tgt = targets[i]
             if tgt is None:
