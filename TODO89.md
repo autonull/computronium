@@ -76,9 +76,66 @@ TODO89's scope.
 `validate` consult it) before adding the next cell-mode credit; the duplicate
 is a one-source-of-truth defect and can drift silently.
 
+**Reminder — breadth under-reports by construction:** the T3 sweep, T9 and T10
+arms were measured by probe, not written as store records. `comp coverage`
+therefore reads nca 1, attention 2 and spatial_lattice 2, while §2 counts 3
+each. The claim is the measurement; a store-backed breadth table needs those
+arms re-run through `survey_cli`.
+
 **Known limit:** continuous RL checkpoint resume restores the system and
 optimiser but not the replay buffer or target networks, so a resumed
 continuous run cold-starts its critic. Open only if resumable RL runs matter.
+
+---
+
+## 2b. Versatility map — what is exercised, what is not (not tickets)
+
+Measured 2026-11-12 from **428 readable stores, 6,925 PASS cells** (duckdb 2.0;
+0 unreadable after the lock refresh).
+
+| Axis | Seen / declared | Zero or thin |
+|---|---|---|
+| substrate | 9 / 9 | quantum 56 cells (4 geoms), neuromorphic 292 (4), analog/optical/complex 241–309; digital 3,703 |
+| geometry | 11 / 11 | causal_transformer 32, spatial_lattice 46, attention 120, tile 204 |
+| dynamics | 8 / 8 | energy_min 4 geoms, pc family 2, lazy 1, spike 1, diffusion 1 (most are declared by `nonlayered_geometry_dynamics`) |
+| plasticity | 7 / 7 | `fast_weights` 2 geoms (declared void on nca/ntm), `substrate_coupled` 7 |
+| credit | 10 / 10 | as §2: graph 2 error-aware, everything else ≥3 |
+| update | 11 / 12 | **`role_split` has zero cells**; `ortho_adam` 4 geoms, `riemannian_orthogonal` 5 |
+| tasks | 22 / 25 | never touched: `kmnist`, `char_ngram`, `tiny_shakespeare`; thin: `cifar10` 9 cells, `usps` 2, `pendulum` 9 |
+
+**Substrate × geometry holes:** graph has zero cells off digital; nca is on 6 of
+9 substrates and `neuromorphic`/`quantum` are on 4 geometries each. Some are
+real constraints (`nca_ntm_fast_weight_plasticity`, `nonlayered_geometry_dynamics`),
+but "graph is digital-only" and "quantum supports four geometries" are
+unmeasured, not declared.
+
+**Domains with no claim:** CIFAR-10 (9 cells), `usps` (2), continual learning
+(`sequential_mnist` 23 cells; `forgetting`/`backward_transfer` are registered
+but unmeasured), language (`copy_task` 55 cells, no `bleu_score`), timeseries
+(`synthetic_forecast` 31, no claim), and `ScientificTask` — a whole domain class
+with **no registry row**.
+
+**Instrument gaps, each with its cheapest action:**
+
+1. **3 pre-existing acceptance locks fail** (reproduced on duckdb 1.5.6 and
+   2.0.0, so not the refresh): `test_campaign_evidence_lock::test_f2` reads
+   `payload["train_acc"]` while the evaluator records `accuracy`; the two
+   promotion locks report every cell at L2, so no cell earns L1. Release-candidate
+   gates — fix before the next round close, not as a feature ticket.
+2. **`comp coverage report` defaults to one run** (6 cells) instead of the
+   428-store corpus; `scripts/probes/t3_credit_breadth.py` is the corpus
+   instrument. Give coverage a corpus mode so the two never disagree.
+3. **12 objectives are registered without a payload key**
+   (`bleu_score`, `bp_deficit`, `convergence_steps`, `credit_efficiency`,
+   `generalization_gap`, `ruler_{energy,param,walltime}_ratio`,
+   `stability_plasticity_ratio`, `test_accuracy`, `test_loss`,
+   `training_time`), `f1_score` is unmeasured for every classification task, and
+   15 measured keys (`accuracy`, `mean_reward`, `val_acc_mean`, …) have no
+   registered objective. Each row is a withdrawn claim or a missing registration.
+4. **Declared-void inventory:** 46 constraints, 37 VOID, 6 HARD, 2 operating
+   point, 1 fairness. That is the ceiling on versatility; a hole that is not in
+   the list is a defect, and a hole that is must state its reason (the nca
+   duplicate in §2 is the counterexample).
 
 ---
 
@@ -133,6 +190,10 @@ trigger explicit instead of re-deriving it:
 
 **Closed by T10:** the nca third credit (`target_inversion` 0.9389, §1). Do not
 re-derive it; the fold lives in `_fold_cell_targets` and the locks hide it.
+
+**Outside TODO89 scope:** §2b maps the wider surface (axes exercised, tasks
+with no claim, 3 failing acceptance locks, unmeasured objectives). It is not a
+ticket queue; each row names its cheapest action.
 
 ---
 
