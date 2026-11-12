@@ -42,7 +42,7 @@ from computronium.experiment.schema import (
     seed_all_registries,
 )
 
-from ._specs import mechanism_spec, unreachable_spec
+from ._specs import filtered_spec, mechanism_spec
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -87,11 +87,11 @@ def test_the_oracle_prices_every_primitive_it_can_measure() -> None:
 def test_a_declaration_that_names_an_unreachable_primitive_is_filtered() -> None:
     """Axis filtering removes unreachable primitives at search space time.
 
-    The search space builder now filters unreachable primitives (opportunity 3
-    addressed at S2 Space). The price oracle receives a pre-filtered space
-    and correctly reports no unreachable structural primitives.
+    The fixture declares ``instantaneous`` beside ``thermodynamic_contrast``;
+    the pair composes for nothing. The space builder must drop the dynamics
+    and the oracle must see only the reachable remainder.
     """
-    spec = unreachable_spec()
+    spec = filtered_spec()
     plan = _plan(spec)
 
     # With axis filtering, the search space only contains legal structural combinations.

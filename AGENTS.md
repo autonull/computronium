@@ -41,6 +41,7 @@
 *   **Control Flow**: Flatten with guard clauses (`if not condition: return`). 
 *   **Finally Blocks**: **Never** use `return`, `break`, or `continue` inside a `finally` block (PEP 765). This is a hard `SyntaxError` and silently swallows exceptions.
 *   **Composition over Inheritance**: Favor small pure functions. Isolate side effects so core logic stays testable.
+*   **One Source of Truth per Rule**: legality, pricing, measurement identity, dispatch and capability flags each live in exactly one place. A second table, filter or cache that re-derives one is a defect, not a fallback: feed the first or delete it, and count what the second one used to drop. Capability flags are declared (config field, `ClassVar`, registry row), never inferred by reflection or by shape.
 *   **Immutability**: Default to immutable structures (`tuple`, `frozenset`, frozen dataclasses) unless mutation is strictly required.
 
 ## Async Concurrency & Thread Safety
@@ -196,7 +197,7 @@
 
 4. **VERIFY** (0.02h) — Quick re-run same config
 
-5. **COMMIT + LOG** — Update TODO with session log
+5. **COMMIT + CLOSE** — Commit the fix. A ticket's evidence is its commit message plus the measured number written where the mechanism lives (constraint comment, identity card, lock docstring). The TODO holds open work only: a closed ticket leaves the queue and does not accumulate a session log.
 
 **Defect Patterns (Symptom → Likely Cause):**
 
@@ -348,6 +349,7 @@
 | `--dry-run` writes store, silent | Check `dry_run` before store create; print plan | `survey_cli.py` |
 | Capability rows name dead tests | Fixture must fail when mechanism removed | `surface/conformance.py`, test files |
 | Dataset ordered by class, tail-slice split | Stratify + report majority baseline | `domains/tabular.py` |
+| Claim finer than the metric's granularity | Report the resolution; fold-mean or a larger split | `domains/tabular.py`, `domains/factory.py` |
 | Credit needs an input channel the pipeline never adds | Mark the row unavailable with the reason | `schema/seed_registries.py` |
 | Graph task proposed on node-mode geometry | Domain-exclusive geometry filter | `kernel/search_space.py` |
 | Explicit `1` read as "unset" (`!= 1`) | Test `is not None`; ladder only on `None` | `kernel/search_space.py` |
@@ -366,8 +368,18 @@
 - Zero "free settle telemetry failed" warnings
 - 100% positive control PASS rate
 - 4+ claim-eligible cells per multi-task run (n_seeds × tasks)
+- **Every number carries its ruler.** State the metric's resolution beside it
+  (held-out samples for a split, episodes for RL, folds for a fold-mean) and the
+  chance/majority rate it is measured against.
+- **A claim within 1 σ of its threshold is `marginal`, not met.** Re-measure it
+  as a pre-registered paired comparison (`configs/preregistrations/<slug>.json`,
+  `computronium.validation.preregistration.PairedComparison`) or state the arm it
+  needs. Do not round it up.
+- **A ticket closes on a claim or a named verdict, never on a defect count.** A
+  session fixes what blocks a run or a number; a fix that does neither is
+  hygiene and belongs to round close.
 
-**Session Log Template (append to TODO):**
+**Session Log Template (commit message body; never appended to the TODO):**
 ```
 ## Session YYYY-MM-DD
 **Experiment:** <command>
@@ -394,6 +406,8 @@
 - Let auxiliary NaNs discard valid cells
 - Run with `convergence_threshold < 1e-3` for energy_min
 - Accept `max_steps=30` default for energy_min
+- Close a ticket on a defect count instead of a claim or a named verdict
+- Call a result "met" when it sits within 1 σ of its threshold
 
 ---
 

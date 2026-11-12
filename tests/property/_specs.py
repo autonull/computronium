@@ -61,12 +61,13 @@ def mechanism_spec(*, budget_seconds: float | None = 600.0) -> RunSpec:
     )
 
 
-def unreachable_spec() -> RunSpec:
-    """A declaration that names a primitive no legal cell can reach.
+def filtered_spec() -> RunSpec:
+    """A declaration whose credit rules out one of its declared dynamics.
 
     ``thermodynamic_contrast`` needs energy-based dynamics; paired with
-    ``instantaneous`` it composes for nothing, so a run measures one cell and
-    reports a one-member axis as if it had chosen one.
+    ``instantaneous`` it composes for nothing. The space builder must drop
+    ``instantaneous`` rather than propose dead cells, leaving
+    ``energy_minimization`` as the only reachable dynamics.
     """
     spec = mechanism_spec()
     return spec.model_copy(
@@ -81,4 +82,4 @@ def unreachable_spec() -> RunSpec:
     )
 
 
-__all__ = ["mechanism_spec", "unreachable_spec"]
+__all__ = ["filtered_spec", "mechanism_spec"]

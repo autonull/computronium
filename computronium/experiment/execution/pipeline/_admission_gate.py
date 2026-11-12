@@ -1,6 +1,6 @@
 """Admission gate utilities for pipeline.
 
-Provides reusable admission gate logic (compatibility matrix + compose validation)
+Provides the reusable last-mile admission gate (compose validation)
 that can be used by pipeline stages and other components.
 """
 
@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from computronium.experiment.kernel.compose import ProposalComposeError
 from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
-from computronium.ontology.system import check_compatibility_matrix
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
@@ -23,30 +22,6 @@ class AdmissionGateError(ValueError):
     def __init__(self, cause: str, message: str) -> None:
         self.cause = cause
         super().__init__(message)
-
-
-def check_compatibility_gate(
-    coordinate: Coordinate,
-) -> tuple[bool, str | None]:
-    """Check compatibility matrix for known-incompatible combos.
-
-    Args:
-        coordinate: The experiment coordinate to check.
-
-    Returns:
-        Tuple of (passed, rejection_message_or_none).
-    """
-    compat_violations = check_compatibility_matrix(
-        substrate=coordinate.substrate,
-        geometry=coordinate.geometry,
-        dynamics=coordinate.dynamics,
-        plasticity=coordinate.plasticity,
-        credit=coordinate.credit,
-        update=coordinate.update,
-    )
-    if compat_violations:
-        return False, "; ".join(compat_violations)
-    return True, None
 
 
 def check_compose_gate(
@@ -96,7 +71,10 @@ def passes_admission_gate(
     schedule: Schedule,
     task_id: str | None = None,
 ) -> tuple[bool, str | None]:
-    """Run both admission gates: compatibility matrix + compose validation.
+    """Run the last-mile compose/validate gate.
+
+    ``iter_candidates`` is the only legality filter upstream; this gate is the
+    last mile that proves the selected cell composes for its task shape.
 
     Args:
         coordinate: The experiment coordinate to check.
@@ -106,19 +84,11 @@ def passes_admission_gate(
     Returns:
         Tuple of (passed, rejection_message_or_none).
     """
-    # ADMISSION GATE 1: fast compatibility matrix pre-check
-    passed, msg = check_compatibility_gate(coordinate)
-    if not passed:
-        return False, msg
-
-    # ADMISSION GATE 2: last-mile SystemConfig.validate check
-    passed, msg = check_compose_gate(coordinate, schedule, task_id)
-    return passed, msg
+    return check_compose_gate(coordinate, schedule, task_id)
 
 
 __all__ = [
     "AdmissionGateError",
-    "check_compatibility_gate",
     "check_compose_gate",
     "passes_admission_gate",
 ]

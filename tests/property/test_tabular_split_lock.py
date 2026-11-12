@@ -61,3 +61,25 @@ def test_evaluate_reports_majority_baseline() -> None:
     assert metrics.custom["majority_baseline"] == expected
     assert metrics.custom["val_acc_over_majority"] == metrics.accuracy - expected
     assert metrics.to_dict()["majority_baseline"] == expected
+
+
+def test_folds_partition_every_row_and_select_one() -> None:
+    """The fold path is a real partition, not a second holdout (T2).
+
+    Five stratified folds must cover every row exactly once, keep all three
+    classes in every validation fold, and ``set_fold`` must install that fold's
+    loaders. Falsified by returning overlapping folds or by ignoring the fold
+    index: the validation size would not be 30 or the coverage would not be 1.
+    """
+    task = _task("iris")
+    task.setup()
+    folds = task.fold_indices(5)
+    seen = torch.zeros(len(task._X), dtype=torch.int)
+    for train_idx, val_idx in folds:
+        assert not set(train_idx) & set(val_idx)
+        seen[torch.as_tensor(val_idx)] += 1
+        assert set(task._y[val_idx].tolist()) == {0, 1, 2}
+    assert bool((seen == 1).all())
+
+    task.set_fold(2, 5)
+    assert len(_labels(task, TaskSplit.VAL)) == len(folds[2][1]) == 30

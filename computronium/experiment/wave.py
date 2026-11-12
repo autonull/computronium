@@ -45,7 +45,6 @@ from computronium.experiment.schema.coordinate import (
 )
 from computronium.experiment.schema.record import GateVerdict
 from computronium.experiment.schema.run_spec import RunSpec
-from computronium.ontology.system import check_compatibility_matrix
 
 logger = get_logger(__name__)
 
@@ -204,31 +203,6 @@ MUTATION_AXES: list[StructuralAxis] = [
 ]
 
 
-def _check_coord_compatibility(coord: Coordinate) -> bool:
-    violations = check_compatibility_matrix(
-        coord.substrate,
-        coord.geometry,
-        coord.dynamics,
-        coord.plasticity,
-        coord.credit,
-        coord.update,
-    )
-    return not violations
-
-
-def _compatibility_violation(coord: Coordinate) -> str | None:
-    """The first flat-rule violation this coordinate carries, else ``None``."""
-    violations = check_compatibility_matrix(
-        coord.substrate,
-        coord.geometry,
-        coord.dynamics,
-        coord.plasticity,
-        coord.credit,
-        coord.update,
-    )
-    return violations[0] if violations else None
-
-
 def _make_positive_control_cell(
     spec: RunSpec,
 ) -> tuple[Coordinate, Schedule] | None:
@@ -261,11 +235,6 @@ def _make_positive_control_cell(
         update="euclidean",
         params={},
     )
-
-    # Verify compatibility
-    if not _check_coord_compatibility(coord):
-        logger.warning("Positive control coordinate failed compatibility check")
-        return None
 
     # The run's own first task; a run always names at least one.
     task = spec.task_names[0]
@@ -490,12 +459,6 @@ class StaticPlanner:
                     params=dict(coord.params),
                 )
 
-                if not _check_coord_compatibility(mutated_coord):
-                    self.rejections[
-                        _compatibility_violation(mutated_coord) or "compatibility"
-                    ] += 1
-                    continue
-
                 task = random.choice(self.tasks)
                 schedule = schedule_for(self.spec, task, self.fidelity)
 
@@ -523,12 +486,6 @@ class StaticPlanner:
                 offset=self._offset,
                 rejections=self.rejections,
             ):
-                if not _check_coord_compatibility(coord):
-                    self.rejections[
-                        _compatibility_violation(coord) or "compatibility"
-                    ] += 1
-                    continue
-
                 cell_schedule = schedule_for(self.spec, schedule.task_id, self.fidelity)
 
                 measurement_key = coord.measurement_key(cell_schedule)
@@ -735,9 +692,6 @@ class PolicyPlanner:
             if proposed >= self._wave_size:
                 break
             coord = prop.coordinate
-            if not _check_coord_compatibility(coord):
-                self.rejections[_compatibility_violation(coord) or "compatibility"] += 1
-                continue
             task = prop.schedule.task_id
             schedule = schedule_for(self.spec, task, self.fidelity)
             keys = [coord.measurement_key(rep) for rep in schedule.seed_plan]

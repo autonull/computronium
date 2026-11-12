@@ -381,12 +381,15 @@ def cross_validate(
     from computronium.core.system_trainer.train_task import train_on_task
 
     all_fold_metrics: dict[str, dict[str, float]] = {}
-    config = SystemTrainerConfig(max_epochs=epochs, track_energy=False)
+    config = SystemTrainerConfig(
+        max_epochs=epochs, track_energy=False, device=str(task.device)
+    )
 
     for fold in range(n_folds):
         logger.info("Cross-validation fold %s/%s", fold + 1, n_folds)
-        if hasattr(task, "set_fold"):
-            task.set_fold(fold, n_folds)
+        set_fold = getattr(task, "set_fold", None)
+        if callable(set_fold):
+            set_fold(fold, n_folds)
         trained: list[System] = []
 
         def factory(input_dim: int, output_dim: int) -> System:

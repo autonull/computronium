@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 import dataclasses
+import random
+from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import field
 from pathlib import Path
@@ -26,13 +29,13 @@ from computronium.core.system_trainer._resume import (
     TrainerSnapshot,
     fold_in,
 )
-from computronium.core.system_trainer.config import SystemTrainerConfig
 
 if TYPE_CHECKING:
     from types import TracebackType
 
     from torch import Tensor
 
+    from computronium.core.system_trainer.config import SystemTrainerConfig
     from computronium.ontology import System
 
 type StepCallback = Callable[[Mapping[str, float]], None]
@@ -40,7 +43,33 @@ type CheckpointCallback = Callable[[TrainerSnapshot], None]
 
 logger = get_logger()
 
+
+class _QCritic(nn.Module):
+    """State-action value head for the continuous lane."""
+
+    def __init__(self, obs_dim: int, action_dim: int) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim + action_dim, 64),
+            nn.Tanh(),
+            nn.Linear(64, 64),
+            nn.Tanh(),
+            nn.Linear(64, 1),
+        )
+
+    def forward(self, states: Tensor, actions: Tensor) -> Tensor:
+        return self.net(torch.cat([states, actions], dim=-1))
+
+
 MAX_STEPS = 1000
+REWARD_SCALE = 0.1
+ENTROPY_COEF = 0.01
+DDPG_ACTOR_LR = 1e-4
+DDPG_CRITIC_LR = 1e-3
+DDPG_WARMUP = 1_000
+DDPG_BUFFER = 200_000
+DDPG_TAU = 0.005
+DDPG_NOISE = 0.15
 
 
 def _autocast_context(device: torch.device, precision: str):
@@ -57,9 +86,10 @@ def _autocast_context(device: torch.device, precision: str):
 class RLSystemTrainer:
     """Trainer for RL tasks with 5-D composable systems.
 
-    Implements REINFORCE (Policy Gradient) with baseline for discrete
-    and continuous action spaces. Orchestrates:
-        System.forward → action sampling → environment step → return computation → policy update
+    Implements a one-step actor-critic for discrete and continuous action
+    spaces. Orchestrates:
+        System.forward → action sampling → environment step → TD target →
+        actor/critic update
     """
 
     system: System
@@ -98,12 +128,47 @@ class RLSystemTrainer:
         # Seeding
         self._seed_environment(self.config.seed)
 
-        # Optimizer (for policy parameters)
-        lr = self.config.extra.get("lr", 3e-4) if self.config.extra else 3e-4
-        params = list(self.system.geometry.params.values())
+        # Optimiser plan. Continuous control takes the deterministic
+        # actor-critic lane: at 400 episodes, one update per episode is the
+        # measured defect (T1), while per-step updates over the same episode
+        # budget reach the criterion. Discrete tasks keep the cheaper
+        # per-step one-step actor-critic.
+        extra = self.config.extra if self.config.extra is not None else {}
+        raw_lr = extra.get("lr")
+        lr = float(raw_lr) if isinstance(raw_lr, (int, float)) else None
+        input_dim = int(self.train_data.input_dim)
         if self.is_continuous:
-            params.append(self.log_std)
-        self.optimizer = optim.Adam(params, lr=lr)
+            action_space = self._env.action_space
+            if not isinstance(action_space, Box):
+                raise RuntimeError("continuous lane requires a Box action space")
+            action_dim = int(action_space.shape[0])
+            actor_lr = lr or DDPG_ACTOR_LR
+            critic_lr = lr or DDPG_CRITIC_LR
+            self._replay: deque[tuple[Tensor, Tensor, float, Tensor, float]] = deque(
+                maxlen=DDPG_BUFFER
+            )
+            self._random = random.Random(self.config.seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - replay sampling
+            self.critic = _QCritic(input_dim, action_dim).to(self.device)
+            self.target_critic = copy.deepcopy(self.critic)
+            self.target_system = copy.deepcopy(self.system)
+            self.target_system.geometry.to(self.device)
+            self.optimizer = optim.Adam(
+                self.system.geometry.params.values(), lr=actor_lr
+            )
+        else:
+            lr = lr or 3e-4
+            self.optimizer = optim.Adam(self.system.geometry.params.values(), lr=lr)
+            self.critic = nn.Sequential(
+                nn.Linear(input_dim, 64),
+                nn.Tanh(),
+                nn.Linear(64, 64),
+                nn.Tanh(),
+                nn.Linear(64, 1),
+            ).to(self.device)
+        self.critic_optimizer = optim.Adam(
+            self.critic.parameters(),
+            lr=critic_lr if self.is_continuous else (lr or 3e-4),
+        )
 
         # History
         self.reward_history: list[float] = []
@@ -179,110 +244,192 @@ class RLSystemTrainer:
             obs, reward, terminated, _ = step_result
             return obs, float(reward), terminated, False
 
-    def _get_action(self, logits: torch.Tensor) -> tuple[object, torch.Tensor]:
-        """Sample action from logits and return (env_action, log_prob)."""
+    def _policy_step(self, logits: torch.Tensor):
+        """Sample an environment action and its log-probability."""
         if self.is_continuous:
-            # Continuous Action Space (Gaussian Policy)
-            mean = torch.tanh(logits) * self.action_scale + self.action_bias
-            std = torch.exp(self.log_std)
+            scale, bias = self.action_scale, self.action_bias
+            log_std = self.log_std
+            if scale is None or bias is None or log_std is None:
+                raise RuntimeError("continuous policy is missing its parameters")
+            mean = torch.tanh(logits) * scale + bias
+            std = torch.exp(log_std.clamp(-2.0, 0.0))
             dist = torch.distributions.Normal(mean, std)
             action = dist.sample()
-            log_prob = dist.log_prob(action).sum(dim=-1)
-            env_action = action.cpu().detach().numpy()[0]
-        else:
-            # Discrete Action Space (Categorical Policy)
-            probs = torch.softmax(logits, dim=-1)
-            dist = torch.distributions.Categorical(probs)
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
-            env_action = action.item()
+            return (
+                action.detach().cpu().numpy()[0],
+                dist.log_prob(action).sum(-1),
+                dist,
+            )
+        dist = torch.distributions.Categorical(logits=logits)
+        action = dist.sample()
+        return action.item(), dist.log_prob(action), dist
 
-        return env_action, log_prob
+    def _train_episode(self) -> dict[str, float]:
+        """Run one episode through the lane matching the action space."""
+        if self.is_continuous:
+            return self._train_episode_ddpg()
+        return self._train_episode_a2c()
 
-    def _collect_trajectory(self) -> tuple[list[torch.Tensor], list[float]]:
-        """Run one episode and collect log_probs and rewards."""
+    def _train_episode_a2c(self) -> dict[str, float]:
+        """Discrete actions: per-step one-step actor-critic."""
+        self.system.geometry.train()
+        self.critic.train()
         obs = self._reset_env()
-
-        log_probs = []
-        rewards = []
+        total_reward = 0.0
+        loss_value = 0.0
+        steps = 0
 
         for _ in range(self.max_steps):
-            obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
-
-            # Forward pass through system
+            state = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
             with self._autocast:
-                logits = self.system.forward(obs_tensor)
+                logits = self.system.forward(state)
+            env_action, log_prob, dist = self._policy_step(logits)
+            next_obs, reward, terminated, truncated = self._step_env(env_action)
 
-            # Get action
-            env_action, log_prob = self._get_action(logits)
-
-            # Step environment
-            obs, reward, terminated, truncated = self._step_env(env_action)
-
-            log_probs.append(log_prob)
-            rewards.append(reward)
-
+            loss_value += self._a2c_update(
+                state, log_prob, dist, reward, next_obs, terminated
+            )
+            total_reward += reward
+            steps += 1
+            obs = next_obs
             if terminated or truncated:
                 break
 
-        return log_probs, rewards
-
-    def _compute_returns(self, rewards: list[float]) -> torch.Tensor:
-        """Compute discounted returns with normalization."""
-        returns = []
-        R = 0.0
-        for r in reversed(rewards):
-            R = r + self.gamma * R
-            returns.insert(0, R)
-
-        returns_tensor = torch.tensor(returns, device=self.device)
-
-        # Normalize returns for stability
-        if len(returns_tensor) > 1:
-            returns_tensor = (returns_tensor - returns_tensor.mean()) / (
-                returns_tensor.std() + 1e-9
-            )
-
-        return returns_tensor
-
-    def _update_policy(
-        self, log_probs: list[torch.Tensor], returns: torch.Tensor
-    ) -> float:
-        """Update policy using REINFORCE."""
-        loss_list = []
-        for log_prob, R in zip(log_probs, returns):
-            loss_list.append(-log_prob * R)
-
-        loss = torch.stack(loss_list).sum()
-
-        self.optimizer.zero_grad()
-        loss.backward()
-
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(self.system.geometry.params.values(), 1.0)
-
-        self.optimizer.step()
-
-        return loss.item()
-
-    def _train_episode(self) -> dict[str, float]:
-        """Run one episode and update policy."""
-        self.system.geometry.train()
-
-        # 1. Collect Trajectory
-        log_probs, rewards = self._collect_trajectory()
-
-        # 2. Compute Returns
-        returns = self._compute_returns(rewards)
-
-        # 3. Policy Gradient Update
-        loss_value = self._update_policy(log_probs, returns)
-
-        total_reward = sum(rewards)
         self.reward_history.append(total_reward)
         self.loss_history.append(loss_value)
+        return {"reward": total_reward, "loss": loss_value, "steps": steps}
 
-        return {"reward": total_reward, "loss": loss_value, "steps": len(rewards)}
+    def _a2c_update(
+        self,
+        state: Tensor,
+        log_prob: Tensor,
+        dist: torch.distributions.Distribution,
+        reward: float,
+        next_obs: np.ndarray,
+        terminated: bool,
+    ) -> float:
+        """One actor-critic update for a discrete transition."""
+        value = self.critic(state).squeeze()
+        with torch.no_grad():
+            next_state = torch.FloatTensor(next_obs).unsqueeze(0).to(self.device)
+            with self._autocast:
+                next_value = self.critic(next_state).squeeze()
+            target = REWARD_SCALE * reward + self.gamma * next_value * (not terminated)
+
+        advantage = (target - value).detach().clamp(-10.0, 10.0)
+        entropy = dist.entropy().sum(-1).mean()
+        actor_loss = -(log_prob * advantage).mean() - ENTROPY_COEF * entropy
+        critic_loss = 0.5 * (target - value).pow(2)
+        loss = actor_loss + critic_loss
+
+        self.optimizer.zero_grad()
+        self.critic_optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.system.geometry.params.values(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
+        self.optimizer.step()
+        self.critic_optimizer.step()
+        return float(loss.detach())
+
+    def _actor_action(self, states: Tensor, *, target: bool = False) -> Tensor:
+        system = self.target_system if target else self.system
+        scale, bias = self.action_scale, self.action_bias
+        if scale is None or bias is None:
+            raise RuntimeError("continuous policy is missing action scaling")
+        with self._autocast:
+            logits = system.forward(states)
+        return torch.tanh(logits) * scale + bias
+
+    def _polyak(
+        self, target: Mapping[str, Tensor], source: Mapping[str, Tensor]
+    ) -> None:
+        with torch.no_grad():
+            for key, param in source.items():
+                target[key].mul_(1.0 - DDPG_TAU).add_(DDPG_TAU * param)
+
+    def _ddpg_update(self) -> float:
+        """One deterministic-policy-gradient update from the replay buffer."""
+        batch = self._random.sample(
+            self._replay, min(int(self.config.batch_size), len(self._replay))
+        )
+        states, actions, rewards, next_states, dones = zip(*batch)
+        states = torch.stack(states).to(self.device)
+        actions = torch.stack(actions).to(self.device)
+        rewards = torch.tensor(rewards, device=self.device).unsqueeze(-1)
+        next_states = torch.stack(next_states).to(self.device)
+        dones = torch.tensor(dones, device=self.device).unsqueeze(-1)
+
+        with torch.no_grad():
+            next_actions = self._actor_action(next_states, target=True)
+            target = rewards + self.gamma * (1.0 - dones) * self.target_critic(
+                next_states, next_actions
+            )
+        critic_loss = 0.5 * (self.critic(states, actions) - target).pow(2).mean()
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
+        self.critic_optimizer.step()
+
+        actor_loss = -self.critic(states, self._actor_action(states)).mean()
+        self.optimizer.zero_grad()
+        actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.system.geometry.params.values(), 1.0)
+        self.optimizer.step()
+
+        self._polyak(self.target_system.geometry.params, self.system.geometry.params)
+        self._polyak(
+            dict(self.target_critic.named_parameters()),
+            dict(self.critic.named_parameters()),
+        )
+        return float((actor_loss + critic_loss).detach())
+
+    def _train_episode_ddpg(self) -> dict[str, float]:
+        """Continuous actions: per-step DDPG with replay and target networks."""
+        self.system.geometry.train()
+        self.critic.train()
+        action_space = self._env.action_space
+        if not isinstance(action_space, Box):
+            raise RuntimeError("continuous lane requires a Box action space")
+        low, high = action_space.low, action_space.high
+        obs = self._reset_env()
+        total_reward = 0.0
+        loss_value = 0.0
+        steps = 0
+
+        for _ in range(self.max_steps):
+            state = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+            if len(self._replay) < DDPG_WARMUP:
+                env_action = np.random.uniform(low=low, high=high).astype(np.float32)
+                action_tensor = torch.from_numpy(env_action)
+            else:
+                with torch.no_grad():
+                    action = self._actor_action(state)
+                action += DDPG_NOISE * torch.randn_like(action)
+                action = torch.clamp(action, min=float(low[0]), max=float(high[0]))
+                env_action = action.cpu().numpy()[0]
+                action_tensor = action.squeeze(0).cpu()
+
+            next_obs, reward, terminated, truncated = self._step_env(env_action)
+            next_state = torch.FloatTensor(next_obs)
+            self._replay.append((
+                state.squeeze(0).cpu(),
+                action_tensor.detach(),
+                float(reward),
+                next_state,
+                float(terminated),
+            ))
+            if len(self._replay) >= DDPG_WARMUP:
+                loss_value += self._ddpg_update()
+
+            total_reward += reward
+            steps += 1
+            obs = next_obs
+            if terminated or truncated:
+                break
+
+        self.reward_history.append(total_reward)
+        self.loss_history.append(loss_value)
+        return {"reward": total_reward, "loss": loss_value, "steps": steps}
 
     def train_epoch(self) -> dict[str, float]:
         """Run multiple episodes as an 'epoch'."""
@@ -291,8 +438,9 @@ class RLSystemTrainer:
         epoch_reward_sum = 0.0
         epoch_loss_sum = 0.0
 
+        raw_episodes = (self.config.extra or {}).get("episodes_per_epoch", 10)
         episodes_per_epoch = (
-            self.config.extra.get("episodes_per_epoch", 10) if self.config.extra else 10
+            int(raw_episodes) if isinstance(raw_episodes, (int, float)) else 10
         )
 
         for _ in range(episodes_per_epoch):

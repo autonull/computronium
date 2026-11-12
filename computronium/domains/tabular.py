@@ -52,6 +52,8 @@ class TabularTask(DomainTask):
         )
 
     def setup(self) -> None:
+        if self._setup_done:
+            return
         from sklearn.datasets import (
             load_breast_cancer,
             load_digits,
@@ -79,35 +81,78 @@ class TabularTask(DomainTask):
         # Normalize
         X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-8)
 
+        self._X = X
+        self._y = y
+        self._fold: int | None = None
+        self._n_folds = 0
+
         # Stratified, deterministic split. sklearn ships iris/wine ordered by
         # class, so the tail slice held out ONE class — wine's validation was
         # 36 class-2 rows against a train set of 12, and every arm read 0.0.
         from sklearn.model_selection import train_test_split
 
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=0.2, random_state=0, stratify=y
+        train_idx, val_idx = train_test_split(
+            np.arange(X.shape[0]), test_size=0.2, random_state=0, stratify=y
         )
-
-        train_ds = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
-        val_ds = TensorDataset(torch.from_numpy(X_val), torch.from_numpy(y_val))
-
-        self._train_loader = DataLoader(
-            train_ds, batch_size=self.batch_size, shuffle=True
-        )
-        self._val_loader = DataLoader(val_ds, batch_size=self.batch_size, shuffle=False)
-        self._test_loader = self._val_loader
+        self._set_loaders(np.asarray(train_idx), np.asarray(val_idx))
 
         self._input_dim = X.shape[1]
         self._output_dim = len(data.target_names)
         self._setup_done = True
 
+    def _set_loaders(self, train_idx: np.ndarray, val_idx: np.ndarray) -> None:
+        X_train = torch.from_numpy(self._X[train_idx])
+        y_train = torch.from_numpy(self._y[train_idx])
+        X_val = torch.from_numpy(self._X[val_idx])
+        y_val = torch.from_numpy(self._y[val_idx])
+        self._train_loader = DataLoader(
+            TensorDataset(X_train, y_train), batch_size=self.batch_size, shuffle=True
+        )
+        self._val_loader = DataLoader(
+            TensorDataset(X_val, y_val), batch_size=self.batch_size, shuffle=False
+        )
+        self._test_loader = self._val_loader
+
+    def fold_indices(self, n_folds: int = 5) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Deterministic stratified folds, shared with any reference comparison.
+
+        The same indices must drive every arm compared on a fold-mean, so this
+        method is the single source of the split. ``random_state=0`` and
+        ``shuffle=True`` make it reproducible across processes.
+
+        Returns:
+            One ``(train_indices, val_indices)`` pair per fold.
+        """
+        if not self._setup_done:
+            self.setup()
+        from sklearn.model_selection import StratifiedKFold
+
+        splitter = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=0)
+        return list(splitter.split(self._X, self._y))
+
+    def set_fold(self, fold: int, n_folds: int) -> None:
+        """Select one stratified fold as validation; the rest becomes training.
+
+        ``cross_validate`` calls this before each fold's ``train_on_task``. A
+        validation split of 30 rows resolves to 0.033 per sample, so a claim
+        below one row's resolution is not readable from a single holdout.
+        """
+        if n_folds < 2 or not 0 <= fold < n_folds:
+            raise ValueError(f"fold {fold} out of range for {n_folds} folds")
+        folds = self.fold_indices(n_folds)
+        self._fold = fold
+        self._n_folds = n_folds
+        train_idx, val_idx = folds[fold]
+        self._set_loaders(np.asarray(train_idx), np.asarray(val_idx))
+
     def get_dataloader(self, split: TaskSplit) -> DataLoader:
         if not self._setup_done:
             self.setup()
 
-        if split == TaskSplit.TRAIN:
-            return self._train_loader
-        return self._val_loader
+        loader = self._train_loader if split == TaskSplit.TRAIN else self._val_loader
+        if loader is None:
+            raise RuntimeError("TabularTask loaders are not built")
+        return loader
 
     def evaluate(
         self,

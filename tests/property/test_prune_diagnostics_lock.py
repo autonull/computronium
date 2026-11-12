@@ -15,10 +15,6 @@ from __future__ import annotations
 
 from collections import Counter
 
-from computronium.experiment.execution.policy import (
-    ProposalContext,
-    UniformRandomPolicy,
-)
 from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.kernel.search_space import (
     iter_candidates,
@@ -30,7 +26,6 @@ from computronium.experiment.schema import (
     StructuralAxis,
 )
 from computronium.experiment.wave import PolicyPlanner, StaticPlanner
-from computronium.ontology.system import check_compatibility_matrix
 
 
 def _spec(
@@ -104,45 +99,6 @@ def test_the_planner_summary_carries_the_cause() -> None:
         )
 
 
-def test_a_flat_rule_drop_is_counted_too() -> None:
-    """The planner's own compatibility matrix is a filter, not a silent gate.
-
-    ``ternary`` x ``temporal_psi`` passes every declared constraint, so the
-    search space proposes it; the flat matrix refuses it at the planner. That
-    second filter has to report itself, or the two sources of truth can drift
-    without a trace.
-    """
-    spec = _spec(
-        substrate="ternary",
-        geometry="feedforward",
-        plasticity="temporal_psi",
-    )
-    space = search_space_from_spec(spec, tasks=("mnist",))
-    rejections: Counter[str] = Counter()
-    ctx = ProposalContext(
-        search_space=space,
-        spec=spec,
-        run_id="lock",
-        n_propose=4,
-        shape=task_shape,
-        rejections=rejections,
-    )
-
-    assert list(UniformRandomPolicy(seed=42).propose(ctx))
-    planner = PolicyPlanner(
-        spec=spec,
-        fidelity="L1",
-        tasks=("mnist",),
-        seed=42,
-        search_space=space,
-        policy="random",
-    )
-    planner.propose(4, seen=set())
-    assert "ternary' incompatible with plasticity 'temporal_psi" in (
-        planner.rejection_summary()
-    )
-
-
 def test_stale_stdp_rule_stays_deleted() -> None:
     """STDP on instantaneous dynamics is a declared-legal cell, not a void.
 
@@ -152,18 +108,8 @@ def test_stale_stdp_rule_stays_deleted() -> None:
     vanish at the planner. The credit is error-blind by contract, so it measures
     chance on a supervised task; that is a result, not an illegal coordinate.
     """
-    coordinate = (
-        "digital",
-        "recurrent",
-        "instantaneous",
-        "null",
-        "temporal_trace",
-        "adam",
-    )
-    assert check_compatibility_matrix(*coordinate) == []
-
     spec = _spec(credit="temporal_trace", plasticity=("null", "routing"))
     space = search_space_from_spec(spec, tasks=("mnist",))
     cells = list(iter_candidates(spec, space, shape=task_shape, page_size=50))
     assert cells
-    assert {coordinate.plasticity for coordinate, _ in cells} == {"null", "routing"}
+    assert {coord.plasticity for coord, _ in cells} == {"null", "routing"}

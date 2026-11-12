@@ -5,8 +5,10 @@ from __future__ import annotations
 import pytest
 
 from computronium.experiment import simple_survey
+from computronium.experiment.execution.pipeline._admission_gate import (
+    check_compose_gate,
+)
 from computronium.experiment.simple_survey import run_simple_survey
-from computronium.ontology.system import check_compatibility_matrix
 
 
 def test_dry_run_generates_valid_cells():
@@ -20,15 +22,8 @@ def test_dry_run_generates_valid_cells():
     assert len(result["cells"]) == result["n"]
 
     for coord, sched in result["cells"]:
-        violations = check_compatibility_matrix(
-            coord.substrate,
-            coord.geometry,
-            coord.dynamics,
-            coord.plasticity,
-            coord.credit,
-            coord.update,
-        )
-        assert violations == [], f"Invalid coordinate: {violations}"
+        passed, message = check_compose_gate(coord, sched)
+        assert passed, f"Invalid coordinate: {message}"
 
 
 def test_dry_run_fidelity_l0():
@@ -105,20 +100,12 @@ def test_dry_run_different_seeds_produce_different_cells():
 
 
 def test_compatibility_filtering():
-    """Compatibility matrix should filter invalid combinations."""
+    """Every generated cell composes for its task shape."""
     result = run_simple_survey(0.01, fidelity="L0", dry_run=True)
 
-    # All generated cells should be compatible
-    for coord, _ in result["cells"]:
-        violations = check_compatibility_matrix(
-            coord.substrate,
-            coord.geometry,
-            coord.dynamics,
-            coord.plasticity,
-            coord.credit,
-            coord.update,
-        )
-        assert violations == [], f"Found violations: {violations}"
+    for coord, sched in result["cells"]:
+        passed, message = check_compose_gate(coord, sched)
+        assert passed, f"Found violations: {message}"
 
 
 def test_cell_count_scales_with_budget():
