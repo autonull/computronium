@@ -223,6 +223,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
             "fidelity": fidelity,
             "model": model,
             "unavailable": _unavailable_declarations(spec),
+            "pruned": planner.rejection_summary(),
         }
 
     planner = StaticPlanner(

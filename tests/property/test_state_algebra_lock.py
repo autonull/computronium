@@ -73,7 +73,7 @@ def _surfaces() -> tuple[SystemState, CompositeState]:
     return SystemState(x=x), CompositeState(activity={"x": x}, plastic={}, substrate={})
 
 
-CREDIT = PACKAGE.parent / "credit.py"
+CREDIT = PACKAGE.parent / "credit"
 PACKAGE_ROOT = PACKAGE.parents[1]
 
 
@@ -264,9 +264,11 @@ class TestSourceLock:
         every reference kernel passes ``CompositeState`` and silenced the
         mismatch with ``# type: ignore[arg-type]``. The retyping is only worth
         anything if the next one has to be the surface too."""
-        offenders = _annotations_in_source(CREDIT.read_text(encoding="utf-8")) & set(
-            ALGEBRA_NAMES
-        )
+        offenders: set[str] = set()
+        for path in sorted(CREDIT.rglob("*.py")):
+            offenders |= _annotations_in_source(path.read_text(encoding="utf-8")) & set(
+                ALGEBRA_NAMES
+            )
         assert not offenders, (
             f"credit signatures must name SettableState, not a state algebra: {offenders}"
         )

@@ -189,6 +189,9 @@ class ProposalContext:
     task: str | None = None
     shape: ShapeResolver | None = None
     n_propose: int = 10
+    # Sink for why candidates were refused; the caller owns the counter, so a
+    # planner that proposes nothing can say what pruned the space.
+    rejections: Any = None
     # Backward compatibility
     budget: Any = None
     cost_model: Any = None
@@ -297,6 +300,7 @@ class ProposalContext:
                 check_composable=True,  # Filter invalid combos at search space level
                 offset=offset,
                 max_scan=max_scan,
+                rejections=self.rejections,
             )
             if self.fresh(coordinate, schedule, measured)
         )

@@ -213,6 +213,8 @@ def _print_dry_run(result: dict[str, Any], args: argparse.Namespace) -> None:
             f"~{cell_cost:.1f}s/cell ({model.source}) | "
             f"~{total:.0f}s total{split_text}"
         )
+        if pruned := result.get("pruned"):
+            print(f"  pruned: {pruned}")
         return
     if args.mode == "learn" and result.get("ladder"):
         _print_ladder_dry_run(result, args.hours)

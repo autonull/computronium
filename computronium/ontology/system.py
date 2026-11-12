@@ -523,7 +523,6 @@ _INCOMPATIBILITY_RULES: tuple[_IncompatibilityRule, ...] = (
     _IncompatibilityRule("credit", "equilibrium", "dynamics", "lazy"),
     _IncompatibilityRule("credit", "local_goodness", "dynamics", "spike_integration"),
     _IncompatibilityRule("credit", "forward_only", "dynamics", "spike_integration"),
-    _IncompatibilityRule("credit", "temporal_trace", "dynamics", "instantaneous"),
     _IncompatibilityRule("credit", "temporal_trace", "dynamics", "energy_minimization"),
     _IncompatibilityRule("credit", "temporal_trace", "dynamics", "lazy"),
     _IncompatibilityRule("credit", "temporal_trace", "dynamics", "diffusion"),

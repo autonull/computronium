@@ -192,6 +192,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
             "model": model,
             "wave": 0,
             "unavailable": _unavailable_declarations(spec),
+            "pruned": planner.rejection_summary(),
         }
         if ladder:
             result["budget_split"] = {"L0": 0.6, "L1": 0.3, "L2": 0.1}

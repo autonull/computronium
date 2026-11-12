@@ -13,6 +13,7 @@ import signal
 import sys
 import time
 import uuid
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -215,6 +216,19 @@ def _check_coord_compatibility(coord: Coordinate) -> bool:
     return not violations
 
 
+def _compatibility_violation(coord: Coordinate) -> str | None:
+    """The first flat-rule violation this coordinate carries, else ``None``."""
+    violations = check_compatibility_matrix(
+        coord.substrate,
+        coord.geometry,
+        coord.dynamics,
+        coord.plasticity,
+        coord.credit,
+        coord.update,
+    )
+    return violations[0] if violations else None
+
+
 def _make_positive_control_cell(
     spec: RunSpec,
 ) -> tuple[Coordinate, Schedule] | None:
@@ -337,6 +351,13 @@ class Planner(Protocol):
         ...
 
 
+def _rejection_summary(rejections: Counter[str], top: int = 3) -> str:
+    """The most common reasons the space refused a cell, as one line."""
+    return ", ".join(
+        f"{reason} ({count})" for reason, count in rejections.most_common(top)
+    )
+
+
 class StaticPlanner:
     """SimpleSurvey's deterministic planner: fixed affine permutation prefix."""
 
@@ -365,6 +386,7 @@ class StaticPlanner:
         self._exploitation_done = False
         self._top_coords: list[Coordinate] = []
         self._wave_size = 0
+        self.rejections: Counter[str] = Counter()
         self._init_resume()
 
     def _init_resume(self) -> None:
@@ -469,6 +491,9 @@ class StaticPlanner:
                 )
 
                 if not _check_coord_compatibility(mutated_coord):
+                    self.rejections[
+                        _compatibility_violation(mutated_coord) or "compatibility"
+                    ] += 1
                     continue
 
                 task = random.choice(self.tasks)
@@ -496,8 +521,12 @@ class StaticPlanner:
                 max_scan=self._page_size,
                 check_composable=True,
                 offset=self._offset,
+                rejections=self.rejections,
             ):
                 if not _check_coord_compatibility(coord):
+                    self.rejections[
+                        _compatibility_violation(coord) or "compatibility"
+                    ] += 1
                     continue
 
                 cell_schedule = schedule_for(self.spec, schedule.task_id, self.fidelity)
@@ -522,14 +551,24 @@ class StaticPlanner:
                 break
 
         if len(cells) < n:
+            causes = self.rejection_summary()
             logger.warning(
-                "Planned %d cells but only found %d valid cells (%.1f%% of target)",
+                "Planned %d cells but only found %d valid cells (%.1f%% of target)%s",
                 n,
                 len(cells),
                 100.0 * len(cells) / max(1, n),
+                f"; pruned by {causes}" if causes else "",
             )
 
         return cells[:n]
+
+    def rejection_summary(self, top: int = 3) -> str:
+        """The most common reasons the space refused a cell, as one line.
+
+        A plan that comes back short measures the space, not the planner: the
+        cause is what makes the outcome actionable.
+        """
+        return _rejection_summary(self.rejections, top)
 
     def __iter__(self):
         """Iterator of (Coordinate, Schedule) for exploration/exploitation."""
@@ -593,6 +632,7 @@ class PolicyPlanner:
         self._wave_count = 0
         self._wave_size = 0
         self._policy: Any = None
+        self.rejections: Counter[str] = Counter()
         self._init_policy()
         self._init_resume(resume_from)
 
@@ -686,6 +726,7 @@ class PolicyPlanner:
             task=None,
             shape=task_shape,
             deadline=None,
+            rejections=self.rejections,
         )
         proposals = list(self._policy.propose(ctx))
 
@@ -695,6 +736,7 @@ class PolicyPlanner:
                 break
             coord = prop.coordinate
             if not _check_coord_compatibility(coord):
+                self.rejections[_compatibility_violation(coord) or "compatibility"] += 1
                 continue
             task = prop.schedule.task_id
             schedule = schedule_for(self.spec, task, self.fidelity)
@@ -720,6 +762,10 @@ class PolicyPlanner:
 
     def mark_seen(self, measurement_key: str) -> None:
         self._seen.add(measurement_key)
+
+    def rejection_summary(self, top: int = 3) -> str:
+        """The most common reasons the space refused a cell, as one line."""
+        return _rejection_summary(self.rejections, top)
 
     def after_wave(self) -> None:
         self._wave_count += 1
@@ -1113,6 +1159,8 @@ def _pretty_print_dry_run(
         print("No cells generated (search space may be empty or over-constrained)")
         for reason in result.get("unavailable", []):
             print(f"  unavailable: {reason}")
+        if pruned := result.get("pruned"):
+            print(f"  pruned: {pruned}")
         return
 
     header = (

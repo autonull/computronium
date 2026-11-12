@@ -290,7 +290,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             require_replay_hash=True,
             require_normalized_metric=True,
         )
-        logger.info(
+        logger.debug(
             "Claim-eligible cells: %d (n>=3, replay_hash, normalized metric, PASS, not quarantined)",
             len(eligible),
         )

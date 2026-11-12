@@ -354,9 +354,9 @@ class RunSpec(BaseModel):
         """Every task this run measures, singular field first."""
         # Handle "auto" task for smart-survey profile
         if self.task == "auto":
-            from computronium.domains.registry import get_cheap_tasks
+            from computronium.domains._task_registry import CHEAP_TASKS
 
-            return tuple(get_cheap_tasks())
+            return tuple(CHEAP_TASKS)
         return tuple(dict.fromkeys(n for n in (self.task, *self.tasks) if n))
 
     @property

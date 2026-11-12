@@ -30,6 +30,8 @@ from computronium.experiment.schema.harvest import (
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 
 if TYPE_CHECKING:
+    from collections import Counter
+
     from computronium.experiment.kernel.evaluate import TaskShape
     from computronium.experiment.legality.dsl import Expr
     from computronium.experiment.schema.axis import AxisSpec
@@ -113,41 +115,59 @@ def _compile_expr(expr: Expr) -> Callable[[tuple[str, ...]], Any]:  # ruff: igno
 
 
 def _compiled_void_constraints() -> tuple[
-    list[Callable[[tuple[str, ...]], Any]], list[Callable[[tuple[str, ...]], Any]]
+    list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    list[tuple[str, Callable[[tuple[str, ...]], Any]]],
 ]:
-    """Compiled ``(task-independent, task-dependent)`` void constraint evaluators.
+    """Compiled ``(task-independent, task-dependent)`` void constraints, named.
 
     Task-independent constraints never read ``task`` and are checked once per
     candidate; task-dependent ones are checked for the candidate's own task.
     Constraints reading hyperparameters are excluded here — the caller
-    evaluates those only once the cell is composed.
+    evaluates those only once the cell is composed. The name travels with the
+    evaluator so a pruned cell can say which constraint voided it.
     """
     from computronium.experiment.legality.dsl import references_params
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
-    indep: list[Callable[[tuple[str, ...]], Any]] = []
-    dep: list[Callable[[tuple[str, ...]], Any]] = []
+    indep: list[tuple[str, Callable[[tuple[str, ...]], Any]]] = []
+    dep: list[tuple[str, Callable[[tuple[str, ...]], Any]]] = []
     for constraint in CONSTRAINTS_REGISTRY.values():
         if constraint.kind.value != "void":
             continue
         pred = constraint.predicate
         if pred is None or references_params(pred):
             continue
-        fn = _compile_expr(pred)
-        (dep if "task" in str(pred) else indep).append(fn)
+        entry = (constraint.name, _compile_expr(pred))
+        (dep if "task" in str(pred) else indep).append(entry)
     return indep, dep
 
 
+def _void_rejection(
+    indep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    dep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    values: tuple[str, ...],
+    task: str,
+) -> str | None:
+    """Name of the first void constraint a selection violates, else ``None``."""
+    indep_vals = (*values, "")
+    for name, fn in indep:
+        if not fn(indep_vals):
+            return f"void constraint: {name}"
+    task_vals = (*values, task)
+    for name, fn in dep:
+        if not fn(task_vals):
+            return f"void constraint: {name}"
+    return None
+
+
 def _void_pass(
-    indep: list[Callable[[tuple[str, ...]], Any]],
-    dep: list[Callable[[tuple[str, ...]], Any]],
+    indep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    dep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
     values: tuple[str, ...],
     task: str,
 ) -> bool:
     """Whether a structural selection satisfies every void constraint."""
-    indep_vals = (*values, "")
-    task_vals = (*values, task)
-    return all(fn(indep_vals) for fn in indep) and all(fn(task_vals) for fn in dep)
+    return _void_rejection(indep, dep, values, task) is None
 
 
 def _void_cache_key(coordinate: Coordinate) -> tuple[str, ...]:
@@ -262,6 +282,51 @@ def _is_geometry_task_compatible(
 
     # All other geometries can handle vision input (they flatten or process spatially)
     return True
+
+
+def _structural_rejection(
+    coordinate: Coordinate,
+    task: str,
+    indep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    dep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    *,
+    void_cache: VoidCache | None,
+    rejections: Counter[str] | None,
+) -> str | None:
+    """Why the six structural axes refuse this coordinate, else ``None``.
+
+    Every cause is counted: the void cache and the declared constraints are the
+    fast paths, and the two explicit compatibility pairs are defense-in-depth
+    for void constraints that may not be evaluated correctly. One function so
+    the reasons and the filters cannot drift apart.
+    """
+    cache_hit = void_cache is not None and void_cache.is_known_void(coordinate)
+    reason = "void cache" if cache_hit else None
+    if reason is None:
+        values = (
+            coordinate.substrate,
+            coordinate.geometry,
+            coordinate.dynamics,
+            coordinate.plasticity,
+            coordinate.credit,
+            coordinate.update,
+        )
+        reason = _void_rejection(indep, dep, values, task)
+    if reason is None and not _is_substrate_dynamics_compatible(
+        coordinate.substrate, coordinate.dynamics
+    ):
+        reason = "substrate x dynamics"
+    if reason is None and not _is_geometry_dynamics_compatible(
+        coordinate.geometry, coordinate.dynamics
+    ):
+        reason = "geometry x dynamics"
+    if reason is None:
+        return None
+    if void_cache is not None:
+        void_cache.record_void(coordinate)
+    if rejections is not None:
+        rejections[reason] += 1
+    return reason
 
 
 class VoidCache:
@@ -511,10 +576,10 @@ def _filter_axes_for_validity(  # ruff: ignore[complex-structure, too-many-state
     valid_by_axis = {axis: set() for axis in axes_order}
 
     for values in product(*axis_primitives):
-        if not all(fn((*values, "")) for fn in task_indep_fns):
+        if any(not fn((*values, "")) for _name, fn in task_indep_fns):
             continue
         task_ok = any(
-            all(fn((*values, task_name)) for fn in task_dep_fns)
+            all(fn((*values, task_name)) for _name, fn in task_dep_fns)
             for task_name in task_list
         )
         if task_ok:
@@ -701,20 +766,21 @@ def _cell_params(
     return usable
 
 
-# Module-level cache for _composable results
-_composable_cache: dict[tuple, bool] = {}
+# Module-level cache for _compose_rejection results (None = composable)
+_composable_cache: dict[tuple, str | None] = {}
 
 
-def _composable(
+def _compose_rejection(
     coordinate: Coordinate, task: str, shape: ShapeResolver, param_budget: int
-) -> bool:
-    """Whether the cell's configs compose and validate for this task's shape.
+) -> str | None:
+    """Why the cell's configs do not compose and validate, or ``None`` if legal.
 
     Legality is asked of the one mechanism that owns it —
     ``SystemConfig.validate``, reached through ``compose_configs`` — rather than
     re-declared here as availability predicates, which would be a second source
     of truth for the same rules. A cell that cannot compose is not a cheap
-    failure to discover after a training run.
+    failure to discover after a training run. The reason travels to the dry-run
+    preview, where "0 cells" without a cause is an unanswerable result.
 
     ``param_budget`` is the schedule's ceiling, so the space screens a cell at
     the size the evaluator will train it; a space that screens a small cell and
@@ -727,6 +793,7 @@ def _composable(
     SystemConfig.validate(): hidden_dim, num_layers, max_steps, beta, residual.
     """
     from computronium.experiment.kernel.compose import (
+        _dry_run_trainable,
         compose_configs,
         geometry_param_count,
     )
@@ -775,27 +842,25 @@ def _composable(
             param_budget=param_budget,
             task=task_instance,
         )
-    except ValueError, TypeError, KeyError:
-        _composable_cache[cache_key] = False
-        return False
+    except (ValueError, TypeError, KeyError) as exc:
+        reason = f"compose {type(exc).__name__}: {exc}"
+        _composable_cache[cache_key] = reason
+        return reason
 
     # The same R25 fairness rule the evaluator's gate applies, asked here so a
     # cell that cannot honour its ceiling is never proposed: a cell that cannot
     # fit is discovered by training, which is the expensive way to find out.
-    if param_budget > 0:
-        result = geometry_param_count(config.geometry) <= param_budget * (
-            1 + PARAM_BUDGET_TOLERANCE
-        )
-        if not result:
-            _composable_cache[cache_key] = False
-            return False
+    if param_budget > 0 and geometry_param_count(config.geometry) > param_budget * (
+        1 + PARAM_BUDGET_TOLERANCE
+    ):
+        reason = f"param budget {param_budget} exceeded"
+        _composable_cache[cache_key] = reason
+        return reason
 
     # Dry-run gate: verify the cell can actually train (catches detached graphs,
     # FA contract failures, no-gradient-reached, etc.)
     # Run unconditionally - default param_budget=0 must not disable the gate.
-    from computronium.experiment.kernel.compose import _dry_run_trainable
-
-    dry_ok, _dry_reason = _dry_run_trainable(
+    dry_ok, dry_reason = _dry_run_trainable(
         coordinate=coordinate,
         geometry=geometry_explicit,
         input_shape=task_shape.input_shape,
@@ -804,11 +869,19 @@ def _composable(
         task=task_instance,
     )
     if not dry_ok:
-        _composable_cache[cache_key] = False
-        return False
+        reason = f"dry-run gate: {dry_reason}"
+        _composable_cache[cache_key] = reason
+        return reason
 
-    _composable_cache[cache_key] = True
-    return True
+    _composable_cache[cache_key] = None
+    return None
+
+
+def _composable(
+    coordinate: Coordinate, task: str, shape: ShapeResolver, param_budget: int
+) -> bool:
+    """Whether the cell's configs compose and validate for this task's shape."""
+    return _compose_rejection(coordinate, task, shape, param_budget) is None
 
 
 def schedule_for(
@@ -977,40 +1050,45 @@ def iter_candidates(  # ruff: ignore[complex-structure]
     offset: int = 0,
     page_size: int = _PAGE_SIZE,
     use_void_cache: bool = True,
+    rejections: Counter[str] | None = None,
 ) -> Iterator[tuple[Coordinate, Schedule]]:
     """Walk the harvested schema under the spec, yielding legal cells.
 
-            The active space is computed, never tabulated: each axis offers the
-            primitives the spec permits, the harvested availability predicates decide
-            which hyperparameters a selection can use, and the spec's own domains are
-            swept, as a Cartesian product over the axes rather than a diagonal.
+    The active space is computed, never tabulated: each axis offers the
+    primitives the spec permits, the harvested availability predicates decide
+    which hyperparameters a selection can use, and the spec's own domains are
+    swept, as a Cartesian product over the axes rather than a diagonal.
 
-            Supports paging via ``offset`` and ``page_size`` for unbounded traversal.
+    Supports paging via ``offset`` and ``page_size`` for unbounded traversal.
 
-            Args:
-                spec: The run declaration; names the task, fidelity, seed plan and the
-                    hyperparameters to sweep.
-                search_space: The run's active space.
-                deadline: Optional hard deadline; if soft-expired, no cells are yielded.
-                cost_model: Optional cost model (not used in deadline system).
-                shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
-                    cell whose configs cannot compose or validate for that shape is
-                    skipped instead of proposed.
-                max_scan: Stop after this many candidates *examined*, not yielded. A
-                    caller that prices or samples a factorial — where the illegal
-                    candidates are the expensive majority — bounds the examination; a
-                    caller that walks the space for what it can measure leaves it
-                    ``None`` and takes the module's page size.
-                check_composable: If True (default), verify that configs compose and
-                    validate via ``_composable``. If False, skip this check for faster
-        candidate generation (validation will happen at Gate/Compose stages).
-                offset: Number of candidates to skip before yielding (for paging).
-                page_size: Maximum candidates to examine per page (default 50k).
-                use_void_cache: Whether to use the persistent void cache (default True).
-    Disable for tests that need a clean search space.
+    Args:
+        spec: The run declaration; names the task, fidelity, seed plan and the
+            hyperparameters to sweep.
+        search_space: The run's active space.
+        deadline: Optional hard deadline; if soft-expired, no cells are yielded.
+        cost_model: Optional cost model (not used in deadline system).
+        shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
+            cell whose configs cannot compose or validate for that shape is
+            skipped instead of proposed.
+        max_scan: Stop after this many candidates *examined*, not yielded. A
+            caller that prices or samples a factorial — where the illegal
+            candidates are the expensive majority — bounds the examination; a
+            caller that walks the space for what it can measure leaves it
+            ``None`` and takes the module's page size.
+        check_composable: If True (default), verify that configs compose and
+            validate via ``_composable``. If False, skip this check for faster
+            candidate generation (validation will happen at Gate/Compose
+            stages).
+        offset: Number of candidates to skip before yielding (for paging).
+        page_size: Maximum candidates to examine per page (default 50k).
+        use_void_cache: Whether to use the persistent void cache (default True).
+            Disable for tests that need a clean search space.
+        rejections: Optional counter that tallies why candidates were
+            skipped, keyed by cause. A run that yields nothing can then
+            say why instead of reporting an empty plan.
 
-            Yields:
-                ``(coordinate, schedule)`` pairs, in a deterministic order.
+    Yields:
+        ``(coordinate, schedule)`` pairs, in a deterministic order.
     """
     task_indep_fns, task_dep_fns = _compiled_void_constraints()
 
@@ -1032,41 +1110,15 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             continue
         seen.add(coordinate.measurement_key(schedule))
 
-        # Check void cache first (fast path - avoids DSL evaluation)
-        if use_void_cache and void_cache and void_cache.is_known_void(coordinate):
-            continue
-
-        # Fast void constraint check (compiled predicates, no composition)
-        if task_indep_fns or task_dep_fns:
-            values = (
-                coordinate.substrate,
-                coordinate.geometry,
-                coordinate.dynamics,
-                coordinate.plasticity,
-                coordinate.credit,
-                coordinate.update,
-            )
-            if not _void_pass(task_indep_fns, task_dep_fns, values, task):
-                # Record in void cache for future runs
-                if use_void_cache and void_cache:
-                    void_cache.record_void(coordinate)
-                continue
-
-        # Explicit substrate-dynamics compatibility filter (defense-in-depth for
-        # void constraints that may not be evaluated correctly)
-        if not _is_substrate_dynamics_compatible(
-            coordinate.substrate, coordinate.dynamics
-        ):
-            if use_void_cache and void_cache:
-                void_cache.record_void(coordinate)
-            continue
-
-        # Explicit geometry-dynamics compatibility filter
-        if not _is_geometry_dynamics_compatible(
-            coordinate.geometry, coordinate.dynamics
-        ):
-            if use_void_cache and void_cache:
-                void_cache.record_void(coordinate)
+        rejection = _structural_rejection(
+            coordinate,
+            task,
+            task_indep_fns,
+            task_dep_fns,
+            void_cache=void_cache if use_void_cache else None,
+            rejections=rejections,
+        )
+        if rejection is not None:
             continue
 
         # Explicit geometry-task compatibility filter
@@ -1077,16 +1129,18 @@ def iter_candidates(  # ruff: ignore[complex-structure]
             ):
                 if use_void_cache and void_cache:
                     void_cache.record_void(coordinate)
+                if rejections is not None:
+                    rejections["geometry x task"] += 1
                 continue
 
-        if (
-            check_composable
-            and shape is not None
-            and not _composable(
+        if check_composable and shape is not None:
+            rejection = _compose_rejection(
                 coordinate, schedule.task_id, shape, schedule.param_budget
             )
-        ):
-            continue
+            if rejection is not None:
+                if rejections is not None:
+                    rejections[rejection] += 1
+                continue
         if deadline is not None and deadline.soft_expired():
             return
         yield coordinate, schedule
@@ -1101,6 +1155,7 @@ def generate_candidates(
     shape: ShapeResolver | None = None,
     limit: int = 10,
     use_void_cache: bool = True,
+    rejections: Counter[str] | None = None,
 ) -> list[tuple[Coordinate, Schedule]]:
     """The first ``limit`` cells of :func:`iter_candidates`."""
     stream = iter_candidates(
@@ -1110,6 +1165,7 @@ def generate_candidates(
         cost_model=cost_model,
         shape=shape,
         use_void_cache=use_void_cache,
+        rejections=rejections,
     )
     return list(islice(stream, limit))
 

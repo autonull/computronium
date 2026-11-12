@@ -2,7 +2,18 @@
 
 **Mission:** Continue the experiment/fix cycle: run experiments (≤15 min each), discover bugs, scrutinize poor-performing algorithms as potential implementation defects, and question excluded possibilities.
 
-**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G9 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin). **Continuation (2026-11-11 late-2):** R1(b) shipped — PROTEINS (1113 graphs, 223 held out) is a second graph-classification task, so a graph cell resolves to 0.005/graph instead of 0.026; R7 closed as **G9** — the "CUDA PyG crash" was our own unbatched graph probe feeding node rows to a foreign edge index, not upstream PyG, and CUDA graph cells now train. Claim-grade PROTEINS: gradient 0.665 ± 0.007, random_projections 0.625 ± 0.011 (majority 0.596, 2 claim-eligible cells); best PROTEINS arm 0.697 (n=5, hidden 128×5, step 0.003) is at the >0.70 target, not above it. **Continuation (2026-11-11 late-3):** R9 CLOSED — pooling is now a geometry knob (`geometry.pooling`: mean|sum) with a mode-aware `PoolContext` so every pooled-readout credit path uses the forward's transpose; sum pooling was *worse* (0.672 vs 0.691 at 100 epochs), and 200 epochs at the mean-pooled arm crosses the target: **0.7040 ± 0.0071 (n=5)** vs 0.596 majority. **Continuation (2026-11-11 late-4):** N1 CLOSED — six harness defects behind the non-graph credit sweep: **G10** tabular splits held out one class (wine val_acc 0.0 → **0.94–0.97**, n=3), **G11** `local_contrastive` trained on the last 10 pixels as its "label" (now unavailable), **G12** graph tasks paired with node-mode geometry, **G13** explicit `n_seeds`/`epochs` = 1 read as unset, **G14** budget-cut cells mislabeled `constraint_violation` (now `timeout`, with serial admission control and control-derived first-wave pricing), **G15** the supervised dry-run gate filtered every continuous-control RL cell (pendulum measured nothing). Pendulum now trains (−1289 random → −1184 at 400 episodes); `homeostatic`/`random_projections` "failures" resolve to contract-documented error-blindness and episode budget, not dispatch defects.
+**Status:** TODO87 PHASE 1-7 COMPLETE. TODO88 G1–G9 FIXED (2026-11-11); late session adds **G8** (the settle path skipped intermediate graph aggregation — the harness trained a weaker model than `forward`), **R3** (`target_inversion`/`temporal_trace` graph paths), **R4** (transformer-aware `homeostatic`), and closes **R2** as refuted-and-traced-to-G8. Cora+gradient is claim-grade (0.766 mean, n=3, target >0.75 met); MUTAG harness mean rose 0.640 → 0.693 after G8. Core system working across vision, RL, graph, tabular. **Close (2026-11-11):** R8 fixed (LM token targets), R5 closed (cell replay hash now seed-sensitive; CUDA scatter tolerance derived as a limitation), R1(c) shipped (every graph cell reports the measured majority baseline and margin). **Continuation (2026-11-11 late-2):** R1(b) shipped — PROTEINS (1113 graphs, 223 held out) is a second graph-classification task, so a graph cell resolves to 0.005/graph instead of 0.026; R7 closed as **G9** — the "CUDA PyG crash" was our own unbatched graph probe feeding node rows to a foreign edge index, not upstream PyG, and CUDA graph cells now train. Claim-grade PROTEINS: gradient 0.665 ± 0.007, random_projections 0.625 ± 0.011 (majority 0.596, 2 claim-eligible cells); best PROTEINS arm 0.697 (n=5, hidden 128×5, step 0.003) is at the >0.70 target, not above it. **Continuation (2026-11-11 late-3):** R9 CLOSED — pooling is now a geometry knob (`geometry.pooling`: mean|sum) with a mode-aware `PoolContext` so every pooled-readout credit path uses the forward's transpose; sum pooling was *worse* (0.672 vs 0.691 at 100 epochs), and 200 epochs at the mean-pooled arm crosses the target: **0.7040 ± 0.0071 (n=5)** vs 0.596 majority. **Continuation (2026-11-11 late-4):** N1 CLOSED — six harness defects behind the non-graph credit sweep: **G10** tabular splits held out one class (wine val_acc 0.0 → **0.94–0.97**, n=3), **G11** `local_contrastive` trained on the last 10 pixels as its "label" (now unavailable), **G12** graph tasks paired with node-mode geometry, **G13** explicit `n_seeds`/`epochs` = 1 read as unset, **G14** budget-cut cells mislabeled `constraint_violation` (now `timeout`, with serial admission control and control-derived first-wave pricing), **G15** the supervised dry-run gate filtered every continuous-control RL cell (pendulum measured nothing). Pendulum now trains (−1289 random → −1184 at 400 episodes); `homeostatic`/`random_projections` "failures" resolve to contract-documented error-blindness and episode budget, not dispatch defects. **Continuation (2026-11-12):** N2–N6 CLOSED — plasticity (routing, fast_weights) and substrate breadth (memristive/ternary/sparse) are at parity with their references, `predictive_settling` reaches feedforward+recurrent, and the two hygiene tickets are done; three new defects fixed (**G16** a short plan now names its pruning cause, **G17** the planner's second compatibility matrix dropped 26 % of the declared space in silence, **G18** the sparse substrate's forward ignored `sparsity`), with **G19** (`local_goodness` x `energy_minimization` diverges) open.
+
+**Progress (Session 2026-11-12 — N2/N3/N4/N5/N6 + G16/G17/G18):**
+- ✅ **N2 Plasticity at parity, and one contract boundary** — every plasticity arm matched `null` on a task the base learner can solve: MNIST feedforward 3 epochs, routing 0.9684/0.9677 vs null 0.9679/0.9662; MNIST feedforward `energy_minimization`+`thermodynamic_contrast` 2 epochs, fast_weights 0.9447/0.9476 vs null 0.9472/0.9498. So fast weights pair with energy dynamics as intended and cost nothing. The `copy_task`/`recurrent` arm cannot use `gradient` (declared void: `recurrent_instantaneous_gradient_credit`), and its compatible credit `temporal_trace` is **error-blind by contract** (`phases=(FREE,)`, the loss is never read), so recurrent+MNIST+STDP measured chance for both arms (routing 0.0956/0.1234, null 0.1018/0.1238) — the same boundary R4 found for `homeostatic`, now confirmed for the second error-blind credit.
+- ✅ **N3 Substrate breadth at parity, and one substrate that named no difference** — 3 seeds each at 3 epochs: digital **0.9672**, memristive **0.9675**, ternary **0.9588** (4 claim-eligible cells). `sparse` produced *bit-identical* per-seed accuracies to digital (0.9679/0.9662/0.9674), which was **G18**: `SparseSubstrate.get_forward_operator` was a dense matmul behind a weight clamp, so the declared `sparsity` never reached the forward path. Magnitude pruning now masks the declared fraction per forward; sparse measures **0.9641/0.9648/0.9631** (mean 0.9640) against digital's 0.9672 — a −0.32 pt cost at 50 % sparsity, and no longer a copy of digital.
+- ✅ **N4 Predictive settling reaches recurrent and feedforward** — the N4 premise ("filtered on feedforward") is stale: `predictive_settling` proposes on both (feedforward and recurrent, with `thermodynamic_contrast`). Live recurrent arm: 0.5441/0.4511 at 2 epochs, **144 s/epoch** — it trains but is ~4× energy_minimization's cost, so its tier is L2, not L1. The two feedforward seeds were proposed but not reached inside the 0.2 h budget (642.8 s, 3 cells).
+- ✅ **N5 `TASK_COST_CLASS` deleted** — the hand-maintained table in `domains/registry.py` disagreed with the enriched `TaskRegistry` (pendulum MEDIUM not EXPENSIVE, proteins EXPENSIVE not MEDIUM, spiral three-class not binary) and `test_smart_survey_lock::test_task_scheduler_cost_classes` failed on the drift. The table and its four accessors are gone; the one consumer (`RunSpec.task_names` for `task == "auto"`) reads `domains._task_registry.CHEAP_TASKS`, and the lock now asserts every registry row lands in its declared class and baseline.
+- ✅ **N6 state-algebra lock reads the credit package** — `test_credit_annotations_name_the_surface` pointed at `ontology/credit.py`, which is now a package; it scans every module in `credit/`.
+- ✅ **G16 A short plan now names what pruned it** — an empty plan reported "No more cells to evaluate" over a declaration that was void on its face. `iter_candidates` takes a rejection sink (`Counter[str]`) keyed by cause — the named void constraint, `substrate x dynamics`, `geometry x dynamics`, `geometry x task`, `compose <Exc>`, `param budget`, `dry-run gate: <reason>` — the planners carry it (`StaticPlanner.rejections`, `PolicyPlanner.rejections`, `ProposalContext.rejections`), the dry-run payload carries `pruned`, and the summary/short-plan output prints it. Measured: `pruned: void constraint: recurrent_instantaneous_gradient_credit (2)`.
+- ✅ **G17 The planner's flat matrix dropped 26 % of the declared space in silence** — `_check_coord_compatibility` re-filtered every proposed cell with `_INCOMPATIBILITY_RULES`, a second source of truth beside the declared constraints. Measured over the whole 6-axis product: **15,348 of 58,968 space-legal coordinates** are voided at the planner, and the drop was invisible. Its drops now count into the same sink, and the stale `temporal_trace x instantaneous` rule is deleted — the declared space and the compiled `hebbian` rung both admit that coordinate. Reconciling the remaining rules is queued (N8).
+- ⚠️ **G19 (open) `local_goodness` x `energy_minimization` diverges** — MNIST feedforward, 2 epochs: loss 1.87 → **289.5**, val_acc 0.0891 (chance), 64 s/epoch. `thermodynamic_contrast` on the same dynamics reaches 0.9472, so the pair is the suspect, not the settling. Queued as N9.
+- ✅ **`comp report` no longer repeats the claim-eligibility line** — the eligibility count was logged at INFO inside a per-section accessor, so one report printed it 31 times. It is a diagnostic now (DEBUG).
 
 **Progress (Session 2026-11-11 late-4 — N1):**
 - ✅ **G10 Tabular split held out one class** — `TabularTask.setup` split by slicing `X[:n]`/`X[n:]`, and sklearn ships iris/wine ordered by class. Wine's 36-row validation set was *entirely* class 2 while the train set held 12 class-2 rows: every arm read `val_acc=0.0` (train 0.88–0.90). Iris validation was class 2 only, which is why it swung 0.47–0.77 by seed. Fixed with `train_test_split(test_size=0.2, random_state=0, stratify=y)`; `evaluate` now reports `majority_baseline` and `val_acc_over_majority` beside accuracy (the R1c protocol, applied to tabular). Measured: wine 0.972/0.944/0.944 (n=3, 5 epochs) vs 0.0; iris 0.867/0.867/0.767 vs 0.767/0.467/0.700; majority 0.389 and 0.333.
@@ -64,14 +75,24 @@
 
 ## 📌 REMAINING WORK — NEXT SESSION (ordered by what unblocks a claim)
 
-**Order of work now (NEXT SESSION — non-graph focus, per user directive):**
-1. **N2** — Plasticity beyond chance-level tasks: routing vs null with gradient credit on MNIST/feedforward and copy_task/recurrent; fast weights paired with energy_minimization (its compatible dynamics), not instantaneous.
-2. **N3** — Substrate breadth at parity: digital vs memristive vs ternary/sparse on MNIST feedforward (3 seeds), including the GPU settle-kernel gap.
-3. **N4** — Predictive settling reach: find which non-graph geometry supports `predictive_settling` and run it there; it is currently filtered on feedforward.
-4. **N5** — Hygiene queue: delete or derive `domains/registry.TASK_COST_CLASS` (it disagrees with the enriched `TaskRegistry`: pendulum/acrobot/cartpole/graph_classification/proteins); `test_smart_survey_lock::test_task_scheduler_cost_classes` fails on the drift.
-5. **N6** — Hygiene queue: `test_state_algebra_lock` reads `computronium/ontology/credit.py`; the module is now the `credit/` package. Update the lock's path.
-6. **N7** — Feature: implement `local_contrastive`'s label channel (widen the input layer by `label_dim`, append the one-hot target, label-sweep readout) and flip G11's availability back.
-7. **R6** — Register C hygiene at round close (after the experiment cycle).
+**Order of work now (NEXT SESSION):**
+1. **N7** — Feature: implement `local_contrastive`'s label channel (widen the input layer by `label_dim`, append the one-hot target, label-sweep readout) and flip G11's availability back. It is the last credit that cannot be measured at all.
+2. **N8** — Reconcile the planner's flat matrix with the declared space (G17): 15,348 of 58,968 space-legal coordinates are still voided at the planner by `_INCOMPATIBILITY_RULES`. Either derive the flat rules from the declared constraints, or declare each surviving rule as a constraint so the space knows it. Start from the measured top causes (temporal_trace/target_inversion x energy_minimization, ternary x temporal_psi, random_projections/homeostatic x diffusion).
+3. **N9** — `local_goodness` x `energy_minimization` diverges (G19: loss 1.87 → 289.5, chance). Decide contract vs defect the way R4/N2 settled the error-blind credits: read the identity card, then either mark the pair void in the declared space or fix the dispatch.
+4. **N10** — Error-blind credits are a category, not a bug: `homeostatic` and `temporal_trace` read no label (`phases=(FREE,)`), so they measure chance on every supervised task. State that on the success criterion ("≥3 credits work per geometry" must mean ≥3 *error-aware* credits) and in the credit identity cards.
+5. **R6** — Register C hygiene at round close (after the experiment cycle).
+
+| # | Ticket | Why now | Gate / cost | Depends on |
+|---|--------|---------|-------------|------------|
+| N2 | ✅ **CLOSED — plasticity is at parity with null, and one contract boundary is named.** routing 0.9681 vs null 0.9671 (MNIST ff, 3 epochs); fast_weights 0.9462 vs null 0.9485 (energy_minimization, 2 epochs); recurrent+STDP is chance for both arms because `temporal_trace` never reads the label. | Done; do not reopen as "plasticity is broken". | — | — |
+| N3 | ✅ **CLOSED — substrate breadth at parity, 4 claim-eligible cells.** digital 0.9672, memristive 0.9675, ternary 0.9588, sparse 0.9640 (after G18). | Done. | — | — |
+| N4 | ✅ **CLOSED — `predictive_settling` reaches feedforward and recurrent** (recurrent 0.5441/0.4511 at 2 epochs, 144 s/epoch → L2 tier). | Done. | — | — |
+| N5 | ✅ **CLOSED — `TASK_COST_CLASS` deleted**; the derived `domains._task_registry` is the single source and the lock reads it. | Done. | — | — |
+| N6 | ✅ **CLOSED — state-algebra lock scans the `credit/` package.** | Done. | — | — |
+| N7 | **Feature** — `local_contrastive` label channel; flip G11 availability back. | Last unmeasurable credit. | 1 registry row + compose widening + lock | G11 |
+| N8 | **Drift** — 26 % of space-legal coordinates voided at the planner by a second matrix (G17). | Two sources of truth for one rule. | `_INCOMPATIBILITY_RULES` vs `CONSTRAINTS_REGISTRY`; drift lock | G17 |
+| N9 | **Defect candidate** — `local_goodness` x `energy_minimization` diverges (G19). | A credit that only diverges is either mis-specified or mis-dispatched. | identity card read + 1 run | — |
+| N10 | **Documentation** — error-blind credits measure chance by contract (homeostatic, temporal_trace). | Success criteria currently read as if every credit learns. | identity cards + success criteria | R4, N2 |
 
 | # | Ticket | Why now | Gate / cost | Depends on |
 |---|--------|---------|-------------|------------|
@@ -1530,3 +1551,99 @@ at the HEAD baseline (5 errors, all pre-existing).
 
 **Next Experiment:** N2 (plasticity on a learnable task), then N3 (substrate
 breadth), then N4 (predictive-settling reach).
+
+---
+
+## Session 2026-11-12 (N2/N3/N4 close, N5/N6 hygiene, G16/G17/G18)
+
+**Experiments (all ≤11 min, `--max-workers 1`, cuda):**
+
+1. **N2a — plasticity on a learnable task** (MNIST feedforward, gradient+adam,
+   3 epochs, n=2):
+   ```
+   --axes '{"substrate":["digital"],"geometry":["feedforward"],
+     "dynamics":["instantaneous"],"plasticity":["null","routing"],
+     "credit":["gradient"],"update":["adam"]}'
+   ```
+   routing **0.9684/0.9677**, null **0.9679/0.9662** → parity (+0.001), no harm.
+   A single supervised task gives routing nothing to route *between*.
+
+2. **N2b — fast weights with its compatible dynamics** (MNIST feedforward,
+   `energy_minimization`+`thermodynamic_contrast`+adam, 2 epochs, n=2):
+   fast_weights **0.9447/0.9476**, null **0.9472/0.9498** → parity (−0.002).
+   energy_minimization on feedforward reaches 0.947 in 2 epochs (30 s/epoch),
+   which also closes the "energy_minimization is weak" suspicion.
+
+3. **N2c — recurrent + error-blind credit** (MNIST recurrent, `temporal_trace`,
+   3 epochs, n=2): routing **0.0956/0.1234**, null **0.1018/0.1238** → chance,
+   loss flat at ln 10. `TemporalTraceCredit.phases = (FREE,)`: the rule is
+   STDP over settled (pre, post) pairs and never reads the label. Contract, not
+   a dispatch bug — the same boundary R4 found for `homeostatic`.
+
+4. **N3 — substrate breadth** (MNIST feedforward, gradient+adam, 3 epochs, n=3):
+   digital **0.9672**, memristive **0.9675**, ternary **0.9588**, sparse
+   **0.9672 — bit-identical to digital seed for seed**. That identity was G18.
+   Re-run after the fix: sparse **0.9641/0.9648/0.9631** (0.9640), digital
+   0.9672 → −0.32 pt at 50 % sparsity, curves no longer equal.
+
+5. **N4 — predictive settling reach** (MNIST, `thermodynamic_contrast`, 2
+   epochs): the space proposes feedforward *and* recurrent. Live recurrent:
+   **0.5441/0.4511**, 144 s/epoch; the 0.2 h budget stopped after 3 cells.
+
+**Defects Found:**
+- **G16** — a short plan reported "No more cells to evaluate" with no cause; the
+  void-constraint / compose / dry-run reasons were discarded.
+- **G17** — the planner re-filtered with `_INCOMPATIBILITY_RULES`, a second
+  source of truth: **15,348 of 58,968** space-legal coordinates dropped in
+  silence, including the stale `temporal_trace x instantaneous` rule that the
+  declared space and the compiled `hebbian` rung both admit.
+- **G18** — `SparseSubstrate.get_forward_operator` ignored `sparsity`; the
+  substrate axis named no difference.
+- **G19 (open)** — `local_goodness` x `energy_minimization` diverges
+  (loss 1.87 → 289.5, val_acc 0.0891 at 64 s/epoch).
+- **Report noise** — `comp report` printed the claim-eligibility count 31 times
+  (INFO inside a per-section accessor).
+- **Stale fixture** — `_specs.unreachable_spec()` now yields 10 cells: the
+  declaration it was written for became reachable when the axis filter started
+  narrowing dynamics to the legal value. Its docstring is a comment until it is
+  re-pointed at a still-void declaration.
+
+**Fixes Applied:**
+- `computronium/experiment/kernel/search_space.py` — `_compiled_void_constraints`
+  returns named evaluators; `_void_rejection` names the first violated
+  constraint; `_compose_rejection` returns the cause (`compose <Exc>`,
+  `param budget`, `dry-run gate: <reason>`) and `_composable` wraps it;
+  `_structural_rejection` holds the cache/void/compatibility filters and counts
+  each cause; `iter_candidates`/`generate_candidates` take a `rejections` sink.
+- `computronium/experiment/wave.py` — `StaticPlanner.rejections` +
+  `rejection_summary()`, `PolicyPlanner.rejections` + `rejection_summary()`,
+  `_rejection_summary` shared, compatibility drops counted via
+  `_compatibility_violation`, short-plan warning names the causes, dry-run
+  printer prints `pruned`.
+- `computronium/experiment/execution/policy.py` — `ProposalContext.rejections`
+  sink reaches `iter_candidates` from every policy.
+- `computronium/experiment/simple_survey.py`, `learning_survey.py`,
+  `survey_cli.py` — dry-run payload carries `pruned`; the summary format prints it.
+- `computronium/experiment/surface/report.py` — eligibility count at DEBUG.
+- `computronium/ontology/system.py` — stale `temporal_trace x instantaneous`
+  flat rule deleted.
+- `computronium/ontology/substrate/_substrate.py` — `SparseSubstrate.prune_weights`
+  (magnitude mask, declared fraction) wired into the forward operator.
+- `computronium/domains/registry.py`, `domains/__init__.py`,
+  `experiment/schema/run_spec.py` — `TASK_COST_CLASS` + four accessors deleted;
+  `task == "auto"` reads `domains._task_registry.CHEAP_TASKS`.
+- Locks: `test_prune_diagnostics_lock.py` (4), `test_sparse_substrate_lock.py`
+  (3); `test_smart_survey_lock` and `test_state_algebra_lock` updated to the
+  derived truth (registry classes/baselines; `credit/` package).
+
+**Verification:** new locks 7/7; `tests/property -k "search_space or prune or
+sparse or smart_survey or state_algebra or compatible or dry_run or schedule or
+task_registry or profile"` **158 passed**. Ruff on changed files at the HEAD
+finding count (31 in `wave.py` + `test_smart_survey_lock`, 6 pre-existing in
+`search_space.py`; no new findings). Pyright on changed files: only the 2
+pre-existing `policy.py` errors. Live: `pruned: void constraint:
+recurrent_instantaneous_gradient_credit (2)`; sparse ≠ digital; `comp report`
+prints the eligibility line once.
+
+**Next Experiment:** N7 (`local_contrastive` label channel), then N8 (matrix vs
+declared-space reconciliation), then N9 (`local_goodness` x `energy_minimization`).

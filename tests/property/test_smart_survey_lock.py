@@ -36,32 +36,21 @@ class TestSmartSurveyLock:
         assert profile.checkpoint_every_n == 1
 
     def test_task_scheduler_cost_classes(self) -> None:
-        """TaskScheduler defines correct cost classes."""
+        """TaskScheduler cost classes are the enriched registry's, not a copy."""
+        from computronium.experiment.registry.task_registry import TaskRegistry
+
         scheduler = TaskScheduler()
+        registry_classes = {
+            task.name: task.cost_class.value.upper() for task in TaskRegistry()
+        }
 
-        # Verify CHEAP tasks
-        cheap = scheduler.CHEAP_TASKS
-        assert "xor" in cheap
-        assert "spiral" in cheap
-        assert "circles" in cheap
-        assert "digits" in cheap
-        assert "copy_task" in cheap
-
-        # Verify MEDIUM tasks
-        medium = scheduler.MEDIUM_TASKS
-        assert "mnist" in medium
-        assert "fashion_mnist" in medium
-        assert "sequential_mnist" in medium
-        assert "char_ngram" in medium
-        assert "cora" in medium
-
-        # Verify EXPENSIVE tasks
-        expensive = scheduler.EXPENSIVE_TASKS
-        assert "cifar10" in expensive
-        assert "tiny_shakespeare" in expensive
-        assert "pendulum" in expensive
-        assert "acrobot" in expensive
-        assert "cartpole" in expensive
+        for name, cost_class in registry_classes.items():
+            group = {
+                "CHEAP": scheduler.CHEAP_TASKS,
+                "MEDIUM": scheduler.MEDIUM_TASKS,
+                "EXPENSIVE": scheduler.EXPENSIVE_TASKS,
+            }[cost_class]
+            assert name in group, f"{name} declared {cost_class} in the registry"
 
     def test_fidelity_task_cycling(self) -> None:
         """TaskScheduler cycles tasks correctly per fidelity."""
@@ -104,25 +93,18 @@ class TestSmartSurveyLock:
         assert norm == 0.0
 
     def test_baseline_lookup(self) -> None:
-        """TaskScheduler returns correct baselines for known tasks."""
+        """TaskScheduler baselines are the registry's class counts, not a copy."""
+        from computronium.experiment.registry.task_registry import TaskRegistry
+
         scheduler = TaskScheduler()
 
-        # 10-class tasks
-        assert scheduler.get_baseline("digits") == 0.1
-        assert scheduler.get_baseline("mnist") == 0.1
-        assert scheduler.get_baseline("cifar10") == 0.1
+        for task in TaskRegistry():
+            if task.output_dim > 1:
+                assert scheduler.get_baseline(task.name) == pytest.approx(
+                    1.0 / task.output_dim, abs=0.01
+                ), f"{task.name} has {task.output_dim} classes"
 
-        # Binary tasks
-        assert scheduler.get_baseline("xor") == 0.5
-        assert scheduler.get_baseline("spiral") == 0.5
-
-        # 3-class
-        assert scheduler.get_baseline("pubmed") == 0.33
-
-        # 7-class
-        assert scheduler.get_baseline("cora") == 0.14
-
-        # Continuous control
+        # Continuous control: no classification baseline
         assert scheduler.get_baseline("pendulum") == 0.0
 
         # Unknown task defaults to 0.1

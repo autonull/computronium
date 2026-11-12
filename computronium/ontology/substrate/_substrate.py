@@ -775,7 +775,15 @@ class ComplexSubstrate:
 
 
 class SparseSubstrate:
-    """Sparse substrate with dynamic sparsity masks."""
+    """Sparse substrate with dynamic sparsity masks.
+
+    ``sparsity`` is a structural constraint, so it has to reach the forward
+    path: a sparse substrate whose forward is a dense matmul is the digital
+    substrate under another name (identical loss curves, seed for seed). The
+    mask keeps the largest ``1 - sparsity`` fraction of each weight tensor by
+    magnitude — the standard dynamic (magnitude) pruning rule — and is recomputed
+    per forward, so pruned weights regrow when they become the largest again.
+    """
 
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.sparse()
@@ -784,6 +792,21 @@ class SparseSubstrate:
         if self.config.weight_bounds is not None:
             w = w.clamp(*self.config.weight_bounds)
         return w
+
+    def prune_weights(self, w: Tensor) -> Tensor:
+        """Zero all but the largest ``1 - sparsity`` fraction of ``w``."""
+        sparsity = self.config.sparsity
+        if not sparsity or sparsity <= 0:
+            return w
+        flat = w.detach().abs().flatten()
+        keep = min(flat.numel(), max(0, round(flat.numel() * (1.0 - sparsity))))
+        if keep >= flat.numel():
+            return w
+        if keep == 0:
+            return torch.zeros_like(w)
+        mask = torch.zeros(flat.numel(), dtype=w.dtype, device=w.device)
+        mask[torch.topk(flat, keep).indices] = 1
+        return w * mask.view(w.shape)
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         if self.config.noise_level > 0:
@@ -794,7 +817,7 @@ class SparseSubstrate:
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         def forward(x: Tensor, w: Tensor) -> Tensor:
             x = self.inject_state_noise(x)
-            w = self.quantize_weights(w)
+            w = self.prune_weights(self.quantize_weights(w))
             return x @ w.T
 
         return forward
