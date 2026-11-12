@@ -445,6 +445,10 @@ _UPDATE_CONFIG_METHODS: dict[str, str] = {
     "unit_rms": "primitive.parameter_update.euclidean",  # unit_rms uses euclidean primitive
     "local_adam": "primitive.parameter_update.euclidean",  # local_adam uses euclidean primitive
     "lion": "primitive.parameter_update.euclidean",  # lion uses euclidean primitive
+    # role_split is a dispatcher, not a standalone primitive spec: its
+    # declared default routes the readout through muon and the rest through
+    # euclidean. The catalogue row is the on-role rule.
+    "role_split": "primitive.parameter_update.muon",
 }
 
 _UPDATE_ONTOLOGY_CLASSES: dict[str, str] = {
@@ -481,7 +485,7 @@ def _update_config_classmethods() -> dict[str, str]:
         try:
             config = member.__func__(ParameterUpdateConfig)
         except TypeError:
-            continue  # factory with required args (role_split) is not no-arg
+            continue  # factory with required args is not no-arg
         if isinstance(config, ParameterUpdateConfig):
             found[name] = config.update_type
     return found

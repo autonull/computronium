@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import DataOrigin
-from computronium.experiment.schema.record import GateVerdict, Record
+from computronium.experiment.schema.record import GateVerdict, Maturity, Record
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -1061,6 +1061,25 @@ def filter_promoted(records: list[Record]) -> list[Record]:
     return [r for r in records if promoted(r)]
 
 
+def matured(record: Record) -> bool:
+    """Whether a record earned a rung of the promotion ladder.
+
+    L1 is arithmetic on the store (the cell reached the declared seed count),
+    so it is earned independently of the claim-grade L2 rung. A failed or
+    quarantined measurement earns nothing, whatever its scheduled fidelity.
+    """
+    return (
+        record.status.gate_verdict.value == "PASS"
+        and not record.status.quarantine
+        and record.status.maturity is not Maturity.L0
+    )
+
+
+def filter_matured(records: list[Record]) -> list[Record]:
+    """Filter records to those that earned L1 or better."""
+    return [r for r in records if matured(r)]
+
+
 def filter_by_data_origin(records: list[Record], origin: DataOrigin) -> list[Record]:
     """Filter records by data origin."""
     return [r for r in records if r.provenance.data_origin == origin]
@@ -1109,6 +1128,7 @@ __all__ = [
     "filter_by_data_origin",
     "filter_by_maturity",
     "filter_claim_eligible",
+    "filter_matured",
     "filter_promoted",
     "generalizes",
     "group_by_cell_key",
@@ -1117,6 +1137,7 @@ __all__ = [
     "is_exploration_data",
     "is_policy_selected_data",
     "is_test_data",
+    "matured",
     "pairing_key",
     "promotable",
     "promoted",

@@ -94,6 +94,23 @@ logger = get_logger(__name__)
 _TASK_CACHE: dict[tuple[str, str, int], Any] = {}
 _TASK_LOCK: Final[threading.Lock] = threading.Lock()
 
+# One CUDA device trains one cell at a time. Inductor's static Triton launcher
+# and cuSOLVER's QR wrapper keep per-module state that concurrent launches
+# corrupt (measured: CUDA_ERROR_INVALID_HANDLE, "lazy wrapper should be called
+# at most once"), and concurrent cells on one device measure contention rather
+# than the cell's own walltime.
+_DEVICE_LOCKS: dict[str, threading.Lock] = {}
+_DEVICE_LOCKS_GUARD: Final[threading.Lock] = threading.Lock()
+
+
+def _device_lock(device: str) -> threading.Lock | None:
+    """The lock for one CUDA device, or ``None`` for a CPU device."""
+    resolved = _resolve_device(device)
+    if not resolved.startswith("cuda"):
+        return None
+    with _DEVICE_LOCKS_GUARD:
+        return _DEVICE_LOCKS.setdefault(resolved, threading.Lock())
+
 
 def _cell_replay_hash(
     provenance: Provenance, coordinate: Coordinate, schedule: Schedule
@@ -247,6 +264,35 @@ def evaluate_cell(
     Raises:
         EvaluationError: The task, the composition, or the training run failed.
     """
+    lock = _device_lock(schedule.device)
+    if lock is None:
+        return _evaluate_cell(
+            coordinate,
+            schedule,
+            geometry,
+            checkpoint_dir,
+            resume_checkpoint_path,
+            params,
+        )
+    with lock:
+        return _evaluate_cell(
+            coordinate,
+            schedule,
+            geometry,
+            checkpoint_dir,
+            resume_checkpoint_path,
+            params,
+        )
+
+
+def _evaluate_cell(
+    coordinate: Coordinate,
+    schedule: Schedule,
+    geometry: Mapping[str, Any] | None = None,
+    checkpoint_dir: str | None = None,
+    resume_checkpoint_path: str | None = None,
+    params: Mapping[str, Any] | None = None,
+) -> CellEvaluation:
     resolved_device = _resolve_device(schedule.device)
     _set_seeds(schedule.seed, schedule.deterministic)
 
@@ -625,7 +671,6 @@ def _build_status_with_procedures(
     *,
     replay_hash: str | None = None,
     deterministic: bool = False,
-    schedule: object | None = None,
 ) -> Status:
     """Build schema Status with assessment procedure metadata (WP5).
 
@@ -659,13 +704,9 @@ def _build_status_with_procedures(
     else:
         reproducibility = ReproducibilityClass.REPLAYABLE
 
-    # Determine maturity from schedule fidelity
-    fidelity_to_maturity = {"L0": Maturity.L0, "L1": Maturity.L1, "L2": Maturity.L2}
-    maturity = (
-        fidelity_to_maturity.get(schedule.fidelity, Maturity.L0)
-        if schedule
-        else Maturity.L0
-    )
+    # Maturity is earned by the promotion ladder, not declared by the schedule's
+    # requested fidelity: a measurement starts at L0 whatever regime it ran.
+    maturity = Maturity.L0
 
     # A FAIL names WHY it failed. A run-deadline cut is not a constraint
     # violation: reading it as one sends the next investigator after a
@@ -751,8 +792,6 @@ def cell_record(
         )
     except EvaluationError as exc:
         cause = FailureCause(exc.cause)
-        fidelity_to_maturity = {"L0": Maturity.L0, "L1": Maturity.L1, "L2": Maturity.L2}
-        maturity = fidelity_to_maturity.get(schedule.fidelity, Maturity.L0)
         return Record.create(
             run_id=provenance.links.get("run_id", str(uuid.uuid4())),
             coordinate=coordinate,
@@ -764,7 +803,7 @@ def cell_record(
                 cause=cause,
                 severity=Severity.HIGH,
                 quarantine=True,
-                maturity=maturity,
+                maturity=Maturity.L0,
                 uncertainty={},
                 reproducibility=ReproducibilityClass.REPLAYABLE,
                 assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
@@ -819,7 +858,6 @@ def cell_record(
         schedule.param_budget,
         replay_hash=replay_hash,
         deterministic=schedule.deterministic,
-        schedule=schedule,
     )
 
     return Record.create(

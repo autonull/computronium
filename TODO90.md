@@ -1,9 +1,8 @@
 # TODO90 — Breadth, not depth (Successor to TODO89)
 
-**Status:** 2026-11-12 · base `e1243ed9` · **no ticket started** · starts in a
-fresh session. TODO89 is closed: T1–T10 carry measured numbers, and its
-remaining work is two depth items (graph third credit, PROTEINS 0.7040), parked
-here with explicit triggers.
+**Status:** 2026-11-12 · base `e1243ed9` · **B0–B3 closed** · next B4. TODO89 is
+closed: T1–T10 carry measured numbers, and its remaining work is two depth items
+(graph third credit, PROTEINS 0.7040), parked here with explicit triggers.
 
 **Mission:** TODO89 made the instrument trustworthy and spent it on four
 domains. TODO90 spends it on **surface**: every axis primitive exercised or
@@ -25,6 +24,46 @@ working `role_split` cell is breadth.
 | objectives | 12 registered without a payload key; 15 measured keys with no objective |
 
 Full evidence: `TODO89.md` §2b; raw probe `scripts/probes/t3_credit_breadth.py`.
+
+---
+
+## Progress ledger
+
+Session 2026-11-12 (second): B0–B3 closed. Every row names its instrument.
+
+| # | Ticket | Result | Evidence |
+|---|---|---|---|
+| B0 | Acceptance repair | **Green.** f2 reads its objective through `objective_metric`, not a literal; promotion earns L1 (maturity starts at L0, the ladder writes L1, `maturation`/`deep_tier` gate L2); `Promoted:` counts matured records. 13 passed, 0 failed. | `tests/acceptance/test_campaign_evidence_lock.py`, `test_promotion_lock.py`; `evaluate.py::_device_lock` |
+| B1 | Corpus coverage | **Green.** `comp coverage report --corpus` reads 428 stores and prints the probe's numbers; unreadable stores are named. | `computronium/experiment/evidence/corpus.py`, `tests/property/test_corpus_coverage_lock.py` |
+| B2 | Store-backed breadth | **Green.** nca 3, attention 3, spatial_lattice 3 from stores; each arm 3 seeds × 20 epochs on digits, task `digits` on every record. Rule narrowed: the stale gradient void now names only `tile`. | `experiments/experiment_20261112_b2.duckdb`; `seed_registries.py` |
+| B3 | `role_split` | **Green.** Declared default (muon-on-readout + Euclidean elsewhere); 10 PASS cells across feedforward and conv. Update axis 12/12 measured. | `ontology/update/__init__.py`, `tests/property/test_role_split_update.py`, `experiments/experiment_20261112_b3.duckdb` |
+
+**Defect found in B0 and fixed with B0:** one CUDA device ran four cells and
+three seeds concurrently, corrupting Inductor's static Triton launcher
+(`CUDA_ERROR_INVALID_HANDLE`, `load_kernel() must be called before run()`) and
+cuSOLVER's QR wrapper (`lazy wrapper should be called at most once`). One
+process-wide per-device lock in `evaluate_cell` serializes CUDA training; the
+campaign went from 15 failed records to 0, and walltime measures the cell rather
+than contention. CPU evaluation still runs concurrently.
+
+**Measured now (2026-11-12, after B2/B3):** this session's first `comp coverage
+report --corpus` read **7,288 PASS cells over 428 stores**; after B2/B3 the same
+command reads **7,319 PASS cells over 430 readable stores, 0 unreadable**. Axis
+primitives are 57/57 exercised (update 12/12). Ten of eleven geometries hold
+≥3 store-backed error-aware credits; **graph holds 2** (gradient,
+random_projections) and its third credit is the parked T8 verdict, not a B2
+gap.
+
+| Surface | At plan start | Now |
+|---|---|---|
+| Axis primitives exercised or declared | 56/57 (update 11/12) | **57/57** (update 12/12) |
+| Geometries with store-backed ≥3 error-aware credits | 8/11 | **10/11** — graph has 2; T8's third credit is parked (marginal, not met) |
+| Acceptance locks | 3 fail | **0 fail** |
+| Corpus coverage instrument | probe only | **one command**, drift-locked |
+| Tasks measured or retired | 22/25 | 22/25 — B4 remains |
+| Domains with one claim | 4/7 | 4/7 — B6 remains |
+| Registered-vs-measured objectives | 12 unmeasured, 15 orphans | unchanged — B8 |
+| Duplicate legality tables | 2 | unchanged — B9 |
 
 ---
 
@@ -63,6 +102,11 @@ Ordered by what unblocks the next measurable thing, not by interest.
 A session takes **B0–B2 first** unless they are already green. They are the
 instrument; every later ticket's evidence depends on them.
 
+**Progress (2026-11-12):** B0, B1, B2 and B3 are closed with the results in
+§0a; **B4 is the next ticket**. B5's start narrowed (graph off `digital`; nca ×
+`complex`/`neuromorphic`) because B2 closed the three probe-only credit counts.
+B6–B9 are unchanged.
+
 ---
 
 ## 2. Tickets
@@ -84,6 +128,13 @@ short-circuits or the promotion gate reads the wrong verdict.
 measured run shows L0→L1→L2 progression with the promotion count in the report.
 **Gate:** `uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py tests/acceptance/test_promotion_lock.py -q -rf --tb=line`.
 
+**Result (2026-11-12):** 13 passed in 124 s (plus `test_campaign_lock.py`: 7
+passed). The payload key is now `objective_metric(campaign.spec.objectives[0])`;
+the promotion test's 10 records all PASS and earn L1, history lists them, and
+`Promoted:` is non-zero. The spec's budget moved 60 s → 300 s because serialized
+CUDA training costs ~110 s for its ten records — the deadline, not the cell, was
+deciding which seeds reached the store.
+
 ### B1 — Corpus coverage command
 
 **Start:** `comp coverage report` defaults to one run (6 cells). The corpus
@@ -96,6 +147,14 @@ error-aware credits, unreadable stores, and the tasks never touched.
 **Acceptance:** one command prints the same numbers as the probe; a lock fails
 if the CLI and the probe disagree on total cells and per-geometry counts. A
 stale-store read failure is reported, not silently skipped.
+
+**Result (2026-11-12):** `comp coverage report --corpus` and
+`scripts/probes/t3_credit_breadth.py` both report 7,288 PASS cells over 428
+readable stores at the session's start, 0 unreadable, 11 geometries. Both call
+`evidence.corpus.scan_corpus`; `tests/property/test_corpus_coverage_lock.py`
+builds a small corpus (two readable stores, one FAIL record, one unreadable
+store) and asserts the command and the probe agree on total, per-geometry
+error-aware credits, tasks, untouched tasks, and the unreadable path.
 
 ### B2 — Store-backed breadth
 
@@ -112,6 +171,27 @@ stores**; each arm's record carries the same metric value as the probe (within
 1 σ), and every record's task name is the run's task (not `default`).
 **Non-goal:** beating the probe numbers; this ticket's claim is provenance.
 
+**Result (2026-11-12):** `experiments/experiment_20261112_b2.duckdb` holds four
+runs at the probe protocol (digits 8×8, seeds 0/1/2, 20 epochs, hidden_dim 64,
+param_budget 0 so the grid is 8×8):
+
+| Arm | Store mean ± SE (n=3) | Probe | Verdict |
+|---|---|---|---|
+| nca × random_projections | 0.8917 ± 0.0048 (CPU) | 0.8907 ± 0.0009 (t9, CPU) | matches |
+| nca × target_inversion | 0.9389 ± 0.0058 (CUDA) | 0.9389 ± 0.0056 (t10, CPU) | matches |
+| attention × gradient | 0.9787 ± 0.0009 | 0.9472 at 2 epochs (t3) | same arm, more training |
+| spatial_lattice × gradient | 0.9824 ± 0.0009 | 0.9361 at 2 epochs (t3) | same arm, more training |
+
+The nca arms were also measured on CUDA (random_projections 0.8778 ± 0.0089),
+which is a device difference, not a credit difference; the CPU record is the
+one compared with the CPU probe. Every record's task is `digits`; every cell
+has three PASS seeds. The t3 gap probe measured at 2 epochs, so its number is a
+lower bound, not the 20-epoch target (the ticket's non-goal). The declared void
+`nonlayered_instantaneous_gradient_credit` named attention, spatial_lattice, nca,
+ntm and others; stores now hold PASS gradient cells for all of them, so the row
+names only `tile` (the one topology with none), with its measured reason in
+`seed_registries.py`.
+
 ### B3 — `role_split` (U-axis breadth)
 
 **Start:** zero cells in 428 stores. `ParameterUpdateConfig.role_split` needs
@@ -126,6 +206,17 @@ Prefer (a): it is functional breadth and the paper arm already exists.
 **Acceptance:** (a) one PASS cell on feedforward and one on a non-FF geometry
 (e.g. conv), or (b) the row unavailable and a lock proving the composed
 coordinate is refused with the reason.
+
+**Result (2026-11-12, option a):** `ParameterUpdateConfig.role_split()` now has
+a declared default — `role_names=("readout",)`, Muon on the readout, Euclidean
+elsewhere — and accepts the swept `step_size`/`momentum`/`grad_clip`, so the
+axis row composes. A factory cannot know a parameter name before the geometry
+exists, so `RoleSplitUpdate` resolves the `readout` token against the composed
+geometry's `output_dim` at step time. `experiments/experiment_20261112_b3.duckdb`
+holds 10 PASS role_split cells (5 feedforward, 5 conv) at a 3-epoch screening
+schedule; the update axis is now 12/12 measured. Locks:
+`tests/property/test_role_split_update.py::TestDeclaredDefault` and
+`test_registry_completeness_lock.py` (which now catalogues role_split).
 
 ### B4 — Three untouched tasks
 
@@ -230,18 +321,19 @@ the same mechanism lock T7 uses.
 
 ## 3. Success criteria for TODO90 (breadth)
 
-| Criterion | Start | Target |
-|---|---|---|
-| Axis primitives exercised or declared | **56/57** (update 11/12) | **57/57** with a PASS cell or a named row |
-| Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry |
-| Geometries with store-backed ≥3 error-aware credits | 8/11 | **11/11** (B2 closes the 3 probe-only) |
-| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) |
-| Acceptance locks | 3 fail | **0 fail** |
-| Corpus coverage instrument | probe only | **one command**, drift-locked |
-| Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **0 unexplained** |
-| Duplicate legality tables | 2 (nca homeostatic/pc_alm) | **0** |
+| Criterion | Start | Target | Now (2026-11-12) |
+|---|---|---|---|
+| Axis primitives exercised or declared | **56/57** (update 11/12) | **57/57** with a PASS cell or a named row | **57/57** |
+| Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry | 22/25 |
+| Geometries with store-backed ≥3 error-aware credits | 8/11 | **11/11** (B2 closes the 3 probe-only) | **10/11** — graph parked (T8) |
+| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | 4/7 |
+| Acceptance locks | 3 fail | **0 fail** | **0 fail** |
+| Corpus coverage instrument | probe only | **one command**, drift-locked | **one command**, locked |
+| Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **0 unexplained** | 12 / 15 |
+| Duplicate legality tables | 2 (nca homeostatic/pc_alm) | **0** | 2 |
 
-Measured 2026-11-12: 6,925 PASS cells over 428 stores. Each row above names the
+Measured 2026-11-12 at plan start: 6,925 PASS cells over 428 stores. Measured
+after B2/B3: 7,319 over 430 stores, 0 unreadable. Each row above names the
 instrument that would move it, and the target is a cell, a row, or a claim —
 never a count of attempted work.
 
@@ -268,10 +360,11 @@ Next Experiment:
 ## 5. Parked (depth — trigger only)
 
 1. **Graph third credit.** T8's verdict stands (`target_inversion` 0.6842 ±
-   0.0204 vs 0.6579 majority, +1.29 SE, marginal). Trigger: a breadth claim
-   cites graph credit breadth, or the graph energy settle is needed by another
-   ticket. Then T8's acceptance applies (n=5 × 200 epochs, every seed >1 σ over
-   majority).
+   0.0204 vs 0.6579 majority, +1.29 SE, marginal). This is also the corpus's
+   last geometry below three store-backed error-aware credits (10/11). Trigger:
+   a breadth claim cites graph credit breadth, or the graph energy settle is
+   needed by another ticket. Then T8's acceptance applies (n=5 × 200 epochs,
+   every seed >1 σ over majority).
 2. **PROTEINS 0.7040.** Marginal until a claim cites that arm; then T6's
    pre-registered paired re-measure is the trigger.
 3. Everything TODO89 §5 lists as NO stays NO: paper figures, publishing,
@@ -285,12 +378,14 @@ Next Experiment:
 # state
 uv lock --check && uv run python -c "import duckdb, torch; print(duckdb.__version__, torch.__version__)"
 uv run python scripts/probes/t3_credit_breadth.py | tail -40
-uv run comp coverage report
+uv run comp coverage report --corpus
 
-# the gate B0 repairs
+# the gate B0 repaired (green 2026-11-12)
 uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py \
   tests/acceptance/test_promotion_lock.py -q -rf --tb=line > logs/b0.log 2>&1
 ```
 
 Read `TODO89.md` §2b before choosing a ticket; it owns the measured surface.
-Start at B0 unless it is green; then B1, then B2.
+B0–B3 are green (see §0a). **Start at B4**, then B5; B6–B9 remain. B2's rule
+narrowing means B5 keeps only its substrate × geometry holes: graph off
+`digital` and nca × `complex`/`neuromorphic`.

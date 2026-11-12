@@ -45,6 +45,7 @@ from computronium.experiment.evidence.claims import (
     cell_metrics_by_axis_value,
     check_all_alerts,
     derive_claims,
+    filter_matured,
     filter_promoted,
     replication_key,
     strongest_axis,
@@ -226,9 +227,8 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             return None
 
         record_count = self._store.count_records(run_id)
-        eligible = self.claim_eligible_records(run_id)
         claim_eligible_cells = len(self._claim_eligible_cells(run_id))
-        promoted_count = len(filter_promoted(eligible))
+        promoted_count = len(filter_matured(self._store.query_records(run_id=run_id)))
 
         # Calculate declared cells from the spec
         declared_cells = 0
@@ -595,8 +595,8 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         return fronts
 
     def promotion_history(self, run_id: str) -> list[dict[str, Any]]:
-        """Promoted records in persistence (seq) order — promotion history."""
-        promoted = filter_promoted(self.claim_eligible_records(run_id))
+        """Records that earned a promotion rung (L1 or L2), in seq order."""
+        promoted = filter_matured(self._store.query_records(run_id=run_id))
         promoted.sort(key=lambda r: r.seq)
         return [
             {

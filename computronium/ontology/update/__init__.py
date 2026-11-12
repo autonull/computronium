@@ -460,14 +460,28 @@ class ParameterUpdateConfig:
     def role_split(
         cls,
         *,
-        role_names: tuple[str, ...],
-        on_role: ParameterUpdateConfig,
-        other: ParameterUpdateConfig,
+        step_size: float = 0.01,
+        momentum: float = 0.9,
+        grad_clip: float = 1.0,
+        role_names: tuple[str, ...] = ("readout",),
+        on_role: ParameterUpdateConfig | None = None,
+        other: ParameterUpdateConfig | None = None,
     ) -> ParameterUpdateConfig:
-        """Role-split dispatcher config (X-USU-001 hybrid rule): the
-        ``on_role`` rule applies to the parameters named in ``role_names``,
-        ``other`` to the rest (X-USU-001 winner: muon-on-readout +
-        euclid-elsewhere)."""
+        """Role-split dispatcher config (X-USU-001 hybrid rule).
+
+        The declared default is the X-USU-001 winner: ``on_role`` is Muon
+        (orthogonalized) and ``other`` is Euclidean, with ``role_names`` naming
+        the readout. The token ``"readout"`` is resolved by
+        :class:`RoleSplitUpdate` against the composed geometry's output
+        dimension, because a factory cannot know a parameter name before the
+        geometry exists.
+        """
+        on_role = on_role or cls.riemannian_orthogonal(
+            step_size=step_size, momentum=momentum
+        )
+        other = other or cls.euclidean(
+            step_size=step_size, momentum=momentum, grad_clip=grad_clip
+        )
         return cls(
             update_type="role_split",
             step_size=on_role.step_size,
@@ -1482,6 +1496,34 @@ class ElasticConsolidationUpdate:
         self._baseline = {k: v.clone() for k, v in state.get("baseline", {}).items()}
 
 
+#: The role name the role-split factory declares for the output projection.
+#: A factory cannot know a parameter name before the geometry exists, so the
+#: token is resolved against the composed geometry at step time.
+_READOUT_ROLE = "readout"
+
+
+def _resolve_readout_role(
+    roles: frozenset[str], params: dict[str, Tensor], geometry: Geometry | None
+) -> frozenset[str]:
+    """Expand the ``readout`` token to the parameter that projects to output."""
+    if _READOUT_ROLE not in roles:
+        return roles
+    learnable = _learnable_weight_names(params)
+    output_dim = getattr(getattr(geometry, "config", None), "output_dim", None)
+    readout = next(
+        (
+            name
+            for name in reversed(learnable)
+            if output_dim is not None and params[name].shape[0] == output_dim
+        ),
+        learnable[-1] if learnable else None,
+    )
+    resolved = set(roles - {_READOUT_ROLE})
+    if readout is not None:
+        resolved.add(readout)
+    return frozenset(resolved)
+
+
 @update_backend("role_split")
 class RoleSplitUpdate:
     """Per-name dispatcher: the ``on_role`` rule on ``role_names``, the
@@ -1533,12 +1575,13 @@ class RoleSplitUpdate:
         self._other = cast("StatefulUpdate", update_from_config(spec.other))
 
     def _partitions(
-        self, params: dict[str, Tensor]
+        self, params: dict[str, Tensor], geometry: Geometry | None
     ) -> tuple[tuple[StatefulUpdate, frozenset[str]], ...]:
         names = frozenset(params)
+        roles = _resolve_readout_role(self._role_names, params, geometry)
         return (
-            (self._on_role, names & self._role_names),
-            (self._other, names - self._role_names),
+            (self._on_role, names & roles),
+            (self._other, names - roles),
         )
 
     def step(
@@ -1551,7 +1594,7 @@ class RoleSplitUpdate:
         grads = dict(zip(_learnable_weight_names(params), pseudo_grads))
         bgrads = bias_grads or {}
         updated = dict(params)
-        for rule, names in self._partitions(params):
+        for rule, names in self._partitions(params, geometry):
             if not names:
                 continue
             sub_params = {n: params[n] for n in names}

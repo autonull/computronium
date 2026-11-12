@@ -197,6 +197,42 @@ class TestConfigRoundTrip:
             RoleSplitUpdate(ParameterUpdateConfig.euclidean())
 
 
+class TestDeclaredDefault:
+    """The axis row composes without a caller supplying sub-rules (TODO90 B3)."""
+
+    def test_factory_needs_no_sub_rules(self) -> None:
+        cfg = ParameterUpdateConfig.role_split()
+        assert cfg.update_type == "role_split"
+        assert cfg.role_names == ("readout",)
+        assert cfg.sub_rules is not None
+        assert cfg.sub_rules.on_role.update_type == "riemannian_orthogonal"
+        assert cfg.sub_rules.other.update_type == "euclidean"
+
+    def test_readout_token_resolves_to_the_output_projection(self) -> None:
+        """A factory cannot name a parameter; the composed geometry can."""
+        from types import SimpleNamespace
+
+        from computronium.ontology.update import _resolve_readout_role
+
+        params = _params()
+        geometry = SimpleNamespace(config=SimpleNamespace(output_dim=3))
+        assert _resolve_readout_role(
+            frozenset({"readout"}), params, geometry
+        ) == frozenset({"2.weight"})
+
+    def test_the_axis_hyperparameters_reach_the_factory(self) -> None:
+        """The search space only carries knobs the factory accepts."""
+        from computronium.experiment.schema.axis import StructuralAxis
+        from computronium.experiment.schema.seed_registries import (
+            _accepted_params,
+            seed_all_registries,
+        )
+
+        seed_all_registries()
+        accepted = _accepted_params(StructuralAxis.UPDATE, "role_split")
+        assert {"step_size", "momentum", "grad_clip"} <= accepted
+
+
 class TestEndToEnd:
     def test_system_train_step_with_role_split_update(self) -> None:
         """A composed 5-D system with a role-split update runs a train step;

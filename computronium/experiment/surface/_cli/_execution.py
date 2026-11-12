@@ -405,8 +405,10 @@ def _settle_maturity(
     Uses statistical promotion gates (L1: superiority, CI width, train/val gap,
     rho band; L2: replay) with config-driven thresholds.
 
-    Honors profile flags: maturation=False skips L1→L2 promotion; deep_tier=False
-    skips confirmation re-measurement.
+    L1 is always earned: it is arithmetic on the store (the cell reached the
+    declared seed count). ``maturation`` gates the L2 rung; ``deep_tier``
+    re-measures L2 on fresh confirmation seeds instead of replaying the
+    discovery seeds.
     """
     from dataclasses import replace
 
@@ -420,18 +422,14 @@ def _settle_maturity(
     from computronium.experiment.schema.record import Maturity
     from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
 
-    # Honor profile flags — no new CLI flag needed
-    if not spec.maturation and not spec.deep_tier:
-        compute_and_store_uncertainty(store, run_id, min_seeds=spec.n_seeds)
-        return
-
     # Use statistical gates with thresholds adapted to the run's seed count
     # For low-seed runs, use relaxed thresholds; statistical gates need n>=5
-    min_seeds = max(spec.n_seeds, 5) if spec.n_seeds >= 3 else spec.n_seeds
+    declared_seeds = spec.n_seeds or 1
+    min_seeds = max(declared_seeds, 5) if declared_seeds >= 3 else declared_seeds
     thresholds = GateThresholds(
         min_seeds_for_stats=min_seeds,
-        superiority_margin_sigma=1.0 if spec.n_seeds < 5 else 2.0,
-        ci_width_threshold=0.1 if spec.n_seeds < 5 else 0.05,
+        superiority_margin_sigma=1.0 if declared_seeds < 5 else 2.0,
+        ci_width_threshold=0.1 if declared_seeds < 5 else 0.05,
     )
     baselines = _resolve_baselines(store, run_id, spec)
 
@@ -460,7 +458,8 @@ def _settle_maturity(
         tolerance=REPLAY_METRIC_TOLERANCE,
         thresholds=thresholds,
         baselines=baselines,
-        confirmation_evaluator=confirmation_evaluator,
+        confirmation_evaluator=confirmation_evaluator if spec.deep_tier else None,
+        allow_l2=spec.maturation or spec.deep_tier,
     )
     logger.info(
         "Promotion: %d cell(s) assessed, %d earned L2",
@@ -477,11 +476,11 @@ def _settle_maturity(
             entry["replay"],
             passed,
         )
-    uncertainty = compute_and_store_uncertainty(store, run_id, min_seeds=spec.n_seeds)
+    uncertainty = compute_and_store_uncertainty(store, run_id, min_seeds=declared_seeds)
     logger.info(
         "Uncertainty: computed for %d cell(s) with >=%d seeds",
         len(uncertainty),
-        spec.n_seeds,
+        declared_seeds,
     )
 
 

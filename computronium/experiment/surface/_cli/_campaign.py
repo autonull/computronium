@@ -399,6 +399,19 @@ def _cmd_coverage(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
         return 0
 
     elif args.coverage_command == "report":
+        if args.corpus:
+            from computronium.experiment.evidence.corpus import (
+                default_store_paths,
+                scan_corpus,
+            )
+
+            corpus = scan_corpus(default_store_paths(Path.cwd()), root=Path.cwd())
+            if args.format == "json":
+                print(json.dumps(corpus.to_dict(), indent=2))
+            else:
+                print(corpus.render())
+            return 0
+
         store_path = Path(args.store)
         if not store_path.exists():
             print(f"Store not found: {store_path}")

@@ -10,6 +10,10 @@ A geometry with fewer than three error-aware credits is a named gap, not a
 reason to run a sweep. Only a gap that the existing stores cannot fill is a
 sweep candidate.
 
+The counting lives in ``computronium.experiment.evidence.corpus``: this probe
+and ``comp coverage report --corpus`` read one implementation, and the lock in
+``tests/property/test_corpus_coverage_lock.py`` compares their numbers.
+
 Run: uv run python scripts/probes/t3_credit_breadth.py
 Measured (2026-11-12): 8 of 12 declared geometries reach three error-aware
 credits from the stores alone (feedforward 8, recurrent 5, tile_mesh 5, conv 3,
@@ -22,85 +26,38 @@ under ``unreadable`` rather than silently skipped.
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
-from computronium.core.system_trainer.spec import _credit_from_config
-from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema import AXES_REGISTRIES
-from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.seed_registries import seed_all_registries
-from computronium.ontology.credit import CreditAssignmentConfig
+from computronium.experiment.evidence.corpus import (
+    default_store_paths,
+    scan_corpus,
+)
 
 __all__ = ["main"]
 
 ROOT = Path(__file__).resolve().parents[2]
-RESULTS: dict[str, object] = {}
 
 
-def _error_blind(credit: str) -> bool:
-    factory = getattr(CreditAssignmentConfig, credit, None)
-    if factory is None:
-        return False
-    return bool(_credit_from_config(factory()).error_blind)
-
-
-def _stores() -> list[Path]:
-    paths = sorted((ROOT / "experiments").glob("*.duckdb"))
-    root = ROOT / "experiment.duckdb"
-    if root.exists():
-        paths.append(root)
-    return paths
-
-
-def main() -> int:
-    seed_all_registries()
-    geometries = tuple(sorted(AXES_REGISTRIES[StructuralAxis.GEOMETRY].keys()))
-    covered: dict[str, dict[str, int]] = {geometry: {} for geometry in geometries}
-    unreadable: dict[str, str] = {}
-
-    for path in _stores():
-        try:
-            with RecordStore(StoreConfig(path=path, read_only=True)) as store:
-                records = store.query_records()
-        except Exception as error:  # ruff: ignore[blind-except] — a stale store is data, not a crash
-            unreadable[str(path.relative_to(ROOT))] = str(error)
-            continue
-        for record in records:
-            if record.status.gate_verdict.value != "PASS":
-                continue
-            if record.geometry not in covered:
-                continue
-            covered[record.geometry][record.credit] = (
-                covered[record.geometry].get(record.credit, 0) + 1
-            )
-
-    table: dict[str, dict[str, object]] = {}
-    missing: dict[str, list[str]] = {}
-    for geometry, credits in covered.items():
-        error_aware = {
-            credit: count
-            for credit, count in credits.items()
-            if not _error_blind(credit)
-        }
-        error_blind = {
-            credit: count for credit, count in credits.items() if _error_blind(credit)
-        }
-        table[geometry] = {
-            "error_aware": sorted(error_aware),
-            "error_aware_cells": error_aware,
-            "error_blind": sorted(error_blind),
-            "n_error_aware": len(error_aware),
-            "pass_cells": sum(credits.values()),
-        }
-        if len(error_aware) < 3:
-            missing[geometry] = sorted(error_aware)
-
-    RESULTS["source"] = [str(path.relative_to(ROOT)) for path in _stores()]
-    RESULTS["geometries"] = table
-    RESULTS["missing"] = missing
-    RESULTS["unreadable"] = unreadable
-    print(json.dumps(RESULTS, indent=2))
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=ROOT,
+        help="Corpus root holding experiments/*.duckdb (default: repo root)",
+    )
+    args = parser.parse_args(argv)
+    root = args.root.resolve()
+    coverage = scan_corpus(default_store_paths(root), root=root)
+    results = coverage.to_dict()
+    results["missing"] = {
+        geometry: list(row.error_aware)
+        for geometry, row in coverage.geometries.items()
+        if len(row.error_aware) < 3
+    }
+    print(json.dumps(results, indent=2))
     return 0
 
 

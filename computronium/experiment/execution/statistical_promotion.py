@@ -689,6 +689,7 @@ def promote_with_stats(
     confirmation_evaluator: Callable[[list[Record], list[int]], list[Record]]
     | None = None,
     cycle: int = 0,
+    allow_l2: bool = True,
 ) -> list[dict[str, Any]]:
     """Earn maturity with statistical gates at L1; L2 requires confirmation seeds (C1).
 
@@ -708,14 +709,18 @@ def promote_with_stats(
             that re-measures a cell with fresh confirmation seeds and returns the
             new records. If provided, used for L2 promotion (C1).
         cycle: Current loop cycle number (for confirmation seed generation).
+        allow_l2: Whether the L2 rung may be earned. L1 is always written for
+            an eligible cell: it is arithmetic on the store, not a gate.
     """
     from computronium.experiment.execution.promotion import (
         eligible_cells,
     )
 
-    # First run original promotion to get L1 eligibility
+    # First run original promotion to get L1 eligibility. An undeclared seed
+    # floor (the ladder owns depth per fidelity) still earns L1 at one seed:
+    # the cell exists and passed, so that is the weakest declaration it meets.
     records = store.query_records(run_id=run_id)
-    eligible = eligible_cells(records, spec.n_seeds)
+    eligible = eligible_cells(records, spec.n_seeds or 1)
 
     # Now run statistical gates for L1->L2 decision
     from computronium.experiment.schema.record import (
@@ -746,7 +751,7 @@ def promote_with_stats(
         replay_status = "fail"
         confirmation_gate_result = None
 
-        if gate_result.all_passed:
+        if gate_result.all_passed and allow_l2:
             # Cell passed L1 statistical gates
             l2_passed, replay_status, confirmation_gate_result = (
                 _evaluate_l2_confirmation(

@@ -300,9 +300,17 @@ def test_f2_the_campaigns_own_numbers_are_the_stores_numbers(
     """
     by_credit: dict[str, list[float]] = {}
     by_axis: dict[str, set[str]] = {}
+    from computronium.experiment.schema.metrics import objective_metric
+
+    primary_key = objective_metric(campaign.spec.objectives[0])
+    failed = [r for r in campaign.records if r.payload.get("status") == "failed"]
+    assert not failed, (
+        f"{len(failed)} campaign cell(s) failed and carry no "
+        f"{primary_key!r}: {failed[0].payload.get('error')}"
+    )
     for record in campaign.records:
         by_credit.setdefault(record.credit, []).append(  # type: ignore[attr-defined]
-            float(record.payload["train_acc"])  # type: ignore[attr-defined]
+            float(record.payload[primary_key])  # type: ignore[attr-defined]
         )
         by_axis.setdefault("credit", set()).add(record.credit)  # type: ignore[attr-defined]
 

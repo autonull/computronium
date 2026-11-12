@@ -1132,26 +1132,21 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
-    # Geometry-Dynamics-Credit: some non-layered geometries with instantaneous dynamics
-    # cannot use gradient/backprop credit because instantaneous pass doesn't properly
-    # compute gradients through output projection/head weights.
-    # Conv, causal_transformer, and graph DO work with gradient credit (verified by positive control and gradient flow test).
+    # Geometry-Dynamics-Credit: one non-layered geometry with instantaneous
+    # dynamics has no measured gradient/backprop cell. The rule once named nine
+    # geometries; the stores now hold PASS gradient cells for conv, attention,
+    # tile_mesh, nca, ntm, spatial_lattice, graph and causal_transformer
+    # (t3_credit_breadth.py; attention 0.9472 and spatial_lattice 0.9361 in
+    # t3_credit_gap_sweep.py). `tile` is the only topology left with none.
     ConstraintSpec(
         name="nonlayered_instantaneous_gradient_credit",
         kind=ConstraintKind.VOID,
-        description="Non-layered geometries with instantaneous dynamics incompatible with gradient/backprop credit (output projection gradients disconnected)",
+        description="Tile geometry with instantaneous dynamics has no measured gradient/backprop cell (output projection gradients unverified)",
         predicate=not_(
             and_(
                 in_(
                     var("geometry"),
-                    const([
-                        "attention",
-                        "tile_mesh",
-                        "tile",
-                        "nca",
-                        "ntm",
-                        "spatial_lattice",
-                    ]),
+                    const(["tile"]),
                 ),
                 eq(var("dynamics"), const("instantaneous")),
                 in_(var("credit"), const(["gradient", "backprop"])),

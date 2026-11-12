@@ -572,6 +572,11 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
         "--store", default="experiment.duckdb", help="DuckDB store path"
     )
     p_coverage_report.add_argument(
+        "--corpus",
+        action="store_true",
+        help="Read every experiments/*.duckdb store, not one run",
+    )
+    p_coverage_report.add_argument(
         "--run-id", default=None, help="Specific run ID (latest if omitted)"
     )
     p_coverage_report.add_argument(

@@ -11,7 +11,8 @@ maturity the store earned:
 
 Falsifiable: removing the promotion call from ``_cmd_run`` turns every
 assertion red (records stay L0). Cost discipline: one cell × 2 seeds at
-3 epochs, measured ~5 s per record plus one replay measurement.
+3 epochs; the default sweep yields five cells × two seeds, measured ~110 s
+serialized on one CUDA device.
 """
 
 from __future__ import annotations
@@ -39,7 +40,10 @@ _SPEC = {
     "batch_limit": 0,
     "seed": 0,
     "param_budget": 10000,
-    "budget_seconds": 60,
+    # One CUDA device trains one cell at a time (see evaluate._device_lock), so
+    # the ten records this spec measures cost ~110 s. The cap must exceed that
+    # or the deadline, not the cell, decides which seeds reach the store.
+    "budget_seconds": 300,
     "policy": "round_robin_grid",
     "axes": [
         {"axis": "substrate", "primitives": ["digital"]},
