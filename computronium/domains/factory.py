@@ -6,10 +6,12 @@ All concrete task classes now live in ``domains/``.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
+from torch.utils.data import Dataset
 
 if TYPE_CHECKING:
     from torch.utils.data import DataLoader
@@ -509,6 +511,32 @@ class GraphClassificationTask(DomainTask):
         )
 
 
+class _NextCharDataset(Dataset):
+    """Deterministic next-character items over a cyclic pattern.
+
+    Item ``i`` is the context window starting at ``starts[i]`` and its target
+    is the following character. Starts are drawn once with a fixed seed, so a
+    validation pass measures the same items on every run — the dummy
+    single-sample loader this replaces reported 0.0 accuracy by construction.
+    """
+
+    def __init__(self, vocab_size: int, context_len: int, size: int, seed: int) -> None:
+        self.vocab_size = vocab_size
+        self.context_len = context_len
+        generator = torch.Generator().manual_seed(seed)
+        self.starts = torch.randint(
+            0, vocab_size - context_len, (size,), generator=generator
+        )
+
+    def __len__(self) -> int:
+        return len(self.starts)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        start = int(self.starts[index])
+        seq = torch.arange(start, start + self.context_len + 1) % self.vocab_size
+        return seq[:-1].float(), seq[-1].long()
+
+
 class CharNGramTask(DomainTask):
     """Synthetic task: Predict next character from previous N chars.
 
@@ -552,25 +580,24 @@ class CharNGramTask(DomainTask):
         )
 
     def setup(self) -> None:
+        from torch.utils.data import DataLoader
+
+        if self._train_loader is None:
+            self._train_loader = DataLoader(
+                _NextCharDataset(self.vocab_size, self.context_len, 4096, seed=0),
+                batch_size=self.batch_size,
+            )
+            self._val_loader = DataLoader(
+                _NextCharDataset(self.vocab_size, self.context_len, 1024, seed=1),
+                batch_size=self.batch_size,
+            )
+            self._test_loader = self._val_loader
         self._setup_done = True
 
     def get_dataloader(self, split: TaskSplit) -> DataLoader:
-        # CharNGramTask uses get_batch instead of DataLoader
-        # Return a dummy loader that will be overridden by get_batch
         if not self._setup_done:
             self.setup()
-        if self._train_loader is None:
-            from torch.utils.data import DataLoader, TensorDataset
-
-            # Create dummy data for DataLoader interface
-            dummy_x = torch.zeros(1, self.context_len)
-            dummy_y = torch.zeros(1, dtype=torch.long)
-            dummy_ds = TensorDataset(dummy_x, dummy_y)
-            self._train_loader = DataLoader(dummy_ds, batch_size=1)
-            self._val_loader = DataLoader(dummy_ds, batch_size=1)
-        if split == TaskSplit.TRAIN:
-            return self._train_loader
-        return self._val_loader
+        return self._train_loader if split == TaskSplit.TRAIN else self._val_loader
 
     def get_batch(
         self, split: str | TaskSplit = "train", batch_size: int = 32
@@ -589,6 +616,11 @@ class CharNGramTask(DomainTask):
         x = x.view(x.size(0), -1)
         y = torch.stack(y_list).to(self.device).long()
         return x, y
+
+    def compute_loss(
+        self, outputs: torch.Tensor, targets: torch.Tensor
+    ) -> torch.Tensor:
+        return torch.nn.functional.cross_entropy(outputs, targets)
 
     def evaluate(
         self,
@@ -619,7 +651,11 @@ class CharNGramTask(DomainTask):
         finally:
             if was_training:
                 model.train()
-        return Metrics(loss=avg_loss, accuracy=accuracy)
+        return Metrics(
+            loss=avg_loss,
+            accuracy=accuracy,
+            perplexity=math.exp(min(avg_loss, 10)),
+        )
 
     def create_trainer(self, model: nn.Module, **kwargs) -> _TaskTrainer:
         kwargs.pop("device", None)

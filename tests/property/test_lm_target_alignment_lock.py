@@ -125,3 +125,57 @@ def test_trainer_validate_accepts_sequence_targets() -> None:
     history = trainer.fit()
     assert math.isfinite(history[-1]["val_loss"])
     assert math.isfinite(history[-1]["val_acc"])
+
+
+def test_causal_transformer_lm_takes_vocab_from_output_dim() -> None:
+    """A token task's shape is (sequence length, vocabulary), not the reverse.
+
+    The builder read the vocabulary out of ``input_dim`` (the sequence length)
+    and left ``seq_len`` at a fixed 32: a 65-char Shakespeare corpus composed
+    a 128-class head over a 32-position embedding table, and the trainer then
+    failed on a 127-token sequence.
+    """
+    from computronium.experiment.kernel._geometry_builders import (
+        build_geometry_config_dispatch,
+    )
+
+    seq_len, vocab = 128, 65
+    config = build_geometry_config_dispatch(
+        "causal_transformer",
+        input_shape=(seq_len,),
+        output_dim=vocab,
+        param_budget=0,
+        geometry={},
+    )
+    assert config.input_dim == vocab
+    assert config.output_dim == vocab
+    assert config.seq_len == seq_len
+
+
+def test_lm_dataloader_yields_next_token_pairs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The trainer unpacks ``(x, y)``; a bare token ``DataLoader`` raised.
+
+    ``SystemTrainer`` does ``x, y = next(train_iter)``, so the LM loader must
+    hand out next-token pairs. It used to iterate the raw token tensor, which
+    died with "too many values to unpack (expected 2)" before the first step.
+    """
+    from computronium.data import lm as lm_data
+    from computronium.domains.base import TaskSplit
+    from computronium.domains.lm import LMTask
+
+    vocab, seq_len = 12, 16
+
+    class _StubCorpus:
+        data = torch.randint(0, vocab, (4000,))
+        vocab_size = vocab
+
+    monkeypatch.setattr(lm_data, "get_lm_dataset", lambda *a, **k: _StubCorpus())
+    task = LMTask(seq_len=seq_len)
+    task.setup()
+
+    x, y = next(iter(task.get_dataloader(TaskSplit.TRAIN)))
+    assert x.shape == y.shape == (task.batch_size, seq_len)
+    assert torch.equal(y[:, :-1], x[:, 1:])
+
+    val_x, val_y = next(iter(task.get_dataloader(TaskSplit.VAL)))
+    assert val_x.shape == val_y.shape

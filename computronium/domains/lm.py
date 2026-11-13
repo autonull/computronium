@@ -6,7 +6,7 @@ Standard LM datasets (Shakespeare, WikiText, etc.)
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from computronium.domains.base import (
     DomainSpec,
@@ -19,6 +19,29 @@ from computronium.domains.base import (
 __all__ = [
     "LMTask",
 ]
+
+
+class _NextTokenDataset(Dataset):
+    """Contiguous next-token pairs over a token tensor.
+
+    One item is ``(tokens[i : i+T], tokens[i+1 : i+T+1])`` and the stride is
+    ``T``, so no token is shared between items and a validation pass covers
+    its split once. A bare ``DataLoader`` over the token tensor yields single
+    tensors, which the system trainer cannot unpack into ``(x, y)``.
+    """
+
+    def __init__(self, tokens: torch.Tensor, seq_len: int) -> None:
+        self.tokens = tokens
+        self.seq_len = seq_len
+        self._count = max(0, (len(tokens) - 1) // seq_len)
+
+    def __len__(self) -> int:
+        return self._count
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        start = index * self.seq_len
+        chunk = self.tokens[start : start + self.seq_len + 1]
+        return chunk[:-1], chunk[1:]
 
 
 class LMTask(DomainTask):
@@ -73,12 +96,16 @@ class LMTask(DomainTask):
         self._train_data = train_data
         self._val_data = val_data
 
-        # Create DataLoaders
+        # Create DataLoaders over next-token pairs; the trainer unpacks (x, y)
         self._train_loader = DataLoader(
-            train_data, batch_size=self.batch_size, shuffle=True
+            _NextTokenDataset(train_data, self.seq_len),
+            batch_size=self.batch_size,
+            shuffle=True,
         )
         self._val_loader = DataLoader(
-            val_data, batch_size=self.batch_size, shuffle=False
+            _NextTokenDataset(val_data, self.seq_len),
+            batch_size=self.batch_size,
+            shuffle=False,
         )
         self._test_loader = self._val_loader
         self._setup_done = True
@@ -86,11 +113,11 @@ class LMTask(DomainTask):
     def get_dataloader(self, split: TaskSplit) -> DataLoader:
         if not self._setup_done:
             self.setup()
-
-        if split == TaskSplit.TRAIN:
-            return self._train_loader
-        else:
-            return self._val_loader
+        loader = self._train_loader if split == TaskSplit.TRAIN else self._val_loader
+        if loader is None:
+            msg = f"{self.name}: setup() built no loader for {split}"
+            raise RuntimeError(msg)
+        return loader
 
     def get_batch(
         self, split: str | TaskSplit = "train", batch_size: int | None = None
@@ -145,11 +172,7 @@ class LMTask(DomainTask):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 outputs = model(inputs)
 
-                # Reshape for cross entropy
-                if outputs.dim() == 3:
-                    outputs = outputs.reshape(-1, outputs.size(-1))
-                    targets = targets.reshape(-1)
-
+                outputs, targets = self._flat(outputs, targets)
                 loss = self.compute_loss(outputs, targets)
 
                 total_loss += loss.item() * targets.numel()
@@ -162,11 +185,23 @@ class LMTask(DomainTask):
 
         return Metrics(loss=avg_loss, accuracy=accuracy, perplexity=perplexity)
 
+    @staticmethod
+    def _flat(
+        outputs: torch.Tensor, targets: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Fold a sequence-shaped logits/target pair to one row per token.
+
+        ``TransformerGeometry`` already folds ``[B, T]`` into ``[B*T, V]``; a
+        second reshape then mismatched 4096 logits against 32 target rows.
+        """
+        from computronium.ontology._utils import _align_target_rows
+
+        if outputs.dim() == 3:
+            outputs = outputs.reshape(-1, outputs.size(-1))
+        return outputs, _align_target_rows(outputs, targets)
+
     def compute_loss(
         self, outputs: torch.Tensor, targets: torch.Tensor
     ) -> torch.Tensor:
-        # For autoregressive LM: outputs (B, T, V) -> (B*T, V), targets (B, T) -> (B*T)
-        if outputs.dim() == 3:
-            outputs = outputs.reshape(-1, outputs.size(-1))
-            targets = targets.reshape(-1)
+        outputs, targets = self._flat(outputs, targets)
         return torch.nn.functional.cross_entropy(outputs, targets)

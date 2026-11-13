@@ -1,6 +1,6 @@
 # TODO90 — Breadth, not depth (Successor to TODO89)
 
-**Status:** 2026-11-12 · base `e1243ed9` · **B0–B3 closed** · next B4. TODO89 is
+**Status:** 2026-11-12 · base `e1243ed9` · **B0–B4 closed** · next B5. TODO89 is
 closed: T1–T10 carry measured numbers, and its remaining work is two depth items
 (graph third credit, PROTEINS 0.7040), parked here with explicit triggers.
 
@@ -29,7 +29,8 @@ Full evidence: `TODO89.md` §2b; raw probe `scripts/probes/t3_credit_breadth.py`
 
 ## Progress ledger
 
-Session 2026-11-12 (second): B0–B3 closed. Every row names its instrument.
+Session 2026-11-12 (second): B0–B3 closed. Session 2026-11-12 (third): B4
+closed. Every row names its instrument.
 
 | # | Ticket | Result | Evidence |
 |---|---|---|---|
@@ -37,6 +38,7 @@ Session 2026-11-12 (second): B0–B3 closed. Every row names its instrument.
 | B1 | Corpus coverage | **Green.** `comp coverage report --corpus` reads 428 stores and prints the probe's numbers; unreadable stores are named. | `computronium/experiment/evidence/corpus.py`, `tests/property/test_corpus_coverage_lock.py` |
 | B2 | Store-backed breadth | **Green.** nca 3, attention 3, spatial_lattice 3 from stores; each arm 3 seeds × 20 epochs on digits, task `digits` on every record. Rule narrowed: the stale gradient void now names only `tile`. | `experiments/experiment_20261112_b2.duckdb`; `seed_registries.py` |
 | B3 | `role_split` | **Green.** Declared default (muon-on-readout + Euclidean elsewhere); 10 PASS cells across feedforward and conv. Update axis 12/12 measured. | `ontology/update/__init__.py`, `tests/property/test_role_split_update.py`, `experiments/experiment_20261112_b3.duckdb` |
+| B4 | Three untouched tasks | **Green.** `kmnist` 0.6669 val_acc (chance/majority 0.100), `char_ngram` 3.9923 ppl (unigram 25.21), `tiny_shakespeare` 8.4394 ppl (unigram 27.19); 1 seed each, 2 PASS records per task. Corpus task list holds no `NOT TOUCHED` row. | `experiments/experiment_20261112_b4.duckdb`; `tests/property/test_lm_target_alignment_lock.py` |
 
 **Defect found in B0 and fixed with B0:** one CUDA device ran four cells and
 three seeds concurrently, corrupting Inductor's static Triton launcher
@@ -54,13 +56,17 @@ primitives are 57/57 exercised (update 12/12). Ten of eleven geometries hold
 random_projections) and its third credit is the parked T8 verdict, not a B2
 gap.
 
+**Measured after B4:** the same command reads **7,325 PASS cells over 431
+readable stores, 0 unreadable**, and its task section ends with "every
+registered task is measured" — the three `NOT TOUCHED` names are gone.
+
 | Surface | At plan start | Now |
 |---|---|---|
 | Axis primitives exercised or declared | 56/57 (update 11/12) | **57/57** (update 12/12) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **10/11** — graph has 2; T8's third credit is parked (marginal, not met) |
 | Acceptance locks | 3 fail | **0 fail** |
 | Corpus coverage instrument | probe only | **one command**, drift-locked |
-| Tasks measured or retired | 22/25 | 22/25 — B4 remains |
+| Tasks measured or retired | 22/25 | **25/25** — every registered task is measured |
 | Domains with one claim | 4/7 | 4/7 — B6 remains |
 | Registered-vs-measured objectives | 12 unmeasured, 15 orphans | unchanged — B8 |
 | Duplicate legality tables | 2 | unchanged — B9 |
@@ -102,10 +108,20 @@ Ordered by what unblocks the next measurable thing, not by interest.
 A session takes **B0–B2 first** unless they are already green. They are the
 instrument; every later ticket's evidence depends on them.
 
-**Progress (2026-11-12):** B0, B1, B2 and B3 are closed with the results in
-§0a; **B4 is the next ticket**. B5's start narrowed (graph off `digital`; nca ×
+**Progress (2026-11-12):** B0, B1, B2, B3 and B4 are closed with the results in
+§0a; **B5 is the next ticket**. B5's start narrowed (graph off `digital`; nca ×
 `complex`/`neuromorphic`) because B2 closed the three probe-only credit counts.
 B6–B9 are unchanged.
+
+**B5 start state (2026-11-12):** four coordinates, each one cell with
+`--epochs 2 --n-seeds 1 --device cuda` and all six axes pinned, as B4 did:
+`graph × ternary`, `graph × sparse` (task `cora`, arm
+`graph/instantaneous/null/gradient/adam`), `nca × complex`, `nca ×
+neuromorphic` (task `digits`, arm `nca/instantaneous/null/gradient/adam`).
+A tuple that refuses composes nothing; then it needs a `VOID` row whose
+`unavailable_reason` is the measured failure — not a silent prune. Substrate
+and geometry are the only axes that change: keep the credit error-aware so a
+PASS cell also counts toward the ≥3-credits-per-geometry row.
 
 ---
 
@@ -234,6 +250,54 @@ leaving it registered and unmeasured is the defect.
 metric, ruler, and walltime. `comp coverage tasks` lists no `NOT TOUCHED`
 task: every listed task is measured or absent from the registry.
 
+**Result (2026-11-12):** `experiments/experiment_20261112_b4.duckdb` holds three
+runs, 2 PASS records each (the arm plus the run's positive control). Digits for
+the ruler were computed from the split the cell measured.
+
+| Task | Arm | Epochs × seed | Primary metric | Ruler | Walltime |
+|---|---|---|---|---|---|
+| `kmnist` | digital/conv/instantaneous/null/gradient/adam, CUDA | 3 × 1 | val_acc **0.6669** | chance = majority = 0.100 (balanced) | 37 s |
+| `char_ngram` | digital/feedforward/instantaneous/null/gradient/adam, CUDA | 10 × 1 | perplexity **3.9923** (val_acc 0.5215) | unigram ppl 25.21; chance 0.037 | 6 s |
+| `tiny_shakespeare` | digital/causal_transformer/instantaneous/null/gradient/adam, CUDA | 5 × 1 | perplexity **8.4394** (val_acc 0.3714) | unigram ppl 27.19; majority 0.1535 | 17 s |
+
+`comp coverage report --corpus` now ends its task section with "every registered
+task is measured"; tasks are 25/25. The probes are
+`scripts/probes/`-class throwaways and are not committed; the store is the
+evidence.
+
+**Defects found in B4 and fixed with B4** — each one made the task
+unmeasurable, not merely poor:
+
+1. `LMTask` handed the trainer a bare token `DataLoader` whose items are single
+   tensors; `SystemTrainer` unpacks `(x, y)` and died with "too many values to
+   unpack (expected 2)" before the first step. The loader now yields
+   `_NextTokenDataset` pairs `(tokens[i:i+T], tokens[i+1:i+T+1])`.
+2. `LMTask.compute_loss` reshaped a second time after `TransformerGeometry`
+   had already folded `[B, T]` into `[B*T, V]`, comparing 4096 logits against
+   32 target rows. One `_flat` helper now folds both sides (the same
+   `_align_target_rows` the pipeline uses).
+3. `build_causal_transformer_config` took the vocabulary from `input_dim` (the
+   *sequence length*, 128) and left `seq_len` at a fixed 32: a 65-char corpus
+   composed a 128-class head under a 32-position embedding table. LM mode now
+   reads vocabulary from `output_dim` and positions from the task's shape
+   (D16's rule).
+4. `_sample_inputs` stacked a collated `(x, y)` list into `[2, B, T]`, so the
+   free-settle probe compared `B*T` logits to a `T`-wide positional table
+   ("free settle telemetry failed"). A two-element collection is now the pair
+   the provider contract declares.
+5. `CharNGramTask` declared a 50-token causal-transformer row while
+   implementing single-step prediction over a 3-token window, evaluated on a
+   one-sample zeros loader, and had no `compute_loss` at all — the cell
+   measured 0.0 accuracy by construction. It now has a seeded
+   `_NextCharDataset` (train 4096 / val 1024 items), a real `compute_loss`, a
+   perplexity metric, and a truthful registry row (`(3,) → 27`,
+   `geometry_hint="feedforward"`).
+
+Locks: `tests/property/test_lm_target_alignment_lock.py` gains
+`test_causal_transformer_lm_takes_vocab_from_output_dim` (fails if the builder
+reverts to `input_dim`/32) and `test_lm_dataloader_yields_next_token_pairs`
+(fails if the loader returns bare tensors or loses the one-token shift).
+
 ### B5 — Substrate × geometry holes
 
 **Start:** graph has zero cells off `digital`; nca is on 6 of 9 substrates
@@ -324,7 +388,7 @@ the same mechanism lock T7 uses.
 | Criterion | Start | Target | Now (2026-11-12) |
 |---|---|---|---|
 | Axis primitives exercised or declared | **56/57** (update 11/12) | **57/57** with a PASS cell or a named row | **57/57** |
-| Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry | 22/25 |
+| Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry | **25/25** (B4) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **11/11** (B2 closes the 3 probe-only) | **10/11** — graph parked (T8) |
 | Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | 4/7 |
 | Acceptance locks | 3 fail | **0 fail** | **0 fail** |
@@ -333,7 +397,8 @@ the same mechanism lock T7 uses.
 | Duplicate legality tables | 2 (nca homeostatic/pc_alm) | **0** | 2 |
 
 Measured 2026-11-12 at plan start: 6,925 PASS cells over 428 stores. Measured
-after B2/B3: 7,319 over 430 stores, 0 unreadable. Each row above names the
+after B2/B3: 7,319 over 430 stores, 0 unreadable. After B4: 7,325 over 431
+stores, 0 unreadable. Each row above names the
 instrument that would move it, and the target is a cell, a row, or a claim —
 never a count of attempted work.
 
@@ -386,6 +451,6 @@ uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py \
 ```
 
 Read `TODO89.md` §2b before choosing a ticket; it owns the measured surface.
-B0–B3 are green (see §0a). **Start at B4**, then B5; B6–B9 remain. B2's rule
+B0–B4 are green (see §0a). **Start at B5**; B6–B9 remain. B2's rule
 narrowing means B5 keeps only its substrate × geometry holes: graph off
 `digital` and nca × `complex`/`neuromorphic`.

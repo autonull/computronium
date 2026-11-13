@@ -702,13 +702,17 @@ def build_causal_transformer_config(
             in_channels=_as_int(geometry.get("in_channels"), 1),
         )
     else:
-        # Standard LM mode
+        # Standard LM mode: a token task's ``input_shape`` is its sequence
+        # length and its ``output_dim`` the vocabulary. Reading the vocabulary
+        # from the sequence length built a 128-class head over a 65-char
+        # vocabulary and a 32-position embedding table under a 127-token
+        # sequence (the task's own shape is the ruler, D16).
         return GeometryConfig.causal_transformer(
-            vocab_size=input_dim,
+            vocab_size=output_dim,
             d_model=hidden,
             n_layers=depth,
             n_heads=heads,
-            seq_len=_as_int(geometry.get("seq_len"), 32),
+            seq_len=_as_int(geometry.get("seq_len"), input_dim),
         )
 
 

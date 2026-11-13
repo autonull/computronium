@@ -600,8 +600,11 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "char_ngram": TaskSpecEnriched(
         name="char_ngram",
         domain=DomainType.LANGUAGE,
-        input_shape=(50,),
-        output_dim=128,
+        # The task predicts one character from a flat context window of
+        # ``context_len`` previous characters; it is not a token sequence, so
+        # the shape is the window and the geometry is the MLP that reads it.
+        input_shape=(3,),
+        output_dim=27,
         cost_class=CostClass.MEDIUM,
         primary_objective="perplexity",
         objectives=(
@@ -615,7 +618,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
         ),
-        geometry_hint="causal_transformer",
+        geometry_hint="feedforward",
         typical_batch_size=32,
         typical_lr=1e-3,
         tags=("language", "char_ngram"),

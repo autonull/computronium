@@ -267,15 +267,19 @@ def _sample_inputs(task: Any, device: str) -> tuple[torch.Tensor | None, int]:
         # Task doesn't use DataLoader (e.g., graph, RL); use get_batch
         batch = task.get_batch("train", batch_size=32)
 
-    # Handle different batch structures
-    if isinstance(batch, tuple) and len(batch) >= 2:
-        sample_x = batch[0]
-    elif isinstance(batch, list):
-        # List of tensors - stack if same shape, else take first
-        if len(batch) > 0 and all(b.shape == batch[0].shape for b in batch):
-            sample_x = torch.stack(batch)
+    # Handle different batch structures. The trainer's provider contract is an
+    # ``(x, y)`` pair, and a ``DataLoader`` over a pair dataset collates it to
+    # a two-element list — not a tuple. Stacking that list turned one
+    # sequence batch into ``[2, B, T]`` and the settle probe then compared
+    # ``B*T`` logits against a ``T``-wide positional table.
+    if isinstance(batch, list | tuple):
+        items = list(batch)
+        if len(items) == 2 or isinstance(batch, tuple):
+            sample_x = items[0]
+        elif items and all(b.shape == items[0].shape for b in items):
+            sample_x = torch.stack(items)
         else:
-            sample_x = batch[0]
+            sample_x = items[0]
     else:
         sample_x = batch
 

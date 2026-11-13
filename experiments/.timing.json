@@ -71,9 +71,12 @@
     "startup_s": 0.0
   },
   "cuda/L0": {
-    "cost_per_cell_s": 95.128,
+    "cost_per_cell_s": 33.297,
     "per_task": {
-      "mnist": 95.128
+      "char_ngram": 3.277,
+      "kmnist": 24.702,
+      "mnist": 95.128,
+      "tiny_shakespeare": 10.081
     },
     "startup_s": 0.0
   },
