@@ -36,6 +36,8 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.acceleration.kernel_backend import KernelBackend
     from computronium.ontology import (
         CreditAssignment,
@@ -104,12 +106,15 @@ def compose_system[  # ruff: ignore[complex-structure]
     update: TU,
     *,
     device: str | torch.device | None = None,
+    loss_fn: Callable[[Tensor, Tensor], Tensor] | None = None,
 ) -> System[TS, TG, TD, TC, TU]:
     """Compose a System from five orthogonal components.
 
     Args:
         device: Optional target device; parameters are placed on it at
             construction (``None`` keeps components where they were built).
+        loss_fn: The task's declared loss. ``None`` keeps the pipeline's
+            cross-entropy fallback, which is only correct for classification.
 
     This is the primary factory function for creating computronium systems
     from the 5-D ontology primitives.
@@ -142,6 +147,8 @@ def compose_system[  # ruff: ignore[complex-structure]
         optimizer: object | None = None
         # Optional kernel backend for accelerated training
         _kernel_backend: KernelBackend | None = None
+        # The task's declared loss; ``None`` means the pipeline's CE fallback.
+        loss_fn: Callable[[Tensor, Tensor], Tensor] | None = None
 
         def attach_kernel_backend(self, backend: KernelBackend) -> None:
             """Attach a kernel backend for accelerated training.
@@ -243,6 +250,7 @@ def compose_system[  # ruff: ignore[complex-structure]
                 self.update,
                 x,
                 y,
+                loss_fn=self.loss_fn,
                 **graph_kwargs,
             )
 
@@ -329,6 +337,7 @@ def compose_system[  # ruff: ignore[complex-structure]
         dynamics=dynamics,
         credit=credit,
         update=update,
+        loss_fn=loss_fn,
     )
     if device is not None:
         system.to(device)
@@ -572,6 +581,8 @@ def compose_system_from_configs(
     dynamics: StateDynamicsConfig,
     credit: CreditAssignmentConfig,
     update: ParameterUpdateConfig,
+    *,
+    loss_fn: Callable[[Tensor, Tensor], Tensor] | None = None,
 ) -> System:
     """Compose a System from five configuration objects.
 
@@ -610,6 +621,7 @@ def compose_system_from_configs(
         dynamics_instance,
         credit_instance,
         update_instance,
+        loss_fn=loss_fn,
     )
 
 

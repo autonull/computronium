@@ -1,0 +1,36 @@
+{
+  "claim": "On the synthetic_forecast task (timeseries domain, 32-step sine window, 1-step horizon, noise sigma 0.1), the pinned arm digital/feedforward/instantaneous/null/gradient/adam reaches a validation MAE of at most 0.100 at the L2 schedule (5 seeds x 20 epochs) — at least 1.15x below the 0.11459 naive last-value ruler and removing at least 42% of the headroom between that ruler and the 0.07979 irreducible noise floor.",
+  "metric": "val_mae",
+  "threshold": 0.1,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-13",
+  "ticket": "TODO90 B6c",
+  "domain": "timeseries",
+  "task": "synthetic_forecast",
+  "coordinate": "digital/feedforward/instantaneous/null/gradient/adam",
+  "schedule": {
+    "fidelity": "L2",
+    "n_seeds": 5,
+    "epochs": 20,
+    "batch_size": 32,
+    "device": "cuda"
+  },
+  "ruler": {
+    "name": "naive last-value forecast (y_hat = x[-1])",
+    "value": 0.11459,
+    "split": "synthetic_forecast validation split (n = 994 contiguous windows, 20% tail hold-out)",
+    "se": 0.00268,
+    "note": "Measured on the split the cell measures. Linear extrapolation is worse (MAE 0.19950), so persistence is the stronger naive arm and the one registered."
+  },
+  "noise_floor": {
+    "name": "irreducible error of a deterministic predictor under the generator's Gaussian noise",
+    "value": 0.07979,
+    "definition": "0.1 * sqrt(2/pi) = E|epsilon| for sigma = 0.1",
+    "available_headroom_over_naive": 0.0348,
+    "note": "A threshold below this floor is unreachable by construction; 0.100 keeps 0.0202 of slack above it."
+  },
+  "decision_rule": "Met iff (1) every one of the 5 seeds writes PASS with val_mae <= 0.100, and (2) the one-sided 95% upper confidence bound of the seed mean (t, df=4) is < 0.100. Marginal iff the seed mean is within 1 SE of 0.100. Distance is reported in SEs and as a fraction of the headroom over naive.",
+  "pilot_role": "Schedule choice, not threshold choice: a 20-epoch / 1-seed pilot this session measured val_mae 0.0907 after the pipeline learned to train a regression target at all. The threshold is derived from the split's naive ruler and the generator's noise floor, both computable without running the arm.",
+  "claim_eligibility": "L2 records carry 5 achieved PASS seeds, a replay hash, and a normalized metric, so the run's claim-eligible cell count is non-zero."
+}

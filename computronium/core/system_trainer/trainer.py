@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.core.losses import perplexity
+from computronium.core.losses import compute_loss, perplexity
 from computronium.core.system_trainer._early_stopping import (
     EarlyStoppingConfig,
     EarlyStoppingState,
@@ -459,7 +459,10 @@ class SystemTrainer:
             return {}
 
         self.system.geometry.eval()
-        val_ce_sum = 0.0
+        # The system's declared loss is the task's own (composition attaches
+        # ``DomainTask.compute_loss``); ``None`` keeps the CE fallback.
+        loss_fn = getattr(self.system, "loss_fn", None)
+        val_loss_sum = 0.0
         val_correct = 0
         num_samples = 0
 
@@ -502,13 +505,13 @@ class SystemTrainer:
 
                 logits = self.system.forward(x, **graph_kwargs)
                 y = _align_target_rows(logits, y)
-                ce = torch.nn.functional.cross_entropy(logits, y, reduction="sum")
-                val_ce_sum += ce.item()
+                batch_loss = compute_loss(loss_fn, logits, y)
+                val_loss_sum += batch_loss.item() * logits.shape[0]
                 val_correct += (logits.argmax(-1) == y).sum().item()
                 num_samples += y.numel()
 
         denom = max(num_samples, 1)
-        val_loss = val_ce_sum / denom
+        val_loss = val_loss_sum / denom
         return {
             "val_loss": val_loss,
             "val_acc": val_correct / denom,

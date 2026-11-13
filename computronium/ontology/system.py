@@ -143,6 +143,10 @@ class System(Protocol[TS, TG, TD, TC, TU]):
     credit: TC
     update: TU
     _kernel_backend: KernelBackend | None
+    # The task's declared loss (``DomainTask.compute_loss``), or ``None`` for
+    # the cross-entropy fallback. Declared where the task and the system meet
+    # (composition), never inferred from the output width.
+    loss_fn: Callable[[Tensor, Tensor], Tensor] | None
 
     def train_step(self, x: Tensor, y: Tensor, **graph_kwargs) -> dict[str, float]:
         """Execute one training step through the family-neutral pipeline.
@@ -160,6 +164,7 @@ class System(Protocol[TS, TG, TD, TC, TU]):
             self.update,
             x,
             y,
+            loss_fn=getattr(self, "loss_fn", None),
             **graph_kwargs,
         )
 

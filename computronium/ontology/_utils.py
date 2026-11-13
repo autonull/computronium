@@ -35,14 +35,23 @@ def _acts_list(activations: list[Tensor] | Tensor | None) -> list[Tensor]:
 
 
 def _align_target_rows(out: Tensor, target: Tensor) -> Tensor:
-    """Fold sequence-shaped targets to match the logits' row count.
+    """Fold sequence-shaped *class-index* targets to match the logits' rows.
 
     ``TransformerGeometry`` folds the sequence dim into the batch, so LM
     logits are ``[B*T, V]`` while next-token targets stay ``[B, T]``. A
     target whose element count equals the logits' row count is that folded
     token target; class targets ``[B]`` and soft labels keep their shape.
+
+    Only integer targets are class indices. A regression target ``[B, 1]``
+    has the same element count as the logits' rows ``[B, 1]`` — folding it
+    would turn continuous values into a scatter index (``scatter(): Expected
+    dtype int32/int64 for index``) and a one-hot nudge into nonsense.
     """
-    if target.dim() > 1 and target.numel() == out.shape[0]:
+    if (
+        target.dim() > 1
+        and not target.is_floating_point()
+        and target.numel() == out.shape[0]
+    ):
         return target.reshape(-1)
     return target
 

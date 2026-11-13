@@ -203,17 +203,22 @@ MUTATION_AXES: list[StructuralAxis] = [
 ]
 
 
-def _make_positive_control_cell(
+def _make_positive_control_cells(
     spec: RunSpec,
-) -> tuple[Coordinate, Schedule] | None:
-    """Create a known-working cell for positive control (P3).
+) -> list[tuple[Coordinate, Schedule]]:
+    """Candidate cells for the positive control (P3), in declared order.
 
-    Uses a task-appropriate geometry based on the task's geometry_hint:
-    - Vision: conv (or feedforward for digits)
-    - Graph: graph
-    - RL: feedforward
-    - Language: causal_transformer
-    - Tabular: feedforward
+    The first arm is the canonical control: the task's own geometry hint,
+    instantaneous dynamics, null plasticity, gradient credit, Euclidean
+    update. A hint can name a topology the credit rule refuses — a recurrent
+    geometry has no feedforward path to its recurrent weights
+    (``SystemConfig.validate``) — and then the canonical arm *cannot exist*,
+    so the cell is skipped rather than failed and the next declared arm is
+    tried. The fallback reads the task's own flattened input shape through a
+    feedforward geometry, which every registered task has.
+
+    ``_evaluate_cells`` writes no record for a cell that cannot compose, so a
+    skipped arm is distinguishable from a training failure (which writes one).
     """
     from computronium.experiment.kernel.search_space import schedule_for
     from computronium.experiment.registry.task_registry import get_task_registry
@@ -222,27 +227,30 @@ def _make_positive_control_cell(
     task_name = spec.task_names[0]
     registry = get_task_registry()
     task_spec = registry.get(task_name)
-    geometry = task_spec.geometry_hint or "feedforward"
-
-    # Known good coordinate: digital substrate, task-appropriate geometry,
-    # instantaneous dynamics, null plasticity, gradient credit, euclidean update
-    coord = Coordinate(
-        substrate="digital",
-        geometry=geometry,
-        dynamics="instantaneous",
-        plasticity="null",
-        credit="gradient",
-        update="euclidean",
-        params={},
-    )
+    hint = task_spec.geometry_hint or "feedforward"
 
     # The run's own first task; a run always names at least one.
-    task = spec.task_names[0]
-    schedule = schedule_for(spec, task, "L0")
+    schedule = schedule_for(spec, task_name, "L0")
     # The control is a one-epoch sanity check, never the run's declared depth:
     # an explicit --epochs 20 must not turn the control into a 60s-capped
     # training run that can fail and poison the run's evidence.
-    return (coord, replace(schedule, epochs=1, n_seeds=1))
+    schedule = replace(schedule, epochs=1, n_seeds=1)
+
+    return [
+        (
+            Coordinate(
+                substrate="digital",
+                geometry=geometry,
+                dynamics="instantaneous",
+                plasticity="null",
+                credit="gradient",
+                update="euclidean",
+                params={},
+            ),
+            schedule,
+        )
+        for geometry in dict.fromkeys((hint, "feedforward"))
+    ]
 
 
 def _build_provenance(
@@ -1664,11 +1672,13 @@ def _run_waves(
     # Positive control (P3): a known-working cell proves the harness trains.
     # Always L0 and capped, so validating the pipeline can never eat the run.
     positive_control_results: list = []
-    positive_control_cell = _make_positive_control_cell(spec)
-    if positive_control_cell is not None:
-        planned_cells += 1
+    positive_control_cells = _make_positive_control_cells(spec)
+    planned_cells += 1
+    for arm_number, positive_control_cell in enumerate(positive_control_cells, start=1):
         logger.info(
-            "Positive control (L0): %s/%s/%s/%s/%s/%s on %s",
+            "Positive control (L0, arm %d/%d): %s/%s/%s/%s/%s/%s on %s",
+            arm_number,
+            len(positive_control_cells),
             positive_control_cell[0].substrate,
             positive_control_cell[0].geometry,
             positive_control_cell[0].dynamics,
@@ -1713,6 +1723,17 @@ def _run_waves(
             gate,
             primary_key,
             f"{primary_val:.4f}" if isinstance(primary_val, float) else primary_val,
+        )
+        # A cell that cannot compose writes no record: that arm does not exist
+        # for this task, so the next declared arm is the control. A record —
+        # PASS or FAIL — is the verdict and ends the ladder.
+        if pc_eval.results:
+            break
+        logger.info(
+            "Positive control arm %d wrote no record (the coordinate cannot "
+            "compose for %s); trying the next declared arm",
+            arm_number,
+            pc_task_id,
         )
 
     while budget_remaining > 0:

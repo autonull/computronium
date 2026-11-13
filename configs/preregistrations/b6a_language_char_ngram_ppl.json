@@ -1,0 +1,35 @@
+{
+  "claim": "On the char_ngram task (language domain, 3-character context, 27-way next-character prediction), the pinned arm digital/feedforward/instantaneous/null/gradient/adam reaches a validation perplexity of at most 5.0 at the L2 schedule (5 seeds x 20 epochs) — at least 4.75x below the 23.77 unigram ruler measured on the same 1,024-item validation split.",
+  "metric": "val_ppl",
+  "threshold": 5.0,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-13",
+  "ticket": "TODO90 B6a",
+  "domain": "language",
+  "task": "char_ngram",
+  "coordinate": "digital/feedforward/instantaneous/null/gradient/adam",
+  "schedule": {
+    "fidelity": "L2",
+    "n_seeds": 5,
+    "epochs": 20,
+    "batch_size": 32,
+    "device": "cuda"
+  },
+  "ruler": {
+    "name": "unigram perplexity over the validation split's target characters",
+    "value": 23.77,
+    "vocabulary_uniform_upper_bound": 27.0,
+    "split": "char_ngram validation split (seed=1, 1,024 items, 24 distinct target classes)",
+    "note": "Computed from the split the cell measures: counts over the 1,024 validation targets, renormalized over the observed classes. B4 quoted 25.21 from a different estimator; the smaller ruler is the harder one to beat and is the one registered here."
+  },
+  "secondary_metric": {
+    "metric": "val_acc",
+    "value_from_val_ppl": "exp(-mean per-token log-likelihood)",
+    "majority_class_rate": 0.0518,
+    "note": "Reported beside the primary metric; not part of the decision rule."
+  },
+  "decision_rule": "Met iff (1) every one of the 5 seeds writes PASS with val_ppl <= 5.0, and (2) the one-sided 95% upper confidence bound of the seed mean (t, df=4) is < 5.0. Marginal iff the seed mean is within 1 SE of 5.0. Distance from the threshold is reported in SEs of the seed mean and as a perplexity ratio against the ruler.",
+  "pilot_role": "Schedule choice, not threshold choice: TODO90 B4 measured 3.9923 at 10 epochs / 1 seed, and a 20-epoch / 1-seed pilot this session measured 2.5869. The 20-epoch schedule is registered because it is the ladder's L2 default; the 5.0 threshold is derived from the ruler (a 4.75x reduction), not from either pilot number.",
+  "claim_eligibility": "L2 records carry 5 achieved PASS seeds, a replay hash, and a normalized metric, so the run's claim-eligible cell count is non-zero (the B6 acceptance's 'claim' evidence)."
+}

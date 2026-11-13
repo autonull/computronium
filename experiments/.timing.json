@@ -1,8 +1,9 @@
 {
   "cpu/L0": {
-    "cost_per_cell_s": 0.142,
+    "cost_per_cell_s": 0.23,
     "per_task": {
-      "graph_classification": 0.142
+      "graph_classification": 0.142,
+      "synthetic_forecast": 0.319
     },
     "startup_s": 0.0
   },
@@ -71,9 +72,9 @@
     "startup_s": 0.0
   },
   "cuda/L0": {
-    "cost_per_cell_s": 23.324,
+    "cost_per_cell_s": 23.888,
     "per_task": {
-      "char_ngram": 3.277,
+      "char_ngram": 6.661,
       "cora": 0.208,
       "digits": 11.525,
       "kmnist": 24.702,
@@ -106,9 +107,11 @@
     "startup_s": 0.0
   },
   "cuda/L2": {
-    "cost_per_cell_s": 5295.082,
+    "cost_per_cell_s": 1772.495,
     "per_task": {
-      "mnist": 5295.082
+      "char_ngram": 12.811,
+      "mnist": 5295.082,
+      "synthetic_forecast": 9.593
     },
     "startup_s": 0.0
   }

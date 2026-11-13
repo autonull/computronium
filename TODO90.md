@@ -1,8 +1,9 @@
 # TODO90 — Breadth, not depth (Successor to TODO89)
 
-**Status:** 2026-11-13 · base `85f62aa3` · **B0–B5 closed** · next B6. TODO89 is
-closed: T1–T10 carry measured numbers, and its remaining work is two depth items
-(graph third credit, PROTEINS 0.7040), parked here with explicit triggers.
+**Status:** 2026-11-13 · base `85f62aa3` · **B0–B5, B6a, B6c closed** · next
+B6b. TODO89 is closed: T1–T10 carry measured numbers, and its remaining work is
+two depth items (graph third credit, PROTEINS 0.7040), parked here with
+explicit triggers.
 
 **Mission:** TODO89 made the instrument trustworthy and spent it on four
 domains. TODO90 spends it on **surface**: every axis primitive exercised or
@@ -32,7 +33,9 @@ Full evidence: `TODO89.md` §2b; raw probe `scripts/probes/t3_credit_breadth.py`
 
 Session 2026-11-12 (second): B0–B3 closed. Session 2026-11-12 (third): B4
 closed. Session 2026-11-13: B5 closed, and its instrument found a defect the
-ticket did not predict. Every row names its instrument.
+ticket did not predict. Session 2026-11-13 (second): B6a and B6c closed, and
+the timeseries arm could not run at all until three defects were fixed. Every
+row names its instrument.
 
 | # | Ticket | Result | Evidence |
 |---|---|---|---|
@@ -42,6 +45,8 @@ ticket did not predict. Every row names its instrument.
 | B3 | `role_split` | **Green.** Declared default (muon-on-readout + Euclidean elsewhere); 10 PASS cells across feedforward and conv. Update axis 12/12 measured. | `ontology/update/__init__.py`, `tests/property/test_role_split_update.py`, `experiments/experiment_20261112_b3.duckdb` |
 | B4 | Three untouched tasks | **Green.** `kmnist` 0.6669 val_acc (chance/majority 0.100), `char_ngram` 3.9923 ppl (unigram 25.21), `tiny_shakespeare` 8.4394 ppl (unigram 27.19); 1 seed each, 2 PASS records per task. Corpus task list holds no `NOT TOUCHED` row. | `experiments/experiment_20261112_b4.duckdb`; `tests/property/test_lm_target_alignment_lock.py` |
 | B5 | Substrate × geometry holes | **Green, with one defect named.** 32 runs, 63 PASS records, 0 fail. The pair instrument closed **18 undeclared pairs** (68 measured → 92; 60 coupled → 78) and refused 21 (14 hold 192 cells that cannot count). 0 undeclared remain. | `experiments/experiment_20261113_b5.duckdb`; `evidence/corpus.py`; `tests/property/test_corpus_coverage_lock.py`, `test_substrate_reaches_compute_lock.py` |
+| B6a | Language claim | **Met.** `char_ngram` at L2 (5 seeds × 20 epochs, all PASS): val_ppl **2.4617 ± 0.0338** (SE), one-sided 95% upper bound **2.5337**, against a **5.0** threshold and a **23.77** unigram ruler on the same 1,024-item split — **9.66× below the ruler**, 75 SE clear of the threshold. claim-eligible cells **1**. | `experiments/experiment_20261113_b6a.duckdb`; `configs/preregistrations/b6a_language_char_ngram_ppl.json` |
+| B6c | Timeseries claim | **Met, after three defects were fixed** (see below). `synthetic_forecast` at L2 (5 seeds × 20 epochs, all PASS): val_mae **0.08904 ± 0.00117** (SE), upper bound **0.09153**, against a **0.100** threshold, the **0.11459** naive last-value ruler and the **0.07979** noise floor — **1.287× below naive**, 73.4% of the 0.0348 headroom removed, 8.7 combined SE of separation. claim-eligible cells **1**. | `experiments/experiment_20261113_b6c.duckdb`; `configs/preregistrations/b6c_timeseries_synthetic_forecast_mae.json`; `tests/property/test_regression_target_lock.py` |
 
 **Defect found in B0 and fixed with B0:** one CUDA device ran four cells and
 three seeds concurrently, corrupting Inductor's static Triton launcher
@@ -50,6 +55,36 @@ cuSOLVER's QR wrapper (`lazy wrapper should be called at most once`). One
 process-wide per-device lock in `evaluate_cell` serializes CUDA training; the
 campaign went from 15 failed records to 0, and walltime measures the cell rather
 than contention. CPU evaluation still runs concurrently.
+
+**Three defects found in B6c and fixed with B6c.** The timeseries claim did not
+exist because the domain could not train at all — not because it performed
+poorly:
+
+1. **A regression target was read as a class index.** `_align_target_rows`
+   folded any target whose element count matched the logits' row count; for a
+   `[B, 1]` float target that is `[B]`, and `nudged_output` then scattered it
+   (`scatter(): Expected dtype int32/int64 for index`). Folding now requires a
+   non-floating target; `_one_hot`/`nudged_output` reshape a float target of the
+   logits' element count and refuse one that is neither.
+2. **The pipeline had no way to receive the task's loss.** Every loss site ran
+   cross-entropy, so a regression cell optimized (and validated with) class
+   likelihood: `val_loss` was `0.0`/nonsense on the 26 pre-existing
+   `synthetic_forecast` records. `loss_fn` is now declared on the composed
+   system — composition hands it `DomainTask.compute_loss` — threaded through
+   `_TrainStepContext`/`_PhaseContext` to all four loss sites, and used by
+   `SystemTrainer.validate`.
+3. **The positive control assumed a legal coordinate.** `synthetic_forecast`
+   and `sequential_mnist` name a `recurrent` geometry hint, and
+   `SystemConfig.validate` refuses `gradient` + `instantaneous` on a recurrent
+   geometry, so the control cell could not compose and was silently skipped
+   (`gate=N/A` in b6c's log). The control is now a declared two-arm ladder (the
+   hint, then `feedforward` over the task's own shape); an arm that cannot
+   compose writes no record, so the next arm runs. Verified: arm 1 skipped, arm
+   2 PASS.
+
+Lock: `tests/property/test_regression_target_lock.py` (6 tests: the fold, the
+nudge, the declared-loss choice, one real regression step whose `free_loss`
+equals the task's MSE, and the control ladder composing only on its fallback).
 
 **Measured now (2026-11-12, after B2/B3):** this session's first `comp coverage
 report --corpus` read **7,288 PASS cells over 428 stores**; after B2/B3 the same
@@ -69,6 +104,12 @@ substrate × geometry pairs hold a PASS cell, 78 of them on a coordinate no rule
 refuses, 21 refused by a rule, 0 undeclared**. Fourteen of the refused pairs
 hold 192 cells; those cells cannot count as substrate breadth (B10).
 
+**Measured after B6a/B6c (2026-11-13, second):** the same command reads **7,401
+PASS cells over 435 readable stores, 0 unreadable** — the two claims added 13
+PASS cells and 3 stores. `char_ngram` moves from 2 to **10** PASS cells and
+`synthetic_forecast` from 31 to **36**, so both now carry a claim-grade cell
+rather than a provenance cell.
+
 | Surface | At plan start | Now |
 |---|---|---|
 | Axis primitives exercised or declared | 56/57 (update 11/12) | **57/57** (update 12/12) |
@@ -77,7 +118,7 @@ hold 192 cells; those cells cannot count as substrate breadth (B10).
 | Corpus coverage instrument | probe only | **one command**, drift-locked, with a substrate × geometry pair section |
 | Tasks measured or retired | 22/25 | **25/25** — every registered task is measured |
 | Substrate × geometry pairs | 20 holes, 4 named by the plan | **92/99 hold a cell; 78 substrate-coupled; 21 refused; 0 holes** |
-| Domains with one claim | 4/7 | 4/7 — B6 remains |
+| Domains with one claim | 4/7 | **6/7** — language (B6a) and timeseries (B6c) closed; memory is B6b |
 | Registered-vs-measured objectives | 12 unmeasured, 15 orphans | unchanged — B8 |
 | Duplicate legality tables | 2 | 2 (plus a third `references_params` copy, §2 B9) |
 
@@ -102,36 +143,51 @@ backwards compatibility is written.
 
 Ordered by what unblocks the next measurable thing, not by interest.
 
-| # | Ticket | Deliverable | Cost |
-|---|---|---|---|
-| B0 | **Acceptance repair** | promotion ladder and f2 number recompute are green; breadth evidence can reach L1/L2 | 30 min |
-| B1 | **Corpus coverage command** | one `comp coverage` invocation reports the 428-store table, drift-locked to the probe | 30 min |
-| B2 | **Store-backed breadth** | T3/T9/T10 probe arms become PASS records; no geometry's third credit is probe-only | 1 h |
-| B3 | **`role_split`** | a cell on two geometries, or a declared row with the composition reason | 30 min |
-| B4 | **Three untouched tasks** | `kmnist`, `char_ngram`, `tiny_shakespeare`: one PASS cell each, or retirement | 1–2 h |
-| B5 | **Substrate × geometry holes** | graph off digital; nca on `complex`/`neuromorphic`; or declared rows | 1 h |
-| B6 | **One claim per domain** | language, memory, timeseries; plus CIFAR-10 and a second RL task | 2–3 h |
-| B7 | **Scientific domain** | one registered task with a loader and a cell, or a named retirement | 1 h |
-| B8 | **Measurement breadth** | wire the cheap objectives; retire or register the orphan keys | 1–2 h |
-| B9 | **Duplicate-rule cleanup** | nca `homeostatic`/`pc_alm` voids live in one table | 30 min |
-| B10 | **Substrate reaches NCA/NTM** | thread the substrate operator through `NcaGeometry` and `NtmGeometry`, then re-measure 14 pairs | 2 h |
+| # | Ticket | Deliverable | Cost | State |
+|---|---|---|---|---|
+| B0 | **Acceptance repair** | promotion ladder and f2 number recompute are green; breadth evidence can reach L1/L2 | 30 min | **closed** |
+| B1 | **Corpus coverage command** | one `comp coverage` invocation reports the 428-store table, drift-locked to the probe | 30 min | **closed** |
+| B2 | **Store-backed breadth** | T3/T9/T10 probe arms become PASS records; no geometry's third credit is probe-only | 1 h | **closed** |
+| B3 | **`role_split`** | a cell on two geometries, or a declared row with the composition reason | 30 min | **closed** |
+| B4 | **Three untouched tasks** | `kmnist`, `char_ngram`, `tiny_shakespeare`: one PASS cell each, or retirement | 1–2 h | **closed** |
+| B5 | **Substrate × geometry holes** | graph off digital; nca on `complex`/`neuromorphic`; or declared rows | 1 h | **closed** |
+| B6a | **Language claim** | `char_ngram` val_ppl under a pre-registered threshold | 1 h | **closed, met** |
+| B6b | **Memory claim** | `copy_task` token accuracy over the copy-the-input baseline | 1 h | **open — next** |
+| B6c | **Timeseries claim** | `synthetic_forecast` MAE over the naive last-value ruler | 1 h | **closed, met** |
+| B7 | **Scientific domain** | one registered task with a loader and a cell, or a named retirement | 1 h | open |
+| B8 | **Measurement breadth** | wire the cheap objectives; retire or register the orphan keys | 1–2 h | open |
+| B9 | **Duplicate-rule cleanup** | nca `homeostatic`/`pc_alm` voids live in one table | 30 min | open |
+| B10 | **Substrate reaches NCA/NTM** | thread the substrate operator through `NcaGeometry` and `NtmGeometry`, then re-measure 14 pairs | 2 h | open |
 
 A session takes **B0–B2 first** unless they are already green. They are the
 instrument; every later ticket's evidence depends on them.
 
-**Progress (2026-11-13):** B0, B1, B2, B3, B4 and B5 are closed with the results
-in §0a; **B6 is the next ticket**, split into three one-domain tickets (§2) so a
-session takes one ruler, not three. B5 widened under its own instrument: the
-plan named four coordinates, the pair section of `comp coverage` named 20, and
-the sweep found that 14 pairs already held cells which cannot count (B10).
-B7, B8 and B9 are unchanged.
+**Progress (2026-11-13, second session):** B0, B1, B2, B3, B4, B5, **B6a and
+B6c** are closed with the results in §0a; **B6b is the next ticket**, and it is
+the only breadth item between the plan and its 7/7 domain target. B5 widened
+under its own instrument: the plan named four coordinates, the pair section of
+`comp coverage` named 20, and the sweep found that 14 pairs already held cells
+which cannot count (B10). B6c widened the same way: a ticket whose whole
+deliverable was one ruler needed three pipeline fixes before the ruler could be
+computed (see §0a). B7, B8 and B9 are unchanged.
 
-**B6 start state (2026-11-13):** three domains hold no claim. Each needs a
-pre-registration *before* the run, ≥3 seeds, and a ruler: `char_ngram`
-(unigram perplexity 25.21, B4 measured 3.9923 at 10 epochs / 1 seed),
-`copy_task` (copy-the-input baseline), `synthetic_forecast` (naive last-value
-MAE). `cartpole` and `cifar10` are the two breadth arms for domains that
-already have claims (`cifar10` holds 9 cells, `cartpole` 14).
+**B6b start state (2026-11-13, second session):** `copy_task` holds 55 PASS
+cells, so the task trains; what is missing is the *ruler*, not the cell. Its
+registry row declares `input_shape=(10,)`, `output_dim=2`,
+`primary_objective="validation_accuracy"`, `geometry_hint="ntm"`, and the plan
+registers a "copy-the-input baseline (token accuracy)". Before running:
+1. Measure the baseline on the same val split the cell measures (copy the input
+   one step, and all-zero, and report both — the trivial policy that beats
+   "copy" is not the same one that beats "zero").
+2. Read the 55 existing cells' `val_acc` distribution: if they straddle the
+   baseline, the claim's schedule is the issue and the ticket is a schedule
+   choice, not a new arm.
+3. Pre-register, then run 5 seeds at L2 (the ladder default 5 × 20) with the
+   `ntm` geometry and the credit that geometry accepts. `ntm` is inert w.r.t.
+   substrate (B10) but it does train, so a digital claim is unaffected by B10.
+
+**B6a/B6c start states are closed** and kept in §2 only for their measured
+numbers and their defect list.
 
 **B10 start state (2026-11-13):** `NcaGeometry` and `NtmGeometry` call
 `nn.Linear`/`nn.LSTM` directly; `get_forward_operator()` is never reached, so
@@ -382,15 +438,66 @@ in this order: B6a is the cheapest ruler to compute, B6c the most independent.
 
 | # | Domain | Task | Ruler | Pre-registration |
 |---|---|---|---|---|
-| B6a | language | `char_ngram` | unigram perplexity **25.21** (B4) | threshold on `val_ppl` at the task's context length, ≥3 seeds |
-| B6b | memory | `copy_task` | copy-the-input baseline (token accuracy) | threshold on token accuracy, ≥3 seeds |
-| B6c | timeseries | `synthetic_forecast` | naive last-value MAE | threshold on MAE, ≥3 seeds, beat naive by >1 σ |
+| B6a | language | `char_ngram` | unigram perplexity **23.77** on the measured split (vocabulary-uniform 27.0); B4 quoted 25.21 from another estimator | threshold on `val_ppl`, ≥3 seeds — **closed, met** |
+| B6b | memory | `copy_task` | copy-the-input baseline (token accuracy) | threshold on token accuracy, ≥3 seeds — **open, next** |
+| B6c | timeseries | `synthetic_forecast` | naive last-value MAE **0.11459**; noise floor 0.07979 | threshold on MAE, ≥3 seeds, beat naive by >1 σ — **closed, met** |
 
 Each: write `configs/preregistrations/<slug>.json` **before** the run
 (`ThresholdRegistration` or the paired-comparison form), then run three seeds
 through `survey_cli` with all six axes pinned and `--epochs` large enough to
 beat the ruler at one seed first (a claim at a schedule that measures chance is
 not a claim). Report the number with its ruler and its distance from it in σ.
+
+**Result B6a (2026-11-13):** met. `configs/preregistrations/b6a_language_char_ngram_ppl.json`
+registered a 5.0 val_ppl threshold before the confirmatory run; the arm ran at
+L2 (5 seeds × 20 epochs, `digital/feedforward/instantaneous/null/gradient/adam`)
+in `experiments/experiment_20261113_b6a.duckdb`, 68 s, 6 PASS records, 1
+claim-eligible cell.
+
+| Seed | val_ppl | val_acc |
+|---|---|---|
+| 42 | 2.5869 | 0.6475 |
+| 43 | 2.4296 | 0.6475 |
+| 44 | 2.3848 | 0.6963 |
+| 45 | 2.4584 | 0.6973 |
+| 46 | 2.4488 | 0.7021 |
+
+Mean **2.4617**, sd 0.0755, SE 0.0338, one-sided 95% upper bound **2.5337 < 5.0**
+(75 SE clear). Ruler: unigram perplexity **23.7720** over the same 1,024-item
+validation split (24 distinct target classes, majority 0.0518), so the arm sits
+**9.66× below the ruler**; in log space, 0.709 nats of margin = 51.7σ. The
+task's ceiling is not 1.0: the deterministic cycle is a sawtooth in the raw
+float coordinates, so val_acc plateaus at 0.65–0.70 while the perplexity keeps
+falling — the claim is about the metric the registry names, not about solving
+the sawtooth.
+
+**Result B6c (2026-11-13):** met, and it took three pipeline fixes to make the
+domain measurable at all (§0a). Registration:
+`configs/preregistrations/b6c_timeseries_synthetic_forecast_mae.json`, 0.100
+val_mae threshold; arm at L2 (5 seeds × 20 epochs) in
+`experiments/experiment_20261113_b6c.duckdb`, 53 s, 5 PASS records, 1
+claim-eligible cell.
+
+| Seed | val_mae | val_loss (MSE) |
+|---|---|---|
+| 42 | 0.09071 | 0.01305 |
+| 43 | 0.08783 | 0.01188 |
+| 44 | 0.08586 | 0.01159 |
+| 45 | 0.09254 | 0.01341 |
+| 46 | 0.08826 | 0.01227 |
+
+Mean **0.08904**, sd 0.00261, SE 0.00117, upper bound **0.09153 < 0.100**
+(9.4 SE clear). Rulers: naive last-value **0.11459** (n = 994, SE 0.00268),
+linear extrapolation 0.19950 (worse), and the generator's noise floor
+**0.07979** = 0.1·√(2/π). The arm is **1.287× below naive**, removes **73.4%**
+of the 0.0348 headroom above the floor, and separates from naive by 8.7
+combined SE.
+
+**Metric hygiene still owed (B8):** for a regression task the trainer's
+`val_acc` is 0.0 by construction (argmax over a one-wide head) and `val_ppl` is
+exp(MSE). Neither is a claim metric — `val_mae` comes from the task's own
+`evaluate` — but both are numbers in the payload with no ruler. B8 owns that
+row.
 
 **Breadth arms (only after the three above close):**
 
@@ -495,7 +602,7 @@ section counts it as coupled.
 | Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry | **25/25** (B4) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **11/11** (B2 closes the 3 probe-only) | **10/11** — graph parked (T8) |
 | Substrate × geometry pairs measured or refused | 18 undeclared | **0 undeclared**, each pair a coupled cell or a named rule | **0 undeclared** — 78 on a coupled cell, 21 refused (14 await B10) |
-| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | 4/7 — B6a–c |
+| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | **6/7** — language (B6a) and timeseries (B6c) closed; memory is B6b |
 | Acceptance locks | 3 fail | **0 fail** | **0 fail** |
 | Corpus coverage instrument | probe only | **one command**, drift-locked | **one command**, locked, pairs included |
 | Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **0 unexplained** | 12 / 15 |
@@ -504,9 +611,10 @@ section counts it as coupled.
 Measured 2026-11-12 at plan start: 6,925 PASS cells over 428 stores. Measured
 after B2/B3: 7,319 over 430 stores, 0 unreadable. After B4: 7,325 over 431
 stores, 0 unreadable. After B5: 7,388 over 432 stores, 0 unreadable, 99
-substrate × geometry pairs all accounted for. Each row above names the
-instrument that would move it, and the target is a cell, a row, or a claim —
-never a count of attempted work.
+substrate × geometry pairs all accounted for. After B6a/B6c: 7,401 over 435
+stores, 0 unreadable, both claims at L2 with 5 achieved seeds. Each row above
+names the instrument that would move it, and the target is a cell, a row, or a
+claim — never a count of attempted work.
 
 ---
 
@@ -556,15 +664,26 @@ uv run comp coverage report --corpus | sed -n '/Substrate x Geometry/,/Per-Task/
 # the gate B0 repaired (green 2026-11-12)
 uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py \
   tests/acceptance/test_promotion_lock.py -q -rf --tb=line > logs/b0.log 2>&1
+
+# the lock B6c added: a regression target is a value, not a class index
+uv run python -m pytest tests/property/test_regression_target_lock.py -q --tb=line
 ```
 
 Read `TODO89.md` §2b before choosing a ticket; it owns the measured surface.
-B0–B5 are green (see §0a). **Start at B6a**; B6b, B6c, B7, B8, B9 and B10
-remain. B5's pair section is the substrate-breadth instrument: read
+B0–B5, B6a and B6c are green (see §0a). **Start at B6b** (`copy_task`); B7, B8,
+B9, B10 and the two breadth arms remain. B5's pair section is the
+substrate-breadth instrument: read
 `comp coverage report --corpus | sed -n '/Substrate x Geometry/,/Per-Task/p'`
 to see every pair that holds a cell, every pair a rule refuses, and every
 cell on a refused pair that cannot count.
 
-**Do not take B10 before B6a–c.** B10 is depth on one geometry family; B6
-gives three domains their first claim, which is what the breadth mission asks
-for. B10's trigger is a claim that cites substrate breadth for nca or ntm.
+**A claim needs the task's own loss.** B6c proved the pipeline could not train
+a regression target until `loss_fn` was threaded from composition to every
+loss site. Before claiming a *new* task trains poorly, check that its
+`compute_loss` reaches the pipeline: compose one cell and assert the reported
+`loss` equals the task's metric on the same batch
+(`test_pipeline_trains_a_regression_cell_with_its_own_loss` is the pattern).
+
+**Do not take B10 before B6b.** B10 is depth on one geometry family; B6 gives
+the last domain its first claim, which is what the breadth mission asks for.
+B10's trigger is a claim that cites substrate breadth for nca or ntm.

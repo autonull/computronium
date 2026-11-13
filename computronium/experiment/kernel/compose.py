@@ -174,6 +174,7 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
             task=task,
         )
         system = cell.system
+        loss_fn = getattr(task, "compute_loss", None)
 
         # Create a dummy input batch (batch_size=2 for batch norm etc.)
         # Prefer real batch from task if available to get correct dtype
@@ -215,7 +216,7 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
 
                 # Compute loss for nudged phase
                 if phase is Phase.NUDGED:
-                    loss_tensor, _ = _task_loss_tensor(settled, y)
+                    loss_tensor, _ = _task_loss_tensor(settled, y, loss_fn)
                     set_state_field(settled, "loss", loss_tensor)
 
                 states[phase] = settled
@@ -226,7 +227,7 @@ def _dry_run_trainable(  # ruff: ignore[too-many-statements, too-many-branches, 
                 return False, "no settled states available"
             loss = output_state.loss
             if loss is None:
-                loss, _ = _task_loss_tensor(output_state, y)
+                loss, _ = _task_loss_tensor(output_state, y, loss_fn)
 
             pseudo_grads = credit.compute_pseudo_gradient(states, loss, system.geometry)
 
@@ -797,6 +798,9 @@ def compose_cell_system(
         task=task,
     )
     active = harvest_schema().active(coordinate)
+    # The task owns what this cell optimizes: hand its declared loss to the
+    # system, whose train_step threads it into every loss site in the pipeline.
+    loss_fn = getattr(task, "compute_loss", None)
     # Use joint system (6-D) when plasticity is not null, otherwise 5-D system
     if coordinate.plasticity != "null":
         system = compose_joint_system_from_configs(
@@ -807,6 +811,7 @@ def compose_cell_system(
             config.credit,
             config.update,
             validate=True,
+            loss_fn=loss_fn,
         )
     else:
         system = compose_system_from_configs(
@@ -815,6 +820,7 @@ def compose_cell_system(
             config.dynamics,
             config.credit,
             config.update,
+            loss_fn=loss_fn,
         )
     label_dim = config.credit.label_dim if config.credit.label_channel else 0
     if label_dim:

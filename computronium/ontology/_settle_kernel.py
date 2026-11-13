@@ -106,10 +106,15 @@ def _one_hot(target: Tensor, like: Tensor) -> Tensor:
     """Convert class indices to one-hot matching 'like' tensor.
 
     ``like.shape[:-1]`` is the target's expected index layout (``[B]``,
-    ``[B, T]``, ``[N]``); ``like.shape[-1]`` is the class dimension.
+    ``[B, T]``, ``[N]``); ``like.shape[-1]`` is the class dimension. A
+    float target of the same element count is not a class index — it is the
+    value itself (a regression target or soft labels), so it only needs the
+    shape match.
     """
     if target.shape == like.shape:
         return target
+    if target.numel() == like.numel():
+        return target.reshape(like.shape)
     if target.dim() == 1:
         out = torch.zeros_like(like)
         out.scatter_(1, target.unsqueeze(1), 1.0)
@@ -123,7 +128,12 @@ def _one_hot(target: Tensor, like: Tensor) -> Tensor:
 
 
 def nudged_output(out: Tensor, target: Tensor, beta: float) -> Tensor:
-    """β-nudge output activities toward the target one-hot.
+    """β-nudge output activities toward the target.
+
+    Two target kinds share this nudge, separated by *value* semantics, not by
+    guessing: an integer target is a class index (one-hot it), a float target
+    of the logits' own element count is the value itself (a regression target
+    or soft labels — nudge straight toward it).
 
     Sequence-shaped token targets ``[B, T]`` fold to the logits' rows
     ``[B*T, V]`` before the nudge (R8). Entries carrying the CE
@@ -134,8 +144,17 @@ def nudged_output(out: Tensor, target: Tensor, beta: float) -> Tensor:
     from computronium.ontology._utils import _align_target_rows
 
     target = _align_target_rows(out, target)
+    if target.shape != out.shape and target.numel() == out.numel():
+        target = target.reshape(out.shape)
     if target.shape == out.shape:
         return out + beta * (target - out)
+    if target.is_floating_point():
+        msg = (
+            f"float target {tuple(target.shape)} is neither the logits' shape "
+            f"{tuple(out.shape)} nor their element count; a regression target "
+            "must match the output"
+        )
+        raise ValueError(msg)
     onehot = _one_hot(target.clamp_min(0), out)
     valid = (target >= 0).unsqueeze(-1).to(out.dtype)
     return out + beta * valid * (onehot - out)

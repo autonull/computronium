@@ -12,6 +12,7 @@ If a system has a ``_kernel_backend`` attached, the kernel backend's
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, TypeIs
@@ -19,6 +20,7 @@ from typing import TYPE_CHECKING, Protocol, TypeIs
 import torch
 from torch import Tensor
 
+from computronium.core.losses import compute_loss
 from computronium.ontology import (
     Geometry,
     ParameterUpdate,
@@ -40,6 +42,8 @@ if TYPE_CHECKING:
 
     from computronium.ontology import CreditAssignment
     from computronium.state.composite import ActivityValue
+
+type LossFn = Callable[[Tensor, Tensor], Tensor]
 
 type PhaseStates = Mapping[Phase, SettableState]
 
@@ -144,8 +148,13 @@ def forward_pass(
     return acts
 
 
-def task_loss(state: SettableState, y: Tensor) -> Tensor:
-    """Cross-entropy on the state's output activations.
+def task_loss(state: SettableState, y: Tensor, loss_fn: LossFn | None = None) -> Tensor:
+    """Loss on the state's output activations, through the task's own ``loss_fn``.
+
+    ``loss_fn`` is the task's declared loss (``DomainTask.compute_loss``): the
+    one source for what this cell optimizes. Without it the fallback is
+    cross-entropy, which is only correct for classification — a regression
+    task's float targets are not class indices and must arrive with their loss.
 
     Writes accuracy into ``state.metrics`` (pre-aggregated float contract).
     """
@@ -154,15 +163,17 @@ def task_loss(state: SettableState, y: Tensor) -> Tensor:
         return torch.tensor(0.0, device=y.device)
     logits = acts[-1] if isinstance(acts, list) else acts
     y = _align_target_rows(logits, y)
-    loss = torch.nn.functional.cross_entropy(logits, y)
+    loss = compute_loss(loss_fn, logits, y)
     with torch.no_grad():
         acc = _accuracy(logits, y).item()
     set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
     return loss
 
 
-def _task_loss_tensor(state: SettableState, y: Tensor) -> tuple[Tensor, Tensor]:
-    """Cross-entropy on the state's output activations (tensor-returning variant).
+def _task_loss_tensor(
+    state: SettableState, y: Tensor, loss_fn: LossFn | None = None
+) -> tuple[Tensor, Tensor]:
+    """Loss on the state's output activations (tensor-returning variant).
 
     Returns (loss, accuracy_tensor) where accuracy_tensor is a scalar tensor.
     Writes accuracy tensor into ``state.metrics`` for downstream use.
@@ -173,7 +184,7 @@ def _task_loss_tensor(state: SettableState, y: Tensor) -> tuple[Tensor, Tensor]:
         return zero, zero
     logits = acts[-1] if isinstance(acts, list) else acts
     y = _align_target_rows(logits, y)
-    loss = torch.nn.functional.cross_entropy(logits, y)
+    loss = compute_loss(loss_fn, logits, y)
     with torch.no_grad():
         acc = _accuracy(logits, y)
     set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
@@ -249,6 +260,7 @@ class _PhaseContext:
     plasticity: object | None
     psi: dict[str, Tensor] | None
     context: object | None
+    loss_fn: LossFn | None = None
     graph_kwargs: dict[str, Tensor] | None = None
 
 
@@ -266,6 +278,7 @@ class _TrainStepContext:
     plasticity: object | None
     psi: dict[str, Tensor] | None
     context: object | None
+    loss_fn: LossFn | None = None
     graph_kwargs: dict[str, Tensor] | None = None
 
 
@@ -314,7 +327,7 @@ def _run_phases(ctx: _PhaseContext) -> dict[Phase, SettableState]:
                     )
 
             if phase is Phase.NUDGED:
-                loss_tensor, _ = _task_loss_tensor(settled, ctx.y)
+                loss_tensor, _ = _task_loss_tensor(settled, ctx.y, ctx.loss_fn)
                 set_state_field(settled, "loss", loss_tensor)
             set_state_field(
                 settled, "energy", ctx.dynamics.compute_energy(settled, ctx.geometry)
@@ -330,6 +343,7 @@ def _prepare_output_state(
     y: Tensor,
     dynamics: StateDynamics,
     geometry: Geometry,
+    loss_fn: LossFn | None = None,
 ) -> tuple[SettableState, Tensor, Tensor]:
     """Prepare output state and compute loss/energy tensors."""
     output = states.get(Phase.NUDGED, states.get(Phase.FREE))
@@ -339,7 +353,7 @@ def _prepare_output_state(
         output.activations = initial_activations
     loss = output.loss
     if loss is None:
-        loss, _ = _task_loss_tensor(output, y)
+        loss, _ = _task_loss_tensor(output, y, loss_fn)
         set_state_field(output, "loss", loss)
     elif not isinstance(loss, Tensor):
         loss = torch.as_tensor(loss)
@@ -392,6 +406,8 @@ def _compute_free_metrics(
     dynamics: StateDynamics,
     x: Tensor,
     y: Tensor,
+    *,
+    loss_fn: LossFn | None = None,
     **graph_kwargs,
 ) -> tuple[Tensor, Tensor, Tensor]:
     """Compute post-update free metrics (target-free)."""
@@ -401,7 +417,7 @@ def _compute_free_metrics(
         free_settled = dynamics.settle(
             free_state, geometry, substrate, target=None, **graph_kwargs
         )
-        free_loss, _ = _task_loss_tensor(free_settled, y)
+        free_loss, _ = _task_loss_tensor(free_settled, y, loss_fn)
         free_energy = dynamics.compute_energy(free_settled, geometry)
         free_accuracy = (free_settled.metrics or {}).get("accuracy", torch.tensor(0.0))
         if not isinstance(free_accuracy, Tensor):
@@ -425,12 +441,19 @@ def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
         plasticity=ctx.plasticity,
         psi=ctx.psi,
         context=ctx.context,
+        loss_fn=ctx.loss_fn,
         graph_kwargs=ctx.graph_kwargs,
     )
     states = _run_phases(phase_ctx)
 
     output, loss, energy = _prepare_output_state(
-        states, initial_activations, ctx.x, ctx.y, ctx.dynamics, ctx.geometry
+        states,
+        initial_activations,
+        ctx.x,
+        ctx.y,
+        ctx.dynamics,
+        ctx.geometry,
+        ctx.loss_fn,
     )
 
     pseudo_grads, bias_grads = _compute_pseudo_grads(
@@ -445,6 +468,7 @@ def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
         ctx.dynamics,
         ctx.x,
         ctx.y,
+        loss_fn=ctx.loss_fn,
         **(ctx.graph_kwargs or {}),
     )
 
@@ -479,6 +503,7 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
     plasticity: object | None = None,
     psi: dict[str, Tensor] | None = None,
     context: object | None = None,
+    loss_fn: LossFn | None = None,
     **graph_kwargs,
 ) -> dict[str, Tensor]:
     """Execute one training step through the 5/6-layer pipeline, returning tensor metrics.
@@ -500,6 +525,7 @@ def run_train_step_tensor(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[t
         plasticity=plasticity,
         psi=psi,
         context=context,
+        loss_fn=loss_fn,
         graph_kwargs=graph_kwargs or None,
     )
     return _run_train_step_tensor_impl(ctx)
@@ -517,6 +543,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
     plasticity: object | None = None,
     psi: dict[str, Tensor] | None = None,
     context: object | None = None,
+    loss_fn: LossFn | None = None,
     **graph_kwargs,
 ) -> dict[str, float]:
     """Execute one training step through the 5/6-layer pipeline.
@@ -549,6 +576,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         plasticity=plasticity,
         psi=psi,
         context=context,
+        loss_fn=loss_fn,
         graph_kwargs=graph_kwargs or None,
     )
     tensor_metrics = _run_train_step_tensor_impl(ctx)

@@ -40,6 +40,8 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.acceleration.kernel_backend import KernelBackend
     from computronium.core.system_trainer.config import JointSystem
     from computronium.ontology import (
@@ -78,6 +80,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
     update: TU,
     *,
     device: str | torch.device | None = None,
+    loss_fn: Callable[[Tensor, Tensor], Tensor] | None = None,
 ) -> JointSystem[TS, TG, TD, TP, TC, TU]:
     """Compose a JointSystem from six orthogonal components.
 
@@ -162,6 +165,8 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
         update: TU
         _kernel_backend: KernelBackend | None = None
         _training: bool = True
+        # The task's declared loss; ``None`` means the pipeline's CE fallback.
+        loss_fn: Callable[[Tensor, Tensor], Tensor] | None = None
 
         def train_step(self, x: Tensor, y: Tensor, **graph_kwargs) -> dict[str, float]:
             """Execute one training step through the family-neutral pipeline."""
@@ -182,6 +187,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 plasticity=self.plasticity,
                 psi=psi,
                 context=self.context,
+                loss_fn=self.loss_fn,
                 **graph_kwargs,
             )
 
@@ -295,7 +301,9 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
         # For NullPlasticity, we can just use the 5-D system
         from computronium.core.system_trainer.factory import compose_system
 
-        base_system = compose_system(substrate, geometry, dynamics, credit, update)
+        base_system = compose_system(
+            substrate, geometry, dynamics, credit, update, loss_fn=loss_fn
+        )
         if device is not None:
             base_system.to(device)
 
@@ -318,6 +326,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 self.credit = system.credit
                 self.update = system.update
                 self.plasticity = NullPlasticity()
+                self.loss_fn = system.loss_fn
 
             def train_step(
                 self, x: Tensor, y: Tensor, **graph_kwargs
@@ -404,6 +413,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
         plasticity=plasticity,
         credit=credit,
         update=update,
+        loss_fn=loss_fn,
     )
     if device is not None:
         joint.to(device)
@@ -443,6 +453,7 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
     *,
     device: str | torch.device | None = None,
     validate: bool = False,
+    loss_fn: Callable[[Tensor, Tensor], Tensor] | None = None,
 ) -> JointSystem[
     Substrate,
     Geometry,
@@ -535,6 +546,7 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
         credit_instance,
         update_instance,
         device=device,
+        loss_fn=loss_fn,
     )
 
 
