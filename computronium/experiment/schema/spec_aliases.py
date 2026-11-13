@@ -1,20 +1,14 @@
-"""Spec-ID to runtime-coordinate aliases (TODO91 S1).
+"""Spec-ID to runtime-coordinate aliases (TODO91 S1b removes this module).
+
+**Temporary.** Two names for one mechanism is the defect TODO91 records, and
+this table institutionalizes it. TODO91 S1b renames the spec IDs to their
+runtime coordinates, deletes this module, and makes the inventory and
+``coordinate_of`` resolve by identity. Do not add surface that depends on it.
 
 The implementation matrix names primitives by their historical *spec* ID;
 ``AXES_REGISTRIES`` names the coordinate a run selects. The two vocabularies
 drifted because nothing joined them: ``feedforward_dag`` shipped as
 ``feedforward``, ``photonic`` as ``optical``, ``reverse_mode`` as ``gradient``.
-This module is the one table that says which spec ID selects which runtime
-coordinate, so the inventory, the docs lock, and any future selector read the
-same answer.
-
-An entry is one of three kinds:
-
-* identity — the spec's last segment is the runtime name (most rows);
-* alias — :data:`SPEC_RUNTIME_ALIASES` names the runtime coordinate;
-* not a primitive — :data:`NOT_A_PRIMITIVE` records why a shipped mechanism has
-  no composable coordinate. A spec ID absent from the runtime registry and
-  without a row here is a defect, not a fallback.
 """
 
 from __future__ import annotations

@@ -104,18 +104,20 @@ Ordered by what makes the selection surface trustworthy first, not by interest.
 
 | # | Ticket | Deliverable | Cost | State |
 |---|---|---|---|---|
+| S1b | **Vocabulary unification** | one name per primitive: delete the alias table; spec IDs equal runtime coordinates; identity join in the inventory and `coordinate_of`; runtime-only coordinates either gain a spec row or a declared mode row | 2–3 h | **next session** |
 | S0 | **Inventory instrument** | one `comp` command joins spec rows, runtime axes, packages, tasks, domains, objectives, capabilities; zero `unknown` rows | 1 h | **closed** |
-| S1 | **Algorithm surface** | every algorithm package is public or declared internal; spec ID → runtime constructor alias table | 1–2 h | **closed** |
-| S2 | **Architecture surface** | every geometry has a forward/step/param smoke; every spec geometry resolves through the alias table or is retired | 1 h | **half: alias + docs rows done; geometry forward smoke open** |
+| S1 | **Algorithm surface** | every algorithm package is public or declared internal | 1–2 h | **closed; alias table must be removed by S1b** |
+| S2 | **Architecture surface** | every geometry has a forward/step/param smoke; every runtime geometry is accounted for | 1 h | blocked on S1b; docs rows + smoke open |
 | S3 | **Task surface** | planned tasks implemented or declared; `continual`/`multitask` gain one task each or a named retirement | 2 h | open (declared rows landed) |
 | S4 | **Loss/objective surface** | declared loss inventory per task; continual objectives wired or retired | 1 h | open |
 | S5 | **Capability surface** | all 21 unverified rows get a smoke test or `unavailable_reason` + trigger | 2 h | open (inventory classifies all 21 as declared) |
 | S6 | **Combination smoke** | legal-coordinate matrix composes and trains one step with zero failures | 1–2 h | open |
-| S7 | **Vocabulary/docs lock** | generated docs read from the inventory; API-vocabulary drift locked | 30 min | open (spec-matrix + docs-task joins locked) |
+| S7 | **Vocabulary/docs lock** | generated docs read from the inventory; one vocabulary locked | 30 min | open (joins landed; alias-free lock follows S1b) |
 
-S0 is the instrument; S1–S2 make selection verifiable; S3–S4 complete the
-content; S6 proves combinations; S5 is infrastructure readiness; S7 prevents
-the second vocabulary from returning.
+S0 is the instrument; **S1b makes the instrument's two vocabularies one**;
+S1–S2 make selection verifiable; S3–S4 complete the content; S6 proves
+combinations; S5 is infrastructure readiness; S7 prevents a second vocabulary
+from returning.
 
 ### 3a. Progress log
 
@@ -133,18 +135,56 @@ the docs task list and the generated implementation matrix.
 
 **S1 — closed.** The seven EQ variants are declared internal with their preset
 factory (`algorithms/__init__.py::INTERNAL_ALGORITHMS`); `PUBLIC_ALGORITHMS`
-and `ALL_ALGORITHMS` are explicit. The alias table is
-`experiment/schema/spec_aliases.py`: 12 spec→runtime aliases, one
-`not_a_primitive` row (`closed_form_ridge`), and a fail-loud unknown axis. The
-inventory resolves all 44 primitive specs through it; unknown spec IDs fail
-the lock.
+and `ALL_ALGORITHMS` are explicit. The spec→runtime alias table
+(`experiment/schema/spec_aliases.py`) was a first pass and is **not the
+target**: S1b deletes it in favour of one name per primitive. Do not build new
+surface on it.
 
-**S2 — half.** Done: alias resolution for all 7 geometry specs; the four
+**S1b — next session, immediate.** Alias removal. The table is a second
+vocabulary: `photonic`/`optical`, `feedforward_dag`/`feedforward`,
+`reverse_mode`/`gradient` and seven more pairs name one mechanism twice, and
+`acceleration/status.py::_primitive_to_axis` holds a third hand-maintained copy
+of the same translation. Plan:
+
+1. **Rename the spec IDs to the runtime names** (10): `photonic→optical`,
+   `feedforward_dag→feedforward`, `recurrent_attractor→recurrent`,
+   `spatial_lattice_3d→spatial_lattice`, `fabric_pc→graph`,
+   `instantaneous_pass→instantaneous`, `lazy_state_dynamics→lazy`,
+   `pc_alm_settling→pc_alm`, `fast_weight→fast_weights`,
+   `reverse_mode→gradient`.
+2. **Delete the alias resolution**: `experiment/schema/spec_aliases.py`; make
+   the inventory resolve by identity (`spec.id.rsplit(".")[-1]` must be the
+   runtime name). Keep only a declaration row for mechanisms with no
+   coordinate (`noisy`, `closed_form_ridge`).
+3. **Replace** `acceleration/status.py::_primitive_to_axis` (~60 hand lines)
+   with the axis segment: `primitive.<axis_segment>.<runtime_name>`; share one
+   `AXIS_SEGMENT` map with `coordinate_of` and the inventory.
+4. **Update `uses_primitives`** in the 10 algorithm specs that cite old IDs.
+5. **Regenerate** `tests/property/generated/test_primitive_*` and
+   `docs/generated/{IMPLEMENTATION_MATRIX.md,primitives,algorithms}` from the
+   registry; delete stale filename variants.
+6. **Update the locks**: `test_registry_completeness_lock.py`,
+   `test_preset_audit_lock.py`, `tests/acceleration/test_rung_parity.py`, the
+   five per-primitive kernel-parity tests, and
+   `test_surface_inventory_lock.py`.
+7. **Runtime-only coordinates** (15: `analog`, `conv`, `attention`,
+   `causal_transformer`, `tile`, `local_contrastive`, `error_predictive_coding`,
+   `adam`, `lion`, `local_adam`, `mean_norm`, `ortho_adam`,
+   `riemannian_orthogonal`, `role_split`, `conflict_adaptive`): each gains a
+   spec row whose ID is its name, or a declared "mode of X" row with a trigger.
+   No third table. Measure the count before/after and write it here.
+
+Blast radius: 10 spec files, ~10 algorithm specs, 3 acceleration modules, 7
+locks/tests, 49 generated tests, generated docs. No measurement semantics
+change: `coordinate_of` already emits the runtime value, so evidence
+coordinates stay byte-identical. A fresh session should start here and close
+S2/S7 only after it.
+
+**S2 — blocked.** Alias resolution is deliberately not extended. The four
 docs-claimed architectures (PINO/DeepONet/FNO/LSTM) are declared rows with a
-trigger; the inventory lock asserts every geometry spec resolves and every
-runtime coordinate has a row. Open: one forward/param smoke per **runtime**
-geometry (11/11) and an explicit activation-layout/cell-mode declaration per
-geometry row.
+trigger. Open after S1b: one forward/param smoke per **runtime** geometry
+(11/11) and an explicit activation-layout/cell-mode declaration per geometry
+row.
 
 **S3 — declared half landed.** The 11 planned names and 4 docs contradictions
 are now rows with a reason and trigger (`inventory.py::DECLARED_CLAIMS`), so
@@ -161,9 +201,9 @@ repository — either ship the package tests or retire those rows.
 generated implementation-matrix ID has no row. Open: generated docs counts must
 be derived from the inventory rather than hand-maintained prose.
 
-**Next session order:** S2 geometry smoke → S3 offline loaders → S4 loss
-inventory → S5 capability decisions → S6 legal-coordinate smoke → S7 generated
-counts.
+**Next session order:** S1b vocabulary unification first (alias removal blocks
+S2 and S7) → S2 geometry smoke → S3 offline loaders → S4 loss inventory → S5
+capability decisions → S6 legal-coordinate smoke → S7 generated counts.
 
 ---
 
@@ -199,26 +239,71 @@ the underlying registries (the TODO90 corpus-lock pattern).
    currently neither declared nor documented as internal.
 2. Add the public ones to `computronium.algorithms` (lazy namespace), or add a
    `INTERNAL_ALGORITHMS` row naming the preset that reaches each.
-3. Build one alias table mapping spec IDs to runtime constructors:
-   `primitive.substrate.photonic` → `optical`, `...noisy` → digital-noise
-   config, `primitive.credit_assignment.reverse_mode` → `gradient`,
-   `primitive.geometry.feedforward_dag` → `feedforward`,
-   `...recurrent_attractor` → `recurrent`, `...spatial_lattice_3d` →
-   `spatial_lattice`, `...fabric_pc` → `graph`, and so on.
+3. ~~Build one alias table mapping spec IDs to runtime constructors.~~ **Do not
+   build an alias table.** S1b makes the spec ID itself the runtime name.
 4. Smoke: one compose + one train step per public algorithm (a small 3-class
    toy batch, CPU, no claims).
 
 **Acceptance:** every package is `public` or `internal` with a preset path;
-every spec ID resolves to a runtime constructor or an explicit
-`not_a_primitive` row; an unknown ID fails the lock; 21/21 accounted for.
+21/21 accounted for; no alias table is introduced.
+
+### S1b — Vocabulary unification (immediate; blocks S2/S7)
+
+**Problem.** Two names for one mechanism is the defect TODO91 §1 item 2
+records, and an alias table institutionalizes it. A user selecting
+`feedforward` and a docs page naming `feedforward_dag` are describing one
+implementation; a third hand copy lives in
+`acceleration/status.py::_primitive_to_axis`. Three tables, one fact.
+
+**Deliverable**
+
+1. **Rename the 10 spec IDs to their runtime coordinates:** `photonic→optical`,
+   `feedforward_dag→feedforward`, `recurrent_attractor→recurrent`,
+   `spatial_lattice_3d→spatial_lattice`, `fabric_pc→graph`,
+   `instantaneous_pass→instantaneous`, `lazy_state_dynamics→lazy`,
+   `pc_alm_settling→pc_alm`, `fast_weight→fast_weights`,
+   `reverse_mode→gradient`.
+2. **Delete `experiment/schema/spec_aliases.py`.** The inventory resolves by
+   identity: the spec's last segment must be a runtime coordinate. The only
+   non-identity rows are mechanisms with no coordinate, declared with a reason
+   (`noisy`: the digital substrate with noise; `closed_form_ridge`: a
+   plasticity object with no axis coordinate).
+3. **Delete `acceleration/status.py::_primitive_to_axis`'s hand tables.** Parse
+   `primitive.<axis_segment>.<name>` with one shared `AXIS_SEGMENT` map
+   (`credit_assignment→credit`, `parameter_update→update`,
+   `state_dynamics→dynamics`, identity otherwise) used by `coordinate_of`, the
+   inventory, and any future selector.
+4. **Update `uses_primitives`** in every algorithm spec that cites a renamed
+   ID.
+5. **Regenerate** `tests/property/generated/test_primitive_*` and
+   `docs/generated/{IMPLEMENTATION_MATRIX.md,primitives,algorithms}`; delete
+   the stale filename variants. Do not hand-edit generated docs.
+6. **Update the locks and tests:** `test_registry_completeness_lock.py`,
+   `test_preset_audit_lock.py`, `tests/acceleration/test_rung_parity.py`, the
+   five per-primitive kernel-parity tests, and
+   `test_surface_inventory_lock.py`.
+7. **Runtime-only coordinates** (15): `analog`, `conv`, `attention`,
+   `causal_transformer`, `tile`, `local_contrastive`,
+   `error_predictive_coding`, `adam`, `lion`, `local_adam`, `mean_norm`,
+   `ortho_adam`, `riemannian_orthogonal`, `role_split`, `conflict_adaptive`.
+   Each gains a spec row whose ID is its name, or a declared "mode of X" row
+   with a trigger. Report the count before/after.
+
+**Acceptance:** zero alias entries; `inventory` resolves every spec row by
+identity; `comp coverage inventory` still reports 0 `unknown`; a deliberately
+renamed spec ID makes its row `unknown`; the generated matrix and the runtime
+registry share one vocabulary; no measurement coordinate in evidence changes
+(`coordinate_of` already emits the runtime value).
+
+**Cost:** 2–3 h. Files: 10 spec files, ~10 algorithm specs, 3 acceleration
+modules, 7 test/lock files, 49 generated tests, generated docs.
 
 ### S2 — Architecture surface
 
 **Deliverable**
 
-1. The alias table from S1 covers every geometry spec ID; report which spec
-   geometries have **no runtime implementation** (`fabric_pc` vs `graph` is an
-   alias, not a second implementation — decide which).
+1. Every runtime geometry maps to exactly one spec row (S1b), or carries a
+   declared retirement. No alias table.
 2. A shape/parameter smoke per runtime geometry: build from `GeometryConfig`,
    forward a batch, one step/route, report parameter count and output shape.
 3. Every geometry row declares its activation layout and cell/sample mode
@@ -327,7 +412,8 @@ fails the lock.
 |---|---|---|
 | Inventory rows with `unknown` status | 11 planned names, 4 docs/runtime contradictions, 7 hidden algorithms, 4 docs-claimed architectures, 21 unverified capabilities | **0** |
 | Algorithm packages accounted for | 14 public, 7 silent | **21/21 public or declared internal** |
-| Spec IDs resolving to a runtime constructor | unverified (two vocabularies) | **64/64 rows resolved or `not_a_primitive`** |
+| Spec IDs resolving to a runtime constructor | unverified (two vocabularies) | **one vocabulary: every spec ID equals its runtime name or is `not_a_primitive`** |
+| Alias tables mapping spec IDs to runtime names | 3 hand copies (`spec_aliases.py`, `status.py` tables, docs prose) | **0** |
 | Runtime geometries with a smoke | 11 registered, no per-geometry smoke | **11/11** |
 | Architectures named in docs with a runtime row | PINO/DeepONet/FNO and a standalone LSTM are unbacked | **every claim implemented or retired** |
 | Planned tasks implemented or declared | prose only | **every docs entry is a row** |
@@ -390,5 +476,6 @@ depth items. This plan does not touch those; it completes the *selection*
 surface.
 
 **Order:** S0 first. Without the inventory, every later ticket argues from a
-different list. Then S1/S2 (algorithms + architectures), S3/S4 (tasks +
-losses), S6 (combinations), S5 (capabilities), S7 (docs).
+different list. Then **S1b (one vocabulary; remove the alias table)**, S1/S2
+(algorithms + architectures), S3/S4 (tasks + losses), S6 (combinations), S5
+(capabilities), S7 (docs).
