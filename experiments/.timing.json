@@ -72,9 +72,10 @@
     "startup_s": 0.0
   },
   "cuda/L0": {
-    "cost_per_cell_s": 23.888,
+    "cost_per_cell_s": 20.922,
     "per_task": {
       "char_ngram": 6.661,
+      "copy_task": 3.125,
       "cora": 0.208,
       "digits": 11.525,
       "kmnist": 24.702,
@@ -107,9 +108,10 @@
     "startup_s": 0.0
   },
   "cuda/L2": {
-    "cost_per_cell_s": 1772.495,
+    "cost_per_cell_s": 1335.44,
     "per_task": {
       "char_ngram": 12.811,
+      "copy_task": 24.275,
       "mnist": 5295.082,
       "synthetic_forecast": 9.593
     },

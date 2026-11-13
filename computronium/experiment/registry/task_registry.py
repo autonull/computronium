@@ -516,8 +516,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "copy_task": TaskSpecEnriched(
         name="copy_task",
         domain=DomainType.MEMORY,
-        input_shape=(10,),  # Sequence length, binary
-        output_dim=2,
+        input_shape=(21,),  # 10 source tokens + delimiter + up to 10 copied prefix
+        output_dim=8,  # vocabulary; the delimiter (8) and pad (9) are never targets
         cost_class=CostClass.CHEAP,
         primary_objective="validation_accuracy",
         objectives=(
@@ -538,7 +538,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
             ),
         ),
         geometry_hint="ntm",
-        typical_batch_size=16,
+        typical_batch_size=64,
         typical_lr=1e-3,
         tags=("memory", "sequence", "copy"),
         description="Neural Turing Machine copy task",

@@ -1,0 +1,42 @@
+{
+  "claim": "On the copy_task task (memory domain, 10-token source over a vocabulary of 8 plus a delimiter, next-token-after-delimiter framing), the pinned arm digital/feedforward/instantaneous/null/gradient/adam reaches validation token accuracy of at least 0.50 at the L2 schedule (5 seeds x 20 epochs) — 3.9x the strongest fixed-policy ruler (0.12825 majority-token) and 56.9% of the headroom between that ruler and the task's 1.000 positional-copy ceiling.",
+  "metric": "val_acc",
+  "threshold": 0.5,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-13",
+  "ticket": "TODO90 B6b",
+  "domain": "memory",
+  "task": "copy_task",
+  "coordinate": "digital/feedforward/instantaneous/null/gradient/adam",
+  "schedule": {
+    "fidelity": "L2",
+    "n_seeds": 5,
+    "epochs": 20,
+    "batch_size": 64,
+    "device": "cuda"
+  },
+  "ruler": {
+    "name": "fixed-policy token accuracy on the same 20,000-row validation split (2,000 sequences x 10 steps)",
+    "value": 0.12825,
+    "strongest_policy": "always emit the majority source token (token 4)",
+    "alternatives": {
+      "uniform_vocabulary": 0.125,
+      "all_zero": 0.12585,
+      "copy_the_input_one_step": 0.12205,
+      "copy_input_at_index_0": 0.21055
+    },
+    "se": 0.0024,
+    "note": "copy_the_input_one_step is the ruler the ticket names; the majority-token policy is stronger and is the one registered. copy_input_at_index_0 scores above chance only because it is exact for the t=0 row of each sequence."
+  },
+  "ceiling": {
+    "name": "positional copy (emit the input token at the sample's own step index)",
+    "value": 1.0,
+    "definition": "sample t carries y = seq[t] at vector index t and the index is recoverable from the pad count (non-pad length - seq_len - 1), so the answer is present in the input",
+    "headroom_over_ruler": 0.87175,
+    "note": "The ticket names the copy-the-input baseline as the ruler to beat, so that baseline is reported as the ceiling it is: no arm can exceed it, and a claim over it is unattainable by construction. The claim is registered against the fixed-policy rulers with the ceiling reported as the bound."
+  },
+  "decision_rule": "Met iff (1) every one of the 5 seeds writes PASS with val_acc >= 0.50, and (2) the one-sided 95% lower confidence bound of the seed mean (t, df=4) is > 0.50. Marginal iff the seed mean is within 1 SE of 0.50. Distance is reported in SEs, as a multiple of the ruler, and as a fraction of the headroom to the ceiling.",
+  "pilot_role": "Schedule and arm choice, not threshold choice: a 1-seed / 20-epoch pilot at this session measured val_acc 0.6255 for digital/feedforward and 0.2835 for digital/ntm, so feedforward is the claim arm and ntm is reported as a measured, worse arm. The threshold is set from the split's fixed-policy rulers, which are computable without running an arm.",
+  "claim_eligibility": "L2 records carry 5 achieved PASS seeds, a replay hash, and a normalized metric, so the run's claim-eligible cell count is non-zero."
+}

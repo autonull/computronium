@@ -1,9 +1,10 @@
 # TODO90 — Breadth, not depth (Successor to TODO89)
 
-**Status:** 2026-11-13 · base `85f62aa3` · **B0–B5, B6a, B6c closed** · next
-B6b. TODO89 is closed: T1–T10 carry measured numbers, and its remaining work is
+**Status:** 2026-11-13 · base `a0c4bb6c` · **B0–B5, B6a–B6c closed** · next
+B7. TODO89 is closed: T1–T10 carry measured numbers, and its remaining work is
 two depth items (graph third credit, PROTEINS 0.7040), parked here with
-explicit triggers.
+explicit triggers. All three domain claims are met, so the breadth mission has
+one claim per domain (7/7).
 
 **Mission:** TODO89 made the instrument trustworthy and spent it on four
 domains. TODO90 spends it on **surface**: every axis primitive exercised or
@@ -34,8 +35,9 @@ Full evidence: `TODO89.md` §2b; raw probe `scripts/probes/t3_credit_breadth.py`
 Session 2026-11-12 (second): B0–B3 closed. Session 2026-11-12 (third): B4
 closed. Session 2026-11-13: B5 closed, and its instrument found a defect the
 ticket did not predict. Session 2026-11-13 (second): B6a and B6c closed, and
-the timeseries arm could not run at all until three defects were fixed. Every
-row names its instrument.
+the timeseries arm could not run at all until three defects were fixed. Session
+2026-11-13 (third): B6b closed, and its ruler turned out to be the task's
+ceiling. Every row names its instrument.
 
 | # | Ticket | Result | Evidence |
 |---|---|---|---|
@@ -46,6 +48,7 @@ row names its instrument.
 | B4 | Three untouched tasks | **Green.** `kmnist` 0.6669 val_acc (chance/majority 0.100), `char_ngram` 3.9923 ppl (unigram 25.21), `tiny_shakespeare` 8.4394 ppl (unigram 27.19); 1 seed each, 2 PASS records per task. Corpus task list holds no `NOT TOUCHED` row. | `experiments/experiment_20261112_b4.duckdb`; `tests/property/test_lm_target_alignment_lock.py` |
 | B5 | Substrate × geometry holes | **Green, with one defect named.** 32 runs, 63 PASS records, 0 fail. The pair instrument closed **18 undeclared pairs** (68 measured → 92; 60 coupled → 78) and refused 21 (14 hold 192 cells that cannot count). 0 undeclared remain. | `experiments/experiment_20261113_b5.duckdb`; `evidence/corpus.py`; `tests/property/test_corpus_coverage_lock.py`, `test_substrate_reaches_compute_lock.py` |
 | B6a | Language claim | **Met.** `char_ngram` at L2 (5 seeds × 20 epochs, all PASS): val_ppl **2.4617 ± 0.0338** (SE), one-sided 95% upper bound **2.5337**, against a **5.0** threshold and a **23.77** unigram ruler on the same 1,024-item split — **9.66× below the ruler**, 75 SE clear of the threshold. claim-eligible cells **1**. | `experiments/experiment_20261113_b6a.duckdb`; `configs/preregistrations/b6a_language_char_ngram_ppl.json` |
+| B6b | Memory claim | **Met, on a re-derived ruler.** `copy_task` at L2 (5 seeds × 20 epochs, all PASS): val_acc **0.6552 ± 0.0280** (SE), lower bound **0.5956**, against a **0.50** threshold and the strongest fixed-policy ruler **0.12825** — **5.11× the ruler**, **60.4%** of the headroom to the task's **1.000** positional-copy ceiling, 5.55 SE clear. The ticket's named ruler (copy-the-input) *is* that ceiling, so the ruler was re-derived from fixed policies. claim-eligible cells **1**. | `experiments/experiment_20261113_b6b.duckdb`, `experiment_20261113_b6b_ntm_arm.duckdb`; `configs/preregistrations/b6b_memory_copy_task_token_accuracy.json`; `tests/property/test_copy_task_ruler_lock.py` |
 | B6c | Timeseries claim | **Met, after three defects were fixed** (see below). `synthetic_forecast` at L2 (5 seeds × 20 epochs, all PASS): val_mae **0.08904 ± 0.00117** (SE), upper bound **0.09153**, against a **0.100** threshold, the **0.11459** naive last-value ruler and the **0.07979** noise floor — **1.287× below naive**, 73.4% of the 0.0348 headroom removed, 8.7 combined SE of separation. claim-eligible cells **1**. | `experiments/experiment_20261113_b6c.duckdb`; `configs/preregistrations/b6c_timeseries_synthetic_forecast_mae.json`; `tests/property/test_regression_target_lock.py` |
 
 **Defect found in B0 and fixed with B0:** one CUDA device ran four cells and
@@ -110,6 +113,12 @@ PASS cells and 3 stores. `char_ngram` moves from 2 to **10** PASS cells and
 `synthetic_forecast` from 31 to **36**, so both now carry a claim-grade cell
 rather than a provenance cell.
 
+**Measured after B6b (2026-11-13, third):** the same command reads **7,409 PASS
+cells over 437 readable stores, 0 unreadable** — the claim store and the ntm
+arm store added 8 PASS cells and 2 stores (the superseded feedforward pilot was
+deleted, not counted). `copy_task` moves from 55 to **63** PASS cells. The pair
+and task sections are unchanged: 92/99, 25/25.
+
 | Surface | At plan start | Now |
 |---|---|---|
 | Axis primitives exercised or declared | 56/57 (update 11/12) | **57/57** (update 12/12) |
@@ -118,7 +127,7 @@ rather than a provenance cell.
 | Corpus coverage instrument | probe only | **one command**, drift-locked, with a substrate × geometry pair section |
 | Tasks measured or retired | 22/25 | **25/25** — every registered task is measured |
 | Substrate × geometry pairs | 20 holes, 4 named by the plan | **92/99 hold a cell; 78 substrate-coupled; 21 refused; 0 holes** |
-| Domains with one claim | 4/7 | **6/7** — language (B6a) and timeseries (B6c) closed; memory is B6b |
+| Domains with one claim | 4/7 | **7/7** — language (B6a), timeseries (B6c), memory (B6b) |
 | Registered-vs-measured objectives | 12 unmeasured, 15 orphans | unchanged — B8 |
 | Duplicate legality tables | 2 | 2 (plus a third `references_params` copy, §2 B9) |
 
@@ -152,7 +161,7 @@ Ordered by what unblocks the next measurable thing, not by interest.
 | B4 | **Three untouched tasks** | `kmnist`, `char_ngram`, `tiny_shakespeare`: one PASS cell each, or retirement | 1–2 h | **closed** |
 | B5 | **Substrate × geometry holes** | graph off digital; nca on `complex`/`neuromorphic`; or declared rows | 1 h | **closed** |
 | B6a | **Language claim** | `char_ngram` val_ppl under a pre-registered threshold | 1 h | **closed, met** |
-| B6b | **Memory claim** | `copy_task` token accuracy over the copy-the-input baseline | 1 h | **open — next** |
+| B6b | **Memory claim** | `copy_task` token accuracy over the fixed-policy rulers, with the copy-the-input ceiling named | 1 h | **closed, met** |
 | B6c | **Timeseries claim** | `synthetic_forecast` MAE over the naive last-value ruler | 1 h | **closed, met** |
 | B7 | **Scientific domain** | one registered task with a loader and a cell, or a named retirement | 1 h | open |
 | B8 | **Measurement breadth** | wire the cheap objectives; retire or register the orphan keys | 1–2 h | open |
@@ -162,32 +171,43 @@ Ordered by what unblocks the next measurable thing, not by interest.
 A session takes **B0–B2 first** unless they are already green. They are the
 instrument; every later ticket's evidence depends on them.
 
-**Progress (2026-11-13, second session):** B0, B1, B2, B3, B4, B5, **B6a and
-B6c** are closed with the results in §0a; **B6b is the next ticket**, and it is
-the only breadth item between the plan and its 7/7 domain target. B5 widened
-under its own instrument: the plan named four coordinates, the pair section of
-`comp coverage` named 20, and the sweep found that 14 pairs already held cells
-which cannot count (B10). B6c widened the same way: a ticket whose whole
-deliverable was one ruler needed three pipeline fixes before the ruler could be
-computed (see §0a). B7, B8 and B9 are unchanged.
+**Progress (2026-11-13, third session):** B0–B5 and **B6a–B6c** are closed with
+the results in §0a, so **all seven domains hold one claim**. The breadth mission's
+remaining tickets are B7 (scientific domain), B8 (measurement breadth), B9
+(duplicate rules) and B10 (substrate reaches NCA/NTM). B5 widened under its own
+instrument: the plan named four coordinates, the pair section of `comp coverage`
+named 20, and the sweep found that 14 pairs already held cells which cannot
+count (B10). B6c widened the same way: a ticket whose whole deliverable was one
+ruler needed three pipeline fixes before the ruler could be computed. B6b
+widened in a third direction: its named ruler is the task's ceiling, so the
+ruler was re-derived from fixed policies (see §0a).
 
-**B6b start state (2026-11-13, second session):** `copy_task` holds 55 PASS
-cells, so the task trains; what is missing is the *ruler*, not the cell. Its
-registry row declares `input_shape=(10,)`, `output_dim=2`,
-`primary_objective="validation_accuracy"`, `geometry_hint="ntm"`, and the plan
-registers a "copy-the-input baseline (token accuracy)". Before running:
-1. Measure the baseline on the same val split the cell measures (copy the input
-   one step, and all-zero, and report both — the trivial policy that beats
-   "copy" is not the same one that beats "zero").
-2. Read the 55 existing cells' `val_acc` distribution: if they straddle the
-   baseline, the claim's schedule is the issue and the ticket is a schedule
-   choice, not a new arm.
-3. Pre-register, then run 5 seeds at L2 (the ladder default 5 × 20) with the
-   `ntm` geometry and the credit that geometry accepts. `ntm` is inert w.r.t.
-   substrate (B10) but it does train, so a digital claim is unaffected by B10.
+**B6b start state (closed 2026-11-13, third session):** `copy_task` held 55 PASS
+cells, so the task trained; the missing piece was the ruler. The three steps the
+plan prescribed were followed and the first one found the defect: on the measured
+split (20,000 rows) the fixed-policy rulers are at chance (all-zero 0.12585,
+copy-one-step 0.12205, majority-token **0.12825**, uniform 0.125), but the
+positional copy — emit the input token at the sample's own step index, which the
+pad count reveals — reads every target and scores **1.000**. The
+"copy-the-input baseline" the ticket names is therefore the ceiling, and no arm
+can beat it; the claim registers the fixed-policy rulers instead and reports the
+ceiling as the bound. Two stale declarations were fixed with the ticket: the
+registry row declared `(10,)`/`2` where the loader emits `(21,)`/`8` and a batch
+of 64, and `CopyTask` declared the timeseries domain while its registry row says
+memory.
 
 **B6a/B6c start states are closed** and kept in §2 only for their measured
 numbers and their defect list.
+
+**Remaining work (ordered, 2026-11-13):** every open ticket now closes on a
+cell, a row or a named verdict; none needs a claim.
+
+| # | What closes it | First command | Risk / note |
+|---|---|---|---|
+| B7 | one scientific task registered with an offline loader **or** the `ScientificTask` export retired with a named verdict | `uv run comp coverage tasks \| grep -i scientific` (empty today) | The pendulum generator already exists in `domains/timeseries.py`; a scientific row can reuse it, so the repair may be a registry row plus a baseline, not a new dataset. |
+| B8 | `comp coverage unmeasured` shrinks by the rows wired; a lock asserts `MEASURED_OBJECTIVES == registered objective names ∪ documented internal keys` | `uv run comp coverage unmeasured` | Five sub-deliverables, cheapest first; `test_loss`/`test_accuracy`/`f1_score` need a real held-out split added to the evaluator once. `forgetting`/`backward_transfer` wait for a continual ticket. |
+| B9 | one source per legality rule; the lock fails if a second copy returns | `grep -rn "def _references_params" computronium/` | Three copies named (§2 B9). The S5 copy must import `legality/dsl.py`'s helper so `classification_requires_classifier_head` lands at compose time. |
+| B10 | `nca_ntm_substrate_inert` deleted, the 14 pairs re-measured, `train_loss` off digital | `uv run python -m pytest tests/property/test_substrate_reaches_compute_lock.py -q` | Depth; trigger is a claim that cites substrate breadth for nca/ntm. The lock currently asserts the defect, so it flips with the fix. |
 
 **B10 start state (2026-11-13):** `NcaGeometry` and `NtmGeometry` call
 `nn.Linear`/`nn.LSTM` directly; `get_forward_operator()` is never reached, so
@@ -439,7 +459,7 @@ in this order: B6a is the cheapest ruler to compute, B6c the most independent.
 | # | Domain | Task | Ruler | Pre-registration |
 |---|---|---|---|---|
 | B6a | language | `char_ngram` | unigram perplexity **23.77** on the measured split (vocabulary-uniform 27.0); B4 quoted 25.21 from another estimator | threshold on `val_ppl`, ≥3 seeds — **closed, met** |
-| B6b | memory | `copy_task` | copy-the-input baseline (token accuracy) | threshold on token accuracy, ≥3 seeds — **open, next** |
+| B6b | memory | `copy_task` | fixed-policy rulers: majority-token **0.12825**, all-zero 0.12585, copy-one-step 0.12205, uniform 0.125; the copy-the-input policy is the **1.000** ceiling | threshold on val_acc, ≥3 seeds — **closed, met** |
 | B6c | timeseries | `synthetic_forecast` | naive last-value MAE **0.11459**; noise floor 0.07979 | threshold on MAE, ≥3 seeds, beat naive by >1 σ — **closed, met** |
 
 Each: write `configs/preregistrations/<slug>.json` **before** the run
@@ -492,6 +512,64 @@ linear extrapolation 0.19950 (worse), and the generator's noise floor
 **0.07979** = 0.1·√(2/π). The arm is **1.287× below naive**, removes **73.4%**
 of the 0.0348 headroom above the floor, and separates from naive by 8.7
 combined SE.
+
+**Result B6b (2026-11-13, third session):** met, on a re-derived ruler.
+Registration: `configs/preregistrations/b6b_memory_copy_task_token_accuracy.json`,
+0.50 val_acc threshold. The arm is
+`digital/feedforward/instantaneous/null/gradient/adam` at L2 (5 seeds × 20
+epochs) in `experiments/experiment_20261113_b6b.duckdb`, 129 s, 6 PASS records
+(the run's positive control plus 5 seeds), 1 claim-eligible cell.
+
+| Seed | val_acc | val_loss |
+|---|---|---|
+| 42 | 0.6255 | 0.9043 |
+| 43 | 0.7195 | 0.7736 |
+| 44 | 0.5870 | 0.9598 |
+| 45 | 0.6200 | 0.9006 |
+| 46 | 0.7240 | 0.7507 |
+
+Mean **0.6552**, sd 0.0625, SE 0.0280, one-sided 95% lower bound **0.5956 >
+0.50** (5.55 SE clear). Rulers on the same 20,000-row split (2,000 sequences ×
+10 steps): majority-token **0.12825**, all-zero 0.12585, copy-the-input one step
+0.12205, vocabulary-uniform 0.125. The arm is **5.11×** the strongest ruler and
+removes **60.4%** of the 0.87175 headroom between that ruler and the ceiling.
+
+**Ruler defect found in B6b (the ticket's named ruler is the ceiling).**
+`copy_task` puts `y = seq[t]` in the input vector at index `t`, and `t` is
+recoverable as `non_pad_length - seq_len - 1`; a positional copy therefore reads
+**every** target and scores exactly **1.0000**. The "copy-the-input baseline" the
+ticket names is thus the task's ceiling, and a claim stated as beating it is
+unattainable by construction — the ticket's own step 1 ("the trivial policy that
+beats 'copy' is not the same one that beats 'zero'") anticipated this. The
+registration keeps both numbers: the ceiling is declared as the bound, the
+threshold is derived from the fixed-policy rulers, and the lock asserts the
+bracket `max(fixed rulers) < threshold < ceiling`. A streaming copy — state
+carried across steps so the input never holds the answer — is the repair that
+would make "beat copy" meaningful; it is parked (§5) because it re-pins the 63
+existing `copy_task` cells and is depth, not breadth.
+
+**Two stale declarations found in B6b and fixed with B6b.** Each made the task's
+declared identity disagree with what it measures:
+
+1. **The registry row did not describe the loader.** It declared
+   `input_shape=(10,)` ("binary"), `output_dim=2`, `typical_batch_size=16`; the
+   loader emits a 21-wide float token vector (10 source + delimiter + up to 10
+   copied prefix, pad 9) with 8 target classes at batch 64. The row now matches,
+   and the batch size has one source (`CopyTask._batch_size`) instead of a
+   ternary repeated in both loaders.
+2. **The task class declared the wrong domain.** `CopyTask.domain_type` and
+   `.spec` said `TIMESERIES` while its registry row says `MEMORY`, which routed
+   the primary-metric lookup to `mse` — a key `CopyTask.evaluate` never returns.
+   Both now say `MEMORY`.
+
+Lock: `tests/property/test_copy_task_ruler_lock.py` (5 tests: the positional
+copy reads every target at the pad-derived index, every fixed policy sits within
+6.8 SE of the vocabulary-uniform rate, the registry row matches the loader's
+shape and batch, the task class and row name the same domain, and the
+registration brackets rulers and ceiling). 5 passed. Re-measured: this arm's
+`ntm` cousin at the same schedule measures **0.2835** (train_acc 0.6366), so the
+hint geometry underperforms the claimed arm by 2.3× and is reported as a
+measured, worse arm — `experiments/experiment_20261113_b6b_ntm_arm.duckdb`.
 
 **Metric hygiene still owed (B8):** for a regression task the trainer's
 `val_acc` is 0.0 by construction (argmax over a one-wide head) and `val_ppl` is
@@ -602,7 +680,7 @@ section counts it as coupled.
 | Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry | **25/25** (B4) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **11/11** (B2 closes the 3 probe-only) | **10/11** — graph parked (T8) |
 | Substrate × geometry pairs measured or refused | 18 undeclared | **0 undeclared**, each pair a coupled cell or a named rule | **0 undeclared** — 78 on a coupled cell, 21 refused (14 await B10) |
-| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | **6/7** — language (B6a) and timeseries (B6c) closed; memory is B6b |
+| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | **7/7** — language (B6a), timeseries (B6c), memory (B6b) |
 | Acceptance locks | 3 fail | **0 fail** | **0 fail** |
 | Corpus coverage instrument | probe only | **one command**, drift-locked | **one command**, locked, pairs included |
 | Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **0 unexplained** | 12 / 15 |
@@ -612,9 +690,10 @@ Measured 2026-11-12 at plan start: 6,925 PASS cells over 428 stores. Measured
 after B2/B3: 7,319 over 430 stores, 0 unreadable. After B4: 7,325 over 431
 stores, 0 unreadable. After B5: 7,388 over 432 stores, 0 unreadable, 99
 substrate × geometry pairs all accounted for. After B6a/B6c: 7,401 over 435
-stores, 0 unreadable, both claims at L2 with 5 achieved seeds. Each row above
-names the instrument that would move it, and the target is a cell, a row, or a
-claim — never a count of attempted work.
+stores, 0 unreadable, both claims at L2 with 5 achieved seeds. After B6b: 7,409
+over 437 stores, 0 unreadable, three claims at L2 with 5 achieved seeds each and
+7/7 domains. Each row above names the instrument that would move it, and the
+target is a cell, a row, or a claim — never a count of attempted work.
 
 ---
 
@@ -646,7 +725,16 @@ Next Experiment:
    every seed >1 σ over majority).
 2. **PROTEINS 0.7040.** Marginal until a claim cites that arm; then T6's
    pre-registered paired re-measure is the trigger.
-3. Everything TODO89 §5 lists as NO stays NO: paper figures, publishing,
+3. **A streaming copy task.** `copy_task`'s input holds the answer at a
+   pad-derived index, so a positional copy scores 1.0000 and "beat
+   copy-the-input" cannot be stated (B6b). The repair is a copy the input cannot
+   answer: carry state across steps so the source is seen once and never again,
+   or withhold the source and score recall from a query. Trigger: a claim needs
+   memory *capacity* rather than memory *addressing*, or a ticket wants the 63
+   existing `copy_task` cells re-pinned. Then B6b's registration is re-derived —
+   `tests/property/test_copy_task_ruler_lock.py` fails on the repair and names
+   the three numbers to re-measure.
+4. Everything TODO89 §5 lists as NO stays NO: paper figures, publishing,
    retrospectives, cycles > 30 min, repo-wide gates outside round close.
 
 ---
@@ -667,12 +755,16 @@ uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py \
 
 # the lock B6c added: a regression target is a value, not a class index
 uv run python -m pytest tests/property/test_regression_target_lock.py -q --tb=line
+
+# the lock B6b added: copy_task's rulers, its 1.000 ceiling, its true shape
+uv run python -m pytest tests/property/test_copy_task_ruler_lock.py -q --tb=line
 ```
 
 Read `TODO89.md` §2b before choosing a ticket; it owns the measured surface.
-B0–B5, B6a and B6c are green (see §0a). **Start at B6b** (`copy_task`); B7, B8,
-B9, B10 and the two breadth arms remain. B5's pair section is the
-substrate-breadth instrument: read
+B0–B5 and B6a–B6c are green (see §0a), and all seven domains hold one claim.
+**Start at B7** (scientific domain) or B8 (measurement breadth), whichever the
+next deliverable needs; B9, B10 and the two breadth arms remain. B5's pair
+section is the substrate-breadth instrument: read
 `comp coverage report --corpus | sed -n '/Substrate x Geometry/,/Per-Task/p'`
 to see every pair that holds a cell, every pair a rule refuses, and every
 cell on a refused pair that cannot count.
@@ -684,6 +776,11 @@ loss site. Before claiming a *new* task trains poorly, check that its
 `loss` equals the task's metric on the same batch
 (`test_pipeline_trains_a_regression_cell_with_its_own_loss` is the pattern).
 
-**Do not take B10 before B6b.** B10 is depth on one geometry family; B6 gives
-the last domain its first claim, which is what the breadth mission asks for.
-B10's trigger is a claim that cites substrate breadth for nca or ntm.
+**A claim needs a ruler the arm can beat.** B6b's ticket named a ruler (copy the
+input) that the task's own framing satisfies exactly, so the ruler was the
+ceiling. Before registering a threshold, compute the named policy's score on the
+split the cell measures; if it is 1.0 (or 0.0 on a loss), the task's framing
+leaks and the ruler must be re-derived from policies that address nothing.
+
+**B10 stays parked.** B10 is depth on one geometry family. Its trigger is a
+claim that cites substrate breadth for nca or ntm.

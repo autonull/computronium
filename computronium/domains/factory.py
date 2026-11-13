@@ -189,6 +189,7 @@ class CopyTask(DomainTask):
         self.seq_len = seq_len
         self.vocab_size = vocab_size
         self.num_workers = num_workers
+        self._batch_size = 32 if quick_mode else 64
         # Input: padded to max_len = 2*seq_len + 1 (original seq + delimiter + max copied prefix)
         # Output: vocab_size (next token prediction)
         self._input_dim = 2 * seq_len + 1
@@ -196,13 +197,13 @@ class CopyTask(DomainTask):
 
     @property
     def domain_type(self) -> DomainType:
-        return DomainType.TIMESERIES
+        return DomainType.MEMORY
 
     @property
     def spec(self) -> DomainSpec:
         return DomainSpec(
             name=self.name,
-            domain_type=DomainType.TIMESERIES,
+            domain_type=DomainType.MEMORY,
             description="Copy task: next-token prediction after delimiter",
             default_metrics=["accuracy", "loss"],
             supported_tasks=["sequence_copy"],
@@ -231,21 +232,6 @@ class CopyTask(DomainTask):
         # Create next-token prediction samples
         # For each sequence, create samples: (prefix + delimiter + copied_prefix) -> next_token
         # We'll generate all positions in the copy phase
-        def create_samples(seqs, delims):
-            samples_x = []
-            samples_y = []
-            for seq, delim in zip(seqs, delims):
-                # Input: original sequence + delimiter
-                context = torch.cat([seq, delim])  # [seq_len + 1]
-                # Targets: the sequence itself (copy phase)
-                for t in range(self.seq_len):
-                    # Input at step t: context + copied prefix up to t
-                    prefix = seq[:t] if t > 0 else torch.empty(0, dtype=torch.long)
-                    x = torch.cat([context, prefix])  # [seq_len + 1 + t]
-                    y = seq[t]  # next token to predict
-                    samples_x.append(x)
-                    samples_y.append(y)
-            return torch.nested.nested_tensor(samples_x), torch.stack(samples_y)
 
         # For simplicity, use fixed-length input by padding
         # Max input length: seq_len (original) + 1 (delimiter) + seq_len (max copied prefix) = 2*seq_len + 1
@@ -280,13 +266,13 @@ class CopyTask(DomainTask):
 
         self._train_loader = DataLoader(
             train_ds,
-            batch_size=32 if self.quick_mode else 64,
+            batch_size=self._batch_size,
             shuffle=True,
             num_workers=self.num_workers,
         )
         self._val_loader = DataLoader(
             val_ds,
-            batch_size=32 if self.quick_mode else 64,
+            batch_size=self._batch_size,
             shuffle=False,
             num_workers=self.num_workers,
         )
