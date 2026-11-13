@@ -40,6 +40,14 @@ TESTS = pathlib.Path("tests")
 #: recorded here.
 KNOWN_LONG: tuple[tuple[str, int], ...] = (
     (
+        "tests/property/test_combination_smoke_lock.py::test_budget_eight_cover_trains_with_zero_failures",
+        300,
+    ),
+    (
+        "tests/property/test_combination_smoke_lock.py::test_planner_covers_every_reachable_coordinate",
+        300,
+    ),
+    (
         "tests/property/test_hyperparameter_effect_lock.py::test_every_swept_knob_reaches_at_least_one_cell",
         600,
     ),
@@ -109,7 +117,10 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ),
     ("tests/integration/test_pc_alm_validation.py::test_pcalm_depth_scaling", 300),
     ("tests/integration/test_quickstart.py::test_backprop_vs_eqprop_mnist", 600),
-    ("tests/integration/test_smoke_all_tasks.py::test_vision_kmnist", 300),
+    (
+        "tests/integration/test_smoke_all_tasks.py::test_task_trains_one_declared_cell",
+        120,
+    ),
     ("tests/integration/test_wheel_acceptance.py::test_wheel_installs_and_runs", 300),
     ("tests/integration/test_benchmarks_gpu.py::TestAdaptationEfficiencyGPU", 300),
     ("tests/integration/test_benchmarks_gpu.py::TestComputeEfficiencyGPU", 300),

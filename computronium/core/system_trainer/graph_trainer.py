@@ -165,7 +165,9 @@ class GraphSystemTrainer:
             raise ValueError("Graph data missing train_mask")
         y = self._data.y.masked_fill(~train_mask, IGNORE_INDEX)
         with self._autocast:
-            step_metrics = self.system.train_step(self._data.x, y)
+            step_metrics = self.system.train_step(
+                self._data.x, y, edge_index=self._data.edge_index
+            )
         train_loss = step_metrics.get("loss", 0.0)
         train_acc = step_metrics.get(
             "free_accuracy", step_metrics.get("nudged_fit_accuracy", 0.0)
@@ -299,7 +301,7 @@ class GraphSystemTrainer:
             raise ValueError("Graph data missing val_mask and test_mask")
 
         with torch.no_grad(), self._autocast:
-            out = self.system.forward(data.x)
+            out = self.system.forward(data.x, edge_index=data.edge_index)
             val_out = out[val_mask]
             val_y = data.y[val_mask]
 

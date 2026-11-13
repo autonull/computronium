@@ -139,6 +139,18 @@ class TemporalPsiPlasticity:
             h = h[:min_batch]
             target = target[:min_batch]
             post = post[:min_batch]
+        # A task may carry the CE ignore sentinel for unlabeled rows (graph node
+        # mode masks every non-train node). Those rows have no target, so they
+        # must not enter the ridge fit — and ``one_hot`` refuses a negative
+        # class outright.
+        if target.dim() == 1:
+            labeled = target >= 0
+            if not bool(labeled.all()):
+                if not bool(labeled.any()):
+                    return None
+                h = h[labeled]
+                target = target[labeled]
+                post = post[labeled]
         ones = torch.ones(h.shape[0], 1, device=h.device, dtype=h.dtype)
         h_aug = torch.cat((h, ones), dim=-1)
         num_classes = post.shape[-1]

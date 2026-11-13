@@ -193,7 +193,10 @@ def test_graph_trainer_routes_through_train_step() -> None:
     assert len(calls) == 1, calls
     (x_shape, kwargs) = calls[0]
     assert x_shape == (NUM_NODES, INPUT_DIM)
-    assert kwargs == (), kwargs
+    # The node-mode trainer must hand the graph channel to the pipeline; without
+    # it the graph geometry raises "graph topology requires edge_index" (measured
+    # TODO91 S6: cora + graph refused at settle).
+    assert kwargs == ("edge_index",), kwargs
     assert torch.isfinite(torch.tensor(metrics["train_loss"]))
 
 

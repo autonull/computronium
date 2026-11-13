@@ -1277,12 +1277,16 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             }:
                 compiled_path_type = "simple_noise"
 
+        # A substrate with no compiled kernel (ternary, memristive, complex,
+        # quantum) has no compiled path type; the eager loop is the contract.
+        # Passing ``base_compiled=True`` there tripped the assert (measured
+        # 2026-11-13, TODO91 S6: ternary + energy_minimization + fast_weights).
         return (
             all_acts,
             kernel,
             beta,
             use_checkpointing,
-            base_compiled,
+            base_compiled and compiled_path_type is not None,
             compiled_path_type,
         )
 

@@ -210,9 +210,14 @@ class RoutingPlasticity:
                     new_gate_logits = new_gate_logits[: x.shape[0]]
                 batch_size = x.shape[0]
 
-            # Per-gate drive from input statistics (fixed projection)
-            gate_proj = self._gate_projection(x.shape[1], x.device)
-            gate_drive = x.flatten(1) @ gate_proj  # [batch, gate_dim]
+            # Per-gate drive from input statistics (fixed projection). The
+            # width is the *flattened* input, not dim 1: a [B, C, H, W] batch
+            # would otherwise project 784 features through a C-wide matrix
+            # (measured 2026-11-13, TODO91 S6: mnist patched transformer died
+            # on "32x784 and 1x64").
+            x_flat = x.flatten(1) if x.dim() > 2 else x
+            gate_proj = self._gate_projection(x_flat.shape[1], x.device)
+            gate_drive = x_flat @ gate_proj  # [batch, gate_dim]
             new_gate_logits += self._config.learning_rate * gate_drive
 
         # Compute active routes

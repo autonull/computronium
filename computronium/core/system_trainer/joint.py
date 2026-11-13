@@ -218,13 +218,15 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
             )
             return self
 
-        def forward(self, x: Tensor) -> Tensor:
+        def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
             from computronium.core.pipeline import run_forward
 
-            return run_forward(self.substrate, self.geometry, self.dynamics, x)
+            return run_forward(
+                self.substrate, self.geometry, self.dynamics, x, *args, **kwargs
+            )
 
-        def __call__(self, x: Tensor) -> Tensor:
-            return self.forward(x)
+        def __call__(self, x: Tensor, *args, **kwargs) -> Tensor:
+            return self.forward(x, *args, **kwargs)
 
         @property
         def training(self) -> bool:

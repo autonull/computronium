@@ -39,6 +39,16 @@ if TYPE_CHECKING:
     from computronium.state import CompositeState, SystemContext
 
 
+# Plasticity laws whose ψ *replaces* the geometry readout instead of
+# correcting it (``replace_readout=True`` in their config). A replacing ψ
+# computes the logits itself, so the geometry's output projection is unused —
+# the gradient credit's reachability contract refuses that cell (measured
+# 2026-11-13, TODO91 S6: "no gradient reached ['output_proj.weight']").
+# This tuple is the one source: the registry projects it into a void
+# constraint, and the surface lock asserts each member's config default agrees.
+READOUT_REPLACING_PLASTICITIES: tuple[str, ...] = ("conflict_adaptive",)
+
+
 @dataclass(frozen=True, slots=True)
 class ConflictAdaptivePsiConfig:
     """Agreement-driven trace decay.

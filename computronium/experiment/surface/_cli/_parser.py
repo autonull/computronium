@@ -618,6 +618,42 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
         help="Exit non-zero when any row is unknown",
     )
 
+    p_coverage_combinations = p_coverage_sub.add_parser(
+        "combinations",
+        help="Legal-coordinate combination smoke: greedy cover of every runtime "
+        "coordinate, composed and trained one cell at a time (TODO91 S6)",
+    )
+    p_coverage_combinations.add_argument(
+        "--task",
+        action="append",
+        default=None,
+        help="Task whose declared space joins the cover; repeat to cover "
+        "coordinates no single task reaches (default: iris)",
+    )
+    p_coverage_combinations.add_argument(
+        "--budget",
+        type=int,
+        default=50,
+        help="Maximum cells to train (a full cover is ~15; 0 means uncapped)",
+    )
+    p_coverage_combinations.add_argument("--seed", type=int, default=0)
+    p_coverage_combinations.add_argument(
+        "--param-budget", type=int, default=50_000, help="Per-cell parameter ceiling"
+    )
+    p_coverage_combinations.add_argument("--epochs", type=int, default=1)
+    p_coverage_combinations.add_argument(
+        "--batch-limit", type=int, default=1, help="Batches per epoch (0 means all)"
+    )
+    p_coverage_combinations.add_argument("--device", default="cpu")
+    p_coverage_combinations.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_coverage_combinations.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero on any FAIL row or any uncovered coordinate",
+    )
+
     # Defect command — failure constraint registry (TODO63 Phase 3)
     p_defect = sub.add_parser(
         "defect",

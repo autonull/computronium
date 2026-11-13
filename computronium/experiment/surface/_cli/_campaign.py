@@ -405,6 +405,9 @@ def _cmd_coverage(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
     elif args.coverage_command == "inventory":
         return _coverage_inventory(args)
 
+    elif args.coverage_command == "combinations":
+        return _coverage_combinations(args)
+
     elif args.coverage_command == "report":
         if args.corpus:
             from computronium.experiment.evidence.corpus import (
@@ -511,3 +514,25 @@ def _coverage_inventory(args: argparse.Namespace) -> int:
     print(render_json(report) if args.format == "json" else report.render())
     unknown = report.by_status(InventoryStatus.UNKNOWN)
     return 1 if args.strict and unknown else 0
+
+
+def _coverage_combinations(args: argparse.Namespace) -> int:
+    """Plan, train, and report the legal-coordinate cover (TODO91 S6)."""
+    from computronium.experiment.surface.combinations import (
+        render_json,
+        run_combinations,
+    )
+
+    report = run_combinations(
+        tuple(args.task or ("iris",)),
+        budget=args.budget or None,
+        seed=args.seed,
+        param_budget=args.param_budget,
+        epochs=args.epochs,
+        batch_limit=args.batch_limit,
+        device=args.device,
+    )
+    print(render_json(report) if args.format == "json" else report.render())
+    if not args.strict:
+        return 0
+    return 1 if report.failures or report.uncovered else 0

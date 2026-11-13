@@ -143,8 +143,8 @@ def _compiled_void_constraints() -> tuple[
 
 
 def _void_rejection(
-    indep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
-    dep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    indep: Sequence[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    dep: Sequence[tuple[str, Callable[[tuple[str, ...]], Any]]],
     values: tuple[str, ...],
     task: str,
 ) -> str | None:
@@ -161,8 +161,8 @@ def _void_rejection(
 
 
 def _void_pass(
-    indep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
-    dep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    indep: Sequence[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    dep: Sequence[tuple[str, Callable[[tuple[str, ...]], Any]]],
     values: tuple[str, ...],
     task: str,
 ) -> bool:
@@ -182,123 +182,75 @@ def _void_cache_key(coordinate: Coordinate) -> tuple[str, ...]:
     )
 
 
-def _is_substrate_dynamics_compatible(substrate: str, dynamics: str) -> bool:
-    """Check if a substrate-dynamics combination is valid.
-
-    This is a defense-in-depth check that mirrors the void constraints in
-    CONSTRAINTS_REGISTRY. It catches invalid combinations that might slip
-    through the compiled constraint evaluation.
-
-    Args:
-        substrate: Substrate primitive name
-        dynamics: Dynamics primitive name
-
-    Returns:
-        True if the combination is valid, False otherwise.
-    """
-    # Neuromorphic substrate requires temporal dynamics
-    if substrate == "neuromorphic":
-        if dynamics not in {"spike_integration", "energy_minimization", "diffusion"}:
-            return False
-
-    # Quantum substrate requires compatible dynamics
-    if substrate == "quantum":
-        if dynamics not in {"energy_minimization", "instantaneous", "diffusion"}:
-            return False
-
-    # Ternary substrate incompatible with pc_alm
-    if substrate == "ternary" and dynamics == "pc_alm":
-        return False
-
-    return True
-
-
-def _is_geometry_dynamics_compatible(geometry: str, dynamics: str) -> bool:
-    """Check if a geometry-dynamics combination is valid.
-
-    Mirrors void constraints: recurrent geometry requires settling dynamics,
-    non-layered geometries require instantaneous dynamics.
-    """
-    # Recurrent geometry requires settling dynamics
-    if geometry in {"recurrent"} and dynamics not in {
-        "energy_minimization",
-        "predictive_settling",
-        "error_predictive_coding",
-        "pc_alm",
-        "diffusion",
-        "instantaneous",
-    }:
-        return False
-
-    # Non-layered geometries require instantaneous dynamics
-    if (
-        geometry
-        in {
-            "attention",
-            "spatial_lattice",
-            "graph",
-            "conv",
-            "nca",
-            "ntm",
-            "causal_transformer",
-            "tile",
-            "tile_mesh",
-        }
-        and dynamics != "instantaneous"
-    ):
-        return False
-
-    return True
-
-
 def _is_geometry_task_compatible(
     geometry: str, task_shape: TaskShape, task_id: str | None = None
 ) -> bool:
-    """Check if a geometry is compatible with a task's input shape.
+    """The declared geometry × task-shape rule (one table, four branches).
 
-    Some geometries require specific input structures (e.g., NTM needs 1D,
-    Graph needs graph structure, Tile needs specific spatial dims).
+    Measured 2026-11-13 (TODO91 S6): a declared-void-passing cell can still die
+    on the task's own shape. This function is the single place that rule lives,
+    so the planner refuses the cell with a named reason instead of training a
+    defect.
+
+    Args:
+        geometry: Runtime geometry coordinate.
+        task_shape: The task's declared input shape and output width.
+        task_id: Task identity, for the domain-exclusive branches.
+
+    Returns:
+        Whether the geometry can consume this task's input and readout layout.
     """
-    # Graph domain tasks hand the graph trainer an ``edge_index``/``batch`` on
-    # every forward. A node-mode geometry (feedforward, recurrent, ...) takes
-    # only ``x`` and dies on the extra arguments, so the graph domain is
-    # exclusive: graph tasks train on graph geometry, and only there.
-    if task_id is not None:
-        from computronium.experiment.registry.task_registry import get_task_registry
+    rank = len(task_shape.input_shape or ())
+    domain = _task_domain(task_id)
 
-        registry = get_task_registry()
-        task_spec = registry.get(task_id)
-        if task_spec is not None and task_spec.domain.value == "graph":
-            return geometry == "graph"
+    # A graph task's sample is a node set plus edge_index; only the graph
+    # geometry consumes it. A non-graph task supplies no edge_index, so the
+    # graph geometry has nothing to route.
+    if domain == "graph" or geometry == "graph":
+        return domain == "graph" and geometry == "graph"
 
-    # Graph geometry requires graph structure (edge_index) - only for graph tasks
-    if geometry == "graph":
-        return False  # Non-graph tasks don't provide graph structure
+    # conv unfolds a 2-D/3-D grid. A flat feature vector is viewed as one
+    # sample per element (measured: cora's 2708x1433 input died in unfold).
+    if geometry == "conv":
+        return rank >= 3
 
-    # Causal transformer expects 1D sequence for LM mode, but supports vision mode
-    # with patch embedding for 2D/3D inputs (images)
+    # The causal transformer's token mode shifts targets per token. A flat
+    # classifier input is read as a token sequence whose labels are per
+    # sample, which the settle nudge cannot broadcast (measured: iris refused
+    # with negative class values). Vision patch embedding is the rank >= 3
+    # branch; a language task declares per-token targets.
     if geometry == "causal_transformer":
-        return True  # Patch embedding configuration determines actual compatibility
+        return rank >= 3 or domain == "language"
 
-    # All other geometries can handle vision input (they flatten or process spatially)
     return True
+
+
+def _task_domain(task_id: str | None) -> str | None:
+    """A task's declared domain, or ``None`` when the id is unknown."""
+    if task_id is None:
+        return None
+    from computronium.experiment.registry.task_registry import get_task_registry
+
+    task_spec = get_task_registry().get(task_id)
+    return None if task_spec is None else task_spec.domain.value
 
 
 def _structural_rejection(
     coordinate: Coordinate,
     task: str,
-    indep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
-    dep: list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    indep: Sequence[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    dep: Sequence[tuple[str, Callable[[tuple[str, ...]], Any]]],
     *,
     void_cache: VoidCache | None,
     rejections: Counter[str] | None,
 ) -> str | None:
     """Why the six structural axes refuse this coordinate, else ``None``.
 
-    Every cause is counted: the void cache and the declared constraints are the
-    fast paths, and the two explicit compatibility pairs are defense-in-depth
-    for void constraints that may not be evaluated correctly. One function so
-    the reasons and the filters cannot drift apart.
+    ``(substrate, geometry, dynamics, plasticity, credit, update, task)``.
+    The declared constraints are the only source: the two defense-in-depth
+    copies that used to live here (substrate × dynamics, geometry × dynamics)
+    were deleted in TODO91 S6, because they disagreed with the registry and
+    silently dropped cells the registry admitted.
     """
     cache_hit = void_cache is not None and void_cache.is_known_void(coordinate)
     reason = "void cache" if cache_hit else None
@@ -312,14 +264,6 @@ def _structural_rejection(
             coordinate.update,
         )
         reason = _void_rejection(indep, dep, values, task)
-    if reason is None and not _is_substrate_dynamics_compatible(
-        coordinate.substrate, coordinate.dynamics
-    ):
-        reason = "substrate x dynamics"
-    if reason is None and not _is_geometry_dynamics_compatible(
-        coordinate.geometry, coordinate.dynamics
-    ):
-        reason = "geometry x dynamics"
     if reason is None:
         return None
     if void_cache is not None:

@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING, Any, Final
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+from computronium.core.plasticity import READOUT_REPLACING_PLASTICITIES
 from computronium.experiment.execution.stage import STAGE_SPECS as EXEC_STAGE_SPECS
 from computronium.experiment.legality.dsl import (
     and_,
     const,
     eq,
     ge,
-    gt,
     has_key,
     implies,
     in_,
@@ -68,7 +68,11 @@ from computronium.experiment.schema.registries import (
     register_prior,
     register_stage,
 )
-from computronium.ontology.system import NCA_CELL_MODE_CREDITS
+from computronium.ontology.system import (
+    NCA_CELL_MODE_CREDITS,
+    NONLAYERED_GEOMETRIES,
+    SETTLING_DYNAMICS,
+)
 
 # =============================================================================
 # AXIS PRIMITIVES — Seed AXES_REGISTRIES with AxisSpec for each primitive
@@ -1065,54 +1069,23 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
-    # Geometry-Dynamics: non-layered geometries cannot host settling dynamics
+    # Geometry-Dynamics: non-layered geometries cannot host settling dynamics.
+    # One table: ``NONLAYERED_GEOMETRIES``/``SETTLING_DYNAMICS`` are the same
+    # constants ``SystemConfig.validate`` enforces, so a declared-legal cell
+    # cannot be refused at compose time (TODO91 S6 measured three that were).
     ConstraintSpec(
         name="nonlayered_geometry_dynamics",
         kind=ConstraintKind.VOID,
-        description="Non-layered geometries (attention, spatial_lattice, graph, conv, nca, ntm, causal_transformer) require instantaneous dynamics",
-        predicate=or_(
-            eq(var("dynamics"), const("instantaneous")),
-            not_(
-                in_(
-                    var("geometry"),
-                    const([
-                        "attention",
-                        "spatial_lattice",
-                        "graph",
-                        "conv",
-                        "nca",
-                        "ntm",
-                        "causal_transformer",
-                    ]),
-                )
-            ),
+        description=(
+            "Non-layered geometries ("
+            + ", ".join(sorted(NONLAYERED_GEOMETRIES))
+            + ") refuse settling dynamics ("
+            + ", ".join(sorted(SETTLING_DYNAMICS))
+            + ")"
         ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
-    ),
-    # Geometry-Dynamics: tile/tile_mesh requires compatible dynamics
-    ConstraintSpec(
-        name="tile_mesh_dynamics",
-        kind=ConstraintKind.VOID,
-        description="Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics",
         predicate=or_(
-            not_(in_(var("geometry"), const(["tile_mesh", "tile"]))),
-            in_(
-                var("dynamics"),
-                const(["energy_minimization", "pc_alm", "instantaneous"]),
-            ),
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
-    ),
-    # Geometry-Dynamics: NCA/NTM requires instantaneous dynamics
-    ConstraintSpec(
-        name="nca_ntm_geometry",
-        kind=ConstraintKind.VOID,
-        description="NCA/NTM geometries require instantaneous dynamics",
-        predicate=or_(
-            eq(var("dynamics"), const("instantaneous")),
-            not_(in_(var("geometry"), const(["nca", "ntm"]))),
+            not_in(var("dynamics"), const(sorted(SETTLING_DYNAMICS))),
+            not_(in_(var("geometry"), const(sorted(NONLAYERED_GEOMETRIES)))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1171,6 +1144,44 @@ CONSTRAINTS = [
         predicate=not_(
             and_(
                 eq(var("dynamics"), const("diffusion")),
+                in_(var("credit"), const(["gradient", "backprop"])),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Dynamics-Credit: diffusion's integrator leaves no layered chain for the
+    # FA contract to span, so RandomProjectionsCredit raises (measured
+    # 2026-11-13, TODO91 S6: recurrent + diffusion + random_projections ->
+    # "layered FA contract would return all-zero pseudo-gradient").
+    ConstraintSpec(
+        name="diffusion_dynamics_random_projections",
+        kind=ConstraintKind.VOID,
+        description="Diffusion dynamics leave no layered FA chain; random-projections credit cannot chain",
+        predicate=not_(
+            and_(
+                eq(var("dynamics"), const("diffusion")),
+                eq(var("credit"), const("random_projections")),
+            )
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Plasticity-Credit: a readout-replacing ψ law computes the logits itself,
+    # so the geometry's output projection never enters the loss graph and the
+    # gradient credit's reachability contract refuses the cell (measured
+    # 2026-11-13, TODO91 S6).
+    ConstraintSpec(
+        name="readout_replacing_plasticity_gradient_credit",
+        kind=ConstraintKind.VOID,
+        description=(
+            "Readout-replacing plasticity ("
+            + ", ".join(READOUT_REPLACING_PLASTICITIES)
+            + ") leaves the geometry readout unused, so gradient credit cannot reach it"
+        ),
+        predicate=not_(
+            and_(
+                in_(var("plasticity"), const(list(READOUT_REPLACING_PLASTICITIES))),
                 in_(var("credit"), const(["gradient", "backprop"])),
             )
         ),
@@ -1284,20 +1295,6 @@ CONSTRAINTS = [
             origin="DECLARED",
         )
         for credit in NCA_CELL_MODE_CREDITS
-    ),
-    # Geometry-Dynamics: tile_mesh with pc_alm dynamics has width mismatch
-    ConstraintSpec(
-        name="tile_mesh_pc_alm_dynamics",
-        kind=ConstraintKind.VOID,
-        description="tile_mesh geometry with pc_alm dynamics has layer width mismatch",
-        predicate=not_(
-            and_(
-                eq(var("geometry"), const("tile_mesh")),
-                eq(var("dynamics"), const("pc_alm")),
-            )
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
     ),
     # Geometry-Dynamics-Credit: recurrent geometry with instantaneous dynamics
     # fails gradient credit because instantaneous pass doesn't settle recurrent
@@ -1602,29 +1599,6 @@ CONSTRAINTS = [
         predicate=le(var("params.max_steps"), const(1000)),
         proof_kind=ProofKind.RESOURCE,
         origin="DECLARED",
-    ),
-    # Task fence constraints (from TASK_COMPAT fences)
-    ConstraintSpec(
-        name="classification_requires_classifier_head",
-        kind=ConstraintKind.VOID,
-        description="Classification tasks require output_dim matching num_classes",
-        predicate=or_(
-            not_(eq(var("task"), const("classification"))),
-            gt(var("output_dim"), const(1)),
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="TASK_FENCE",
-    ),
-    ConstraintSpec(
-        name="language_modeling_requires_causal",
-        kind=ConstraintKind.VOID,
-        description="Language modeling requires causal attention or recurrent geometry",
-        predicate=or_(
-            not_(eq(var("task"), const("language_modeling"))),
-            in_(var("geometry"), const(["causal_transformer", "recurrent"])),
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="TASK_FENCE",
     ),
     # Hard constraints (enforced at S4/S6 — resource/budget limits)
     ConstraintSpec(

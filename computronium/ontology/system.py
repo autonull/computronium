@@ -54,8 +54,36 @@ from computronium.state import PlasticityConfig
 # its rows (TODO90 B9). Adding a credit here changes both at once.
 NCA_CELL_MODE_CREDITS: Final[tuple[str, ...]] = ("homeostatic", "pc_alm")
 
+# Geometries with no layer stack for the settle kernel to iterate, so every
+# settling dynamic is refused at compose time ("Energy-based settling requires
+# a layered geometry", measured 2026-11-13 TODO91 S6). This set is the one
+# source: ``SystemConfig.validate`` refuses these coordinates and the
+# constraint registry projects the same names into its rows. ``graph`` is
+# deliberately absent — measured, graph + energy_minimization settles.
+NONLAYERED_GEOMETRIES: Final[frozenset[str]] = frozenset({
+    "attention",
+    "spatial_lattice",
+    "nca",
+    "ntm",
+    "tile",
+    "tile_mesh",
+    "conv",
+    "causal_transformer",
+})
+
+# Dynamics that need a layer stack to settle.
+SETTLING_DYNAMICS: Final[frozenset[str]] = frozenset({
+    "energy_minimization",
+    "predictive_settling",
+    "error_predictive_coding",
+    "pc_alm",
+    "diffusion",
+    "spike_integration",
+    "lazy",
+})
+
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Collection, Iterable, Iterator
 
     from computronium.acceleration.kernel_backend import KernelBackend
 
@@ -427,8 +455,6 @@ class SystemConfig:
         # Geometry-Dynamics compatibility
         self._validate_recurrent_geometry_dynamics()
         self._validate_nonlayered_geometry_dynamics()
-        self._validate_tile_mesh_dynamics()
-        self._validate_nca_ntm_geometry()
         self._validate_diffusion_dynamics_credit()
         self._validate_diffusion_dynamics_geometry()
         self._validate_spike_integration_credit()
@@ -436,7 +462,6 @@ class SystemConfig:
         self._validate_pc_alm_dynamics()
         self._validate_residual_connections()
         self._validate_nca_cell_mode_credits()
-        self._validate_tile_mesh_pc_alm_dynamics()
 
         # Geometry-Plasticity compatibility
         self._validate_nca_ntm_fast_weight_plasticity()
@@ -494,7 +519,7 @@ class SystemConfig:
     def _forbid_when(
         self,
         condition: bool,
-        forbidden_values: set[str],
+        forbidden_values: Collection[str],
         axis_name: str,
         actual_value: str,
         context: str = "",
@@ -563,49 +588,12 @@ class SystemConfig:
 
     def _validate_nonlayered_geometry_dynamics(self) -> None:
         """Non-layered geometries cannot host settling dynamics."""
-        nonlayered = {
-            "attention",
-            "spatial_lattice",
-            "nca",
-            "ntm",
-            "tile",
-            "tile_mesh",
-        }
-        settling_dynamics = {
-            "energy_minimization",
-            "predictive_settling",
-            "error_predictive_coding",
-            "pc_alm",
-            "diffusion",
-            "spike_integration",
-            "lazy",
-        }
         self._forbid_when(
-            condition=self.geometry.topology_type in nonlayered,
-            forbidden_values=settling_dynamics,
+            condition=self.geometry.topology_type in NONLAYERED_GEOMETRIES,
+            forbidden_values=SETTLING_DYNAMICS,
             axis_name="dynamics.dynamics_type",
             actual_value=self.dynamics.dynamics_type,
             context=f"{self.geometry.topology_type!r} geometry cannot host settling dynamics",
-        )
-
-    def _validate_tile_mesh_dynamics(self) -> None:
-        """Tile mesh geometry requires compatible dynamics."""
-        self._require_when(
-            condition=self.geometry.topology_type in {"tile_mesh", "tile"},
-            allowed_values={"energy_minimization", "pc_alm", "instantaneous"},
-            axis_name="dynamics.dynamics_type",
-            actual_value=self.dynamics.dynamics_type,
-            context=f"tile mesh geometry (topology_type={self.geometry.topology_type!r})",
-        )
-
-    def _validate_nca_ntm_geometry(self) -> None:
-        """NCA/NTM geometries require instantaneous dynamics."""
-        self._require_when(
-            condition=self.geometry.topology_type in {"nca", "ntm"},
-            allowed_values={"instantaneous"},
-            axis_name="dynamics.dynamics_type",
-            actual_value=self.dynamics.dynamics_type,
-            context=f"{self.geometry.topology_type.upper()} geometry",
         )
 
     def _validate_diffusion_dynamics_credit(self) -> None:
@@ -698,16 +686,6 @@ class SystemConfig:
             raise ValueError(
                 "NCA geometry with instantaneous dynamics incompatible with "
                 f"{self.credit.credit_type} credit (cell-mode activations)"
-            )
-
-    def _validate_tile_mesh_pc_alm_dynamics(self) -> None:
-        """tile_mesh geometry with pc_alm dynamics has layer width mismatch."""
-        if (
-            self.geometry.topology_type == "tile_mesh"
-            and self.dynamics.dynamics_type == "pc_alm"
-        ):
-            raise ValueError(
-                "tile_mesh geometry with pc_alm dynamics has layer width mismatch"
             )
 
     def _validate_nca_ntm_fast_weight_plasticity(self) -> None:

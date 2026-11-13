@@ -201,7 +201,7 @@ class ContinualJointSystem(nn.Module):
             if not hasattr(self, "_fast_weight_proj"):
                 hidden_dim = last_hidden.shape[-1]
                 self._fast_weight_proj = nn.Linear(
-                    plasticity.fast_weights_dim, hidden_dim, bias=False
+                    plasticity.fast_weight_dim, hidden_dim, bias=False
                 ).to(x.device)
                 # Initialize with small weights
                 nn.init.normal_(self._fast_weight_proj.weight, std=0.01)
