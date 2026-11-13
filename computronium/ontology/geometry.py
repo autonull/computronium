@@ -1451,7 +1451,7 @@ def _make_recurrent_geometry(config: GeometryConfig) -> RecurrentGeometry:
     )
 
 
-@geometry_backend("recurrent", "recurrent_attractor", ctor=_make_recurrent_geometry)
+@geometry_backend("recurrent", ctor=_make_recurrent_geometry)
 class RecurrentGeometry(nn.Module):
     """Recurrent attractor topology (Hopfield, EqProp MLPs).
 

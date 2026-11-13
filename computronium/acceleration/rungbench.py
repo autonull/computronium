@@ -52,8 +52,8 @@ _RUNG_PACKAGES: tuple[tuple[str, str], ...] = (
         "computronium.primitives.state_dynamics.energy_minimization",
     ),
     (
-        "primitive.state_dynamics.pc_alm_settling",
-        "computronium.primitives.state_dynamics.pc_alm_settling",
+        "primitive.state_dynamics.pc_alm",
+        "computronium.primitives.state_dynamics.pc_alm",
     ),
     (
         "primitive.state_dynamics.predictive_settling",

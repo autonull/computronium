@@ -5,7 +5,7 @@ registry keys, and self-documentation fields.
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 Backend = Literal[
     "reference",
@@ -46,6 +46,47 @@ Axis = Literal[
 ]
 
 
+#: The runtime axis segment each spec axis names (TODO91 S1b).
+#:
+#: A spec ID *is* its runtime coordinate: ``primitive.<axis>.<name>`` selects
+#: ``<name>`` on ``<axis>``. Three axes spell their segment differently from the
+#: spec's historical axis label; the rest are identity, which is why the map is
+#: two entries and a fallthrough rather than six rows.
+AXIS_SEGMENT: Final[dict[str, str]] = {
+    "state_dynamics": "dynamics",
+    "credit_assignment": "credit",
+    "parameter_update": "update",
+}
+
+
+def axis_segment(axis: str) -> str:
+    """The runtime axis segment a spec axis names.
+
+    Args:
+        axis: A spec axis label, e.g. ``"state_dynamics"``.
+
+    Returns:
+        The runtime segment, e.g. ``"dynamics"``.
+    """
+    return AXIS_SEGMENT.get(axis, axis)
+
+
+def coordinate_of_id(spec_id: str) -> tuple[str, str] | None:
+    """The ``(runtime axis, runtime coordinate)`` a primitive spec ID names.
+
+    Args:
+        spec_id: A primitive spec ID of the form
+            ``primitive.<axis>.<name>``.
+
+    Returns:
+        The pair, or ``None`` when the ID has another shape.
+    """
+    parts = spec_id.split(".")
+    if len(parts) != 3 or parts[0] != "primitive":
+        return None
+    return axis_segment(parts[1]), parts[2]
+
+
 @dataclass(frozen=True, slots=True)
 class ParityTolerance:
     """Tolerance thresholds for parity comparison between reference and kernel outputs."""
@@ -64,7 +105,7 @@ class ImplementationSpec:
         primitive.state_dynamics.predictive_settling
         primitive.credit_assignment.random_projections
         primitive.parameter_update.muon
-        primitive.plasticity.fast_weight
+        primitive.plasticity.fast_weights
         algorithm.backprop
         algorithm.fa
         algorithm.pcalm

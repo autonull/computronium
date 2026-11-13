@@ -438,7 +438,7 @@ def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:  # ruff: ignore[too-
             "digital",
             "memristive",
             "neuromorphic",
-            "photonic",
+            "optical",
             "complex",
             "analog",
             "quantum",
@@ -453,7 +453,7 @@ def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:  # ruff: ignore[too-
     # Generate coordinates for all combinations
     coordinates = []
     neuromorphic_plasticity = {"null", "routing"}
-    no_substrate_coupled = {"photonic", "quantum"}
+    no_substrate_coupled = {"optical", "quantum"}
     for substrate in substrates:
         for plasticity in plasticity_types:
             # Skip invalid combinations

@@ -220,7 +220,7 @@ def _is_geometry_dynamics_compatible(geometry: str, dynamics: str) -> bool:
     non-layered geometries require instantaneous dynamics.
     """
     # Recurrent geometry requires settling dynamics
-    if geometry in {"recurrent", "recurrent_attractor"} and dynamics not in {
+    if geometry in {"recurrent"} and dynamics not in {
         "energy_minimization",
         "predictive_settling",
         "error_predictive_coding",

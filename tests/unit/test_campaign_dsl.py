@@ -40,7 +40,7 @@ def test_recurrent_geometry_dropped_for_instantaneous_gradient() -> None:
         factors={
             "geometry": {
                 "name": "geometry",
-                "values": ["recurrent", "recurrent_attractor", "mlp"],
+                "values": ["recurrent", "mlp"],
             },
             "dynamics": {"name": "dynamics", "values": ["instantaneous"]},
             "credit": {"name": "credit", "values": ["gradient"]},
@@ -54,13 +54,13 @@ def test_recurrent_geometry_survives_temporal_dynamics() -> None:
         factors={
             "geometry": {
                 "name": "geometry",
-                "values": ["recurrent", "recurrent_attractor", "mlp"],
+                "values": ["recurrent", "mlp"],
             },
             "dynamics": {"name": "dynamics", "values": ["predictive_settling"]},
             "credit": {"name": "credit", "values": ["gradient"]},
         }
     )
-    assert _geometry_primitives(spec) == ["recurrent", "recurrent_attractor", "mlp"]
+    assert _geometry_primitives(spec) == ["recurrent", "mlp"]
 
 
 def test_axis_selection_order_is_stable() -> None:

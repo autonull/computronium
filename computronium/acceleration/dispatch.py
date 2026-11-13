@@ -238,7 +238,7 @@ def _availability_family_from_spec(spec: ImplementationSpec) -> str | None:
         "pc": "pc",
         "tile": "tile",
         "hebbian": "hebbian",
-        "fast_weight": "hebbian",  # fast_weight uses hebbian kernels
+        "fast_weights": "hebbian",  # fast_weights uses hebbian kernels
         "routing": "hebbian",  # routing uses hebbian kernels
         "ff": "ff",
         "pepita": "ff",  # pepita uses ff kernels
@@ -250,7 +250,7 @@ def _availability_family_from_spec(spec: ImplementationSpec) -> str | None:
         "temporal_trace": "hebbian",
         "target_inversion": "tp",
         "thermodynamic_contrast": "pc",
-        "reverse_mode": "fa",  # backprop uses fa kernels
+        "gradient": "fa",  # backprop uses gradient (reverse-mode) kernels
         "complex": "complex_substrate",
     }
     return name_to_family.get(algo_name)

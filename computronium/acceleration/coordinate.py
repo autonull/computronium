@@ -71,17 +71,29 @@ def _snake(name: str) -> str:
 
 
 def _plasticity_value(system: System) -> str:
-    """The plasticity slot, from the class that implements it.
+    """The plasticity slot: the coordinate the composed law names.
 
-    ``RoutingPlasticity`` reads ``routing`` and ``FastWeightPlasticity`` reads
-    ``fast_weight``, which are the short names the primitive registry gives them,
-    so a spec and the system it composes name one coordinate with one vocabulary.
+    Read from the config discriminator where the law has one. The two ψ laws
+    carry their own config dataclasses (no ``plasticity_type`` field), so their
+    coordinates are declared here — a two-row exception, not a translation
+    table: every other value comes from the law's own config.
     """
     plasticity = getattr(system, "plasticity", None)
     if plasticity is None:
         return NULL_PLASTICITY
-    name = type(plasticity).__name__
-    return _snake(name.removesuffix("Plasticity"))
+    config = getattr(plasticity, "config", None)
+    declared = getattr(config, "plasticity_type", None)
+    if declared:
+        return declared
+    name = type(plasticity).__name__.removesuffix("Plasticity")
+    return _PSI_COORDINATES.get(name, _snake(name))
+
+
+#: The ψ laws whose config dataclass carries no ``plasticity_type``.
+_PSI_COORDINATES: Final[dict[str, str]] = {
+    "FastWeight": "fast_weights",
+    "ConflictAdaptivePsi": "conflict_adaptive",
+}
 
 
 def key_of(system: System) -> DispatchKey:

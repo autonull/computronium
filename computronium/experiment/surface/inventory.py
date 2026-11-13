@@ -20,9 +20,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
-from computronium.experiment.schema.axis import StructuralAxis
-
 __all__ = [
+    "NO_COORDINATE",
     "DeclaredClaim",
     "InventoryKind",
     "InventoryReport",
@@ -226,6 +225,25 @@ DECLARED_CLAIMS: Final[tuple[DeclaredClaim, ...]] = (
 )
 
 
+# TODO91 S1b: the only two mechanisms that ship as primitive specs yet have no
+# composable axis coordinate. Adding a coordinate for either would create an
+# unmeasured breadth row, so they are declared here — beside the join that reads
+# them — rather than translated by an alias table.
+NO_COORDINATE: Final[dict[str, str]] = {
+    "primitive.substrate.noisy": (
+        "the digital substrate configured with noise; reachable as "
+        "SubstrateConfig.digital(noise_level=…), which the substrate axis reads "
+        "through `digital`"
+    ),
+    "primitive.plasticity.closed_form_ridge": (
+        "no axis coordinate: reachable only as "
+        "core.plasticity.closed_form_ridge.create_closed_form_ridge_plasticity, "
+        "which method cards call; the axis composes plasticity through "
+        "core.joint.transition.PlasticityConfig"
+    ),
+}
+
+
 @dataclass(frozen=True, slots=True)
 class InventoryReport:
     """The joined surface rows."""
@@ -360,27 +378,30 @@ def _algorithm_rows(root: Path) -> list[InventoryRow]:
 
 
 def _primitive_rows(root: Path) -> list[InventoryRow]:
+    """One row per primitive spec; the spec ID names its runtime coordinate.
+
+    A coordinate with no spec row is a hole the bijection lock
+    (``test_primitives_and_runtime_coordinates_are_a_bijection``) reports, not a
+    row this join invents — the join reads what exists, it does not fill gaps.
+    """
     from computronium.acceleration.registry import all_specs
+    from computronium.acceleration.spec import coordinate_of_id
     from computronium.experiment.schema.axis import AXES_REGISTRIES
-    from computronium.experiment.schema.spec_aliases import (
-        NOT_A_PRIMITIVE,
-        SPEC_AXIS,
-        runtime_name_for,
-    )
 
     rows: list[InventoryRow] = []
-    targeted: dict[str, set[str]] = {axis.value: set() for axis in StructuralAxis}
     for spec in sorted(all_specs(), key=lambda item: item.id):
         if spec.kind != "primitive" or spec.axis is None:
             continue
-        axis_value = SPEC_AXIS[spec.axis].value
-        runtime = runtime_name_for(spec)
+        parsed = coordinate_of_id(spec.id)
+        if parsed is None:
+            msg = f"primitive spec {spec.id!r} is not primitive.<axis>.<name>"
+            raise ValueError(msg)
+        axis_value, runtime = parsed
         generated = (
             f"{GENERATED_TESTS}/test_primitive_"
             f"{spec.id.removeprefix('primitive.').replace('.', '_')}_invariants.py"
         )
-        if runtime is None:
-            reason = NOT_A_PRIMITIVE.get(spec.id)
+        if runtime not in AXES_REGISTRIES[axis_value]:
             rows.append(
                 _row(
                     row_id=spec.id,
@@ -388,12 +409,11 @@ def _primitive_rows(root: Path) -> list[InventoryRow]:
                     runtime_name=None,
                     smoke_path=None,
                     root=root,
-                    reason=reason,
+                    reason=NO_COORDINATE.get(spec.id),
                     axis=axis_value,
                 )
             )
             continue
-        targeted[axis_value].add(runtime)
         rows.append(
             _row(
                 row_id=spec.id,
@@ -406,25 +426,6 @@ def _primitive_rows(root: Path) -> list[InventoryRow]:
                 axis=axis_value,
             )
         )
-
-    for axis, registry in AXES_REGISTRIES.items():
-        for runtime in sorted(registry.keys()):
-            if runtime in targeted[axis]:
-                continue
-            rows.append(
-                _row(
-                    row_id=f"primitive.{axis}.{runtime}",
-                    kind=InventoryKind.PRIMITIVE,
-                    runtime_name=runtime,
-                    smoke_path=COMPLETENESS_LOCK,
-                    root=root,
-                    reason=(
-                        "runtime-only coordinate; no implementation spec row "
-                        "names it (completeness lock pins its config mapping)"
-                    ),
-                    axis=axis,
-                )
-            )
     return rows
 
 

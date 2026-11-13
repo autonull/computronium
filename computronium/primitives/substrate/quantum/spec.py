@@ -9,8 +9,12 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Quantum",
     axis="substrate",
-    reference_entrypoint=("computronium.primitives.substrate.quantum.reference.step"),
-    kernel_entrypoint=("computronium.primitives.substrate.quantum.kernel.step"),
+    reference_entrypoint=(
+        "computronium.primitives.substrate.quantum.reference.make_substrate"
+    ),
+    kernel_entrypoint=(
+        "computronium.primitives.substrate.quantum.kernel.make_substrate"
+    ),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
     status="reference_only",

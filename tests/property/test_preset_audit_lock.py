@@ -18,98 +18,45 @@ from computronium.algorithms import _ALGORITHMS
 if TYPE_CHECKING:
     from computronium.ontology import System
 
-# Mapping from config values to primitive names (from test_registry_completeness_lock.py)
-_TOPOLOGY_TO_PRIMITIVE = {
-    "feedforward": "primitive.geometry.feedforward_dag",
-    "causal_transformer": "primitive.geometry.feedforward_dag",
-    "recurrent": "primitive.geometry.recurrent_attractor",
-    "tile_mesh": "primitive.geometry.tile_mesh",
-    "conv": "primitive.geometry.feedforward_dag",
-    "graph": "primitive.geometry.fabric_pc",
-    "attention": "primitive.geometry.feedforward_dag",
-    "spatial_lattice": "primitive.geometry.spatial_lattice_3d",
-    "nca": "primitive.geometry.nca",
-    "ntm": "primitive.geometry.ntm",
+# A spec ID *is* its runtime coordinate, so the expected primitive name is
+# derived rather than translated (TODO91 S1b).
+_AXIS_SLUG = {
+    "geometry": "geometry",
+    "state_dynamics": "state_dynamics",
+    "credit_assignment": "credit_assignment",
+    "parameter_update": "parameter_update",
+    "plasticity": "plasticity",
 }
 
-_DYNAMICS_TO_PRIMITIVE = {
-    "instantaneous": "primitive.state_dynamics.instantaneous_pass",
-    "energy_minimization": "primitive.state_dynamics.energy_minimization",
-    "predictive_settling": "primitive.state_dynamics.predictive_settling",
-    "spike_integration": "primitive.state_dynamics.spike_integration",
-    "diffusion": "primitive.state_dynamics.diffusion",
-    "pc_alm": "primitive.state_dynamics.pc_alm_settling",
-    "lazy": "primitive.state_dynamics.lazy_state_dynamics",
-    "error_predictive_coding": "primitive.state_dynamics.error_predictive_coding",
-}
 
-_CREDIT_TO_PRIMITIVE = {
-    "gradient": "primitive.credit_assignment.reverse_mode",
-    "thermodynamic_contrast": "primitive.credit_assignment.thermodynamic_contrast",
-    "random_projections": "primitive.credit_assignment.random_projections",
-    "local_goodness": "primitive.credit_assignment.local_goodness",
-    "temporal_trace": "primitive.credit_assignment.temporal_trace",
-    "target_inversion": "primitive.credit_assignment.target_inversion",
-    "homeostatic": "primitive.credit_assignment.homeostatic",
-    "pepita": "primitive.credit_assignment.pepita",
-    "pc_alm": "primitive.credit_assignment.pc_alm",
-    "local_contrastive": "primitive.credit_assignment.local_goodness",
-}
+def _primitive_for(axis: str, coordinate: str) -> str:
+    """The same-named primitive spec a dispatch coordinate names."""
+    return f"primitive.{_AXIS_SLUG[axis]}.{coordinate}"
 
-_UPDATE_TO_PRIMITIVE = {
-    "euclidean": "primitive.parameter_update.euclidean",
-    "riemannian_orthogonal": "primitive.parameter_update.muon",
-    "muon": "primitive.parameter_update.muon",
-    "spectral_constrained": "primitive.parameter_update.spectral_constrained",
-    "mean_norm": "primitive.parameter_update.euclidean",
-    "elastic_consolidation": "primitive.parameter_update.elastic_consolidation",
-    "natural_gradient": "primitive.parameter_update.natural_gradient",
-    "adam": "primitive.parameter_update.euclidean",
-    "ortho_adam": "primitive.parameter_update.muon",
-    "unit_rms": "primitive.parameter_update.euclidean",
-    "local_adam": "primitive.parameter_update.euclidean",
-    "lion": "primitive.parameter_update.euclidean",
-    "role_split": "primitive.parameter_update.role_split",
-}
 
-_PLASTICITY_TO_PRIMITIVE = {
-    "null": "primitive.plasticity.null",
-    "routing": "primitive.plasticity.routing",
-    "fast_weight": "primitive.plasticity.fast_weight",
-    "substrate_coupled": "primitive.plasticity.substrate_coupled",
-    "rule_state": "primitive.plasticity.rule_state",
-    "temporal_psi": "primitive.plasticity.temporal_psi",
-    "conflict_adaptive": "primitive.plasticity.temporal_psi",
-}
+def _axis_of_primitive(spec_id: str) -> str | None:
+    """The dispatch axis a primitive spec ID names, or None if it names none.
 
-_AXIS_TO_PRIMITIVE_MAP = {
-    "geometry": _TOPOLOGY_TO_PRIMITIVE,
-    "state_dynamics": _DYNAMICS_TO_PRIMITIVE,
-    "credit_assignment": _CREDIT_TO_PRIMITIVE,
-    "parameter_update": _UPDATE_TO_PRIMITIVE,
-    "plasticity": _PLASTICITY_TO_PRIMITIVE,
-}
-
-_PRIMITIVE_TO_AXIS = {
-    **dict.fromkeys(_TOPOLOGY_TO_PRIMITIVE.values(), "geometry"),
-    **dict.fromkeys(_DYNAMICS_TO_PRIMITIVE.values(), "state_dynamics"),
-    **dict.fromkeys(_CREDIT_TO_PRIMITIVE.values(), "credit_assignment"),
-    **dict.fromkeys(_UPDATE_TO_PRIMITIVE.values(), "parameter_update"),
-    **dict.fromkeys(_PLASTICITY_TO_PRIMITIVE.values(), "plasticity"),
-}
+    A spec ID's middle segment is the spec's own axis label, which is the
+    dispatch axis name for the five composed axes.
+    """
+    parts = spec_id.split(".")
+    if len(parts) != 3 or parts[0] != "primitive":
+        return None
+    return parts[1] if parts[1] in DISPATCH_AXES else None
 
 
 def _map_coordinate_to_primitives(
     coordinate: tuple[str, str, str, str, str],
 ) -> dict[str, str]:
-    """Map a dispatch coordinate to the expected primitive names by axis."""
+    """Map a dispatch coordinate to the primitive spec each axis names."""
     topology, dynamics, credit, update, plasticity = coordinate
     return {
-        "geometry": _TOPOLOGY_TO_PRIMITIVE[topology],
-        "state_dynamics": _DYNAMICS_TO_PRIMITIVE[dynamics],
-        "credit_assignment": _CREDIT_TO_PRIMITIVE[credit],
-        "parameter_update": _UPDATE_TO_PRIMITIVE[update],
-        "plasticity": _PLASTICITY_TO_PRIMITIVE[plasticity],
+        "geometry": _primitive_for("geometry", topology),
+        "state_dynamics": _primitive_for("state_dynamics", dynamics),
+        "credit_assignment": _primitive_for("credit_assignment", credit),
+        "parameter_update": _primitive_for("parameter_update", update),
+        "plasticity": _primitive_for("plasticity", plasticity),
     }
 
 
@@ -143,7 +90,7 @@ class TestPresetAuditLock:
 
         # Check each declared primitive matches the factory's composition for its axis
         for declared_primitive in declared:
-            axis = _PRIMITIVE_TO_AXIS.get(declared_primitive)
+            axis = _axis_of_primitive(declared_primitive)
             if axis is None:
                 pytest.fail(
                     f"{name}: unknown primitive {declared_primitive!r} in uses_primitives"
@@ -158,7 +105,8 @@ class TestPresetAuditLock:
         # The spec should not declare more than one primitive per axis
         seen_axes = set()
         for declared_primitive in declared:
-            axis = _PRIMITIVE_TO_AXIS[declared_primitive]
+            axis = _axis_of_primitive(declared_primitive)
+            assert axis is not None, declared_primitive
             assert axis not in seen_axes, (
                 f"{name}: duplicate axis {axis} in uses_primitives"
             )
@@ -188,13 +136,13 @@ class TestPresetAuditLock:
             f"pepita credit axis is {coordinate[2]!r}, expected 'pepita'"
         )
 
-    def test_fast_weight_uses_fast_weight_plasticity(self) -> None:
-        """Fast weight must declare fast_weight plasticity."""
+    def test_fast_weight_uses_fast_weights_plasticity(self) -> None:
+        """Fast weight must declare the fast_weights plasticity coordinate."""
         system = _build_algorithm_system("fast_weight")
         coordinate = key_of(system)
         # plasticity is at index 4
-        assert coordinate[4] == "fast_weight", (
-            f"fast_weight plasticity axis is {coordinate[4]!r}, expected 'fast_weight'"
+        assert coordinate[4] == "fast_weights", (
+            f"fast_weight plasticity axis is {coordinate[4]!r}, expected 'fast_weights'"
         )
 
     def test_tile_uses_tile_mesh_geometry(self) -> None:

@@ -999,11 +999,11 @@ CONSTRAINTS = [
     ConstraintSpec(
         name="substrate_geometry_compatibility",
         kind=ConstraintKind.VOID,
-        description="Digital substrate incompatible with analog-only geometries",
+        description="Digital substrate incompatible with analog-only substrates",
         predicate=not_(
             and_(
                 eq(var("substrate"), const("digital")),
-                in_(var("geometry"), const(["analog", "photonic", "quantum"])),
+                in_(var("substrate"), const(["analog", "optical", "quantum"])),
             )
         ),
         proof_kind=ProofKind.LOGICAL,
@@ -1049,7 +1049,7 @@ CONSTRAINTS = [
         kind=ConstraintKind.VOID,
         description="Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics",
         predicate=or_(
-            not_(in_(var("geometry"), const(["recurrent", "recurrent_attractor"]))),
+            not_(in_(var("geometry"), const("recurrent"))),
             in_(
                 var("dynamics"),
                 const([
@@ -1184,7 +1184,7 @@ CONSTRAINTS = [
         description="Diffusion dynamics requires recurrent geometry",
         predicate=or_(
             not_(eq(var("dynamics"), const("diffusion"))),
-            in_(var("geometry"), const(["recurrent", "recurrent_attractor"])),
+            in_(var("geometry"), const("recurrent")),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1302,7 +1302,7 @@ CONSTRAINTS = [
     # Geometry-Dynamics-Credit: recurrent geometry with instantaneous dynamics
     # fails gradient credit because instantaneous pass doesn't settle recurrent
     # connections, leaving some weights disconnected from the loss graph.
-    # Both "recurrent" and "recurrent_attractor" are registered names for this
+    # "recurrent" is the registered name for this geometry (TODO91 S1b).
     # geometry (see ontology/geometry.py:1281).
     ConstraintSpec(
         name="recurrent_instantaneous_gradient_credit",
@@ -1310,7 +1310,7 @@ CONSTRAINTS = [
         description="Recurrent geometry with instantaneous dynamics incompatible with gradient/backprop credit (weights disconnected from loss)",
         predicate=not_(
             and_(
-                in_(var("geometry"), const(["recurrent", "recurrent_attractor"])),
+                in_(var("geometry"), const("recurrent")),
                 eq(var("dynamics"), const("instantaneous")),
                 in_(var("credit"), const(["gradient", "backprop"])),
             )
@@ -1489,7 +1489,7 @@ CONSTRAINTS = [
                     ]),
                 )
             ),
-            in_(var("geometry"), const(["feedforward", "feedforward_dag"])),
+            in_(var("geometry"), const("feedforward")),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -2750,7 +2750,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="plasticity",
-        verifying_test="tests/property/generated/test_primitive_plasticity_fast_weight_invariants.py",
+        verifying_test="tests/property/generated/test_primitive_plasticity_fast_weights_invariants.py",
         flags=("fast_weight", "plasticity", "gate1_accepted"),
     ),
     CapabilitySpec(

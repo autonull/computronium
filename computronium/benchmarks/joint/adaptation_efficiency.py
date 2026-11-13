@@ -57,7 +57,7 @@ class PlasticityModulatedModel(nn.Module):
             self.route_gate = nn.Linear(hidden_dim, plasticity.gate_dim)
         elif hasattr(plasticity, "fast_weight_dim"):
             # Fast weights: additive modulation
-            self.fast_weight_proj = nn.Linear(plasticity.fast_weight_dim, hidden_dim)
+            self.fast_weight_proj = nn.Linear(plasticity.fast_weights_dim, hidden_dim)
         elif hasattr(plasticity, "num_operators"):
             # Rule state: operator selection
             self.operator_proj = nn.Linear(plasticity.operator_dim, hidden_dim)
@@ -122,7 +122,7 @@ class PlasticityModulatedModel(nn.Module):
                 fast_weights = self.psi.get(
                     "fast_weights",
                     torch.zeros(
-                        batch_size, self.plasticity.fast_weight_dim, device=device
+                        batch_size, self.plasticity.fast_weights_dim, device=device
                     ),
                 )
                 modulation = self.fast_weight_proj(fast_weights)

@@ -14,10 +14,10 @@ SPEC = ImplementationSpec(
     supported_backends=("reference", "kernel"),
     status="kernel_verified",
     uses_primitives=(
-        "primitive.state_dynamics.instantaneous_pass",
-        "primitive.credit_assignment.reverse_mode",
+        "primitive.state_dynamics.instantaneous",
+        "primitive.credit_assignment.gradient",
         "primitive.parameter_update.euclidean",
-        "primitive.plasticity.fast_weight",
+        "primitive.plasticity.fast_weights",
     ),
     summary="6-D Joint: episode-local associative memory via fast-weight matrices.",
     equations="""

@@ -390,7 +390,7 @@ def _finalize_metrics(
 
     if hasattr(model.plasticity, "fast_weight_dim"):
         final_metrics.plastic_state_bytes = (
-            model.plasticity.fast_weight_dim * 4 * config.batch_size  # type: ignore[attr-defined]
+            model.plasticity.fast_weights_dim * 4 * config.batch_size  # type: ignore[attr-defined]
         )
     if arm_name == "replay":
         buffer = extra.get("buffer")

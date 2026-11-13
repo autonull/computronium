@@ -10,31 +10,55 @@ import pytest
 from computronium.acceleration.registry import get
 
 SPEC_ID = "primitive.plasticity.substrate_coupled"
+CASE_MODULE = "computronium.primitives.plasticity.substrate_coupled.cases"
+REFERENCE_MODULE = "computronium.primitives.plasticity.substrate_coupled.reference"
+REFERENCE_FUNCTION = "step"
 
 
 @pytest.fixture(scope="module")
 def spec():
-    return get("primitive.plasticity.substrate_coupled")
+    return get(SPEC_ID)
+
+
+def _run(seed: int):
+    """One reference call on a case built from ``seed``."""
+    from importlib import import_module
+
+    cases = import_module(CASE_MODULE)
+    reference = import_module(REFERENCE_MODULE)
+    case = cases.make_case(seed=seed)
+    call = getattr(reference, REFERENCE_FUNCTION)
+    return call(case)
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
 @hypothesis.settings(max_examples=10, deadline=None)
 def test_deterministic_under_fixed_seed(spec, seed):
-    """Test that implementation is deterministic under fixed seed."""
-    from importlib import import_module
+    """Two calls under one seed produce the same output."""
+    from computronium.acceleration.parity import digest
 
-    from computronium.acceleration.parity import compare
-    from computronium.primitives.plasticity.substrate_coupled.cases import make_case
+    assert digest(_run(seed)) == digest(_run(seed))
 
-    case1 = make_case(seed=seed)
-    case2 = make_case(seed=seed)
 
-    ref_module = import_module(
-        "computronium.primitives.plasticity.substrate_coupled.reference"
-    )
-    out1 = ref_module.step(case1)
-    out2 = ref_module.step(case2)
+@hypothesis.given(st.integers(min_value=0, max_value=1000))
+@hypothesis.settings(max_examples=10, deadline=None)
+def test_state_remains_finite(spec, seed):
+    """Every tensor in the output is finite (no NaN/Inf)."""
+    import torch
 
-    # Use the existing compare function which handles CompositeState, dicts, etc.
-    metrics = compare(out1, out2)
-    assert metrics["max_abs_diff"] == 0.0, f"Outputs differ for seed {seed}: {metrics}"
+    def _check(value, path="output"):
+        if isinstance(value, torch.Tensor):
+            assert not torch.isnan(value).any(), f"NaN found in {path}"
+            assert not torch.isinf(value).any(), f"Inf found in {path}"
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                _check(item, f"{path}.{key}")
+        elif isinstance(value, list | tuple):
+            for index, item in enumerate(value):
+                _check(item, f"{path}[{index}]")
+        elif hasattr(value, "__dict__") and not isinstance(value, type):
+            for key, item in vars(value).items():
+                if not key.startswith("_"):
+                    _check(item, f"{path}.{key}")
+
+    _check(_run(seed))

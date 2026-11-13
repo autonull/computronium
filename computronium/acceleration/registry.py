@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 def register_module(
     module_name: str,
-    docstring: str,
+    docstring: str | None,
     *,
     has_factory: bool = False,
     factory_name: str | None = None,

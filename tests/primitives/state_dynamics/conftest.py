@@ -20,10 +20,10 @@ from computronium.primitives.state_dynamics.energy_minimization import (
 from computronium.primitives.state_dynamics.energy_minimization import (
     reference_step as reference_step_em,
 )
-from computronium.primitives.state_dynamics.pc_alm_settling import (
+from computronium.primitives.state_dynamics.pc_alm import (
     make_case as make_case_pcalm,
 )
-from computronium.primitives.state_dynamics.pc_alm_settling import (
+from computronium.primitives.state_dynamics.pc_alm import (
     reference_step as reference_step_pcalm,
 )
 from computronium.primitives.state_dynamics.predictive_settling import (
@@ -175,7 +175,7 @@ def _warmup_predictive_settling() -> None:
 def _warmup_pc_alm() -> None:
     try:
         from computronium.acceleration.compile import compile_model
-        from computronium.primitives.state_dynamics.pc_alm_settling import (
+        from computronium.primitives.state_dynamics.pc_alm import (
             make_case,
             reference_step,
         )

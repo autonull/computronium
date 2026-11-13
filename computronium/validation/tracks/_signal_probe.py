@@ -313,7 +313,7 @@ def run_complete_signal_probe():
     backends_to_test = ["pytorch"]
     if torch.cuda.is_available():
         try:
-            from computronium.acceleration.kernels import HAS_CUPY
+            from computronium.acceleration.backends import HAS_CUPY
 
             if HAS_CUPY:
                 backends_to_test.append("kernel")

@@ -95,7 +95,7 @@ def run_microbench(
     """Run a microbenchmark for a registered implementation.
 
     Args:
-        implementation_id: Registry ID (e.g., "primitive.state_dynamics.pc_alm_settling")
+        implementation_id: Registry ID (e.g., "primitive.state_dynamics.pc_alm")
         backend: "auto", "reference", or "kernel"
         device: Device to run on
         steps: Number of steps/iterations per run

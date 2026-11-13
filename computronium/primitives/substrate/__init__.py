@@ -1,38 +1,5 @@
 """Substrate primitives package.
 
-Lazy loading for substrate primitives.
+Each subpackage is one runtime substrate coordinate and registers its spec on
+import.
 """
-
-import importlib
-from typing import Any
-
-# Primitive modules that can be directly accessed
-_PRIMITIVES: frozenset[str] = frozenset({  # ruff: ignore[non-empty-init-module]
-    "digital",
-    "memristive",
-    "neuromorphic",
-    "photonic",
-    "quantum",
-    "noisy",
-    "sparse",
-    "complex",
-    "ternary",
-})
-
-
-def __getattr__(name: str) -> Any:
-    """Lazy load substrate primitives."""
-    if name in _PRIMITIVES:
-        return importlib.import_module(f".{name}", __name__)
-
-    raise AttributeError(
-        f"module 'computronium.primitives.substrate' has no attribute '{name}'"
-    )
-
-
-def __dir__() -> list[str]:
-    """List available attributes for tab completion."""
-    return sorted([*_PRIMITIVES, "__all__", "__doc__", "__name__", "__package__"])
-
-
-__all__: list[str] = sorted([*_PRIMITIVES])  # ruff: ignore[invalid-all-format]

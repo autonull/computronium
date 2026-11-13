@@ -86,7 +86,7 @@ def generate_geometry_dynamics_matrix() -> dict[str, dict[str, bool]]:
     matrix = {g: dict.fromkeys(dynamics, True) for g in geometries}
 
     # Recurrent geometries require settling dynamics
-    recurrent_geoms = {"recurrent", "recurrent_attractor"}
+    recurrent_geoms = {"recurrent"}
     settling_dynamics = {
         "energy_minimization",
         "predictive_settling",

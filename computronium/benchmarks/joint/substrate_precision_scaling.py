@@ -28,14 +28,14 @@ from computronium.core.utils.device import get_device
 
 # Substrate precision configurations
 DIGITAL_PRECISIONS = ["fp32", "fp16", "bf16", "int8", "ternary"]
-ANALOG_SUBSTRATES = ["memristive", "neuromorphic", "photonic", "complex", "quantum"]
+ANALOG_SUBSTRATES = ["memristive", "neuromorphic", "optical", "complex", "quantum"]
 
 # Default hidden dim per substrate (some need larger for precision)
 SUBSTRATE_CONFIGS = {
     "digital": {"hidden_dim": 128, "supports_mixed_precision": True},
     "memristive": {"hidden_dim": 128, "noise_level": 0.01},
     "neuromorphic": {"hidden_dim": 128, "threshold": 1.0},
-    "photonic": {"hidden_dim": 128, "phase_noise": 0.01},
+    "optical": {"hidden_dim": 128, "phase_noise": 0.01},
     "complex": {"hidden_dim": 128, "noise_level": 0.01},
     "analog": {"hidden_dim": 128, "noise_level": 0.01},
     "quantum": {
@@ -115,7 +115,7 @@ class SubstrateModel(nn.Module):
                 # Spike-like noise: random dropout
                 mask = torch.rand_like(x) > self.noise_level
                 return x * mask.float()
-            elif self.substrate == "photonic":
+            elif self.substrate == "optical":
                 # Phase noise: multiplicative
                 phase = torch.randn_like(x) * self.noise_level
                 return x * torch.cos(phase)

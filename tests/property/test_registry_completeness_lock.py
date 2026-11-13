@@ -26,18 +26,6 @@ from computronium.ontology.update import (
 # Axis 1: Substrate
 # ============================================================
 
-_SUBSTRATE_CONFIG_METHODS: dict[str, str] = {
-    "digital": "primitive.substrate.digital",
-    "analog": "primitive.substrate.digital",  # Analog uses digital primitive (no separate primitive)
-    "memristive": "primitive.substrate.memristive",
-    "neuromorphic": "primitive.substrate.neuromorphic",
-    "optical": "primitive.substrate.photonic",
-    "quantum": "primitive.substrate.quantum",
-    "complex": "primitive.substrate.complex",
-    "sparse": "primitive.substrate.sparse",
-    "ternary": "primitive.substrate.ternary",
-    # noisy is created via digital with noise_level > 0
-}
 
 _SUBSTRATE_ONTOLOGY_CLASSES: dict[str, str] = {
     "digital": "DigitalSubstrate",
@@ -50,6 +38,22 @@ _SUBSTRATE_ONTOLOGY_CLASSES: dict[str, str] = {
     "sparse": "SparseSubstrate",
     "ternary": "TernarySubstrate",
 }
+
+
+def _expected_spec_id(axis: str, coordinate: str) -> str:
+    """The spec ID that must exist for a runtime coordinate."""
+    return f"primitive.{axis}.{coordinate}"
+
+
+def _assert_coordinate_has_spec(specs, axis: str, coordinate: str) -> str:
+    """Assert the coordinate's same-named spec is registered; return its ID."""
+    spec_id = _expected_spec_id(axis, coordinate)
+    if spec_id not in specs:
+        raise AssertionError(
+            f"{axis} coordinate {coordinate!r} has no same-named spec; "
+            f"registered: {sorted(specs)}"
+        )
+    return spec_id
 
 
 def _substrate_config_classmethods() -> dict[str, str]:
@@ -65,28 +69,17 @@ def _substrate_config_classmethods() -> dict[str, str]:
 
 
 def test_substrate_config_classmethods_cover_primitives() -> None:
-    """Every SubstrateConfig classmethod maps to a known primitive spec."""
-    classmethods = _substrate_config_classmethods()
+    """Every SubstrateConfig classmethod names the spec of its own coordinate."""
     primitive_ids = {s.id for s in primitives() if s.axis == "substrate"}
 
-    for method_name, substrate_type in classmethods.items():
-        if substrate_type not in _SUBSTRATE_CONFIG_METHODS:
-            raise AssertionError(
-                f"SubstrateConfig.{method_name} -> {substrate_type} "
-                f"has no expected primitive mapping"
-            )
-        expected_primitive = _SUBSTRATE_CONFIG_METHODS[substrate_type]
-        if expected_primitive not in primitive_ids:
-            raise AssertionError(
-                f"SubstrateConfig.{method_name} expects primitive "
-                f"{expected_primitive!r} but it's not registered. "
-                f"Available: {sorted(primitive_ids)}"
-            )
+    for _method, substrate_type in _substrate_config_classmethods().items():
+        _assert_coordinate_has_spec(primitive_ids, "substrate", substrate_type)
 
 
 def test_substrate_primitives_have_ontology_classes() -> None:
     """Every substrate primitive has a corresponding ontology class."""
     from computronium.ontology.substrate import (
+        AnalogSubstrate,
         ComplexSubstrate,
         DigitalSubstrate,
         MemristiveSubstrate,
@@ -102,12 +95,13 @@ def test_substrate_primitives_have_ontology_classes() -> None:
         "primitive.substrate.digital": DigitalSubstrate,
         "primitive.substrate.memristive": MemristiveSubstrate,
         "primitive.substrate.neuromorphic": NeuromorphicSubstrate,
-        "primitive.substrate.photonic": OpticalSubstrate,
+        "primitive.substrate.optical": OpticalSubstrate,
         "primitive.substrate.quantum": QuantumSubstrate,
         "primitive.substrate.complex": ComplexSubstrate,
         "primitive.substrate.sparse": SparseSubstrate,
         "primitive.substrate.ternary": TernarySubstrate,
         "primitive.substrate.noisy": NoisySubstrate,
+        "primitive.substrate.analog": AnalogSubstrate,
     }
 
     for spec in primitives():
@@ -122,9 +116,7 @@ def test_substrate_primitives_have_ontology_classes() -> None:
             config = SubstrateConfig.digital(noise_level=0.05)
             substrate = cls(config)
         else:
-            config_method = next(
-                k for k, v in _SUBSTRATE_CONFIG_METHODS.items() if v == spec.id
-            )
+            config_method = spec.id.rsplit(".", 1)[-1]
             config = getattr(SubstrateConfig, config_method)()
             # ComplexSubstrate is instantiated directly (not via substrate_from_config)
             if cls is ComplexSubstrate:
@@ -141,18 +133,6 @@ def test_substrate_primitives_have_ontology_classes() -> None:
 # Axis 2: Geometry
 # ============================================================
 
-_GEOMETRY_CONFIG_METHODS: dict[str, str] = {
-    "feedforward": "primitive.geometry.feedforward_dag",
-    "causal_transformer": "primitive.geometry.feedforward_dag",  # uses FeedforwardGeometry
-    "recurrent": "primitive.geometry.recurrent_attractor",
-    "tile_mesh": "primitive.geometry.tile_mesh",
-    "conv": "primitive.geometry.feedforward_dag",  # ConvGeometry extends FeedforwardGeometry
-    "graph": "primitive.geometry.fabric_pc",  # GraphGeometry uses FabricPC
-    "attention": "primitive.geometry.feedforward_dag",  # AttentionGeometry extends FeedforwardGeometry
-    "spatial_lattice": "primitive.geometry.spatial_lattice_3d",
-    "nca": "primitive.geometry.nca",
-    "ntm": "primitive.geometry.ntm",
-}
 
 _GEOMETRY_ONTOLOGY_CLASSES: dict[str, str] = {
     "feedforward": "FeedforwardGeometry",
@@ -183,28 +163,18 @@ def _geometry_config_classmethods() -> dict[str, str]:
 
 
 def test_geometry_config_classmethods_cover_primitives() -> None:
-    """Every GeometryConfig classmethod maps to a known primitive spec."""
-    classmethods = _geometry_config_classmethods()
+    """Every GeometryConfig classmethod names the spec of its own coordinate."""
     primitive_ids = {s.id for s in primitives() if s.axis == "geometry"}
 
-    for method_name, topology_type in classmethods.items():
-        if topology_type not in _GEOMETRY_CONFIG_METHODS:
-            raise AssertionError(
-                f"GeometryConfig.{method_name} -> {topology_type} "
-                f"has no expected primitive mapping"
-            )
-        expected_primitive = _GEOMETRY_CONFIG_METHODS[topology_type]
-        if expected_primitive not in primitive_ids:
-            raise AssertionError(
-                f"GeometryConfig.{method_name} expects primitive "
-                f"{expected_primitive!r} but it's not registered. "
-                f"Available: {sorted(primitive_ids)}"
-            )
+    for _method, topology_type in _geometry_config_classmethods().items():
+        _assert_coordinate_has_spec(primitive_ids, "geometry", topology_type)
 
 
 def test_geometry_primitives_have_ontology_classes() -> None:
     """Every geometry primitive has a corresponding ontology class."""
     from computronium.ontology.geometry import (
+        AttentionGeometry,
+        ConvGeometry,
         FeedforwardGeometry,
         GraphGeometry,
         NcaGeometry,
@@ -212,16 +182,21 @@ def test_geometry_primitives_have_ontology_classes() -> None:
         RecurrentGeometry,
         SpatialLattice3DGeometry,
         TileGeometry,
+        TransformerGeometry,
     )
 
     ONTOLOGY_MAP: dict[str, type] = {
-        "primitive.geometry.feedforward_dag": FeedforwardGeometry,
-        "primitive.geometry.recurrent_attractor": RecurrentGeometry,
+        "primitive.geometry.feedforward": FeedforwardGeometry,
+        "primitive.geometry.recurrent": RecurrentGeometry,
         "primitive.geometry.tile_mesh": TileGeometry,
-        "primitive.geometry.fabric_pc": GraphGeometry,
+        "primitive.geometry.graph": GraphGeometry,
         "primitive.geometry.ntm": NtmGeometry,
         "primitive.geometry.nca": NcaGeometry,
-        "primitive.geometry.spatial_lattice_3d": SpatialLattice3DGeometry,
+        "primitive.geometry.spatial_lattice": SpatialLattice3DGeometry,
+        "primitive.geometry.conv": ConvGeometry,
+        "primitive.geometry.attention": AttentionGeometry,
+        "primitive.geometry.causal_transformer": TransformerGeometry,
+        "primitive.geometry.tile": TileGeometry,
     }
 
     # Config methods with their specific required arguments
@@ -229,6 +204,27 @@ def test_geometry_primitives_have_ontology_classes() -> None:
         "feedforward": {"input_dim": 10, "output_dim": 5, "hidden_dims": (8,)},
         "recurrent": {"input_dim": 10, "output_dim": 5, "hidden_dims": (8,)},
         "tile_mesh": {"input_dim": 10, "output_dim": 5, "num_layers": 2},
+        "tile": {"input_dim": 10, "output_dim": 5, "num_layers": 2},
+        "conv": {
+            "input_dim": 784,
+            "output_dim": 5,
+            "conv_channels": (8,),
+            "in_channels": 1,
+            "input_hw": (8, 8),
+        },
+        "attention": {
+            "input_dim": 10,
+            "output_dim": 5,
+            "hidden_dim": 8,
+            "num_heads": 2,
+        },
+        "causal_transformer": {
+            "vocab_size": 16,
+            "d_model": 8,
+            "n_layers": 1,
+            "n_heads": 2,
+            "seq_len": 4,
+        },
         "graph": {"input_dim": 10, "output_dim": 5, "edge_index": [[0, 1], [1, 0]]},
         "ntm": {"input_dim": 10, "output_dim": 5, "hidden": 8},
         "nca": {"channels": 8, "hidden": 8},
@@ -246,9 +242,7 @@ def test_geometry_primitives_have_ontology_classes() -> None:
             raise AssertionError(f"Primitive {spec.id} has no ontology class mapping")
         cls = ONTOLOGY_MAP[spec.id]
         # Verify the ontology class can be instantiated via config round-trip
-        config_method = next(
-            k for k, v in _GEOMETRY_CONFIG_METHODS.items() if v == spec.id
-        )
+        config_method = spec.id.rsplit(".", 1)[-1]
         args = GEOMETRY_CONFIG_ARGS[config_method]
         config = getattr(GeometryConfig, config_method)(**args)
         geometry = geometry_from_config(config)
@@ -268,6 +262,7 @@ def test_state_dynamics_primitives_have_ontology_classes() -> None:
     from computronium.ontology.dynamics import (
         DiffusionDynamics,
         EnergyMinimizationDynamics,
+        ErrorPredictiveCodingDynamics,
         InstantaneousDynamics,
         LazyStateDynamics,
         PCALMDynamics,
@@ -278,22 +273,14 @@ def test_state_dynamics_primitives_have_ontology_classes() -> None:
     ONTOLOGY_MAP: dict[str, type] = {
         "primitive.state_dynamics.diffusion": DiffusionDynamics,
         "primitive.state_dynamics.energy_minimization": EnergyMinimizationDynamics,
-        "primitive.state_dynamics.instantaneous_pass": InstantaneousDynamics,
-        "primitive.state_dynamics.lazy_state_dynamics": LazyStateDynamics,
-        "primitive.state_dynamics.pc_alm_settling": PCALMDynamics,
+        "primitive.state_dynamics.instantaneous": InstantaneousDynamics,
+        "primitive.state_dynamics.lazy": LazyStateDynamics,
+        "primitive.state_dynamics.pc_alm": PCALMDynamics,
         "primitive.state_dynamics.predictive_settling": PredictiveSettlingDynamics,
         "primitive.state_dynamics.spike_integration": SpikeIntegrationDynamics,
-    }
-
-    # Map primitive IDs to StateDynamicsConfig classmethod names
-    DYNAMICS_CONFIG_METHODS: dict[str, str] = {
-        "primitive.state_dynamics.diffusion": "diffusion",
-        "primitive.state_dynamics.energy_minimization": "energy_minimization",
-        "primitive.state_dynamics.instantaneous_pass": "instantaneous",
-        "primitive.state_dynamics.lazy_state_dynamics": "lazy",
-        "primitive.state_dynamics.pc_alm_settling": "pc_alm",
-        "primitive.state_dynamics.predictive_settling": "predictive_settling",
-        "primitive.state_dynamics.spike_integration": "spike_integration",
+        "primitive.state_dynamics.error_predictive_coding": (
+            ErrorPredictiveCodingDynamics
+        ),
     }
 
     for spec in primitives():
@@ -303,7 +290,7 @@ def test_state_dynamics_primitives_have_ontology_classes() -> None:
             raise AssertionError(f"Primitive {spec.id} has no ontology class mapping")
         cls = ONTOLOGY_MAP[spec.id]
         # Verify the ontology class can be instantiated via config round-trip
-        config_method = DYNAMICS_CONFIG_METHODS[spec.id]
+        config_method = spec.id.rsplit(".", 1)[-1]
         config = getattr(StateDynamicsConfig, config_method)()
         from computronium.ontology.dynamics import dynamics_from_config
 
@@ -318,18 +305,6 @@ def test_state_dynamics_primitives_have_ontology_classes() -> None:
 # Axis 4: CreditAssignment
 # ============================================================
 
-_CREDIT_CONFIG_METHODS: dict[str, str] = {
-    "thermodynamic_contrast": "primitive.credit_assignment.thermodynamic_contrast",
-    "random_projections": "primitive.credit_assignment.random_projections",
-    "local_goodness": "primitive.credit_assignment.local_goodness",
-    "temporal_trace": "primitive.credit_assignment.temporal_trace",
-    "target_inversion": "primitive.credit_assignment.target_inversion",
-    "homeostatic": "primitive.credit_assignment.homeostatic",
-    "pepita": "primitive.credit_assignment.pepita",
-    "gradient": "primitive.credit_assignment.reverse_mode",  # gradient/backprop -> reverse_mode
-    "local_contrastive": "primitive.credit_assignment.local_goodness",  # local_contrastive uses local_goodness
-    "pc_alm": "primitive.credit_assignment.pc_alm",
-}
 
 _CREDIT_ONTOLOGY_CLASSES: dict[str, str] = {
     "thermodynamic_contrast": "ThermodynamicContrast",
@@ -358,23 +333,11 @@ def _credit_config_classmethods() -> dict[str, str]:
 
 
 def test_credit_config_classmethods_cover_primitives() -> None:
-    """Every CreditAssignmentConfig classmethod maps to a known primitive spec."""
-    classmethods = _credit_config_classmethods()
+    """Every CreditAssignmentConfig classmethod names its own coordinate's spec."""
     primitive_ids = {s.id for s in primitives() if s.axis == "credit_assignment"}
 
-    for method_name, credit_type in classmethods.items():
-        if credit_type not in _CREDIT_CONFIG_METHODS:
-            raise AssertionError(
-                f"CreditAssignmentConfig.{method_name} -> {credit_type} "
-                f"has no expected primitive mapping"
-            )
-        expected_primitive = _CREDIT_CONFIG_METHODS[credit_type]
-        if expected_primitive not in primitive_ids:
-            raise AssertionError(
-                f"CreditAssignmentConfig.{method_name} expects primitive "
-                f"{expected_primitive!r} but it's not registered. "
-                f"Available: {sorted(primitive_ids)}"
-            )
+    for _method, credit_type in _credit_config_classmethods().items():
+        _assert_coordinate_has_spec(primitive_ids, "credit_assignment", credit_type)
 
 
 def test_credit_primitives_have_ontology_classes() -> None:
@@ -382,6 +345,7 @@ def test_credit_primitives_have_ontology_classes() -> None:
     from computronium.ontology.credit import (
         BackpropCredit,
         HomeostaticCredit,
+        LocalContrastiveCredit,
         LocalGoodnessCredit,
         PCALMCredit,
         PepitaCredit,
@@ -400,7 +364,8 @@ def test_credit_primitives_have_ontology_classes() -> None:
         "primitive.credit_assignment.homeostatic": HomeostaticCredit,
         "primitive.credit_assignment.pepita": PepitaCredit,
         "primitive.credit_assignment.pc_alm": PCALMCredit,
-        "primitive.credit_assignment.reverse_mode": BackpropCredit,
+        "primitive.credit_assignment.gradient": BackpropCredit,
+        "primitive.credit_assignment.local_contrastive": LocalContrastiveCredit,
     }
 
     for spec in primitives():
@@ -410,9 +375,7 @@ def test_credit_primitives_have_ontology_classes() -> None:
             raise AssertionError(f"Primitive {spec.id} has no ontology class mapping")
         cls = ONTOLOGY_MAP[spec.id]
         # Verify the ontology class can be instantiated via config round-trip
-        config_method = next(
-            k for k, v in _CREDIT_CONFIG_METHODS.items() if v == spec.id
-        )
+        config_method = spec.id.rsplit(".", 1)[-1]
         config = getattr(CreditAssignmentConfig, config_method)()
         # PCALMCredit is not handled by _credit_from_config dispatch (gap in dispatch)
         # Directly instantiate the ontology class with the config
@@ -432,24 +395,6 @@ def test_credit_primitives_have_ontology_classes() -> None:
 # Axis 5: ParameterUpdate
 # ============================================================
 
-_UPDATE_CONFIG_METHODS: dict[str, str] = {
-    "euclidean": "primitive.parameter_update.euclidean",
-    "riemannian_orthogonal": "primitive.parameter_update.muon",
-    "muon": "primitive.parameter_update.muon",
-    "spectral_constrained": "primitive.parameter_update.spectral_constrained",
-    "mean_norm": "primitive.parameter_update.euclidean",  # mean_norm uses euclidean primitive
-    "elastic_consolidation": "primitive.parameter_update.elastic_consolidation",
-    "natural_gradient": "primitive.parameter_update.natural_gradient",
-    "adam": "primitive.parameter_update.euclidean",  # adam uses euclidean primitive
-    "ortho_adam": "primitive.parameter_update.muon",  # ortho_adam uses muon primitive
-    "unit_rms": "primitive.parameter_update.euclidean",  # unit_rms uses euclidean primitive
-    "local_adam": "primitive.parameter_update.euclidean",  # local_adam uses euclidean primitive
-    "lion": "primitive.parameter_update.euclidean",  # lion uses euclidean primitive
-    # role_split is a dispatcher, not a standalone primitive spec: its
-    # declared default routes the readout through muon and the rest through
-    # euclidean. The catalogue row is the on-role rule.
-    "role_split": "primitive.parameter_update.muon",
-}
 
 _UPDATE_ONTOLOGY_CLASSES: dict[str, str] = {
     "euclidean": "EuclideanUpdate",
@@ -492,23 +437,17 @@ def _update_config_classmethods() -> dict[str, str]:
 
 
 def test_update_config_classmethods_cover_primitives() -> None:
-    """Every ParameterUpdateConfig classmethod maps to a known primitive spec."""
-    classmethods = _update_config_classmethods()
+    """Every ParameterUpdateConfig classmethod names its own coordinate's spec.
+
+    ``unit_rms`` is the one factory with no coordinate: the update registry does
+    not select it, so it has no spec and is excluded here.
+    """
     primitive_ids = {s.id for s in primitives() if s.axis == "parameter_update"}
 
-    for method_name, update_type in classmethods.items():
-        if update_type not in _UPDATE_CONFIG_METHODS:
-            raise AssertionError(
-                f"ParameterUpdateConfig.{method_name} -> {update_type} "
-                f"has no expected primitive mapping"
-            )
-        expected_primitive = _UPDATE_CONFIG_METHODS[update_type]
-        if expected_primitive not in primitive_ids:
-            raise AssertionError(
-                f"ParameterUpdateConfig.{method_name} expects primitive "
-                f"{expected_primitive!r} but it's not registered. "
-                f"Available: {sorted(primitive_ids)}"
-            )
+    for _method, update_type in _update_config_classmethods().items():
+        if update_type == "unit_rms":
+            continue
+        _assert_coordinate_has_spec(primitive_ids, "parameter_update", update_type)
 
 
 def test_every_update_config_factory_dispatches() -> None:
@@ -558,10 +497,16 @@ def test_every_update_class_is_registered() -> None:
 def test_update_primitives_have_ontology_classes() -> None:
     """Every parameter_update primitive has a corresponding ontology class."""
     from computronium.ontology.update import (
+        AdamUpdate,
         ElasticConsolidationUpdate,
         EuclideanUpdate,
+        LionUpdate,
+        LocalAdamUpdate,
+        MeanNormUpdate,
         NaturalGradientUpdate,
+        OrthoAdamUpdate,
         RiemannianOrthogonalUpdate,
+        RoleSplitUpdate,
         SpectralConstrainedUpdate,
     )
 
@@ -571,6 +516,15 @@ def test_update_primitives_have_ontology_classes() -> None:
         "primitive.parameter_update.spectral_constrained": SpectralConstrainedUpdate,
         "primitive.parameter_update.natural_gradient": NaturalGradientUpdate,
         "primitive.parameter_update.elastic_consolidation": ElasticConsolidationUpdate,
+        "primitive.parameter_update.adam": AdamUpdate,
+        "primitive.parameter_update.lion": LionUpdate,
+        "primitive.parameter_update.local_adam": LocalAdamUpdate,
+        "primitive.parameter_update.mean_norm": MeanNormUpdate,
+        "primitive.parameter_update.ortho_adam": OrthoAdamUpdate,
+        "primitive.parameter_update.riemannian_orthogonal": (
+            RiemannianOrthogonalUpdate
+        ),
+        "primitive.parameter_update.role_split": RoleSplitUpdate,
     }
 
     for spec in primitives():
@@ -580,9 +534,7 @@ def test_update_primitives_have_ontology_classes() -> None:
             raise AssertionError(f"Primitive {spec.id} has no ontology class mapping")
         cls = ONTOLOGY_MAP[spec.id]
         # Verify the ontology class can be instantiated via config round-trip
-        config_method = next(
-            k for k, v in _UPDATE_CONFIG_METHODS.items() if v == spec.id
-        )
+        config_method = spec.id.rsplit(".", 1)[-1]
         config = getattr(ParameterUpdateConfig, config_method)()
         update = update_from_config(config)
         assert isinstance(update, cls), (
@@ -594,17 +546,6 @@ def test_update_primitives_have_ontology_classes() -> None:
 # ============================================================
 # Axis 6: Plasticity
 # ============================================================
-
-_PLASTICITY_CONFIG_METHODS: dict[str, str] = {
-    "null": "primitive.plasticity.null",
-    "routing": "primitive.plasticity.routing",
-    "fast_weights": "primitive.plasticity.fast_weight",
-    "substrate_coupled": "primitive.plasticity.substrate_coupled",
-    "rule_state": "primitive.plasticity.rule_state",
-    "temporal_psi": "primitive.plasticity.temporal_psi",
-    "conflict_adaptive": "primitive.plasticity.temporal_psi",  # conflict_adaptive uses temporal_psi primitive
-    # closed_form_ridge has no PlasticityConfig classmethod
-}
 
 
 def _plasticity_config_classmethods() -> dict[str, str]:
@@ -629,23 +570,11 @@ def _plasticity_config_classmethods() -> dict[str, str]:
 
 
 def test_plasticity_config_classmethods_cover_primitives() -> None:
-    """Every PlasticityConfig classmethod maps to a known primitive spec."""
-    classmethods = _plasticity_config_classmethods()
+    """Every PlasticityConfig classmethod names its own coordinate's spec."""
     primitive_ids = {s.id for s in primitives() if s.axis == "plasticity"}
 
-    for method_name, plasticity_type in classmethods.items():
-        if plasticity_type not in _PLASTICITY_CONFIG_METHODS:
-            raise AssertionError(
-                f"PlasticityConfig.{method_name} -> {plasticity_type} "
-                f"has no expected primitive mapping"
-            )
-        expected_primitive = _PLASTICITY_CONFIG_METHODS[plasticity_type]
-        if expected_primitive not in primitive_ids:
-            raise AssertionError(
-                f"PlasticityConfig.{method_name} expects primitive "
-                f"{expected_primitive!r} but it's not registered. "
-                f"Available: {sorted(primitive_ids)}"
-            )
+    for _method, plasticity_type in _plasticity_config_classmethods().items():
+        _assert_coordinate_has_spec(primitive_ids, "plasticity", plasticity_type)
 
 
 def test_plasticity_primitives_have_ontology_classes() -> None:
@@ -658,28 +587,20 @@ def test_plasticity_primitives_have_ontology_classes() -> None:
         SubstrateCoupledPlasticity,
         TemporalPsiPlasticity,
     )
+    from computronium.core.plasticity.adaptive_psi import (
+        ConflictAdaptivePsiPlasticity,
+    )
     from computronium.state import NullPlasticity
 
     ONTOLOGY_MAP: dict[str, type] = {
         "primitive.plasticity.null": NullPlasticity,
         "primitive.plasticity.routing": RoutingPlasticity,
-        "primitive.plasticity.fast_weight": FastWeightPlasticity,
+        "primitive.plasticity.fast_weights": FastWeightPlasticity,
         "primitive.plasticity.substrate_coupled": SubstrateCoupledPlasticity,
         "primitive.plasticity.rule_state": RuleStatePlasticity,
         "primitive.plasticity.temporal_psi": TemporalPsiPlasticity,
         "primitive.plasticity.closed_form_ridge": ClosedFormRidgePlasticity,
-    }
-
-    # Map primitive IDs to PlasticityConfig classmethod names
-    PLASTICITY_CONFIG_METHODS: dict[str, str | None] = {
-        "primitive.plasticity.null": "null",
-        "primitive.plasticity.routing": "routing",
-        "primitive.plasticity.fast_weight": "fast_weights",
-        "primitive.plasticity.substrate_coupled": "substrate_coupled",
-        "primitive.plasticity.rule_state": "rule_state",
-        "primitive.plasticity.temporal_psi": "temporal_psi",
-        # closed_form_ridge has no PlasticityConfig classmethod
-        "primitive.plasticity.closed_form_ridge": None,
+        "primitive.plasticity.conflict_adaptive": ConflictAdaptivePsiPlasticity,
     }
 
     for spec in primitives():
@@ -689,7 +610,9 @@ def test_plasticity_primitives_have_ontology_classes() -> None:
             raise AssertionError(f"Primitive {spec.id} has no ontology class mapping")
         cls = ONTOLOGY_MAP[spec.id]
         # Verify the ontology class can be instantiated via config round-trip
-        config_method = PLASTICITY_CONFIG_METHODS.get(spec.id)
+        config_method = spec.id.rsplit(".", 1)[-1]
+        if config_method == "closed_form_ridge":
+            config_method = None
         if config_method is None:
             # closed_form_ridge: directly instantiate with default config
             # ClosedFormRidgePlasticity expects ClosedFormRidgeConfig, not PlasticityConfig
@@ -720,30 +643,38 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.substrate.digital": "DigitalSubstrate",
         "primitive.substrate.memristive": "MemristiveSubstrate",
         "primitive.substrate.neuromorphic": "NeuromorphicSubstrate",
-        "primitive.substrate.photonic": "OpticalSubstrate",
+        "primitive.substrate.optical": "OpticalSubstrate",
         "primitive.substrate.quantum": "QuantumSubstrate",
         "primitive.substrate.complex": "ComplexSubstrate",
         "primitive.substrate.sparse": "SparseSubstrate",
         "primitive.substrate.ternary": "TernarySubstrate",
         "primitive.substrate.noisy": "NoisySubstrate",
+        "primitive.substrate.analog": "AnalogSubstrate",
     },
     "geometry": {
-        "primitive.geometry.feedforward_dag": "FeedforwardGeometry",
-        "primitive.geometry.recurrent_attractor": "RecurrentGeometry",
+        "primitive.geometry.feedforward": "FeedforwardGeometry",
+        "primitive.geometry.recurrent": "RecurrentGeometry",
         "primitive.geometry.tile_mesh": "TileGeometry",
-        "primitive.geometry.fabric_pc": "GraphGeometry",
+        "primitive.geometry.graph": "GraphGeometry",
         "primitive.geometry.ntm": "NtmGeometry",
         "primitive.geometry.nca": "NcaGeometry",
-        "primitive.geometry.spatial_lattice_3d": "SpatialLattice3DGeometry",
+        "primitive.geometry.spatial_lattice": "SpatialLattice3DGeometry",
+        "primitive.geometry.conv": "ConvGeometry",
+        "primitive.geometry.attention": "AttentionGeometry",
+        "primitive.geometry.causal_transformer": "TransformerGeometry",
+        "primitive.geometry.tile": "TileGeometry",
     },
     "state_dynamics": {
         "primitive.state_dynamics.diffusion": "DiffusionDynamics",
         "primitive.state_dynamics.energy_minimization": "EnergyMinimizationDynamics",
-        "primitive.state_dynamics.instantaneous_pass": "InstantaneousDynamics",
-        "primitive.state_dynamics.lazy_state_dynamics": "LazyStateDynamics",
-        "primitive.state_dynamics.pc_alm_settling": "PCALMDynamics",
+        "primitive.state_dynamics.instantaneous": "InstantaneousDynamics",
+        "primitive.state_dynamics.lazy": "LazyStateDynamics",
+        "primitive.state_dynamics.pc_alm": "PCALMDynamics",
         "primitive.state_dynamics.predictive_settling": "PredictiveSettlingDynamics",
         "primitive.state_dynamics.spike_integration": "SpikeIntegrationDynamics",
+        "primitive.state_dynamics.error_predictive_coding": (
+            "ErrorPredictiveCodingDynamics"
+        ),
     },
     "credit_assignment": {
         "primitive.credit_assignment.thermodynamic_contrast": "ThermodynamicContrast",
@@ -754,7 +685,8 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.credit_assignment.homeostatic": "HomeostaticCredit",
         "primitive.credit_assignment.pepita": "PepitaCredit",
         "primitive.credit_assignment.pc_alm": "PCALMCredit",
-        "primitive.credit_assignment.reverse_mode": "BackpropCredit",
+        "primitive.credit_assignment.gradient": "BackpropCredit",
+        "primitive.credit_assignment.local_contrastive": "LocalContrastiveCredit",
     },
     "parameter_update": {
         "primitive.parameter_update.euclidean": "EuclideanUpdate",
@@ -762,15 +694,25 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.parameter_update.spectral_constrained": "SpectralConstrainedUpdate",
         "primitive.parameter_update.natural_gradient": "NaturalGradientUpdate",
         "primitive.parameter_update.elastic_consolidation": "ElasticConsolidationUpdate",
+        "primitive.parameter_update.adam": "AdamUpdate",
+        "primitive.parameter_update.lion": "LionUpdate",
+        "primitive.parameter_update.local_adam": "LocalAdamUpdate",
+        "primitive.parameter_update.mean_norm": "MeanNormUpdate",
+        "primitive.parameter_update.ortho_adam": "OrthoAdamUpdate",
+        "primitive.parameter_update.riemannian_orthogonal": (
+            "RiemannianOrthogonalUpdate"
+        ),
+        "primitive.parameter_update.role_split": "RoleSplitUpdate",
     },
     "plasticity": {
         "primitive.plasticity.null": "NullPlasticity",
         "primitive.plasticity.routing": "RoutingPlasticity",
-        "primitive.plasticity.fast_weight": "FastWeightPlasticity",
+        "primitive.plasticity.fast_weights": "FastWeightPlasticity",
         "primitive.plasticity.substrate_coupled": "SubstrateCoupledPlasticity",
         "primitive.plasticity.rule_state": "RuleStatePlasticity",
         "primitive.plasticity.temporal_psi": "TemporalPsiPlasticity",
         "primitive.plasticity.closed_form_ridge": "ClosedFormRidgePlasticity",
+        "primitive.plasticity.conflict_adaptive": "ConflictAdaptivePsiPlasticity",
     },
 }
 

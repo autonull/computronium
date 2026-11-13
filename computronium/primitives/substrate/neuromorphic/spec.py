@@ -10,9 +10,11 @@ SPEC = ImplementationSpec(
     name="Neuromorphic",
     axis="substrate",
     reference_entrypoint=(
-        "computronium.primitives.substrate.neuromorphic.reference.step"
+        "computronium.primitives.substrate.neuromorphic.reference.make_substrate"
     ),
-    kernel_entrypoint=("computronium.primitives.substrate.neuromorphic.kernel.step"),
+    kernel_entrypoint=(
+        "computronium.primitives.substrate.neuromorphic.kernel.make_substrate"
+    ),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
     status="reference_only",

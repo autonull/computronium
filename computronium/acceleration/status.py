@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 from computronium.acceleration.availability import compile_report
 from computronium.acceleration.dispatch import resolve_rung
 from computronium.acceleration.registry import all_specs
+from computronium.acceleration.spec import coordinate_of_id
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -112,80 +113,17 @@ def _kernel_module_source(spec: ImplementationSpec) -> str | None:
 
 
 def _primitive_to_axis(primitive: str) -> tuple[str, str] | None:
-    """Map a primitive name to its axis and value."""
-    # Extract the primitive name from full ID like "primitive.state_dynamics.instantaneous_pass"
-    prim_name = primitive.split(".")[-1]
+    """The (runtime axis, coordinate) a primitive spec ID names.
 
-    # credit_assignment primitives
-    credit_primitives = {
-        "thermodynamic_contrast": ("credit", "thermodynamic_contrast"),
-        "equilibrium": ("credit", "equilibrium"),
-        "random_projections": ("credit", "random_projections"),
-        "local_goodness": ("credit", "local_goodness"),
-        "pepita": ("credit", "pepita"),
-        "temporal_trace": ("credit", "temporal_trace"),
-        "target_inversion": ("credit", "target_inversion"),
-        "gradient": ("credit", "gradient"),
-        "backprop": ("credit", "gradient"),
-        "reverse_mode": ("credit", "gradient"),
-        "pc_alm": ("credit", "pc_alm"),
-    }
-    # state_dynamics primitives
-    dynamics_primitives = {
-        "energy_minimization": ("dynamics", "energy_minimization"),
-        "predictive_settling": ("dynamics", "predictive_settling"),
-        "spike_integration": ("dynamics", "spike_integration"),
-        "instantaneous_pass": ("dynamics", "instantaneous"),
-        "instantaneous": ("dynamics", "instantaneous"),
-        "diffusion": ("dynamics", "diffusion"),
-        "pc_alm": ("dynamics", "pc_alm"),
-        "pc_alm_settling": ("dynamics", "pc_alm"),
-    }
-    # geometry primitives
-    geometry_primitives = {
-        "feedforward": ("geometry", "feedforward"),
-        "recurrent": ("geometry", "recurrent"),
-        "recurrent_attractor": ("geometry", "recurrent_attractor"),
-        "tile_mesh": ("geometry", "tile_mesh"),
-        "tile": ("geometry", "tile_mesh"),
-        "attention": ("geometry", "attention"),
-        "spatial_lattice": ("geometry", "spatial_lattice"),
-        "graph": ("geometry", "graph"),
-        "conv": ("geometry", "conv"),
-        "nca": ("geometry", "nca"),
-        "ntm": ("geometry", "ntm"),
-        "causal_transformer": ("geometry", "causal_transformer"),
-    }
-    # update primitives
-    update_primitives = {
-        "euclidean": ("update", "euclidean"),
-        "adam": ("update", "adam"),
-        "ortho_adam": ("update", "ortho_adam"),
-        "lion": ("update", "lion"),
-        "riemannian_orthogonal": ("update", "riemannian_orthogonal"),
-        "spectral_constrained": ("update", "spectral_constrained"),
-        "mean_norm": ("update", "mean_norm"),
-        "elastic_consolidation": ("update", "elastic_consolidation"),
-    }
-    # plasticity primitives
-    plasticity_primitives = {
-        "null_plasticity": ("plasticity", "null"),
-        "routing": ("plasticity", "routing"),
-        "fast_weight": ("plasticity", "fast_weight"),
-        "substrate_coupled": ("plasticity", "substrate_coupled"),
-    }
-
-    if prim_name in credit_primitives:
-        return credit_primitives[prim_name]
-    if prim_name in dynamics_primitives:
-        return dynamics_primitives[prim_name]
-    if prim_name in geometry_primitives:
-        return geometry_primitives[prim_name]
-    if prim_name in update_primitives:
-        return update_primitives[prim_name]
-    if prim_name in plasticity_primitives:
-        return plasticity_primitives[prim_name]
-    return None
+    A spec ID *is* its runtime coordinate (TODO91 S1b), so this reads the two
+    segments rather than consulting a third hand table: ``primitive.<axis>.<name>``
+    selects ``<name>`` on ``axis_segment(<axis>)``.
+    """
+    parsed = coordinate_of_id(primitive)
+    if parsed is None:
+        return None
+    axis, name = parsed
+    return axis, name
 
 
 def coordinate_of(spec: ImplementationSpec) -> str:
@@ -203,20 +141,13 @@ def coordinate_of(spec: ImplementationSpec) -> str:
         "plasticity": "null",
     }
 
-    # For primitive specs, use the axis field
+    # For primitive specs, the ID names the coordinate
     if spec.kind == "primitive" and spec.axis:
-        axis_map = {
-            "substrate": "substrate",
-            "geometry": "geometry",
-            "state_dynamics": "dynamics",
-            "plasticity": "plasticity",
-            "credit_assignment": "credit",
-            "parameter_update": "update",
-        }
-        axis_key = axis_map.get(spec.axis)
-        if axis_key and axis_key != "substrate":
-            # For primitives, we only know one axis
-            axes[axis_key] = spec.id.split(".")[-1]
+        parsed = _primitive_to_axis(spec.id)
+        if parsed is not None:
+            axis_key, name = parsed
+            if axis_key != "substrate":
+                axes[axis_key] = name
         return f"{axes['geometry']}/{axes['dynamics']}/{axes['credit']}/{axes['update']}/{axes['plasticity']}"
 
     # For algorithm specs, use uses_primitives
@@ -245,7 +176,7 @@ def coordinate_of(spec: ImplementationSpec) -> str:
                 "pcalm",
                 "hebbian",
                 "snn",
-                "fast_weight",
+                "fast_weights",
                 "routing",
             ]
         ):

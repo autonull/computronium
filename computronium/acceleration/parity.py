@@ -4,6 +4,7 @@ Compare reference and kernel outputs with configurable tolerances.
 Must remain generic - no knowledge of specific algorithms.
 """
 
+import dataclasses
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -57,6 +58,57 @@ def _flatten(value: Any) -> torch.Tensor:
         return _flatten_composite_state(value)
 
     return torch.as_tensor(value).detach().reshape(-1).float()
+
+
+def digest(value: Any) -> str:
+    """A total, structure-preserving digest of a reference output.
+
+    ``compare`` needs tensor-shaped outputs; a substrate factory returns an
+    object, and a composite state need not be a tensor. Two calls under one seed
+    must agree on *all* of it, so this digests tensors by content, containers in
+    order, dataclasses by field, and other objects by their public attributes —
+    never by ``repr``, which carries an address.
+
+    Args:
+        value: Any reference output.
+
+    Returns:
+        A string that is equal for two structurally identical outputs.
+    """
+    parts: list[str] = []
+    _digest_into(value, "out", parts)
+    return "|".join(parts)
+
+
+def _digest_into(node: Any, path: str, parts: list[str]) -> None:
+    """Append ``node``'s structure to ``parts`` under ``path``."""
+    if isinstance(node, torch.Tensor):
+        flat = node.detach().reshape(-1).float()
+        parts.append(
+            f"{path}:{tuple(node.shape)}:{flat.sum().item():.17g}"
+            f":{flat.abs().sum().item():.17g}"
+        )
+    elif isinstance(node, dict):
+        for key in sorted(node, key=str):
+            _digest_into(node[key], f"{path}.{key}", parts)
+    elif isinstance(node, list | tuple):
+        for index, item in enumerate(node):
+            _digest_into(item, f"{path}[{index}]", parts)
+    else:
+        _digest_leaf(node, path, parts)
+
+
+def _digest_leaf(node: Any, path: str, parts: list[str]) -> None:
+    """Append a non-container value, never through ``repr`` on an object."""
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        for field in dataclasses.fields(node):
+            _digest_into(getattr(node, field.name), f"{path}.{field.name}", parts)
+    elif hasattr(node, "__dict__") and not isinstance(node, type):
+        for key in sorted(vars(node)):
+            if not key.startswith("_"):
+                _digest_into(vars(node)[key], f"{path}.{key}", parts)
+    else:
+        parts.append(f"{path}={node!r}")
 
 
 def compare(reference: Any, kernel: Any) -> dict[str, float]:

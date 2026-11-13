@@ -322,7 +322,7 @@ class CampaignDSL(BaseModel):
         """Instantaneous dynamics cannot train a recurrent geometry by gradient."""
         return not (
             dyn == "instantaneous"
-            and geom in {"recurrent", "recurrent_attractor"}
+            and geom in {"recurrent"}
             and cred in {"gradient", "backprop"}
         )
 

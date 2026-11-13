@@ -6,66 +6,59 @@
 import hypothesis
 import hypothesis.strategies as st
 import pytest
-import torch
 
 from computronium.acceleration.registry import get
 
 SPEC_ID = "algorithm.ternary_eqprop"
+CASE_MODULE = "computronium.algorithms.ternary_eqprop.cases"
+REFERENCE_MODULE = "computronium.algorithms.ternary_eqprop.reference"
+REFERENCE_FUNCTION = "step"
 
 
 @pytest.fixture(scope="module")
 def spec():
-    return get("algorithm.ternary_eqprop")
+    return get(SPEC_ID)
+
+
+def _run(seed: int):
+    """One reference call on a case built from ``seed``."""
+    from importlib import import_module
+
+    cases = import_module(CASE_MODULE)
+    reference = import_module(REFERENCE_MODULE)
+    case = cases.make_case(seed=seed)
+    call = getattr(reference, REFERENCE_FUNCTION)
+    return call(case)
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
 @hypothesis.settings(max_examples=10, deadline=None)
 def test_deterministic_under_fixed_seed(spec, seed):
-    """Test that implementation is deterministic under fixed seed."""
-    from importlib import import_module
+    """Two calls under one seed produce the same output."""
+    from computronium.acceleration.parity import digest
 
-    from computronium.acceleration.parity import compare
-    from computronium.algorithms.ternary_eqprop.cases import make_case
-
-    case1 = make_case(seed=seed)
-    case2 = make_case(seed=seed)
-
-    ref_module = import_module("computronium.algorithms.ternary_eqprop.reference")
-    out1 = ref_module.step(case1)
-    out2 = ref_module.step(case2)
-
-    # Use the existing compare function which handles CompositeState, dicts, etc.
-    metrics = compare(out1, out2)
-    assert metrics["max_abs_diff"] == 0.0, f"Outputs differ for seed {seed}: {metrics}"
+    assert digest(_run(seed)) == digest(_run(seed))
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
 @hypothesis.settings(max_examples=10, deadline=None)
 def test_state_remains_finite(spec, seed):
-    """Test that all outputs remain finite (no NaN/Inf)."""
-    from importlib import import_module
+    """Every tensor in the output is finite (no NaN/Inf)."""
+    import torch
 
-    from computronium.algorithms.ternary_eqprop.cases import make_case
+    def _check(value, path="output"):
+        if isinstance(value, torch.Tensor):
+            assert not torch.isnan(value).any(), f"NaN found in {path}"
+            assert not torch.isinf(value).any(), f"Inf found in {path}"
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                _check(item, f"{path}.{key}")
+        elif isinstance(value, list | tuple):
+            for index, item in enumerate(value):
+                _check(item, f"{path}[{index}]")
+        elif hasattr(value, "__dict__") and not isinstance(value, type):
+            for key, item in vars(value).items():
+                if not key.startswith("_"):
+                    _check(item, f"{path}.{key}")
 
-    case = make_case(seed=seed)
-
-    ref_module = import_module("computronium.algorithms.ternary_eqprop.reference")
-    out = ref_module.step(case)
-
-    def _check_finite(x, path="output"):
-        if isinstance(x, torch.Tensor):
-            assert not torch.isnan(x).any(), f"NaN found in {path}"
-            assert not torch.isinf(x).any(), f"Inf found in {path}"
-        elif isinstance(x, dict):
-            for k, v in x.items():
-                _check_finite(v, f"{path}.{k}")
-        elif isinstance(x, (list, tuple)):
-            for i, v in enumerate(x):
-                _check_finite(v, f"{path}[{i}]")
-        # Handle CompositeState and similar objects with __dict__
-        elif hasattr(x, "__dict__") and not isinstance(x, type):
-            for k, v in x.__dict__.items():
-                if not k.startswith("_"):
-                    _check_finite(v, f"{path}.{k}")
-
-    _check_finite(out)
+    _check(_run(seed))

@@ -193,7 +193,7 @@ def _build_component_sets() -> dict[BudgetStrategy, ComponentSet]:
     c = _get_components()
 
     # Filter out known-invalid combinations:
-    # - instantaneous dynamics + recurrent/recurrent_attractor geometry + gradient/backprop credit
+    # - instantaneous dynamics + recurrent geometry + gradient/backprop credit
     #   fails validation because gradient doesn't reach recurrent weights
     # For broad_shallow and balanced, we keep all components but the validation will catch
     # invalid combos at runtime. For a better experience, we could filter here.

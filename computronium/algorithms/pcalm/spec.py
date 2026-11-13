@@ -14,7 +14,7 @@ SPEC = ImplementationSpec(
     supported_backends=("reference", "kernel"),
     status="kernel_verified",
     uses_primitives=(
-        "primitive.state_dynamics.pc_alm_settling",
+        "primitive.state_dynamics.pc_alm",
         "primitive.credit_assignment.pc_alm",
     ),
     summary="Augmented Lagrangian Predictive Coding.",

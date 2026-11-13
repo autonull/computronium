@@ -845,7 +845,7 @@ A decreasing energy function does not by itself guarantee convergence to a uniqu
 
 ### Substrates
 
-Start with digital finite-precision computation. Extend later to noisy, sparse, ternary, memristive, neuromorphic, or photonic models.
+Start with digital finite-precision computation. Extend later to noisy, sparse, ternary, memristive, neuromorphic, or optical models.
 
 Treat quantum substrates as a distinct formalization problem rather than assuming that a generic stochastic or complex-valued model captures quantum computation.
 

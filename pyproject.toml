@@ -508,7 +508,7 @@ ignore = [
 "computronium/primitives/substrate/ternary/reference.py" = [
     "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
-"computronium/primitives/geometry/spatial_lattice_3d/reference.py" = [
+"computronium/primitives/geometry/spatial_lattice/reference.py" = [
     "typing-only-first-party-import", # FeedforwardGeometry used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/noisy/kernel.py" = [

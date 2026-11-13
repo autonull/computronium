@@ -10,9 +10,11 @@ SPEC = ImplementationSpec(
     name="Memristive",
     axis="substrate",
     reference_entrypoint=(
-        "computronium.primitives.substrate.memristive.reference.step"
+        "computronium.primitives.substrate.memristive.reference.make_substrate"
     ),
-    kernel_entrypoint=("computronium.primitives.substrate.memristive.kernel.step"),
+    kernel_entrypoint=(
+        "computronium.primitives.substrate.memristive.kernel.make_substrate"
+    ),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
     status="reference_only",

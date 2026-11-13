@@ -65,7 +65,7 @@ class SignalPropagationTrack(ValidationTrack):
             results_kernel = None
             if torch.cuda.is_available():
                 try:
-                    from computronium.acceleration.kernels import HAS_CUPY
+                    from computronium.acceleration.backends import HAS_CUPY
 
                     if HAS_CUPY:
                         results_kernel = run_signal_propagation_experiment(

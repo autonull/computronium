@@ -66,18 +66,28 @@ def _print_table(specs) -> None:
         )
 
 
-def _print_markdown(specs) -> None:
-    """Print GitHub-flavored markdown format."""
-    print("| ID | KIND | AXIS | BACKENDS | STATUS | KERNEL TECH | SUMMARY |")
-    print("|----|------|------|----------|--------|-------------|---------|")
+def render_github_markdown(specs=None) -> str:
+    """The GitHub-flavored matrix table as a string."""
+    specs = all_specs() if specs is None else specs
+    lines = [
+        "| ID | KIND | AXIS | BACKENDS | STATUS | KERNEL TECH | SUMMARY |",
+        "|----|------|------|----------|--------|-------------|---------|",
+    ]
     for spec in specs:
         axis = spec.axis or ""
         backends = ",".join(spec.supported_backends)
         kernel_tech = spec.kernel_technology or ""
         summary = (spec.summary or "")[:60]
-        print(
-            f"| {spec.id} | {spec.kind} | {axis} | {backends} | {spec.status} | {kernel_tech} | {summary} |"
+        lines.append(
+            f"| {spec.id} | {spec.kind} | {axis} | {backends} | {spec.status} "
+            f"| {kernel_tech} | {summary} |"
         )
+    return "\n".join(lines) + "\n"
+
+
+def _print_markdown(specs) -> None:
+    """Print GitHub-flavored markdown format."""
+    print(render_github_markdown(specs), end="")
 
 
 def _print_json(specs) -> None:

@@ -237,10 +237,17 @@ def test_a_batched_rung_answers_for_every_sample_in_the_batch(
 # - plasticity.null: no-op by design
 # - plasticity.substrate_coupled: no-op at plasticity level (ψ ≡ σ)
 BATCH_AXIS_SKIP: set[str] = {
+    "computronium.primitives.parameter_update.adam.reference",
     "computronium.primitives.parameter_update.elastic_consolidation.reference",
     "computronium.primitives.parameter_update.euclidean.reference",
+    "computronium.primitives.parameter_update.lion.reference",
+    "computronium.primitives.parameter_update.local_adam.reference",
+    "computronium.primitives.parameter_update.mean_norm.reference",
     "computronium.primitives.parameter_update.muon.reference",
     "computronium.primitives.parameter_update.natural_gradient.reference",
+    "computronium.primitives.parameter_update.ortho_adam.reference",
+    "computronium.primitives.parameter_update.riemannian_orthogonal.reference",
+    "computronium.primitives.parameter_update.role_split.reference",
     "computronium.primitives.parameter_update.spectral_constrained.reference",
     "computronium.primitives.plasticity.null.reference",
     "computronium.primitives.plasticity.substrate_coupled.reference",

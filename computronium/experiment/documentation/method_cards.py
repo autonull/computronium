@@ -119,7 +119,7 @@ def _get_axis_registries() -> dict[str, dict[str, type]]:
         "null": getattr(
             __import__("computronium.state", fromlist=[""]), "NullPlasticity", None
         ),
-        "fast_weight": getattr(
+        "fast_weights": getattr(
             __import__("computronium.core.plasticity.fast_weights", fromlist=[""]),
             "FastWeightPlasticity",
             None,

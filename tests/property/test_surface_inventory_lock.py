@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 from computronium.acceleration.registry import all_specs
+from computronium.acceleration.spec import coordinate_of_id
 from computronium.algorithms import (
     ALL_ALGORITHMS,
     INTERNAL_ALGORITHMS,
@@ -32,13 +33,9 @@ from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     OBJECTIVES_REGISTRY,
 )
-from computronium.experiment.schema.spec_aliases import (
-    NOT_A_PRIMITIVE,
-    SPEC_AXIS,
-    runtime_name_for,
-)
 from computronium.experiment.surface.inventory import (
     DECLARED_CLAIMS,
+    NO_COORDINATE,
     InventoryKind,
     InventoryStatus,
     build_inventory,
@@ -86,20 +83,41 @@ def test_every_algorithm_package_is_declared_public_or_internal(report) -> None:
             assert row.smoke_path, row.id
 
 
-def test_every_spec_id_resolves_or_is_not_a_primitive(report) -> None:
+def test_every_spec_id_resolves_or_is_declared_no_coordinate(report) -> None:
     rows = _ids(report, InventoryKind.PRIMITIVE)
     for spec in all_specs():
         if spec.kind != "primitive":
             continue
         assert spec.id in rows, spec.id
-        runtime = runtime_name_for(spec)
-        if runtime is None:
-            assert spec.id in NOT_A_PRIMITIVE, spec.id
-            row = next(row for row in report.rows if row.id == spec.id)
-            assert row.status is InventoryStatus.DECLARED, spec.id
-        else:
-            assert spec.axis is not None
-            assert runtime in AXES_REGISTRIES[SPEC_AXIS[spec.axis]], spec.id
+        axis, runtime = coordinate_of_id(spec.id)
+        matching = AXES_REGISTRIES[axis]
+        if runtime in matching:
+            continue
+        assert spec.id in NO_COORDINATE, spec.id
+        row = next(row for row in report.rows if row.id == spec.id)
+        assert row.status is InventoryStatus.DECLARED, spec.id
+
+
+def test_primitives_and_runtime_coordinates_are_a_bijection(report) -> None:
+    """Every runtime coordinate has a same-named spec row (TODO91 S1b/S1c)."""
+    declared = {
+        coordinate
+        for spec_id in NO_COORDINATE
+        for _, coordinate in [coordinate_of_id(spec_id)]
+    }
+    missing = {
+        (axis.value, name)
+        for axis, registry in AXES_REGISTRIES.items()
+        for name in (spec.name for spec in registry)
+        if (axis.value, name)
+        not in {
+            coordinate_of_id(spec.id)
+            for spec in all_specs()
+            if spec.kind == "primitive"
+        }
+        and name not in declared
+    }
+    assert not missing, sorted(missing)
 
 
 def test_every_runtime_axis_coordinate_has_a_row(report) -> None:
@@ -188,16 +206,3 @@ def test_docs_task_names_resolve_to_a_row(report) -> None:
         if row.kind is InventoryKind.TASK
     }
     assert _docs_task_names() <= known, _docs_task_names() - known
-
-
-def test_spec_matrix_ids_are_inventory_rows(report) -> None:
-    matrix = (REPO / "docs" / "generated" / "IMPLEMENTATION_MATRIX.md").read_text(
-        encoding="utf-8"
-    )
-    matrix_ids = {
-        line.split("|")[1].strip()
-        for line in matrix.splitlines()
-        if line.startswith("| ") and "---" not in line and not line.startswith("| ID ")
-    }
-    known = {row.id for row in report.rows}
-    assert matrix_ids <= known, sorted(matrix_ids - known)

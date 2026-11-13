@@ -34,13 +34,11 @@ Two locks:
   method that does not exist, and therefore a block that had never run and
   never could. There are exactly two shapes, and no third:
 
-  * **14 table-driven lazy shims** -- every one resolves its names from a table
+  * **11 table-driven lazy shims** -- every one resolves its names from a table
     declared in the same file, so the population *is* statically derivable:
 
     - ``_LAZY`` (3): ``computronium/__init__.py``, ``cli``, ``core``.
       The root ``__all__``/``_LAZY`` wiring lock covers these.
-    - ``_PRIMITIVES`` (3): ``primitives``, ``primitives/geometry``,
-      ``primitives/substrate``.
     - ``_ALGORITHMS`` (1): ``algorithms``.
     - ``_CANONICAL_TRANSFORMS`` (1): ``data/transforms.py``, whose dataset
       transforms are built on first access so ``torchvision`` stays optional.
@@ -299,9 +297,6 @@ GETATTR_SHIMS: dict[str, str] = {
     "computronium/cli/__init__.py": "_LAZY",
     "computronium/core/__init__.py": "_LAZY",
     "computronium/algorithms/__init__.py": "_ALGORITHMS",
-    "computronium/primitives/__init__.py": "_PRIMITIVES",
-    "computronium/primitives/geometry/__init__.py": "_PRIMITIVES",
-    "computronium/primitives/substrate/__init__.py": "_PRIMITIVES",
     "computronium/experiment/__init__.py": "_symbol_to_module",
     "computronium/experiment/schema/__init__.py": "_symbol_to_module",
     "computronium/experiment/evidence/__init__.py": "_symbol_to_module",

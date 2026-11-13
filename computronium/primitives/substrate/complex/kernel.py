@@ -1,12 +1,11 @@
 """Accelerated kernel for Complex Substrate.
 
-Imports Triton kernels from computronium.core.substrates.complex_substrate to establish
-family membership and technology. Delegates to reference implementation
-until a fused complex substrate kernel is written.
+No fused complex-substrate kernel exists, so this rung builds the reference
+configuration. ``is_available`` reports whether the family's Triton kernels
+compile; it does not make this rung a different substrate.
 """
 
 from computronium.acceleration.availability import triton_rung_available
-from computronium.core.substrates.complex_substrate import ComplexSubstrate
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -18,11 +17,6 @@ def is_available() -> bool:
 
 def make_substrate(spec):
     """Create a complex substrate instance from a SubstrateSpec."""
-    if not is_available():
-        from .reference import make_substrate as reference_make_substrate
+    from .reference import make_substrate as reference_make_substrate
 
-        return reference_make_substrate(spec)
-
-    # Use accelerated implementation - convert SubstrateSpec to SubstrateConfig
-    config = spec.to_config()
-    return ComplexSubstrate(config)
+    return reference_make_substrate(spec)

@@ -24,18 +24,17 @@ from computronium.ontology.geometry import (
 
 
 def test_activation_layout_all_geometries() -> None:
-    """Every geometry backend must implement activation_layout."""
-    from computronium.ontology.geometry import _GEOMETRY_BACKENDS
+    """Every runtime geometry coordinate must implement activation_layout."""
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
 
-    for topology_type, backend in _GEOMETRY_BACKENDS.items():
-        # Skip abstract/base entries
-        if topology_type in ("tile_block",):
-            continue
-        # Create a minimal config for this topology
+    coordinates = sorted(AXES_REGISTRIES[StructuralAxis.GEOMETRY].keys())
+    assert coordinates, "the geometry axis registry is empty"
+
+    for topology_type in coordinates:
         config = _minimal_config_for_topology(topology_type)
         if config is None:
             continue
-        geom = backend.build(config)
+        geom = geometry_from_config(config)
         layout = geom.activation_layout(batch_size=4)
         assert isinstance(layout, ActivationLayout), (
             f"{topology_type}: activation_layout must return ActivationLayout"
@@ -64,7 +63,7 @@ def _minimal_config_for_topology(topology_type: str) -> GeometryConfig | None:
             return GeometryConfig.causal_transformer(
                 vocab_size=32, d_model=64, n_layers=2, n_heads=4, seq_len=16
             )
-        case "recurrent" | "recurrent_attractor":
+        case "recurrent":
             return GeometryConfig.recurrent(
                 input_dim=10, output_dim=5, hidden_dims=(16,)
             )

@@ -1,0 +1,34 @@
+"""Spatial Lattice 3D Geometry Primitive Specification."""
+
+from computronium.acceleration.spec import (
+    ImplementationSpec,
+)
+
+SPEC = ImplementationSpec(
+    id="primitive.geometry.spatial_lattice",
+    kind="primitive",
+    name="Spatial Lattice Geometry",
+    axis="geometry",
+    reference_entrypoint=(
+        "computronium.primitives.geometry.spatial_lattice.reference.forward"
+    ),
+    kernel_entrypoint=(
+        "computronium.primitives.geometry.spatial_lattice.kernel.forward"
+    ),
+    kernel_technology="triton",
+    supported_backends=("reference", "kernel"),
+    status="reference_only",
+    summary="3D spatial lattice topology with local connectivity for neural cellular automata and spatial computation.",
+    equations="""
+    x_{i,j,k}' = σ(Σ_{n∈N(i,j,k)} W_n · x_n + b)
+    N(i,j,k) = neighbors within radius r in 3D lattice
+    """,
+    invariants=(
+        "output shape matches (batch, output_dim)",
+        "deterministic under fixed seed",
+        "activations remain finite",
+        "local connectivity preserved",
+    ),
+    notes="Reference implementation delegates to SpatialLattice3DGeometry. Kernel falls back to reference (Triton TODO).",
+    tags=("spatial", "lattice", "3d", "local_connectivity", "nca"),
+)

@@ -14,7 +14,7 @@ SPEC = ImplementationSpec(
     supported_backends=("reference", "kernel"),
     status="kernel_verified",
     uses_primitives=(
-        "primitive.state_dynamics.instantaneous_pass",
+        "primitive.state_dynamics.instantaneous",
         "primitive.credit_assignment.temporal_trace",
         "primitive.parameter_update.euclidean",
     ),

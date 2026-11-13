@@ -15,8 +15,8 @@ SPEC = ImplementationSpec(
     status="kernel_verified",
     uses_primitives=(
         "primitive.geometry.tile_mesh",
-        "primitive.state_dynamics.instantaneous_pass",
-        "primitive.credit_assignment.reverse_mode",
+        "primitive.state_dynamics.instantaneous",
+        "primitive.credit_assignment.gradient",
         "primitive.parameter_update.euclidean",
     ),
     summary="TileNet: modular tiled architecture with local connectivity.",

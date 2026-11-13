@@ -6,7 +6,7 @@ Delegates to fast_weight primitive kernel where possible.
 from typing import Any
 
 from computronium.acceleration.backends import kernel_available
-from computronium.primitives.plasticity.fast_weight.kernel import (
+from computronium.primitives.plasticity.fast_weights.kernel import (
     is_available as fw_kernel_available,
 )
 

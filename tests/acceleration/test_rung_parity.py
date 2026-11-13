@@ -111,7 +111,7 @@ def test_pcalm_fused_update_matches_the_eager_dual_primal_update(device: str) ->
     step_size, rho, alpha = 0.1, 1.0, 0.5
     fused = fused_dual_primal_update(h, c, lam, topdown, step_size, rho, alpha)
     eager = _eager_dual_primal_update(h, c, lam, topdown, step_size, rho, alpha)
-    tolerance = _spec_parity("primitive.state_dynamics.pc_alm_settling")
+    tolerance = _spec_parity("primitive.state_dynamics.pc_alm")
     assert_parity(fused[0], eager[0], tolerance)
     assert_parity(fused[1], eager[1], tolerance)
 

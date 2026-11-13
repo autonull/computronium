@@ -547,8 +547,7 @@ class SystemConfig:
     def _validate_recurrent_geometry_dynamics(self) -> None:
         """Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics."""
         self._require_when(
-            condition=self.geometry.topology_type
-            in {"recurrent", "recurrent_attractor"},
+            condition=self.geometry.topology_type in {"recurrent"},
             allowed_values={
                 "energy_minimization",
                 "predictive_settling",
@@ -623,7 +622,7 @@ class SystemConfig:
         """Diffusion dynamics requires energy-based geometry (recurrent)."""
         self._require_when(
             condition=self.dynamics.dynamics_type == "diffusion",
-            allowed_values={"recurrent", "recurrent_attractor"},
+            allowed_values={"recurrent"},
             axis_name="geometry.topology_type",
             actual_value=self.geometry.topology_type,
             context="diffusion dynamics requires recurrent geometry",
@@ -889,7 +888,7 @@ class SystemConfig:
             "local_contrastive",
         }:
             geom_type = getattr(self.geometry, "config", self.geometry).topology_type
-            if geom_type not in {"feedforward", "feedforward_dag"}:
+            if geom_type not in {"feedforward"}:
                 raise ValueError(
                     f"LocalContrastiveCredit (credit_type={self.credit.credit_type!r}) "
                     f"requires feedforward geometry, got {geom_type!r}"
@@ -983,7 +982,7 @@ class SystemConfig:
         fails because the recurrent weights are not in the feedforward loss graph."""
         if (
             self.dynamics.dynamics_type == "instantaneous"
-            and self.geometry.topology_type in {"recurrent", "recurrent_attractor"}
+            and self.geometry.topology_type in {"recurrent"}
             and self.credit.credit_type in {"gradient", "backprop"}
         ):
             raise ValueError(
@@ -1115,7 +1114,7 @@ class SystemConfig:
         validators: list[tuple[bool, bool]] = [
             # (condition, should_pass)
             (
-                geo_type in {"recurrent", "recurrent_attractor"},
+                geo_type in {"recurrent"},
                 dyn_type in _RECURRENT_DYNAMICS,
             ),
             (

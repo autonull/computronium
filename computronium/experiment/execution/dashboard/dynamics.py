@@ -538,14 +538,10 @@ def _train_and_measure_cell(
         The payload the browser draws: the cell, the measurements, and the
         plain reason when the cell has no dynamics to show.
     """
+    from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
     from computronium.domains.factory import create_task
     from computronium.experiment.analysis.transition import build_transition
-    from computronium.experiment.kernel.evaluate import (
-        SystemTrainer,
-        SystemTrainerConfig,
-        _resolve_device,
-        task_shape,
-    )
+    from computronium.experiment.kernel.evaluate import task_shape
 
     started = time.perf_counter()
     task = create_task(task_id, device=device, quick_mode=True, num_workers=0)
@@ -575,10 +571,9 @@ def _train_and_measure_cell(
         }
 
     # Train the cell
-    resolved_device = _resolve_device(device)
     config = SystemTrainerConfig(
         max_epochs=epochs,
-        device=resolved_device,
+        device=device,
         seed=42,
         limit_train_batches=None,
         limit_val_batches=None,

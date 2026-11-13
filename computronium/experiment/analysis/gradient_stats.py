@@ -51,15 +51,14 @@ def compute_gradient_statistics(
     layer_grads: dict[str, list[Tensor]] = {}
 
     # Collect gradients over several batches
-    for i, (x_batch, y_batch) in enumerate(dataloader):
+    for i, (batch_x, batch_y) in enumerate(dataloader):
         if i >= config.sample_batches:
             break
 
-        x_batch, y_batch = x_batch.to(device), y_batch.to(device)
         model.zero_grad()
 
-        output = model(x)
-        loss = torch.nn.functional.cross_entropy(output, y)
+        output = model(batch_x.to(device))
+        loss = torch.nn.functional.cross_entropy(output, batch_y.to(device))
         loss.backward()
 
         for name, param in model.named_parameters():
