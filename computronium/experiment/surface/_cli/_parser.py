@@ -604,6 +604,20 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
         "--format", choices=["json", "text"], default="text", help="Output format"
     )
 
+    p_coverage_inventory = p_coverage_sub.add_parser(
+        "inventory",
+        help="Join every declared surface (specs, axes, tasks, objectives, "
+        "capabilities) into one classified table (TODO91 S0)",
+    )
+    p_coverage_inventory.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+    p_coverage_inventory.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero when any row is unknown",
+    )
+
     # Defect command — failure constraint registry (TODO63 Phase 3)
     p_defect = sub.add_parser(
         "defect",

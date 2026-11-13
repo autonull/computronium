@@ -2,6 +2,7 @@
 
 **Status:** 2026-11-13 · base `e226694a` · TODO90 closed (breadth instrument,
 B0–B10) · **this plan writes no claims and runs no search.**
+Progress: S0 closed, S1 closed, S2 half-closed (see §3a).
 
 **Mission:** Make the *implemented surface of the library* complete enough that
 a future experiment — including HPO — can select any declared algorithm,
@@ -103,18 +104,66 @@ Ordered by what makes the selection surface trustworthy first, not by interest.
 
 | # | Ticket | Deliverable | Cost | State |
 |---|---|---|---|---|
-| S0 | **Inventory instrument** | one `comp` command joins spec rows, runtime axes, packages, tasks, domains, objectives, capabilities; zero `unknown` rows | 1 h | open |
-| S1 | **Algorithm surface** | every algorithm package is public or declared internal; spec ID → runtime constructor alias table | 1–2 h | open |
-| S2 | **Architecture surface** | every geometry has a forward/step/param smoke; every spec geometry resolves through the alias table or is retired | 1 h | open |
-| S3 | **Task surface** | planned tasks implemented or declared; `continual`/`multitask` gain one task each or a named retirement | 2 h | open |
+| S0 | **Inventory instrument** | one `comp` command joins spec rows, runtime axes, packages, tasks, domains, objectives, capabilities; zero `unknown` rows | 1 h | **closed** |
+| S1 | **Algorithm surface** | every algorithm package is public or declared internal; spec ID → runtime constructor alias table | 1–2 h | **closed** |
+| S2 | **Architecture surface** | every geometry has a forward/step/param smoke; every spec geometry resolves through the alias table or is retired | 1 h | **half: alias + docs rows done; geometry forward smoke open** |
+| S3 | **Task surface** | planned tasks implemented or declared; `continual`/`multitask` gain one task each or a named retirement | 2 h | open (declared rows landed) |
 | S4 | **Loss/objective surface** | declared loss inventory per task; continual objectives wired or retired | 1 h | open |
-| S5 | **Capability surface** | all 21 unverified rows get a smoke test or `unavailable_reason` + trigger | 2 h | open |
+| S5 | **Capability surface** | all 21 unverified rows get a smoke test or `unavailable_reason` + trigger | 2 h | open (inventory classifies all 21 as declared) |
 | S6 | **Combination smoke** | legal-coordinate matrix composes and trains one step with zero failures | 1–2 h | open |
-| S7 | **Vocabulary/docs lock** | generated docs read from the inventory; API-vocabulary drift locked | 30 min | open |
+| S7 | **Vocabulary/docs lock** | generated docs read from the inventory; API-vocabulary drift locked | 30 min | open (spec-matrix + docs-task joins locked) |
 
 S0 is the instrument; S1–S2 make selection verifiable; S3–S4 complete the
 content; S6 proves combinations; S5 is infrastructure readiness; S7 prevents
 the second vocabulary from returning.
+
+### 3a. Progress log
+
+**S0 — closed.** `comp coverage inventory [--format json] [--strict]` joins
+the spec registry, `AXES_REGISTRIES`, algorithm packages, `SUPPORTED_TASKS`,
+`DomainType`, `TaskRegistry`, `OBJECTIVES_REGISTRY`, and
+`CAPABILITIES_REGISTRY` into one classified table (`inventory.py`). Measured
+2026-11-13: **287 rows — 234 implemented, 53 declared, 0 unknown** (21
+algorithms, 59 primitives, 41 tasks, 11 domains, 63 objectives, 88
+capabilities, 4 architectures). Classification is path-backed: a row whose
+smoke file disappears becomes `unknown`; only a recorded reason makes it
+`declared`. Lock:
+`tests/property/test_surface_inventory_lock.py` (10 tests), which also joins
+the docs task list and the generated implementation matrix.
+
+**S1 — closed.** The seven EQ variants are declared internal with their preset
+factory (`algorithms/__init__.py::INTERNAL_ALGORITHMS`); `PUBLIC_ALGORITHMS`
+and `ALL_ALGORITHMS` are explicit. The alias table is
+`experiment/schema/spec_aliases.py`: 12 spec→runtime aliases, one
+`not_a_primitive` row (`closed_form_ridge`), and a fail-loud unknown axis. The
+inventory resolves all 44 primitive specs through it; unknown spec IDs fail
+the lock.
+
+**S2 — half.** Done: alias resolution for all 7 geometry specs; the four
+docs-claimed architectures (PINO/DeepONet/FNO/LSTM) are declared rows with a
+trigger; the inventory lock asserts every geometry spec resolves and every
+runtime coordinate has a row. Open: one forward/param smoke per **runtime**
+geometry (11/11) and an explicit activation-layout/cell-mode declaration per
+geometry row.
+
+**S3 — declared half landed.** The 11 planned names and 4 docs contradictions
+are now rows with a reason and trigger (`inventory.py::DECLARED_CLAIMS`), so
+none is silence. Open: register the offline loaders (`diabetes`,
+`lorenz_state`), and give `continual`/`multitask` one task each or a retirement
+row.
+
+**S5 — classification landed.** All 21 unverified capabilities are `declared`
+with their registry reason; all 67 active rows resolve to an existing test
+file. Open: the two lab rows cite package tests that are absent from this
+repository — either ship the package tests or retire those rows.
+
+**S7 — joins landed.** The inventory lock fails if a docs task name or a
+generated implementation-matrix ID has no row. Open: generated docs counts must
+be derived from the inventory rather than hand-maintained prose.
+
+**Next session order:** S2 geometry smoke → S3 offline loaders → S4 loss
+inventory → S5 capability decisions → S6 legal-coordinate smoke → S7 generated
+counts.
 
 ---
 

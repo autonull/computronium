@@ -398,6 +398,9 @@ def _cmd_coverage(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
             )
         return 0
 
+    elif args.coverage_command == "inventory":
+        return _coverage_inventory(args)
+
     elif args.coverage_command == "report":
         if args.corpus:
             from computronium.experiment.evidence.corpus import (
@@ -490,3 +493,17 @@ def _cmd_coverage(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
         return 0
 
     return 0
+
+
+def _coverage_inventory(args: argparse.Namespace) -> int:
+    """Print the joined surface inventory; ``--strict`` fails on unknown rows."""
+    from computronium.experiment.surface.inventory import (
+        InventoryStatus,
+        build_inventory,
+        render_json,
+    )
+
+    report = build_inventory()
+    print(render_json(report) if args.format == "json" else report.render())
+    unknown = report.by_status(InventoryStatus.UNKNOWN)
+    return 1 if args.strict and unknown else 0
