@@ -393,6 +393,10 @@ def _cmd_coverage(args: argparse.Namespace) -> int:  # ruff: ignore[complex-stru
             for task_name, objs in sorted(report.items()):
                 print(f"\n{task_name}: {', '.join(objs)}")
                 total_unmeasured += len(objs)
+                row = registry.get(task_name)
+                for obj in row.unmeasured_objectives():
+                    if obj.unavailable_reason:
+                        print(f"  {obj.name}: {obj.unavailable_reason}")
             print(
                 f"\nTotal: {total_unmeasured} unmeasured objectives across {len(report)} tasks"
             )

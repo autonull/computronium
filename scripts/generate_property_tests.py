@@ -34,9 +34,9 @@ import pytest
 from computronium.acceleration.registry import get
 
 SPEC_ID = "{spec_id}"
-CASE_MODULE = "{case_module}"
-REFERENCE_MODULE = "{reference_module}"
-REFERENCE_FUNCTION = "{reference_function}"
+{case_module_line}
+{reference_module_line}
+{reference_function_line}
 
 
 @pytest.fixture(scope="module")
@@ -109,14 +109,22 @@ def _slug(spec: ImplementationSpec) -> str:
     return spec.id.replace(".", "_")
 
 
+def _assignment(name: str, value: str, width: int = 88) -> str:
+    """One module-level string assignment, wrapped so ruff format leaves it."""
+    line = f'{name} = "{value}"'
+    if len(line) <= width:
+        return line
+    return f'{name} = (\n    "{value}"\n)'
+
+
 def _render(spec: ImplementationSpec) -> str:
     reference_module, reference_function = _module_of(spec.reference_entrypoint)
     case_module = f"{reference_module.rpartition('.')[0]}.cases"
     body = _HEADER.format(
         spec_id=spec.id,
-        case_module=case_module,
-        reference_module=reference_module,
-        reference_function=reference_function,
+        case_module_line=_assignment("CASE_MODULE", case_module),
+        reference_module_line=_assignment("REFERENCE_MODULE", reference_module),
+        reference_function_line=_assignment("REFERENCE_FUNCTION", reference_function),
         call=_call_body(reference_function),
     )
     if reference_function not in _TAKES_SPEC:

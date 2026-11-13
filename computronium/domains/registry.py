@@ -27,8 +27,8 @@ __all__ = [
 # resolution must not touch the network, and architecture §11 defers the full
 # Phase-0 breadth. A name listed here that cannot resolve is a defect, so
 # network-fetching vision sets (cifar100/svhn) and not-yet-implemented domains
-# (mountain_car/lunar_lander RL, wikitext2/penn_treebank LM,
-# diabetes/california_housing tabular) stay out until their loaders land.
+# (mountain_car/lunar_lander RL, wikitext2/penn_treebank LM, california_housing
+# tabular) stay out until their loaders land.
 SUPPORTED_TASKS: frozenset[str] = frozenset({
     # vision (incl. toy boolean/toy-classification datasets)
     "xor",
@@ -60,12 +60,14 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "proteins",
     # tabular
     "breast_cancer",
+    "diabetes",
     "iris",
     "wine",
     # timeseries
     "synthetic_forecast",
     # scientific (offline physics-simulation loader)
     "pendulum_state",
+    "lorenz_state",
 })
 
 

@@ -152,11 +152,14 @@ class TestCapabilitiesRegistryTotality:
             assert cap.description
             assert cap.stage is not None
             assert cap.owner is not None
-            assert cap.verifying_test is not None
             assert isinstance(cap.flags, tuple)
             assert cap.status in CapabilityStatus
             if cap.status == CapabilityStatus.RETIRED:
+                # A retired row's evidence is its record, not a test path: a
+                # path that does not exist is exactly what S5 retired.
                 assert cap.retirement_record is not None
+            else:
+                assert cap.verifying_test is not None
 
     def test_capability_kind_distribution(self) -> None:
         """Capabilities distributed across all kinds."""
@@ -281,13 +284,21 @@ class TestCapabilitiesRegistryTotality:
             assert owner in owners, f"No capabilities for owner {owner}"
 
     def test_verifying_test_format(self) -> None:
-        """verifying_test should be pytest node id format."""
+        """verifying_test should be pytest node id format.
+
+        A retired row is the one exception: its evidence is the retirement
+        record, and naming a test file that does not exist is the defect this
+        rule exists to prevent (TODO91 S5).
+        """
         from computronium.experiment.schema import seed_all_registries
 
         seed_all_registries()
 
         for cap in CAPABILITIES_REGISTRY.values():
             test_path = cap.verifying_test
+            if cap.status is CapabilityStatus.RETIRED:
+                assert cap.retirement_record, cap.capability_id
+                continue
             assert test_path, f"Capability {cap.capability_id} missing verifying_test"
             # Should be a valid pytest path format
             assert "::" in test_path or test_path.endswith(".py"), (

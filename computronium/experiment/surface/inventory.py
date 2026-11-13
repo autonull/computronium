@@ -136,12 +136,6 @@ DECLARED_CLAIMS: Final[tuple[DeclaredClaim, ...]] = (
         trigger="declare the Box2D dependency and a deterministic episode cap",
     ),
     DeclaredClaim(
-        id="task:tabular:diabetes",
-        kind=InventoryKind.TASK,
-        reason="offline loader exists (sklearn.datasets.load_diabetes); row unregistered",
-        trigger="register a TabularTask regression row (S3)",
-    ),
-    DeclaredClaim(
         id="task:tabular:california_housing",
         kind=InventoryKind.TASK,
         reason="network_required: sklearn.datasets.fetch_california_housing downloads",
@@ -161,21 +155,6 @@ DECLARED_CLAIMS: Final[tuple[DeclaredClaim, ...]] = (
             trigger=f"implement the {name} integrator with a conservation smoke",
         )
         for name in ("heat", "wave", "burgers", "navier_stokes")
-    ),
-    DeclaredClaim(
-        id="task:scientific:pendulum",
-        kind=InventoryKind.TASK,
-        reason=(
-            "docs name `pendulum` for the ODE loader; that name is the RL task. "
-            "The scientific loader is registered as `pendulum_state`"
-        ),
-        trigger="rewrite the docs entry to `pendulum_state` (S3 reconciliation)",
-    ),
-    DeclaredClaim(
-        id="task:scientific:lorenz",
-        kind=InventoryKind.TASK,
-        reason="ScientificTask already generates Lorenz; no task row registered",
-        trigger="register `lorenz_state` in SUPPORTED_TASKS (S3)",
     ),
     DeclaredClaim(
         id="architecture:PINO",

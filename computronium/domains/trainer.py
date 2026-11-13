@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 from computronium.core.logging import get_logger
-from computronium.domains.base import DomainType
+from computronium.core.losses import LossKind
 
 __all__ = [
     "TaskProtocol",
@@ -53,6 +53,9 @@ class TaskProtocol(Protocol):
     @property
     def task_type(self) -> str: ...
 
+    @property
+    def loss_kind(self) -> LossKind: ...
+
     def setup(self) -> None: ...
 
     def get_batch(
@@ -67,14 +70,14 @@ class TaskProtocol(Protocol):
 
 
 def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
-    """Pick a torch loss module matching the task's output geometry.
+    """Pick the torch loss module for the task's declared loss kind.
 
-    Regression tasks (``task_type == "tabular"`` with ``output_dim == 1``
-    — e.g. California Housing) emit float ``[B, 1]`` targets and must use
-    MSELoss; everything else (vision/lm/discrete-tabular) treats the
-    target as a class index and uses CrossEntropyLoss.
+    The choice is declared once: ``DomainTask.loss_kind`` names a row in
+    ``core.losses.LOSS_INVENTORY``. A task whose output geometry is a
+    continuous value (``output_dim == 1`` tabular regression) declares MSE;
+    everything else treats the target as a class index.
     """
-    if task.task_type == DomainType.TABULAR and task.output_dim == 1:
+    if task.loss_kind is LossKind.MEAN_SQUARED_ERROR:
         return nn.MSELoss()
     return nn.CrossEntropyLoss()
 

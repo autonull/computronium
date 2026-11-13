@@ -221,7 +221,7 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 | Panel | Key Contents |
 |-------|--------------|
 | **🚪 Entry Points** | 37 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
-| **🎯 Tasks & Data** | 7 domains, 26 tasks |
+| **🎯 Tasks & Data** | 7 domains, 28 tasks |
 | **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 63 objectives (54 measured), 5 priors, 88 capabilities, 48 constraints |
 | **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
 | **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (34 fields), `compose_joint_system` factory |
@@ -1193,7 +1193,7 @@ comp run quick-verify --store experiment.duckdb
 
 ### 📋 Tabular Domain
 
-**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes`, `california_housing` (regression, planned)
+**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes` (regression, continuous target, MSE read in train-variance units); `california_housing` (regression, planned: the sklearn loader downloads)
 
 **Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
 
@@ -1201,13 +1201,13 @@ comp run quick-verify --store experiment.duckdb
 
 **Tasks**: `synthetic_forecast` (sine-wave forecasting); `ett_h1` (planned)
 
-**Models**: RNN/LSTM/Transformer families across all credit assignments.
+**Models**: `recurrent`, `attention`, and `causal_transformer` geometries across all credit assignments. A standalone LSTM family is declared unavailable: the only LSTM in the tree is NTM's controller.
 
 ### 🔬 Scientific Domain
 
-**Tasks**: `pendulum`, `lorenz` (ODE simulation); PDE suites (Heat/Wave/Burgers, Navier-Stokes) planned
+**Tasks**: `pendulum_state`, `lorenz_state` (offline ODE integration, one-step state prediction); the PDE suites Heat/Wave/Burgers/Navier-Stokes are planned
 
-**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.
+**Models**: `feedforward` and `recurrent` geometries over integrated state vectors. The operator-learning families PINO, DeepONet, and FNO are declared unavailable: no geometry implements them, and each carries a declared reason and trigger in the surface inventory.
 
 ## Research program
 

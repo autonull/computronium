@@ -31,6 +31,9 @@ class TaskObjective:
     payload_key: str | None = None  # Key in payload dict
     axis_tag: str | None = None
     description: str = ""
+    # Required when the objective is declared but not emitted: a row that is
+    # neither measured nor explained is a claim the run withdraws silently.
+    unavailable_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -477,9 +480,24 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 False,
                 "backward_transfer",
                 "task",
+                unavailable_reason=(
+                    "no task sequence: the pipeline trains one task per cell, so "
+                    "there is no later-task accuracy to compare against an earlier one"
+                ),
             ),
             TaskObjective(
-                "forgetting", "minimize", "minmax", 0.5, False, "forgetting", "task"
+                "forgetting",
+                "minimize",
+                "minmax",
+                0.5,
+                False,
+                "forgetting",
+                "task",
+                unavailable_reason=(
+                    "needs a task sequence plus a per-task accuracy monitor; the "
+                    "computation exists in core/continual/metrics.py but no task "
+                    "sequence feeds it. Trigger: the first continual-domain task (S3)"
+                ),
             ),
             TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
@@ -875,6 +893,40 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         tags=("tabular", "sklearn", "wine"),
         description="Wine classification dataset",
     ),
+    "diabetes": TaskSpecEnriched(
+        name="diabetes",
+        domain=DomainType.TABULAR,
+        input_shape=(10,),
+        output_dim=1,
+        cost_class=CostClass.CHEAP,
+        primary_objective="validation_loss",
+        objectives=(
+            TaskObjective(
+                "validation_loss",
+                "minimize",
+                "log",
+                1.0,
+                True,
+                "val_loss",
+                "task",
+                "MSE on the standardized disease-progression target",
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+            TaskObjective(
+                "param_count", "minimize", "minmax", 0.2, True, "param_count", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=("tabular", "sklearn", "regression"),
+        description=(
+            "Diabetes disease-progression regression (sklearn, offline; continuous "
+            "target so the primary number is MSE, not a class rate)"
+        ),
+    ),
     "synthetic_forecast": TaskSpecEnriched(
         name="synthetic_forecast",
         domain=DomainType.TIMESERIES,
@@ -956,6 +1008,47 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         typical_lr=1e-3,
         tags=("scientific", "simulation", "physics", "pendulum"),
         description="Pendulum one-step state prediction (offline ODE integration)",
+    ),
+    "lorenz_state": TaskSpecEnriched(
+        name="lorenz_state",
+        domain=DomainType.SCIENTIFIC,
+        input_shape=(3,),  # x, y, z
+        output_dim=3,  # next x, y, z
+        cost_class=CostClass.CHEAP,
+        primary_objective="validation_loss",
+        objectives=(
+            TaskObjective(
+                "validation_loss",
+                "minimize",
+                "log",
+                1.0,
+                True,
+                "val_loss",
+                "task",
+                "MSE on the next Lorenz state",
+            ),
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                0.5,
+                True,
+                "val_acc",
+                "task",
+                "Negative MSE as accuracy proxy",
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+            TaskObjective(
+                "param_count", "minimize", "minmax", 0.2, True, "param_count", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=("scientific", "simulation", "physics", "lorenz", "chaotic"),
+        description="Lorenz one-step state prediction (offline integration)",
     ),
 }
 

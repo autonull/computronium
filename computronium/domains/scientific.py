@@ -10,6 +10,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from computronium.core.losses import LossKind
 from computronium.domains.base import (
     DomainSpec,
     DomainTask,
@@ -190,3 +191,7 @@ class ScientificTask(DomainTask):
         self, outputs: torch.Tensor, targets: torch.Tensor
     ) -> torch.Tensor:
         return nn.functional.mse_loss(outputs, targets.float())
+
+    @property
+    def loss_kind(self) -> LossKind:
+        return LossKind.MEAN_SQUARED_ERROR

@@ -34,8 +34,9 @@ from computronium.experiment.surface import (
 
 # Shape-only rows today: each names a test that asserts without calling a kernel
 # entry point (an enum membership check, a protocol-shape declaration). They are
-# enumerated in docs/generated/capabilities.md, not hidden.
-SHAPE_ONLY_ALLOWANCE = 30
+# enumerated in docs/generated/capabilities.md, not hidden. Measured 4 on
+# 2026-11-13 (TODO91 S5).
+SHAPE_ONLY_ALLOWANCE = 4
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +60,7 @@ def _rows(status: CapabilityStatus = CapabilityStatus.ACTIVE) -> list[str]:
     ]
 
 
-UNVERIFIED_ALLOWANCE = 21
+UNVERIFIED_ALLOWANCE = 19
 
 
 def test_every_active_row_names_a_verifying_test() -> None:

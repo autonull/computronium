@@ -771,12 +771,12 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
                 quick_mode=quick_mode,
                 **kwargs,
             )
-        case "pendulum_state":
+        case "pendulum_state" | "lorenz_state":
             from computronium.domains.scientific import ScientificTask
 
             return ScientificTask(
                 name=task_name,
-                dataset_name="pendulum",
+                dataset_name=task_name.removesuffix("_state"),
                 device=str(device),
                 **kwargs,
             )
@@ -811,7 +811,7 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
             return GraphTask(
                 name=base_name, dataset_name=base_name, device=str(device), **kwargs
             )
-        case "breast_cancer" | "california_housing" | "iris" | "wine":
+        case "breast_cancer" | "california_housing" | "diabetes" | "iris" | "wine":
             from computronium.domains.tabular import TabularTask
 
             return TabularTask(

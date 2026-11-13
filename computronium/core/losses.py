@@ -1,27 +1,87 @@
 """Shared loss and accuracy utilities.
 
 Consolidates duplicate implementations from ``core/trainer.py`` and
-``graph/training.py`` into a single canonical source.
+``graph/training.py`` into a single canonical source, and declares the loss
+inventory every task's ``compute_loss`` must come from (TODO91 S4).
 """
 
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import TYPE_CHECKING, Final, Literal
 
 import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 __all__ = [
+    "LOSS_INVENTORY",
+    "LossKind",
+    "LossSpec",
     "accuracy_tensor",
     "compute_accuracy",
     "compute_loss",
+    "cross_entropy",
+    "mean_squared_error",
     "perplexity",
     "reshape_for_cross_entropy",
 ]
+
+
+class LossKind(StrEnum):
+    """The loss families a task may optimize."""
+
+    CROSS_ENTROPY = "cross_entropy"
+    MEAN_SQUARED_ERROR = "mean_squared_error"
+
+
+@dataclass(frozen=True, slots=True)
+class LossSpec:
+    """One declared loss: its rule, the target it reads, and what it emits."""
+
+    kind: LossKind
+    fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    target: Literal["class_index", "continuous"]
+    metric_keys: tuple[str, ...]
+    notes: str
+
+
+def cross_entropy(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Softmax cross-entropy over class indices."""
+    return torch.nn.functional.cross_entropy(logits, targets)
+
+
+def mean_squared_error(preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Mean squared error over a continuous, value-valued target."""
+    return torch.nn.functional.mse_loss(preds, targets.float())
+
+
+# The one declared loss inventory: a task's ``loss_kind`` names a row here, and
+# ``tests/property/test_loss_inventory_lock.py`` fails when a task computes a
+# loss its row does not describe. A new objective is a new row, not an override.
+LOSS_INVENTORY: Final[Mapping[LossKind, LossSpec]] = {
+    LossKind.CROSS_ENTROPY: LossSpec(
+        kind=LossKind.CROSS_ENTROPY,
+        fn=cross_entropy,
+        target="class_index",
+        metric_keys=("loss", "val_loss", "val_acc"),
+        notes="The target is a class index; accuracy is the match rate.",
+    ),
+    LossKind.MEAN_SQUARED_ERROR: LossSpec(
+        kind=LossKind.MEAN_SQUARED_ERROR,
+        fn=mean_squared_error,
+        target="continuous",
+        metric_keys=("loss", "val_loss", "mse"),
+        notes=(
+            "The target is a value; accuracy is undefined, so the loss is the "
+            "primary number and its ruler is the task's target variance."
+        ),
+    ),
+}
 
 
 def perplexity(val_loss: float) -> float:

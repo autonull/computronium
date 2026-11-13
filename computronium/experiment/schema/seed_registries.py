@@ -2858,9 +2858,10 @@ CAPABILITIES = [
         required=False,
         stage="S1_FRAME",
         owner="lab",
-        status=CapabilityStatus.UNVERIFIED,
-        unverified_reason="computronium-lab package not available in this repository",
-        verifying_test="packages/computronium-lab/tests/test_synthesis.py",
+        verifying_test=(
+            "packages/computronium-lab/tests/test_lab_boundary.py::"
+            "test_exploratory_synthesis_records_ceec"
+        ),
         flags=("lab", "synthesis", "platform"),
     ),
     CapabilitySpec(
@@ -2872,9 +2873,13 @@ CAPABILITIES = [
         required=False,
         stage="S10_DECIDE",
         owner="lab",
-        status=CapabilityStatus.UNVERIFIED,
-        unverified_reason="computronium-lab package not available in this repository",
-        verifying_test="packages/computronium-lab/tests/test_lab_integration_loop.py",
+        status=CapabilityStatus.RETIRED,
+        retirement_record=(
+            "TODO91 S5: the lab package ships synthesis (C81) but no evolution "
+            "kernel — no module or test implements budgeted evolution. Re-register "
+            "as ACTIVE when packages/computronium-lab implements it with a test "
+            "that runs one budgeted generation end to end."
+        ),
         flags=("lab", "evolution", "platform"),
     ),
     CapabilitySpec(

@@ -9,6 +9,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from computronium.core.losses import LossKind, accuracy_tensor
 from computronium.domains.base import (
     DomainSpec,
     DomainTask,
@@ -20,6 +21,18 @@ from computronium.domains.base import (
 __all__ = [
     "TabularTask",
 ]
+
+# What each dataset's target is, known before the data is loaded: the loss
+# inventory row is chosen from this, so ``loss_kind`` answers without a setup.
+# ``setup`` asserts the loaded target's dtype agrees, so the table cannot drift
+# from the loader it describes.
+_TARGET_KIND = {
+    "digits": LossKind.CROSS_ENTROPY,
+    "breast_cancer": LossKind.CROSS_ENTROPY,
+    "wine": LossKind.CROSS_ENTROPY,
+    "iris": LossKind.CROSS_ENTROPY,
+    "diabetes": LossKind.MEAN_SQUARED_ERROR,
+}
 
 
 class TabularTask(DomainTask):
@@ -33,6 +46,16 @@ class TabularTask(DomainTask):
     ):
         super().__init__(name, **kwargs)
         self.dataset_name = dataset_name
+        self._y_mean = 0.0
+        self._y_std = 1.0
+
+    @property
+    def loss_kind(self) -> LossKind:
+        return _TARGET_KIND[self.dataset_name]
+
+    @property
+    def _regression(self) -> bool:
+        return self.loss_kind is LossKind.MEAN_SQUARED_ERROR
 
     @property
     def domain_type(self) -> DomainType:
@@ -44,7 +67,9 @@ class TabularTask(DomainTask):
             name=self.name,
             domain_type=DomainType.TABULAR,
             description=f"Tabular task: {self.dataset_name}",
-            default_metrics=["accuracy", "loss"],
+            default_metrics=["loss", "mse"]
+            if self._regression
+            else ["accuracy", "loss"],
             supported_tasks=["classification", "regression"],
             default_batch_size=32,
             default_lr=1e-3,
@@ -56,6 +81,7 @@ class TabularTask(DomainTask):
             return
         from sklearn.datasets import (
             load_breast_cancer,
+            load_diabetes,
             load_digits,
             load_iris,
             load_wine,
@@ -66,6 +92,7 @@ class TabularTask(DomainTask):
             "breast_cancer": load_breast_cancer,
             "wine": load_wine,
             "iris": load_iris,
+            "diabetes": load_diabetes,
         }
 
         if self.dataset_name not in _DATASETS:
@@ -73,10 +100,27 @@ class TabularTask(DomainTask):
                 f"Unknown tabular dataset: {self.dataset_name}. "
                 f"Available: {list(_DATASETS.keys())}"
             )
+        if set(_DATASETS) != set(_TARGET_KIND):
+            raise RuntimeError(
+                "tabular loader table and target-kind table disagree: "
+                f"{set(_DATASETS) ^ set(_TARGET_KIND)}"
+            )
 
         data = _DATASETS[self.dataset_name]()
         X = data.data.astype(np.float32)
-        y = data.target.astype(np.int64)
+        target = np.asarray(data.target)
+        loaded_continuous = bool(np.issubdtype(target.dtype, np.floating))
+        if loaded_continuous != self._regression:
+            raise ValueError(
+                f"{self.dataset_name}: declared "
+                f"{self.loss_kind} but the loader ships a "
+                f"{'continuous' if loaded_continuous else 'class-index'} target"
+            )
+        y = (
+            target.astype(np.float32).reshape(-1, 1)
+            if self._regression
+            else target.astype(np.int64)
+        )
 
         # Normalize
         X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-8)
@@ -89,18 +133,45 @@ class TabularTask(DomainTask):
         # Stratified, deterministic split. sklearn ships iris/wine ordered by
         # class, so the tail slice held out ONE class — wine's validation was
         # 36 class-2 rows against a train set of 12, and every arm read 0.0.
+        # A regression target has no classes, so it splits unstratified.
         from sklearn.model_selection import train_test_split
 
         train_idx, val_idx = train_test_split(
-            np.arange(X.shape[0]), test_size=0.2, random_state=0, stratify=y
+            np.arange(X.shape[0]),
+            test_size=0.2,
+            random_state=0,
+            stratify=None if self._regression else y,
         )
-        self._set_loaders(np.asarray(train_idx), np.asarray(val_idx))
+        if self._regression:
+            self._set_loaders(
+                np.asarray(train_idx), np.asarray(val_idx), fit_target_stats=True
+            )
+        else:
+            self._set_loaders(np.asarray(train_idx), np.asarray(val_idx))
 
         self._input_dim = X.shape[1]
-        self._output_dim = len(data.target_names)
+        self._output_dim = 1 if self._regression else len(data.target_names)
         self._setup_done = True
 
-    def _set_loaders(self, train_idx: np.ndarray, val_idx: np.ndarray) -> None:
+    def _set_loaders(
+        self,
+        train_idx: np.ndarray,
+        val_idx: np.ndarray,
+        *,
+        fit_target_stats: bool = False,
+    ) -> None:
+        if fit_target_stats:
+            # Target statistics come from the training split only: a mean/std
+            # fitted on the validation rows leaks the ruler into the metric.
+            # Standardized MSE then reads in target-variance units, so 1.0 is
+            # the train-mean predictor.
+            self._y_mean = float(self._y[train_idx].mean())
+            self._y_std = float(self._y[train_idx].std()) + 1e-8
+            self._y = (self._y - self._y_mean) / self._y_std
+        if self._regression:
+            self._y = self._y.astype(np.float32)
+        elif self._y.dtype != np.int64:
+            self._y = self._y.astype(np.int64)
         X_train = torch.from_numpy(self._X[train_idx])
         y_train = torch.from_numpy(self._y[train_idx])
         X_val = torch.from_numpy(self._X[val_idx])
@@ -125,6 +196,11 @@ class TabularTask(DomainTask):
         """
         if not self._setup_done:
             self.setup()
+        if self._regression:
+            from sklearn.model_selection import KFold
+
+            splitter = KFold(n_splits=n_folds, shuffle=True, random_state=0)
+            return list(splitter.split(self._X))
         from sklearn.model_selection import StratifiedKFold
 
         splitter = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=0)
@@ -164,7 +240,7 @@ class TabularTask(DomainTask):
         loader = self.get_dataloader(split)
 
         total_loss = 0.0
-        total_correct = 0
+        total_hits = 0.0
         total_samples = 0
         labels: list[torch.Tensor] = []
 
@@ -178,12 +254,18 @@ class TabularTask(DomainTask):
                 loss = self.compute_loss(outputs, targets)
 
                 total_loss += loss.item() * inputs.size(0)
-                total_correct += (outputs.argmax(1) == targets).sum().item()
+                total_hits += accuracy_tensor(outputs, targets).item() * inputs.size(0)
                 total_samples += inputs.size(0)
                 labels.append(targets.detach().cpu().view(-1))
 
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
-        accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+        if self._regression:
+            # A continuous target has no class to match: the primary number is
+            # the loss (MSE), and accuracy is absent rather than a 0.0 that
+            # reads like a measured class rate.
+            return Metrics(loss=avg_loss, custom={"mse": avg_loss})
+
+        accuracy = total_hits / total_samples if total_samples > 0 else 0.0
 
         # A small held-out split is unreadable alone: report the majority-class
         # rate beside accuracy so a cell at chance is visibly at chance.
@@ -201,3 +283,10 @@ class TabularTask(DomainTask):
                 "val_acc_over_majority": accuracy - majority_baseline,
             },
         )
+
+    def compute_loss(
+        self, outputs: torch.Tensor, targets: torch.Tensor
+    ) -> torch.Tensor:
+        if self._regression:
+            return torch.nn.functional.mse_loss(outputs, targets.float())
+        return torch.nn.functional.cross_entropy(outputs, targets)

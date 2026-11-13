@@ -10,7 +10,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from computronium.core.losses import compute_accuracy
+from computronium.core.losses import LossKind, compute_accuracy
 
 __all__ = [
     "Batch",
@@ -258,6 +258,11 @@ class DomainTask(ABC):
         max_batches: int | None = None,
     ) -> Metrics:
         """Evaluate model on a split."""
+
+    @property
+    def loss_kind(self) -> LossKind:
+        """The declared loss row this task optimizes (see ``LOSS_INVENTORY``)."""
+        return LossKind.CROSS_ENTROPY
 
     def compute_loss(
         self, outputs: torch.Tensor, targets: torch.Tensor

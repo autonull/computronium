@@ -93,7 +93,7 @@ comp run quick-verify --store experiment.duckdb
 
 ### 📋 Tabular Domain
 
-**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes`, `california_housing` (regression, planned)
+**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes` (regression, continuous target, MSE read in train-variance units); `california_housing` (regression, planned: the sklearn loader downloads)
 
 **Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
 
@@ -101,10 +101,10 @@ comp run quick-verify --store experiment.duckdb
 
 **Tasks**: `synthetic_forecast` (sine-wave forecasting); `ett_h1` (planned)
 
-**Models**: RNN/LSTM/Transformer families across all credit assignments.
+**Models**: `recurrent`, `attention`, and `causal_transformer` geometries across all credit assignments. A standalone LSTM family is declared unavailable: the only LSTM in the tree is NTM's controller.
 
 ### 🔬 Scientific Domain
 
-**Tasks**: `pendulum`, `lorenz` (ODE simulation); PDE suites (Heat/Wave/Burgers, Navier-Stokes) planned
+**Tasks**: `pendulum_state`, `lorenz_state` (offline ODE integration, one-step state prediction); the PDE suites Heat/Wave/Burgers/Navier-Stokes are planned
 
-**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.
+**Models**: `feedforward` and `recurrent` geometries over integrated state vectors. The operator-learning families PINO, DeepONet, and FNO are declared unavailable: no geometry implements them, and each carries a declared reason and trigger in the surface inventory.
