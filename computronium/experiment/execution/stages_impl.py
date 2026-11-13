@@ -620,7 +620,7 @@ class ComposeStage:
     async def run(self, ctx: StageContext) -> Fragment:
         """Enforce resource constraints on proposals with resolved hyperparameters."""
         from computronium.experiment.execution.stage import Fragment
-        from computronium.experiment.legality.dsl import Expr, Var
+        from computronium.experiment.legality.dsl import references_params
         from computronium.experiment.legality.engine import (
             ConstraintEnforcement,
             ConstraintKind,
@@ -633,22 +633,6 @@ class ComposeStage:
 
         logger.info("S5 Compose: Enforcing resource constraints with hyperparameters")
 
-        def _references_params(expr: Expr) -> bool:
-            """Check if expression references params.* variables."""
-            if isinstance(expr, Var) and expr.name.startswith("params."):
-                return True
-            for field_name in ("expr", "left", "right", "obj", "key"):
-                child = getattr(expr, field_name, None)
-                if isinstance(child, Expr) and _references_params(child):
-                    return True
-            if hasattr(expr, "args"):
-                args = getattr(expr, "args", None)
-                if args is not None:
-                    for arg in args:
-                        if isinstance(arg, Expr) and _references_params(arg):
-                            return True
-            return False
-
         # Create and seed legality engine with params.* constraints
         engine = LegalityEngine()
         for spec in CONSTRAINTS_REGISTRY.values():
@@ -656,7 +640,7 @@ class ComposeStage:
                 continue
             # Only evaluate constraints that reference params (hyperparameters)
             # These are the resource constraints deferred from S4 Gate
-            if not _references_params(spec.predicate):
+            if not references_params(spec.predicate):
                 continue
 
             # Map registry constraint to engine constraint

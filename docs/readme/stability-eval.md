@@ -51,7 +51,7 @@ The five experimental questions — adaptation efficiency, compute efficiency, s
 
 ## 🌐 Evaluation Domains
 
-The framework defines **7 evaluation domains**, unified through a common task interface (`DomainTask` protocol), each with dedicated data loaders and metrics. **~25 tasks/datasets are currently implemented**; additional tasks are planned extensions (marked below). Planned entries do not count toward implemented totals.
+The framework defines **7 evaluation domains**, unified through a common task interface (`DomainTask` protocol), each with dedicated data loaders and metrics. **~26 tasks/datasets are currently implemented**; additional tasks are planned extensions (marked below). Planned entries do not count toward implemented totals.
 
 ### 📊 Domain Overview
 

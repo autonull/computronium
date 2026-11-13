@@ -7,7 +7,6 @@ in evaluate.py, keeping the main evaluation logic clean and focused.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -19,7 +18,7 @@ from computronium.experiment.execution.settle_operator import (
 from computronium.experiment.schema.metrics import HISTORY_METRICS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
@@ -51,6 +50,44 @@ def history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
     }
     metrics["epochs_run"] = float(final.get("global_step", 0))
     return metrics
+
+
+def derived_metrics(
+    history: list[dict[str, float]],
+    walltime_s: float,
+    metrics: Mapping[str, float],
+) -> dict[str, float]:
+    """Measurements derived from numbers the cell already measured.
+
+    Called after the post-training probes, because the stability-plasticity
+    ratio needs ``spectral_radius`` and ``psi_capacity``. Every value is a
+    derivation, not a new run:
+
+    - ``training_time``: walltime per epoch (``walltime_s`` is the training span)
+    - ``convergence_steps``: global step of the best validation loss
+    - ``generalization_gap``: final ``val_loss - train_loss`` (signed; positive
+      means the validation loss is higher)
+    - ``stability_plasticity_ratio``: ``spectral_radius / psi_capacity``
+    """
+    derived: dict[str, float] = {}
+    if history:
+        epochs = len(history)
+        if walltime_s > 0.0 and epochs:
+            derived["training_time"] = float(walltime_s / epochs)
+        scored = [record for record in history if "val_loss" in record]
+        if scored:
+            best = min(scored, key=lambda record: record["val_loss"])
+            derived["convergence_steps"] = float(best.get("global_step", epochs))
+        final = history[-1]
+        if "train_loss" in final and "val_loss" in final:
+            derived["generalization_gap"] = float(
+                final["val_loss"] - final["train_loss"]
+            )
+    radius = metrics.get("spectral_radius")
+    capacity = metrics.get("psi_capacity")
+    if radius is not None and capacity:
+        derived["stability_plasticity_ratio"] = float(radius / capacity)
+    return derived
 
 
 def _within_ceiling(param_count: int, param_budget: int) -> bool:

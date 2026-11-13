@@ -602,7 +602,7 @@ class TestReport:
             pydantic_core.ValidationError,
             match=r"have no measurement.*metric_key is None",
         ):
-            _spec(objectives=("training_time",))
+            _spec(objectives=("credit_efficiency",))
 
     def test_unmeasured_objectives_in_axis_objectives_do_not_trigger_limitation(
         self, tmp_path: Path

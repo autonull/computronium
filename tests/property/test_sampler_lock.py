@@ -197,7 +197,7 @@ class TestObjectivesAreMeasurements:
 
     def test_an_unregistered_objective_is_refused(self) -> None:
         with pytest.raises(UnknownObjectiveError, match="unknown objective"):
-            objective_metric("accuracy")
+            objective_metric("not_a_registered_objective")
 
     def test_a_registered_but_unmeasured_objective_is_refused(self) -> None:
         with pytest.raises(UnmeasuredObjectiveError, match="registered but unmeasured"):

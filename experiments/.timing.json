@@ -72,12 +72,12 @@
     "startup_s": 0.0
   },
   "cuda/L0": {
-    "cost_per_cell_s": 20.922,
+    "cost_per_cell_s": 19.376,
     "per_task": {
       "char_ngram": 6.661,
       "copy_task": 3.125,
       "cora": 0.208,
-      "digits": 11.525,
+      "digits": 0.707,
       "kmnist": 24.702,
       "mnist": 95.128,
       "tiny_shakespeare": 5.102
@@ -108,11 +108,12 @@
     "startup_s": 0.0
   },
   "cuda/L2": {
-    "cost_per_cell_s": 1335.44,
+    "cost_per_cell_s": 1069.944,
     "per_task": {
       "char_ngram": 12.811,
       "copy_task": 24.275,
       "mnist": 5295.082,
+      "pendulum_state": 7.957,
       "synthetic_forecast": 9.593
     },
     "startup_s": 0.0

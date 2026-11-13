@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Protocol, TypeIs
 import torch
 from torch import Tensor
 
-from computronium.core.losses import compute_loss
+from computronium.core.losses import accuracy_tensor, compute_loss
 from computronium.ontology import (
     Geometry,
     ParameterUpdate,
@@ -116,16 +116,6 @@ def _graph_kwargs_for(
     return {k: v for k, v in kwargs.items() if k not in _GRAPH_KWARGS}
 
 
-def _accuracy(logits: Tensor, y: Tensor) -> Tensor:
-    """Classification accuracy; ignore-index sentinel entries (y < 0) are
-    excluded from both hits and denominator, so full-batch node
-    classification reports accuracy over the labelled (training) nodes."""
-    pred = logits.argmax(dim=-1)
-    valid = y >= 0
-    hits = ((pred == y) & valid).sum()
-    return hits.to(logits.dtype) / valid.sum().clamp(min=1).to(logits.dtype)
-
-
 def phase_states(
     *, free: SystemState | None = None, nudged: SystemState | None = None
 ) -> dict[Phase, SystemState]:
@@ -165,7 +155,7 @@ def task_loss(state: SettableState, y: Tensor, loss_fn: LossFn | None = None) ->
     y = _align_target_rows(logits, y)
     loss = compute_loss(loss_fn, logits, y)
     with torch.no_grad():
-        acc = _accuracy(logits, y).item()
+        acc = accuracy_tensor(logits, y).item()
     set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
     return loss
 
@@ -186,7 +176,7 @@ def _task_loss_tensor(
     y = _align_target_rows(logits, y)
     loss = compute_loss(loss_fn, logits, y)
     with torch.no_grad():
-        acc = _accuracy(logits, y)
+        acc = accuracy_tensor(logits, y)
     set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
     return loss, acc
 

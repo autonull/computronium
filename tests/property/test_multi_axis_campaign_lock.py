@@ -458,15 +458,11 @@ def test_multi_axis_campaign_unmeasured_objectives_fail_at_use() -> None:
 
     # These objectives are registered but unmeasured
     unmeasured = (
-        "training_time",
         "bp_deficit",
         "ruler_walltime_ratio",
         "ruler_energy_ratio",
         "ruler_param_ratio",
-        "stability_plasticity_ratio",
         "credit_efficiency",
-        "convergence_steps",
-        "generalization_gap",
     )
 
     for obj in unmeasured:
@@ -480,7 +476,7 @@ def test_multi_axis_campaign_unmeasured_objectives_fail_at_use() -> None:
     # A spec declaring an unmeasured objective should fail validation at spec creation
     spec = _multi_axis_spec(fast=True)
     spec_dict = spec.model_dump()
-    spec_dict["objectives"] = (*spec.objectives, "training_time")
+    spec_dict["objectives"] = (*spec.objectives, "credit_efficiency")
     with pytest.raises(ValueError, match="have no measurement"):
         RunSpec(**spec_dict)
 

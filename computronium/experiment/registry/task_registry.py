@@ -85,9 +85,6 @@ def _graph_classification_spec(
                 "task",
             ),
             TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
-            ),
-            TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
         ),
@@ -266,16 +263,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
             ),
             TaskObjective(
-                "f1_score",
-                "maximize",
-                "minmax",
-                0.5,
-                False,
-                "f1_score",
-                "task",
-                "Macro F1 score",
-            ),
-            TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
             TaskObjective(
@@ -309,9 +296,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
             ),
             TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
-            ),
-            TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
             TaskObjective(
@@ -343,9 +327,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
             ),
             TaskObjective(
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
-            ),
-            TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
             ),
             TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
@@ -445,9 +426,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
             ),
             TaskObjective(
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
-            ),
-            TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
             ),
             TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
@@ -557,7 +535,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "log",
                 1.0,
                 True,
-                "perplexity",
+                "val_ppl",
                 "task",
                 "Language model perplexity",
             ),
@@ -573,16 +551,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "accuracy",
                 "task",
                 "Token-level accuracy",
-            ),
-            TaskObjective(
-                "bleu_score",
-                "maximize",
-                "minmax",
-                0.2,
-                False,
-                "bleu_score",
-                "task",
-                "BLEU score",
             ),
             TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
@@ -609,7 +577,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         primary_objective="perplexity",
         objectives=(
             TaskObjective(
-                "perplexity", "minimize", "log", 1.0, True, "perplexity", "task"
+                "perplexity", "minimize", "log", 1.0, True, "val_ppl", "task"
             ),
             TaskObjective(
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
@@ -744,9 +712,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
             ),
             TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
-            ),
-            TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
         ),
@@ -777,9 +742,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
             ),
             TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
-            ),
-            TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
         ),
@@ -808,9 +770,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
             ),
             TaskObjective(
                 "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
-            ),
-            TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
             ),
             TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
@@ -853,9 +812,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "task",
             ),
             TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
-            ),
-            TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
         ),
@@ -883,9 +839,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 "task",
             ),
             TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
-            ),
-            TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
             ),
         ),
@@ -911,9 +864,6 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
                 True,
                 "val_acc",
                 "task",
-            ),
-            TaskObjective(
-                "f1_score", "maximize", "minmax", 0.5, False, "f1_score", "task"
             ),
             TaskObjective(
                 "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
@@ -965,6 +915,47 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         typical_lr=1e-3,
         tags=("timeseries", "forecasting", "synthetic"),
         description="Synthetic sine-wave forecasting",
+    ),
+    "pendulum_state": TaskSpecEnriched(
+        name="pendulum_state",
+        domain=DomainType.SCIENTIFIC,
+        input_shape=(3,),  # sin(theta), cos(theta), theta_dot
+        output_dim=3,  # next sin(theta), cos(theta), theta_dot
+        cost_class=CostClass.CHEAP,
+        primary_objective="validation_loss",
+        objectives=(
+            TaskObjective(
+                "validation_loss",
+                "minimize",
+                "log",
+                1.0,
+                True,
+                "val_loss",
+                "task",
+                "MSE on the next pendulum state",
+            ),
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                0.5,
+                True,
+                "val_acc",
+                "task",
+                "Negative MSE as accuracy proxy",
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+            TaskObjective(
+                "param_count", "minimize", "minmax", 0.2, True, "param_count", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=("scientific", "simulation", "physics", "pendulum"),
+        description="Pendulum one-step state prediction (offline ODE integration)",
     ),
 }
 

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.core.losses import compute_loss, perplexity
+from computronium.core.losses import accuracy_tensor, compute_loss, perplexity
 from computronium.core.system_trainer._early_stopping import (
     EarlyStoppingConfig,
     EarlyStoppingState,
@@ -507,7 +507,7 @@ class SystemTrainer:
                 y = _align_target_rows(logits, y)
                 batch_loss = compute_loss(loss_fn, logits, y)
                 val_loss_sum += batch_loss.item() * logits.shape[0]
-                val_correct += (logits.argmax(-1) == y).sum().item()
+                val_correct += accuracy_tensor(logits, y).item() * logits.shape[0]
                 num_samples += y.numel()
 
         denom = max(num_samples, 1)

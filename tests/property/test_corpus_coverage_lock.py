@@ -238,16 +238,19 @@ def test_a_void_pair_names_its_rule_and_a_reachable_one_stays_a_hole(
     gaps = command["pair_gaps"]
     holes = command["pair_holes"]
 
-    # NCA calls no substrate operator, so a non-digital pair cannot measure
+    # NTM calls no substrate operator, so a non-digital pair cannot measure
     # substrate breadth; the row says so, and the cell's presence does not
-    # hide the refusal.
-    assert "nca_ntm_substrate_inert" in gaps["analog/nca"]
-    assert "nca_ntm_substrate_inert" not in gaps.get("digital/nca", "")
-    # Neuromorphic x nca is refused twice over: the geometry is inert off
+    # hide the refusal. NCA is wired (TODO90 B10): its pairs are reachable.
+    assert "ntm_substrate_inert" in gaps["analog/ntm"]
+    assert "ntm_substrate_inert" not in gaps.get("digital/ntm", "")
+    # Neuromorphic x ntm is refused twice over: the geometry is inert off
     # digital and the substrate's dynamics row covers the rest.
-    assert "neuromorphic/nca" in gaps
+    assert "neuromorphic/ntm" in gaps
+    # Complex is refused for every geometry: its operator is the digital
+    # matmul on real weights (declared 2026-11-13, B10).
+    assert "complex/conv" in gaps
     assert all(
-        pair.startswith("neuromorphic/") or pair.endswith(("/nca", "/ntm"))
+        pair.startswith(("neuromorphic/", "complex/")) or pair.endswith("/ntm")
         for pair in gaps
     )
     # No rule refuses digital x conv, and the fixture holds no cell for
@@ -270,12 +273,12 @@ def test_deleting_the_rule_turns_its_pairs_back_into_holes(
     kept = tuple(
         rule
         for rule in engine.void_rules()
-        if rule.name
-        not in {"neuromorphic_substrate_dynamics", "nca_ntm_substrate_inert"}
+        if rule.name not in {"neuromorphic_substrate_dynamics", "ntm_substrate_inert"}
     )
     monkeypatch.setattr(engine, "void_rules", lambda: kept)
 
     coverage = scan_corpus(default_store_paths(corpus_root), root=corpus_root)
-    # Without the rules, instantaneous dynamics is legal on both sides, so the
-    # pair is reachable and unmeasured: a hole, not a void.
-    assert ("neuromorphic", "nca") in coverage.pair_holes
+    # Without the rows, instantaneous dynamics is legal on the NTM side too,
+    # so the pair is reachable and unmeasured: a hole, not a void.
+    assert ("analog", "ntm") in coverage.pair_holes
+    assert ("neuromorphic", "ntm") in coverage.pair_holes

@@ -50,7 +50,7 @@ class ScientificTask(DomainTask):
             description=f"Scientific simulation: {self.dataset_name}",
             default_metrics=["mse", "accuracy"],
             supported_tasks=["regression", "simulation"],
-            default_batch_size=64,
+            default_batch_size=32,
             default_lr=1e-3,
             tags=["scientific", "simulation", "physics"],
         )
@@ -151,9 +151,11 @@ class ScientificTask(DomainTask):
         if not self._setup_done:
             self.setup()
 
-        if split == TaskSplit.TRAIN:
-            return self._train_loader
-        return self._val_loader
+        loader = self._train_loader if split == TaskSplit.TRAIN else self._val_loader
+        if loader is None:
+            msg = f"scientific task {self.name!r} has no {split} loader"
+            raise RuntimeError(msg)
+        return loader
 
     def evaluate(
         self,

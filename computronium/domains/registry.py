@@ -64,6 +64,8 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "wine",
     # timeseries
     "synthetic_forecast",
+    # scientific (offline physics-simulation loader)
+    "pendulum_state",
 })
 
 

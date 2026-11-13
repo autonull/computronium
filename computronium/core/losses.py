@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 __all__ = [
+    "accuracy_tensor",
     "compute_accuracy",
     "compute_loss",
     "perplexity",
@@ -88,3 +89,20 @@ def compute_accuracy(logits: torch.Tensor, y: torch.Tensor, scale: int = 1) -> f
     logits_ce, y_ce = reshape_for_cross_entropy(logits, y)
     with torch.no_grad():
         return (logits_ce.argmax(1) == y_ce).float().mean().item() * scale
+
+
+def accuracy_tensor(logits: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """Class-match accuracy as a scalar tensor, with an ignore-index sentinel.
+
+    Entries with ``y < 0`` are excluded from both hits and denominator, so a
+    full-batch node classification reports accuracy over the labelled nodes.
+    A floating-point target declares a regression objective: it has no classes,
+    so class-match accuracy is undefined and the result is the declared ``0.0``
+    sentinel rather than an argmax over a value vector.
+    """
+    if y.is_floating_point():
+        return torch.zeros((), dtype=logits.dtype, device=logits.device)
+    pred = logits.argmax(dim=-1)
+    valid = y >= 0
+    hits = ((pred == y) & valid).sum()
+    return hits.to(logits.dtype) / valid.sum().clamp(min=1).to(logits.dtype)

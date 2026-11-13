@@ -6,7 +6,15 @@ import logging
 import warnings
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, Self, TypeVar, cast, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Protocol,
+    Self,
+    TypeVar,
+    cast,
+    runtime_checkable,
+)
 
 import torch
 from torch import Tensor, nn
@@ -38,6 +46,13 @@ from computronium.ontology.update import (
     ParameterUpdateConfig,
 )
 from computronium.state import PlasticityConfig
+
+# Declared structural voids: credits that assume sample-mode activations cannot
+# run on an NCA geometry's cell-mode activations [B*H*W, C] with instantaneous
+# dynamics. This tuple is the one source: ``SystemConfig.validate`` refuses
+# these coordinates and the constraint registry projects the same names into
+# its rows (TODO90 B9). Adding a credit here changes both at once.
+NCA_CELL_MODE_CREDITS: Final[tuple[str, ...]] = ("homeostatic", "pc_alm")
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -420,8 +435,7 @@ class SystemConfig:
         self._validate_predictive_settling_credit()
         self._validate_pc_alm_dynamics()
         self._validate_residual_connections()
-        self._validate_nca_instantaneous_homeostatic()
-        self._validate_nca_instantaneous_pc_alm()
+        self._validate_nca_cell_mode_credits()
         self._validate_tile_mesh_pc_alm_dynamics()
 
         # Geometry-Plasticity compatibility
@@ -675,28 +689,16 @@ class SystemConfig:
                 f"got topology_type={self.geometry.topology_type!r}"
             )
 
-    def _validate_nca_instantaneous_homeostatic(self) -> None:
-        """NCA geometry with instantaneous dynamics incompatible with homeostatic credit."""
+    def _validate_nca_cell_mode_credits(self) -> None:
+        """NCA + instantaneous dynamics refuses credits that read sample-mode activations."""
         if (
             self.geometry.topology_type == "nca"
             and self.dynamics.dynamics_type == "instantaneous"
-            and self.credit.credit_type == "homeostatic"
+            and self.credit.credit_type in NCA_CELL_MODE_CREDITS
         ):
             raise ValueError(
                 "NCA geometry with instantaneous dynamics incompatible with "
-                "homeostatic credit (cell-mode activations)"
-            )
-
-    def _validate_nca_instantaneous_pc_alm(self) -> None:
-        """NCA geometry with instantaneous dynamics incompatible with pc_alm credit."""
-        if (
-            self.geometry.topology_type == "nca"
-            and self.dynamics.dynamics_type == "instantaneous"
-            and self.credit.credit_type == "pc_alm"
-        ):
-            raise ValueError(
-                "NCA geometry with instantaneous dynamics incompatible with "
-                "pc_alm credit (cell-mode activations)"
+                f"{self.credit.credit_type} credit (cell-mode activations)"
             )
 
     def _validate_tile_mesh_pc_alm_dynamics(self) -> None:

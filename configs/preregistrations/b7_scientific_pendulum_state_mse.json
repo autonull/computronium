@@ -1,0 +1,36 @@
+{
+  "claim": "On the pendulum_state task (scientific domain, one-step prediction of [sin(theta), cos(theta), theta_dot] under a dt=0.05 Euler integration, offline), the pinned arm digital/feedforward/instantaneous/null/gradient/adam reaches a validation MSE of at most 0.010 at the L2 schedule (5 seeds x 20 epochs) — at least 4.3x below the 0.04302 identity (persistence) ruler on the same 1,000-row validation split.",
+  "metric": "val_loss",
+  "threshold": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-13",
+  "ticket": "TODO90 B7",
+  "domain": "scientific",
+  "task": "pendulum_state",
+  "coordinate": "digital/feedforward/instantaneous/null/gradient/adam",
+  "schedule": {
+    "fidelity": "L2",
+    "n_seeds": 5,
+    "epochs": 20,
+    "batch_size": 32,
+    "device": "cuda"
+  },
+  "ruler": {
+    "name": "identity / persistence (y_hat = x)",
+    "value": 0.04302,
+    "split": "pendulum_state validation split (n = 1,000 contiguous rows, 20% tail hold-out)",
+    "se": 0.00088,
+    "note": "Measured on the split the cell measures by scripts/probes/b7_pendulum_state_ruler.py. Weaker policies: zero 1.33135, val-mean 1.33123, sin/cos-only with omega zeroed 1.00040. The identity policy repeats the input; it is not an oracle, and it is dominated by the omega component (per-dimension MSE 0.0035 / 0.0037 / 0.1219)."
+  },
+  "noise_floor": {
+    "name": "irreducible error of a deterministic predictor",
+    "value": 0.0,
+    "definition": "The loader integrates a deterministic ODE with no additive noise, and [sin(theta), cos(theta), theta_dot] determines the next state, so the mapping is a deterministic function of the input.",
+    "note": "A floor of 0 means the threshold cannot be derived from noise; it is derived from the persistence ruler and checked to sit far above the pilot's measured loss."
+  },
+  "decision_rule": "Met iff (1) every one of the 5 seeds writes PASS with val_loss <= 0.010, and (2) the one-sided 95% upper confidence bound of the seed mean (t, df=4) is < 0.010. Marginal iff the seed mean is within 1 SE of 0.010. Distance is reported in SEs and as a multiple of the identity ruler.",
+  "pilot_role": "Schedule choice, not threshold choice: a 20-epoch / 1-seed pilot this session measured val_loss 0.0000 (control arm 0.0011). The threshold is derived from the split's identity ruler, computable without running the arm.",
+  "claim_eligibility": "L2 records carry 5 achieved PASS seeds, a replay hash, and a normalized metric, so the run's claim-eligible cell count is non-zero.",
+  "metric_hygiene": "val_acc on this task is the declared 0.0 regression sentinel (classification accuracy is undefined for a value target); the claim metric is the task loss, val_loss. B8 owns the payload rule."
+}

@@ -128,6 +128,13 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "val_acc_mean",
     "val_acc_std",
     "val_acc_n_seeds",
+    # Derived measurements the evaluator computes from history and the payload
+    "convergence_steps",
+    "generalization_gap",
+    "training_time",
+    "stability_plasticity_ratio",
+    # RL episode length: emitted by the RL evaluator, filtered as a history key
+    "mean_length",
 }
 
 # Objective name -> the payload key that satisfies it.
@@ -184,13 +191,17 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "val_acc_mean": "val_acc_mean",
     "val_acc_std": "val_acc_std",
     "val_acc_n_seeds": "val_acc_n_seeds",
+    # Derived measurements (one payload key each, computed by the evaluator)
+    "convergence_steps": "convergence_steps",
+    "generalization_gap": "generalization_gap",
+    "training_time": "training_time",
+    "stability_plasticity_ratio": "stability_plasticity_ratio",
     # RL objectives
     "mean_reward": "mean_reward",
     "std_reward": "std_reward",
     "mean_length": "mean_length",
     # Graph objectives
     "accuracy": "accuracy",
-    "f1_score": "f1_score",
 })
 
 

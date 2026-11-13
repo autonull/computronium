@@ -771,6 +771,15 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
                 quick_mode=quick_mode,
                 **kwargs,
             )
+        case "pendulum_state":
+            from computronium.domains.scientific import ScientificTask
+
+            return ScientificTask(
+                name=task_name,
+                dataset_name="pendulum",
+                device=str(device),
+                **kwargs,
+            )
         case "graph_classification" | "proteins":
             return GraphClassificationTask(
                 name=task_name,

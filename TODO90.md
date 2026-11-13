@@ -1,10 +1,11 @@
 # TODO90 — Breadth, not depth (Successor to TODO89)
 
-**Status:** 2026-11-13 · base `a0c4bb6c` · **B0–B5, B6a–B6c closed** · next
-B7. TODO89 is closed: T1–T10 carry measured numbers, and its remaining work is
+**Status:** 2026-11-13 · base `a0c4bb6c` · **B0–B9 closed, B10 closed for NCA**
+· two named verdicts remain inside B10 (NTM controller, complex arithmetic).
+TODO89 is closed: T1–T10 carry measured numbers, and its remaining work is
 two depth items (graph third credit, PROTEINS 0.7040), parked here with
-explicit triggers. All three domain claims are met, so the breadth mission has
-one claim per domain (7/7).
+explicit triggers. All eight domains hold one claim (8/8), so the breadth
+mission has a claim per domain.
 
 **Mission:** TODO89 made the instrument trustworthy and spent it on four
 domains. TODO90 spends it on **surface**: every axis primitive exercised or
@@ -37,7 +38,8 @@ closed. Session 2026-11-13: B5 closed, and its instrument found a defect the
 ticket did not predict. Session 2026-11-13 (second): B6a and B6c closed, and
 the timeseries arm could not run at all until three defects were fixed. Session
 2026-11-13 (third): B6b closed, and its ruler turned out to be the task's
-ceiling. Every row names its instrument.
+ceiling. Session 2026-11-13 (fourth): B7–B10 closed or narrowed to named
+verdicts. Every row names its instrument.
 
 | # | Ticket | Result | Evidence |
 |---|---|---|---|
@@ -50,6 +52,10 @@ ceiling. Every row names its instrument.
 | B6a | Language claim | **Met.** `char_ngram` at L2 (5 seeds × 20 epochs, all PASS): val_ppl **2.4617 ± 0.0338** (SE), one-sided 95% upper bound **2.5337**, against a **5.0** threshold and a **23.77** unigram ruler on the same 1,024-item split — **9.66× below the ruler**, 75 SE clear of the threshold. claim-eligible cells **1**. | `experiments/experiment_20261113_b6a.duckdb`; `configs/preregistrations/b6a_language_char_ngram_ppl.json` |
 | B6b | Memory claim | **Met, on a re-derived ruler.** `copy_task` at L2 (5 seeds × 20 epochs, all PASS): val_acc **0.6552 ± 0.0280** (SE), lower bound **0.5956**, against a **0.50** threshold and the strongest fixed-policy ruler **0.12825** — **5.11× the ruler**, **60.4%** of the headroom to the task's **1.000** positional-copy ceiling, 5.55 SE clear. The ticket's named ruler (copy-the-input) *is* that ceiling, so the ruler was re-derived from fixed policies. claim-eligible cells **1**. | `experiments/experiment_20261113_b6b.duckdb`, `experiment_20261113_b6b_ntm_arm.duckdb`; `configs/preregistrations/b6b_memory_copy_task_token_accuracy.json`; `tests/property/test_copy_task_ruler_lock.py` |
 | B6c | Timeseries claim | **Met, after three defects were fixed** (see below). `synthetic_forecast` at L2 (5 seeds × 20 epochs, all PASS): val_mae **0.08904 ± 0.00117** (SE), upper bound **0.09153**, against a **0.100** threshold, the **0.11459** naive last-value ruler and the **0.07979** noise floor — **1.287× below naive**, 73.4% of the 0.0348 headroom removed, 8.7 combined SE of separation. claim-eligible cells **1**. | `experiments/experiment_20261113_b6c.duckdb`; `configs/preregistrations/b6c_timeseries_synthetic_forecast_mae.json`; `tests/property/test_regression_target_lock.py` |
+| B7 | Scientific domain | **Green, with a claim.** `pendulum_state` registered (`ScientificTask`, offline Euler ODE), 6 PASS records; claim at L2 (5 seeds × 20 epochs, all PASS): val_loss **1.7574e-5 ± 1.2386e-6** (SE), upper bound **2.02e-5**, against a **0.010** threshold and the **0.04302 ± 0.00088** identity ruler — **2,448× below the ruler**, 8 domains with a claim. The row matches the loader ((3,)→3, batch 32), and `SCIENTIFIC` maps its primary metric to `mse`. | `experiments/experiment_20261113_b7.duckdb`; `configs/preregistrations/b7_scientific_pendulum_state_mse.json`; `tests/property/test_scientific_task_lock.py`; `scripts/probes/b7_pendulum_state_ruler.py` |
+| B8 | Measurement breadth | **Green.** 15 of 51 mapped objectives had no registry row and 9 registered rows had no measurement. The two surfaces now name the same **54** measured rows; `f1_score`/`bleu_score`/`test_*`/`ruler_*`/`bp_deficit`/`credit_efficiency` are retired with the measurement each would need. Four derived metrics are emitted from numbers the cell already measured (`training_time`, `convergence_steps`, `generalization_gap`, `stability_plasticity_ratio`); `mean_length` joins the declared key space; `perplexity` task rows point at `val_ppl`, not a second key. `comp coverage unmeasured` reads **2** rows (the deferred continual pair), down from 15. | `computronium/experiment/schema/{metrics,seed_registries}.py`, `kernel/_metrics.py`, `kernel/evaluate.py`, `registry/task_registry.py`; `tests/property/test_objective_breadth_lock.py` |
+| B9 | Duplicate-rule cleanup | **Green.** `NCA_CELL_MODE_CREDITS` is the one table: `SystemConfig.validate` reads it at call time and the two constraint rows are generated from it, so a credit removed there stops being refused in both places. The S5-local `_references_params` copy is deleted; both stages import `legality/dsl.references_params`, which treats `output_dim` as a hyperparameter. | `computronium/ontology/system.py`, `experiment/schema/seed_registries.py`, `experiment/execution/stages_impl.py`; `tests/property/test_legality_single_source_lock.py` |
+| B10 | Substrate reaches NCA/NTM | **Closed for NCA, narrowed for NTM, and a third defect named.** `NcaGeometry`'s cell MLP and readout run through `substrate.get_forward_operator()` (via `_substrate_linear`), threaded through `step`, `rollout`, `route` and `forward_with_intermediates`. Re-measured 8 NCA arms on `digits` (2 epochs, 1 seed): all PASS, 6 non-complex arms have distinct `train_loss` (digital 1.99038 vs analog 2.01361, ternary 2.03621, sparse 2.08250, memristive 2.00146, optical 1.99451, quantum 1.99591) and now count as substrate-coupled. Two verdicts: `ntm_substrate_inert` (the stock LSTM controller has no single-operator form) and the newly measured `complex_substrate_real_compute` (complex arithmetic on real weights bit-reproduces digital: 279 stored complex cells cannot count). | `computronium/ontology/geometry.py`, `experiment/schema/seed_registries.py`; `experiments/experiment_20261113_b10_nca.duckdb`; `tests/property/test_substrate_reaches_compute_lock.py`, `test_corpus_coverage_lock.py` |
 
 **Defect found in B0 and fixed with B0:** one CUDA device ran four cells and
 three seeds concurrently, corrupting Inductor's static Triton launcher
@@ -119,17 +125,25 @@ arm store added 8 PASS cells and 2 stores (the superseded feedforward pilot was
 deleted, not counted). `copy_task` moves from 55 to **63** PASS cells. The pair
 and task sections are unchanged: 92/99, 25/25.
 
+**Measured after B7/B10 (2026-11-13, fourth):** the same command reads **7,424
+PASS cells over 439 readable stores, 0 unreadable** — B7's claim store added 6,
+B10's NCA sweep added 9, and the three superseded B7 pilot stores were deleted,
+not counted. The pair section now reads **92/99 hold a cell, 75 on a
+coordinate no rule refuses, 24 refused, 0 undeclared**; **17 refused pairs hold
+346 cells** that cannot count (11 complex pairs, 6 NTM pairs). Tasks are
+**26/26** measured. `comp coverage unmeasured` reads **2** rows.
+
 | Surface | At plan start | Now |
 |---|---|---|
 | Axis primitives exercised or declared | 56/57 (update 11/12) | **57/57** (update 12/12) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **10/11** — graph has 2; T8's third credit is parked (marginal, not met) |
 | Acceptance locks | 3 fail | **0 fail** |
 | Corpus coverage instrument | probe only | **one command**, drift-locked, with a substrate × geometry pair section |
-| Tasks measured or retired | 22/25 | **25/25** — every registered task is measured |
-| Substrate × geometry pairs | 20 holes, 4 named by the plan | **92/99 hold a cell; 78 substrate-coupled; 21 refused; 0 holes** |
-| Domains with one claim | 4/7 | **7/7** — language (B6a), timeseries (B6c), memory (B6b) |
-| Registered-vs-measured objectives | 12 unmeasured, 15 orphans | unchanged — B8 |
-| Duplicate legality tables | 2 | 2 (plus a third `references_params` copy, §2 B9) |
+| Tasks measured or retired | 22/25 | **26/26** — `pendulum_state` joins the registry (B7) |
+| Substrate × geometry pairs | 20 holes, 4 named by the plan | **92/99 hold a cell; 75 substrate-coupled; 24 refused; 0 holes** |
+| Domains with one claim | 4/7 | **8/8** — language, timeseries, memory, scientific |
+| Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **54 declared = 54 measured, 9 retired with reasons; 2 task rows unmeasured (continual)** |
+| Duplicate legality tables | 2 | **0** — one credit table, one `references_params` |
 
 ---
 
@@ -163,24 +177,29 @@ Ordered by what unblocks the next measurable thing, not by interest.
 | B6a | **Language claim** | `char_ngram` val_ppl under a pre-registered threshold | 1 h | **closed, met** |
 | B6b | **Memory claim** | `copy_task` token accuracy over the fixed-policy rulers, with the copy-the-input ceiling named | 1 h | **closed, met** |
 | B6c | **Timeseries claim** | `synthetic_forecast` MAE over the naive last-value ruler | 1 h | **closed, met** |
-| B7 | **Scientific domain** | one registered task with a loader and a cell, or a named retirement | 1 h | open |
-| B8 | **Measurement breadth** | wire the cheap objectives; retire or register the orphan keys | 1–2 h | open |
-| B9 | **Duplicate-rule cleanup** | nca `homeostatic`/`pc_alm` voids live in one table | 30 min | open |
-| B10 | **Substrate reaches NCA/NTM** | thread the substrate operator through `NcaGeometry` and `NtmGeometry`, then re-measure 14 pairs | 2 h | open |
+| B7 | **Scientific domain** | one registered task with a loader and a cell, or a named retirement | 1 h | **closed, claim met** |
+| B8 | **Measurement breadth** | wire the cheap objectives; retire or register the orphan keys | 1–2 h | **closed** |
+| B9 | **Duplicate-rule cleanup** | nca `homeostatic`/`pc_alm` voids live in one table | 30 min | **closed** |
+| B10 | **Substrate reaches NCA/NTM** | thread the substrate operator through `NcaGeometry` and `NtmGeometry`, then re-measure 14 pairs | 2 h | **closed for NCA; NTM and complex named** |
 
 A session takes **B0–B2 first** unless they are already green. They are the
 instrument; every later ticket's evidence depends on them.
 
-**Progress (2026-11-13, third session):** B0–B5 and **B6a–B6c** are closed with
-the results in §0a, so **all seven domains hold one claim**. The breadth mission's
-remaining tickets are B7 (scientific domain), B8 (measurement breadth), B9
-(duplicate rules) and B10 (substrate reaches NCA/NTM). B5 widened under its own
-instrument: the plan named four coordinates, the pair section of `comp coverage`
-named 20, and the sweep found that 14 pairs already held cells which cannot
-count (B10). B6c widened the same way: a ticket whose whole deliverable was one
-ruler needed three pipeline fixes before the ruler could be computed. B6b
-widened in a third direction: its named ruler is the task's ceiling, so the
-ruler was re-derived from fixed policies (see §0a).
+**Progress (2026-11-13, fourth session):** B0–B10 are closed with the results in
+§0a. **All eight domains hold one claim**, every registered task is measured,
+the objective mapping and registry name the same 54 rows, the duplicate legality
+tables are gone, and NCA's substrate path is measured. Two named verdicts stay
+inside B10 rather than being silently dropped: `ntm_substrate_inert` (a stock
+LSTM controller has no single-operator form) and `complex_substrate_real_compute`
+(the complex operator is the digital matmul on real weights). B5 widened under
+its own instrument; B6c and B6b each widened in a different direction; B7
+widened into a pipeline defect (a multi-column regression target crashed every
+loss site); B10 widened into the complex-substrate verdict.
+
+**Remaining work is depth or a trigger, not breadth.** The breadth queue is
+empty: no axis primitive, task, domain, objective row, or substrate × geometry
+pair is undeclared. §5 lists the parked depth items and the breadth arms below
+(with their pre-registered rulers) are the only optional spend.
 
 **B6b start state (closed 2026-11-13, third session):** `copy_task` held 55 PASS
 cells, so the task trained; the missing piece was the ruler. The three steps the
@@ -577,6 +596,46 @@ exp(MSE). Neither is a claim metric — `val_mae` comes from the task's own
 `evaluate` — but both are numbers in the payload with no ruler. B8 owns that
 row.
 
+**B8 settled that row.** `val_acc` is now the *declared* 0.0 regression
+sentinel, not a by-product: `core.losses.accuracy_tensor` is the one accuracy
+rule, a floating-point target returns 0.0 without an argmax, and every loss
+site and the trainer's validation call it. The claim metrics remain the task's
+own (`val_loss`, `val_mae`, `val_ppl`), and the objective registry says which
+name reads which key.
+
+**Defects found in B7–B10.**
+
+1. **A multi-column regression target crashed every loss site.** `_accuracy`
+   compared `argmax(logits)` against the full `[B, C]` target, so a 3-output
+   scientific regression raised `size of tensor a (32) must match tensor b (3)`
+   in both the pipeline and `SystemTrainer.validate`. The rule now lives in
+   `core.losses.accuracy_tensor` and returns the 0.0 sentinel for a float
+   target; classification accuracy is unchanged.
+2. **The objective mapping and the objective registry were different sets.**
+   `MEASURED_OBJECTIVES` named 51 objectives, the registry registered 48, and
+   15 mapped names had no row, so `objective_metric("accuracy")` raised for a
+   name the mapping claimed. 15 rows are now registered; 9 unmeasured rows name
+   the measurement they need; the sets are equal (54). Four derived metrics are
+   emitted (`training_time`, `convergence_steps`, `generalization_gap`,
+   `stability_plasticity_ratio`). Two task rows carried a second key for a
+   measured objective (`perplexity`) — they now point at `val_ppl`.
+3. **`f1_score` and `bleu_score` were declared by 12 task rows and emitted by
+   none.** Both are retired from the task rows with the missing measurement
+   named (no prediction surface; no text generation). The unmeasured report
+   drops from 15 rows to 2 (the deferred continual pair).
+4. **`NcaGeometry` ignored its substrate argument.** B5 found it; B10 fixed it
+   by routing the cell MLP and readout through `_substrate_linear` and threading
+   the substrate through `step`/`rollout`/`route`/`forward_with_intermediates`.
+   Re-measured: 6 non-complex NCA arms differ from digital.
+5. **The complex substrate's operator is the digital matmul on real weights.**
+   `(a+bi)(c+di)` with real `w` is `ac`; feedforward and NCA are bit-identical.
+   279 stored complex cells cannot count as substrate breadth. The row
+   `complex_substrate_real_compute` declares it; the NTM half of the old row is
+   kept as `ntm_substrate_inert` with the stock-LSTM reason.
+6. **The S5 stage carried a third `_references_params` copy** that ignored
+   `output_dim`; S5 now imports the dsl traversal, and the two NCA voids are a
+   projection of `NCA_CELL_MODE_CREDITS` rather than two hand-written pairs.
+
 **Breadth arms (only after the three above close):**
 
 | Domain | Task | Ruler | Target |
@@ -590,85 +649,135 @@ within 1 σ of its threshold is marginal, not met.
 
 ### B7 — Scientific domain
 
-**Start:** `ScientificTask` is exported and constructible but absent from
-`SUPPORTED_TASKS`; the domain has no registry row and no cells.
+**Result (2026-11-13, closed):** `pendulum_state` is registered — an offline
+Euler pendulum loader inside `ScientificTask` (`sin θ, cos θ, ω` →
+next state, 5,000 rows, 80/20 split) with a feedforward geometry hint and an MSE
+primary objective. The registry row matches the loader ((3,) → 3, batch 32,
+domain SCIENTIFIC); `_primary_domain_metric_key` maps SCIENTIFIC to `mse`.
 
-**Deliverable:** register one scientific task with an offline loader (a physics
-simulation the repo already generates, e.g. pendulum state prediction with an
-MSE objective and a naive baseline) **or** retire the domain's export with a
-named verdict. Do not leave a constructible domain that coverage cannot see.
+Ruler, from `scripts/probes/b7_pendulum_state_ruler.py` on the measured split
+(n = 1,000): identity/persistence **0.04302 ± 0.00088** (SE); zero 1.33135,
+val-mean 1.33123, sin/cos-only 1.00040. The ODE is deterministic and the input
+determines the next state, so the noise floor is 0; the threshold is derived
+from the ruler.
 
-**Acceptance:** `comp coverage tasks` lists the task and one PASS cell exists,
-or the export is gone and the plan records the verdict.
+Claim (`configs/preregistrations/b7_scientific_pendulum_state_mse.json`,
+threshold 0.010): arm `digital/feedforward/instantaneous/null/gradient/adam` at
+L2 (5 seeds × 20 epochs) in `experiments/experiment_20261113_b7.duckdb`, 8 s per
+seed, 6 PASS records, claim-eligible cells **1**. val_loss **1.7574e-5 ±
+1.2386e-6** (SE), one-sided 95% upper bound **2.02e-5** — 568× below the
+threshold, **2,448× below the identity ruler**, every seed PASS.
+
+Bucket: the 4.3×-below-ruler threshold (0.010) is deliberately far above the
+measured mean because it was derived before the confirmatory run; the margin is
+reported, not used to re-pick the threshold. `val_acc` on this task is the
+declared 0.0 regression sentinel (B8), so the claim metric is `val_loss`.
+
+Lock: `tests/property/test_scientific_task_lock.py` (4 tests: the task is
+supported and resolves, the registry row matches the loader, a float target
+returns the 0.0 sentinel while class targets still score, and the registration
+brackets its ruler and floor). 4 passed.
 
 ### B8 — Measurement breadth
 
-**Start:** 12 objectives registered without a payload key (`bleu_score`,
-`bp_deficit`, `convergence_steps`, `credit_efficiency`, `generalization_gap`,
-`ruler_{energy,param,walltime}_ratio`, `stability_plasticity_ratio`,
-`test_accuracy`, `test_loss`, `training_time`); 15 measured keys with no
-objective (`accuracy`, `mean_reward`, `val_acc_mean`, …); `f1_score` and
-`forgetting`/`backward_transfer` are unmeasured.
+**Result (2026-11-13, closed):** the two surfaces now name one set. Fifteen
+mapped names had no `OBJECTIVES_REGISTRY` row (`accuracy`, `mean_reward`,
+`std_reward`, `mean_length`, `energy_per_op`, `free_energy_final`,
+`nonlinearity_error`, `settle_steps_used`, `synaptic_ops_per_sample`,
+`thermal_noise_variance`, `val_acc_ci_{lower,upper,mean,std,n_seeds}`); each is
+registered with its metric key. Nine registered rows still have no measurement
+and each now names the measurement it needs:
 
-**Deliverable, in this order (cheapest first):**
-1. Ruler ratios from existing payload keys (`walltime_s`, `param_count`,
-   energy keys) — pure derivation, no new training.
-2. `training_time` / `convergence_steps` from history the trainer already keeps.
-3. `test_accuracy` / `test_loss` / `f1_score` — a real held-out test split; add
-   it to the evaluator once, not per task.
-4. `forgetting` / `backward_transfer` — requires the continual evaluation B6
-   needs; do it with that ticket, not before.
-5. Orphan keys: register as objectives or delete from `MEASURED_OBJECTIVES` so
-   the mapping and the registry name the same set.
+| Retired row | What would have to exist |
+|---|---|
+| `f1_score` | a per-sample prediction surface (task.evaluate returns accuracy/loss only) |
+| `bleu_score` | a generation task (no registered task emits text) |
+| `test_accuracy`, `test_loss` | an independent hold-out (every loader aliases TEST to VAL) |
+| `bp_deficit`, `ruler_{walltime,energy,param}_ratio` | a discovered baseline record for the task at this hardware/budget |
+| `credit_efficiency` | a credit-alignment measurement (the payload has no alignment score) |
 
-**Acceptance:** `comp coverage unmeasured` shrinks by the wired rows; a lock
-asserts `set(MEASURED_OBJECTIVES) == registered objective names ∪ documented
-internal keys` (the 15 are the current violation).
+Four measurements are derived in one place (`kernel/_metrics.derived_metrics`,
+called after the post-training probes) from numbers the cell already measured:
+`training_time` (walltime per epoch), `convergence_steps` (global step of the
+best `val_loss`), `generalization_gap` (final `val_loss - train_loss`), and
+`stability_plasticity_ratio` (`spectral_radius / psi_capacity`). `mean_length`
+joins `MEASURED_METRICS` (the RL evaluator already emits it), and the two task
+rows that declared a second key for a measured objective now point at `val_ppl`.
+
+`comp coverage unmeasured` reads **2 rows** (`sequential_mnist`'s
+`forgetting`/`backward_transfer`, deferred with continual evaluation), down from
+15. The mapping holds 54 measured names; the registry holds the same 54.
+`val_acc` for a regression target is now the declared 0.0 sentinel rather than
+an accidental argmax (`core.losses.accuracy_tensor` is the one rule), which is
+what made `pendulum_state` trainable at all (B7).
+
+Lock: `tests/property/test_objective_breadth_lock.py` (5 tests: mapping ≡
+registry-measured, every retired row names its missing measurement, no task
+declares an unmeasured payload key, the derived metrics are derivations, and a
+real cell payload carries them). 5 passed.
 
 ### B9 — Duplicate-rule cleanup
 
-**Start:** nca × instantaneous `homeostatic` and `pc_alm` voids exist both as
-registry rows and as `SystemConfig.validate` methods; T10 had to delete both
-copies of the `target_inversion` rule.
+**Result (2026-11-13, closed):** `NCA_CELL_MODE_CREDITS` in
+`ontology/system.py` is the one table. `SystemConfig.validate` reads it at call
+time through `_validate_nca_cell_mode_credits`, and the two constraint rows are
+generated from it in `seed_registries` (`nca_instantaneous_{credit}`), so a
+credit added or removed there changes both surfaces at once. The S5-local
+`_references_params` is deleted; S4 Gate and S5 Compose both import
+`legality/dsl.references_params`, which counts `output_dim` as a
+hyperparameter — so `classification_requires_classifier_head` now discriminates
+the same way at both stages.
 
-**Third copy found 2026-11-13 (B5):** `execution/stages_impl.py:636` defines a
-local `_references_params` that differs from `legality/dsl.py`'s: it matches
-only `params.*`, not `output_dim`. S4 Gate skips
-`classification_requires_classifier_head` (which reads `output_dim`) as a
-param rule, and S5 Compose's copy also skips it — so that constraint is enforced
-by neither stage. The dsl helper is the one source now; S5 should import it and
-the rule will land at compose time, where `output_dim` is known.
-
-**Deliverable:** one table. Make `validate` consult the declared rows (or delete
-the methods and route every legality check through composition). A lock deletes
-the registry row and proves the coordinate is refused with that row's reason —
-the same mechanism lock T7 uses.
-
-**Acceptance:** one source per rule; the lock fails if a second copy returns.
+Lock: `tests/property/test_legality_single_source_lock.py` (5 tests: the
+registry is a projection of the tuple, the runtime refusal message is the row's
+description, monkeypatching the tuple to drop `pc_alm` makes that coordinate
+validate, a legal NCA control composes, and an AST scan finds no local
+traversal while `output_dim` is classified as a param rule). 5 passed.
 
 ---
 
 ### B10 — Substrate reaches NCA/NTM
 
-**Start:** `NcaGeometry.forward` and `NtmGeometry.forward` accept a `substrate`
-argument and never use it; the pair instrument refuses their 14 non-digital
-pairs (`nca_ntm_substrate_inert`) and lists the 192 cells that cannot count.
-The evidence is identical `train_loss` to six decimals across substrates
-(`experiments/experiment_20261113_b5.duckdb`), while `conv`/`attention`/
-`spatial_lattice`/`graph` change with the substrate as they should.
+**Result (2026-11-13, closed for NCA; NTM and complex are named verdicts):**
+`NcaGeometry`'s cell MLP (hidden + delta) and readout run through
+`_substrate_linear` → `substrate.get_forward_operator()`, threaded through
+`step`, `rollout`, `route`, `forward` and `forward_with_intermediates`; the
+`distill_init` path keeps the digital default (it has no substrate argument).
+`NtmGeometry` is not wired: its `nn.LSTM` controller has no single-operator
+form, and a manual gate rewrite would be a second forward path — the plan's own
+condition for deferring it. The old row is narrowed to `ntm_substrate_inert`.
 
-**Deliverable:** route NCA's cell MLP and readout through
-`substrate.get_forward_operator()`, threading the substrate through `step`,
-`rollout` and the settle path that calls them; do NTM only if the LSTM
-controller can be written in substrate ops without a second forward path. Then
-delete `nca_ntm_substrate_inert`, re-run the 14 pairs, and confirm the
-`train_loss` now differs from digital.
+A third defect surfaced while re-measuring: the **complex substrate's operator
+is the digital matmul on real weights** (`(a+bi)(c+di)` with real `w` is `ac`).
+Feedforward and NCA are bit-identical on complex, so 279 stored complex cells
+cannot count as substrate breadth. The row `complex_substrate_real_compute`
+declares that, and it refuses every complex pair.
 
-**Acceptance:** `tests/property/test_substrate_reaches_compute_lock.py` asserts
-the pair is refused **and** the geometry reproduces digital — the lock flips
-with the fix, so the row cannot outlive the defect. A re-measured pair carries a
-cell whose `train_loss` differs from the digital arm, and the corpus pair
-section counts it as coupled.
+Re-measurement (`experiments/experiment_20261113_b10_nca.duckdb`, `digits`,
+2 epochs, 1 seed, 9 records, 9 PASS):
+
+| Substrate | train_loss | Counts as coupled |
+|---|---|---|
+| digital | 1.99038 | reference |
+| memristive | 2.00146 | yes |
+| optical | 1.99451 | yes |
+| quantum | 1.99591 | yes |
+| analog | 2.01361 | yes |
+| ternary | 2.03621 | yes |
+| sparse | 2.08250 | yes |
+| complex | 1.99038 (bit-identical) | **no** — `complex_substrate_real_compute` |
+| neuromorphic | not run | refused (`neuromorphic_substrate_dynamics`) |
+
+Corpus after the sweep: **92/99 pairs hold a cell, 75 on a coordinate no rule
+refuses, 24 refused, 0 undeclared**; 17 refused pairs hold 346 cells that cannot
+count (11 complex pairs, 6 NTM pairs). The six non-complex NCA pairs moved into
+the coupled count.
+
+Lock: `tests/property/test_substrate_reaches_compute_lock.py` (4 tests: only
+NTM is refused off digital, NCA reads the substrate while NTM still reproduces
+digital, feedforward still reads it, and complex is real arithmetic with its
+row). `tests/property/test_corpus_coverage_lock.py` updated to the narrowed
+row. 8 passed together.
 
 ---
 
@@ -677,23 +786,24 @@ section counts it as coupled.
 | Criterion | Start | Target | Now (2026-11-13) |
 |---|---|---|---|
 | Axis primitives exercised or declared | **56/57** (update 11/12) | **57/57** with a PASS cell or a named row | **57/57** |
-| Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry | **25/25** (B4) |
+| Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **26/26**, each measured or absent from the registry | **26/26** (B4 + B7) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **11/11** (B2 closes the 3 probe-only) | **10/11** — graph parked (T8) |
-| Substrate × geometry pairs measured or refused | 18 undeclared | **0 undeclared**, each pair a coupled cell or a named rule | **0 undeclared** — 78 on a coupled cell, 21 refused (14 await B10) |
-| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | **7/7** — language (B6a), timeseries (B6c), memory (B6b) |
+| Substrate × geometry pairs measured or refused | 18 undeclared | **0 undeclared**, each pair a coupled cell or a named rule | **0 undeclared** — 75 coupled, 24 refused, 17 refused pairs hold 346 cells |
+| Domains with one claim | 4/7 | **8/8** (language, memory, timeseries, scientific) | **8/8** — B6a/B6b/B6c/B7 at L2 with 5 seeds each |
 | Acceptance locks | 3 fail | **0 fail** | **0 fail** |
 | Corpus coverage instrument | probe only | **one command**, drift-locked | **one command**, locked, pairs included |
-| Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **0 unexplained** | 12 / 15 |
-| Duplicate legality tables | 2 (nca homeostatic/pc_alm) | **0** | 2 (+ the S5 `references_params` copy) |
+| Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **0 unexplained** | **54 = 54**; 9 retired with named measurements; 2 deferred (continual) |
+| Duplicate legality tables | 2 (nca homeostatic/pc_alm) | **0** | **0** — one credit table, one `references_params` |
 
 Measured 2026-11-12 at plan start: 6,925 PASS cells over 428 stores. Measured
 after B2/B3: 7,319 over 430 stores, 0 unreadable. After B4: 7,325 over 431
 stores, 0 unreadable. After B5: 7,388 over 432 stores, 0 unreadable, 99
 substrate × geometry pairs all accounted for. After B6a/B6c: 7,401 over 435
 stores, 0 unreadable, both claims at L2 with 5 achieved seeds. After B6b: 7,409
-over 437 stores, 0 unreadable, three claims at L2 with 5 achieved seeds each and
-7/7 domains. Each row above names the instrument that would move it, and the
-target is a cell, a row, or a claim — never a count of attempted work.
+over 437 stores, 0 unreadable. After B7/B10: **7,424 over 439 stores, 0
+unreadable**, 26/26 tasks, 8/8 domain claims, 54/54 objective rows. Each row
+above names the instrument that would move it, and the target is a cell, a row,
+or a claim — never a count of attempted work.
 
 ---
 
@@ -734,7 +844,25 @@ Next Experiment:
    existing `copy_task` cells re-pinned. Then B6b's registration is re-derived —
    `tests/property/test_copy_task_ruler_lock.py` fails on the repair and names
    the three numbers to re-measure.
-4. Everything TODO89 §5 lists as NO stays NO: paper figures, publishing,
+4. **NTM's LSTM controller in substrate ops.** `ntm_substrate_inert` is the one
+   remaining geometry-side inertness (6 refused pairs hold cells). The repair is
+   a gate rewrite of `nn.LSTM` as two substrate operators with the same state
+   dict and no second forward path; routing only the key/add/erase projections
+   would make the loss differ without making the controller physical, so it is
+   not done. Trigger: a claim needs NTM substrate breadth. Then the row is
+   deleted and the 6 pairs re-measured; `test_substrate_reaches_compute_lock`
+   fails on the delete.
+5. **Complex arithmetic at a real-valued model.** `complex_substrate_real_compute`
+   refuses 11 pairs and leaves 279 cells uncounted. The repair is a model path
+   that carries complex activations (or a declared phase-noise term that changes
+   a real matmul); until then the substrate's declared physics does not enter a
+   real-valued cell. Trigger: a claim cites complex-substrate breadth, or a
+   complex-valued geometry lands.
+6. **`test_accuracy` / `test_loss` need a real hold-out.** Every loader aliases
+   TEST to VAL. A three-way split re-pins every existing validation number, so
+   it is a corpus-wide re-measure, not a B8 wiring row. Trigger: a claim that
+   must state out-of-sample error on a new split.
+7. Everything TODO89 §5 lists as NO stays NO: paper figures, publishing,
    retrospectives, cycles > 30 min, repo-wide gates outside round close.
 
 ---
@@ -744,37 +872,38 @@ Next Experiment:
 ```bash
 # state
 uv lock --check && uv run python -c "import duckdb, torch; print(duckdb.__version__, torch.__version__)"
-uv run python scripts/probes/t3_credit_breadth.py | tail -40
 uv run comp coverage report --corpus
 # substrate breadth: cells, refused pairs, and cells on a refused pair
 uv run comp coverage report --corpus | sed -n '/Substrate x Geometry/,/Per-Task/p'
+uv run comp coverage unmeasured
 
-# the gate B0 repaired (green 2026-11-12)
+# the acceptance gate (green since B0; ~4 min)
 uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py \
   tests/acceptance/test_promotion_lock.py -q -rf --tb=line > logs/b0.log 2>&1
 
-# the lock B6c added: a regression target is a value, not a class index
-uv run python -m pytest tests/property/test_regression_target_lock.py -q --tb=line
-
-# the lock B6b added: copy_task's rulers, its 1.000 ceiling, its true shape
-uv run python -m pytest tests/property/test_copy_task_ruler_lock.py -q --tb=line
+# breadth locks added by B6-B10 (18 tests, ~45 s)
+uv run python -m pytest \
+  tests/property/test_regression_target_lock.py \
+  tests/property/test_copy_task_ruler_lock.py \
+  tests/property/test_scientific_task_lock.py \
+  tests/property/test_objective_breadth_lock.py \
+  tests/property/test_legality_single_source_lock.py \
+  tests/property/test_substrate_reaches_compute_lock.py \
+  tests/property/test_corpus_coverage_lock.py -q --tb=line
 ```
 
-Read `TODO89.md` §2b before choosing a ticket; it owns the measured surface.
-B0–B5 and B6a–B6c are green (see §0a), and all seven domains hold one claim.
-**Start at B7** (scientific domain) or B8 (measurement breadth), whichever the
-next deliverable needs; B9, B10 and the two breadth arms remain. B5's pair
-section is the substrate-breadth instrument: read
-`comp coverage report --corpus | sed -n '/Substrate x Geometry/,/Per-Task/p'`
-to see every pair that holds a cell, every pair a rule refuses, and every
-cell on a refused pair that cannot count.
+The breadth queue is empty (B0–B10 closed, §3). Read `TODO89.md` §2b and this
+file's §5 before spending a session; the only optional breadth spend is the two
+pre-registered arms below (vision `cifar10`, RL `cartpole`), and everything else
+is depth with a trigger.
 
 **A claim needs the task's own loss.** B6c proved the pipeline could not train
 a regression target until `loss_fn` was threaded from composition to every
-loss site. Before claiming a *new* task trains poorly, check that its
-`compute_loss` reaches the pipeline: compose one cell and assert the reported
-`loss` equals the task's metric on the same batch
-(`test_pipeline_trains_a_regression_cell_with_its_own_loss` is the pattern).
+loss site. B7 then proved a multi-column regression target crashed `_accuracy`
+until that rule had one source. Before claiming a *new* task trains poorly,
+compose one cell and assert the reported `loss` equals the task's metric on the
+same batch (`test_pipeline_trains_a_regression_cell_with_its_own_loss` is the
+pattern).
 
 **A claim needs a ruler the arm can beat.** B6b's ticket named a ruler (copy the
 input) that the task's own framing satisfies exactly, so the ruler was the
@@ -782,5 +911,8 @@ ceiling. Before registering a threshold, compute the named policy's score on the
 split the cell measures; if it is 1.0 (or 0.0 on a loss), the task's framing
 leaks and the ruler must be re-derived from policies that address nothing.
 
-**B10 stays parked.** B10 is depth on one geometry family. Its trigger is a
-claim that cites substrate breadth for nca or ntm.
+**A primitive that "works" may not be in the computation.** B5/B10 found a
+PASS cell whose substrate never entered the forward pass. A breadth cell must
+show the axis changed the number, not merely that it ran: compare the arm to
+its digital counterpart at the same schedule (`train_loss` to six decimals was
+the tell).

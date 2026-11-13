@@ -31,6 +31,7 @@ from computronium.experiment.kernel._metrics import (
     compute_energy_metrics,
     compute_plasticity_metrics,
     compute_stability_metrics,
+    derived_metrics,
     history_metrics,
 )
 from computronium.experiment.kernel._task_scheduler import TaskScheduler
@@ -317,6 +318,7 @@ def _evaluate_cell(
 
     metrics = _collect_all_metrics(trainer, history, cell, task, schedule, coordinate)
     _post_training_metrics(metrics, cell, task, schedule, coordinate, walltime_s)
+    metrics.update(derived_metrics(history, walltime_s, metrics))
     _validate_metrics_finite(metrics, coordinate, schedule.task_id)
 
     convergence_curve = _extract_convergence_curve(schedule, history)
@@ -531,6 +533,8 @@ def _primary_domain_metric_key(domain_type: Any) -> str:
         case DomainType.RL:
             return "mean_reward"
         case DomainType.TIMESERIES:
+            return "mse"
+        case DomainType.SCIENTIFIC:
             return "mse"
         case _:
             return "accuracy"

@@ -68,6 +68,7 @@ from computronium.experiment.schema.registries import (
     register_prior,
     register_stage,
 )
+from computronium.ontology.system import NCA_CELL_MODE_CREDITS
 
 # =============================================================================
 # AXIS PRIMITIVES — Seed AXES_REGISTRIES with AxisSpec for each primitive
@@ -408,13 +409,64 @@ def _measured(objectives: list[ObjectiveSpec]) -> list[ObjectiveSpec]:
         if objective.name in MEASURED_OBJECTIVES
         else replace(
             objective,
-            unavailable_reason=(
+            unavailable_reason=UNAVAILABLE_REASONS.get(
+                objective.name,
                 "registered ahead of measurement: the evaluator emits no payload "
-                f"key for it. Measured objectives: {measured}"
+                f"key for it. Measured objectives: {measured}",
             ),
         )
         for objective in objectives
     ]
+
+
+# A retired objective names what would have to exist for a measurement, not
+# merely that none does. These are the rows no evaluator path emits.
+UNAVAILABLE_REASONS: Final[dict[str, str]] = {
+    "f1_score": (
+        "no evaluator path reads per-sample predictions: task.evaluate() "
+        "returns accuracy/loss only, so F1 would have to be recomputed from a "
+        "second pass per domain. Retired from the task rows until a declared "
+        "prediction surface exists; accuracy and loss are the measured pair."
+    ),
+    "bleu_score": (
+        "no registered task generates text: char_ngram and tiny_shakespeare "
+        "predict a class per position, so BLEU has no candidate/reference pair."
+    ),
+    "test_accuracy": (
+        "every task loader aliases TEST to VAL (`_test_loader = _val_loader`), "
+        "so a test metric would repeat the validation number under a second "
+        "name. Requires an independent hold-out per task and a corpus re-pin."
+    ),
+    "test_loss": (
+        "every task loader aliases TEST to VAL (`_test_loader = _val_loader`), "
+        "so a test metric would repeat the validation number under a second "
+        "name. Requires an independent hold-out per task and a corpus re-pin."
+    ),
+    "bp_deficit": (
+        "needs a discovered baseline accuracy for the task at this hardware "
+        "fingerprint and budget; BaselineRegistry holds no record. "
+        "compute_ruler_metrics() applies it on the Pareto path when one exists."
+    ),
+    "ruler_walltime_ratio": (
+        "needs a discovered baseline walltime for the task at this hardware "
+        "fingerprint and budget; no baseline record is registered, and a "
+        "fabricated denominator is not a ruler."
+    ),
+    "ruler_energy_ratio": (
+        "needs a discovered baseline energy for the task at this hardware "
+        "fingerprint and budget; no baseline record is registered, and a "
+        "fabricated denominator is not a ruler."
+    ),
+    "ruler_param_ratio": (
+        "needs a discovered baseline parameter count for the task; no baseline "
+        "record is registered, and cell/baseline with a guessed baseline is "
+        "not a ruler."
+    ),
+    "credit_efficiency": (
+        "needs a credit-alignment measurement; the payload carries credit "
+        "identity but no alignment score, and FLOPs alone is not efficiency."
+    ),
+}
 
 
 OBJECTIVES = _measured([
@@ -803,11 +855,135 @@ OBJECTIVES = _measured([
     ),
     ObjectiveSpec(
         name="generalization_gap",
-        description="Train-validation gap (smaller is better)",
+        description="Train-validation gap (v_loss - train_loss); smaller is better",
         direction="minimize",
         weight=1.0,
         normalizer="minmax",
         axis_tag="task",
+    ),
+    # Substrate objectives, registered now that the payload keys are declared
+    ObjectiveSpec(
+        name="energy_per_op",
+        description="Energy per device operation (substrate)",
+        direction="minimize",
+        weight=1.0,
+        normalizer="log",
+        axis_tag="substrate",
+    ),
+    ObjectiveSpec(
+        name="free_energy_final",
+        description="Free energy at the final settle step",
+        direction="minimize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="stability",
+    ),
+    ObjectiveSpec(
+        name="nonlinearity_error",
+        description="Deviation of the substrate nonlinearity from its declared model",
+        direction="minimize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="substrate",
+    ),
+    ObjectiveSpec(
+        name="settle_steps_used",
+        description="Settle steps the cell actually consumed",
+        direction="minimize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="stability",
+    ),
+    ObjectiveSpec(
+        name="synaptic_ops_per_sample",
+        description="Synaptic operations per sample (substrate)",
+        direction="minimize",
+        weight=1.0,
+        normalizer="log",
+        axis_tag="substrate",
+    ),
+    ObjectiveSpec(
+        name="thermal_noise_variance",
+        description="Thermal noise variance of the substrate",
+        direction="minimize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="substrate",
+    ),
+    # RL objectives
+    ObjectiveSpec(
+        name="mean_reward",
+        description="Mean episode return",
+        direction="maximize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="task",
+    ),
+    ObjectiveSpec(
+        name="std_reward",
+        description="Episode return variance",
+        direction="minimize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="task",
+    ),
+    ObjectiveSpec(
+        name="mean_length",
+        description="Mean episode length",
+        direction="minimize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="task",
+    ),
+    # Graph objectives
+    ObjectiveSpec(
+        name="accuracy",
+        description="Accuracy as emitted by the graph task evaluator",
+        direction="maximize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="task",
+    ),
+    # Statistical validity objectives (WS1.4)
+    ObjectiveSpec(
+        name="val_acc_ci_lower",
+        description="Lower confidence bound of the seed mean",
+        direction="maximize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="statistical",
+    ),
+    ObjectiveSpec(
+        name="val_acc_ci_upper",
+        description="Upper confidence bound of the seed mean (a reported bound)",
+        direction="maximize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="statistical",
+    ),
+    ObjectiveSpec(
+        name="val_acc_mean",
+        description="Seed-mean validation accuracy",
+        direction="maximize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="statistical",
+    ),
+    ObjectiveSpec(
+        name="val_acc_std",
+        description="Seed-to-seed validation accuracy spread",
+        direction="minimize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="statistical",
+    ),
+    ObjectiveSpec(
+        name="val_acc_n_seeds",
+        description="Seeds behind a reported mean",
+        direction="maximize",
+        weight=1.0,
+        normalizer="minmax",
+        axis_tag="statistical",
     ),
 ])
 
@@ -977,11 +1153,11 @@ CONSTRAINTS = [
     # cell reproduces the digital arm's train_loss to six decimals on every
     # non-digital substrate (`experiments/experiment_20261113_b5.duckdb`).
     ConstraintSpec(
-        name="nca_ntm_substrate_inert",
+        name="ntm_substrate_inert",
         kind=ConstraintKind.VOID,
-        description="NCA and NTM geometries call no substrate operator: off digital the substrate changes only the energy model, so the cell cannot measure substrate breadth",
+        description="NTM geometry calls no substrate operator: its stock LSTM controller has no single-operator form, so off digital the substrate changes only the energy model (NCA is wired, TODO90 B10)",
         predicate=or_(
-            not_(in_(var("geometry"), const(["nca", "ntm"]))),
+            not_(eq(var("geometry"), const("ntm"))),
             eq(var("substrate"), const("digital")),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
@@ -1086,34 +1262,28 @@ CONSTRAINTS = [
     # Geometry-Dynamics-Credit: NCA with instantaneous dynamics is incompatible
     # with credits that assume sample-mode activations (NCA uses cell-mode [B*H*W, C]).
     # ``target_inversion`` is absent: its target folds back to cell rows
-    # (``_fold_cell_targets``), measured in TODO89 T10.
-    ConstraintSpec(
-        name="nca_instantaneous_homeostatic",
-        kind=ConstraintKind.VOID,
-        description="NCA geometry with instantaneous dynamics incompatible with homeostatic credit (cell-mode activations)",
-        predicate=not_(
-            and_(
-                eq(var("geometry"), const("nca")),
-                eq(var("dynamics"), const("instantaneous")),
-                eq(var("credit"), const("homeostatic")),
-            )
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
-    ),
-    ConstraintSpec(
-        name="nca_instantaneous_pc_alm",
-        kind=ConstraintKind.VOID,
-        description="NCA geometry with instantaneous dynamics incompatible with pc_alm credit (cell-mode activations)",
-        predicate=not_(
-            and_(
-                eq(var("geometry"), const("nca")),
-                eq(var("dynamics"), const("instantaneous")),
-                eq(var("credit"), const("pc_alm")),
-            )
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
+    # (``_fold_cell_targets``), measured in TODO89 T10. The credit list is the
+    # ontology's declared set (TODO90 B9): a runtime refusal and a registry row
+    # cannot disagree, because both read ``NCA_CELL_MODE_CREDITS``.
+    *(
+        ConstraintSpec(
+            name=f"nca_instantaneous_{credit}",
+            kind=ConstraintKind.VOID,
+            description=(
+                "NCA geometry with instantaneous dynamics incompatible with "
+                f"{credit} credit (cell-mode activations)"
+            ),
+            predicate=not_(
+                and_(
+                    eq(var("geometry"), const("nca")),
+                    eq(var("dynamics"), const("instantaneous")),
+                    eq(var("credit"), const(credit)),
+                )
+            ),
+            proof_kind=ProofKind.TYPE_MISMATCH,
+            origin="DECLARED",
+        )
+        for credit in NCA_CELL_MODE_CREDITS
     ),
     # Geometry-Dynamics: tile_mesh with pc_alm dynamics has width mismatch
     ConstraintSpec(
@@ -1242,6 +1412,20 @@ CONSTRAINTS = [
                 const(["spike_integration", "energy_minimization", "diffusion"]),
             ),
         ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Substrate-Arithmetic: a complex substrate over real weights is the real
+    # matmul. ``(a+bi)(c+di)`` with ``b=d=0`` is ``ac``, and every topology in
+    # the registry holds real weights, so the operator reproduces digital to the
+    # bit. Measured 2026-11-13 (TODO90 B10): feedforward and nca are
+    # bit-identical on complex and digital; 279 stored complex cells cannot
+    # count as substrate breadth.
+    ConstraintSpec(
+        name="complex_substrate_real_compute",
+        kind=ConstraintKind.VOID,
+        description="Complex substrate computes the digital matmul on real weights, so a real-valued cell cannot measure its physics",
+        predicate=not_(eq(var("substrate"), const("complex"))),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),

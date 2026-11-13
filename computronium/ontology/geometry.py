@@ -113,6 +113,25 @@ class ActivationLayout:
         return None
 
 
+def _substrate_linear(
+    x: Tensor, layer: nn.Linear, substrate: Substrate | None
+) -> Tensor:
+    """``x @ W.T + b`` through the substrate's forward operator.
+
+    One helper so a cell topology cannot route some of its projections through
+    the substrate and leave the rest digital (TODO90 B10). ``substrate=None``
+    means the digital default, matching every other geometry.
+    """
+    if substrate is None:
+        from computronium.ontology.substrate import DigitalSubstrate
+
+        substrate = DigitalSubstrate()
+    out = substrate.get_forward_operator()(x, layer.weight)
+    if layer.bias is not None:
+        out = out + layer.bias
+    return out
+
+
 def _linear_stack(
     dims: tuple[int, ...],
     init_scale: float,
@@ -3514,10 +3533,10 @@ class NcaGeometry(nn.Module):
             nb = torch.cat([nb, labels[:, : self.config.label_channels]], dim=1)
         return nb.permute(0, 2, 3, 1).reshape(b * h * w, -1)
 
-    def _delta(self, states: Tensor, labels: Tensor | None) -> Tensor:
-        x = self.perceive(states, labels)
-        h = torch.relu(self._cell_hidden(x))
-        return self.config.delta_scale * torch.tanh(self._cell_delta(h))
+    def _delta(
+        self, states: Tensor, labels: Tensor | None, substrate: Substrate | None = None
+    ) -> Tensor:
+        return self._delta_flat(self.perceive(states, labels), substrate)
 
     def _apply_delta(
         self, states: Tensor, delta_flat: Tensor, mask: Tensor | None
@@ -3538,7 +3557,11 @@ class NcaGeometry(nn.Module):
         return states + delta * m.reshape(-1, 1, *states.shape[-2:])
 
     def step(
-        self, states: Tensor, labels: Tensor | None = None, mask: Tensor | None = None
+        self,
+        states: Tensor,
+        labels: Tensor | None = None,
+        mask: Tensor | None = None,
+        substrate: Substrate | None = None,
     ) -> Tensor:
         """One CA update: states += mask * delta(states).
 
@@ -3547,13 +3570,17 @@ class NcaGeometry(nn.Module):
             labels: Optional (B, L, H, W) per-cell label grid
             mask: Optional (B, H, W) update mask; sampled at ``mask_prob``
                 when absent (functional damping, §11.4)
+            substrate: Optional substrate; both cell MLP layers run through
+                its forward operator, so off ``digital`` the cell physics
+                changes the state delta (TODO90 B10)
         """
         if states.dim() != 4 or states.shape[-2:] != tuple(self.config.grid_hw):
             raise ValueError(
                 f"NcaGeometry expects states (B, C, {self.config.grid_hw[0]}, "
                 f"{self.config.grid_hw[1]}), got {tuple(states.shape)}"
             )
-        return self._apply_delta(states, self._delta(states, labels), mask)
+        delta = self._delta(states, labels, substrate)
+        return self._apply_delta(states, delta, mask)
 
     def rollout(
         self,
@@ -3561,12 +3588,13 @@ class NcaGeometry(nn.Module):
         steps: int,
         labels: Tensor | None = None,
         grad: bool = False,
+        substrate: Substrate | None = None,
     ) -> Tensor:
         """Run ``steps`` CA updates from ``states`` (autograd optional)."""
         ctx = torch.enable_grad() if grad else torch.no_grad()
         with ctx:
             for _ in range(steps):
-                states = self.step(states, labels)
+                states = self.step(states, labels, substrate=substrate)
         return states
 
     def distill_init(
@@ -3626,9 +3654,10 @@ class NcaGeometry(nn.Module):
             opt.step()
         return float(loss.detach())
 
-    def _delta_flat(self, x: Tensor) -> Tensor:
-        h = torch.relu(self._cell_hidden(x))
-        return self.config.delta_scale * torch.tanh(self._cell_delta(h))
+    def _delta_flat(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        h = torch.relu(_substrate_linear(x, self._cell_hidden, substrate))
+        delta = _substrate_linear(h, self._cell_delta, substrate)
+        return self.config.delta_scale * torch.tanh(delta)
 
     def _reshape_to_grid(self, x: Tensor) -> tuple[Tensor, bool]:
         """Reshape flattened input to (B, C, H, W) grid if needed.
@@ -3657,22 +3686,24 @@ class NcaGeometry(nn.Module):
             return x.flatten(1)
         return x
 
-    def _apply_readout(self, state_grid: Tensor) -> Tensor:
-        """Apply readout layer to flattened state grid if available."""
+    def _apply_readout(
+        self, state_grid: Tensor, substrate: Substrate | None = None
+    ) -> Tensor:
+        """Apply readout layer to flattened state grid through the substrate."""
         if self._readout is not None:
             flat = state_grid.flatten(1)
-            return self._readout(flat)
+            return _substrate_linear(flat, self._readout, substrate)
         return state_grid.flatten(1)
 
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
         x_grid, was_flat = self._reshape_to_grid(x)
-        state_grid = self.step(x_grid)
+        state_grid = self.step(x_grid, substrate=substrate)
         # Return state grid for settling dynamics and primitives tests
         return self._reshape_from_grid(state_grid, was_flat)
 
-    def route(self, activations: Tensor) -> Tensor:
+    def route(self, activations: Tensor, substrate: Substrate | None = None) -> Tensor:
         act_grid, was_flat = self._reshape_to_grid(activations)
-        out = self.step(act_grid)
+        out = self.step(act_grid, substrate=substrate)
         # Route returns state grid for settling dynamics
         return self._reshape_from_grid(out, was_flat)
 
@@ -3764,16 +3795,16 @@ class NcaGeometry(nn.Module):
         x_grid, _ = self._reshape_to_grid(x)
         perceived = self.perceive(x_grid)
         acts = [perceived]
-        hidden = torch.relu(self._cell_hidden(perceived))
+        hidden = torch.relu(_substrate_linear(perceived, self._cell_hidden, substrate))
         acts.append(hidden)
-        delta = self._delta_flat(perceived)
+        delta = self._delta_flat(perceived, substrate)
         acts.append(delta)
         # The readout consumes the flattened post-step state, so that state is
         # the act the readout weight is credited against. Without it the act
         # chain skips the weight's input (the FA/credit width contract).
         state_grid = self._apply_delta(x_grid, delta, None)
         acts.append(state_grid.flatten(1))
-        acts.append(self._apply_readout(state_grid))
+        acts.append(self._apply_readout(state_grid, substrate))
         return acts
 
 
