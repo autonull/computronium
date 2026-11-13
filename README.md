@@ -222,7 +222,7 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 |-------|--------------|
 | **🚪 Entry Points** | 37 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
 | **🎯 Tasks & Data** | 7 domains, 25 tasks |
-| **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 48 objectives (51 measured), 5 priors, 88 capabilities, 46 constraints |
+| **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 48 objectives (51 measured), 5 priors, 88 capabilities, 47 constraints |
 | **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
 | **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (34 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |

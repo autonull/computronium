@@ -196,3 +196,86 @@ def test_an_unreadable_store_is_reported_by_both_surfaces(
     assert broken in command["unreadable"]
     assert broken in probe["unreadable"]
     assert len(command["source"]) == 2  # the broken store is not a source
+
+
+def test_every_substrate_geometry_pair_is_measured_or_accounted_for(
+    corpus_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command = _command_numbers(monkeypatch, corpus_root, capsys)
+    probe = _probe_numbers(corpus_root, capsys)
+
+    assert command["pairs"] == probe["pairs"]
+    assert command["pair_gaps"] == probe["pair_gaps"]
+    assert command["pairs"] == {
+        "digital/conv": 1,
+        "digital/feedforward": 3,
+        "digital/graph": 1,
+    }
+    substrates = (
+        command["axes"]["substrate"]["measured"]
+        + command["axes"]["substrate"]["missing"]
+    )
+    geometries = (
+        command["axes"]["geometry"]["measured"] + command["axes"]["geometry"]["missing"]
+    )
+    declared = {f"{s}/{g}" for s in substrates for g in geometries}
+    gaps = set(command["pair_gaps"])
+    holes = set(command["pair_holes"])
+    # Every declared pair is measured, refused by a named rule, or named as a
+    # hole; a pair counted as both a void and a hole is a contradiction.
+    assert set(command["pairs"]) | gaps | holes == declared
+    assert not gaps & holes
+
+
+def test_a_void_pair_names_its_rule_and_a_reachable_one_stays_a_hole(
+    corpus_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command = _command_numbers(monkeypatch, corpus_root, capsys)
+    gaps = command["pair_gaps"]
+    holes = command["pair_holes"]
+
+    # NCA calls no substrate operator, so a non-digital pair cannot measure
+    # substrate breadth; the row says so, and the cell's presence does not
+    # hide the refusal.
+    assert "nca_ntm_substrate_inert" in gaps["analog/nca"]
+    assert "nca_ntm_substrate_inert" not in gaps.get("digital/nca", "")
+    # Neuromorphic x nca is refused twice over: the geometry is inert off
+    # digital and the substrate's dynamics row covers the rest.
+    assert "neuromorphic/nca" in gaps
+    assert all(
+        pair.startswith("neuromorphic/") or pair.endswith(("/nca", "/ntm"))
+        for pair in gaps
+    )
+    # No rule refuses digital x conv, and the fixture holds no cell for
+    # analog x conv: an unmeasured, legal pair is the defect the breadth rule
+    # names, so it must be reported as a hole, never quietly dropped.
+    assert "analog/conv" in holes
+    assert "digital/conv" not in holes
+
+
+def test_deleting_the_rule_turns_its_pairs_back_into_holes(
+    corpus_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from computronium.experiment.evidence.corpus import (
+        default_store_paths,
+        scan_corpus,
+    )
+    from computronium.experiment.legality import engine
+
+    kept = tuple(
+        rule
+        for rule in engine.void_rules()
+        if rule.name
+        not in {"neuromorphic_substrate_dynamics", "nca_ntm_substrate_inert"}
+    )
+    monkeypatch.setattr(engine, "void_rules", lambda: kept)
+
+    coverage = scan_corpus(default_store_paths(corpus_root), root=corpus_root)
+    # Without the rules, instantaneous dynamics is legal on both sides, so the
+    # pair is reachable and unmeasured: a hole, not a void.
+    assert ("neuromorphic", "nca") in coverage.pair_holes

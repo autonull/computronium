@@ -971,6 +971,22 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
+    # Substrate-Geometry: NCA and NTM forward passes never call the substrate's
+    # operators, so off `digital` the substrate changes only the energy model.
+    # Measured 2026-11-13 (TODO90 B5): on digits 8x8, 2 epochs, one seed, the
+    # cell reproduces the digital arm's train_loss to six decimals on every
+    # non-digital substrate (`experiments/experiment_20261113_b5.duckdb`).
+    ConstraintSpec(
+        name="nca_ntm_substrate_inert",
+        kind=ConstraintKind.VOID,
+        description="NCA and NTM geometries call no substrate operator: off digital the substrate changes only the energy model, so the cell cannot measure substrate breadth",
+        predicate=or_(
+            not_(in_(var("geometry"), const(["nca", "ntm"]))),
+            eq(var("substrate"), const("digital")),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
     # Dynamics-Credit: diffusion blocks gradient/backprop
     ConstraintSpec(
         name="diffusion_dynamics_credit",

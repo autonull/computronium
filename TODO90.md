@@ -1,6 +1,6 @@
 # TODO90 — Breadth, not depth (Successor to TODO89)
 
-**Status:** 2026-11-12 · base `e1243ed9` · **B0–B4 closed** · next B5. TODO89 is
+**Status:** 2026-11-13 · base `85f62aa3` · **B0–B5 closed** · next B6. TODO89 is
 closed: T1–T10 carry measured numbers, and its remaining work is two depth items
 (graph third credit, PROTEINS 0.7040), parked here with explicit triggers.
 
@@ -20,6 +20,7 @@ working `role_split` cell is breadth.
 | tasks | **22/25** — `kmnist`, `char_ngram`, `tiny_shakespeare` never ran; `cifar10` 9 cells, `usps` 2 |
 | domains | vision/graph/tabular/RL have claims; language, memory, timeseries have none; `ScientificTask` has no registry row |
 | credit breadth | probe-backed for 3 geometries (T9/T10 arms are not store records) |
+| substrate × geometry | **18 pairs of 99 unmeasured and undeclared** — the plan named four |
 | gates | **3 acceptance locks fail** (f2 payload key, promotion L1 ×2), reproduced on duckdb 1.5.6 and 2.0.0 |
 | objectives | 12 registered without a payload key; 15 measured keys with no objective |
 
@@ -30,7 +31,8 @@ Full evidence: `TODO89.md` §2b; raw probe `scripts/probes/t3_credit_breadth.py`
 ## Progress ledger
 
 Session 2026-11-12 (second): B0–B3 closed. Session 2026-11-12 (third): B4
-closed. Every row names its instrument.
+closed. Session 2026-11-13: B5 closed, and its instrument found a defect the
+ticket did not predict. Every row names its instrument.
 
 | # | Ticket | Result | Evidence |
 |---|---|---|---|
@@ -39,6 +41,7 @@ closed. Every row names its instrument.
 | B2 | Store-backed breadth | **Green.** nca 3, attention 3, spatial_lattice 3 from stores; each arm 3 seeds × 20 epochs on digits, task `digits` on every record. Rule narrowed: the stale gradient void now names only `tile`. | `experiments/experiment_20261112_b2.duckdb`; `seed_registries.py` |
 | B3 | `role_split` | **Green.** Declared default (muon-on-readout + Euclidean elsewhere); 10 PASS cells across feedforward and conv. Update axis 12/12 measured. | `ontology/update/__init__.py`, `tests/property/test_role_split_update.py`, `experiments/experiment_20261112_b3.duckdb` |
 | B4 | Three untouched tasks | **Green.** `kmnist` 0.6669 val_acc (chance/majority 0.100), `char_ngram` 3.9923 ppl (unigram 25.21), `tiny_shakespeare` 8.4394 ppl (unigram 27.19); 1 seed each, 2 PASS records per task. Corpus task list holds no `NOT TOUCHED` row. | `experiments/experiment_20261112_b4.duckdb`; `tests/property/test_lm_target_alignment_lock.py` |
+| B5 | Substrate × geometry holes | **Green, with one defect named.** 32 runs, 63 PASS records, 0 fail. The pair instrument closed **18 undeclared pairs** (68 measured → 92; 60 coupled → 78) and refused 21 (14 hold 192 cells that cannot count). 0 undeclared remain. | `experiments/experiment_20261113_b5.duckdb`; `evidence/corpus.py`; `tests/property/test_corpus_coverage_lock.py`, `test_substrate_reaches_compute_lock.py` |
 
 **Defect found in B0 and fixed with B0:** one CUDA device ran four cells and
 three seeds concurrently, corrupting Inductor's static Triton launcher
@@ -60,16 +63,23 @@ gap.
 readable stores, 0 unreadable**, and its task section ends with "every
 registered task is measured" — the three `NOT TOUCHED` names are gone.
 
+**Measured after B5 (2026-11-13):** the same command reads **7,388 PASS cells
+over 432 readable stores, 0 unreadable**. Its new pair section reads **92 of 99
+substrate × geometry pairs hold a PASS cell, 78 of them on a coordinate no rule
+refuses, 21 refused by a rule, 0 undeclared**. Fourteen of the refused pairs
+hold 192 cells; those cells cannot count as substrate breadth (B10).
+
 | Surface | At plan start | Now |
 |---|---|---|
 | Axis primitives exercised or declared | 56/57 (update 11/12) | **57/57** (update 12/12) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **10/11** — graph has 2; T8's third credit is parked (marginal, not met) |
 | Acceptance locks | 3 fail | **0 fail** |
-| Corpus coverage instrument | probe only | **one command**, drift-locked |
+| Corpus coverage instrument | probe only | **one command**, drift-locked, with a substrate × geometry pair section |
 | Tasks measured or retired | 22/25 | **25/25** — every registered task is measured |
+| Substrate × geometry pairs | 20 holes, 4 named by the plan | **92/99 hold a cell; 78 substrate-coupled; 21 refused; 0 holes** |
 | Domains with one claim | 4/7 | 4/7 — B6 remains |
 | Registered-vs-measured objectives | 12 unmeasured, 15 orphans | unchanged — B8 |
-| Duplicate legality tables | 2 | unchanged — B9 |
+| Duplicate legality tables | 2 | 2 (plus a third `references_params` copy, §2 B9) |
 
 ---
 
@@ -104,24 +114,32 @@ Ordered by what unblocks the next measurable thing, not by interest.
 | B7 | **Scientific domain** | one registered task with a loader and a cell, or a named retirement | 1 h |
 | B8 | **Measurement breadth** | wire the cheap objectives; retire or register the orphan keys | 1–2 h |
 | B9 | **Duplicate-rule cleanup** | nca `homeostatic`/`pc_alm` voids live in one table | 30 min |
+| B10 | **Substrate reaches NCA/NTM** | thread the substrate operator through `NcaGeometry` and `NtmGeometry`, then re-measure 14 pairs | 2 h |
 
 A session takes **B0–B2 first** unless they are already green. They are the
 instrument; every later ticket's evidence depends on them.
 
-**Progress (2026-11-12):** B0, B1, B2, B3 and B4 are closed with the results in
-§0a; **B5 is the next ticket**. B5's start narrowed (graph off `digital`; nca ×
-`complex`/`neuromorphic`) because B2 closed the three probe-only credit counts.
-B6–B9 are unchanged.
+**Progress (2026-11-13):** B0, B1, B2, B3, B4 and B5 are closed with the results
+in §0a; **B6 is the next ticket**, split into three one-domain tickets (§2) so a
+session takes one ruler, not three. B5 widened under its own instrument: the
+plan named four coordinates, the pair section of `comp coverage` named 20, and
+the sweep found that 14 pairs already held cells which cannot count (B10).
+B7, B8 and B9 are unchanged.
 
-**B5 start state (2026-11-12):** four coordinates, each one cell with
-`--epochs 2 --n-seeds 1 --device cuda` and all six axes pinned, as B4 did:
-`graph × ternary`, `graph × sparse` (task `cora`, arm
-`graph/instantaneous/null/gradient/adam`), `nca × complex`, `nca ×
-neuromorphic` (task `digits`, arm `nca/instantaneous/null/gradient/adam`).
-A tuple that refuses composes nothing; then it needs a `VOID` row whose
-`unavailable_reason` is the measured failure — not a silent prune. Substrate
-and geometry are the only axes that change: keep the credit error-aware so a
-PASS cell also counts toward the ≥3-credits-per-geometry row.
+**B6 start state (2026-11-13):** three domains hold no claim. Each needs a
+pre-registration *before* the run, ≥3 seeds, and a ruler: `char_ngram`
+(unigram perplexity 25.21, B4 measured 3.9923 at 10 epochs / 1 seed),
+`copy_task` (copy-the-input baseline), `synthetic_forecast` (naive last-value
+MAE). `cartpole` and `cifar10` are the two breadth arms for domains that
+already have claims (`cifar10` holds 9 cells, `cartpole` 14).
+
+**B10 start state (2026-11-13):** `NcaGeometry` and `NtmGeometry` call
+`nn.Linear`/`nn.LSTM` directly; `get_forward_operator()` is never reached, so
+every non-digital substrate reproduces the digital arm's `train_loss` to six
+decimals (`experiments/experiment_20261113_b5.duckdb`). The row
+`nca_ntm_substrate_inert` refuses the 14 pairs and
+`tests/property/test_substrate_reaches_compute_lock.py` fails the moment a
+geometry starts reading the substrate — delete the row in the same commit.
 
 ---
 
@@ -312,24 +330,78 @@ added with a measured reason) — not a silent prune.
 **Acceptance:** each tuple yields a PASS cell or a `VOID` row with the measured
 failure; the planner's drop count names the row (no silent drops).
 
-### B6 — One claim per domain
+**Result (2026-11-13):** the ticket widened under its own instrument. The pair
+section added to `comp coverage report --corpus` reports the *declared* product
+(9 substrates × 11 geometries = 99 pairs) instead of the four coordinates the
+plan guessed, so the sweep covered all 18 undeclared pairs: 32 runs, 63 PASS
+records, 0 fail, in `experiments/experiment_20261113_b5.duckdb`. Every run
+pinned all six axes (`gradient`/`adam`, 2 epochs, 1 seed, CUDA) against the
+task that geometry already uses: `digits` for conv/attention/spatial_lattice,
+`cora` for graph, `tiny_shakespeare` for causal_transformer.
 
-Pick one task per domain that has no claim — **language, memory, timeseries** —
-and pre-register its target before the run
-(`configs/preregistrations/<slug>.json`). Then extend two domains that have a
-claim to a second task. Suggested first arms:
+| Geometry | Task | Arm val_acc per substrate | Digital ruler |
+|---|---|---|---|
+| graph | cora | ternary **0.330**, sparse **0.226** | 0.274 (majority ≈ 0.30; 500 val nodes, 1σ ≈ 0.020) |
+| conv | digits | quantum **0.622** | 0.653 |
+| attention | digits | quantum **0.947**, sparse **0.947** | 0.944 (360 val rows, 1σ ≈ 0.012) |
+| spatial_lattice | digits | analog **0.939** | 0.939 |
+| causal_transformer | tiny_shakespeare | analog **0.279**, complex **0.307**, memristive **0.298**, optical **0.311**, quantum **0.307**, sparse **0.304**, ternary **0.272** | 0.307 (val ppl 10.7–12.0; unigram 27.19) |
+| nca | digits | complex **0.425**, optical **0.419**, quantum **0.419** | 0.425 — **inert**, see B10 |
+| ntm | digits | analog **0.783**, quantum **0.783**, ternary **0.783** | 0.783 — **inert**, see B10 |
+
+The claim is provenance, not accuracy: at 2 epochs the graph arms sit within
+1–3σ of the majority rate, and the ticket's non-goal is beating a ruler. The
+corpus now reads **92/99 pairs with a cell, 78 substrate-coupled, 21 refused by
+a rule, 0 undeclared**. `neuromorphic × {attention, causal_transformer, conv,
+graph, spatial_lattice}` is refused on both sides of an empty intersection: the
+geometry needs instantaneous dynamics and the substrate refuses it.
+
+**Defect found in B5 and named, not fixed (B10):** three pairs reproduce the
+digital arm's `train_loss` to six decimals — `ntm × {analog, quantum, ternary}`
+and `nca × complex` — because `NcaGeometry` and `NtmGeometry` never call the
+substrate's forward operator. A PASS cell existed; the substrate never entered
+the computation. The row `nca_ntm_substrate_inert` now refuses those 14 pairs,
+the pair section lists the 192 cells that cannot count, and
+`tests/property/test_substrate_reaches_compute_lock.py` pins both directions
+(row present ⇒ coordinate refused; geometry wired ⇒ assertion fails).
+
+**Instrument (2026-11-13):** `CorpusCoverage` gained `pairs`, `pair_gaps` and
+`pair_holes`; the pair verdict comes from the system's own void rules, pruned by
+each rule's variable footprint (`referenced_names` in `legality/dsl.py`, the
+one traversal `references_params` now also uses). The report names the
+shallowest rule that explains a refusal, so a dynamics contradiction is not
+blamed on a credit. Lock: `tests/property/test_corpus_coverage_lock.py` (five
+tests: command ≡ probe, every pair accounted for, a void names its rule, a
+reachable unmeasured pair is a hole, deleting a rule turns voids into holes).
+
+### B6 — One claim per domain (split into three)
+
+One ticket per domain, because each closes on its own pre-registered ruler and
+a session that takes all three re-pays the harness cost three times. Take them
+in this order: B6a is the cheapest ruler to compute, B6c the most independent.
+
+| # | Domain | Task | Ruler | Pre-registration |
+|---|---|---|---|---|
+| B6a | language | `char_ngram` | unigram perplexity **25.21** (B4) | threshold on `val_ppl` at the task's context length, ≥3 seeds |
+| B6b | memory | `copy_task` | copy-the-input baseline (token accuracy) | threshold on token accuracy, ≥3 seeds |
+| B6c | timeseries | `synthetic_forecast` | naive last-value MAE | threshold on MAE, ≥3 seeds, beat naive by >1 σ |
+
+Each: write `configs/preregistrations/<slug>.json` **before** the run
+(`ThresholdRegistration` or the paired-comparison form), then run three seeds
+through `survey_cli` with all six axes pinned and `--epochs` large enough to
+beat the ruler at one seed first (a claim at a schedule that measures chance is
+not a claim). Report the number with its ruler and its distance from it in σ.
+
+**Breadth arms (only after the three above close):**
 
 | Domain | Task | Ruler | Target |
 |---|---|---|---|
-| language | `char_ngram` (medium) | unigram perplexity | pre-registered at the task's context length |
-| memory | `copy_task` | token accuracy vs copy-the-input baseline | pre-registered, ≥3 seeds |
-| timeseries | `synthetic_forecast` | naive last-value MAE | beat naive at ≥3 seeds, >1 σ |
-| vision (breadth) | `cifar10` (conv, 9 cells) | 10 classes, majority printed | pre-register from the reference arm, ≥ chance×5 |
-| continual sub-domain | `sequential_mnist` | per-task accuracy after the sequence | `forgetting` ≤ the pre-registered bound (B8 item 4 emits it) |
-| RL (breadth) | `cartpole` or `acrobot` | random-policy mean_reward | mean_reward above random by >1 σ, 20 eval episodes |
+| vision (breadth) | `cifar10` (conv, 9 cells) | 10 classes, majority printed | pre-register from the reference arm, ≥ chance × 5 |
+| RL (breadth) | `cartpole` (14 cells) | random-policy mean_reward | above random by >1 σ, 20 eval episodes |
 
-**Acceptance per row:** a number with its ruler and pre-registration, met or
-marginal — a task that already has 9+ cells is not "exploratory".
+**Acceptance per ticket:** a number with its ruler and pre-registration, met or
+marginal — a task that already has 9+ cells is not "exploratory", and a claim
+within 1 σ of its threshold is marginal, not met.
 
 ### B7 — Scientific domain
 
@@ -374,6 +446,14 @@ internal keys` (the 15 are the current violation).
 registry rows and as `SystemConfig.validate` methods; T10 had to delete both
 copies of the `target_inversion` rule.
 
+**Third copy found 2026-11-13 (B5):** `execution/stages_impl.py:636` defines a
+local `_references_params` that differs from `legality/dsl.py`'s: it matches
+only `params.*`, not `output_dim`. S4 Gate skips
+`classification_requires_classifier_head` (which reads `output_dim`) as a
+param rule, and S5 Compose's copy also skips it — so that constraint is enforced
+by neither stage. The dsl helper is the one source now; S5 should import it and
+the rule will land at compose time, where `output_dim` is known.
+
 **Deliverable:** one table. Make `validate` consult the declared rows (or delete
 the methods and route every legality check through composition). A lock deletes
 the registry row and proves the coordinate is refused with that row's reason —
@@ -383,22 +463,48 @@ the same mechanism lock T7 uses.
 
 ---
 
+### B10 — Substrate reaches NCA/NTM
+
+**Start:** `NcaGeometry.forward` and `NtmGeometry.forward` accept a `substrate`
+argument and never use it; the pair instrument refuses their 14 non-digital
+pairs (`nca_ntm_substrate_inert`) and lists the 192 cells that cannot count.
+The evidence is identical `train_loss` to six decimals across substrates
+(`experiments/experiment_20261113_b5.duckdb`), while `conv`/`attention`/
+`spatial_lattice`/`graph` change with the substrate as they should.
+
+**Deliverable:** route NCA's cell MLP and readout through
+`substrate.get_forward_operator()`, threading the substrate through `step`,
+`rollout` and the settle path that calls them; do NTM only if the LSTM
+controller can be written in substrate ops without a second forward path. Then
+delete `nca_ntm_substrate_inert`, re-run the 14 pairs, and confirm the
+`train_loss` now differs from digital.
+
+**Acceptance:** `tests/property/test_substrate_reaches_compute_lock.py` asserts
+the pair is refused **and** the geometry reproduces digital — the lock flips
+with the fix, so the row cannot outlive the defect. A re-measured pair carries a
+cell whose `train_loss` differs from the digital arm, and the corpus pair
+section counts it as coupled.
+
+---
+
 ## 3. Success criteria for TODO90 (breadth)
 
-| Criterion | Start | Target | Now (2026-11-12) |
+| Criterion | Start | Target | Now (2026-11-13) |
 |---|---|---|---|
 | Axis primitives exercised or declared | **56/57** (update 11/12) | **57/57** with a PASS cell or a named row | **57/57** |
 | Tasks in `SUPPORTED_TASKS` measured or retired | 22/25 | **25/25**, each measured or absent from the registry | **25/25** (B4) |
 | Geometries with store-backed ≥3 error-aware credits | 8/11 | **11/11** (B2 closes the 3 probe-only) | **10/11** — graph parked (T8) |
-| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | 4/7 |
+| Substrate × geometry pairs measured or refused | 18 undeclared | **0 undeclared**, each pair a coupled cell or a named rule | **0 undeclared** — 78 on a coupled cell, 21 refused (14 await B10) |
+| Domains with one claim | 4/7 | **7/7** (language, memory, timeseries close the gap) | 4/7 — B6a–c |
 | Acceptance locks | 3 fail | **0 fail** | **0 fail** |
-| Corpus coverage instrument | probe only | **one command**, drift-locked | **one command**, locked |
+| Corpus coverage instrument | probe only | **one command**, drift-locked | **one command**, locked, pairs included |
 | Registered-vs-measured objectives | 12 unmeasured, 15 orphans | **0 unexplained** | 12 / 15 |
-| Duplicate legality tables | 2 (nca homeostatic/pc_alm) | **0** | 2 |
+| Duplicate legality tables | 2 (nca homeostatic/pc_alm) | **0** | 2 (+ the S5 `references_params` copy) |
 
 Measured 2026-11-12 at plan start: 6,925 PASS cells over 428 stores. Measured
 after B2/B3: 7,319 over 430 stores, 0 unreadable. After B4: 7,325 over 431
-stores, 0 unreadable. Each row above names the
+stores, 0 unreadable. After B5: 7,388 over 432 stores, 0 unreadable, 99
+substrate × geometry pairs all accounted for. Each row above names the
 instrument that would move it, and the target is a cell, a row, or a claim —
 never a count of attempted work.
 
@@ -444,6 +550,8 @@ Next Experiment:
 uv lock --check && uv run python -c "import duckdb, torch; print(duckdb.__version__, torch.__version__)"
 uv run python scripts/probes/t3_credit_breadth.py | tail -40
 uv run comp coverage report --corpus
+# substrate breadth: cells, refused pairs, and cells on a refused pair
+uv run comp coverage report --corpus | sed -n '/Substrate x Geometry/,/Per-Task/p'
 
 # the gate B0 repaired (green 2026-11-12)
 uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py \
@@ -451,6 +559,12 @@ uv run python -m pytest tests/acceptance/test_campaign_evidence_lock.py \
 ```
 
 Read `TODO89.md` §2b before choosing a ticket; it owns the measured surface.
-B0–B4 are green (see §0a). **Start at B5**; B6–B9 remain. B2's rule
-narrowing means B5 keeps only its substrate × geometry holes: graph off
-`digital` and nca × `complex`/`neuromorphic`.
+B0–B5 are green (see §0a). **Start at B6a**; B6b, B6c, B7, B8, B9 and B10
+remain. B5's pair section is the substrate-breadth instrument: read
+`comp coverage report --corpus | sed -n '/Substrate x Geometry/,/Per-Task/p'`
+to see every pair that holds a cell, every pair a rule refuses, and every
+cell on a refused pair that cannot count.
+
+**Do not take B10 before B6a–c.** B10 is depth on one geometry family; B6
+gives three domains their first claim, which is what the breadth mission asks
+for. B10's trigger is a claim that cites substrate breadth for nca or ntm.
