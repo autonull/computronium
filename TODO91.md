@@ -249,7 +249,7 @@ structure, reference determinism, two-seed kernel parity, per-axis output
 contracts (dynamics returns a `CompositeState` whose `x` matches the case; an
 update covers the harness parameters and changes at least one; a credit returns
 exactly the geometry's weight-shaped tensors; a plasticity returns exactly its
-declared `output_keys`, matching `psi` shapes and changing at least one), seed
+declared `output_keys`/`output_bounds`, matching `psi` shapes and changing at least one), seed
 sensitivity, and the substrate config → spec → config projection. The 145 legacy
 `test_<name>_{cases,reference,kernel_parity,structural}.py` files and the
 state-dynamics `conftest.py` are deleted; the scaffolder emits no primitive test
@@ -269,8 +269,9 @@ changes — the trainer already passes the live geometry.
 Measured: `tests/primitives` **550 passed / 15.08 s → 404 passed / 14.18 s**;
 the restored per-axis contracts are why the item count is higher than the first
 fold (330). Each new lock was mutation-tested: dropping a credit tensor,
-renaming a plasticity key, truncating a dynamics `x`, renaming an update key,
-and zeroing a substrate's projected sparsity each turns its test red. The
+renaming a plasticity key, moving `active_routes` out of [0, 1], truncating a
+dynamics `x`, renaming an update key, and zeroing a substrate's projected
+sparsity each turns its test red. The
 remaining legacy triples are `tests/algorithms/*` (84 files), which keep the
 factory tests; fold them into an algorithm contract only when an algorithm
 factory needs a declared smoke.
@@ -778,7 +779,7 @@ fails the lock.
 | Primitive contract test modules | one per primitive package | **1 parameterized module, 59 specs; 145 legacy files deleted (S1d)** | 1 per axis |
 | Batch-axis exemptions | 14-row hand list | **14 derived from `ImplementationSpec.reads_batch_axis`; 2 explicit declarations** | declared once |
 | Seed-varying references | 40+ hand checks, one suppressed | **derived from `ImplementationSpec.varies_with_seed`; 2 explicit no-op declarations** | declared once |
-| Plasticity output names | per-package literals | **8 specs declare `output_keys`; the contract asserts exact set** | declared once |
+| Plasticity output names | per-package literals | **8 specs declare `output_keys`; routing declares its [0, 1] bound** | declared once |
 | Tasks with a training PASS cell | 15 named by hand | **28/28, parametrized over `SUPPORTED_TASKS`** | every task |
 
 The instrument is S0's command plus its drift lock. A row is never "covered"
@@ -969,8 +970,8 @@ ticket here):
   three primitive test templates, and `tests/generate_tests.py` are deleted;
   the scaffolder emits only the package.
 - **Mutation-tested locks:** truncated credit list, renamed routing key,
-  truncated dynamics `x`, renamed update key, and dropped substrate sparsity
-  each fail the corresponding contract. The zeros-restoring local_goodness
+  out-of-range `active_routes`, truncated dynamics `x`, renamed update key,
+  and dropped substrate sparsity each fail the corresponding contract. The zeros-restoring local_goodness
   variant fails the seed contract.
 - **Defect found by the audit:** `local_goodness` rebuilt its geometry from
   cloned weights, disconnecting the activations' autograd graph; FF returned

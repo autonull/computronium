@@ -258,6 +258,9 @@ def test_plasticity_step_returns_named_tensors(spec) -> None:
         assert any(
             not torch.equal(tensor, plastic[name]) for name, tensor in updated.items()
         ), spec.id
+    for name, low, high in spec.output_bounds:
+        value = updated[name]
+        assert torch.all(value >= low) and torch.all(value <= high), (spec.id, name)
 
 
 @pytest.mark.parametrize("spec", SUBSTRATES, ids=[s.id for s in SUBSTRATES])

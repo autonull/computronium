@@ -141,6 +141,7 @@ class ImplementationSpec:
     seed_sensitive: bool | None = None
     seed_free_reason: str = ""
     output_keys: tuple[str, ...] | None = None
+    output_bounds: tuple[tuple[str, float, float], ...] = ()
 
     # Algorithm metadata
     uses_primitives: tuple[str, ...] = ()
