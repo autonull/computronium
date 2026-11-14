@@ -1,0 +1,9 @@
+{
+  "claim": "On Cora node classification (500-node public split, majority 0.316), muon's val_acc advantage over adam differs between the graph and feedforward geometries by at least +0.01, paired over seeds 47-51 at L2/100",
+  "metric": "val_acc",
+  "threshold": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-14",
+  "protocol": "TODO92 §3.10, second interaction. 2x2 geometry {graph, feedforward} x update {adam, muon}, anchored on the Cora record 6328d4d4 (digital/null/gradient, update.step_size 0.01, L2/100, cuda). Per-seed interaction = (muon - adam)_graph - (muon - adam)_feedforward. Decision: paired_comparison(interaction, zeros).passes(registration) (95% CI above +0.01). A null or negative interaction is a named verdict. Fresh seeds 47-51, committed before any run. Legality and cost measured first (1 epoch, seed 42): graph+muon 0.17 val_acc 0.47 s; feedforward+adam 0.086 0.02 s; feedforward+muon 0.058 0.01 s, so the 2x2 is minutes, not hours. Parameter counts are reported per geometry; the update pair is matched within a geometry."
+}
