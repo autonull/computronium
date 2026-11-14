@@ -1,8 +1,9 @@
 # TODO92 — Breadth and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a and §3.0 closed (ruler + baseline re-verified);
-§3.2 capacity arm rejected, graph stays marginal; next §3.3 (RL), §3.4
-(`neuromorphic × graph`), §3.2 readout lever.
+**Status:** 2026-11-14 · §3.0a, §3.0 and §3.3 closed. RL is met at −135.1
+(n=3, 400 episodes); its credit axis is inert (§3.3b). Graph stays marginal with
+capacity excluded (§3.2). Next: §3.3b (credit-aware RL) or the graph readout
+lever.
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -62,7 +63,7 @@ that cannot count as substrate breadth), 1 hole: `neuromorphic × graph`.
 | Graph classification | PROTEINS **0.7013 ± 0.0164** (SD) | n=5, 223 held out; majority 0.596 | > 0.70 | **marginal** (0.08σ) |
 | Node classification | Cora **0.7660 ± 0.0151** (SD) | n=3, 500-node public split; majority 0.316 | > 0.75 | met (1.06σ) |
 | Tabular | wine **1.0000** (record 0.9722) | n=3, 36 held out (resolution 0.0278); majority 0.389 | > 0.90 | met |
-| RL | pendulum **−1219** (record; no replay) | 1 record, L0 3 ep, mean reward; its credit is error-blind | > −200 | **not met** → §3.3 |
+| RL | pendulum **−135.1 ± 9.0** (SD) | n=3, 400 episodes (40×10), mean return; chance ≈ −1200 | > −200 | met → §3.3 |
 
 Provenance for the pre-re-run rows was TODO85–90's session log. Every row now
 carries a re-execution: `scripts/probes/t92_baseline_replay.py` rebuilds each
@@ -72,9 +73,13 @@ three seeds), so a number that moves is the system moving, not a different cell.
 The re-run holds each verdict: node reproduces seed-for-seed (0.782/0.752/0.764)
 and vision within 1e-4, while graph's point estimate moves (record mean 0.6969 →
 0.7013) and stays 0.08σ above its bar. Wine's record does not reproduce
-(0.9722 → 1.0000 at the same key and seed), so its row is the re-run. RL has no
-replayable record at all. The two weak points are the graph-classification
-marginal and RL; the regression lane is closed (§3.1).
+(0.9722 → 1.0000 at the same key and seed), so its row is the re-run. RL's old
+−1219 row had no replayable record; its new row is the 3-seed 400-episode run
+recorded 2026-11-14. **That number is the lane's, not a credit's:** the
+trainer optimises geometry parameters with DDPG and never calls the composed
+credit, so the cell that produced −135.1 is geometry × substrate (§3.3b). The
+only open weak point is the graph-classification marginal; RL is met. The
+regression lane is closed (§3.1).
 
 ---
 
@@ -143,13 +148,28 @@ walltime, and never records a run into a store.
    lever is the readout (mean pooling; `pooling` is not a declared knob) or a
    different task split — a design change, not a seed sweep. Cost: one arm, 8
    min.
-3. **RL.** −1219 against > −200. This is a capability gap, not a tuning gap:
-   check episode budget, reward scaling, and whether the control task's
-   geometry/credit pairing is legal before treating it as an algorithm result.
-   The re-run sharpened it: −1184 has no PASS record, and the best recorded cell
-   uses `homeostatic`, which is error-blind and measures chance by contract. No
-   RL claim exists until an error-aware credit (e.g. `target_inversion`,
-   `pc_alm`) runs the task.
+3. ~~**RL**~~ — **closed 2026-11-14: met.** Three seeds × 400 episodes
+   (40 × 10) recorded to `experiments/t92_rl_400ep.duckdb`:
+   −144.94 / −133.04 / −127.21, mean **−135.1**, SD 9.0, bootstrap CI
+   [−144.9, −127.2] against the > −200 bar. Pre-registered in
+   `configs/preregistrations/t92_rl_400ep.json`. The pre-DDPG −1219 row was
+   stale; the current lane clears the bar. Two findings it produced are filed:
+   the credit axis is inert (§3.3b) and gate PASS has no metric bar (§3.3c).
+3b. **RL's credit signal is unbuilt.** DDPG optimises `system.geometry.params`
+    and never calls the composed credit: `gradient`, `target_inversion`,
+    `pc_alm`, `random_projections`, `local_goodness` and `homeostatic` measure
+    bit-identically at 30 episodes (−126.4). Every RL row is therefore a
+    measurement of geometry × substrate, and "RL × error-aware credit" is a
+    declared-unavailable cell until the trainer threads the credit's
+    pseudo-gradient into its update, or the lane declares itself credit-blind
+    with that reason. Acceptance: one RL cell whose reward differs between two
+    credits, or the refusal row plus the trainer note (criterion 4).
+3c. **Gate PASS is defect-free, not above-bar.** `assess_gate_verdict` reads
+    void/hard/soft defects and an optional seed floor; it has no metric
+    threshold, so the positive control PASSed at −1536.6. Corpus PASS counts
+    overstate learning on RL and near-chance tasks; claim eligibility must read
+    the metric and its ruler. Fix is a per-task bar in the gate, or a documented
+    rule that PASS never implies above-bar.
 4. **`neuromorphic × graph`** — no cell, no rule. Either a graph-operator path
    for the substrate or a declared refusal with a measured reason.
 5. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
@@ -171,7 +191,8 @@ walltime, and never records a run into a store.
 | 2026-11-14 | graph classification | 256×6 capacity arm 0.6816 ± 0.0210 | 5 | paired vs 128×4 control 0.6960; same seeds | pre-registered diff −0.0143, CI [−0.0395, +0.0036], p=0.41 — **arm rejected** | §3.2 |
 | 2026-11-14 | node classification | Cora 0.7660 ± 0.0151 (SD) | 3 | 500 public-split nodes; majority 0.316 | reproduced; met (1.06σ) | §3.0 (closed) |
 | 2026-11-14 | tabular | wine 1.0000 (record 0.9722 did not reproduce) | 3 | 36 held out (resolution 0.0278); majority 0.389 | re-run is the measurement; met | §3.0 (closed) |
-| 2026-11-14 | RL | pendulum −1219 (best record) | 1 | L0 3 ep, mean reward; credit error-blind | not replayable; **not met** | §3.3 |
+| 2026-11-14 | RL (credit axis) | six credits identical: mean_reward −126.4 | 1 | 30 episodes, L0 | credit inert — one value for all six | §3.3b |
+| 2026-11-14 | RL | pendulum −135.1 ± 9.0 (SD) | 3 | 400 episodes (40×10), mean return; chance ≈ −1200 | CI [−144.9, −127.2] vs −200; **met** | §3.3 (closed) |
 
 One row per domain per measurement; a row is superseded, never edited.
 
@@ -190,6 +211,8 @@ One row per domain per measurement; a row is superseded, never edited.
   the counter-example, not the template.
 - **Every number carries its ruler** and the chance/majority rate it beats.
   Corpus breadth is **distinct measurements**, never PASS records (§3.0a).
+- **A PASS record means defect-free, never above-bar** (measured 2026-11-14: a
+  −1536.6 RL cell PASSed; §3.3c). A claim reads the metric and its ruler.
 - **Claims need n≥3 and a preregistration** when the result sits within 1σ of
   its threshold (`configs/preregistrations/`).
 - **A surface defect found here is fixed here only if it blocks the number**;
@@ -207,8 +230,9 @@ One row per domain per measurement; a row is superseded, never edited.
   distinct measurements, and every §2 row carries a re-execution whose
   `measurement_key` matches its located record. §3.2's capacity arm is rejected
   by pre-registered paired comparison; the graph row stays marginal and its next
-  lever is the readout, not capacity or credit. §3.3 (RL) has no error-aware
-  credit on the task.
+  lever is the readout, not capacity or credit. §3.3 is closed with a number:
+  RL −135.1 (n=3, 400 episodes) clears −200, and that number is geometry ×
+  substrate because the credit axis is inert on the lane (§3.3b).
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.

@@ -1,0 +1,9 @@
+{
+  "claim": "DDPG on the feedforward actor reaches mean_reward > -200 on pendulum over 400 episodes (40 epochs x 10 episodes), 3 seeds, recorded to the corpus",
+  "metric": "mean_reward",
+  "threshold": -200.0,
+  "alpha": 0.05,
+  "min_seeds": 3,
+  "created": "2026-11-14",
+  "protocol": "TODO92 §3.3. Screening (30 episodes, seed 42) measured -126.4 for gradient, target_inversion, pc_alm, random_projections, local_goodness and homeostatic alike: RLSystemTrainer optimises system.geometry.params with DDPG and never calls the credit, so the credit axis is inert on this lane and the arm choice cannot matter. Treatment is therefore the lane itself, not a credit. Ruler: 400 episodes per the domain bar, 10 episodes/epoch. Decided by the 95% bootstrap CI of the seed mean against -200 (computronium.validation.statistics.bootstrap_percentile_ci)."
+}

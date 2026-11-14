@@ -90,6 +90,11 @@ class RLSystemTrainer:
     spaces. Orchestrates:
         System.forward → action sampling → environment step → TD target →
         actor/critic update
+
+    The credit axis is inert on this lane: DDPG optimises
+    ``system.geometry.params`` and never calls a composed credit, so every
+    credit measures identically — six credits, one value, measured 2026-11-14
+    (TODO92 §3.3). A credit-aware RL update is unbuilt, not misconfigured.
     """
 
     system: System
