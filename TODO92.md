@@ -55,6 +55,24 @@ graph-classification marginal, RL, and the regression lane.
 
 ---
 
+### 3.0 First ticket (pre-registered with this plan): re-verify the baseline
+
+The §2 numbers are quoted from the TODO85–90 records. A baseline nobody has
+re-executed is a claim about a record, not about the system — and this project's
+own history (G8, G11, G20) is a list of measurements that were wrong for harness
+reasons. So the first ticket is reproduction, not new breadth.
+
+1. Locate each domain's best recorded cell in the corpus by its `replay_hash`.
+2. Re-execute one cell per domain at that recorded config (n=3 where the claim
+   needs seeds; PROTEINS at n=5 because it is marginal).
+3. Classify each row **reproduced / not reproduced / not replayable** and
+   correct §2 in place.
+4. Demote any row that does not reproduce: it leaves the baseline and becomes a
+   ticket in §3, not a number.
+
+Acceptance: five domains classified, §2 carries the verdict, and no row remains
+that has only a record behind it. Cost: five cells, one session at most.
+
 ## 3. Gap list (ordered by what unblocks a number)
 
 1. **Regression lane** (TODO91 §8, next-ticket subsection). Measured: 9/18
@@ -89,6 +107,9 @@ One row per domain per measurement; a row is superseded, never edited.
 - **No test restructuring.** Tests are a means; a test change is not progress.
   Duplication that costs walltime may be removed only when the replacement is
   mutation-checked.
+- **Session logs live in commit messages.** The plan holds the scoreboard
+  and the ticket list; it does not accumulate narrative. TODO91's length is
+  the counter-example, not the template.
 - **Every number carries its ruler** and the chance/majority rate it beats.
 - **Claims need n≥3 and a preregistration** when the result sits within 1σ of
   its threshold (`configs/preregistrations/`).
