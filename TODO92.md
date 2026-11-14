@@ -37,10 +37,19 @@ attempts, one revert, zero capability.
 
 ## 2. Measured baseline (2026-11-14)
 
-Corpus: **7,433 PASS cells / 440 stores**; **28/28 tasks** measured;
-**92/98** substrate × geometry pairs hold a cell (25 refused by a named rule,
-19 hold cells that cannot count as substrate breadth, 1 unmeasured:
+Corpus: **7,442 PASS records / 441 stores** — **3,431 distinct
+measurements** (the two numbers differ; see the ruler note); **28/28 tasks**
+measured; **92/98** substrate × geometry pairs hold a cell (25 refused by a
+named rule, 19 hold cells that cannot count as substrate breadth, 1 unmeasured:
 `neuromorphic × graph`).
+
+**Ruler note (measured 2026-11-14).** `scan_corpus` counts PASS records, and
+`measurement_key` is unique *within* a store, not across stores: 441 stores hold
+7,442 PASS records for **3,431 distinct configurations** (1,300 keys repeat;
+max 114). Every earlier "PASS cells" number in TODO85–91 is therefore a record
+count, inflated ~2.2× by re-runs. Breadth is quoted as distinct measurements
+from here on; "28/28 tasks" survives because it unions task ids. The report fix
+is §3.0a, and it runs before §3.0's baseline lookup.
 
 | Domain | Best measured | Ruler | Target | Verdict |
 |---|---|---|---|---|
@@ -56,12 +65,30 @@ graph-classification marginal, RL, and the regression lane.
 
 ---
 
-### 3.0 First ticket (pre-registered with this plan): re-verify the baseline
+### 3.0a First ticket: the corpus ruler
+
+**Why.** §2 measured 7,442 PASS records for 3,431 distinct configurations. A
+report that cannot tell a re-run from new coverage makes every breadth number
+ambiguous, and the baseline lookup in §3.0 reads the same corpus.
+
+**Deliverable.** `scan_corpus` (and the report render) reports **records** and
+**distinct `measurement_key`s** side by side; per-task and per-pair counts
+dedupe by measurement identity; the store-count line says what it counts.
+
+**Acceptance.** the two numbers are printed; a deliberately re-run cell does
+not change the distinct count; run the report on the current corpus and record
+the demoted totals in §2. Cost: ~30 min.
+
+### 3.0 Second ticket (pre-registered with this plan): re-verify the baseline
+
+Depends on §3.0a: locate each best cell by measurement identity, not by a
+record count.
 
 The §2 numbers are quoted from the TODO85–90 records. A baseline nobody has
 re-executed is a claim about a record, not about the system — and this project's
 own history (G8, G11, G20) is a list of measurements that were wrong for harness
-reasons. So the first ticket is reproduction, not new breadth.
+reasons. So reproduction precedes new breadth — after the ruler fix, since a
+record count cannot stand in for coverage.
 
 1. Locate each domain's best recorded cell in the corpus by its `replay_hash`.
 2. Re-execute one cell per domain at that recorded config (n=3 where the claim
@@ -88,7 +115,8 @@ that has only a record behind it. Cost: five cells, one session at most.
    for the substrate or a declared refusal with a measured reason.
 4. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
    RNG seeding, objective validation and the settle-driver loop are green
-   (227 passed). No claim made here rests on a known-red lock.
+   (269 passed in the final gate). No claim made here rests on a known-red
+   lock.
 
 ---
 
@@ -115,6 +143,7 @@ One row per domain per measurement; a row is superseded, never edited.
   and the ticket list; it does not accumulate narrative. TODO91's length is
   the counter-example, not the template.
 - **Every number carries its ruler** and the chance/majority rate it beats.
+  Corpus breadth is **distinct measurements**, never PASS records (§3.0a).
 - **Claims need n≥3 and a preregistration** when the result sits within 1σ of
   its threshold (`configs/preregistrations/`).
 - **A surface defect found here is fixed here only if it blocks the number**;
@@ -128,8 +157,9 @@ One row per domain per measurement; a row is superseded, never edited.
 - TODO91 is closed (2026-11-14): its stop condition holds, its §8
   claim-blocking group is green and its regression lane is closed. This file is
   the plan of record.
-- The first ticket is §3.0 (baseline re-verification), which is the one claim
-  the §2 table still rests on a record rather than a run.
+- The first ticket is §3.0a (the corpus ruler: records vs distinct
+  measurements), then §3.0 (baseline re-verification) — the one claim the §2
+  table still rests on a record rather than a run.
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
