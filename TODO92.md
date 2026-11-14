@@ -1,14 +1,14 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b and §3.4 closed. The
+**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b, §3.4 and §3.9 closed. The
 measurement layer is honest: 3,437 measurements, 93/99 pairs, 0 holes, ~468
 claim-shaped L2/n≥5 keys. The first audit found the complex/adam PEPITA pair is
 on a **declared-refused pair** (`complex_substrate_real_compute`), not a live
-substrate interaction. The plan retracts it, parks it with a reversal trigger,
-and starts a **refusal and liveness audit**. §3.7's digital probe is a
-**cost-adjusted parity, not a win** (details
+substrate interaction. §3.9 now classifies all 57 declared axis values: **48
+live, 1 refused, 2 unavailable, 6 canonical references; 0 undeclared inert.**
+§3.7's digital probe is a **cost-adjusted parity, not a win** (details
 in §3.7): no non-standard composition yet has a cost-adjusted capability win;
-the plan searches for one. Next: **§3.9, then §3.7, then §3.10.**
+the plan searches for one. Next: **§3.7, then §3.10.**
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -146,8 +146,9 @@ The digital pair is a **cost-adjusted parity, not a capability win**.
 **Retraction (2026-11-14):** the complex/adam pair is **refused** by
 `complex_substrate_real_compute`; its cells are bit-identical to digital
 because the operator is the digital matmul on real weights. Its records are
-among the 257 refused-pair measurements that cannot count; §3.9 audits the
-rest. The graph, node, tabular and RL rows are screening; their "met" is a
+among the 257 refused-pair measurements that cannot count; §3.9 audited the
+rest (48 live, 1 refused, 2 unavailable). The graph, node, tabular and RL rows
+are screening; their "met" is a
 domain-bar verdict, not a formal claim.
 
 Provenance for the pre-re-run rows was TODO85–90's session log. Every row now
@@ -212,13 +213,66 @@ screening row (1.06σ above 0.75; not claim-grade: n=3, L1 — §3.8).
 `--only` replays a subset; the probe prints per-seed `measurement_key` and
 walltime, and never records a run into a store.
 
+### 3.9 ~~Axis refusal/liveness audit~~ — **closed 2026-11-14**
+
+**Delivered.** `scripts/probes/t92_axis_liveness.py` enumerates all 57 declared
+axis values and classifies each as reference, refused, live, or unavailable.
+Ruler: one seeded `train_step` at the digits task shape (Cora for `graph`),
+fingerprinting the **post-step geometry parameters**. The reference is the same
+completion with the axis set to the canonical value, composed from the variant's
+pre-step weights. Parameters, not `train_loss`: the trainer reports the loss
+before the update, and Lion vs Adam are bit-identical in one-step loss but differ
+by 6.3e-06 in parameters. A plasticity variant is compared against a **joint**
+null, because the 5-D and 6-D system families take different pipeline paths
+(measured: `rule_state` looks live vs a 5-D null and is bit-identical vs a joint
+null).
+
+| Axis | Declared | Live | Refused | Unavailable | Reference |
+|---|---|---|---|---|---|
+| Substrate | 9 | 8 | `complex` | — | `digital` |
+| Geometry | 11 | 11 | — | — | `feedforward` |
+| Dynamics | 8 | 8 | — | — | `instantaneous` |
+| Plasticity | 7 | 5 | — | `rule_state`, `substrate_coupled` | `null` |
+| Credit | 10 | 10 | — | — | `gradient` |
+| Update | 12 | 12 | — | — | `adam` |
+
+**Findings.**
+
+- `complex` stays refused by `complex_substrate_real_compute` (ledger row
+  already present).
+- `rule_state` is inert: it computes ψ but has no `modulate`, so the standard
+  step never applies the selected operator. `substrate_coupled` is a documented
+  no-op at the plasticity protocol level (ψ ≡ σ; the substrate owns state
+  evolution). Both are now `available=False` in `seed_registries._UNAVAILABLE`
+  with a reason and a reversal trigger; the row stays constructible for the
+  benchmarks that use it outside the standard step.
+- `conflict_adaptive` is live, but only under a credit that writes the
+  replacement readout (`local_goodness`, `target_inversion`,
+  `random_projections`, `thermodynamic_contrast`). Its closest legal completion
+  (`homeostatic`, error-blind) is inert: a readout-replacing law cannot be
+  exercised by a credit that never reads the label.
+- `lion` is live by parameters although its one-step `train_loss` equals
+  Adam's. A loss-based audit would have called an update rule inert.
+- `graph` is live on Cora against a flat feedforward reference; the digits shape
+  rule never proposes it.
+
+**Locks.** `tests/property/test_axis_liveness_lock.py`: the two unavailable rows
+stay declared with reasons/triggers, are bit-identical to a joint null after one
+step, `fast_weights` (the live control) is not, `lion` differs from Adam, and
+`complex` stays refused. Removing either `_UNAVAILABLE` row or adding `modulate`
+to `rule_state` fails the lock.
+
+**Not claimed.** Liveness is one step, not a capability result. Every live row
+still needs a matched interaction or claim (§3.7, §3.10).
+
 ## 3. Gap list (ordered by what unblocks a number)
 
 **Priority order (2026-11-14, after the first refusal finding):**
 
-1. **§3.9 — axis refusal/liveness audit.** Read the refusal matrix and classify
-   every axis value as refused, live, or inert; an inert value invalidates every
-   composition claim above it. Cheap, one forward/step per axis value.
+1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
+   declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
+   2 unavailable (`rule_state`, `substrate_coupled`); 0 undeclared inert. The
+   ledger and locks are in §3.9; the next blocker is §3.7.
 2. **§3.7 — PEPITA digital/adam equivalence.** The first credit-axis probe;
    both arms are live digital cells. ~2.1 h CPU for the n=10 confirmation.
 3. **§3.10 — interaction matrix.** Dynamics × credit first (the axis with no
@@ -355,8 +409,8 @@ walltime, and never records a run into a store.
    interaction. `complex` is declared real-arithmetic and every complex cell is
    refused by `complex_substrate_real_compute`; the complex and digital PEPITA
    cells are bit-identical because the operator is the digital matmul on real
-   weights. The pair is refused, not evidence. §3.9 audits it. Do not use it as
-   a claim.
+   weights. The pair is refused, not evidence; §3.9 confirms the refusal. Do
+   not use it as a claim.
 
    **Best-backprop check (secondary):** PEPITA digital/adam **0.9751** vs
    gradient digital/euclidean **0.9789** (the best backprop cell), paired over
@@ -366,9 +420,10 @@ walltime, and never records a run into a store.
    optimizer" objection: PEPITA is within 1 point of the best backprop
    configuration, at 1.41× walltime — a cost-adjusted loss, not parity.
 
-   **Liveness prerequisite:** the substrate audit (§3.9) must pass. The digital
-   pair is already live — PEPITA and gradient differ at the same seed — so the
-   credit probe is not blocked by the complex refusal.
+   **Liveness prerequisite (closed 2026-11-14):** §3.9 classifies every
+   substrate value; 8/9 are live and `complex` is refused. The digital pair is
+   live — PEPITA and gradient differ at the same seed — so the credit probe is
+   not blocked by the complex refusal.
 
    **Confirmation:** pre-register a two-sided equivalence claim with margin
    **±0.01**, α=0.05, `min_seeds=10`; run **new seeds 47–56** on both arms (the
@@ -488,6 +543,7 @@ walltime, and never records a run into a store.
 | 2026-11-14 | RL | pendulum −135.1 ± 9.0 (SD) | 3 | 400 episodes (40×10), mean return; chance ≈ −1200 | CI [−144.9, −127.2] vs −200; **met** | §3.3 (closed) |
 | 2026-11-14 | corpus breadth | 3,437 measurements (7,450 records) | 443 stores | distinct `measurement_key`; 93/99 pairs, **0 holes** | §3.4 closes the last hole | §3.4 (closed) |
 | 2026-11-14 | neuromorphic × graph (Cora) | 0.1540 / 0.1460 / 0.1300 | 1 seed each | 500-node public split; majority 0.316; L0/1 epoch | **coverage, not a claim** (below majority; no replication) | §3.4 (closed) |
+| 2026-11-14 | axis liveness | 57 declared = 6 reference + 48 live + 1 refused + 2 unavailable | 57 values | one seeded `train_step`, post-step geometry fingerprint (digits 8×8; Cora for `graph`) | **0 undeclared inert**; `complex` refused, `rule_state`/`substrate_coupled` unavailable | §3.9 (closed) |
 | 2026-11-14 | graph classification × settling | failure: 1134 vs 32 | 1 | PROTEINS batch, node-major readout | batched path dies under energy_minimization/spike; node-mode works | §3.6 |
 | 2026-11-14 | vision (claim-grade) | matched digital/adam: gradient 0.9755 ± 0.0023 vs PEPITA 0.9751 ± 0.0020 (best gradient 0.9789, digital/euclidean) | 5 | L2/20, 10k held out; chance 0.10 | paired PEPITA−gradient −0.0004, CI [−0.0051, +0.0044], p=0.84 | §3.7 (discovery) |
 | 2026-11-14 | vision (secondary) | complex/adam PEPITA vs gradient | 5 | L2/20, same split | **retracted**: `complex_substrate_real_compute` refuses every complex cell; PEPITA cells bit-identical | §3.9 (refused) |
@@ -512,31 +568,35 @@ pre-registered matched claim.
 | Date | Axis | Variant | Reference | Observation | Verdict | Reversal trigger |
 |---|---|---|---|---|---|---|
 | 2026-11-14 | substrate | `complex` | `digital` | PEPITA val_acc/train_acc bit-identical per seed (42–46); `complex_substrate_real_compute` refuses every complex cell | **refused**, not live; records cannot count until reversed; §3.9 | complex operator gains a real-valued phase/noise term and `substrate_from_config` dispatches to it |
+| 2026-11-14 | plasticity | `rule_state` | `null` (joint) | post-step geometry bit-identical across 12 declared completions; no `modulate` applies ψ | **inert** → unavailable; `_UNAVAILABLE` reason | a trainer applies `apply_operator` (the Z3 frozen-θ loop) |
+| 2026-11-14 | plasticity | `substrate_coupled` | `null` (joint) | post-step geometry bit-identical across 12 declared completions; primitive is a documented no-op | **inert** → unavailable; `_UNAVAILABLE` reason | a substrate carries a separate state σ through the joint transition and the standard step reads it |
+| 2026-11-14 | all axes | 51 non-reference values | canonical stack | 48 live, 1 refused, 2 unavailable, 0 undeclared inert | audit closed; one step is a liveness ruler, not a claim | re-run `scripts/probes/t92_axis_liveness.py` after a declaration change; a fired trigger is `stale-unavailable` |
 
 **Claim-shaped keys.** 3,437 distinct measurements, but only ~468 distinct keys
 are L2 with planned n≥5; the achieved-seed count is lower. Breadth is a floor,
 not a claim count. The ledger is the claim count.
 
 **Liveness caveat.** The 93/99 pair count counts declared substrate values, not
-live substrates. The complex finding shows a pair can be "measured" on a
-**refused** axis; §3.9's refusal/liveness ledger is the live count. Until the
-audit is complete, pair breadth is a coverage floor, not evidence that every
-axis composes.
+live substrates. §3.9 now classifies every declared axis value; pair breadth is
+still a **coverage floor**, not evidence that a pair composes. The live count is
+48/51 non-reference values (1 refused, 2 unavailable). A pair enters an
+interaction only when both its axes are live and the cell is not refused.
 
 **Axis evidence (2026-11-14).** The six-axis program, by what is actually
 claim-grade:
 
-| Axis | Measured (any) | Claim-grade evidence | Gap |
+| Axis | Liveness (2026-11-14) | Claim-grade evidence | Gap |
 |---|---|---|---|
-| Substrate | 9/9 declared | digital only | no live non-digital matched comparison; `complex` refused |
-| Geometry | 11/11 | vision/graph/node screening | graph marginal; node n=3 |
-| Dynamics | 8/8 | none | best cells are instantaneous; no matched settling claim |
-| Plasticity | 7/7 | none | no matched plasticity × task claim |
-| Credit | 10/10 | PEPITA digital/adam discovery | graph 2 error-aware; RL refused; most credits L0/1 |
-| Update | 12/12 | none | no matched update × geometry claim |
+| Substrate | 8/9 live; `complex` refused | digital only | no live non-digital matched comparison |
+| Geometry | 11/11 live | vision/graph/node screening | graph marginal; node n=3 |
+| Dynamics | 8/8 live | none | best cells are instantaneous; no matched settling claim |
+| Plasticity | 5/7 live; `rule_state`, `substrate_coupled` unavailable | none | no matched plasticity × task claim |
+| Credit | 10/10 live | PEPITA digital/adam discovery | graph 2 error-aware; RL refused; most credits L0/1 |
+| Update | 12/12 live | none | no matched update × geometry claim |
 
-"Measured (any)" is one PASS record, not a live or claim-grade cell; the
-claim-grade column is the evidence count. The gaps are the program.
+"Liveness" is the §3.9 one-step parameter fingerprint, not a PASS record or a
+claim-grade cell; the claim-grade column is the evidence count. The gaps are the
+program.
 
 ---
 
@@ -619,16 +679,16 @@ claim-grade column is the evidence count. The gaps are the program.
   pairs and **0 holes**. The numbers are coverage, not a claim. The batched
   graph-classification path under settling dynamics still fails (1134-vs-32
   shape mismatch), filed as §3.6.
-- The **refusal/liveness phase** starts here (2026-11-14). The first audit
-  finding is a refusal, not a factory defect: `complex` is declared
-  real-arithmetic and every complex cell is refused by
-  `complex_substrate_real_compute`. The PEPITA complex/digital cells are
-  bit-identical because the operator is the digital matmul; that pair is one of
-  the 257 refused-pair measurements that cannot count as substrate breadth
-  until the refusal reverses. §3.9 classifies every axis value as refused,
-  live, or inert before §3.10 composes an interaction. Every refusal carries a
-  **reversal trigger**, and a refusal review at round close re-admits rows
-  whose trigger fired; `local_contrastive` is the precedent.
+- The **refusal/liveness phase** ran (2026-11-14). The first audit finding is a
+  refusal, not a factory defect: `complex` is declared real-arithmetic and
+  every complex cell is refused by `complex_substrate_real_compute`. The PEPITA
+  complex/digital cells are bit-identical because the operator is the digital
+  matmul; that pair is one of the 257 refused-pair measurements that cannot
+  count as substrate breadth until the refusal reverses. §3.9 classified every
+  axis value as refused, live, or unavailable before §3.10 composes an
+  interaction. Every refusal carries a **reversal trigger**, and a refusal
+  review at round close re-admits rows whose trigger fired;
+  `local_contrastive` is the precedent.
 - The **credit-axis probe** remains valid on the live digital pair: PEPITA
   0.9751 ± 0.0020 vs gradient 0.9755 ± 0.0023 (n=5, L2/20, seeds 42–46; paired
   −0.0004, 95% CI [−0.0051, +0.0044], p=0.84). Cost: 55,050 params; PEPITA
@@ -636,10 +696,14 @@ claim-grade column is the evidence count. The gaps are the program.
   (~1.41×) at −0.38 pp. It is a **cost-adjusted parity, not a capability win**;
   §3.7 adds the equivalence predicate and runs seeds 47–56 (~2.1 h CPU), and
   §3.10 searches for a cell where a non-standard axis wins at matched cost.
-- Open work, in priority order: §3.9 refusal/liveness audit; §3.7 PEPITA
-  digital equivalence; §3.10 interaction matrix; §3.3c gate metric bar; §3.2
-  one graph readout arm with a stop rule; §3.8 claim-conversion backlog;
-  §3.6 batched graph-settle (deferred); §3.1 regression claims (n=1).
+- §3.9 is closed (2026-11-14): all 57 declared axis values are classified (48
+  live, 1 refused, 2 unavailable, 6 references); the two inert plasticity rows
+  are declared unavailable with reversal triggers, and the lock proves the
+  measurement. The audit is one step, not a capability claim.
+- Open work, in priority order: §3.7 PEPITA digital equivalence; §3.10
+  interaction matrix; §3.3c gate metric bar; §3.2 one graph readout arm with a
+  stop rule; §3.8 claim-conversion backlog; §3.6 batched graph-settle
+  (deferred); §3.1 regression claims (n=1).
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.

@@ -97,7 +97,9 @@ class TestSearchSpaceUserAxesLock:
 
     def test_user_specified_plasticity_axis_preserves_all_primitives(self):
         """User-specified plasticity primitives are preserved."""
-        user_plasticities = ("null", "fast_weights", "routing", "rule_state")
+        # ``rule_state`` is unavailable (TODO92 §3.9), so the lock uses a row
+        # that is both non-default and available.
+        user_plasticities = ("null", "fast_weights", "routing", "temporal_psi")
         spec = RunSpec(
             profile=RUN_PROFILES["production-map"].name,
             task=RUN_PROFILES["production-map"].task,

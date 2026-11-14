@@ -358,9 +358,27 @@ type PrimitiveRow = tuple[str, str, tuple[str, ...]]
 
 # Primitives the kernel registers but cannot honour, with the reason recorded
 # (R78). An unavailable row is excluded from every space, so the run stops
-# proposing cells it would only fail. Empty since N7 wired the label channel
-# (``local_contrastive``); a row returns here only with a measured reason.
-_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {}
+# proposing cells it would only fail. A row returns here only with a measured
+# reason and a reversal trigger (TODO92 §3.9).
+#
+# Reversal triggers:
+# - ``rule_state``: returns when a trainer applies ``apply_operator`` (the Z3
+#   frozen-θ loop). Its ψ evolves but the standard step never reads it.
+# - ``substrate_coupled``: returns when a substrate carries a separate state σ
+#   through the joint transition and the standard step reads it. Today the
+#   primitive is a documented no-op at the plasticity protocol level.
+_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {
+    (StructuralAxis.PLASTICITY, "rule_state"): (
+        "RuleStatePlasticity has no modulate(): the standard train step evolves "
+        "ψ but never applies the selected operator, so the post-step geometry "
+        "is bit-identical to null (TODO92 §3.9, one-step parameter fingerprint)."
+    ),
+    (StructuralAxis.PLASTICITY, "substrate_coupled"): (
+        "SubstrateCoupledPlasticity is a no-op at the plasticity protocol level "
+        "(ψ ≡ σ; the substrate owns state evolution), so the standard step is "
+        "bit-identical to null (TODO92 §3.9, one-step parameter fingerprint)."
+    ),
+}
 
 
 def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...]:
