@@ -1,14 +1,18 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b, §3.4 and §3.9 closed. The
-measurement layer is honest: 3,437 measurements, 93/99 pairs, 0 holes, ~468
-claim-shaped L2/n≥5 keys. The first audit found the complex/adam PEPITA pair is
-on a **declared-refused pair** (`complex_substrate_real_compute`), not a live
-substrate interaction. §3.9 now classifies all 57 declared axis values: **48
-live, 1 refused, 2 unavailable, 6 canonical references; 0 undeclared inert.**
-§3.7's digital probe is a **cost-adjusted parity, not a win** (details
-in §3.7): no non-standard composition yet has a cost-adjusted capability win;
-the plan searches for one. Next: **§3.7, then §3.10.**
+**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b, §3.4, §3.9 and §3.10's first
+interaction are closed. The measurement layer is honest: 3,437 measurements,
+93/99 pairs, 0 holes, ~468 claim-shaped L2/n≥5 keys. The first audit found the
+complex/adam PEPITA pair is on a **declared-refused pair**
+(`complex_substrate_real_compute`), not a live substrate interaction. §3.9 now
+classifies all 57 declared axis values: **48 live, 1 refused, 2 unavailable, 6
+canonical references; 0 undeclared inert.** §3.7's digital probe is a
+**cost-adjusted parity, not a win** (details in §3.7): no non-standard
+composition yet has a cost-adjusted capability win; the plan searches for one.
+The first interaction is **negative**: on Cora, `energy_minimization` costs the
+`random_projections` credit **−2.4 pp** against `gradient` (claim-grade, n=5,
+L2/100; §3.10). Next: **finish §3.7's confirmation, then the remaining
+interactions.**
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -151,6 +155,14 @@ rest (48 live, 1 refused, 2 unavailable). The graph, node, tabular and RL rows
 are screening; their "met" is a
 domain-bar verdict, not a formal claim.
 
+**Node's n=5/L2 conversion (measured 2026-11-14, §3.10 control arm).** The
+same Cora cell at L2/100 over fresh seeds 47–51 measures **0.7568 ± 0.0145**:
+**0.47σ** above the 0.75 bar, inside the 1σ band, so the row is **marginal**,
+not met, even at claim grade. The 0.7660 n=3/L1 row stays the best measured and
+is not claim-grade. This closes the node row's §3.8 conversion: more seeds at
+the same schedule do not clear the bar confidently; a different split or
+readout is the next lever, not another seed sweep.
+
 Provenance for the pre-re-run rows was TODO85–90's session log. Every row now
 carries a re-execution: `scripts/probes/t92_baseline_replay.py` rebuilds each
 located record's coordinate and schedule and trains it again through the same
@@ -275,10 +287,22 @@ still needs a matched interaction or claim (§3.7, §3.10).
    ledger and locks are in §3.9; the next blocker is §3.7.
 2. **§3.7 — PEPITA digital/adam equivalence.** The first credit-axis probe;
    both arms are live digital cells. ~2.1 h CPU for the n=10 confirmation.
-3. **§3.10 — interaction matrix.** Dynamics × credit first (the axis with no
-   claim-grade evidence), then plasticity × task, update × geometry, credit ×
-   substrate on a live non-refused substrate. This is where the broad thesis is
-   tested.
+3. **§3.10 — interaction matrix.** First interaction **measured 2026-11-14**:
+   dynamics × credit on Cora. PEPITA is refused on graph
+   (`local_contrastive_geometry` is feedforward-only), so the graph pair is
+   `random_projections` (error-aware layered FA) vs `gradient`. 2×2, seeds
+   47–51, L2/100 (record `f6a16dae`, `experiments/t92_dynamics_credit_cora.duckdb`):
+   instantaneous/gradient **0.7568 ± 0.0145**, instantaneous/RP
+   **0.7460 ± 0.0049**, energy/gradient **0.7496 ± 0.0107**, energy/RP
+   **0.7152 ± 0.0256**. Interaction `(RP−grad)_energy − (RP−grad)_inst` =
+   **−0.0236**, 95% CI [−0.0496, −0.0076], p=0.008 — **NEGATIVE**. Settling
+   does not help the local credit; it costs it 2.4 pp, at 5.5× the walltime
+   (22 s vs 4 s per 5-seed energy cell). The 1-epoch 7.5 s cost was setup, not
+   per-epoch settle: the whole 2×2 ran in ~41 s. Remaining interactions:
+   **update × geometry** (cheapest; no claim-grade evidence), plasticity × task
+   (needs a memory/continual task), credit × substrate on a live non-refused
+   substrate (the first potential non-standard win). One pre-registered 2×2 at
+   a time.
 4. **§3.3c — gate metric bar.** Makes PASS mean above-bar; every later claim
    depends on it.
 5. **§3.2 — one graph readout arm with a stop rule.** The only graph lever left.
@@ -455,7 +479,7 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
    | Row | Current | To claim | Cost | Priority |
    |---|---|---|---|---|
-   | Node Cora | 0.766 n=3 L1/100 | n=5 L2/100 | measure first; ~5–10 min | after §3.7 |
+   | Node Cora | **measured 2026-11-14**: 0.7568 ± 0.0145 at n=5 L2/100 (§3.10 control) | none — 0.47σ above 0.75, **marginal**; a split/readout change is the lever | done | closed |
    | Graph PROTEINS | 0.701 n=5 L1/100 | n=5 L2/100 | ~10 min | after §3.2 |
    | RL pendulum | −135.1 n=3 L0/40 | n=5 same schedule | ~60 min | only if the lane claim matters |
    | Tabular wine | 1.0 n=3 L0 | replace the task | new loader | low; wine is saturated |
@@ -547,6 +571,8 @@ still needs a matched interaction or claim (§3.7, §3.10).
 | 2026-11-14 | graph classification × settling | failure: 1134 vs 32 | 1 | PROTEINS batch, node-major readout | batched path dies under energy_minimization/spike; node-mode works | §3.6 |
 | 2026-11-14 | vision (claim-grade) | matched digital/adam: gradient 0.9755 ± 0.0023 vs PEPITA 0.9751 ± 0.0020 (best gradient 0.9789, digital/euclidean) | 5 | L2/20, 10k held out; chance 0.10 | paired PEPITA−gradient −0.0004, CI [−0.0051, +0.0044], p=0.84 | §3.7 (discovery) |
 | 2026-11-14 | vision (secondary) | complex/adam PEPITA vs gradient | 5 | L2/20, same split | **retracted**: `complex_substrate_real_compute` refuses every complex cell; PEPITA cells bit-identical | §3.9 (refused) |
+| 2026-11-14 | node classification (claim-grade cell) | Cora 0.7568 ± 0.0145 (SD) | 5 | L2/100, 500-node public split; majority 0.316; seeds 47–51 | 0.47σ above 0.75 — **marginal**, not met | §3.10 control (§3.8 conversion) |
+| 2026-11-14 | node × dynamics × credit (Cora) | inst/grad 0.7568, inst/RP 0.7460, energy/grad 0.7496, energy/RP 0.7152 | 5 per cell | L2/100, same split; seeds 47–51 | interaction **−0.0236**, 95% CI [−0.0496, −0.0076], p=0.008 — **NEGATIVE**, claim-grade; 5.5× walltime | §3.10 (first interaction) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -562,6 +588,7 @@ pre-registered matched claim.
 | 2026-11-14 | MNIST digital/adam: PEPITA vs gradient | 5 | val_acc, 10k held out; L2/20 | 55,050 params; PEPITA 412 s vs gradient 359 s (~1.15×) | −0.0004, 95% CI [−0.0051, +0.0044], p=0.84, dz=−0.09 | discovery; §3.7 confirms n=10 |
 | 2026-11-14 | MNIST complex/adam: PEPITA vs gradient | 5 | same | — | **retracted**: `complex_substrate_real_compute` refuses every complex cell; PEPITA cells bit-identical | **refused**, not an interaction; §3.9 |
 | 2026-11-14 | MNIST best-backprop check: PEPITA digital/adam vs gradient digital/euclidean | 5 | val_acc, 10k held out; L2/20 | 55,050 params; PEPITA 412 s vs gradient 293 s (~1.41×) | −0.0038, 95% CI [−0.0064, −0.0012], p=0.015 | secondary; cost-adjusted loss |
+| 2026-11-14 | Cora dynamics × credit: `(RP−grad)_energy − (RP−grad)_inst` | 5 | val_acc, 500-node public split; majority 0.316; L2/100 | 96,391 params; 41 s for the 2×2 (energy 5.5× instant) | −0.0236, 95% CI [−0.0496, −0.0076], p=0.008 | claim-grade **negative interaction**; §3.10 |
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
@@ -700,9 +727,19 @@ program.
   live, 1 refused, 2 unavailable, 6 references); the two inert plasticity rows
   are declared unavailable with reversal triggers, and the lock proves the
   measurement. The audit is one step, not a capability claim.
-- Open work, in priority order: §3.7 PEPITA digital equivalence; §3.10
-  interaction matrix; §3.3c gate metric bar; §3.2 one graph readout arm with a
-  stop rule; §3.8 claim-conversion backlog; §3.6 batched graph-settle
+- §3.10's first interaction is closed (2026-11-14) with a **claim-grade negative
+  number**: on Cora, dynamics × credit (2×2, seeds 47–51, L2/100) gives
+  interaction **−0.0236 val_acc**, 95% CI [−0.0496, −0.0076], p=0.008.
+  `energy_minimization` costs the `random_projections` credit 2.4 pp against
+  `gradient` at 5.5× walltime. PEPITA is refused on graph
+  (`local_contrastive_geometry`), so the graph pair is RP vs gradient. The 2×2
+  ran in 41 s; the earlier 7.5 s/epoch estimate was setup cost. Its control arm
+  is also the node row's n=5/L2 conversion: 0.7568 ± 0.0145, **marginal**
+  (0.47σ above 0.75), so more seeds at the same schedule do not clear the bar.
+- Open work, in priority order: §3.7 PEPITA digital equivalence (confirmation
+  in flight); §3.10 remaining interactions (update × geometry, plasticity ×
+  task, credit × substrate); §3.3c gate metric bar; §3.2 one graph readout arm
+  with a stop rule; §3.8 claim-conversion backlog; §3.6 batched graph-settle
   (deferred); §3.1 regression claims (n=1).
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
