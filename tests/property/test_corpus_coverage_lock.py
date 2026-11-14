@@ -2,10 +2,12 @@
 
 ``comp coverage report --corpus`` and ``scripts/probes/t3_credit_breadth.py``
 are two surfaces over ``evidence.corpus.scan_corpus``. This lock builds a small
-corpus — two readable stores, a FAIL record, and a store that cannot be read —
-and asserts both surfaces report the same total, per-geometry error-aware
-credits, per-task counts, and the unreadable store. A CLI that ignored
-``--corpus`` (or a probe that skipped an unreadable file) fails here.
+corpus — two readable stores, a FAIL record, a re-run of one cell in the second
+store, and a store that cannot be read — and asserts both surfaces report the
+same record total, distinct-measurement total, per-geometry error-aware credits,
+per-task counts, and the unreadable store. A CLI that ignored ``--corpus`` (or a
+probe that skipped an unreadable file) fails here; dropping the measurement-key
+dedupe moves the distinct count from 5 to 6 and fails the ruler assertion.
 """
 
 from __future__ import annotations
@@ -144,6 +146,13 @@ def corpus_root(tmp_path: Path) -> Path:
                 run_id, geometry="graph", credit="target_inversion", task="cora", seed=0
             )
         )
+        # The same measurement as store a's gradient/digits seed 0, in another
+        # store: a re-run. It must add a record and no measurement.
+        store.append(
+            _record(
+                run_id, geometry="feedforward", credit="gradient", task="digits", seed=0
+            )
+        )
 
     (experiments / "broken.duckdb").write_bytes(b"not a duckdb file")
     return tmp_path
@@ -172,7 +181,8 @@ def test_the_command_and_the_probe_count_the_same_corpus(
     command = _command_numbers(monkeypatch, corpus_root, capsys)
     probe = _probe_numbers(corpus_root, capsys)
 
-    assert command["pass_cells"] == probe["pass_cells"] == 5
+    assert command["records"] == probe["records"] == 6
+    assert command["measurements"] == probe["measurements"] == 5
     assert command["geometries"] == probe["geometries"]
     assert command["tasks"] == probe["tasks"] == {"cora": 1, "digits": 3, "mnist": 1}
     assert command["untouched_tasks"] == probe["untouched_tasks"]
@@ -181,7 +191,9 @@ def test_the_command_and_the_probe_count_the_same_corpus(
     feedforward = command["geometries"]["feedforward"]
     assert feedforward["error_aware"] == ["gradient"]
     assert feedforward["error_blind"] == ["homeostatic"]
-    assert feedforward["pass_cells"] == 3  # the FAIL record is not counted
+    assert feedforward["error_aware_cells"] == {"gradient": 2}
+    assert feedforward["measurements"] == 3
+    assert feedforward["records"] == 4  # 3 in store a, plus the re-run in store b
 
 
 def test_an_unreadable_store_is_reported_by_both_surfaces(

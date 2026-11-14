@@ -5,10 +5,13 @@ One implementation answers "what has the corpus exercised?" for both
 Two counters would drift; a lock compares the command's numbers with the
 probe's.
 
-Rulers: ``pass_cells`` counts PASS records (one per seed), not distinct
-coordinates — the probe and the plan quote records. ``geometries[*].error_aware``
-excludes credits that declare ``error_blind=True``: they read no label, so on a
-supervised task they measure chance by contract and never count toward breadth.
+Rulers: ``records`` counts PASS rows (one per seed, re-runs included);
+``measurements`` counts distinct ``measurement_key`` values across every store.
+Breadth is quoted in measurements, because ``measurement_key`` is unique within
+a store but not across stores, so a re-run inflates the record count and never
+the measurement count. ``geometries[*].error_aware`` excludes credits that
+declare ``error_blind=True``: they read no label, so on a supervised task they
+measure chance by contract and never count toward breadth.
 """
 
 from __future__ import annotations
@@ -55,12 +58,13 @@ def default_store_paths(root: Path) -> tuple[Path, ...]:
 
 @dataclass(frozen=True, slots=True)
 class GeometryCoverage:
-    """One geometry's PASS cells, split by whether the credit reads error."""
+    """One geometry's measurements, split by whether the credit reads error."""
 
     error_aware: tuple[str, ...]
     error_aware_cells: Mapping[str, int]
     error_blind: tuple[str, ...]
-    pass_cells: int
+    measurements: int
+    records: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +73,8 @@ class CorpusCoverage:
 
     stores: tuple[str, ...]
     unreadable: Mapping[str, str]
-    pass_cells: int
+    records: int
+    measurements: int
     axes: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]]
     geometries: Mapping[str, GeometryCoverage]
     pairs: Mapping[tuple[str, str], int]
@@ -81,7 +86,8 @@ class CorpusCoverage:
     def to_dict(self) -> dict[str, Any]:
         return {
             "source": list(self.stores),
-            "pass_cells": self.pass_cells,
+            "records": self.records,
+            "measurements": self.measurements,
             "axes": {
                 axis: {"measured": list(measured), "missing": list(missing)}
                 for axis, (measured, missing) in self.axes.items()
@@ -92,7 +98,8 @@ class CorpusCoverage:
                     "error_aware_cells": dict(row.error_aware_cells),
                     "error_blind": list(row.error_blind),
                     "n_error_aware": len(row.error_aware),
-                    "pass_cells": row.pass_cells,
+                    "measurements": row.measurements,
+                    "records": row.records,
                 }
                 for geometry, row in self.geometries.items()
             },
@@ -110,8 +117,12 @@ class CorpusCoverage:
     def render(self) -> str:
         """The report a reader receives; the probe's numbers, as text."""
         lines = [
-            f"Corpus coverage: {self.pass_cells} PASS cells over "
-            f"{len(self.stores)} readable store(s)",
+            f"Corpus coverage: {self.records} PASS records = "
+            f"{self.measurements} distinct measurements, over "
+            f"{len(self.stores)} readable store(s) of "
+            f"{len(self.stores) + len(self.unreadable)} found",
+            "Ruler: a measurement is one distinct measurement_key; a re-run "
+            "adds a record, never a measurement.",
             "=" * 80,
             "",
             "Per-Axis Coverage (measured / declared):",
@@ -132,7 +143,8 @@ class CorpusCoverage:
             )
             lines.append(
                 f"  {geometry}: {len(row.error_aware)} error-aware "
-                f"({cells or 'none'}); pass={row.pass_cells}"
+                f"({cells or 'none'}); measurements={row.measurements}, "
+                f"records={row.records}"
             )
             if row.error_blind:
                 lines.append(f"    error-blind (excluded): {list(row.error_blind)}")
@@ -142,14 +154,14 @@ class CorpusCoverage:
         lines.extend([
             "",
             "Substrate x Geometry Pairs:",
-            f"  {len(self.pairs)} / {declared_pairs} hold a PASS cell "
+            f"  {len(self.pairs)} / {declared_pairs} hold a measured cell "
             f"({coupled} on a coordinate no rule refuses)",
         ])
         lines.extend(_render_pairs(self.pairs, self.pair_gaps, self.pair_holes))
 
         lines.extend(["", "Per-Task Coverage:"])
         for task, cells in self.tasks.items():
-            lines.append(f"  {task}: {cells} PASS cells")
+            lines.append(f"  {task}: {cells} measurements")
         if self.untouched_tasks:
             lines.append(f"  NOT TOUCHED: {list(self.untouched_tasks)}")
         else:
@@ -293,7 +305,7 @@ def _render_pairs(
     gaps: Mapping[tuple[str, str], tuple[tuple[str, str], ...]],
     holes: tuple[tuple[str, str], ...],
 ) -> list[str]:
-    """The pair section: refused coordinates, cells that cannot count, holes."""
+    """The pair section: refused coordinates, measurements that cannot count, holes."""
     lines = []
     if gaps:
         lines.append(f"  {len(gaps)} refused by a rule:")
@@ -307,8 +319,8 @@ def _render_pairs(
         if on_void:
             cells = sum(pairs[pair] for pair in on_void)
             lines.append(
-                f"  {len(on_void)} of them hold a PASS cell ({cells} cells) that "
-                "cannot count as substrate breadth:"
+                f"  {len(on_void)} of them hold a measurement ({cells} "
+                "measurements) that cannot count as substrate breadth:"
             )
             lines.extend(
                 f"    {substrate} x {geometry} ({pairs[substrate, geometry]})"
@@ -324,8 +336,9 @@ def _render_pairs(
 
 def _geometry_rows(
     covered: Mapping[str, Mapping[str, int]],
+    records: Mapping[str, int],
 ) -> dict[str, GeometryCoverage]:
-    """Split each geometry's PASS cells by whether the credit reads error."""
+    """Split each geometry's measurements by whether the credit reads error."""
     rows: dict[str, GeometryCoverage] = {}
     for geometry, credits in covered.items():
         error_aware = {
@@ -342,21 +355,24 @@ def _geometry_rows(
             error_aware=tuple(sorted(error_aware)),
             error_aware_cells=error_aware,
             error_blind=tuple(sorted(error_blind)),
-            pass_cells=sum(credits.values()),
+            measurements=sum(credits.values()),
+            records=records.get(geometry, 0),
         )
     return rows
 
 
 def scan_corpus(paths: Iterable[Path], *, root: Path | None = None) -> CorpusCoverage:
-    """Count every readable store once: PASS records per axis, geometry and task.
+    """Count every readable store once: PASS records and distinct measurements.
 
     Args:
         paths: Store files to read.
         root: Directory that store paths are reported relative to.
 
     Returns:
-        The corpus coverage. A store that cannot be read is named in
-        ``unreadable`` with its error, never dropped silently.
+        The corpus coverage. ``records`` counts PASS rows; ``measurements``,
+        the per-axis, per-geometry, per-pair and per-task counts all dedupe by
+        ``measurement_key`` across stores. A store that cannot be read is named
+        in ``unreadable`` with its error, never dropped silently.
     """
     seed_all_registries()
     from computronium.experiment.registry.task_registry import TaskRegistry
@@ -365,46 +381,57 @@ def scan_corpus(paths: Iterable[Path], *, root: Path | None = None) -> CorpusCov
     covered: dict[str, dict[str, int]] = {
         geometry: {} for geometry in _declared(StructuralAxis.GEOMETRY)
     }
-    pair_cells: dict[tuple[str, str], int] = {}
-    tasks: dict[str, int] = {}
+    pair_measurements: dict[tuple[str, str], int] = {}
+    task_measurements: dict[str, int] = {}
+    geometry_records: dict[str, int] = {}
     unreadable: dict[str, str] = {}
     readable: list[str] = []
-    pass_cells = 0
+    measurements: set[str] = set()
+    records = 0
 
     for path in paths:
         label = str(path.relative_to(root)) if root else str(path)
         try:
             with RecordStore(StoreConfig(path=path, read_only=True)) as store:
-                records = store.query_records()
+                stored = store.query_records()
         except Exception as error:  # ruff: ignore[blind-except] - a stale store is data
             unreadable[label] = str(error)
             continue
         readable.append(label)
-        for record in records:
+        for record in stored:
             if record.status.gate_verdict.value != "PASS":
                 continue
-            pass_cells += 1
+            records += 1
             for axis in seen_axes:
                 seen_axes[axis].add(getattr(record, axis))
+            geometry_records[record.geometry] = (
+                geometry_records.get(record.geometry, 0) + 1
+            )
+            if record.measurement_key in measurements:
+                continue
+            measurements.add(record.measurement_key)
             if record.geometry in covered:
                 covered[record.geometry][record.credit] = (
                     covered[record.geometry].get(record.credit, 0) + 1
                 )
             pair = (record.substrate, record.geometry)
-            pair_cells[pair] = pair_cells.get(pair, 0) + 1
-            tasks[record.schedule.task_id] = tasks.get(record.schedule.task_id, 0) + 1
+            pair_measurements[pair] = pair_measurements.get(pair, 0) + 1
+            task_measurements[record.schedule.task_id] = (
+                task_measurements.get(record.schedule.task_id, 0) + 1
+            )
 
     registry_tasks = set(TaskRegistry()._enrichments.keys())
-    pair_gaps, pair_holes = _pair_gaps(pair_cells)
+    pair_gaps, pair_holes = _pair_gaps(pair_measurements)
     return CorpusCoverage(
         stores=tuple(readable),
         unreadable=unreadable,
-        pass_cells=pass_cells,
+        records=records,
+        measurements=len(measurements),
         axes=_axis_coverage(seen_axes),
-        geometries=_geometry_rows(covered),
-        pairs=dict(sorted(pair_cells.items())),
+        geometries=_geometry_rows(covered, geometry_records),
+        pairs=dict(sorted(pair_measurements.items())),
         pair_gaps=pair_gaps,
         pair_holes=pair_holes,
-        tasks=dict(sorted(tasks.items())),
-        untouched_tasks=tuple(sorted(registry_tasks - set(tasks))),
+        tasks=dict(sorted(task_measurements.items())),
+        untouched_tasks=tuple(sorted(registry_tasks - set(task_measurements))),
     )

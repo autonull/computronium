@@ -1,6 +1,7 @@
 # TODO92 — Breadth and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · **charter and scoreboard; no tickets yet.**
+**Status:** 2026-11-14 · §3.0a closed (the corpus ruler); §3.0 next (baseline
+re-verification).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -39,17 +40,20 @@ attempts, one revert, zero capability.
 
 Corpus: **7,442 PASS records / 441 stores** — **3,431 distinct
 measurements** (the two numbers differ; see the ruler note); **28/28 tasks**
-measured; **92/98** substrate × geometry pairs hold a cell (25 refused by a
-named rule, 19 hold cells that cannot count as substrate breadth, 1 unmeasured:
-`neuromorphic × graph`).
+measured; **92/98** substrate × geometry pairs hold a measurement (25 refused by
+a named rule, 19 hold 257 measurements that cannot count as substrate breadth, 1
+unmeasured: `neuromorphic × graph`).
 
-**Ruler note (measured 2026-11-14).** `scan_corpus` counts PASS records, and
-`measurement_key` is unique *within* a store, not across stores: 441 stores hold
-7,442 PASS records for **3,431 distinct configurations** (1,300 keys repeat;
-max 114). Every earlier "PASS cells" number in TODO85–91 is therefore a record
-count, inflated ~2.2× by re-runs. Breadth is quoted as distinct measurements
-from here on; "28/28 tasks" survives because it unions task ids. The report fix
-is §3.0a, and it runs before §3.0's baseline lookup.
+**Ruler note (measured 2026-11-14; re-measured by §3.0a).** `scan_corpus` counts
+PASS records, and `measurement_key` is unique *within* a store, not across
+stores: 441 stores hold 7,442 PASS records for **3,431 distinct configurations**
+(1,300 keys repeat; max 114). Every earlier "PASS cells" number in TODO85–91 is
+therefore a record count, inflated ~2.2× by re-runs. Breadth is quoted as
+distinct measurements from here on; "28/28 tasks" survives because it unions
+task ids. The report now prints both numbers: `7,442 PASS records = 3,431
+distinct measurements` over 441 readable stores. Pair breadth: **92/98** hold a
+measurement, 25 are refused by a named rule (19 of those hold 257 measurements
+that cannot count as substrate breadth), 1 hole: `neuromorphic × graph`.
 
 | Domain | Best measured | Ruler | Target | Verdict |
 |---|---|---|---|---|
@@ -65,30 +69,30 @@ graph-classification marginal, RL, and the regression lane.
 
 ---
 
-### 3.0a First ticket: the corpus ruler
+### 3.0a ~~First ticket: the corpus ruler~~ — **closed 2026-11-14**
 
-**Why.** §2 measured 7,442 PASS records for 3,431 distinct configurations. A
-report that cannot tell a re-run from new coverage makes every breadth number
-ambiguous, and the baseline lookup in §3.0 reads the same corpus.
+**Delivered.** `CorpusCoverage` reports `records` and `measurements` side by
+side; per-geometry, per-pair and per-task counts dedupe by `measurement_key`;
+the report's first line says what the store count counts (readable of found),
+and a second line names the ruler. The lock fixture now holds a cell re-run in a
+second store: `records=6`, `measurements=5`, and deleting the dedupe moves the
+distinct count to 6 — the lock contains the case it exists for.
 
-**Deliverable.** `scan_corpus` (and the report render) reports **records** and
-**distinct `measurement_key`s** side by side; per-task and per-pair counts
-dedupe by measurement identity; the store-count line says what it counts.
+**Re-measured corpus.** 441 readable stores (441 found, none unreadable), **7,442
+PASS records = 3,431 distinct measurements**, 28 tasks, 92/98 pairs measured,
+25 refused (19 holding 257 measurements that cannot count), 1 hole:
+`neuromorphic × graph`. §2's numbers reproduce.
 
-**Acceptance.** the two numbers are printed; a deliberately re-run cell does
-not change the distinct count; run the report on the current corpus and record
-the demoted totals in §2. Cost: ~30 min.
+### 3.0 Next ticket (pre-registered with this plan): re-verify the baseline
 
-### 3.0 Second ticket (pre-registered with this plan): re-verify the baseline
-
-Depends on §3.0a: locate each best cell by measurement identity, not by a
+§3.0a is closed: locate each best cell by measurement identity, not by a
 record count.
 
 The §2 numbers are quoted from the TODO85–90 records. A baseline nobody has
 re-executed is a claim about a record, not about the system — and this project's
 own history (G8, G11, G20) is a list of measurements that were wrong for harness
-reasons. So reproduction precedes new breadth — after the ruler fix, since a
-record count cannot stand in for coverage.
+reasons. So reproduction precedes new breadth, now that the ruler separates a
+re-run from new coverage.
 
 1. Locate each domain's best recorded cell in the corpus by its `replay_hash`.
 2. Re-execute one cell per domain at that recorded config (n=3 where the claim
@@ -107,7 +111,8 @@ that has only a record behind it. Cost: five cells, one session at most.
    generalized (`pepita`, `target_inversion`, the shared output-target
    convention), 3 mechanism rows declared class-only and refused on a
    continuous target; the re-run measured 9/9 PASS. Remaining work is a claim,
-   not a lane: `diabetes` 10 and `lorenz_state` 8 PASS cells, all n=1.
+   not a lane: `diabetes` 10 and `lorenz_state` 8 PASS records, all n=1 (record
+   counts, not yet re-counted as measurements).
 2. **RL.** −1184 against > −200. This is a capability gap, not a tuning gap:
    check episode budget, reward scaling, and whether the control task's
    geometry/credit pairing is legal before treating it as an algorithm result.
@@ -126,6 +131,7 @@ that has only a record behind it. Cost: five cells, one session at most.
 |---|---|---|---|---|---|---|
 | 2026-11-14 | regression | — | 1 | MSE, target-variance units | not claim-eligible | §3.1 |
 | 2026-11-14 | regression | lane closed: 3 laws + 3 refusals | 1 | same | cells exist (10 + 8 PASS), claim needs n≥3 | §3.1 (closed) |
+| 2026-11-14 | corpus breadth | 3,431 measurements (7,442 records) | 441 stores | distinct `measurement_key`; 92/98 pairs, 1 hole | instrument prints both; §2 reproduces | §3.0a (closed) |
 
 One row per domain per measurement; a row is superseded, never edited.
 
@@ -157,9 +163,10 @@ One row per domain per measurement; a row is superseded, never edited.
 - TODO91 is closed (2026-11-14): its stop condition holds, its §8
   claim-blocking group is green and its regression lane is closed. This file is
   the plan of record.
-- The first ticket is §3.0a (the corpus ruler: records vs distinct
-  measurements), then §3.0 (baseline re-verification) — the one claim the §2
-  table still rests on a record rather than a run.
+- The next ticket is §3.0 (baseline re-verification) — the one claim the §2
+  table still rests on a record rather than a run. §3.0a (the corpus ruler) is
+  closed: `comp coverage report --corpus` prints records and distinct
+  measurements.
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
