@@ -58,6 +58,7 @@ def _system():
 
 
 def test_nudged_output_folds_token_targets() -> None:
+    torch.manual_seed(0)
     out = torch.randn(T * 2, V)
     y = torch.randint(0, V, (2, T))
     nudged = nudged_output(out, y, 0.5)

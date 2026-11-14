@@ -78,16 +78,38 @@ def _block_transition_acts(
 # ============================================================
 
 
+def output_target(y: Tensor, like: Tensor) -> Tensor:
+    """The output activity a supervised law trains toward.
+
+    A *class index* target becomes one-hot. A float target of the output's own
+    element count is the value itself (a regression target or soft labels), so
+    it is returned as the output's shape — the convention
+    ``_settle_kernel._one_hot`` uses for the settle nudge, applied to the
+    credit laws so a continuous lane reads the same target everywhere.
+    """
+    if y.numel() == like.numel():
+        return y.to(like.dtype).reshape(like.shape)
+    return torch.nn.functional.one_hot(y, num_classes=like.shape[-1]).to(like.dtype)
+
+
 def _propagate_targets(
     acts: list[Tensor],
     y: Tensor,
     weight_names: list[str],
     geometry: Geometry,
 ) -> list[Tensor | None]:
-    """Transpose-feedback target propagation: t_L = one-hot(y), t_l = t_{l+1} @ W_{l+1}."""
-    out_dim = acts[-1].shape[-1]
+    """Transpose-feedback target propagation: t_L = the output target,
+    t_l = t_{l+1} @ W_{l+1}.
+
+    The output target is ``output_target(y, acts[-1])``: one-hot for a class
+    index, the value itself for a continuous target. The propagation rule is
+    the same map either way — it is a linear transpose walk, not a class
+    operation — so the regression lane is the same mechanism, and the
+    layer-local delta ``post − t`` is the gradient of its half-squared error
+    in both lanes (TODO91 §8, measured 2026-11-14).
+    """
     targets: list[Tensor | None] = [None] * len(acts)
-    targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float()
+    targets[-1] = output_target(y, acts[-1])
     for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):  # ruff: ignore[ambiguous-variable-name]
         nxt = targets[l + 1]
         if nxt is None:

@@ -243,6 +243,17 @@ _PLASTICITY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ),
 ]
 
+# Primitives whose target is a class index by construction. Their residual or
+# agreement rule is written over one-hot targets (the psi family) or over a
+# label channel and a candidate sweep (local_contrastive), so a continuous
+# target is a refusal, not a runtime error. Measured 2026-11-14: nine
+# regression cells failed on exactly these three rows (§8, regression lane).
+CLASS_TARGET_ONLY: frozenset[tuple[StructuralAxis, str]] = frozenset({
+    (StructuralAxis.CREDIT, "local_contrastive"),
+    (StructuralAxis.PLASTICITY, "temporal_psi"),
+    (StructuralAxis.PLASTICITY, "conflict_adaptive"),
+})
+
 
 def _hyperparameter_spec(
     name: str, axis_name: str, kind: AxisKind
@@ -382,6 +393,9 @@ def _seed_axis_primitives() -> None:
                     description=description,
                     available=(axis, name) not in _UNAVAILABLE,
                     unavailable_reason=_UNAVAILABLE.get((axis, name)),
+                    target_kind=(
+                        "class_index" if (axis, name) in CLASS_TARGET_ONLY else "any"
+                    ),
                     accepted_params=_accepted_params(axis, name),
                     topology_params=tuple(
                         _hyperparameter_spec(p, axis.value, AxisKind.STRUCTURAL)

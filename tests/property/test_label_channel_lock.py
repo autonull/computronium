@@ -172,6 +172,7 @@ def test_every_post_activation_has_length_sqrt_width() -> None:
     """Stream normalization is a geometry property, not a credit one."""
     from computronium.ontology.geometry import GeometryConfig, geometry_from_config
 
+    torch.manual_seed(0)
     normalizing = geometry_from_config(
         GeometryConfig.feedforward(
             input_dim=8, output_dim=4, hidden_dims=(16, 16), stream_norm=True

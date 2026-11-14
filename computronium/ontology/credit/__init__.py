@@ -12,6 +12,7 @@ import torch
 from torch import Tensor, nn
 
 from computronium.core.identity_card import AlgorithmIdentityCard
+from computronium.core.losses import cross_entropy, mean_squared_error
 from computronium.ontology._utils import (
     PoolContext,
     _acts_list,
@@ -20,6 +21,7 @@ from computronium.ontology._utils import (
     _propagate_targets,
     _weight_acts,
     apply_norm,
+    output_target,
 )
 from computronium.ontology.credit._base import (
     FeedbackMatrixMixin,
@@ -2383,7 +2385,8 @@ class TargetInversionCredit:
         ),
         deviations_from_literature=(
             "inverse mappings are the weight TRANSPOSE, not learned inverse models",
-            "output target is the one-hot label (classification only)",
+            "output target is one-hot(y) for a class index and y itself for a "
+            "continuous target (the propagation map is the same linear walk)",
             "tile meshes propagate targets over assembled blocks with "
             "per-edge scattering (R11.1.4)",
         ),
@@ -2530,9 +2533,7 @@ class TargetInversionCredit:
         scattered to per-edge weights (R11.1.4).
         """
         blocks = geometry.assemble_blocks(geometry.params)
-        targets: list[Tensor] = [
-            torch.nn.functional.one_hot(y, num_classes=acts[-1].shape[-1]).float()
-        ]
+        targets: list[Tensor] = [output_target(y, acts[-1])]
         for i in range(len(acts) - 2, -1, -1):
             targets.append(targets[-1] @ blocks[i])
         targets.reverse()
@@ -2859,8 +2860,15 @@ class PepitaCredit:
             "feedback matrix B fixed (drawn lazily or supplied) — matches published one-B variant",
             "substrate operators applied on both passes via set_substrate wiring",
         ),
-        objective_function="CE(f(x + γ·δBᵀ), y) on the modulated second pass",
-        pseudo_gradient_def="exact autograd gradient of CE(f(x̃), y); δ = y − softmax(logits₁)",
+        objective_function=(
+            "CE(f(x + γ·δBᵀ), y) on the modulated second pass for a class "
+            "index; MSE for a continuous target"
+        ),
+        pseudo_gradient_def=(
+            "exact autograd gradient of the second-pass loss; "
+            "δ = target − prediction (one_hot(y) − softmax for a class index, "
+            "y − logits for a continuous target)"
+        ),
         symmetry_requirements=("none beyond the fixed random B (out×in)",),
         approximation_parameters=(
             "feedback_scale γ (sensitive; parity at 0.05)",
@@ -2916,6 +2924,27 @@ class PepitaCredit:
             raise ValueError(msg)
         return x + self.config.feedback_scale * (delta @ b)
 
+    def _output_error(self, y: Tensor, logits: Tensor) -> Tensor:
+        """δ = target − prediction, in the output's own units.
+
+        A class index answers ``one_hot(y) − softmax(logits)``. A continuous
+        target answers ``y − logits``: the same prediction error without the
+        softmax, because a regression output is a value, not a categorical
+        distribution (TODO91 §8 regression lane).
+        """
+        target = output_target(y, logits)
+        if target.shape == logits.shape and y.is_floating_point():
+            return target - logits
+        return target - torch.softmax(logits, dim=-1)
+
+    def _second_pass_loss(self, y: Tensor, logits: Tensor) -> Tensor:
+        """The committed loss for this target kind: CE for a class index, MSE
+        for a continuous value. Both rows come from the declared inventory."""
+        target = output_target(y, logits)
+        if target.shape == logits.shape and y.is_floating_point():
+            return mean_squared_error(logits, target)
+        return cross_entropy(logits, y)
+
     def compute_pseudo_gradient(
         self,
         states: Mapping[Phase, SettableState],
@@ -2929,16 +2958,12 @@ class PepitaCredit:
         substrate = self._resolved_substrate()
         with torch.no_grad():
             logits1 = geometry.forward(x, substrate)
-            delta = torch.nn.functional.one_hot(y, logits1.shape[-1]).to(
-                logits1.dtype
-            ) - torch.softmax(logits1, dim=-1)
+            delta = self._output_error(y, logits1)
         x_tilde = self._modulated_input(x, delta)
         weight_names = _learnable_weight_names(geometry.params)
         params = [geometry.params[n] for n in weight_names]
         with torch.enable_grad():
-            loss2 = torch.nn.functional.cross_entropy(
-                geometry.forward(x_tilde, substrate), y
-            )
+            loss2 = self._second_pass_loss(y, geometry.forward(x_tilde, substrate))
         grads = torch.autograd.grad(loss2, params)
         return self._clip_grads(list(grads))
 
@@ -2959,14 +2984,10 @@ class PepitaCredit:
         substrate = self._resolved_substrate()
         with torch.no_grad():
             logits1 = geometry.forward(x, substrate)
-            delta = torch.nn.functional.one_hot(y, logits1.shape[-1]).to(
-                logits1.dtype
-            ) - torch.softmax(logits1, dim=-1)
+            delta = self._output_error(y, logits1)
         x_tilde = self._modulated_input(x, delta)
         with torch.enable_grad():
-            loss2 = torch.nn.functional.cross_entropy(
-                geometry.forward(x_tilde, substrate), y
-            )
+            loss2 = self._second_pass_loss(y, geometry.forward(x_tilde, substrate))
         grads = torch.autograd.grad(loss2, [geometry.params[n] for n in bias_names])
         return dict(zip(bias_names, grads, strict=True))
 

@@ -41,7 +41,7 @@ from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.wave import _make_positive_control_cells
 from computronium.ontology._settle_kernel import nudged_output
 from computronium.ontology._utils import _align_target_rows
-from computronium.ontology.credit import GradientCredit
+from computronium.ontology.credit import GradientCredit, Phase
 from computronium.ontology.geometry import geometry_from_config
 
 B, T, D = 8, 4, 16
@@ -102,6 +102,7 @@ def test_task_loss_uses_the_declared_loss_on_float_targets() -> None:
 def test_pipeline_trains_a_regression_cell_with_its_own_loss() -> None:
     """One real step: finite metrics, and ``free_loss`` is the task's MSE."""
     system = _regression_system()
+    torch.manual_seed(0)
     x = torch.randn(B, T)
     y = torch.randn(B, 1)
 
@@ -164,3 +165,136 @@ def test_positive_control_ladder_falls_back_from_an_illegal_hint() -> None:
 
     assert not composes("recurrent")
     assert composes("feedforward")
+
+
+# ---------------------------------------------------------------------------
+# The regression lane of the class-readout laws (TODO91 §8, 2026-11-14)
+# ---------------------------------------------------------------------------
+
+
+def _regression_geometry():
+    torch.manual_seed(0)
+    return geometry_from_config(
+        GeometryConfig.feedforward(input_dim=T, output_dim=1, hidden_dims=(8,))
+    )
+
+
+def test_pepita_regression_gradient_is_the_mse_gradient_at_zero_feedback() -> None:
+    """γ=0 leaves the input unmodulated, so the second pass *is* the BP step.
+
+    This is the finite-check the regression lane needs: the generalized
+    branch must produce the declared MSE gradient, not merely run.
+    """
+    from computronium.ontology.credit import PepitaCredit
+
+    torch.manual_seed(0)
+    geometry = _regression_geometry()
+    x = torch.randn(B, T)
+    y = torch.randn(B, 1)
+    credit = PepitaCredit(CreditAssignmentConfig.pepita(gamma=0.0, grad_clip=0.0))
+    grads = credit.compute_pseudo_gradient(
+        {Phase.FREE: SystemState(x=x, y=y)}, None, geometry
+    )
+
+    from computronium.ontology._utils import _learnable_weight_names
+
+    params = [geometry.params[n] for n in _learnable_weight_names(geometry.params)]
+    logits = geometry.forward(x, credit._resolved_substrate())
+    expected = torch.autograd.grad(torch.nn.functional.mse_loss(logits, y), params)
+    assert any(torch.count_nonzero(g) for g in grads), "the lane emitted only zeros"
+    for observed, reference in zip(grads, expected, strict=True):
+        assert torch.allclose(observed, reference, atol=1e-6)
+
+
+def test_target_inversion_regression_target_is_the_value() -> None:
+    """t_L = y for a continuous target; the propagation map is unchanged."""
+    from computronium.ontology.credit import TargetInversionCredit
+
+    torch.manual_seed(0)
+    geometry = _regression_geometry()
+    x = torch.randn(B, T)
+    y = torch.randn(B, 1)
+    acts = list(geometry.forward_with_intermediates(x, DigitalSubstrate()))
+    state = SystemState(x=x, y=y)
+    state.activations = acts
+    credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion())
+    grads = credit.compute_pseudo_gradient({Phase.NUDGED: state}, None, geometry)
+
+    from computronium.ontology._utils import _learnable_weight_names
+
+    names = _learnable_weight_names(geometry.params)
+    hidden, out = acts[1], acts[2]
+    expected_hidden = (hidden - y @ geometry.params[names[1]]).T @ x / B
+    expected_readout = (out - y).T @ hidden / B
+    assert torch.allclose(grads[0], expected_hidden, atol=1e-6)
+    assert torch.allclose(grads[1], expected_readout, atol=1e-6)
+
+
+def test_class_only_primitives_are_refused_on_a_continuous_task() -> None:
+    """The declared space refuses the pair instead of failing at runtime."""
+    from computronium.experiment.kernel.search_space import TARGET_LANE_RULE
+    from computronium.experiment.surface.combinations import declared_space
+
+    keys = (
+        "credit=local_contrastive",
+        "plasticity=temporal_psi",
+        "plasticity=conflict_adaptive",
+    )
+    seed_all_registries()
+    for task in ("diabetes", "lorenz_state"):
+        space = declared_space(task)
+        refused = dict(space.refused)
+        for key in keys:
+            assert key not in space.reached, f"{task} still reaches {key}"
+            assert TARGET_LANE_RULE in refused[key]
+
+    classification = declared_space("iris")
+    for key in keys:
+        assert key in classification.reached, f"iris lost {key}"
+
+
+def test_void_cache_is_scoped_to_the_task() -> None:
+    """A task-conditional refusal must not poison the same cell for another task."""
+    from computronium.experiment.kernel.search_space import VoidCache
+
+    coordinate = Coordinate(
+        substrate="digital",
+        geometry="feedforward",
+        dynamics="instantaneous",
+        plasticity="null",
+        credit="local_contrastive",
+        update="adam",
+        params={},
+    )
+    cache = VoidCache()
+    cache.record_void(coordinate, "diabetes")
+    assert cache.is_known_void(coordinate, "diabetes")
+    assert not cache.is_known_void(coordinate, "iris")
+
+
+def test_target_kind_is_joined_from_the_loss_inventory() -> None:
+    """``TaskShape.target_kind`` is the loss row's target, not a second table."""
+    from computronium.core.losses import LOSS_INVENTORY
+    from computronium.experiment.kernel.evaluate import task_shape
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+
+    seed_all_registries()
+    assert task_shape("diabetes").target_kind == "continuous"
+    assert task_shape("lorenz_state").target_kind == "continuous"
+    assert task_shape("iris").target_kind == "class_index"
+
+    class_only = {
+        (spec.axis_kind.value, spec.name)
+        for axis in StructuralAxis
+        for spec in AXES_REGISTRIES[axis]
+        if spec.target_kind == "class_index"
+    }
+    assert class_only == {
+        ("credit", "local_contrastive"),
+        ("plasticity", "temporal_psi"),
+        ("plasticity", "conflict_adaptive"),
+    }
+    assert all(
+        LOSS_INVENTORY[kind].target in {"class_index", "continuous"}
+        for kind in LOSS_INVENTORY
+    )

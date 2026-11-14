@@ -116,6 +116,19 @@ class DeclaredSpace:
     scan_walltime_s: float
 
 
+def _target_compatible(axis: str, name: str, target_kind: str) -> bool:
+    """Whether the axis row can read this task's target kind.
+
+    The rule lives in ``search_space`` beside the geometry × shape rule, so the
+    planner and the declared-space command read one implementation.
+    """
+    from computronium.experiment.kernel.search_space import (
+        _is_target_lane_compatible,
+    )
+
+    return _is_target_lane_compatible(axis, name, target_kind)
+
+
 def _refutation(
     axis: str,
     name: str,
@@ -166,6 +179,44 @@ def _refutation(
     return f"{rule} ({count}/{len(completions)} completions)"
 
 
+GEOMETRY_INDEX: Final[int] = AXIS_ORDER.index("geometry")
+
+
+def _declared_names(
+    names: dict[str, list[str]], shape: Any, task_id: str
+) -> tuple[dict[str, tuple[str, ...]], list[list[str]]]:
+    """Per-axis names the task's geometry rule and target kind admit.
+
+    Returns the target-lane refusals (so the refusal report can name the rule
+    per coordinate) and the axes the product is taken over.
+    """
+    from computronium.experiment.kernel.search_space import (
+        _is_geometry_task_compatible,
+    )
+
+    target_refused = {
+        axis: tuple(
+            name
+            for name in names[axis]
+            if not _target_compatible(axis, name, shape.target_kind)
+        )
+        for axis in AXIS_ORDER
+    }
+    axes = [
+        (
+            [
+                geometry
+                for geometry in names["geometry"]
+                if _is_geometry_task_compatible(geometry, shape, task_id)
+            ]
+            if axis == "geometry"
+            else [name for name in names[axis] if name not in target_refused[axis]]
+        )
+        for axis in AXIS_ORDER
+    ]
+    return target_refused, axes
+
+
 def declared_space(
     task_id: str,
     *,
@@ -189,8 +240,8 @@ def declared_space(
         task_shape,
     )
     from computronium.experiment.kernel.search_space import (
+        TARGET_LANE_RULE,
         _compiled_void_constraints,
-        _is_geometry_task_compatible,
         _void_pass,
     )
 
@@ -203,14 +254,7 @@ def declared_space(
         # and the domain branch selects graph geometry.
         shape = TaskShape(input_shape=(), output_dim=0)
 
-    geometry_values = [
-        geometry
-        for geometry in names["geometry"]
-        if _is_geometry_task_compatible(geometry, shape, task_id)
-    ]
-    axes = [
-        geometry_values if axis == "geometry" else names[axis] for axis in AXIS_ORDER
-    ]
+    target_refused, axes = _declared_names(names, shape, task_id)
 
     start = time.perf_counter()
     indep, dep = _compiled_void_constraints()
@@ -228,11 +272,12 @@ def declared_space(
         if key in reached:
             continue
         axis, name = key.split("=", 1)
-        reason = (
-            SHAPE_RULE
-            if name not in geometry_values and axis == "geometry"
-            else _refutation(axis, name, task_id, axes, indep, dep)
-        )
+        if name in target_refused[axis]:
+            reason = TARGET_LANE_RULE
+        elif name not in axes[GEOMETRY_INDEX] and axis == "geometry":
+            reason = SHAPE_RULE
+        else:
+            reason = _refutation(axis, name, task_id, axes, indep, dep)
         refused.append((key, reason))
 
     return DeclaredSpace(

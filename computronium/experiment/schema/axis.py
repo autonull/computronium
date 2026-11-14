@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from computronium.experiment.legality.dsl import Expr
@@ -108,6 +108,12 @@ class AxisSpec:
     prior: str | None = None  # PriorSpec for this primitive
     override_scope: str = "coordinate"  # "coordinate" | "run" | "global"
     accepted_params: frozenset[str] = frozenset()  # Harvested from the factory once
+    # The task target this primitive can read. "any" accepts class indices and
+    # continuous values; "class_index" is a class readout by construction (a
+    # one-hot channel, a centred one-hot residual, an argmax agreement rule),
+    # so the declared space refuses it on a continuous-target task instead of
+    # letting the composed cell raise. One declaration, on the row.
+    target_kind: Literal["any", "class_index"] = "any"
     topology_params: tuple[
         HyperparameterSpec, ...
     ] = ()  # Structural params (not searched)

@@ -361,6 +361,7 @@ def test_sum_pooling_readout_matches_add_pool() -> None:
 
     from computronium.ontology.geometry import GraphGeometry
 
+    torch.manual_seed(0)
     data: Any = Batch.from_data_list([
         Data(
             x=torch.randn(nodes, INPUT_DIM),

@@ -56,7 +56,7 @@ def test_run_naming_no_task_fails() -> None:
 
 def test_unknown_objective_is_named() -> None:
     with pytest.raises(ValidationError, match="unknown objective"):
-        _spec(objectives=("accuracy",))
+        _spec(objectives=("not_an_objective",))
 
 
 def test_unknown_stage_is_named() -> None:

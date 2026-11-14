@@ -352,7 +352,7 @@ def _eqprop_settle_chunk(
     target: Tensor | None,
     n_steps: int,
     residual: bool = False,
-) -> list[Tensor]:
+) -> tuple[list[Tensor], Tensor]:
     """Functional replica of the kernel relaxation loop for a fixed chunk of steps.
 
     Mirrors ``SubstrateSettleKernel.step`` exactly for the common case —
@@ -360,8 +360,15 @@ def _eqprop_settle_chunk(
     (``op(x, w) == x @ w.T + b``) — including the per-step output nudge
     and the residual skip (``residual``). Compiled whole (one graph per
     chunk) by ``_compiled_eqprop_settle_chunk``.
+
+    Returns the final activations **and** the output layer before the
+    chunk's last step: the chunked caller's convergence check is the
+    eager loop's one-step delta, and a chunk-boundary delta would make
+    ``convergence_threshold`` mean ``chunk_size`` times as much.
     """
+    previous_output = acts[-1]
     for _ in range(n_steps):
+        previous_output = acts[-1]
         new_acts: list[Tensor] = [acts[0]]
         num_hidden = len(acts) - 2
         for i in range(num_hidden):
@@ -382,7 +389,7 @@ def _eqprop_settle_chunk(
             out = out + beta * (_one_hot(target, out) - out)
         new_acts.append(out)
         acts = new_acts
-    return acts
+    return acts, previous_output
 
 
 _compiled_eqprop_settle_chunk = torch.compile(_eqprop_settle_chunk, dynamic=False)
@@ -408,12 +415,16 @@ def _eqprop_settle_chunk_analog(  # ruff: ignore[too-many-arguments, too-many-po
     noise_level: float,
     weight_bounds: tuple[float, float] | None,
     residual: bool = False,
-) -> list[Tensor]:
+) -> tuple[list[Tensor], Tensor]:
     """Compiled settle chunk for AnalogSubstrate.
 
     Inlines the analog forward operator: noise injection + weight clamping + matmul.
+    Returns the final activations and the output before the last step (the
+    convergence check's one-step delta).
     """
+    previous_output = acts[-1]
     for _ in range(n_steps):
+        previous_output = acts[-1]
         new_acts: list[Tensor] = [acts[0]]
         num_hidden = len(acts) - 2
         for i in range(num_hidden):
@@ -450,7 +461,7 @@ def _eqprop_settle_chunk_analog(  # ruff: ignore[too-many-arguments, too-many-po
             out = out + beta * (_one_hot(target, out) - out)
         new_acts.append(out)
         acts = new_acts
-    return acts
+    return acts, previous_output
 
 
 _compiled_eqprop_settle_chunk_analog = torch.compile(
@@ -469,12 +480,16 @@ def _eqprop_settle_chunk_simple_noise(  # ruff: ignore[too-many-arguments, too-m
     n_steps: int,
     noise_level: float,
     residual: bool = False,
-) -> list[Tensor]:
+) -> tuple[list[Tensor], Tensor]:
     """Compiled settle chunk for substrates with simple noise injection only.
 
     Covers: NeuromorphicSubstrate, OpticalSubstrate, SparseSubstrate (no weight clamping).
+    Returns the final activations and the output before the last step (the
+    convergence check's one-step delta).
     """
+    previous_output = acts[-1]
     for _ in range(n_steps):
+        previous_output = acts[-1]
         new_acts: list[Tensor] = [acts[0]]
         num_hidden = len(acts) - 2
         for i in range(num_hidden):
@@ -501,7 +516,7 @@ def _eqprop_settle_chunk_simple_noise(  # ruff: ignore[too-many-arguments, too-m
             out = out + beta * (_one_hot(target, out) - out)
         new_acts.append(out)
         acts = new_acts
-    return acts
+    return acts, previous_output
 
 
 _compiled_eqprop_settle_chunk_simple_noise = torch.compile(

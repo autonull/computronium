@@ -758,7 +758,10 @@ class StateDynamics(Protocol):
            point, so the energy gap thermodynamic credit reads was noise.
         4. ``on_step(step, energy)`` fires **once per executed step**,
            independent of ``config.track_free_energy_per_iter``. Telemetry
-           that is gated on an opt-in debug flag is not telemetry.
+           that is gated on an opt-in debug flag is not telemetry — and a
+           settle that is handed a callback must not take a path that cannot
+           honour it: every compiled/chunked fast path is selected only when
+           ``on_step is None``.
 
         A whole-graph or compiled fast path that cannot early-stop
         (``_settle_compiled``, PC-ALM's full-horizon sweep) legitimately seeds
@@ -1152,7 +1155,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         # Common setup
         all_acts, kernel, beta, use_checkpointing, use_compiled, compiled_path_type = (
-            self._setup_settle(state, geometry, substrate, target, **kwargs)
+            self._setup_settle(state, geometry, substrate, target, on_step, **kwargs)
         )
         if all_acts is None:
             return state
@@ -1189,6 +1192,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
+        on_step: Callable[[int, float], None] | None,
         **kwargs,
     ) -> tuple[
         list[Tensor] | None,
@@ -1254,13 +1258,17 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         # Determine if compiled path can be used and which type
         # Base requirements: compiled enabled, no momentum, no recurrent weights,
-        # no checkpointing, no free energy tracking
+        # no checkpointing, no free energy tracking, and no per-step telemetry
+        # request (the chunked path cannot report a per-step callback, and a
+        # telemetry request that silently resolves to a different path is the
+        # defect this condition closes).
         base_compiled = (
             self.config.compiled
             and self.config.momentum == 0.0
             and kernel.params.recurrent_weight is None
             and not use_checkpointing
             and not self.config.track_free_energy_per_iter
+            and on_step is None
         )
 
         compiled_path_type = None
@@ -1331,9 +1339,14 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
     ) -> list[Tensor]:
         """Compiled fast path: chunked settle with early stopping.
 
-        Runs the compiled settle loop in chunks of ``compiled_chunk_size`` steps,
-        checking convergence after each chunk on the host. This moves the
-        convergence check off the hot path while preserving early stopping.
+        Each driver iteration advances ``compiled_chunk_size`` steps in one
+        compiled graph; the host convergence check runs at the chunk boundary.
+        The delta it compares is the chunk's **last step**, not the whole
+        chunk — a boundary-to-boundary delta would make
+        ``convergence_threshold`` mean ``chunk_size`` times as much, so the
+        compiled path would settle to a different state than the eager one
+        for one config (measured 2026-11-14: eager converged in 6 steps,
+        chunked ran the whole 400-step horizon).
         """
         from computronium.ontology._settle_kernel import (
             _compiled_eqprop_settle_chunk,
@@ -1343,76 +1356,75 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         self._note_settle_start()
         chunk_size = min(self.config.compiled_chunk_size, self.config.max_steps)
-        steps_executed = 0
-        acts = all_acts
-        previous_output = acts[-1].detach()
+        chunks = math.ceil(self.config.max_steps / chunk_size)
+        iterate = SettleIterate(all_acts)
+        state = {"steps": 0, "previous_output": all_acts[-1].detach()}
 
-        while steps_executed < self.config.max_steps:
-            remaining = self.config.max_steps - steps_executed
-            current_chunk = min(chunk_size, remaining)
+        def _advance(_chunk: int) -> None:
+            steps_executed = state["steps"]
+            current_chunk = min(chunk_size, self.config.max_steps - steps_executed)
+            acts = iterate.value
 
             if compiled_path_type == "analog":
                 substrate = kernel.substrate
-                noise_level = substrate.config.noise_level
-                weight_bounds = substrate.config.weight_bounds
-                acts = list(
-                    _compiled_eqprop_settle_chunk_analog(
-                        acts,
-                        kernel.params.weights,
-                        kernel.params.biases,
-                        kernel.params.activations,
-                        self.config.step_size,
-                        beta,
-                        target,
-                        current_chunk,
-                        noise_level,
-                        weight_bounds,
-                        kernel.params.residual,
-                    )
+                acts, previous_output = _compiled_eqprop_settle_chunk_analog(
+                    acts,
+                    kernel.params.weights,
+                    kernel.params.biases,
+                    kernel.params.activations,
+                    self.config.step_size,
+                    beta,
+                    target,
+                    current_chunk,
+                    substrate.config.noise_level,
+                    substrate.config.weight_bounds,
+                    kernel.params.residual,
                 )
             elif compiled_path_type == "simple_noise":
                 substrate = kernel.substrate
-                noise_level = substrate.config.noise_level
-                acts = list(
-                    _compiled_eqprop_settle_chunk_simple_noise(
-                        acts,
-                        kernel.params.weights,
-                        kernel.params.biases,
-                        kernel.params.activations,
-                        self.config.step_size,
-                        beta,
-                        target,
-                        current_chunk,
-                        noise_level,
-                        kernel.params.residual,
-                    )
+                acts, previous_output = _compiled_eqprop_settle_chunk_simple_noise(
+                    acts,
+                    kernel.params.weights,
+                    kernel.params.biases,
+                    kernel.params.activations,
+                    self.config.step_size,
+                    beta,
+                    target,
+                    current_chunk,
+                    substrate.config.noise_level,
+                    kernel.params.residual,
                 )
             else:  # "digital"
-                acts = list(
-                    _compiled_eqprop_settle_chunk(
-                        acts,
-                        kernel.params.weights,
-                        kernel.params.biases,
-                        kernel.params.activations,
-                        self.config.step_size,
-                        beta,
-                        target,
-                        current_chunk,
-                        kernel.params.residual,
-                    )
+                acts, previous_output = _compiled_eqprop_settle_chunk(
+                    acts,
+                    kernel.params.weights,
+                    kernel.params.biases,
+                    kernel.params.activations,
+                    self.config.step_size,
+                    beta,
+                    target,
+                    current_chunk,
+                    kernel.params.residual,
                 )
-            steps_executed += current_chunk
+            iterate.value = list(acts)
+            state["previous_output"] = previous_output.detach()
+            state["steps"] = steps_executed + current_chunk
 
-            # Convergence check on host (off hot path)
-            if steps_executed >= self.config.convergence_start:
-                delta = torch.dist(acts[-1], previous_output, p=float("inf")).item()
-                if delta < self.config.convergence_threshold:
-                    self._mark_converged(steps_executed - 1)
-                    break
-            previous_output = acts[-1].detach()
+        def _observe(_chunk: int) -> bool:
+            steps_executed = state["steps"]
+            if steps_executed < self.config.convergence_start:
+                return False
+            delta = torch.dist(
+                iterate.value[-1], state["previous_output"], p=float("inf")
+            ).item()
+            if delta < self.config.convergence_threshold:
+                self._mark_converged(steps_executed - 1)
+                return True
+            return False
 
-        self._settle_steps_used = steps_executed
-        return acts
+        run_settle_loop(_advance, max_steps=chunks, after_step=_observe)
+        self._settle_steps_used = state["steps"]
+        return iterate.value
 
     def _settle_checkpointed(
         self,
@@ -1832,6 +1844,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             self.config.compiled
             and layered.recurrent_weight is None
             and not self.config.track_free_energy_per_iter
+            and on_step is None
         )
 
         if use_compiled:
@@ -2354,7 +2367,7 @@ class PCALMDynamics(_SettleTelemetry):
             raise ValueError("State must contain input 'x'")
 
         # Common setup
-        setup = self._setup_pcalm_settle(state, geometry, substrate, target)
+        setup = self._setup_pcalm_settle(state, geometry, substrate, target, on_step)
         if setup is None:
             return state
         acts, dual_vars, layered, op, current_rho, use_compiled = setup
@@ -2378,6 +2391,7 @@ class PCALMDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
+        on_step: Callable[[int, float], None] | None,
     ) -> (
         tuple[
             list[Tensor],
@@ -2441,6 +2455,7 @@ class PCALMDynamics(_SettleTelemetry):
             and not layered.residual
             and not self.config.track_free_energy_per_iter
             and not self.config.gradient_checkpointing
+            and on_step is None
             and type(substrate).__name__ == "DigitalSubstrate"
             and len(acts) == len(layered.weights) + 1
         )
@@ -2987,6 +3002,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         use_compiled = (
             self.config.compiled
             and nudge_beta is None
+            and on_step is None
             and type(substrate).__name__ == "DigitalSubstrate"
             and all(b is not None for _, b in layer_params)
         )

@@ -170,8 +170,16 @@ def _void_pass(
     return _void_rejection(indep, dep, values, task) is None
 
 
-def _void_cache_key(coordinate: Coordinate) -> tuple[str, ...]:
-    """Create a cache key for a coordinate based on structural axes only."""
+def _void_cache_key(coordinate: Coordinate, task: str) -> tuple[str, ...]:
+    """The structural selection plus the task it was refused for.
+
+    The task belongs in the key because two of the reductions are
+    task-conditional: a task-reading void constraint, the geometry × shape
+    rule, and the target-lane rule. A key without it would cache
+    ``causal_transformer`` as void for every task after refusing it on one
+    (measured 2026-11-14 while adding the target lane: the class-only rows are
+    refused on `diabetes` and must stay selectable on `iris`).
+    """
     return (
         coordinate.substrate,
         coordinate.geometry,
@@ -179,6 +187,7 @@ def _void_cache_key(coordinate: Coordinate) -> tuple[str, ...]:
         coordinate.plasticity,
         coordinate.credit,
         coordinate.update,
+        task,
     )
 
 
@@ -235,6 +244,35 @@ def _task_domain(task_id: str | None) -> str | None:
     return None if task_spec is None else task_spec.domain.value
 
 
+TARGET_LANE_RULE: Final = "class-index primitive on a continuous-target task"
+
+
+def _is_target_lane_compatible(axis: str, name: str, target_kind: str) -> bool:
+    """Whether an axis row can read the task's target kind.
+
+    An ``AxisSpec`` declares ``target_kind``; a ``class_index`` row's mechanism
+    is written over one-hot targets, so a continuous-target task is refused
+    here rather than discovered as a runtime error inside the law (measured
+    2026-11-14: nine regression cells across three such rows — TODO91 §8).
+    """
+    if target_kind == "class_index":
+        return True
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+
+    return AXES_REGISTRIES[StructuralAxis[axis.upper()]][name].target_kind == "any"
+
+
+def _target_lane_rule(coordinate: Coordinate, target_kind: str) -> str | None:
+    """The target-lane rule a six-axis coordinate violates, else ``None``."""
+    from computronium.experiment.schema.axis import StructuralAxis
+
+    for axis in StructuralAxis:
+        name = getattr(coordinate, axis.value)
+        if not _is_target_lane_compatible(axis.value, name, target_kind):
+            return f"{TARGET_LANE_RULE}: {axis.value}={name}"
+    return None
+
+
 def _structural_rejection(
     coordinate: Coordinate,
     task: str,
@@ -252,7 +290,7 @@ def _structural_rejection(
     were deleted in TODO91 S6, because they disagreed with the registry and
     silently dropped cells the registry admitted.
     """
-    cache_hit = void_cache is not None and void_cache.is_known_void(coordinate)
+    cache_hit = void_cache is not None and void_cache.is_known_void(coordinate, task)
     reason = "void cache" if cache_hit else None
     if reason is None:
         values = (
@@ -267,7 +305,7 @@ def _structural_rejection(
     if reason is None:
         return None
     if void_cache is not None:
-        void_cache.record_void(coordinate)
+        void_cache.record_void(coordinate, task)
     if rejections is not None:
         rejections[reason] += 1
     return reason
@@ -276,13 +314,18 @@ def _structural_rejection(
 class VoidCache:
     """Persists void combinations across experiment runs.
 
-    A void combination is a 6-axis coordinate that is known to be invalid
-    (e.g., fails void constraints). By caching these, we avoid re-evaluating
+    A void entry is one six-axis selection *for one task* that is known to be
+    invalid (a declared void constraint, the geometry × shape rule, or the
+    target-lane rule). The task is part of the key: two of those rules are
+    task-conditional, so a task-free key would drop a legal cell from every
+    other task after one refusal. By caching these, we avoid re-evaluating
     them in future runs.
 
-    The cache is persisted to a JSON file for durability across processes.
-    When no db_path is provided, the cache is in-memory only and not shared
-    between instances (suitable for testing).
+    The cache is persisted to a JSON file for durability across processes;
+    entries written before the task was part of the key no longer match and are
+    ignored (the safe direction — the cache refills). When no db_path is
+    provided, the cache is in-memory only and not shared between instances
+    (suitable for testing).
     """
 
     def __init__(self, db_path: str | None = None) -> None:
@@ -318,13 +361,13 @@ class VoidCache:
         data = {"void_combos": [list(k) for k in self._void_combos]}
         path.write_text(json.dumps(data), encoding="utf-8")
 
-    def is_known_void(self, coord: Coordinate) -> bool:
-        """Check if a coordinate is a known void combination."""
-        return _void_cache_key(coord) in self._void_combos
+    def is_known_void(self, coord: Coordinate, task: str) -> bool:
+        """Check if a coordinate is a known void combination for this task."""
+        return _void_cache_key(coord, task) in self._void_combos
 
-    def record_void(self, coord: Coordinate) -> None:
-        """Record a void combination."""
-        self._void_combos.add(_void_cache_key(coord))
+    def record_void(self, coord: Coordinate, task: str) -> None:
+        """Record a void combination for one task."""
+        self._void_combos.add(_void_cache_key(coord, task))
         self._save()
 
     def get_void_count(self) -> int:
@@ -1072,9 +1115,16 @@ def iter_candidates(  # ruff: ignore[complex-structure]
                 coordinate.geometry, task_shape, schedule.task_id
             ):
                 if use_void_cache and void_cache:
-                    void_cache.record_void(coordinate)
+                    void_cache.record_void(coordinate, schedule.task_id)
                 if rejections is not None:
                     rejections["geometry x task"] += 1
+                continue
+            lane = _target_lane_rule(coordinate, task_shape.target_kind)
+            if lane is not None:
+                if use_void_cache and void_cache:
+                    void_cache.record_void(coordinate, schedule.task_id)
+                if rejections is not None:
+                    rejections[lane] += 1
                 continue
 
         if check_composable and shape is not None:

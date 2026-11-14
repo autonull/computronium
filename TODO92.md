@@ -1,9 +1,10 @@
 # TODO92 — Breadth and evidence (successor to TODO91)
 
 **Status:** 2026-11-14 · **charter and scoreboard; no tickets yet.**
-**This file opens when TODO91 is closed.** If TODO91 §8 still lists work, do it
-there first — a second queue built on an unfinished one is how the same ticket
-gets attempted twice. The stop condition is written in TODO91 §10.
+**TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
+is the plan of record. The two gaps it handed over are closed: the
+claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
+open gap list is §3, ordered by what unblocks a number.
 
 **Mission:** grow the *measured* capability of the library, not its paper
 surface. TODO91 closed the selection surface (every declared coordinate
@@ -75,17 +76,19 @@ that has only a record behind it. Cost: five cells, one session at most.
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-1. **Regression lane** (TODO91 §8, next-ticket subsection). Measured: 9/18
-   cells fail on `diabetes`/`lorenz_state`; 7 class-readout one-hot failures,
-   2 label-channel failures. Blocks 2 tasks across ~5 credits/plasticities.
+1. ~~**Regression lane**~~ — **closed 2026-11-14 (TODO91 S9).** 3 laws
+   generalized (`pepita`, `target_inversion`, the shared output-target
+   convention), 3 mechanism rows declared class-only and refused on a
+   continuous target; the re-run measured 9/9 PASS. Remaining work is a claim,
+   not a lane: `diabetes` 10 and `lorenz_state` 8 PASS cells, all n=1.
 2. **RL.** −1184 against > −200. This is a capability gap, not a tuning gap:
    check episode budget, reward scaling, and whether the control task's
    geometry/credit pairing is legal before treating it as an algorithm result.
 3. **`neuromorphic × graph`** — no cell, no rule. Either a graph-operator path
    for the substrate or a declared refusal with a measured reason.
-4. **Claim-blockers** (TODO91 §8, claim-blocking group): settle telemetry, RNG
-   seeding, objective validation, settle-driver loop. Needed before any new
-   claim is credible.
+4. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
+   RNG seeding, objective validation and the settle-driver loop are green
+   (227 passed). No claim made here rests on a known-red lock.
 
 ---
 
@@ -94,6 +97,7 @@ that has only a record behind it. Cost: five cells, one session at most.
 | Date | Domain | Best | n | Ruler | Status | Ticket |
 |---|---|---|---|---|---|---|
 | 2026-11-14 | regression | — | 1 | MSE, target-variance units | not claim-eligible | §3.1 |
+| 2026-11-14 | regression | lane closed: 3 laws + 3 refusals | 1 | same | cells exist (10 + 8 PASS), claim needs n≥3 | §3.1 (closed) |
 
 One row per domain per measurement; a row is superseded, never edited.
 
@@ -114,14 +118,18 @@ One row per domain per measurement; a row is superseded, never edited.
 - **Claims need n≥3 and a preregistration** when the result sits within 1σ of
   its threshold (`configs/preregistrations/`).
 - **A surface defect found here is fixed here only if it blocks the number**;
-  otherwise it files into TODO91 §8 while that file is open.
+  otherwise it files into §3 with a measured reason (TODO91 is closed and takes
+  no new rows).
 
 ---
 
 ## 6. Handoff contract
 
-- TODO91 §10 defines when that plan is closed. Until then, its §8 work takes
-  precedence: this file must not open tickets that TODO91 already owns.
-- When TODO91 closes, this file becomes the plan of record; the first ticket is
-  §3.1 (regression lane) if still open.
-- If this file is read while TODO91 §8 is non-empty, stop: work belongs there.
+- TODO91 is closed (2026-11-14): its stop condition holds, its §8
+  claim-blocking group is green and its regression lane is closed. This file is
+  the plan of record.
+- The first ticket is §3.0 (baseline re-verification), which is the one claim
+  the §2 table still rests on a record rather than a run.
+- A surface defect found here is fixed here only if it blocks the number;
+  otherwise it files into this plan's §3 with a measured reason. TODO91 takes
+  no new work.

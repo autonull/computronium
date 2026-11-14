@@ -145,6 +145,11 @@
 6. **Validation** — if `SystemConfig.validate()` needs a new compatibility
    branch, whitelist the new `dynamics_type` consistently in *all* credit/
    substrate branches (see R5.2 retro: the PC family divergence).
+6b. **Target kind** — if the new law reads the target, declare
+   `AxisSpec.target_kind` on its axis row. A law written over one-hot targets
+   (a label channel, a centred one-hot residual, argmax agreement) must say
+   `"class_index"`, so the declared space refuses it on a continuous-target
+   task instead of raising inside the cell (TODO91 S9).
 7. **Demo (if shipping one)** — demo test follows the static `_ARMS` table
    pattern (module scope, `_train_arm`/`_probe_arm` extracted, walltime
    printed never recorded), one `DEMOS` registry row in

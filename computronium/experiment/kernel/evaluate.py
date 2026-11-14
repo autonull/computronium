@@ -16,12 +16,13 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import torch
 
 from computronium.core.label_channel import probe_input
 from computronium.core.logging import get_logger
+from computronium.core.losses import LOSS_INVENTORY
 from computronium.core.system_trainer import (
     DistributedSystemTrainer,
     SystemTrainer,
@@ -210,6 +211,11 @@ class TaskShape:
 
     input_shape: tuple[int, ...]
     output_dim: int
+    # The loss inventory row the task names (``core/losses.py``): a class
+    # index or a continuous value. The declared space refuses a class-only
+    # primitive on a continuous target; the planner must not have to try the
+    # cell to learn that (measured 2026-11-14, TODO91 §8 regression lane).
+    target_kind: Literal["class_index", "continuous"] = "class_index"
 
     @property
     def input_dim(self) -> int:
@@ -227,7 +233,11 @@ def _task_shape(task: Any) -> TaskShape:
         if isinstance(declared, tuple | list)
         else (int(declared),)
     )
-    return TaskShape(input_shape=shape, output_dim=int(task.output_dim))
+    return TaskShape(
+        input_shape=shape,
+        output_dim=int(task.output_dim),
+        target_kind=LOSS_INVENTORY[task.loss_kind].target,
+    )
 
 
 def task_shape(task_id: str, device: str = "auto") -> TaskShape:
