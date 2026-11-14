@@ -105,6 +105,21 @@ re-run from new coverage.
 Acceptance: five domains classified, §2 carries the verdict, and no row remains
 that has only a record behind it. Cost: five cells, one session at most.
 
+**Step 1 located (2026-11-14, corpus query; re-execution still pending).**
+
+| Domain | Located record | n | Ruler | Note |
+|---|---|---|---|---|
+| Vision | `digital/feedforward` L2, 20 ep, gradient/euclidean | 5 seeds | normalized 0.9769 | replay `faa5ba21`; the only row that already holds its ruler |
+| Graph | `digital/graph` L1, 100 ep, hidden 128×4, step 0.003 | 5 seeds | per-seed 0.6637/0.713/0.713/0.6906/0.7040 → **mean 0.6969, SD 0.0207** | §2's "0.7040 ± 0.0071" is the best seed and a spread no statistic yields; replay `fb294b79`. **Candidate demotion**: mean is below 0.70 |
+| Node | `digital/graph` L1, 100 ep, step 0.01 | 3 seeds | 0.782/0.752/0.764 → mean 0.7660, SD 0.0123 | reproduces §2's mean; replay `f46f549f` |
+| Tabular | **not located**: no 3-measurement group at 0.94–0.97 | — | nearest: 0.9444 (L0 n=1, no replay) and 0.9722 (L2 n_seeds=5, hidden 256, replay `6adb7d0b`) | re-measure at the L2 config with 3 seeds |
+| RL | best recorded `mean_reward` **−1219.45** | 1 | L0, 3 ep, `homeostatic` (`error_blind=True`) | `−1184` has no PASS record; an error-blind credit measures chance by contract, so the row is **not replayable** and the gap stays a capability ticket (§3.2) |
+
+Re-execution order (cheapest first): wine n=3 L2 → PROTEINS n=5 L1 → Cora n=3 L1
+→ MNIST n=5 L2 → pendulum only after an **error-aware** credit is paired with a
+reward task. Each prints its walltime; a row is corrected only by its re-run,
+never by this table.
+
 ## 3. Gap list (ordered by what unblocks a number)
 
 1. ~~**Regression lane**~~ — **closed 2026-11-14 (TODO91 S9).** 3 laws
@@ -116,6 +131,10 @@ that has only a record behind it. Cost: five cells, one session at most.
 2. **RL.** −1184 against > −200. This is a capability gap, not a tuning gap:
    check episode budget, reward scaling, and whether the control task's
    geometry/credit pairing is legal before treating it as an algorithm result.
+   §3.0 step 1 sharpened it: −1184 has no PASS record (best recorded mean_reward
+   −1219.45), and that cell's credit is `homeostatic`, which is error-blind and
+   measures chance by contract. No RL claim exists until an error-aware credit
+   (e.g. `target_inversion`, `pc_alm`) runs the task.
 3. **`neuromorphic × graph`** — no cell, no rule. Either a graph-operator path
    for the substrate or a declared refusal with a measured reason.
 4. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
