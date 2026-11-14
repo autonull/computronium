@@ -17,10 +17,9 @@ computronium/primitives/<axis>/<name>/ with:
 - kernel.py
 - cases.py
 
-And corresponding test files under tests/primitives/<axis>/<name>/:
-- test_reference.py
-- test_kernel_parity.py
-- test_cases.py
+Registering the spec is the test: the per-axis contract and the generated
+invariant module cover every primitive the registry holds, so this scaffolder
+writes no test files.
 """
 
 import argparse
@@ -130,7 +129,6 @@ def _get_file_pairs(
     args: argparse.Namespace, env: Environment
 ) -> list[tuple[Path, Template]]:
     primitive_dir = Path(f"computronium/primitives/{args.axis}/{args.name}")
-    test_dir = Path(f"tests/primitives/{args.axis}/{args.name}")
 
     return [
         (primitive_dir / "__init__.py", env.get_template("init.py.j2")),
@@ -138,12 +136,6 @@ def _get_file_pairs(
         (primitive_dir / "reference.py", env.get_template("reference.py.j2")),
         (primitive_dir / "kernel.py", env.get_template("kernel.py.j2")),
         (primitive_dir / "cases.py", env.get_template("cases.py.j2")),
-        (test_dir / "test_reference.py", env.get_template("test_reference.py.j2")),
-        (
-            test_dir / "test_kernel_parity.py",
-            env.get_template("test_kernel_parity.py.j2"),
-        ),
-        (test_dir / "test_cases.py", env.get_template("test_cases.py.j2")),
     ]
 
 
@@ -205,13 +197,12 @@ def _write_files(
 
 def _print_success(args: argparse.Namespace) -> None:
     primitive_dir = Path(f"computronium/primitives/{args.axis}/{args.name}")
-    test_dir = Path(f"tests/primitives/{args.axis}/{args.name}")
     print(f"\nPrimitive '{args.name}' scaffolded successfully!")
     print(f"  Primitive: {primitive_dir}")
-    print(f"  Tests:     {test_dir}")
     print("\nNext steps:")
     print("  1. Review and customize the generated files")
-    print(f"  2. Run tests: uv run pytest {test_dir} -q")
+    print("  2. Run the axis contract:")
+    print("     uv run python -m pytest tests/primitives -q")
     print("  3. Update ontology imports if needed")
 
 

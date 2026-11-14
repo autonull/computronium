@@ -232,26 +232,27 @@ def test_a_batched_rung_answers_for_every_sample_in_the_batch(
 # same `cases.make_case()` that parity tests use, ensuring proper structure.
 
 
-# References that don't address batch axis by design:
-# - parameter_update.*: operate on batch-averaged gradients, not batched data
-# - plasticity.null: no-op by design
-# - plasticity.substrate_coupled: no-op at plasticity level (ψ ≡ σ)
-BATCH_AXIS_SKIP: set[str] = {
-    "computronium.primitives.parameter_update.adam.reference",
-    "computronium.primitives.parameter_update.elastic_consolidation.reference",
-    "computronium.primitives.parameter_update.euclidean.reference",
-    "computronium.primitives.parameter_update.lion.reference",
-    "computronium.primitives.parameter_update.local_adam.reference",
-    "computronium.primitives.parameter_update.mean_norm.reference",
-    "computronium.primitives.parameter_update.muon.reference",
-    "computronium.primitives.parameter_update.natural_gradient.reference",
-    "computronium.primitives.parameter_update.ortho_adam.reference",
-    "computronium.primitives.parameter_update.riemannian_orthogonal.reference",
-    "computronium.primitives.parameter_update.role_split.reference",
-    "computronium.primitives.parameter_update.spectral_constrained.reference",
-    "computronium.primitives.plasticity.null.reference",
-    "computronium.primitives.plasticity.substrate_coupled.reference",
-}
+# References that don't address batch axis by design. A parameter update
+# consumes batch-averaged gradients, so the whole update axis is batch-free by
+# contract — the rows are derived from the registry, not listed. The two
+# plasticities that return their input state unchanged are declared here beside
+# the mechanism that makes them no-ops.
+def _batch_free_reference_modules() -> set[str]:
+    from computronium.acceleration.registry import all_specs
+
+    modules = {
+        spec.reference_entrypoint.rpartition(".")[0]
+        for spec in all_specs()
+        if spec.kind == "primitive" and spec.axis == "parameter_update"
+    }
+    modules |= {
+        "computronium.primitives.plasticity.null.reference",
+        "computronium.primitives.plasticity.substrate_coupled.reference",
+    }
+    return modules
+
+
+BATCH_AXIS_SKIP: set[str] = _batch_free_reference_modules()
 
 
 def _reference_batch_runs() -> list[tuple[str, Callable[..., Any], Any]]:

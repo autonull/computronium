@@ -48,9 +48,6 @@ def test_primitive_scaffolder_dry_run() -> None:
         "computronium/primitives/state_dynamics/test_dynamics/reference.py",
         "computronium/primitives/state_dynamics/test_dynamics/kernel.py",
         "computronium/primitives/state_dynamics/test_dynamics/cases.py",
-        "tests/primitives/state_dynamics/test_dynamics/test_reference.py",
-        "tests/primitives/state_dynamics/test_dynamics/test_kernel_parity.py",
-        "tests/primitives/state_dynamics/test_dynamics/test_cases.py",
     ]
     for f in expected_files:
         assert f in output, f"Expected file {f} not in dry-run output"
@@ -114,9 +111,6 @@ def test_scaffolder_templates_exist() -> None:
         "primitive/reference.py.j2",
         "primitive/kernel.py.j2",
         "primitive/cases.py.j2",
-        "primitive/test_reference.py.j2",
-        "primitive/test_kernel_parity.py.j2",
-        "primitive/test_cases.py.j2",
     ]
     algorithm_templates = [
         "algorithm/init.py.j2",
