@@ -1,7 +1,7 @@
 # TODO92 — Breadth and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a closed (the corpus ruler); §3.0 next (baseline
-re-verification).
+**Status:** 2026-11-14 · §3.0a and §3.0 closed (ruler + baseline re-verified);
+next §3.2 (graph marginal), §3.3 (RL), §3.4 (`neuromorphic × graph`).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -55,17 +55,25 @@ distinct measurements` over 441 readable stores. Pair breadth: **92/98** hold a
 measurement, 25 are refused by a named rule (19 of those hold 257 measurements
 that cannot count as substrate breadth), 1 hole: `neuromorphic × graph`.
 
-| Domain | Best measured | Ruler | Target | Verdict |
+| Domain | Best measured (re-executed 2026-11-14) | Ruler | Target | Verdict |
 |---|---|---|---|---|
-| Vision | MNIST **0.97** | held-out accuracy (TODO90 C2) | > 0.95 | met |
-| Graph classification | PROTEINS **0.7040 ± 0.0071** | n=5, 223 held out; majority 0.596 | > 0.70 | **marginal** (within 1σ) |
-| Node classification | Cora **0.766** | n=3, public split | > 0.75 | met |
-| Tabular | wine **0.94–0.97** | n=3, stratified split | > 0.90 | met |
-| RL | pendulum **−1184** | 400 episodes, mean reward | > −200 | **not met** |
+| Vision | MNIST **0.9787 ± 0.0009** (SD) | val_acc, 10k held out; chance 0.10 | > 0.95 | met |
+| Graph classification | PROTEINS **0.7013 ± 0.0164** (SD) | n=5, 223 held out; majority 0.596 | > 0.70 | **marginal** (0.08σ) |
+| Node classification | Cora **0.7660 ± 0.0151** (SD) | n=3, 500-node public split; majority 0.316 | > 0.75 | met (1.06σ) |
+| Tabular | wine **1.0000** (record 0.9722) | n=3, 36 held out (resolution 0.0278); majority 0.389 | > 0.90 | met |
+| RL | pendulum **−1219** (record; no replay) | 1 record, L0 3 ep, mean reward; its credit is error-blind | > −200 | **not met** → §3.3 |
 
-Provenance for every row is TODO85–90's session log; this plan does not
-re-measure what is already claim-grade. The three weakest points are the
-graph-classification marginal, RL, and the regression lane.
+Provenance for the pre-re-run rows was TODO85–90's session log. Every row now
+carries a re-execution: `scripts/probes/t92_baseline_replay.py` rebuilds each
+located record's coordinate and schedule and trains it again through the same
+evaluator; the recomputed `measurement_key` matches the record's (Cora on all
+three seeds), so a number that moves is the system moving, not a different cell.
+The re-run holds each verdict: node reproduces seed-for-seed (0.782/0.752/0.764)
+and vision within 1e-4, while graph's point estimate moves (record mean 0.6969 →
+0.7013) and stays 0.08σ above its bar. Wine's record does not reproduce
+(0.9722 → 1.0000 at the same key and seed), so its row is the re-run. RL has no
+replayable record at all. The two weak points are the graph-classification
+marginal and RL; the regression lane is closed (§3.1).
 
 ---
 
@@ -83,42 +91,32 @@ PASS records = 3,431 distinct measurements**, 28 tasks, 92/98 pairs measured,
 25 refused (19 holding 257 measurements that cannot count), 1 hole:
 `neuromorphic × graph`. §2's numbers reproduce.
 
-### 3.0 Next ticket (pre-registered with this plan): re-verify the baseline
+### 3.0 ~~Second ticket: re-verify the baseline~~ — **closed 2026-11-14**
 
-§3.0a is closed: locate each best cell by measurement identity, not by a
-record count.
+**Delivered.** `scripts/probes/t92_baseline_replay.py` rebuilds each located
+record's coordinate and schedule from the record and trains it again through
+`kernel.evaluate_cell`. The anchor seed recomputes the record's
+`measurement_key` (Cora matches on all three seeds), so a replay that moves is
+the system moving, not a different cell. Twelve cells, 18 min walltime (MNIST
+3 × 278 s on its recorded cpu device; the GPU cells are ≤ 40 s).
 
-The §2 numbers are quoted from the TODO85–90 records. A baseline nobody has
-re-executed is a claim about a record, not about the system — and this project's
-own history (G8, G11, G20) is a list of measurements that were wrong for harness
-reasons. So reproduction precedes new breadth, now that the ruler separates a
-re-run from new coverage.
-
-1. Locate each domain's best recorded cell in the corpus by its `replay_hash`.
-2. Re-execute one cell per domain at that recorded config (n=3 where the claim
-   needs seeds; PROTEINS at n=5 because it is marginal).
-3. Classify each row **reproduced / not reproduced / not replayable** and
-   correct §2 in place.
-4. Demote any row that does not reproduce: it leaves the baseline and becomes a
-   ticket in §3, not a number.
-
-Acceptance: five domains classified, §2 carries the verdict, and no row remains
-that has only a record behind it. Cost: five cells, one session at most.
-
-**Step 1 located (2026-11-14, corpus query; re-execution still pending).**
-
-| Domain | Located record | n | Ruler | Note |
+| Domain | Re-run | n | Ruler | Verdict |
 |---|---|---|---|---|
-| Vision | `digital/feedforward` L2, 20 ep, gradient/euclidean | 5 seeds | normalized 0.9769 | replay `faa5ba21`; the only row that already holds its ruler |
-| Graph | `digital/graph` L1, 100 ep, hidden 128×4, step 0.003 | 5 seeds | per-seed 0.6637/0.713/0.713/0.6906/0.7040 → **mean 0.6969, SD 0.0207** | §2's "0.7040 ± 0.0071" is the best seed and a spread no statistic yields; replay `fb294b79`. **Candidate demotion**: mean is below 0.70 |
-| Node | `digital/graph` L1, 100 ep, step 0.01 | 3 seeds | 0.782/0.752/0.764 → mean 0.7660, SD 0.0123 | reproduces §2's mean; replay `f46f549f` |
-| Tabular | **not located**: no 3-measurement group at 0.94–0.97 | — | nearest: 0.9444 (L0 n=1, no replay) and 0.9722 (L2 n_seeds=5, hidden 256, replay `6adb7d0b`) | re-measure at the L2 config with 3 seeds |
-| RL | best recorded `mean_reward` **−1219.45** | 1 | L0, 3 ep, `homeostatic` (`error_blind=True`) | `−1184` has no PASS record; an error-blind credit measures chance by contract, so the row is **not replayable** and the gap stays a capability ticket (§3.2) |
+| Vision | 0.9787 ± 0.0009 | 3 | val_acc, 10k held out | reproduced (record 0.9792 at seed 46); met |
+| Graph | 0.7013 ± 0.0164 | 5 | 223 held out; majority 0.596 | reproduced as **marginal** (0.08σ) |
+| Node | 0.7660 ± 0.0151 | 3 | 500 public-split nodes; majority 0.316 | reproduced, keys match; met (1.06σ) |
+| Tabular | 1.0000 ± 0.0000 | 3 | 36 held out (resolution 0.0278); majority 0.389 | **not reproduced** (record 0.9722 at the same key/seed) — row is the re-run; met |
+| RL | −1219 (record) | 1 | L0 3 ep, mean reward; credit `homeostatic` (`error_blind`) | **not replayable**; row leaves §2 → §3.3 |
 
-Re-execution order (cheapest first): wine n=3 L2 → PROTEINS n=5 L1 → Cora n=3 L1
-→ MNIST n=5 L2 → pendulum only after an **error-aware** credit is paired with a
-reward task. Each prints its walltime; a row is corrected only by its re-run,
-never by this table.
+What the re-run corrected: §2's graph row quoted the best seed (0.7040) and a
+spread no statistic yields (±0.0071); the confirm run's own 5 seeds mean 0.6969,
+and the re-run means 0.7013 — the marginal verdict survives, the point estimate
+did not. Wine's record is stale: the same cell now measures 1.0000, so the row
+is the re-run, not a reproduced record. Node's 0.766 is the thinnest met row
+(1.06σ above 0.75).
+
+`--only` replays a subset; the probe prints per-seed `measurement_key` and
+walltime, and never records a run into a store.
 
 ## 3. Gap list (ordered by what unblocks a number)
 
@@ -128,16 +126,22 @@ never by this table.
    continuous target; the re-run measured 9/9 PASS. Remaining work is a claim,
    not a lane: `diabetes` 10 and `lorenz_state` 8 PASS records, all n=1 (record
    counts, not yet re-counted as measurements).
-2. **RL.** −1184 against > −200. This is a capability gap, not a tuning gap:
+2. **Graph classification is marginal.** Re-run 0.7013 ± 0.0164 (SD), n=5,
+   223 held out: 0.08σ above the 0.70 bar, so the claim rule says marginal, not
+   met. A pre-registered paired comparison
+   (`configs/preregistrations/<slug>.json`) against the majority baseline, or a
+   named arm (wider/deeper graph stack, another error-aware credit) decides it.
+   Not a seed sweep: n=5 already prices the spread.
+3. **RL.** −1219 against > −200. This is a capability gap, not a tuning gap:
    check episode budget, reward scaling, and whether the control task's
    geometry/credit pairing is legal before treating it as an algorithm result.
-   §3.0 step 1 sharpened it: −1184 has no PASS record (best recorded mean_reward
-   −1219.45), and that cell's credit is `homeostatic`, which is error-blind and
-   measures chance by contract. No RL claim exists until an error-aware credit
-   (e.g. `target_inversion`, `pc_alm`) runs the task.
-3. **`neuromorphic × graph`** — no cell, no rule. Either a graph-operator path
+   The re-run sharpened it: −1184 has no PASS record, and the best recorded cell
+   uses `homeostatic`, which is error-blind and measures chance by contract. No
+   RL claim exists until an error-aware credit (e.g. `target_inversion`,
+   `pc_alm`) runs the task.
+4. **`neuromorphic × graph`** — no cell, no rule. Either a graph-operator path
    for the substrate or a declared refusal with a measured reason.
-4. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
+5. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
    RNG seeding, objective validation and the settle-driver loop are green
    (269 passed in the final gate). No claim made here rests on a known-red
    lock.
@@ -151,6 +155,11 @@ never by this table.
 | 2026-11-14 | regression | — | 1 | MSE, target-variance units | not claim-eligible | §3.1 |
 | 2026-11-14 | regression | lane closed: 3 laws + 3 refusals | 1 | same | cells exist (10 + 8 PASS), claim needs n≥3 | §3.1 (closed) |
 | 2026-11-14 | corpus breadth | 3,431 measurements (7,442 records) | 441 stores | distinct `measurement_key`; 92/98 pairs, 1 hole | instrument prints both; §2 reproduces | §3.0a (closed) |
+| 2026-11-14 | vision | MNIST 0.9787 ± 0.0009 (SD) | 3 | val_acc, 10k held out; chance 0.10 | reproduced; met | §3.0 (closed) |
+| 2026-11-14 | graph classification | PROTEINS 0.7013 ± 0.0164 (SD) | 5 | 223 held out; majority 0.596 | reproduced; **marginal** (0.08σ) | §3.2 |
+| 2026-11-14 | node classification | Cora 0.7660 ± 0.0151 (SD) | 3 | 500 public-split nodes; majority 0.316 | reproduced; met (1.06σ) | §3.0 (closed) |
+| 2026-11-14 | tabular | wine 1.0000 (record 0.9722 did not reproduce) | 3 | 36 held out (resolution 0.0278); majority 0.389 | re-run is the measurement; met | §3.0 (closed) |
+| 2026-11-14 | RL | pendulum −1219 (best record) | 1 | L0 3 ep, mean reward; credit error-blind | not replayable; **not met** | §3.3 |
 
 One row per domain per measurement; a row is superseded, never edited.
 
@@ -182,10 +191,11 @@ One row per domain per measurement; a row is superseded, never edited.
 - TODO91 is closed (2026-11-14): its stop condition holds, its §8
   claim-blocking group is green and its regression lane is closed. This file is
   the plan of record.
-- The next ticket is §3.0 (baseline re-verification) — the one claim the §2
-  table still rests on a record rather than a run. §3.0a (the corpus ruler) is
-  closed: `comp coverage report --corpus` prints records and distinct
-  measurements.
+- §3.0a and §3.0 are closed (2026-11-14): the instrument prints records and
+  distinct measurements, and every §2 row carries a re-execution whose
+  `measurement_key` matches its located record. The next tickets are §3.2
+  (graph marginal: a preregistration or a named arm) and §3.3 (RL: no
+  error-aware credit has run the task).
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
