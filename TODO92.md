@@ -4,8 +4,9 @@
 measurement layer is honest: 3,437 measurements, 93/99 pairs, 0 holes, ~468
 claim-shaped L2/n≥5 keys. The first audit found the complex/adam PEPITA pair is
 on a **declared-refused pair** (`complex_substrate_real_compute`), not a live
-substrate interaction. The plan retracts it and starts a **refusal and liveness
-audit**. §3.7's digital probe is a **cost-adjusted parity, not a win** (details
+substrate interaction. The plan retracts it, parks it with a reversal trigger,
+and starts a **refusal and liveness audit**. §3.7's digital probe is a
+**cost-adjusted parity, not a win** (details
 in §3.7): no non-standard composition yet has a cost-adjusted capability win;
 the plan searches for one. Next: **§3.9, then §3.7, then §3.10.**
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
@@ -24,9 +25,10 @@ capability is a property of the **composition** of mechanisms, not of backprop
 alone. The program has four levels:
 
 1. **Refusal and liveness.** Every declared axis value is either **refused**
-   with a measured reason or **live** — it changes the computation it claims to
-   own at a fixed coordinate and seed. An axis value that is neither refused nor
-   live is an inert defect, not a breadth row.
+   with a measured reason **and a reversal trigger**, or **live** — it changes
+   the computation it claims to own at a fixed coordinate and seed. A refusal
+   is a hypothesis about the current implementation, not a law. An axis value
+   that is neither refused nor live is an inert defect, not a breadth row.
 2. **Interaction.** Only live, non-refused pairs enter an interaction — credit ×
    substrate, dynamics × geometry, plasticity × task, update × geometry. The
    interesting claims are interactions; a main-effect tie on one cell is a
@@ -49,7 +51,15 @@ digital/complex values are bit-identical because the complex operator on real
 weights is the digital matmul — the intended behavior of that row. The plan's
 earlier "substrate interaction" was computed on a refused pair; the error was
 in the analysis, not the factory. Read the refusal matrix before an
-interaction. Only live, non-refused pairs can carry a claim.
+interaction. Only live, non-refused pairs can carry a claim — until a refusal is
+reversed.
+
+The complex refusal is **provisional**: it reverses when the complex operator
+gains a real-valued phase/noise term and the factory dispatches to it, as the
+lock's own comment says. `local_contrastive` is the precedent: declared
+unavailable, then N7 wired the label channel and the row returned
+(`test_incompatible_cell_refusal_lock.py`). The plan **parks** the complex pair
+with that trigger; it does not delete the question, and a reversal is progress.
 
 The first live credit probe is a **cost-adjusted parity, not a win**: PEPITA is
 **−0.04 pp** vs gradient on the same update at 1.15× walltime, and −0.38 pp vs the
@@ -68,8 +78,9 @@ plan, tickets ordered by what unblocks a measured number.
 A session progresses only if it increases one of:
 
 1. a **live axis** — a forward/step differs from the reference at the same
-   seed — or a **refusal with a measured reason**, including a refused pair
-   removed from breadth;
+   seed — or a **refusal with a measured reason and a reversal trigger**,
+   including a refused pair removed from breadth; or a **refusal reversed** by
+   a measured liveness/interaction result, including the row re-admitted;
 2. a domain's best measured metric, with its ruler; a **claim** requires L2,
    n≥5, and a pre-registration — n=3/L1 is screening;
 3. the count of **claim-grade matched comparisons or interactions** (L2, n≥5,
@@ -83,7 +94,8 @@ A session progresses only if it increases one of:
 
 **Not progress:** files changed, tests restructured, inventory rows added, plan
 text written, another coverage cell, another L0 record, another marginal arm
-without a stop rule, **a measurement on an inert axis or a refused pair**. TODO91's S1d thread is
+without a stop rule, **a measurement on an inert axis or a refused pair — unless
+the refusal is reversed by its trigger**. TODO91's S1d thread is
 the worked example: four commits, two attempts, one revert, zero capability.
 
 ---
@@ -108,7 +120,8 @@ measurements from here on; "28/28 tasks" survives because it unions task ids.
 The report now prints both numbers: `7,450 PASS records = 3,437 distinct
 measurements` over 443 readable stores. Pair breadth: **93/99** hold a
 measurement, 25 are refused by a named rule (19 of those hold 257 measurements
-that cannot count as substrate breadth), **0 holes**.
+that cannot count as substrate breadth until the refusal reverses; §3.9),
+**0 holes**.
 
 | Domain | Best measured (re-executed 2026-11-14) | Ruler | Target | Verdict |
 |---|---|---|---|---|
@@ -405,20 +418,28 @@ walltime, and never records a run into a store.
    feedforward measurements cannot count as substrate breadth. The factory behavior
    is intentional; the error was computing an interaction from refused records.
    **Audit design:** for each axis value, classify it:
-   - **refused** — a void constraint names the reason; its records cannot count
-     as breadth or enter a claim;
+   - **refused** — a void constraint names the reason **and the reversal
+     trigger**; its records cannot count as breadth or enter a claim until the
+     trigger fires;
    - **live** — the value changes the first forward/loss/step from the reference
      at the same seed;
-   - **inert** — neither; a defect. Fix it or declare it unavailable.
+   - **inert** — neither; a defect. Fix it, park it with a named reversal test,
+     or declare it unavailable with a trigger.
    Cover all six axes with a cell the value can act on: substrate (8 variants),
    geometry (10), dynamics (7), plasticity (6), credit (9), update (11).
    Deterministic mode where noise would mask the comparison. Error-blind credits
    are live if their update differs from the reference; their null error signal
    is a declared contract. Probe: `scripts/probes/t92_axis_liveness.py`.
    **Acceptance:** a refusal/live/inert matrix; every refused row names its
-   rule; every inert row is fixed or declared unavailable; a liveness lock fails
-   when a live variant becomes identity; the corpus breadth count excludes
-   refused rows. **Cost:** minutes, not hours — one forward/step per pair.
+   rule **and reversal trigger**; every inert row is fixed, parked with a test,
+   or unavailable with a trigger; a liveness lock fails when a live variant
+   becomes identity; the corpus breadth count excludes refused rows until
+   reversed. **Refusal review:** at each round close, re-check every trigger; a
+   reversal re-admits the row and is progress (the `local_contrastive`
+   precedent). **Registry:** add `revisit: str | None` beside
+   `unavailable_reason`/`description`; the audit fills it; the refusal review
+   reads it. The trigger lives on the row, not in a second plan table.
+   **Cost:** minutes, not hours — one forward/step per pair.
 
 10. **Axis-interaction matrix (priority 3).** After refusal/liveness, the claims
     are interactions, not main effects. The axis evidence shows dynamics,
@@ -434,8 +455,9 @@ walltime, and never records a run into a store.
       report val_acc and param budget.
     - **credit × substrate:** PEPITA vs gradient on digital and a **live,
       non-refused** substrate (candidates: analog, ternary, sparse, memristive,
-      neuromorphic with compatible dynamics; `complex` is refused, not a
-      comparison). 2×2, seeds 47–56, difference-in-differences
+      neuromorphic with compatible dynamics; `complex` is refused today — its
+      reversal trigger is a real-valued phase/noise term, and if it fires the
+      pair re-enters). 2×2, seeds 47–56, difference-in-differences
       `(PEPITA−gradient)_substrate − (PEPITA−gradient)_digital`, L2/20. A null
       interaction is a named verdict (the local credit is substrate-invariant).
     Each is a pre-registered L2/n≥5 2×2 at matched cost; one interaction at a
@@ -487,9 +509,9 @@ pre-registered matched claim.
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
-| Date | Axis | Variant | Reference | Observation | Verdict |
-|---|---|---|---|---|---|
-| 2026-11-14 | substrate | `complex` | `digital` | PEPITA val_acc/train_acc bit-identical per seed (42–46); `complex_substrate_real_compute` refuses every complex cell | **refused**, not live; records cannot count; §3.9 |
+| Date | Axis | Variant | Reference | Observation | Verdict | Reversal trigger |
+|---|---|---|---|---|---|---|
+| 2026-11-14 | substrate | `complex` | `digital` | PEPITA val_acc/train_acc bit-identical per seed (42–46); `complex_substrate_real_compute` refuses every complex cell | **refused**, not live; records cannot count until reversed; §3.9 | complex operator gains a real-valued phase/noise term and `substrate_from_config` dispatches to it |
 
 **Claim-shaped keys.** 3,437 distinct measurements, but only ~468 distinct keys
 are L2 with planned n≥5; the achieved-seed count is lower. Breadth is a floor,
@@ -537,13 +559,17 @@ claim-grade column is the evidence count. The gaps are the program.
   names its refusal in one constraint (`rl_credit_must_be_error_blind`) and
   keeps only the rows whose contract matches the lane; a second table of
   "inert" credits is a defect (§3.3b).
-- **A refused pair is not a comparison.** Read the refusal matrix first; a
-  measurement on a refused pair cannot count as breadth or enter a claim (the
-  complex PEPITA pair was one; `complex_substrate_real_compute`). A non-refused
-  axis value that returns bit-identical output to the reference is inert; fix
-  it or declare it unavailable with the measured reason (§3.9). A composition
-  claim names the live, non-refused axes it depends on; if one is refused or
-  inert, retract the claim (§3.7's complex pair).
+- **Refusals are provisional.** A refusal is a measured hypothesis, not a law.
+  Every refusal names a **reversal trigger**; when it fires, re-run the
+  liveness test and re-admit the row. `local_contrastive` is the precedent
+  (unavailable until N7 wired the label channel). A refusal without a trigger
+  is a corner. Until reversal, a measurement on a refused pair cannot count as
+  breadth or enter a claim (the complex PEPITA pair;
+  `complex_substrate_real_compute`).
+- **A non-refused axis value that returns bit-identical output is inert.** Fix
+  it, park it with a test, or declare it unavailable with a trigger (§3.9). A
+  composition claim names the live, non-refused axes it depends on; if one is
+  refused or inert, retract the claim until it reverses (§3.7's complex pair).
 - **A coverage cell is not a claim.** A measured pair with n=1, or one below
   its majority rate, closes a hole and enters the scoreboard with that ruler; it
   never enters §2's "best measured" row (§3.4).
@@ -598,9 +624,11 @@ claim-grade column is the evidence count. The gaps are the program.
   real-arithmetic and every complex cell is refused by
   `complex_substrate_real_compute`. The PEPITA complex/digital cells are
   bit-identical because the operator is the digital matmul; that pair is one of
-  the 257 refused-pair measurements that cannot count as substrate breadth.
-  §3.9 classifies every axis value as refused, live, or inert before §3.10
-  composes an interaction.
+  the 257 refused-pair measurements that cannot count as substrate breadth
+  until the refusal reverses. §3.9 classifies every axis value as refused,
+  live, or inert before §3.10 composes an interaction. Every refusal carries a
+  **reversal trigger**, and a refusal review at round close re-admits rows
+  whose trigger fired; `local_contrastive` is the precedent.
 - The **credit-axis probe** remains valid on the live digital pair: PEPITA
   0.9751 ± 0.0020 vs gradient 0.9755 ± 0.0023 (n=5, L2/20, seeds 42–46; paired
   −0.0004, 95% CI [−0.0051, +0.0044], p=0.84). Cost: 55,050 params; PEPITA
