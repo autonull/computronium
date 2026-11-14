@@ -1,0 +1,9 @@
+{
+  "claim": "On MNIST (10k held out), PEPITA and gradient are equivalent within a +/-0.01 val_acc margin at L2/20 on the same digital/feedforward/instantaneous/null/adam cell, paired over new seeds 47-56",
+  "metric": "val_acc",
+  "margin": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 10,
+  "created": "2026-11-14",
+  "protocol": "TODO92 §3.7. Discovery (seeds 42-46, two stores, identical params and schedule): gradient 0.9755 +- 0.0023, PEPITA 0.9751 +- 0.0020, paired PEPITA - gradient -0.0004, 95% CI [-0.0051, +0.0044], p=0.84. Confirmation runs new seeds 47-56 on both arms: treatment = credit pepita, control = credit gradient; both anchors are digital/feedforward/instantaneous/null/adam with params {}, L2/20 epochs, batch_limit 0, CPU, MNIST. Only the credit and seed differ. Decision: the 95% bootstrap CI of the paired difference lies inside [-0.01, +0.01] (computronium.validation.preregistration.PairedComparison.passes_equivalence). The superiority p vs 0 is reported as secondary, never as the decision. Committed before any seed 47-56 run. Stop rule: if the CI leaves the margin, report the measured boundary and do not run a third credit on MNIST."
+}

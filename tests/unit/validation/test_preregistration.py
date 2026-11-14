@@ -12,6 +12,7 @@ from hypothesis import strategies as st
 
 from computronium.validation.preregistration import (
     MIN_SEEDS,
+    EquivalenceRegistration,
     PairedComparison,
     ThresholdRegistration,
     paired_comparison,
@@ -25,6 +26,12 @@ _REG = ThresholdRegistration(
     claim="treatment beats control by >=0.2",
     metric="acc",
     threshold=0.2,
+)
+
+_EQ = EquivalenceRegistration(
+    claim="treatment matches control within 0.01",
+    metric="acc",
+    margin=0.01,
 )
 
 
@@ -74,6 +81,54 @@ def test_registration_example_file_loads() -> None:
     )
     assert reg.threshold == pytest.approx(0.8) and reg.min_seeds >= MIN_SEEDS
     json.dumps(reg.to_dict())
+
+
+def test_equivalence_registration_round_trip() -> None:
+    assert EquivalenceRegistration.from_dict(_EQ.to_dict()) == _EQ
+    with pytest.raises(ValueError, match="margin must be positive"):
+        EquivalenceRegistration(claim="c", metric="acc", margin=0.0)
+
+
+def test_passes_equivalence_reads_the_two_sided_ci() -> None:
+    inside = PairedComparison(
+        n=10,
+        mean_diff=0.001,
+        ci_lower=-0.002,
+        ci_upper=0.004,
+        p_value=0.84,
+        cohens_dz=0.09,
+    )
+    wide = PairedComparison(
+        n=10,
+        mean_diff=0.0,
+        ci_lower=-0.02,
+        ci_upper=0.01,
+        p_value=0.90,
+        cohens_dz=0.0,
+    )
+    outside = PairedComparison(
+        n=10,
+        mean_diff=-0.02,
+        ci_lower=-0.03,
+        ci_upper=-0.01,
+        p_value=0.01,
+        cohens_dz=-1.5,
+    )
+    assert inside.passes_equivalence(_EQ)
+    assert inside.passes_equivalence(0.01)
+    assert not wide.passes_equivalence(_EQ)
+    assert not outside.passes_equivalence(_EQ)
+    with pytest.raises(ValueError, match="margin must be positive"):
+        inside.passes_equivalence(0.0)
+
+
+def test_pepita_mnist_registration_loads_before_its_run() -> None:
+    reg = EquivalenceRegistration.load(
+        Path("configs/preregistrations/t92_pepita_mnist.json")
+    )
+    assert reg.margin == pytest.approx(0.01)
+    assert reg.min_seeds == 10
+    assert reg.metric == "val_acc"
 
 
 def test_paired_comparison_confirms_strong_effect() -> None:

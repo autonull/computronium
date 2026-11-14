@@ -33,6 +33,7 @@ from computronium.validation.statistics import (
 __all__ = [
     "DEFAULT_ALPHA",
     "MIN_SEEDS",
+    "EquivalenceRegistration",
     "PairedComparison",
     "ThresholdRegistration",
     "paired_comparison",
@@ -100,6 +101,63 @@ class ThresholdRegistration:
 
 
 @dataclass(frozen=True, slots=True)
+class EquivalenceRegistration:
+    """A pre-registered two-sided margin for a parity claim.
+
+    ``ThresholdRegistration`` asks whether a treatment beats a control by at
+    least some amount; a tie is not expressible there. This registration
+    declares the margin within which the paired difference counts as
+    equivalent, so a parity claim is decided by the same file that fixed the
+    margin before the run.
+
+    Attributes:
+        claim: Statement under test (e.g. "PEPITA matches gradient on MNIST").
+        metric: Metric name the margin applies to.
+        margin: Half-width of the equivalence interval, in metric units.
+        alpha: Error rate of the paired CI the decision reads.
+        min_seeds: Minimum per-arm seed count.
+        created: ISO date the registration was committed to the repo.
+        protocol: How the decision is computed, for the repo record.
+    """
+
+    claim: str
+    metric: str
+    margin: float
+    alpha: float = DEFAULT_ALPHA
+    min_seeds: int = MIN_SEEDS
+    created: str = ""
+    protocol: str = ""
+
+    def __post_init__(self) -> None:
+        if self.margin <= 0:
+            msg = f"equivalence margin must be positive, got {self.margin}"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict[str, str | float | int]:
+        """Serialize for JSON registration files."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> EquivalenceRegistration:
+        """Deserialize from a registration file."""
+        return cls(
+            claim=str(data["claim"]),
+            metric=str(data["metric"]),
+            margin=float(data["margin"]),  # type: ignore[arg-type]
+            alpha=float(data.get("alpha", DEFAULT_ALPHA)),  # type: ignore[arg-type]
+            min_seeds=int(data.get("min_seeds", MIN_SEEDS)),  # type: ignore[arg-type]
+            created=str(data.get("created", "")),
+            protocol=str(data.get("protocol", "")),
+        )
+
+    @classmethod
+    def load(cls, path: Path) -> EquivalenceRegistration:
+        """Load a registration from a JSON file in the repo."""
+        with path.open(encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
+
+
+@dataclass(frozen=True, slots=True)
 class PairedComparison:
     """Paired-difference result between matched treatment/control seeds."""
 
@@ -115,6 +173,24 @@ class PairedComparison:
         return self.ci_lower > registration.threshold and self.p_value < (
             registration.alpha
         )
+
+    def passes_equivalence(self, registration: EquivalenceRegistration | float) -> bool:
+        """Whether the two-sided CI lies inside the pre-registered margin.
+
+        Args:
+            registration: The equivalence registration, or its margin in metric
+                units. The interval is ``[-margin, +margin]``, read from the
+                harness's two-sided bootstrap CI at ``alpha``.
+        """
+        margin = (
+            registration.margin
+            if isinstance(registration, EquivalenceRegistration)
+            else registration
+        )
+        if margin <= 0:
+            msg = f"equivalence margin must be positive, got {margin}"
+            raise ValueError(msg)
+        return self.ci_lower >= -margin and self.ci_upper <= margin
 
 
 def paired_comparison(
