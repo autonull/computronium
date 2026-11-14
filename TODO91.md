@@ -1115,3 +1115,26 @@ PASS cells. No claim is made: one seed is not claim-eligible.
 - **Queued:** the one-off `test_combination_smoke_lock` failure under parallel
   load (§8).
 - **Next experiment:** the §8 queue that blocks a claim.
+
+---
+
+## 10. Handoff — the stop condition (and TODO92)
+
+This plan exists to make the *selection surface* complete. It stops when that is
+true and the remaining §8 rows no longer block a number:
+
+- [ ] the **claim-blocking group** in §8 is green (settle telemetry, RNG
+      seeding, objective validation, settle-driver loop);
+- [ ] the **regression-lane ticket** in §8 is closed — every measured failure
+      either trains or is refused by a declared rule;
+- [ ] `comp coverage inventory --strict` reports **0 unknown**;
+- [ ] both generators are idempotent under `--check`.
+
+When all four hold, this file is closed and **TODO92.md becomes the plan of
+record**. Breadth tickets do not belong here: a number is evidence about the
+system, while this plan was about whether the system *can be selected* at all.
+
+The readable signal is mechanical: if the last thing you did was add a row to a
+registry, a spec, or a test in this plan's name, you are in the wrong plan.
+If the last thing you did was move a metric with its ruler, you are in TODO92's
+territory. The full queue in §8 is the only work this file still owns.
