@@ -1,0 +1,9 @@
+{
+  "claim": "On Cora node classification (500-node public split, majority 0.316), energy_minimization changes the random_projections minus gradient val_acc advantage by at least +0.01 relative to instantaneous, paired over seeds 47-51 at L2/100",
+  "metric": "val_acc",
+  "threshold": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-14",
+  "protocol": "TODO92 §3.10, first interaction. PEPITA is refused on graph by local_contrastive_geometry (feedforward-only), so the graph credit pair is random_projections (error-aware, layered FA) vs gradient. 2x2: dynamics {instantaneous, energy_minimization} x credit {gradient, random_projections}, anchored on the Cora record 6328d4d4 (digital/graph/null/adam, update.step_size 0.01, L2/100, cuda). Per-seed interaction = (RP - gradient)_energy - (RP - gradient)_instantaneous. Decision: paired_comparison(interaction, zeros).passes(registration) (95% CI above +0.01). A null or negative interaction is a named verdict. Fresh seeds 47-51, committed before any run. Measured legality (1 epoch, seed 42): both energy_minimization cells train; energy_minimization + random_projections 7.5 s/epoch vs instantaneous <0.05 s/epoch, so the energy arms are ~750 s/seed."
+}
