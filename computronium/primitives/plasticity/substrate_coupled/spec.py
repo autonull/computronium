@@ -9,6 +9,8 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Substrate Coupled",
     axis="plasticity",
+    batch_axis="unused",
+    batch_axis_reason="psi equals the substrate state; no plasticity-level update",
     reference_entrypoint=(
         "computronium.primitives.plasticity.substrate_coupled.reference.step"
     ),
