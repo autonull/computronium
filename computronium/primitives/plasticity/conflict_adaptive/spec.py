@@ -9,6 +9,15 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Conflict-Adaptive Plasticity",
     axis="plasticity",
+    output_keys=(
+        "gram",
+        "cross",
+        "readout_m",
+        "readout_b",
+        "trace_steps",
+        "agreement",
+        "rho_used",
+    ),
     reference_entrypoint=(
         "computronium.primitives.plasticity.conflict_adaptive.reference.step"
     ),

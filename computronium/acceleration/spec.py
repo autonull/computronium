@@ -140,6 +140,7 @@ class ImplementationSpec:
     batch_axis_reason: str = ""
     seed_sensitive: bool | None = None
     seed_free_reason: str = ""
+    output_keys: tuple[str, ...] | None = None
 
     # Algorithm metadata
     uses_primitives: tuple[str, ...] = ()

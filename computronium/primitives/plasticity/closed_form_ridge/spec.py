@@ -9,6 +9,7 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Closed-form Ridge Plasticity",
     axis="plasticity",
+    output_keys=("gram", "cross", "readout_m", "readout_b"),
     reference_entrypoint=(
         "computronium.primitives.plasticity.closed_form_ridge.reference.step"
     ),

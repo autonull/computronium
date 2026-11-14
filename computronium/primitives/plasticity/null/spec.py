@@ -9,6 +9,7 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Null Plasticity",
     axis="plasticity",
+    output_keys=(),
     batch_axis="unused",
     batch_axis_reason="returns the plastic state unchanged, by design",
     seed_sensitive=False,

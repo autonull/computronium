@@ -9,6 +9,7 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Routing Plasticity",
     axis="plasticity",
+    output_keys=("gate_logits", "active_routes"),
     reference_entrypoint=("computronium.primitives.plasticity.routing.reference.step"),
     kernel_entrypoint=("computronium.primitives.plasticity.routing.kernel.step"),
     kernel_technology="triton",

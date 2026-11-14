@@ -9,6 +9,7 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Substrate Coupled",
     axis="plasticity",
+    output_keys=(),
     batch_axis="unused",
     batch_axis_reason="psi equals the substrate state; no plasticity-level update",
     seed_sensitive=False,

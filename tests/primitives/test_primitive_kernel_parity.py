@@ -55,7 +55,11 @@ def _case(spec: Any, seed: int) -> Any:
     cases = import_module(
         f"{_module_of(spec.reference_entrypoint).rpartition('.')[0]}.cases"
     )
-    return cases.make_case(seed=seed, device="cpu")
+    case = cases.make_case(seed=seed, device="cpu")
+    case_type = getattr(cases, "Case", None)
+    if case_type is not None:
+        assert isinstance(case, case_type), spec.id
+    return case
 
 
 def _run(spec: Any, entrypoint: str, seed: int) -> Any:
@@ -215,6 +219,9 @@ def test_update_step_covers_the_harness_parameters(spec) -> None:
     for name, tensor in updated.items():
         assert torch.is_tensor(tensor), (spec.id, name)
         assert tensor.shape == expected[name].shape, (spec.id, name)
+    assert any(
+        not torch.equal(tensor, expected[name]) for name, tensor in updated.items()
+    ), spec.id
 
 
 @pytest.mark.parametrize("spec", CREDITS, ids=_ids(CREDITS))
@@ -227,28 +234,42 @@ def test_credit_step_returns_one_gradient_per_parameter(spec) -> None:
     geometry = getattr(case, "geometry", None)
     if geometry is None:
         return
-    parameter_shapes = {tuple(param.shape) for param in geometry.params.values()}
-    assert {tuple(grad.shape) for grad in grads} <= parameter_shapes, spec.id
+    parameters = geometry.params.values()
+    weight_shapes = sorted(
+        tuple(param.shape) for param in parameters if param.ndim == 2
+    )
+    assert len(grads) == len(weight_shapes), spec.id
+    assert sorted(tuple(grad.shape) for grad in grads) == weight_shapes, spec.id
 
 
 @pytest.mark.parametrize("spec", PLASTICITIES, ids=_ids(PLASTICITIES))
 def test_plasticity_step_returns_named_tensors(spec) -> None:
-    """A plasticity step returns a tensor per plastic variable it changes."""
+    """A plasticity step returns exactly its declared plastic variables."""
     case = _case(spec, 0)
     updated = _run(spec, spec.reference_entrypoint, seed=0)
     assert isinstance(updated, dict), spec.id
+    assert spec.output_keys is not None, spec.id
+    assert set(updated) == set(spec.output_keys), spec.id
     assert all(torch.is_tensor(value) for value in updated.values()), spec.id
     plastic = getattr(case, "psi", None)
     if plastic:
-        assert set(updated) == set(plastic), spec.id
         for name, tensor in updated.items():
             assert tensor.shape == plastic[name].shape, (spec.id, name)
+        assert any(
+            not torch.equal(tensor, plastic[name]) for name, tensor in updated.items()
+        ), spec.id
 
 
 @pytest.mark.parametrize("spec", SUBSTRATES, ids=[s.id for s in SUBSTRATES])
 def test_substrate_spec_survives_the_config_projection(spec) -> None:
-    """config → spec → config is lossless for every substrate family."""
+    """The config projection preserves every field the spec declares."""
     from computronium.ontology.substrate.spec import SubstrateSpec
 
-    config = _case(spec, 0).spec.to_config()
+    case_spec = _case(spec, 0).spec
+    config = case_spec.to_config()
+    assert config.sparsity == case_spec.structural_constraints.sparsity, spec.id
+    assert config.weight_bounds == case_spec.structural_constraints.weight_bounds, (
+        spec.id
+    )
+    assert config.noise_level == case_spec.noise_model.level, spec.id
     assert SubstrateSpec.from_config(config).to_config() == config, spec.id

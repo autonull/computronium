@@ -9,6 +9,7 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Temporal ψ Plasticity",
     axis="plasticity",
+    output_keys=("gram", "cross", "readout_m", "readout_b", "trace_steps"),
     reference_entrypoint=(
         "computronium.primitives.plasticity.temporal_psi.reference.step"
     ),
