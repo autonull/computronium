@@ -1,14 +1,13 @@
-# TODO92 — Breadth and evidence (successor to TODO91)
+# TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
 **Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b and §3.4 closed. The
-measurement layer is honest: 3,437 measurements, 93/99 pairs, 0 holes, and
-~468 claim-shaped L2/n≥5 keys. The next phase is **claim conversion**. The
-highest-value result already in the corpus is a matched MNIST pair — PEPITA
-**0.9751 ± 0.0020** vs gradient **0.9755 ± 0.0023** (n=5, L2/20, paired diff
-−0.0004, 95% CI [−0.0051, +0.0044]) — a local credit matches backprop within
-0.5 accuracy points. §3.7 pre-registers the n=10 confirmation. Graph stays
-marginal with one readout arm and a stop rule (§3.2); the gate metric bar
-(§3.3c) makes PASS mean above-bar. Next: **§3.7, then §3.3c, then §3.2.**
+measurement layer is honest: 3,437 measurements, 93/99 pairs, 0 holes, ~468
+claim-shaped L2/n≥5 keys. The first audit found the complex/adam PEPITA pair is
+on a **declared-refused pair** (`complex_substrate_real_compute`), not a live
+substrate interaction. The plan retracts it and starts a **refusal and liveness
+audit**. §3.7's digital probe is a **cost-adjusted parity, not a win** (details
+in §3.7): no non-standard composition yet has a cost-adjusted capability win;
+the plan searches for one. Next: **§3.9, then §3.7, then §3.10.**
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -16,17 +15,47 @@ open gap list is §3, ordered by what unblocks a number.
 
 **Mission:** grow the *measured* capability of the library, not its paper
 surface. TODO91 closed the selection surface (every declared coordinate
-resolves and trains somewhere); this plan asks the next question: which
-combinations produce a number that clears its domain's bar, and what does it
-take to get the rest there.
+resolves and trains somewhere); this plan asks the next question: is every
+declared axis value refused with a reason or live, and which live compositions
+produce a number that clears their domain's bar?
 
-**Research thesis (2026-11-14).** The library's differentiated claim is not
-that it can train MNIST; it is that a local, error-aware credit can match
-backprop on a matched cell. The corpus's first claim-grade comparison points
-that way: PEPITA **0.9751 ± 0.0020** vs gradient **0.9755 ± 0.0023** (n=5,
-L2/20, paired diff −0.0004, 95% CI [−0.0051, +0.0044]). The next long run
-should decide that claim, not chase a 0.08σ domain bar. A backprop-only result
-is table stakes; a PEPITA parity claim is the library's reason to exist.
+**Research thesis (2026-11-14, broad).** The library's claim is that
+capability is a property of the **composition** of mechanisms, not of backprop
+alone. The program has four levels:
+
+1. **Refusal and liveness.** Every declared axis value is either **refused**
+   with a measured reason or **live** — it changes the computation it claims to
+   own at a fixed coordinate and seed. An axis value that is neither refused nor
+   live is an inert defect, not a breadth row.
+2. **Interaction.** Only live, non-refused pairs enter an interaction — credit ×
+   substrate, dynamics × geometry, plasticity × task, update × geometry. The
+   interesting claims are interactions; a main-effect tie on one cell is a
+   probe, not the thesis.
+3. **Capability.** At least one non-standard composition matches or beats the
+   standard stack (digital / feedforward / instantaneous / null / gradient /
+   adam) at claim grade, on a task that matters, **at matched cost** — the
+   primary metric plus walltime, parameter count, and the substrate's energy
+   estimate. A win on accuracy at 10× cost is a different claim.
+4. **Generality.** A winning composition replicates on at least one second task
+   or names its boundary; a single-cell win is a probe, not a library result.
+   The thesis is falsified if, after refusal/liveness and interaction mapping,
+   every non-standard composition is dominated by the standard stack at matched
+   cost.
+
+The first audit result is a **refusal**, not a hidden defect: `complex` is
+declared real-arithmetic, and every complex cell is refused by
+`complex_substrate_real_compute` (`seed_registries.py`). The PEPITA
+digital/complex values are bit-identical because the complex operator on real
+weights is the digital matmul — the intended behavior of that row. The plan's
+earlier "substrate interaction" was computed on a refused pair; the error was
+in the analysis, not the factory. Read the refusal matrix before an
+interaction. Only live, non-refused pairs can carry a claim.
+
+The first live credit probe is a **cost-adjusted parity, not a win**: PEPITA is
+**−0.04 pp** vs gradient on the same update at 1.15× walltime, and −0.38 pp vs the
+best backprop at 1.41× walltime (both 55,050 params). The MNIST cell does not
+satisfy level 3. The interaction matrix (§3.10) is the search for a cell that
+does; if none is found, the thesis is falsified at matched cost.
 
 Every session follows the SEC cycle in `AGENTS.md` (RUN → ANALYZE → FIX →
 VERIFY → COMMIT). This file replaces the per-phase TODO cadence: one rolling
@@ -38,20 +67,24 @@ plan, tickets ordered by what unblocks a measured number.
 
 A session progresses only if it increases one of:
 
-1. a domain's best measured metric, with its ruler; a **claim** requires L2,
+1. a **live axis** — a forward/step differs from the reference at the same
+   seed — or a **refusal with a measured reason**, including a refused pair
+   removed from breadth;
+2. a domain's best measured metric, with its ruler; a **claim** requires L2,
    n≥5, and a pre-registration — n=3/L1 is screening;
-2. the count of **claim-grade matched comparisons** (L2, n≥5, same cell except
-   one axis; pre-registered when the effect is within 1σ of its threshold);
-3. the count of claim-eligible cells (the code's predicate: L2, gate PASS,
+3. the count of **claim-grade matched comparisons or interactions** (L2, n≥5,
+   same cell except one axis; pre-registered when the effect is within 1σ of
+   its threshold);
+4. the count of claim-eligible cells (the code's predicate: L2, gate PASS,
    n≥5, replay hash — `claims.py`);
-4. the count of runnable (task × geometry × **error-aware** credit) cells;
-5. the count of declared-unavailable rows that became runnable, or a refusal
+5. the count of runnable (task × geometry × **error-aware** credit) cells;
+6. the count of declared-unavailable rows that became runnable, or a refusal
    with a measured rule.
 
 **Not progress:** files changed, tests restructured, inventory rows added, plan
 text written, another coverage cell, another L0 record, another marginal arm
-without a stop rule. TODO91's S1d thread is the worked example: four commits,
-two attempts, one revert, zero capability.
+without a stop rule, **a measurement on an inert axis or a refused pair**. TODO91's S1d thread is
+the worked example: four commits, two attempts, one revert, zero capability.
 
 ---
 
@@ -80,7 +113,7 @@ that cannot count as substrate breadth), **0 holes**.
 | Domain | Best measured (re-executed 2026-11-14) | Ruler | Target | Verdict |
 |---|---|---|---|---|
 | Vision | MNIST **0.9789 ± 0.0003** (SD) gradient (digital/euclidean) | n=5, L2/20, val_acc, 10k held out; chance 0.10 | > 0.95 | met, **claim-grade** |
-| Vision (local credit) | MNIST **0.9751 ± 0.0020** (SD) PEPITA (digital/adam) | n=5, L2/20, same split; matched gradient **0.9755 ± 0.0023** | > 0.95 | met, **claim-grade**; paired diff −0.0004 |
+| Vision (local credit) | MNIST **0.9751 ± 0.0020** (SD) PEPITA (digital/adam) | n=5, L2/20, same split; matched gradient **0.9755 ± 0.0023** | > 0.95 | met, **claim-grade**; paired diff −0.0004 at 1.15× walltime — parity, not a win |
 | Graph classification | PROTEINS **0.7013 ± 0.0164** (SD) | n=5, L1/100, 223 held out; majority 0.596 | > 0.70 | **screening; marginal** (0.08σ) |
 | Node classification | Cora **0.7660 ± 0.0151** (SD) | n=3, L1/100, 500-node public split; majority 0.316 | > 0.75 | **screening; met** (1.06σ) |
 | Tabular | wine **1.0000** (record 0.9722) | n=3, L0, 36 held out (resolution 0.0278); majority 0.389 | > 0.90 | **screening; saturated** |
@@ -93,11 +126,16 @@ vision n=5 L2 cells are claim-grade. The first differentiated matched
 comparison is the **digital/adam MNIST pair** (same coordinate and schedule,
 seeds 42–46, only the credit differs): gradient **0.9755 ± 0.0023**, PEPITA
 **0.9751 ± 0.0020**, paired PEPITA − gradient **−0.0004**, 95% CI [−0.0051,
-+0.0044], p=0.84, dz=−0.09. The complex/adam pair is secondary: **+0.0043**,
-CI [−0.0003, +0.0089], p=0.06 — a substrate interaction, not general
-superiority. §3.7 pre-registers the n=10 confirmation. The graph, node,
-tabular and RL rows are screening; their "met" is a domain-bar verdict, not a
-formal claim.
++0.0044], p=0.84, dz=−0.09. **Cost:** both arms 55,050 params; PEPITA
+412 s/seed vs gradient 359 s/seed on CPU (~1.15×). The best backprop
+(digital/euclidean) is **0.9789** at 293 s/seed; PEPITA is −0.38 pp at 1.41×.
+The digital pair is a **cost-adjusted parity, not a capability win**.
+**Retraction (2026-11-14):** the complex/adam pair is **refused** by
+`complex_substrate_real_compute`; its cells are bit-identical to digital
+because the operator is the digital matmul on real weights. Its records are
+among the 257 refused-pair measurements that cannot count; §3.9 audits the
+rest. The graph, node, tabular and RL rows are screening; their "met" is a
+domain-bar verdict, not a formal claim.
 
 Provenance for the pre-re-run rows was TODO85–90's session log. Every row now
 carries a re-execution: `scripts/probes/t92_baseline_replay.py` rebuilds each
@@ -163,27 +201,33 @@ walltime, and never records a run into a store.
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-14, after §3.4):**
+**Priority order (2026-11-14, after the first refusal finding):**
 
-1. **§3.7 — pre-register and run the matched PEPITA vs gradient claim.** It
-   tests the differentiated axis; ~2.1 h CPU; highest information per hour.
-2. **§3.3c — gate metric bar.** Makes PASS mean above-bar; every later claim
+1. **§3.9 — axis refusal/liveness audit.** Read the refusal matrix and classify
+   every axis value as refused, live, or inert; an inert value invalidates every
+   composition claim above it. Cheap, one forward/step per axis value.
+2. **§3.7 — PEPITA digital/adam equivalence.** The first credit-axis probe;
+   both arms are live digital cells. ~2.1 h CPU for the n=10 confirmation.
+3. **§3.10 — interaction matrix.** Dynamics × credit first (the axis with no
+   claim-grade evidence), then plasticity × task, update × geometry, credit ×
+   substrate on a live non-refused substrate. This is where the broad thesis is
+   tested.
+4. **§3.3c — gate metric bar.** Makes PASS mean above-bar; every later claim
    depends on it.
-3. **§3.2 — one graph readout arm with a stop rule.** The only graph lever left
-   after capacity; do not run a third arm.
-4. **§3.8 — claim-conversion backlog.** Convert only the screening rows a claim
+5. **§3.2 — one graph readout arm with a stop rule.** The only graph lever left.
+6. **§3.8 — claim-conversion backlog.** Convert only the screening rows a claim
    needs; label the rest screening.
-5. **§3.6 — batched graph-settle path.** Defer; no domain bar depends on it.
-6. **§3.1 — regression claims.** n=1 records; no current claim.
+7. **§3.6 — batched graph-settle path.** Defer; no domain bar depends on it.
+8. **§3.1 — regression claims.** n=1 records; no current claim.
 
 1. ~~**Regression lane**~~ — **closed 2026-11-14 (TODO91 S9).** 3 laws
    generalized (`pepita`, `target_inversion`, the shared output-target
    convention), 3 mechanism rows declared class-only and refused on a
    continuous target; the re-run measured 9/9 PASS. Remaining work is a claim,
    not a lane: `diabetes` 10 and `lorenz_state` 8 PASS records, all n=1 (record
-   counts, not yet re-counted as measurements). **Priority 6; no current
+   counts, not yet re-counted as measurements). **Priority 8; no current
    claim.**
-2. **Graph classification is marginal (screening, L1).** Re-run 0.7013 ± 0.0164
+2. **Graph classification is marginal (screening, L1; priority 5).** Re-run 0.7013 ± 0.0164
    (SD), n=5, 223 held out: 0.08σ above the 0.70 bar, so the claim rule says
    marginal, not met. **Capacity arm excluded (2026-11-14).** Pre-registered in
    `configs/preregistrations/t92_graph_capacity.json` and run by
@@ -234,7 +278,7 @@ walltime, and never records a run into a store.
     to the recorded positive control. The 400-episode −135.1 row predates the
     rule and remains the lane's geometry × substrate measurement; a
     credit-aware RL update is still unbuilt.
-3c. **Gate PASS is defect-free, not above-bar (priority 2).**
+3c. **Gate PASS is defect-free, not above-bar (priority 4).**
     `assess_gate_verdict` reads void/hard/soft defects and an optional seed
     floor; it has no metric threshold, so the positive control PASSed at
     −1536.6. Corpus PASS counts overstate learning on RL and near-chance tasks.
@@ -266,7 +310,7 @@ walltime, and never records a run into a store.
    RNG seeding, objective validation and the settle-driver loop are green
    (269 passed in the final gate). No claim made here rests on a known-red
    lock.
-6. **Graph classification × settling dynamics (deferred, priority 5).**
+6. **Graph classification × settling dynamics (deferred, priority 7).**
     PROTEINS with `energy_minimization` dies on the batched readout (`Expected
     input batch_size (1134) to match target batch_size (32)`; Dynamo reports the
     same 1134-vs-32 mismatch for the fake-tensor call). `spike_integration`
@@ -279,11 +323,14 @@ walltime, and never records a run into a store.
     Measured cost: <1 s to the failure; a fix is an operator-path change, not a
     tuning run.
 
-7. **Claim: PEPITA matches backprop on a matched MNIST cell (priority 1).**
-   This is the highest-value experiment in the plan: it tests the
-   differentiated axis, not another domain bar. The discovery data is already
-   in the corpus — `digital / feedforward / instantaneous / null / adam`, MNIST,
-   L2/20, seeds 42–46, only the credit differs:
+7. **Credit-axis probe: PEPITA vs gradient on a matched MNIST cell (priority 2).**
+   This is the first credit-axis probe, not the whole thesis: it asks whether a
+   local, error-aware credit matches backprop on a live digital pair. The
+   existing answer is a **cost-adjusted parity, not a capability win**: **−0.04 pp**
+   vs gradient at 1.15× walltime, and −0.38 pp vs the best backprop at 1.41×.
+   The discovery data is already in the corpus — `digital / feedforward /
+   instantaneous / null / adam`, MNIST, L2/20, seeds 42–46, only the credit
+   differs:
 
    | Arm | Mean ± SD | n | Ruler |
    |---|---|---|---|
@@ -291,17 +338,24 @@ walltime, and never records a run into a store.
    | PEPITA | **0.9751 ± 0.0020** | 5 | same |
    | paired PEPITA − gradient | **−0.0004**, 95% CI [−0.0051, +0.0044] | 5 | paired by seed; p=0.84, dz=−0.09 |
 
-   The complex/adam pair is a **secondary** observation: PEPITA **+0.0043**,
-   CI [−0.0003, +0.0089], p=0.06 — a substrate interaction, not general
-   superiority. Do not use it as the primary claim.
+   **Retraction (2026-11-14):** the complex/adam pair is **not** a substrate
+   interaction. `complex` is declared real-arithmetic and every complex cell is
+   refused by `complex_substrate_real_compute`; the complex and digital PEPITA
+   cells are bit-identical because the operator is the digital matmul on real
+   weights. The pair is refused, not evidence. §3.9 audits it. Do not use it as
+   a claim.
 
    **Best-backprop check (secondary):** PEPITA digital/adam **0.9751** vs
    gradient digital/euclidean **0.9789** (the best backprop cell), paired over
    the same seeds: **−0.0038**, 95% CI [−0.0064, −0.0012], p=0.015. The update
    differs, so this is a non-inferiority check, not a matched credit claim; the
-   gap is 0.38 pp, inside the ±0.01 margin. It answers the "inferior optimizer"
-   objection: PEPITA is within 1 point of the best backprop configuration, not
-   only of gradient on its own update.
+   gap is 0.38 pp, inside the ±0.01 margin (±1 pp). It answers the "inferior
+   optimizer" objection: PEPITA is within 1 point of the best backprop
+   configuration, at 1.41× walltime — a cost-adjusted loss, not parity.
+
+   **Liveness prerequisite:** the substrate audit (§3.9) must pass. The digital
+   pair is already live — PEPITA and gradient differ at the same seed — so the
+   credit probe is not blocked by the complex refusal.
 
    **Confirmation:** pre-register a two-sided equivalence claim with margin
    **±0.01**, α=0.05, `min_seeds=10`; run **new seeds 47–56** on both arms (the
@@ -314,19 +368,21 @@ walltime, and never records a run into a store.
    `EquivalenceRegistration` beside `ThresholdRegistration`) to
    `computronium/validation/preregistration.py`; the existing `passes` is a
    one-sided superiority test and is the wrong predicate for a tie. Commit
-   `configs/preregistrations/t93_pepita_mnist.json` **before** the run.
+   `configs/preregistrations/t92_pepita_mnist.json` **before** the run.
    **Cost:** measured 360 s/seed (gradient) and 412 s/seed (PEPITA) on CPU at
    L2/20; 10 new seeds × 2 arms ≈ **2.1 h**, background. GPU was not faster on
    the recorded PEPITA seed (395 s). **Acceptance:** prereg committed before the
-   run; records in `experiments/t93_pepita_mnist.duckdb`; a scoreboard row with
-   n=10, the CI, and the ruler; if it passes, the vision row gains a claim no
-   backprop-only library can make. **Stop rule:** if the CI leaves the ±0.01
+   run; records in `experiments/t92_pepita_mnist.duckdb`; a scoreboard row with
+   n=10, the CI, and the ruler; if it passes, the vision row gains a
+   **cost-adjusted parity** claim (same update, 1.15× walltime), not a
+   capability win; §3.10 then searches for a cell where a non-standard axis
+   wins at matched cost. **Stop rule:** if the CI leaves the ±0.01
    band, report the measured boundary and do not run a third credit on MNIST;
    move the local-credit question to a harder task. **If it passes:** scale the
    same matched design to a harder task (CIFAR-10 or a deeper geometry) before
    claiming general parity; MNIST parity is necessary, not sufficient.
 
-8. **Claim-conversion backlog (priority 4).** The code's `claim_eligible` is
+8. **Claim-conversion backlog (priority 6).** The code's `claim_eligible` is
    L2 + n≥5; these rows are screening. Convert only what a claim needs:
 
    | Row | Current | To claim | Cost | Priority |
@@ -340,6 +396,56 @@ walltime, and never records a run into a store.
    0.0278, saturated at 1.0, and the record did not reproduce. A harder tabular
    task (`breast_cancer`/`diabetes`) with ≥100 held out is the right carrier; do
    not call wine a capability result.
+
+9. **Axis refusal/liveness audit (priority 1).** Read the refusal matrix before
+   composing a comparison. `complex` is the worked example: it is declared
+   real-arithmetic (`SubstrateConfig.complex` with `substrate_type=DIGITAL`),
+   and `complex_substrate_real_compute` refuses every complex cell. The complex
+   PEPITA records are legacy refused-pair measurements — 93 complex ×
+   feedforward measurements cannot count as substrate breadth. The factory behavior
+   is intentional; the error was computing an interaction from refused records.
+   **Audit design:** for each axis value, classify it:
+   - **refused** — a void constraint names the reason; its records cannot count
+     as breadth or enter a claim;
+   - **live** — the value changes the first forward/loss/step from the reference
+     at the same seed;
+   - **inert** — neither; a defect. Fix it or declare it unavailable.
+   Cover all six axes with a cell the value can act on: substrate (8 variants),
+   geometry (10), dynamics (7), plasticity (6), credit (9), update (11).
+   Deterministic mode where noise would mask the comparison. Error-blind credits
+   are live if their update differs from the reference; their null error signal
+   is a declared contract. Probe: `scripts/probes/t92_axis_liveness.py`.
+   **Acceptance:** a refusal/live/inert matrix; every refused row names its
+   rule; every inert row is fixed or declared unavailable; a liveness lock fails
+   when a live variant becomes identity; the corpus breadth count excludes
+   refused rows. **Cost:** minutes, not hours — one forward/step per pair.
+
+10. **Axis-interaction matrix (priority 3).** After refusal/liveness, the claims
+    are interactions, not main effects. The axis evidence shows dynamics,
+    plasticity and update have **no** claim-grade evidence, so start there:
+    - **dynamics × credit:** `energy_minimization` vs `instantaneous` ×
+      gradient/PEPITA, on a task where settling is constitutive; report val_acc
+      **and** walltime per cell. First cell: Cora node classification
+      (`energy_minimization` is legal and settling is iterative); if the effect
+      is null, try a scientific state-prediction task.
+    - **plasticity × task:** `fast_weights`/`routing` vs `null` on a
+      memory/continual task; report retention and task accuracy.
+    - **update × geometry:** `muon`/`lion` vs `adam` on feedforward/graph;
+      report val_acc and param budget.
+    - **credit × substrate:** PEPITA vs gradient on digital and a **live,
+      non-refused** substrate (candidates: analog, ternary, sparse, memristive,
+      neuromorphic with compatible dynamics; `complex` is refused, not a
+      comparison). 2×2, seeds 47–56, difference-in-differences
+      `(PEPITA−gradient)_substrate − (PEPITA−gradient)_digital`, L2/20. A null
+      interaction is a named verdict (the local credit is substrate-invariant).
+    Each is a pre-registered L2/n≥5 2×2 at matched cost; one interaction at a
+    time, not a sweep. Every cell reports the primary metric, walltime,
+    parameter count, and the substrate's energy estimate; the interaction is
+    judged on the metric at matched cost. Choose a task where the axis is
+    constitutive: dynamics → energy-based inference, plasticity →
+    memory/continual, credit → vision, update → optimization-sensitive geometry.
+    Acceptance: a claim-grade interaction table; a null interaction is a
+    verdict, not a failure.
 
 ---
 
@@ -362,26 +468,53 @@ walltime, and never records a run into a store.
 | 2026-11-14 | neuromorphic × graph (Cora) | 0.1540 / 0.1460 / 0.1300 | 1 seed each | 500-node public split; majority 0.316; L0/1 epoch | **coverage, not a claim** (below majority; no replication) | §3.4 (closed) |
 | 2026-11-14 | graph classification × settling | failure: 1134 vs 32 | 1 | PROTEINS batch, node-major readout | batched path dies under energy_minimization/spike; node-mode works | §3.6 |
 | 2026-11-14 | vision (claim-grade) | matched digital/adam: gradient 0.9755 ± 0.0023 vs PEPITA 0.9751 ± 0.0020 (best gradient 0.9789, digital/euclidean) | 5 | L2/20, 10k held out; chance 0.10 | paired PEPITA−gradient −0.0004, CI [−0.0051, +0.0044], p=0.84 | §3.7 (discovery) |
-| 2026-11-14 | vision (secondary) | complex/adam PEPITA vs gradient | 5 | L2/20, same split | +0.0043, CI [−0.0003, +0.0089], p=0.06 | §3.7 (secondary) |
+| 2026-11-14 | vision (secondary) | complex/adam PEPITA vs gradient | 5 | L2/20, same split | **retracted**: `complex_substrate_real_compute` refuses every complex cell; PEPITA cells bit-identical | §3.9 (refused) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
 (`computronium/experiment/evidence/claims.py`). Rows written before the
-claim-conversion phase say "claim needs n≥3"; the current bar is L2/n≥5 (§5).
+refusal/liveness phase say "claim needs n≥3"; the current bar is L2/n≥5 (§5).
 The vision n=5 L2 rows are the first claim-grade cells; §3.7 is the first
 pre-registered matched claim.
 
 ### Claim-grade ledger (L2, n≥5, same cell except one axis)
 
-| Date | Comparison | n | Ruler | Result | Status |
+| Date | Comparison | n | Ruler | Cost | Result | Status |
+|---|---|---|---|---|---|---|
+| 2026-11-14 | MNIST digital/adam: PEPITA vs gradient | 5 | val_acc, 10k held out; L2/20 | 55,050 params; PEPITA 412 s vs gradient 359 s (~1.15×) | −0.0004, 95% CI [−0.0051, +0.0044], p=0.84, dz=−0.09 | discovery; §3.7 confirms n=10 |
+| 2026-11-14 | MNIST complex/adam: PEPITA vs gradient | 5 | same | — | **retracted**: `complex_substrate_real_compute` refuses every complex cell; PEPITA cells bit-identical | **refused**, not an interaction; §3.9 |
+| 2026-11-14 | MNIST best-backprop check: PEPITA digital/adam vs gradient digital/euclidean | 5 | val_acc, 10k held out; L2/20 | 55,050 params; PEPITA 412 s vs gradient 293 s (~1.41×) | −0.0038, 95% CI [−0.0064, −0.0012], p=0.015 | secondary; cost-adjusted loss |
+
+### Refusal/liveness ledger (axis value vs reference, same seed)
+
+| Date | Axis | Variant | Reference | Observation | Verdict |
 |---|---|---|---|---|---|
-| 2026-11-14 | MNIST digital/adam: PEPITA vs gradient | 5 | val_acc, 10k held out; L2/20 | −0.0004, 95% CI [−0.0051, +0.0044], p=0.84, dz=−0.09 | discovery; §3.7 confirms n=10 |
-| 2026-11-14 | MNIST complex/adam: PEPITA vs gradient | 5 | same | +0.0043, CI [−0.0003, +0.0089], p=0.06 | secondary; substrate interaction |
-| 2026-11-14 | MNIST best-backprop check: PEPITA digital/adam vs gradient digital/euclidean | 5 | val_acc, 10k held out; L2/20 | −0.0038, 95% CI [−0.0064, −0.0012], p=0.015 | secondary; different update, non-inferiority only |
+| 2026-11-14 | substrate | `complex` | `digital` | PEPITA val_acc/train_acc bit-identical per seed (42–46); `complex_substrate_real_compute` refuses every complex cell | **refused**, not live; records cannot count; §3.9 |
 
 **Claim-shaped keys.** 3,437 distinct measurements, but only ~468 distinct keys
 are L2 with planned n≥5; the achieved-seed count is lower. Breadth is a floor,
 not a claim count. The ledger is the claim count.
+
+**Liveness caveat.** The 93/99 pair count counts declared substrate values, not
+live substrates. The complex finding shows a pair can be "measured" on a
+**refused** axis; §3.9's refusal/liveness ledger is the live count. Until the
+audit is complete, pair breadth is a coverage floor, not evidence that every
+axis composes.
+
+**Axis evidence (2026-11-14).** The six-axis program, by what is actually
+claim-grade:
+
+| Axis | Measured (any) | Claim-grade evidence | Gap |
+|---|---|---|---|
+| Substrate | 9/9 declared | digital only | no live non-digital matched comparison; `complex` refused |
+| Geometry | 11/11 | vision/graph/node screening | graph marginal; node n=3 |
+| Dynamics | 8/8 | none | best cells are instantaneous; no matched settling claim |
+| Plasticity | 7/7 | none | no matched plasticity × task claim |
+| Credit | 10/10 | PEPITA digital/adam discovery | graph 2 error-aware; RL refused; most credits L0/1 |
+| Update | 12/12 | none | no matched update × geometry claim |
+
+"Measured (any)" is one PASS record, not a live or claim-grade cell; the
+claim-grade column is the evidence count. The gaps are the program.
 
 ---
 
@@ -404,6 +537,13 @@ not a claim count. The ledger is the claim count.
   names its refusal in one constraint (`rl_credit_must_be_error_blind`) and
   keeps only the rows whose contract matches the lane; a second table of
   "inert" credits is a defect (§3.3b).
+- **A refused pair is not a comparison.** Read the refusal matrix first; a
+  measurement on a refused pair cannot count as breadth or enter a claim (the
+  complex PEPITA pair was one; `complex_substrate_real_compute`). A non-refused
+  axis value that returns bit-identical output to the reference is inert; fix
+  it or declare it unavailable with the measured reason (§3.9). A composition
+  claim names the live, non-refused axes it depends on; if one is refused or
+  inert, retract the claim (§3.7's complex pair).
 - **A coverage cell is not a claim.** A measured pair with n=1, or one below
   its majority rate, closes a hole and enters the scoreboard with that ruler; it
   never enters §2's "best measured" row (§3.4).
@@ -418,9 +558,13 @@ not a claim count. The ledger is the claim count.
 - **A marginal arm gets a stop rule before it runs.** One pre-registered arm
   per lever; if it misses its threshold, record the verdict, close the lever,
   and move on. No third capacity/readout sweep (§3.2).
-- **A local-credit claim outranks a domain bar.** A 0.08σ domain gap is lower
-  value than a matched comparison that tests the differentiated axis; spend the
-  next long run on the latter (§3.7).
+- **A live interaction claim outranks a domain bar.** A 0.08σ domain gap is
+  lower value than a matched comparison that tests a live interaction; spend
+  the next long run on the latter (§3.7, §3.10).
+- **A capability claim is metric at matched cost.** An accuracy tie at 1.4×
+  walltime or 10× energy is not a win; report metric, walltime, parameter count,
+  and energy beside every interaction. The standard stack is the cost reference
+  (§3.10).
 - **A surface defect found here is fixed here only if it blocks the number**;
   otherwise it files into §3 with a measured reason (TODO91 is closed and takes
   no new rows).
@@ -449,16 +593,25 @@ not a claim count. The ledger is the claim count.
   pairs and **0 holes**. The numbers are coverage, not a claim. The batched
   graph-classification path under settling dynamics still fails (1134-vs-32
   shape mismatch), filed as §3.6.
-- The **claim-conversion phase** starts here (2026-11-14). The corpus's
-  highest-value result is the matched MNIST pair: PEPITA 0.9751 ± 0.0020 vs
-  gradient 0.9755 ± 0.0023 (n=5, L2/20, seeds 42–46; paired −0.0004, 95% CI
-  [−0.0051, +0.0044], p=0.84). It is discovery, not a claim. §3.7 adds the
-  equivalence predicate, commits `t93_pepita_mnist.json`, and runs new seeds
-  47–56 (~2.1 h CPU) to decide whether a local credit matches backprop.
-- Open work, in priority order: §3.7 PEPITA equivalence claim; §3.3c gate
-  metric bar; §3.2 one graph readout arm with a stop rule; §3.8 claim-conversion
-  backlog (node/graph/RL/tabular); §3.6 batched graph-settle (deferred); §3.1
-  regression claims (n=1, no current claim).
+- The **refusal/liveness phase** starts here (2026-11-14). The first audit
+  finding is a refusal, not a factory defect: `complex` is declared
+  real-arithmetic and every complex cell is refused by
+  `complex_substrate_real_compute`. The PEPITA complex/digital cells are
+  bit-identical because the operator is the digital matmul; that pair is one of
+  the 257 refused-pair measurements that cannot count as substrate breadth.
+  §3.9 classifies every axis value as refused, live, or inert before §3.10
+  composes an interaction.
+- The **credit-axis probe** remains valid on the live digital pair: PEPITA
+  0.9751 ± 0.0020 vs gradient 0.9755 ± 0.0023 (n=5, L2/20, seeds 42–46; paired
+  −0.0004, 95% CI [−0.0051, +0.0044], p=0.84). Cost: 55,050 params; PEPITA
+  412 s/seed vs gradient 359 s (~1.15×), and vs the best backprop 293 s
+  (~1.41×) at −0.38 pp. It is a **cost-adjusted parity, not a capability win**;
+  §3.7 adds the equivalence predicate and runs seeds 47–56 (~2.1 h CPU), and
+  §3.10 searches for a cell where a non-standard axis wins at matched cost.
+- Open work, in priority order: §3.9 refusal/liveness audit; §3.7 PEPITA
+  digital equivalence; §3.10 interaction matrix; §3.3c gate metric bar; §3.2
+  one graph readout arm with a stop rule; §3.8 claim-conversion backlog;
+  §3.6 batched graph-settle (deferred); §3.1 regression claims (n=1).
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
