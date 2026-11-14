@@ -1,7 +1,8 @@
 # TODO92 — Breadth and evidence (successor to TODO91)
 
 **Status:** 2026-11-14 · §3.0a and §3.0 closed (ruler + baseline re-verified);
-next §3.2 (graph marginal), §3.3 (RL), §3.4 (`neuromorphic × graph`).
+§3.2 capacity arm rejected, graph stays marginal; next §3.3 (RL), §3.4
+(`neuromorphic × graph`), §3.2 readout lever.
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -128,10 +129,20 @@ walltime, and never records a run into a store.
    counts, not yet re-counted as measurements).
 2. **Graph classification is marginal.** Re-run 0.7013 ± 0.0164 (SD), n=5,
    223 held out: 0.08σ above the 0.70 bar, so the claim rule says marginal, not
-   met. A pre-registered paired comparison
-   (`configs/preregistrations/<slug>.json`) against the majority baseline, or a
-   named arm (wider/deeper graph stack, another error-aware credit) decides it.
-   Not a seed sweep: n=5 already prices the spread.
+   met. **Capacity arm excluded (2026-11-14).** Pre-registered in
+   `configs/preregistrations/t92_graph_capacity.json` and run by
+   `scripts/probes/t92_graph_capacity.py`: 256-wide 6-layer vs 128-wide 4-layer,
+   paired over seeds 42–46, threshold +0.01. Treatment 0.6816 ± 0.0210 vs
+   control 0.6960 ± 0.0260: mean diff −0.0143, CI [−0.0395, +0.0036], p=0.41 —
+   **FAIL**, capacity is not the lever (train_acc 0.718 shows underfitting, so
+   more parameters were the plausible fix; they did not help). The credit axis
+   is excluded by record too: the only other
+   error-aware graph credit, `random_projections`, holds 0.6233 on PROTEINS.
+   Two runs of the same control cell measure 0.7013 and 0.6960, so run noise is
+   ~0.005 and the marginal band is wider than the CI suggests. The remaining
+   lever is the readout (mean pooling; `pooling` is not a declared knob) or a
+   different task split — a design change, not a seed sweep. Cost: one arm, 8
+   min.
 3. **RL.** −1219 against > −200. This is a capability gap, not a tuning gap:
    check episode budget, reward scaling, and whether the control task's
    geometry/credit pairing is legal before treating it as an algorithm result.
@@ -157,6 +168,7 @@ walltime, and never records a run into a store.
 | 2026-11-14 | corpus breadth | 3,431 measurements (7,442 records) | 441 stores | distinct `measurement_key`; 92/98 pairs, 1 hole | instrument prints both; §2 reproduces | §3.0a (closed) |
 | 2026-11-14 | vision | MNIST 0.9787 ± 0.0009 (SD) | 3 | val_acc, 10k held out; chance 0.10 | reproduced; met | §3.0 (closed) |
 | 2026-11-14 | graph classification | PROTEINS 0.7013 ± 0.0164 (SD) | 5 | 223 held out; majority 0.596 | reproduced; **marginal** (0.08σ) | §3.2 |
+| 2026-11-14 | graph classification | 256×6 capacity arm 0.6816 ± 0.0210 | 5 | paired vs 128×4 control 0.6960; same seeds | pre-registered diff −0.0143, CI [−0.0395, +0.0036], p=0.41 — **arm rejected** | §3.2 |
 | 2026-11-14 | node classification | Cora 0.7660 ± 0.0151 (SD) | 3 | 500 public-split nodes; majority 0.316 | reproduced; met (1.06σ) | §3.0 (closed) |
 | 2026-11-14 | tabular | wine 1.0000 (record 0.9722 did not reproduce) | 3 | 36 held out (resolution 0.0278); majority 0.389 | re-run is the measurement; met | §3.0 (closed) |
 | 2026-11-14 | RL | pendulum −1219 (best record) | 1 | L0 3 ep, mean reward; credit error-blind | not replayable; **not met** | §3.3 |
@@ -193,9 +205,10 @@ One row per domain per measurement; a row is superseded, never edited.
   the plan of record.
 - §3.0a and §3.0 are closed (2026-11-14): the instrument prints records and
   distinct measurements, and every §2 row carries a re-execution whose
-  `measurement_key` matches its located record. The next tickets are §3.2
-  (graph marginal: a preregistration or a named arm) and §3.3 (RL: no
-  error-aware credit has run the task).
+  `measurement_key` matches its located record. §3.2's capacity arm is rejected
+  by pre-registered paired comparison; the graph row stays marginal and its next
+  lever is the readout, not capacity or credit. §3.3 (RL) has no error-aware
+  credit on the task.
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
