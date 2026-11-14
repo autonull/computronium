@@ -37,6 +37,7 @@ def make_case(
         "tau": 20.0,
         "tau_pre": 0.9,
         "tau_post": 0.9,
+        "seed": seed,
         "target": torch.randint(0, 4, (2,), device=device, generator=generator),
     }
 

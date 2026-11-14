@@ -7,7 +7,9 @@ primitive is covered by registering it, not by copying a test triple.
 
 from __future__ import annotations
 
+import ast
 import dataclasses
+import inspect
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
@@ -44,6 +46,132 @@ def package(spec: ImplementationSpec) -> str:
 def make_case(spec: ImplementationSpec, **kwargs: Any) -> Any:
     """Build a case from the spec's own cases module."""
     return import_module(f"{package(spec)}.cases").make_case(**kwargs)
+
+
+def case_class(spec: ImplementationSpec) -> type | None:
+    """The ``Case`` type the spec's cases module declares, if it declares one."""
+    module = import_module(f"{package(spec)}.cases")
+    declared = getattr(module, "Case", None)
+    return declared if isinstance(declared, type) else None
+
+
+class RecordingConfig(dict):
+    """A case config that remembers every key read from it."""
+
+    read: set[str]
+
+    def __init__(self, source: dict[str, Any], read: set[str]) -> None:
+        super().__init__(source)
+        self.read = read
+
+    def __getitem__(self, key: str) -> Any:
+        self.read.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self.read.add(key)
+        return super().get(key, default)
+
+
+def case_factories(spec: ImplementationSpec) -> tuple[str, ...]:
+    """Every case factory the spec's cases module declares."""
+    module = import_module(f"{package(spec)}.cases")
+    return tuple(
+        sorted(
+            name
+            for name in dir(module)
+            if name.startswith("make_case") and callable(getattr(module, name))
+        )
+    )
+
+
+def config_reads(spec: ImplementationSpec) -> frozenset[str]:
+    """The ``case.config`` keys the spec's reference reads, statically and at run time.
+
+    A case factory that omits a key its own reference knows about silently uses
+    the reference's default: the drift the legacy per-package
+    ``config_structure`` assertions guarded against. The read set is derived
+    from the reference, so adding a knob to a law adds its key here.
+
+    Two passes, because neither is complete alone: an AST pass sees branches a
+    single seed does not take, and a recording-dict pass sees reads that a
+    factory helper or a passed-in config factory performs (where the static
+    scan cannot follow).
+    """
+    return _static_config_reads(spec) | _runtime_config_reads(spec)
+
+
+def _literal_config_read(node: ast.AST, aliases: set[str]) -> str | None:
+    """The literal key ``node`` reads from the case config, if it reads one."""
+    match node:
+        case ast.Subscript(
+            value=ast.Attribute(value=ast.Name(id="case"), attr="config"),
+            slice=ast.Constant(value=str() as key),
+        ):
+            return key
+        case ast.Subscript(
+            value=ast.Name(id=name), slice=ast.Constant(value=str() as key)
+        ) if name in aliases - {"case.config"}:
+            return key
+        case ast.Call(
+            func=ast.Attribute(value=ast.Name(id=name), attr="get"),
+            args=[ast.Constant(value=str() as key), *_],
+        ) if name in aliases - {"case.config"}:
+            return key
+        case ast.Call(
+            func=ast.Attribute(
+                value=ast.Attribute(value=ast.Name(id="case"), attr="config"),
+                attr="get",
+            ),
+            args=[ast.Constant(value=str() as key), *_],
+        ):
+            return key
+    return None
+
+
+def _static_config_reads(spec: ImplementationSpec) -> frozenset[str]:
+    """Literal keys read from ``case.config`` or a local alias, by AST."""
+    module = import_module(spec.reference_entrypoint.rpartition(".")[0])
+    tree = ast.parse(inspect.getsource(module))
+
+    def is_case_config(node: ast.expr) -> bool:
+        return (
+            isinstance(node, ast.Attribute)
+            and node.attr == "config"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "case"
+        )
+
+    keys: set[str] = set()
+    for function in ast.walk(tree):
+        if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        aliases = {"case.config"}
+        for node in ast.walk(function):
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and is_case_config(node.value)
+            ):
+                aliases.add(node.targets[0].id)
+        for node in ast.walk(function):
+            key = _literal_config_read(node, aliases)
+            if key is not None:
+                keys.add(key)
+    return frozenset(keys)
+
+
+def _runtime_config_reads(spec: ImplementationSpec) -> frozenset[str]:
+    """Keys read from the case config while the reference runs."""
+    case = make_case(spec, seed=0)
+    config = getattr(case, "config", None)
+    if not isinstance(config, dict):
+        return frozenset()
+    read: set[str] = set()
+    instrumented = dataclasses.replace(case, config=RecordingConfig(config, read))
+    reference(spec, instrumented)
+    return frozenset(read)
 
 
 def call(spec: ImplementationSpec, entrypoint: str, case: Any) -> Any:

@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from tests.primitives._contract import axis_specs, make_case, reference
+from tests.primitives._contract import axis_specs, make_case, payload, reference
 
 SPECS = axis_specs("plasticity")
 IDS = [spec.id for spec in SPECS]
@@ -37,14 +37,19 @@ def test_plastic_state_schema_is_seed_independent(spec) -> None:
 
 
 @pytest.mark.parametrize("spec", SPECS, ids=IDS)
-def test_step_preserves_the_case_plastic_state(spec) -> None:
-    """Every plastic tensor the case declares survives the step with its shape."""
+def test_step_preserves_every_state_tensor_it_names(spec) -> None:
+    """Every case tensor an output key names survives with its shape.
+
+    Covers a law that carries its plastic state in a ``psi`` mapping and one
+    that carries it in named fields (fast weights, routing gates).
+    """
     case = make_case(spec, seed=0)
-    psi = getattr(case, "psi", {})
     output = reference(spec, case)
-    for name, tensor in psi.items():
-        assert name in output, (spec.id, name)
-        assert output[name].shape == tensor.shape, (spec.id, name)
+    for name, value in payload(case).items():
+        items = value.items() if isinstance(value, dict) else ((name, value),)
+        for key, tensor in items:
+            if key in output and isinstance(tensor, torch.Tensor):
+                assert output[key].shape == tensor.shape, (spec.id, key)
 
 
 def test_no_op_laws_return_an_empty_state() -> None:

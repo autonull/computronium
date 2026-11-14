@@ -14,6 +14,8 @@ below with the reason; everything else must vary with the seed.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 import torch
 
@@ -21,6 +23,8 @@ from computronium.acceleration.parity import digest
 from computronium.acceleration.registry import all_specs
 from tests.primitives._contract import (
     axis_specs,
+    case_class,
+    config_reads,
     make_case,
     payload,
     reference,
@@ -45,6 +49,23 @@ SEED_BLIND: dict[str, str] = {
     "primitive.plasticity.null": "no-op plasticity returns its input unchanged",
     "primitive.plasticity.substrate_coupled": "psi is the substrate coupling",
 }
+
+
+@pytest.mark.parametrize("spec", SPECS, ids=IDS)
+def test_case_is_the_type_its_module_declares(spec) -> None:
+    """A case factory returns its module's ``Case`` type, else a dataclass case."""
+    declared = case_class(spec)
+    case = make_case(spec, seed=0)
+    assert declared is not None or dataclasses.is_dataclass(case), spec.id
+    if declared is not None:
+        assert isinstance(case, declared), spec.id
+
+
+@pytest.mark.parametrize("spec", SPECS, ids=IDS)
+def test_case_config_supplies_every_key_the_reference_reads(spec) -> None:
+    """The case config names every knob its reference reads, defaults included."""
+    missing = config_reads(spec) - set(make_case(spec, seed=0).config)
+    assert not missing, (spec.id, sorted(missing))
 
 
 @pytest.mark.parametrize("spec", SPECS, ids=IDS)
