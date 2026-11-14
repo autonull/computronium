@@ -100,12 +100,13 @@ def test_every_primitive_declares_a_kernel_entrypoint() -> None:
     assert not missing, missing
 
 
-def test_an_explicit_batch_axis_declaration_is_explained() -> None:
-    """A spec that overrides its axis's batch rule states why."""
+def test_an_explicit_axis_declaration_is_explained() -> None:
+    """A spec that overrides its axis's batch or seed rule states why."""
     unexplained = [
         spec.id
         for spec in SPECS
-        if spec.batch_axis is not None and not spec.batch_axis_reason
+        if (spec.batch_axis is not None and not spec.batch_axis_reason)
+        or (spec.seed_sensitive is not None and not spec.seed_free_reason)
     ]
     assert not unexplained, unexplained
 
@@ -168,14 +169,80 @@ def test_kernel_matches_reference_at_a_second_seed(spec) -> None:
 
 GEOMETRIES = tuple(spec for spec in SPECS if spec.axis == "geometry")
 SUBSTRATES = tuple(spec for spec in SPECS if spec.axis == "substrate")
+DYNAMICS = tuple(spec for spec in SPECS if spec.axis == "state_dynamics")
+CREDITS = tuple(spec for spec in SPECS if spec.axis == "credit_assignment")
+PLASTICITIES = tuple(spec for spec in SPECS if spec.axis == "plasticity")
+UPDATES = tuple(spec for spec in SPECS if spec.axis == "parameter_update")
+SEED_VARYING = tuple(spec for spec in SPECS if spec.varies_with_seed)
 
 
-@pytest.mark.parametrize("spec", GEOMETRIES, ids=[s.id for s in GEOMETRIES])
-def test_geometry_parameters_depend_on_seed(spec) -> None:
-    """A geometry factory initialized under two seeds cannot be seed-blind."""
+def _ids(specs: tuple[Any, ...]) -> list[str]:
+    return [spec.id for spec in specs]
+
+
+@pytest.mark.parametrize("spec", SEED_VARYING, ids=_ids(SEED_VARYING))
+def test_reference_varies_with_seed(spec) -> None:
+    """A seed-varying reference cannot be seed-blind."""
     first = _run(spec, spec.reference_entrypoint, seed=0)
     second = _run(spec, spec.reference_entrypoint, seed=1)
     assert digest(first) != digest(second), spec.id
+
+
+@pytest.mark.parametrize("spec", DYNAMICS, ids=_ids(DYNAMICS))
+def test_dynamics_step_returns_a_composite_state(spec) -> None:
+    """Every dynamics step settles the case state, not an unrelated shape."""
+    from computronium.state import CompositeState
+
+    case = _case(spec, 0)
+    state = _run(spec, spec.reference_entrypoint, seed=0)
+    assert isinstance(state, CompositeState), spec.id
+    assert state.x is not None and state.x.shape == case.state.shape, spec.id
+    activations = state.activations
+    assert isinstance(activations, list) and activations, spec.id
+    assert activations[0].shape == case.state.shape, spec.id
+
+
+@pytest.mark.parametrize("spec", UPDATES, ids=_ids(UPDATES))
+def test_update_step_covers_the_harness_parameters(spec) -> None:
+    """An update returns one updated tensor per harness parameter."""
+    from computronium.harness import update_geometry
+
+    case = _case(spec, 0)
+    expected = update_geometry(case).params
+    updated = _run(spec, spec.reference_entrypoint, seed=0)
+    assert isinstance(updated, dict), spec.id
+    assert set(updated) == set(expected), spec.id
+    for name, tensor in updated.items():
+        assert torch.is_tensor(tensor), (spec.id, name)
+        assert tensor.shape == expected[name].shape, (spec.id, name)
+
+
+@pytest.mark.parametrize("spec", CREDITS, ids=_ids(CREDITS))
+def test_credit_step_returns_one_gradient_per_parameter(spec) -> None:
+    """A credit returns tensors shaped like the geometry's parameters."""
+    case = _case(spec, 0)
+    grads = _run(spec, spec.reference_entrypoint, seed=0)
+    assert isinstance(grads, list) and grads, spec.id
+    assert all(torch.is_tensor(grad) for grad in grads), spec.id
+    geometry = getattr(case, "geometry", None)
+    if geometry is None:
+        return
+    parameter_shapes = {tuple(param.shape) for param in geometry.params.values()}
+    assert {tuple(grad.shape) for grad in grads} <= parameter_shapes, spec.id
+
+
+@pytest.mark.parametrize("spec", PLASTICITIES, ids=_ids(PLASTICITIES))
+def test_plasticity_step_returns_named_tensors(spec) -> None:
+    """A plasticity step returns a tensor per plastic variable it changes."""
+    case = _case(spec, 0)
+    updated = _run(spec, spec.reference_entrypoint, seed=0)
+    assert isinstance(updated, dict), spec.id
+    assert all(torch.is_tensor(value) for value in updated.values()), spec.id
+    plastic = getattr(case, "psi", None)
+    if plastic:
+        assert set(updated) == set(plastic), spec.id
+        for name, tensor in updated.items():
+            assert tensor.shape == plastic[name].shape, (spec.id, name)
 
 
 @pytest.mark.parametrize("spec", SUBSTRATES, ids=[s.id for s in SUBSTRATES])

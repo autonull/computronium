@@ -65,6 +65,11 @@ AXIS_SEGMENT: Final[dict[str, str]] = {
 #: out of the batch-axis contract (e.g. a plasticity law that returns its input).
 BATCH_FREE_AXES: Final[frozenset[str]] = frozenset({"parameter_update"})
 
+#: Axes whose reference output is a pure function of the spec, not the seed
+#: (a substrate factory builds the same object for one spec). A spec on another
+#: axis declares ``seed_sensitive=False`` to opt out (e.g. a no-op law).
+SEED_FREE_AXES: Final[frozenset[str]] = frozenset({"substrate"})
+
 
 def axis_segment(axis: str) -> str:
     """The runtime axis segment a spec axis names.
@@ -133,6 +138,8 @@ class ImplementationSpec:
     axis: Axis | None = None
     batch_axis: BatchAxis | None = None
     batch_axis_reason: str = ""
+    seed_sensitive: bool | None = None
+    seed_free_reason: str = ""
 
     # Algorithm metadata
     uses_primitives: tuple[str, ...] = ()
@@ -161,3 +168,17 @@ class ImplementationSpec:
         if self.batch_axis is not None:
             return self.batch_axis == "read"
         return self.axis not in BATCH_FREE_AXES
+
+    @property
+    def varies_with_seed(self) -> bool:
+        """Whether the reference output must change with the case seed.
+
+        A substrate factory is a function of its spec, so it is seed-free by
+        axis; a no-op law declares ``seed_sensitive=False`` with a reason.
+
+        Returns:
+            ``False`` for a seed-free spec, else ``True``.
+        """
+        if self.seed_sensitive is not None:
+            return self.seed_sensitive
+        return self.axis not in SEED_FREE_AXES
