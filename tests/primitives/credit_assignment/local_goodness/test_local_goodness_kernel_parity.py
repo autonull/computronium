@@ -10,28 +10,23 @@ from computronium.primitives.credit_assignment.local_goodness import (
 
 
 def test_kernel_parity() -> None:
-    case = make_case(seed=42)
-
-    reference_output = reference_step(case)
-    kernel_output = kernel_step(case)
+    # FF consumes the case's autograd graph; each rung gets its own case.
+    reference_output = reference_step(make_case(seed=42))
+    kernel_output = kernel_step(make_case(seed=42))
 
     assert_parity(reference_output, kernel_output, SPEC.parity)
 
 
 def test_kernel_parity_different_seeds() -> None:
     for seed in [42, 43, 44]:
-        case = make_case(seed=seed)
-
-        reference_output = reference_step(case)
-        kernel_output = kernel_step(case)
+        reference_output = reference_step(make_case(seed=seed))
+        kernel_output = kernel_step(make_case(seed=seed))
 
         assert_parity(reference_output, kernel_output, SPEC.parity)
 
 
 def test_kernel_parity_lemma_mode() -> None:
-    case = make_case(seed=42, local_objective="lemma")
-
-    reference_output = reference_step(case)
-    kernel_output = kernel_step(case)
+    reference_output = reference_step(make_case(seed=42, local_objective="lemma"))
+    kernel_output = kernel_step(make_case(seed=42, local_objective="lemma"))
 
     assert_parity(reference_output, kernel_output, SPEC.parity)

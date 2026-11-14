@@ -917,3 +917,26 @@ ticket here):
 - **Next experiment:** S1d — fold the 172 legacy per-package test files into
   `test_primitive_kernel_parity.py` + the generated invariant modules, and
   measure the delta (items/walltime before and after).
+
+**2026-11-13 — local_goodness FF reference fix (isolated).**
+
+- **Experiment:** `pytest tests/primitives/credit_assignment/local_goodness
+  tests/property/generated/test_primitive_credit_assignment_local_goodness_invariants.py`;
+  wider gate `pytest tests/primitives tests/unit/core/test_credit.py
+  tests/acceleration/test_rung_parity.py tests/property/test_ontology_parity.py
+  tests/property/test_axis_certifications.py`.
+- **Result:** 11 passed in 10.0 s; wider gate 713 passed + 12 xfailed in 77.3 s.
+  FF gradients are nonzero and seed-sensitive: abs-sums `[5.485, 0.684, 0.119]`
+  at seed 0 and `[3.623, 0.536, 0.064]` at seed 43; previously all zero.
+- **Defect:** the reference wrapper rebuilt the geometry from cloned weights, so
+  the activations' autograd graph never reached the parameters. The deleted
+  per-package test asserted only shape and had weakened its seed check.
+- **Fix:** pass `case.geometry` as the reference's geometry
+  (`local_goodness/reference.py`); the determinism and parity tests now build a
+  fresh case per call because the FF path consumes the case's graph. Removing
+  the fix fails `test_reference_step_is_nonzero` and
+  `test_reference_step_different_seeds`.
+- **Note:** the S1d consolidation series was reverted to `660edb01`
+  (`4eddce33`); S1d is open again. This fix stands alone.
+- **Next experiment:** consolidate S1d one axis at a time, or take the §8 queue
+  that blocks a claim.
