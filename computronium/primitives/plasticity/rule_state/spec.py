@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Rule State",
     axis="plasticity",
-    output_keys=("operator_logits", "controller_state"),
     reference_entrypoint=(
         "computronium.primitives.plasticity.rule_state.reference.step"
     ),

@@ -17,9 +17,10 @@ computronium/primitives/<axis>/<name>/ with:
 - kernel.py
 - cases.py
 
-The package is covered by registration alone: ``tests/primitives/
-test_primitive_kernel_parity.py`` parameterizes every spec, and
-``scripts/generate_property_tests.py`` emits its invariant module.
+And corresponding test files under tests/primitives/<axis>/<name>/:
+- test_reference.py
+- test_kernel_parity.py
+- test_cases.py
 """
 
 import argparse
@@ -129,6 +130,7 @@ def _get_file_pairs(
     args: argparse.Namespace, env: Environment
 ) -> list[tuple[Path, Template]]:
     primitive_dir = Path(f"computronium/primitives/{args.axis}/{args.name}")
+    test_dir = Path(f"tests/primitives/{args.axis}/{args.name}")
 
     return [
         (primitive_dir / "__init__.py", env.get_template("init.py.j2")),
@@ -136,6 +138,12 @@ def _get_file_pairs(
         (primitive_dir / "reference.py", env.get_template("reference.py.j2")),
         (primitive_dir / "kernel.py", env.get_template("kernel.py.j2")),
         (primitive_dir / "cases.py", env.get_template("cases.py.j2")),
+        (test_dir / "test_reference.py", env.get_template("test_reference.py.j2")),
+        (
+            test_dir / "test_kernel_parity.py",
+            env.get_template("test_kernel_parity.py.j2"),
+        ),
+        (test_dir / "test_cases.py", env.get_template("test_cases.py.j2")),
     ]
 
 
@@ -197,16 +205,14 @@ def _write_files(
 
 def _print_success(args: argparse.Namespace) -> None:
     primitive_dir = Path(f"computronium/primitives/{args.axis}/{args.name}")
+    test_dir = Path(f"tests/primitives/{args.axis}/{args.name}")
     print(f"\nPrimitive '{args.name}' scaffolded successfully!")
     print(f"  Primitive: {primitive_dir}")
+    print(f"  Tests:     {test_dir}")
     print("\nNext steps:")
     print("  1. Review and customize the generated files")
-    print("  2. Run the contract: uv run pytest tests/primitives -q")
-    print(
-        "  3. Generate its invariant module: "
-        "uv run python scripts/generate_property_tests.py"
-    )
-    print("  4. Update ontology imports if needed")
+    print(f"  2. Run tests: uv run pytest {test_dir} -q")
+    print("  3. Update ontology imports if needed")
 
 
 def main() -> int:

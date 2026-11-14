@@ -232,22 +232,26 @@ def test_a_batched_rung_answers_for_every_sample_in_the_batch(
 # same `cases.make_case()` that parity tests use, ensuring proper structure.
 
 
-# References that don't address the batch axis by design are declared on the
-# spec (`ImplementationSpec.reads_batch_axis`): a parameter update consumes
-# batch-averaged gradients, and the two no-op plasticity laws return their input.
-# The audit reads that declaration instead of keeping a second list.
-def _declared_batch_free_references() -> set[str]:
-    """Reference modules whose spec declares no batch-axis read."""
-    from computronium.acceleration.registry import all_specs
-
-    return {
-        spec.reference_entrypoint.rpartition(".")[0]
-        for spec in all_specs()
-        if not spec.reads_batch_axis
-    }
-
-
-BATCH_AXIS_SKIP: set[str] = _declared_batch_free_references()
+# References that don't address batch axis by design:
+# - parameter_update.*: operate on batch-averaged gradients, not batched data
+# - plasticity.null: no-op by design
+# - plasticity.substrate_coupled: no-op at plasticity level (ψ ≡ σ)
+BATCH_AXIS_SKIP: set[str] = {
+    "computronium.primitives.parameter_update.adam.reference",
+    "computronium.primitives.parameter_update.elastic_consolidation.reference",
+    "computronium.primitives.parameter_update.euclidean.reference",
+    "computronium.primitives.parameter_update.lion.reference",
+    "computronium.primitives.parameter_update.local_adam.reference",
+    "computronium.primitives.parameter_update.mean_norm.reference",
+    "computronium.primitives.parameter_update.muon.reference",
+    "computronium.primitives.parameter_update.natural_gradient.reference",
+    "computronium.primitives.parameter_update.ortho_adam.reference",
+    "computronium.primitives.parameter_update.riemannian_orthogonal.reference",
+    "computronium.primitives.parameter_update.role_split.reference",
+    "computronium.primitives.parameter_update.spectral_constrained.reference",
+    "computronium.primitives.plasticity.null.reference",
+    "computronium.primitives.plasticity.substrate_coupled.reference",
+}
 
 
 def _reference_batch_runs() -> list[tuple[str, Callable[..., Any], Any]]:

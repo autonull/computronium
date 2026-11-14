@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     kind="primitive",
     name="Fast Weights Plasticity",
     axis="plasticity",
-    output_keys=("fast_weights",),
     reference_entrypoint=(
         "computronium.primitives.plasticity.fast_weights.reference.step"
     ),

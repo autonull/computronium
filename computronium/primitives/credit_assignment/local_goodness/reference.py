@@ -26,11 +26,4 @@ def _config_factory(config: dict[str, Any]) -> CreditAssignmentConfig:
     )
 
 
-step = make_reference_step(
-    LocalGoodnessCredit,
-    _config_factory,
-    # FF descends the autograd graph of the activations, so the geometry must be
-    # the one those activations were computed from. Rebuilding it from cloned
-    # weights disconnects the graph and yields all-zero pseudo-gradients.
-    case_to_geometry_fn=lambda case: case.geometry,
-)
+step = make_reference_step(LocalGoodnessCredit, _config_factory)
