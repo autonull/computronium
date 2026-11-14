@@ -1,10 +1,12 @@
 # TODO92 — Breadth and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a, §3.0, §3.3 and §3.3b closed. RL is met at
+**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b and §3.4 closed. RL is met at
 −135.1 (n=3, 400 episodes); its credit axis is now a declared refusal — only
 `error_blind` credits compose on RL tasks (§3.3b). Graph stays marginal with
-capacity excluded (§3.2). Next: the graph readout lever (§3.2), then
-`neuromorphic × graph` (§3.4) or the gate metric bar (§3.3c).
+capacity excluded (§3.2); every declared substrate × geometry pair is now
+measured or refused by a named rule, with 0 holes (§3.4). Next: the graph
+readout lever (§3.2), the batched graph-classification settle path (§3.6), or
+the gate metric bar (§3.3c).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -41,22 +43,25 @@ attempts, one revert, zero capability.
 
 ## 2. Measured baseline (2026-11-14)
 
-Corpus: **7,442 PASS records / 441 stores** — **3,431 distinct
-measurements** (the two numbers differ; see the ruler note); **28/28 tasks**
-measured; **92/98** substrate × geometry pairs hold a measurement (25 refused by
-a named rule, 19 hold 257 measurements that cannot count as substrate breadth, 1
-unmeasured: `neuromorphic × graph`).
+Corpus (re-measured 2026-11-14 after §3.4): **7,450 PASS records / 443
+stores** — **3,437 distinct measurements** (the two numbers differ; see the
+ruler note); **28/28 tasks** measured; **93/99** substrate × geometry pairs hold
+a measurement (25 refused by a named rule, 19 hold 257 measurements that cannot
+count as substrate breadth, **0 unmeasured**). The last hole,
+`neuromorphic × graph`, now holds three cells recorded in
+`experiments/t92_neuromorphic_graph.duckdb` (§3.4).
 
 **Ruler note (measured 2026-11-14; re-measured by §3.0a).** `scan_corpus` counts
 PASS records, and `measurement_key` is unique *within* a store, not across
-stores: 441 stores hold 7,442 PASS records for **3,431 distinct configurations**
-(1,300 keys repeat; max 114). Every earlier "PASS cells" number in TODO85–91 is
-therefore a record count, inflated ~2.2× by re-runs. Breadth is quoted as
-distinct measurements from here on; "28/28 tasks" survives because it unions
-task ids. The report now prints both numbers: `7,442 PASS records = 3,431
-distinct measurements` over 441 readable stores. Pair breadth: **92/98** hold a
+stores: 441 stores held 7,442 PASS records for **3,431 distinct configurations**
+before §3.4 (1,300 keys repeat; max 114); the §3.4 store adds 4 records and 3
+measurements. Every earlier "PASS cells" number in TODO85–91 is therefore a
+record count, inflated ~2.2× by re-runs. Breadth is quoted as distinct
+measurements from here on; "28/28 tasks" survives because it unions task ids.
+The report now prints both numbers: `7,450 PASS records = 3,437 distinct
+measurements` over 443 readable stores. Pair breadth: **93/99** hold a
 measurement, 25 are refused by a named rule (19 of those hold 257 measurements
-that cannot count as substrate breadth), 1 hole: `neuromorphic × graph`.
+that cannot count as substrate breadth), **0 holes**.
 
 | Domain | Best measured (re-executed 2026-11-14) | Ruler | Target | Verdict |
 |---|---|---|---|---|
@@ -187,12 +192,32 @@ walltime, and never records a run into a store.
     means defect-free, never above-bar"). **Still open:** the stronger fix, a
     per-task metric bar in the gate. Until it exists, every claim in this plan
     is read from the payload metric against its task bar, never from PASS.
-4. **`neuromorphic × graph`** — no cell, no rule. Either a graph-operator path
-   for the substrate or a declared refusal with a measured reason.
+4. ~~**`neuromorphic × graph`**~~ — **closed 2026-11-14: measured, not
+   refused.** The pair is runnable on node classification. Three L0/1-epoch
+   cells on Cora (500-node public split, majority 0.316) recorded to
+   `experiments/t92_neuromorphic_graph.duckdb` (run `707b3848`):
+   `energy_minimization + gradient` 0.154 (19 s), `energy_minimization +
+   temporal_trace` 0.146 (0.03 s), `spike_integration + temporal_trace` 0.130
+   (0.07 s); the `digital/graph/instantaneous/gradient` positive control
+   measured 0.132. All four PASS; this is **coverage, not a claim** — the
+   numbers sit below the majority rate at one epoch and no seed replication
+   exists. Corpus: 93/99 pairs, **0 holes**. The graph path is node-mode; the
+   batched graph-classification path still fails under settling dynamics, filed
+   as §3.6.
 5. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
    RNG seeding, objective validation and the settle-driver loop are green
    (269 passed in the final gate). No claim made here rests on a known-red
    lock.
+6. **Graph classification × settling dynamics.** PROTEINS with
+    `energy_minimization` dies on the batched readout (`Expected input
+    batch_size (1134) to match target batch_size (32)`; Dynamo reports the same
+    1134-vs-32 mismatch for the fake-tensor call). `spike_integration` fails
+    the same way; `diffusion` is refused earlier by
+    `diffusion_dynamics_geometry` (requires recurrent). Node-mode Cora works
+    (§3.4), so the defect is the pooled batched path, not the pair. Acceptance:
+    a graph-batched settle path that trains, or a declared refusal naming the
+    shape mismatch. Measured cost: <1 s to the failure; a fix is an
+    operator-path change, not a tuning run.
 
 ---
 
@@ -211,6 +236,9 @@ walltime, and never records a run into a store.
 | 2026-11-14 | RL (credit axis) | six credits identical: mean_reward −126.4 | 1 | 30 episodes, L0 | credit inert — one value for all six | §3.3b |
 | 2026-11-14 | RL (credit axis) | `gradient` = `homeostatic` = −1536.608102 | 2 credits | 1 epoch, seed 42; 15 s/cell | error-aware credits **refused** on RL; only `error_blind` rows compose | §3.3b (closed) |
 | 2026-11-14 | RL | pendulum −135.1 ± 9.0 (SD) | 3 | 400 episodes (40×10), mean return; chance ≈ −1200 | CI [−144.9, −127.2] vs −200; **met** | §3.3 (closed) |
+| 2026-11-14 | corpus breadth | 3,437 measurements (7,450 records) | 443 stores | distinct `measurement_key`; 93/99 pairs, **0 holes** | §3.4 closes the last hole | §3.4 (closed) |
+| 2026-11-14 | neuromorphic × graph (Cora) | 0.1540 / 0.1460 / 0.1300 | 1 seed each | 500-node public split; majority 0.316; L0/1 epoch | **coverage, not a claim** (below majority; no replication) | §3.4 (closed) |
+| 2026-11-14 | graph classification × settling | failure: 1134 vs 32 | 1 | PROTEINS batch, node-major readout | batched path dies under energy_minimization/spike; node-mode works | §3.6 |
 
 One row per domain per measurement; a row is superseded, never edited.
 
@@ -235,6 +263,9 @@ One row per domain per measurement; a row is superseded, never edited.
   names its refusal in one constraint (`rl_credit_must_be_error_blind`) and
   keeps only the rows whose contract matches the lane; a second table of
   "inert" credits is a defect (§3.3b).
+- **A coverage cell is not a claim.** A measured pair with n=1, or one below
+  its majority rate, closes a hole and enters the scoreboard with that ruler; it
+  never enters §2's "best measured" row (§3.4).
 - **Claims need n≥3 and a preregistration** when the result sits within 1σ of
   its threshold (`configs/preregistrations/`).
 - **A surface defect found here is fixed here only if it blocks the number**;
@@ -260,6 +291,14 @@ One row per domain per measurement; a row is superseded, never edited.
   keeps the two `error_blind` rows; the probe reproduces the identity
   (`gradient` = `homeostatic` = −1536.608102 at 1 epoch). A credit-aware RL
   update remains unbuilt and is the only way to reopen the axis.
+- §3.4 is closed (2026-11-14) with measurements: `neuromorphic × graph` runs on
+  Cora (node mode) at L0/1 epoch in three cells, so the corpus holds **93/99**
+  pairs and **0 holes**. The numbers are coverage, not a claim. The batched
+  graph-classification path under settling dynamics still fails (1134-vs-32
+  shape mismatch), filed as §3.6.
+- Open work: §3.2 readout lever (pre-registered `geometry.pooling` arm), §3.3c
+  gate metric bar, §3.6 graph-batched settle path. §3.1's regression rows still
+  need n≥3 before they are claims.
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
