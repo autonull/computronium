@@ -9,10 +9,12 @@ classifies all 57 declared axis values: **48 live, 1 refused, 2 unavailable, 6
 canonical references; 0 undeclared inert.** §3.7's digital probe is a
 **cost-adjusted parity, not a win** (details in §3.7): no non-standard
 composition yet has a cost-adjusted capability win; the plan searches for one.
-The first interaction is **negative**: on Cora, `energy_minimization` costs the
-`random_projections` credit **−2.4 pp** against `gradient` (claim-grade, n=5,
-L2/100; §3.10). Next: **finish §3.7's confirmation, then the remaining
-interactions.**
+The first two interactions are **negative**, and they name the mechanism:
+`energy_minimization` costs the `random_projections` credit **−2.4 pp**
+against `gradient`, and `muon`'s benefit is **−6.2 pp smaller on graph than on
+feedforward** (both claim-grade, n=5, L2/100; §3.10). The graph/muon cell is
+the node row's best measured (**0.7680 ± 0.0133**, 1.35σ above 0.75). Next:
+**finish §3.7's confirmation, then plasticity × task and credit × substrate.**
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -155,13 +157,15 @@ rest (48 live, 1 refused, 2 unavailable). The graph, node, tabular and RL rows
 are screening; their "met" is a
 domain-bar verdict, not a formal claim.
 
-**Node's n=5/L2 conversion (measured 2026-11-14, §3.10 control arm).** The
-same Cora cell at L2/100 over fresh seeds 47–51 measures **0.7568 ± 0.0145**:
-**0.47σ** above the 0.75 bar, inside the 1σ band, so the row is **marginal**,
-not met, even at claim grade. The 0.7660 n=3/L1 row stays the best measured and
-is not claim-grade. This closes the node row's §3.8 conversion: more seeds at
-the same schedule do not clear the bar confidently; a different split or
-readout is the next lever, not another seed sweep.
+**Node's n=5/L2 conversion (measured 2026-11-14, §3.10).** The Cora cell at
+L2/100 over fresh seeds 47–51 measures **0.7568 ± 0.0145** with `adam`:
+**0.47σ** above the 0.75 bar, inside the 1σ band, so that arm is **marginal**,
+not met. The same 2×2's `muon` arm measures **0.7680 ± 0.0133**: **1.35σ**
+above the bar, a claim-grade **cell** and the node row's best measured. The
+`muon − adam` main effect on graph is +1.1 pp, CI [−0.3, +2.4], p=0.17 —
+descriptive, not a pre-registered main-effect claim; the pre-registered
+*interaction* with geometry is the negative result below. The 0.7660 n=3/L1
+row is superseded as best measured but kept as history.
 
 Provenance for the pre-re-run rows was TODO85–90's session log. Every row now
 carries a re-execution: `scripts/probes/t92_baseline_replay.py` rebuilds each
@@ -302,7 +306,20 @@ still needs a matched interaction or claim (§3.7, §3.10).
    **update × geometry** (cheapest; no claim-grade evidence), plasticity × task
    (needs a memory/continual task), credit × substrate on a live non-refused
    substrate (the first potential non-standard win). One pre-registered 2×2 at
-   a time.
+   a time. **Update × geometry cost measured** (1 epoch, seed 42, Cora anchor):
+   graph+muon 0.47 s/epoch, feedforward+adam/muon 0.01–0.02 s/epoch, so the
+   pre-registered `(muon−adam)_graph − (muon−adam)_feedforward` 2×2 at L2/100 ×
+   5 seeds is ~4 min. **Measured 2026-11-14** (record `t92_update_geometry_cora`,
+   seeds 47–51): graph/adam **0.7568 ± 0.0145**, graph/muon **0.7680 ± 0.0133**,
+   feedforward/adam **0.4756 ± 0.0375**, feedforward/muon **0.5492 ± 0.0276**.
+   Interaction **−0.0624**, 95% CI [−0.0960, −0.0288], p=0.008 — **NEGATIVE**.
+   Muon helps the unstructured feedforward stack **+7.4 pp** (CI [+2.7, +12.0])
+   and the graph stack only **+1.1 pp** (CI [−0.3, +2.4], p=0.17): graph message
+   passing already does the work that muon's orthogonalized update does on a
+   flat stack. The graph/muon cell is the node row's best measured:
+   **0.7680 ± 0.0133**, 1.35σ above 0.75 — a claim-grade **cell**, not a
+   pre-registered main-effect claim. Remaining: plasticity × task and credit ×
+   substrate.
 4. **§3.3c — gate metric bar.** Makes PASS mean above-bar; every later claim
    depends on it.
 5. **§3.2 — one graph readout arm with a stop rule.** The only graph lever left.
@@ -479,7 +496,7 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
    | Row | Current | To claim | Cost | Priority |
    |---|---|---|---|---|
-   | Node Cora | **measured 2026-11-14**: 0.7568 ± 0.0145 at n=5 L2/100 (§3.10 control) | none — 0.47σ above 0.75, **marginal**; a split/readout change is the lever | done | closed |
+   | Node Cora | **measured 2026-11-14**: 0.7680 ± 0.0133 at n=5 L2/100 (`muon`); adam arm 0.7568 ± 0.0145 | claim-grade **cell** (1.35σ above 0.75); a main-effect claim needs a pre-registered paired muon−adam (descriptive +1.1 pp, p=0.17) | done | closed |
    | Graph PROTEINS | 0.701 n=5 L1/100 | n=5 L2/100 | ~10 min | after §3.2 |
    | RL pendulum | −135.1 n=3 L0/40 | n=5 same schedule | ~60 min | only if the lane claim matters |
    | Tabular wine | 1.0 n=3 L0 | replace the task | new loader | low; wine is saturated |
@@ -573,6 +590,8 @@ still needs a matched interaction or claim (§3.7, §3.10).
 | 2026-11-14 | vision (secondary) | complex/adam PEPITA vs gradient | 5 | L2/20, same split | **retracted**: `complex_substrate_real_compute` refuses every complex cell; PEPITA cells bit-identical | §3.9 (refused) |
 | 2026-11-14 | node classification (claim-grade cell) | Cora 0.7568 ± 0.0145 (SD) | 5 | L2/100, 500-node public split; majority 0.316; seeds 47–51 | 0.47σ above 0.75 — **marginal**, not met | §3.10 control (§3.8 conversion) |
 | 2026-11-14 | node × dynamics × credit (Cora) | inst/grad 0.7568, inst/RP 0.7460, energy/grad 0.7496, energy/RP 0.7152 | 5 per cell | L2/100, same split; seeds 47–51 | interaction **−0.0236**, 95% CI [−0.0496, −0.0076], p=0.008 — **NEGATIVE**, claim-grade; 5.5× walltime | §3.10 (first interaction) |
+| 2026-11-14 | node classification (best) | Cora **0.7680 ± 0.0133** (SD), `muon` | 5 | L2/100, 500-node public split; majority 0.316; seeds 47–51 | 1.35σ above 0.75 — **met**; claim-grade cell, main effect descriptive (CI [−0.3, +2.4] pp) | §3.10 (second interaction) |
+| 2026-11-14 | node × update × geometry (Cora) | graph/adam 0.7568, graph/muon 0.7680, ff/adam 0.4756, ff/muon 0.5492 | 5 per cell | L2/100, same split; seeds 47–51 | interaction **−0.0624**, 95% CI [−0.0960, −0.0288], p=0.008 — **NEGATIVE**, claim-grade; muon helps ff +7.4 pp, graph +1.1 pp | §3.10 (second interaction) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -589,6 +608,8 @@ pre-registered matched claim.
 | 2026-11-14 | MNIST complex/adam: PEPITA vs gradient | 5 | same | — | **retracted**: `complex_substrate_real_compute` refuses every complex cell; PEPITA cells bit-identical | **refused**, not an interaction; §3.9 |
 | 2026-11-14 | MNIST best-backprop check: PEPITA digital/adam vs gradient digital/euclidean | 5 | val_acc, 10k held out; L2/20 | 55,050 params; PEPITA 412 s vs gradient 293 s (~1.41×) | −0.0038, 95% CI [−0.0064, −0.0012], p=0.015 | secondary; cost-adjusted loss |
 | 2026-11-14 | Cora dynamics × credit: `(RP−grad)_energy − (RP−grad)_inst` | 5 | val_acc, 500-node public split; majority 0.316; L2/100 | 96,391 params; 41 s for the 2×2 (energy 5.5× instant) | −0.0236, 95% CI [−0.0496, −0.0076], p=0.008 | claim-grade **negative interaction**; §3.10 |
+| 2026-11-14 | Cora graph: muon vs adam (main effect) | 5 | val_acc, same split; L2/100 | 96,391 params; 5.1 s vs 3.8 s per 5-seed cell | +0.0112, 95% CI [−0.0028, +0.0244], p=0.17 | descriptive null; not pre-registered |
+| 2026-11-14 | Cora update × geometry: `(muon−adam)_graph − (muon−adam)_ff` | 5 | val_acc, same split; L2/100 | 96,391 (graph) vs ff params; 15 s for the 2×2 | −0.0624, 95% CI [−0.0960, −0.0288], p=0.008 | claim-grade **negative interaction**; §3.10 |
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
@@ -727,15 +748,20 @@ program.
   live, 1 refused, 2 unavailable, 6 references); the two inert plasticity rows
   are declared unavailable with reversal triggers, and the lock proves the
   measurement. The audit is one step, not a capability claim.
-- §3.10's first interaction is closed (2026-11-14) with a **claim-grade negative
-  number**: on Cora, dynamics × credit (2×2, seeds 47–51, L2/100) gives
-  interaction **−0.0236 val_acc**, 95% CI [−0.0496, −0.0076], p=0.008.
+- §3.10's first two interactions are closed (2026-11-14) with **claim-grade
+  negative numbers**. Dynamics × credit on Cora (2×2, seeds 47–51, L2/100):
+  interaction **−0.0236 val_acc**, 95% CI [−0.0496, −0.0076], p=0.008;
   `energy_minimization` costs the `random_projections` credit 2.4 pp against
   `gradient` at 5.5× walltime. PEPITA is refused on graph
   (`local_contrastive_geometry`), so the graph pair is RP vs gradient. The 2×2
-  ran in 41 s; the earlier 7.5 s/epoch estimate was setup cost. Its control arm
-  is also the node row's n=5/L2 conversion: 0.7568 ± 0.0145, **marginal**
-  (0.47σ above 0.75), so more seeds at the same schedule do not clear the bar.
+  ran in 41 s; the earlier 7.5 s/epoch estimate was setup cost. Update ×
+  geometry (same anchor, seeds 47–51): interaction **−0.0624**, 95% CI
+  [−0.0960, −0.0288], p=0.008; muon helps the feedforward stack +7.4 pp but
+  graph only +1.1 pp (CI [−0.3, +2.4], p=0.17). The graph/muon cell is the node
+  row's best measured: **0.7680 ± 0.0133**, 1.35σ above 0.75 — a claim-grade
+  cell, not a pre-registered main-effect claim. The adam control is 0.7568 ±
+  0.0145 (0.47σ, marginal), so the node row's best number moved; more seeds at
+  the old cell would not have cleared the bar.
 - Open work, in priority order: §3.7 PEPITA digital equivalence (confirmation
   in flight); §3.10 remaining interactions (update × geometry, plasticity ×
   task, credit × substrate); §3.3c gate metric bar; §3.2 one graph readout arm
