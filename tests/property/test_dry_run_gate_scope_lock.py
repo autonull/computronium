@@ -21,7 +21,7 @@ from computronium.experiment.kernel.search_space import (
     iter_candidates,
     search_space_from_spec,
 )
-from computronium.experiment.schema import Coordinate
+from computronium.experiment.schema import Coordinate, StructuralAxis
 
 from ._specs import mechanism_spec
 
@@ -64,14 +64,29 @@ def test_a_supervised_multiclass_cell_is_still_judged() -> None:
 
 
 def test_the_pendulum_space_holds_a_cell() -> None:
-    """The end the gate exists to protect: the declared cell is reachable."""
+    """The end the gate exists to protect: the declared cell is reachable.
+
+    The credit axis is the lane's error-blind row: RLSystemTrainer never calls
+    the composed credit, so an error-aware row is refused (TODO92 §3.3b).
+    """
     base = mechanism_spec()
-    spec = base.model_copy(update={"task": "pendulum", "task_cycle": ["pendulum"]})
+    spec = base.model_copy(
+        update={
+            "task": "pendulum",
+            "task_cycle": ["pendulum"],
+            "axes": tuple(
+                selection.model_copy(update={"primitives": ("homeostatic",)})
+                if selection.axis is StructuralAxis.CREDIT
+                else selection
+                for selection in base.axes
+            ),
+        }
+    )
     space = search_space_from_spec(spec, tasks=["pendulum"])
     cells = list(iter_candidates(spec, space, shape=task_shape, page_size=100))
     assert cells
     assert all(schedule.task_id == "pendulum" for _, schedule in cells)
     assert any(
-        coordinate.geometry == "feedforward" and coordinate.credit == "gradient"
+        coordinate.geometry == "feedforward" and coordinate.credit == "homeostatic"
         for coordinate, _ in cells
     )

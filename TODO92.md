@@ -1,9 +1,10 @@
 # TODO92 — Breadth and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a, §3.0 and §3.3 closed. RL is met at −135.1
-(n=3, 400 episodes); its credit axis is inert (§3.3b). Graph stays marginal with
-capacity excluded (§3.2). Next: §3.3b (credit-aware RL) or the graph readout
-lever.
+**Status:** 2026-11-14 · §3.0a, §3.0, §3.3 and §3.3b closed. RL is met at
+−135.1 (n=3, 400 episodes); its credit axis is now a declared refusal — only
+`error_blind` credits compose on RL tasks (§3.3b). Graph stays marginal with
+capacity excluded (§3.2). Next: the graph readout lever (§3.2), then
+`neuromorphic × graph` (§3.4) or the gate metric bar (§3.3c).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -77,9 +78,10 @@ and vision within 1e-4, while graph's point estimate moves (record mean 0.6969 �
 −1219 row had no replayable record; its new row is the 3-seed 400-episode run
 recorded 2026-11-14. **That number is the lane's, not a credit's:** the
 trainer optimises geometry parameters with DDPG and never calls the composed
-credit, so the cell that produced −135.1 is geometry × substrate (§3.3b). The
-only open weak point is the graph-classification marginal; RL is met. The
-regression lane is closed (§3.1).
+credit, so the cell that produced −135.1 is geometry × substrate. The space now
+refuses error-aware credits on RL tasks and keeps only the two `error_blind`
+rows (§3.3b). The only open weak point is the graph-classification marginal; RL
+is met. The regression lane is closed (§3.1).
 
 ---
 
@@ -145,9 +147,13 @@ walltime, and never records a run into a store.
    error-aware graph credit, `random_projections`, holds 0.6233 on PROTEINS.
    Two runs of the same control cell measure 0.7013 and 0.6960, so run noise is
    ~0.005 and the marginal band is wider than the CI suggests. The remaining
-   lever is the readout (mean pooling; `pooling` is not a declared knob) or a
-   different task split — a design change, not a seed sweep. Cost: one arm, 8
-   min.
+   lever is the readout or a different task split — a design change, not a seed
+   sweep. The graph builder already reads `pooling` (`mean` or `sum`, in
+   `geometry_keys.py`) but no run declares it, so the arm is a declared
+   `geometry.pooling` value, not a new primitive. Cost: one arm, ~8 min
+   (control measured 39 s/seed). Acceptance: a pre-registered paired comparison
+   (sum vs mean, seeds 42–46, threshold +0.01) that either moves the row above
+   0.70 or excludes the readout the way capacity was excluded.
 3. ~~**RL**~~ — **closed 2026-11-14: met.** Three seeds × 400 episodes
    (40 × 10) recorded to `experiments/t92_rl_400ep.duckdb`:
    −144.94 / −133.04 / −127.21, mean **−135.1**, SD 9.0, bootstrap CI
@@ -155,21 +161,32 @@ walltime, and never records a run into a store.
    `configs/preregistrations/t92_rl_400ep.json`. The pre-DDPG −1219 row was
    stale; the current lane clears the bar. Two findings it produced are filed:
    the credit axis is inert (§3.3b) and gate PASS has no metric bar (§3.3c).
-3b. **RL's credit signal is unbuilt.** DDPG optimises `system.geometry.params`
-    and never calls the composed credit: `gradient`, `target_inversion`,
-    `pc_alm`, `random_projections`, `local_goodness` and `homeostatic` measure
-    bit-identically at 30 episodes (−126.4). Every RL row is therefore a
-    measurement of geometry × substrate, and "RL × error-aware credit" is a
-    declared-unavailable cell until the trainer threads the credit's
-    pseudo-gradient into its update, or the lane declares itself credit-blind
-    with that reason. Acceptance: one RL cell whose reward differs between two
-    credits, or the refusal row plus the trainer note (criterion 4).
+3b. ~~**RL's credit signal is unbuilt.**~~ — **closed 2026-11-14: refused with
+    a measured rule.** DDPG optimises `system.geometry.params` and never calls
+    the composed credit: `gradient`, `target_inversion`, `pc_alm`,
+    `random_projections`, `local_goodness` and `homeostatic` measured
+    bit-identically at 30 episodes (−126.4). The refusal is declared once, as
+    the void constraint `rl_credit_must_be_error_blind` in
+    `seed_registries.py`: on an RL task only the two rows that declare
+    `error_blind=True` (`homeostatic`, `temporal_trace`) compose; an
+    error-aware credit is refused with that reason instead of proposing a cell
+    whose credit the trainer never applies. The trainer docstring carries the
+    note. Lock: `tests/property/test_rl_credit_refusal_lock.py` proves the rule
+    is task-scoped and that the pendulum space drops `gradient` while keeping
+    the two error-blind rows; deleting the constraint fails it. Reproduced by
+    `scripts/probes/t92_rl_credit_identity.py`: `gradient` and `homeostatic`
+    both return **−1536.608102** (1 epoch, seed 42, 15 s/cell), bit-identical
+    to the recorded positive control. The 400-episode −135.1 row predates the
+    rule and remains the lane's geometry × substrate measurement; a
+    credit-aware RL update is still unbuilt.
 3c. **Gate PASS is defect-free, not above-bar.** `assess_gate_verdict` reads
     void/hard/soft defects and an optional seed floor; it has no metric
     threshold, so the positive control PASSed at −1536.6. Corpus PASS counts
     overstate learning on RL and near-chance tasks; claim eligibility must read
-    the metric and its ruler. Fix is a per-task bar in the gate, or a documented
-    rule that PASS never implies above-bar.
+    the metric and its ruler. The documented rule is in §5 ("A PASS record
+    means defect-free, never above-bar"). **Still open:** the stronger fix, a
+    per-task metric bar in the gate. Until it exists, every claim in this plan
+    is read from the payload metric against its task bar, never from PASS.
 4. **`neuromorphic × graph`** — no cell, no rule. Either a graph-operator path
    for the substrate or a declared refusal with a measured reason.
 5. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
@@ -192,6 +209,7 @@ walltime, and never records a run into a store.
 | 2026-11-14 | node classification | Cora 0.7660 ± 0.0151 (SD) | 3 | 500 public-split nodes; majority 0.316 | reproduced; met (1.06σ) | §3.0 (closed) |
 | 2026-11-14 | tabular | wine 1.0000 (record 0.9722 did not reproduce) | 3 | 36 held out (resolution 0.0278); majority 0.389 | re-run is the measurement; met | §3.0 (closed) |
 | 2026-11-14 | RL (credit axis) | six credits identical: mean_reward −126.4 | 1 | 30 episodes, L0 | credit inert — one value for all six | §3.3b |
+| 2026-11-14 | RL (credit axis) | `gradient` = `homeostatic` = −1536.608102 | 2 credits | 1 epoch, seed 42; 15 s/cell | error-aware credits **refused** on RL; only `error_blind` rows compose | §3.3b (closed) |
 | 2026-11-14 | RL | pendulum −135.1 ± 9.0 (SD) | 3 | 400 episodes (40×10), mean return; chance ≈ −1200 | CI [−144.9, −127.2] vs −200; **met** | §3.3 (closed) |
 
 One row per domain per measurement; a row is superseded, never edited.
@@ -213,6 +231,10 @@ One row per domain per measurement; a row is superseded, never edited.
   Corpus breadth is **distinct measurements**, never PASS records (§3.0a).
 - **A PASS record means defect-free, never above-bar** (measured 2026-11-14: a
   −1536.6 RL cell PASSed; §3.3c). A claim reads the metric and its ruler.
+- **An axis the lane never applies is refused, not swept.** The RL credit axis
+  names its refusal in one constraint (`rl_credit_must_be_error_blind`) and
+  keeps only the rows whose contract matches the lane; a second table of
+  "inert" credits is a defect (§3.3b).
 - **Claims need n≥3 and a preregistration** when the result sits within 1σ of
   its threshold (`configs/preregistrations/`).
 - **A surface defect found here is fixed here only if it blocks the number**;
@@ -232,7 +254,12 @@ One row per domain per measurement; a row is superseded, never edited.
   by pre-registered paired comparison; the graph row stays marginal and its next
   lever is the readout, not capacity or credit. §3.3 is closed with a number:
   RL −135.1 (n=3, 400 episodes) clears −200, and that number is geometry ×
-  substrate because the credit axis is inert on the lane (§3.3b).
+  substrate because the credit axis is inert on the lane.
+- §3.3b is closed (2026-11-14) as a refusal with a measured rule: the space
+  refuses error-aware credits on RL tasks (`rl_credit_must_be_error_blind`) and
+  keeps the two `error_blind` rows; the probe reproduces the identity
+  (`gradient` = `homeostatic` = −1536.608102 at 1 epoch). A credit-aware RL
+  update remains unbuilt and is the only way to reopen the axis.
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.

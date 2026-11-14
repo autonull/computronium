@@ -94,7 +94,9 @@ class RLSystemTrainer:
     The credit axis is inert on this lane: DDPG optimises
     ``system.geometry.params`` and never calls a composed credit, so every
     credit measures identically — six credits, one value, measured 2026-11-14
-    (TODO92 §3.3). A credit-aware RL update is unbuilt, not misconfigured.
+    (TODO92 §3.3). A credit-aware RL update is unbuilt, not misconfigured, and
+    the declared space refuses error-aware credits on RL tasks
+    (``rl_credit_must_be_error_blind``); only the two error-blind rows compose.
     """
 
     system: System

@@ -255,6 +255,38 @@ CLASS_TARGET_ONLY: frozenset[tuple[StructuralAxis, str]] = frozenset({
 })
 
 
+# Credits whose contract reads no target or loss (``error_blind=True``). The
+# RL lane never calls a credit at all, so an error-aware row there would claim a
+# signal the trainer does not apply. Derived from the credit implementations'
+# declared ClassVar, never a second table.
+def _error_blind_credits() -> tuple[str, ...]:
+    from computronium.core.system_trainer.spec import error_blind_credit
+
+    return tuple(
+        sorted(
+            name
+            for name, _description, _params in _CREDIT_PRIMS
+            if error_blind_credit(name)
+        )
+    )
+
+
+def _rl_task_ids() -> tuple[str, ...]:
+    """Task ids whose declared domain is RL, read from the task registry.
+
+    The constraint needs the ids at declaration time; the registry is the
+    single source, so a new RL task joins the rule without a second table.
+    """
+    from computronium.domains.base import DomainType
+    from computronium.experiment.registry.task_registry import get_task_registry
+
+    return tuple(
+        sorted(
+            spec.name for spec in get_task_registry() if spec.domain is DomainType.RL
+        )
+    )
+
+
 def _hyperparameter_spec(
     name: str, axis_name: str, kind: AxisKind
 ) -> HyperparameterSpec:
@@ -1059,6 +1091,26 @@ CONSTRAINTS = [
             )
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Task-Credit: the RL lane is credit-blind. DDPG optimises
+    # ``system.geometry.params`` and never calls the composed credit, so six
+    # error-aware and error-blind rows measured one value (-126.4 at 30
+    # episodes, TODO92 §3.3b). Refuse the error-aware rows rather than propose a
+    # cell whose credit is not applied; the two error-blind rows are the lane's
+    # declared contract.
+    ConstraintSpec(
+        name="rl_credit_must_be_error_blind",
+        kind=ConstraintKind.VOID,
+        description=(
+            "RL tasks (DDPG) never call the composed credit; only error-blind "
+            "credit rows compose, so an RL cell cannot claim a credit signal"
+        ),
+        predicate=or_(
+            not_(in_(var("task"), const(list(_rl_task_ids())))),
+            in_(var("credit"), const(list(_error_blind_credits()))),
+        ),
+        proof_kind=ProofKind.LOGICAL,
         origin="DECLARED",
     ),
     # Geometry-Dynamics: recurrent geometry requires energy/PC-family/diffusion/instantaneous dynamics

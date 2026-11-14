@@ -105,6 +105,19 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
+def error_blind_credit(credit: str) -> bool:
+    """Whether a credit declares that it reads no error signal.
+
+    Reads the ``error_blind`` ClassVar on the implementation the config names.
+    Single source for the corpus instrument and the RL refusal rule: a credit
+    that changes its declaration moves both, without a second table.
+    """
+    factory = getattr(CreditAssignmentConfig, credit, None)
+    if factory is None:
+        return False
+    return bool(_credit_from_config(factory()).error_blind)
+
+
 def _update_from_config(update: ParameterUpdateConfig) -> ParameterUpdate:
     """Instantiate update from config (canonical dispatch in ontology.update)."""
     return update_from_config(update)
@@ -251,5 +264,6 @@ def compose_joint_system_from_configs(
 __all__ = [
     "compose_joint_system_from_configs",
     "compose_system_from_configs",
+    "error_blind_credit",
     "extract_config",
 ]

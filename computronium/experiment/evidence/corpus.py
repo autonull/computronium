@@ -19,11 +19,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from computronium.core.system_trainer.spec import _credit_from_config
+from computronium.core.system_trainer.spec import error_blind_credit
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
 from computronium.experiment.schema.seed_registries import seed_all_registries
-from computronium.ontology.credit import CreditAssignmentConfig
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -37,14 +36,6 @@ __all__ = [
     "error_blind_credit",
     "scan_corpus",
 ]
-
-
-def error_blind_credit(credit: str) -> bool:
-    """Whether a credit declares that it reads no error signal."""
-    factory = getattr(CreditAssignmentConfig, credit, None)
-    if factory is None:
-        return False
-    return bool(_credit_from_config(factory()).error_blind)
 
 
 def default_store_paths(root: Path) -> tuple[Path, ...]:
