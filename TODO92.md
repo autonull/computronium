@@ -78,9 +78,10 @@ best backprop at 1.41× walltime (both 55,050 params). The MNIST cell does not
 satisfy level 3. The interaction matrix (§3.10) is the search for a cell that
 does; if none is found, the thesis is falsified at matched cost.
 
-Every session follows the SEC cycle in `AGENTS.md` (RUN → ANALYZE → FIX →
-VERIFY → COMMIT). This file replaces the per-phase TODO cadence: one rolling
-plan, tickets ordered by what unblocks a measured number.
+Every session follows the SEC decision loop in `AGENTS.md` (DECIDE →
+FALSIFY CHEAPLY → TRIAGE → FIX → VERIFY → RECORD), with the rung ladder and
+2× measured-cost watchdog. This file replaces the per-phase TODO cadence: one
+rolling plan, tickets ordered by what unblocks a measured number.
 
 ---
 
@@ -704,11 +705,10 @@ cross-credit conclusion and no HPO before that point (§5).
   other credits' cells are **unconcluded**. HPO starts only after viability
   breadth is established — that is also when compute and development assistance
   are worth seeking. A cross-credit comparison before that point is not
-  evidence. AGENTS.md's SEC revision (2026-11-14) defines the 3-point
-  viability ladder, the defect-triage verdicts, the breadth exit, and short,
-  adjustable timeboxes (default validate 5 / triage 5 / fix 10 / verify 2
-  minutes; shrink for cheap cells, declare the budget); this rule is the
-  plan-specific corollary.
+  evidence. AGENTS.md's SEC revision (2026-11-14) defines the decision loop,
+  the rung ladder, the 3-point viability gate, the defect-triage verdicts, the
+  breadth exit, and the 2× measured-cost watchdog (no wall-clock budget); this
+  rule is the plan-specific corollary.
 - **One plan, rolling.** No TODO93 per phase. Tickets enter §3 from a measured
   failure or a missing row, and leave when the number moves.
 - **A ticket closes on a number or a named verdict**, never on a defect count.

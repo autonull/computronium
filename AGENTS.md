@@ -165,34 +165,39 @@
 ## Development Skill: Suspicious Experiment Cycle (SEC)
 
 **Name:** SEC — Suspicious Experiment Cycle  
-**Principle:** *Be skeptical of low-performing experiments; this could indicate an implementation defect to fix. But a defect is a claim that needs a named mechanism and a test — otherwise a low cell is a coordinate result, not an algorithm verdict. Be suspicious of any excluded possibilities that may actually be possible.*
+**Status:** working framework for a general validation methodology; this repo is the first case study.
+**Principle:** Every run answers a decision. Be skeptical of low performance, but a defect is a claim that needs a named mechanism and a test; otherwise a low cell is a coordinate result, not an algorithm verdict. Spend the cheapest evidence that can decide the question, and stop when the decision is determined — not when an arbitrary clock expires.
 
-**When to use:** Any time you validate a system with multiple algorithm/architecture combinations and need to distinguish "this doesn't work" from "this is broken", or "this is unoptimized" from "this is a result". SEC is a **validation** loop, not a competitiveness loop.
+**When to use:** Any validation with multiple algorithm/architecture combinations where "doesn't work", "is broken", and "is unoptimized" are live possibilities.
 
-**Scope (2026-11-14 revision): breadth → viability → competitiveness HPO.** Do not tune a rule for performance, or rank it against another, until it passes the viability gate below. An under-tuned cross-credit comparison is not evidence; a low cell is a defect probe first. The output of this phase is a **viability map**, not a leaderboard.
+**Scope: breadth → viability → competitiveness HPO.** The validation phase produces a **viability map**, not a leaderboard. Do not tune a rule for performance, or rank it against another, until it passes the viability gate. An under-tuned comparison is not evidence; a low cell is a defect probe first.
 
-**The Cycle (default ≤25 min; shrink it, never silently extend it):**
+**The SEC decision loop (no wall-clock target):**
 
-Timeboxes are ceilings, not targets. Set a shorter budget for cheap cells (a Cora 1-epoch cell is seconds) and state it in the session log. Extending the default needs a named reason and a stop rule; a validation run never exceeds 30 min — beyond that it is a budgeted experiment, not SEC.
+0. **DECIDE** — Write the decision, the two actions, the error costs, and the stop rule. If the decision is "X beats Y", it is competitiveness and needs the breadth exit; if it is "is this wired?", it is validation.
+1. **FALSIFY CHEAPLY** — Start at the lowest rung that can decide. Climb only while ambiguous. Never run a more expensive rung to confirm a cheaper definitive result.
+2. **TRIAGE** — Classify: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so.
+3. **FIX** — Only a named defect. Correctness/infrastructure, never a knob sweep. If the cause is not found before the rung watchdog, file the symptom with a failing test and stop.
+4. **VERIFY** — The fix must move the cell or the failing test. Moving neither is not a fix.
+5. **RECORD** — Commit the decision, rung reached, stop reason, box, and cost. `unconcluded` is allowed only before the viability gate; after it, a negative is a coordinate result or a refusal.
 
-0. **SCOPE** — Name the claim and the box: one rule/axis, one task, one fidelity, the knob values you will allow. If the claim is "X is worse than Y", stop: that is a competitiveness claim and needs the breadth exit first.
+**The rung ladder (cheapest falsifier first).**
 
-1. **VALIDATE** (default ≤5 min) — Run the smallest cell that can falsify the claim: 1 seed/1 epoch, or the 3-point viability ladder. Example:
-   ```bash
-   uv run python -m computronium.experiment.survey_cli 0.1 \
-     --mode learn --policy tpe --device cuda \
-     --tasks <task> --fidelity L0 \
-     --axes '<focused_json>' --epochs 3 --n-seeds 1
-   ```
-   Check: positive control, act/param counts, non-zero pseudo-gradient, label channel, compatibility. If one epoch does not fit 5 min, the claim is too expensive for SEC: write a budgeted run with a stop rule.
+| Rung | Decision | Test | Verdict / next | Cost model |
+|---|---|---|---|---|
+| 0 | Is it wired? | static checks + 1 step: positive control, shapes, label channel, non-zero update, compatibility | defect → triage; clean → rung 1 | seconds |
+| 1 | Does it train? | 1 epoch / 1 seed | failure → defect; above chance → rung 2 | measured pilot × 1 |
+| 2 | Is it viable across its knob? | 3-point ladder, 1 seed each | one point above chance → coordinate; all fail → defect/refusal | measured pilot × 3 |
+| 3 | Is the effect real? | pre-registered `n_max`, paired CI | CI decision or `n_max` → claim/coordinate | measured per-seed × n |
+| 4 | Is it competitive? | matched comparison at the breadth exit | pre-registered threshold → competitive verdict | budgeted HPO |
 
-2. **TRIAGE** (default ≤5 min) — Classify with the Defect Triage table: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so.
+Rung 3 is the first rung that may carry a claim. Rungs 0–2 are screening; they can stop coarsely without error inflation. Rung 4 is competitiveness and requires the breadth exit.
 
-3. **FIX** (default ≤10 min) — Only for a named defect. Correctness/infrastructure, never a knob sweep. If the cause is not identified in 10 min, file the symptom with a failing test and stop.
+**Stopping rule.** Promote only while the decision is ambiguous and `P(next rung changes the decision) × cost of a wrong decision > cost of the rung`. The rung ladder is the cheap approximation of that rule. A definitive verdict (defect, refusal, coordinate, or claim) stops the loop; otherwise promote. Record the stop reason: `verdict`, `watchdog`, `superseded`, or `n_max` — never the minutes.
 
-4. **VERIFY** (default ≤2 min) — Re-run the same cell; the fix must move the cell or its failing test. A fix that moves neither is not a fix.
+**Watchdog, not timebox.** Rung cost is `fixed startup + pilot × rung size`; kill a rung 0–3 at `2 ×` that measured cost. A rung that exceeds its watchdog is a cost-model defect or a bad cell: kill, record, re-price. Rung 4 uses the pre-registered HPO budget, not a per-run clock. Do not use a global 5/10/25-minute budget as the primary control; the watchdog is a safety cap, not the methodology.
 
-5. **RECORD + COMMIT** — Commit the verdict, the box, the cost, and the next action. `unconcluded` is allowed only before the viability ladder; after it, a negative is a coordinate result or a refusal.
+**Error control.** Screening (rungs 0–2) may stop freely. A claim (rung 3) must use either a pre-registered `n_max` with a fixed-n CI and no peeking, or a sequential/always-valid confidence sequence. Never stop a fixed-n comparison early and report its CI as if it were sequential. Until a confidence-sequence helper exists, `paired_comparison` is fixed-n: fix `n_max` before the run and do not peek.
 
 **The viability gate (minimum fair chance).** Before any cross-credit comparison, each rule gets:
 
@@ -204,8 +209,6 @@ Timeboxes are ceilings, not targets. Set a shorter budget for cheap cells (a Cor
   a non-zero update, not accuracy).
 
 No point above chance → triage as defect or refusal, not an algorithm verdict. Best point above chance → that is the coordinate for a matched comparison. The ladder is **not** competitiveness HPO: 3 points, 1 seed, one cell, recorded as a range, never as a claim.
-
-**Budget rule.** Validate at 1 seed/1 epoch before any multi-seed run. The viability ladder is cheap (minutes on a small task, seconds on Cora), so limited compute is not a reason to skip it. Default timeboxes: validate 5, triage 5, fix 10, verify 2. A cheap-cell profile is validate 2, triage 2, fix 5, verify 1 (10 min total). Shrink them for cheap cells and state the budget in the log; extend only with a named reason and a stop rule. A long run needs a named claim, a box, and a stop rule.
 
 **Defect triage (before a verdict).**
 
@@ -220,6 +223,19 @@ No point above chance → triage as defect or refusal, not an algorithm verdict.
 A defect is only a defect if fixing the named mechanism changes the cell or fails a test. Otherwise it is a coordinate result.
 
 Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: triage them on a non-zero update and their declared contract, not on val_acc.
+
+**SEC invariants (universal).**
+
+1. **Decision first.** No run without a stated decision and stop rule.
+2. **Cheapest falsifier first.** A cheap rung that decides stops the climb.
+3. **Stop when decided.** Evidence, not wall-clock, ends a rung; sequential tests for claims.
+4. **Every negative has a verdict.** Defect with a test, refusal with a trigger, or coordinate result with a box.
+5. **The box is part of the result.** No point estimate without its scope.
+6. **Breadth before optimization.** Map viability first; HPO is successive halving/Hyperband under a total budget, not a per-run clock.
+7. **A watchdog is a safety cap, not a budget.** It is priced from a measured pilot.
+8. **Record the decision, rung, stop reason, and cost.** Time is an outcome.
+9. **Error control scales with the claim.** Screening controls cost; claims control error.
+10. **Measurement identity is reproducibility.** Seed, key, and replay hash travel with the number.
 
 **Defect Patterns (Symptom → Likely Cause):**
 
@@ -389,6 +405,12 @@ Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: tr
 Only then: pre-register a matched comparison, with the compute case the map
 supports.
 
+**Competitiveness HPO (after the breadth exit).** Use successive halving or
+Hyperband: many configurations at 1 epoch, promote the top fraction to 5, then
+20, and kill the rest. The budget is total compute, not per-run timeboxes;
+pre-register the search space, the promotion rule, and the total budget.
+Report the box and the cost beside the metric.
+
 **Success Criteria (per domain):**
 - Vision (MNIST/CIFAR): best val_acc > 0.95
 - Graph classification: best val_acc > 0.70
@@ -421,8 +443,10 @@ supports.
 **Session Log Template (commit message body; never appended to the TODO):**
 ```
 ## Session YYYY-MM-DD
+**Decision:** <question, actions, error costs>
 **Experiment:** <command>
 **Box:** <task, fidelity, seeds, knobs allowed>
+**Rung / stop:** <0-4; why the rung stopped>
 **Result:** <metric, ruler, cost>
 **Triage:** <defect | refusal | coordinate result; if defect, the failing test>
 **Fixes Applied:** <files changed>
@@ -431,14 +455,18 @@ supports.
 
 **Experiment Log Table (for multi-run tracking):**
 
-| Run | Axes | Box (task/fidelity/seeds/knobs) | Walltime | Crashes | Gate Failures | Verdict | Fix Applied |
-|-----|------|----------------------------------|----------|---------|---------------|---------|-------------|
-| N | <axis_json> | <task, fidelity, n_seeds, knobs> | <s> | <n> | <n> | defect / refusal / coordinate | <file/change> |
+| Run | Axes | Box (task/fidelity/seeds/knobs) | Rung / stop | Walltime | Crashes | Gate Failures | Verdict | Fix Applied |
+|-----|------|----------------------------------|-------------|----------|---------|---------------|---------|-------------|
+| N | <axis_json> | <task, fidelity, n_seeds, knobs> | <0-4; why> | <s> | <n> | <n> | defect / refusal / coordinate | <file/change> |
 
 **Never:**
 - Accept "this algorithm doesn't work" without the viability ladder and triage
-- Run a validation cell past its declared timebox without a stop rule
-- Run any experiment >15 min without a named claim, box, and stop rule
+- Use a wall-clock budget as the primary stop rule (the watchdog is a safety cap)
+- Run a cell without a measured cost model (the watchdog is 2× that model)
+- Stop a fixed-n comparison early and report its CI as sequential
+- Climb a rung after a cheaper rung has decided the question
+- Run HPO before the breadth exit
+- Report a result without its rung, stop reason, and cost model
 - Skip the positive control gate
 - Commit without targeted tests passing
 - Use `ProcessPoolExecutor` on single GPU
@@ -464,16 +492,19 @@ supports.
 
 | Computronium (system) | SEC Methodology (development) |
 |----------------------|-------------------------------|
-| 6 axes × primitives → search space | 6-step cycle × viability gate × defect triage → fix space |
+| 6 axes × primitives → search space | decision loop × rung ladder × defect triage → fix space |
 | Positive control (gate) | Positive control PASS (100% target) |
-| Energy minimization (settle to fixed point) | SCOPE→VALIDATE→TRIAGE→FIX→VERIFY (converge on a verdict) |
+| Energy minimization (settle to fixed point) | DECIDE→FALSIFY→TRIAGE→FIX→VERIFY (stop when decided) |
 | Credit assignment (local learning signal) | Viability ladder (minimum fair chance before ranking) |
 | Defect patterns (symptom → cause) | Defect triage (defect / refusal / coordinate result) |
 | Harness reliability (heartbeat, deadline) | Test selection by symbol, kill logging, measured pricing |
 | Excluded possibilities (S/G/D/C/U/P) | Question excluded possibilities table |
 | Normalized metrics (ruler-relative) | Per-domain success criteria + declared hyperparameter box |
-| Claim eligibility (n≥3, replay hash) | Targeted tests + commit with evidence |
+| Claim eligibility (n≥5, replay hash) | Targeted tests + commit with evidence |
 | Search space breadth | Breadth exit before competitiveness HPO |
+| Time/effort control | Rung ladder + 2× measured-cost watchdog (no wall-clock budget) |
+| Competitiveness HPO | Successive halving / Hyperband under a total budget |
+| Statistical error control | Sequential/always-valid CI for claims; no optional stopping |
 
 **Why it stabilizes:**
 
@@ -484,8 +515,10 @@ supports.
 5. **Context preserved in code** — AGENTS.md rules, not prose in TODOs.
 6. **Every negative has an exit** — a named defect with a failing test, a refusal with a reversal trigger, or a boxed coordinate result. "Unconcluded" is not a permanent state.
 7. **Breadth before HPO** — the viability map is the artifact; competitiveness tuning begins only when it is complete, with the compute case it supports.
+8. **Time is an outcome** — the rung ladder and the 2× measured-cost watchdog replace arbitrary clocks; a cheap decision stops cheap.
+9. **Claims control error** — screening stops freely; claims use sequential or fixed-n CIs, never optional stopping.
 
 **The meta-stabilization:** The SEC methodology was refined by the same cycle it describes:
-> SCOPE (claim + box) → VALIDATE (smallest falsifying cell) → TRIAGE (defect/refusal/coordinate) → FIX (integrate into AGENTS.md) → VERIFY (tests pass) → COMMIT+LOG
+> DECIDE (decision + box) → FALSIFY (smallest rung) → TRIAGE (defect/refusal/coordinate) → FIX (integrate into AGENTS.md) → VERIFY (tests pass) → RECORD+COMMIT
 
 This document *is* the fixed point. The methodology describes the process that produced it.
