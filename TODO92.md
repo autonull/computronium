@@ -1,7 +1,7 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b, §3.4, §3.7, §3.9, §3.3c and
-§3.10's first two interactions are closed. The gate now means **defect-free
+**Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.9,
+§3.3c and §3.10's first two interactions are closed. The gate now means **defect-free
 and above the task's chance/majority ruler**: a cell that measures at or below
 the trivial predictor is FAIL with a named `below bar` defect. The recorded
 −1536.6 RL positive control is now FAIL (§3.3c), so PASS counts no longer
@@ -25,9 +25,10 @@ graph row's last lever is now **excluded**: sum pooling measures 0.6466 ±
 0.0248 vs mean 0.6951 ± 0.0237, paired **−0.0484**, 95% CI [−0.0601, −0.0368]
 (n=5, L1/100, seeds 42–46), so §3.2 closes the row **at-bar/marginal**. Next:
 **plasticity × task** (needs a matched arm build; the CL runner's arms differ
-on four axes) and **credit × substrate**. The
-plan is **breadth-first**: no cross-credit ranking and no HPO until every
-declared value is validated (AGENTS.md SEC Loop; §5).
+on four axes) and **credit × substrate** (rung 0 passed on all seven live
+substrates; `analog` is the candidate at ~20 s/epoch, so the L2/20 n=5 2×2 is
+~2.4 h and not yet run). The plan is **breadth-first**: no cross-credit ranking
+and no HPO until every declared value is validated (AGENTS.md SEC Loop; §5).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -361,6 +362,11 @@ still needs a matched interaction or claim (§3.7, §3.10).
    non-standard **win** at matched cost; it needs a live, non-refused
    substrate (analog, ternary, sparse, memristive) and the same PEPITA-vs-
    gradient pair, on feedforward geometry where PEPITA is legal.
+   **Measured 2026-11-15:** rung 0 passes on all seven live substrates (one
+   step, both credits, same initial weights), so the pair is legal everywhere;
+   the pilot measures digital/analog gradient 0.9548/0.9525 and PEPITA
+   0.9524/0.9512 at 1 epoch, seed 47, CPU (~20 s/epoch). `analog` is the
+   candidate; the 2×2 is **not yet run** and needs its pre-registration.
    **Breadth gate before the next comparison.** Each credit gets the AGENTS
    viability gate: 3 values of its primary knob (lr, γ, `readout_error`), 1
    seed each plus one confirmation seed at the best point, one cheap task,
@@ -667,6 +673,19 @@ still needs a matched interaction or claim (§3.7, §3.10).
       is null, try a scientific state-prediction task.
     - **plasticity × task:** `fast_weights`/`routing` vs `null` on a
       memory/continual task; report retention and task accuracy.
+      **Blocker (2026-11-15):** the `core/continual` runner's arms are
+      confounded — `create_backprop_arm` is instantaneous + gradient +
+      euclidean, while `create_fast_weight_arm` is energy_minimization +
+      thermodynamic_contrast + adam, so its `backprop` vs `fast_weights`
+      comparison differs on four axes. Do **not** use
+      `run_continual_learning("backprop")` vs `("fast_weights")` as the
+      plasticity comparison. The matched build composes one
+      `compose_joint_system` twice (digital / feedforward /
+      `energy_minimization` / gradient / adam) with `NullPlasticity` vs
+      `FastWeightPlasticity` (instantaneous + fast_weights is a declared
+      refusal), runs the SplitMNIST task-incremental protocol, and reads
+      `compute_cl_metrics` (final accuracies, forgetting). Cost is unmeasured;
+      the first step is a one-arm pilot.
     - **update × geometry:** `muon`/`lion` vs `adam` on feedforward/graph;
       report val_acc and param budget.
     - **credit × substrate:** PEPITA vs gradient on digital and a **live,
@@ -684,6 +703,34 @@ still needs a matched interaction or claim (§3.7, §3.10).
     memory/continual, credit → vision, update → optimization-sensitive geometry.
     Acceptance: a claim-grade interaction table; a null interaction is a
     verdict, not a failure.
+
+    **Credit × substrate rung 0 measured (2026-11-15).** Both credits were
+    checked per substrate with the §3.9 one-step ruler at the digits shape,
+    from the same pre-step weights
+    (`scripts/probes/t92_credit_substrate_rung0.py`). All seven non-digital
+    available substrates compose, produce a finite non-zero update, and make
+    `pepita` differ from `gradient`: `analog`, `memristive`, `optical`,
+    `quantum`, `sparse`, `ternary`, and `neuromorphic` (against a
+    `digital + energy_minimization` baseline, since it refuses instantaneous
+    dynamics). `complex` stays refused. **Mechanism finding:** in this
+    implementation the non-digital substrates are the digital matmul plus
+    additive state noise (and their energy model), so a substrate arm here
+    measures the credit's **noise robustness**, not a distinct operator. The
+    interaction must be read that way, and the substrate's declared
+    `noise_level` is the knob that matters.
+
+    **Rung-1 pilot (2026-11-15, MNIST, §3.7 anchor, 1 epoch, seed 47, CPU).**
+    gradient digital **0.9548** (15.2 s) / analog **0.9525** (20.1 s);
+    PEPITA digital **0.9524** (21.5 s) / analog **0.9512** (23.2 s). All four
+    are far above chance (0.10), so the analog cell trains. `analog` is the
+    candidate (largest declared noise, 0.1). Measured cost: **~20 s/epoch** on
+    CPU, so the pre-registered L2/20 2×2 at n=5 (4 cells × 5 seeds) is
+    **~2.4 h**. The ladder is implemented in
+    `scripts/probes/t92_credit_substrate_pilot.py --mode ladder` (3 lr points +
+    one confirmation seed, ~2 min at 1 epoch). The 2×2 is not run yet: no
+    pre-registration exists and the measured cost is the gate. Next session:
+    pre-register `configs/preregistrations/t92_credit_substrate.json`, run the
+    ladder, then the 2×2.
 
 ---
 
@@ -706,6 +753,8 @@ still needs a matched interaction or claim (§3.7, §3.10).
 | 2026-11-14 | corpus breadth | 3,437 measurements (7,450 records) | 443 stores | distinct `measurement_key`; 93/99 pairs, **0 holes** | §3.4 closes the last hole | §3.4 (closed) |
 | 2026-11-14 | neuromorphic × graph (Cora) | 0.1540 / 0.1460 / 0.1300 | 1 seed each | 500-node public split; majority 0.316; L0/1 epoch | **coverage, not a claim** (below majority; no replication) | §3.4 (closed) |
 | 2026-11-14 | axis liveness | 57 declared = 6 reference + 48 live + 1 refused + 2 unavailable | 57 values | one seeded `train_step`, post-step geometry fingerprint (digits 8×8; Cora for `graph`) | **0 undeclared inert**; `complex` refused, `rule_state`/`substrate_coupled` unavailable | §3.9 (closed) |
+| 2026-11-15 | credit × substrate (rung 0) | 7/7 non-digital available substrates compose; PEPITA live on each | 1 step each | post-step parameter fingerprint vs digital; digits shape | **interaction unblocked**; substrates are digital matmul + additive noise, so the arm is a noise-robustness test | §3.10 |
+| 2026-11-15 | credit × substrate (rung-1 pilot) | digital grad 0.9548 / PEPITA 0.9524; analog grad 0.9525 / PEPITA 0.9512 | 1 | val_acc, 10k held out, 1 epoch, seed 47, CPU; chance 0.10 | above chance; **~20 s/epoch**, so the L2/20 n=5 2×2 is ~2.4 h | §3.10 |
 | 2026-11-14 | graph classification × settling | failure: 1134 vs 32 | 1 | PROTEINS batch, node-major readout | batched path dies under energy_minimization/spike; node-mode works | §3.6 |
 | 2026-11-14 | vision (claim-grade) | matched digital/adam: gradient 0.9755 ± 0.0023 vs PEPITA 0.9751 ± 0.0020 (best gradient 0.9789, digital/euclidean) | 5 | L2/20, 10k held out; chance 0.10 | paired PEPITA−gradient −0.0004, CI [−0.0051, +0.0044], p=0.84 | §3.7 (discovery) |
 | 2026-11-14 | vision (confirmation) | gradient **0.9744 ± 0.0027** vs PEPITA **0.9752 ± 0.0019** | 10 | L2/20, 10k held out; seeds 47–56; chance 0.10 | paired **+0.0008**, 95% CI [−0.0012, +0.0029], p=0.46 — **EQUIVALENT** within ±0.01; 1.17× walltime | §3.7 (closed) |
@@ -929,14 +978,16 @@ cross-credit conclusion and no HPO before that point (§5).
   PASS**; the claim-grade rows are above their bars. Three claim fixtures were
   moved to the campaign's proved regime (params + 5 epochs, unlimited batches)
   because a below-bar cell is not claim-eligible.
-- Open work, in priority order: §3.10 remaining interactions (plasticity ×
-  task — its runner arms are confounded, so a matched arm build is required;
-  credit × substrate — needs a live non-refused substrate and the credit
-  viability gate); §3.8 graph/RL/tabular conversions (only if a formal claim is
-  needed); §3.6 batched graph-settle (deferred); §3.1 regression claims (n=1);
-  §3.3c documentation follow-up (AGENTS.md's positive-control wording, round
-  close). §3.2 is **closed**: capacity and readout are both excluded and the
-  graph row is at-bar/marginal.
+- Open work, in priority order: §3.10 remaining interactions — **plasticity ×
+  task** needs a matched arm build (the CL runner's arms differ on four axes)
+  and stands at rung 0; **credit × substrate** passed rung 0 on all seven live
+  substrates (2026-11-15), pilot-priced at ~20 s/epoch, and its next step is
+  `configs/preregistrations/t92_credit_substrate.json` + the 3-point ladder +
+  the L2/20 n=5 2×2 (~2.4 h) on `analog`; §3.8 graph/RL/tabular conversions
+  (only if a formal claim is needed); §3.6 batched graph-settle (deferred);
+  §3.1 regression claims (n=1); §3.3c documentation follow-up (AGENTS.md's
+  positive-control wording, round close). §3.2 is **closed**: capacity and
+  readout are both excluded and the graph row is at-bar/marginal.
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and
