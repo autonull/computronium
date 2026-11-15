@@ -55,6 +55,7 @@ from ._cli._execution import (
     execute_spec,
     spec_from_profile,
 )
+from ._cli._gates import _cmd_gate
 from ._cli._parser import _build_parser
 from ._cli._profiles import CORE_COMMANDS, RUN_PROFILES, RunProfile
 from ._cli._registry import _cmd_dashboard, _cmd_dataset, _cmd_environment, _cmd_quality
@@ -140,6 +141,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "loop": _cmd_loop,
         "baseline": _cmd_baseline,
         "coverage": _cmd_coverage,
+        "gate": _cmd_gate,
         "defect": _cmd_defect,
     }
     try:

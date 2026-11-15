@@ -170,6 +170,44 @@ def _void_pass(
     return _void_rejection(indep, dep, values, task) is None
 
 
+def compiled_void_rules() -> tuple[
+    list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+]:
+    """Compiled declared void rules, for callers that audit many cells.
+
+    Compile once per scan and pass the result to :func:`void_refusal`;
+    recompiling per cell is quadratic in the number of constraints.
+    """
+    return _compiled_void_constraints()
+
+
+def void_refusal(
+    rules: tuple[
+        list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+        list[tuple[str, Callable[[tuple[str, ...]], Any]]],
+    ],
+    coordinate: Coordinate,
+    task: str,
+) -> str | None:
+    """Name the declared void rule this coordinate violates, else ``None``.
+
+    Audit entry point for breadth gates: a measured cell on a combination a
+    rule now refuses cannot count as breadth, even if it was recorded before
+    the rule landed.
+    """
+    indep, dep = rules
+    values = (
+        coordinate.substrate,
+        coordinate.geometry,
+        coordinate.dynamics,
+        coordinate.plasticity,
+        coordinate.credit,
+        coordinate.update,
+    )
+    return _void_rejection(indep, dep, values, task)
+
+
 def _void_cache_key(coordinate: Coordinate, task: str) -> tuple[str, ...]:
     """The structural selection plus the task it was refused for.
 
@@ -1168,10 +1206,12 @@ __all__ = [
     "SearchSpace",
     "ShapeResolver",
     "VoidCache",
+    "compiled_void_rules",
     "declared_cell_count",
     "generate_candidates",
     "get_void_cache",
     "iter_candidates",
     "narrow_domain",
     "search_space_from_spec",
+    "void_refusal",
 ]

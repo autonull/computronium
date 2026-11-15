@@ -654,6 +654,24 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
         help="Exit non-zero on any FAIL row or any uncovered coordinate",
     )
 
+    # Gate command — predicates the repo evaluates, never prose
+    p_gate = sub.add_parser(
+        "gate",
+        help="Gates the repo evaluates as predicates, not prose",
+    )
+    p_gate_sub = p_gate.add_subparsers(dest="gate_command", required=True)
+    p_gate_breadth = p_gate_sub.add_parser(
+        "breadth",
+        help="AGENTS breadth exit: every error-aware credit on >=2 task "
+        "families with a legal, bar-cleared L2/n>=5 cell (exit 1 on failure)",
+    )
+    p_gate_breadth.add_argument(
+        "--root", default=".", help="Directory holding experiments/*.duckdb"
+    )
+    p_gate_breadth.add_argument(
+        "--format", choices=["json", "text"], default="text", help="Output format"
+    )
+
     # Defect command — failure constraint registry (TODO63 Phase 3)
     p_defect = sub.add_parser(
         "defect",

@@ -66,6 +66,9 @@ is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
 open gap list is §3, ordered by what unblocks a number.
 
+**§0 is the fresh-session entry point. The breadth gate is executable and
+currently FAILs (6 of 8 credits on one task family).**
+
 **Mission:** grow the *measured* capability of the library, not its paper
 surface. TODO91 closed the selection surface (every declared coordinate
 resolves and trains somewhere); this plan asks the next question: is every
@@ -123,6 +126,49 @@ Every session follows the SEC decision loop in `AGENTS.md` (DECIDE →
 FALSIFY CHEAPLY → TRIAGE → FIX → VERIFY → RECORD), with the rung ladder and
 2× measured-cost watchdog. This file replaces the per-phase TODO cadence: one
 rolling plan, tickets ordered by what unblocks a measured number.
+
+## 0. Start here (fresh session, 2026-11-15)
+
+**One goal: make the breadth gate green, or record it as a refusal with a
+reversal trigger.** No run starts before that disposition is written: closing
+the gate means measuring the missing families, refusing it means naming the
+rule and its trigger.
+
+**Executable gate (the only one in this plan):**
+
+| Gate | Predicate | State | Check |
+|---|---|---|---|
+| Breadth exit | every error-aware credit holds a legal, bar-cleared L2/n≥5 cell on ≥2 task families | **FAIL — 6 of 8**, only `gradient` and `pepita` green | `uv run comp gate breadth` |
+
+**Record corrections (labels, not gates — no checker exists yet):**
+
+| Correction | State |
+|---|---|
+| Registration order | both 2026-11-15 rows are **post-hoc** (registration committed with the result); §4 labels them |
+| Rung completeness | plasticity × task skipped rung 2; §3.10 labels it probe-grade |
+| Positive control | absent for the CL lane; §5 records the rule |
+
+Gate output (2026-11-15): `gradient` graph/memory/tabular/timeseries/vision
+(233 keys), `pepita` memory/tabular/vision (60); `local_goodness` vision (10),
+`random_projections` graph (10), `target_inversion` vision (43),
+`thermodynamic_contrast` vision (21); `local_contrastive` and `pc_alm` zero.
+960 legacy records re-assessed against their task bar; 43 unbarred/below-bar;
+58 refused cells excluded.
+
+**Acceptance:** the command exits 0, or §3.11 records a named refusal with a
+reversal trigger. **Stop rule:** no run starts before that decision.
+**Standing stop-loss:** after the gate is honest, if no non-standard
+composition matches the standard stack at matched cost on ≥2 task families
+with a declared domain bar, the strong thesis is falsified; publish the
+parity/refusal/cost map and stop searching for a win.
+
+**Fresh session commands:** dev-env smoke
+(`uv run python -c "import optuna, scipy, torchvision, pytest"`), then
+`uv run comp gate breadth`, then
+`uv run python -m pytest tests/unit/experiment/test_breadth_gate.py -q`.
+
+**Do not:** write TODO93; re-run a cell to confirm a closed result; tune a
+knob; treat the gate's FAIL as a plan defect — it is the plan.
 
 ---
 
@@ -425,8 +471,10 @@ formal claim is needed):**
    additive state noise), not a distinct operator. PEPITA is the fallback arm
    if `local_goodness` cannot compose on analog.
    **Measured 2026-11-15 (closed): boundary — no interaction at ±1 pp.**
-   Pre-registered in `configs/preregistrations/t92_credit_substrate_lg.json`
-   before the run; `scripts/probes/t92_credit_substrate_lg.py` ran the two
+   The registration (`configs/preregistrations/t92_credit_substrate_lg.json`)
+   was written before the run but **committed with the result** (`df9085d1`),
+   so its margin is **post-hoc** and the row carries no claim;
+   `scripts/probes/t92_credit_substrate_lg.py` ran the two
    analog arms (10 cells, seeds 57–61, L2/20, CPU, 4095 s) into
    `experiments/t92_credit_substrate_lg.duckdb` (run `33621198`, 10 PASS) and
    paired them with the digital §3.11 cells. Analog: gradient **0.9748 ±
@@ -450,9 +498,11 @@ formal claim is needed):**
    (digital/feedforward/instantaneous/null-prior/gradient/euclidean) and varies
    only plasticity; the existing `create_fast_weight_arm` also changes
    dynamics, credit and update, so it was a four-axis contrast. The CL runner's
-   own `avg_forgetting` is the reader. Pre-registered in
-   `configs/preregistrations/t92_plasticity_task.json` before the full run
-   (pilot: 1 seed, 5 epochs/task, null 0.0353 in 30.8 s vs fast 0.0370 in
+   own `avg_forgetting` is the reader. The registration
+   (`configs/preregistrations/t92_plasticity_task.json`) was written before
+   the full run but **committed with the result** (`56473a2b`), so it is
+   **post-hoc**; rung 2 was not run (pilot: 1 seed, 5 epochs/task, null 0.0353
+   in 30.8 s vs fast 0.0370 in
    261.0 s). Full run (`scripts/probes/t92_plasticity_task.py`, seeds 62–66, 5
    epochs/task, SplitMNIST, CPU, ~24 min): `null` **0.0417 ± 0.0051**,
    `fast_weights` **0.0425 ± 0.0053**, final task-0 accuracy 0.9970 vs 0.9974,
@@ -930,10 +980,14 @@ formal claim is needed):**
     to hold a legal, above-chance **L2/n≥5** cell on **≥2 task families**
     before a cross-credit comparison. Only `gradient` and
     `random_projections` have a second family (Cora); the other six have MNIST
-    only. The gate is **NOT met**, and the plan's earlier "breadth gate closed"
-    wording is **retracted**. The §3.10 credit-axis rows remain claim-eligible
-    cells but are **not breadth-eligible interactions**; do not cite them as
-    credit-axis evidence until this gate closes.
+    only. The gate is **NOT met**: `uv run comp gate breadth` (2026-11-15)
+    exits 1, with **6 of 8** credits on one family (only `gradient` and
+    `pepita` green); 960 legacy records were re-assessed against their task
+    bar, 43 were unbarred/below-bar and 58 refused cells were excluded. The
+    plan's earlier "breadth gate closed" wording is **retracted**. The §3.10
+    credit-axis rows remain claim-eligible cells but are **not
+    breadth-eligible interactions**; do not cite them as credit-axis evidence
+    until this gate closes.
 
 ---
 
@@ -973,8 +1027,8 @@ formal claim is needed):**
 | 2026-11-15 | credit cost model | `pc_alm` **~315 s** per 1-epoch cell; every other credit ≤ 41 s | 1 | walltime, MNIST L2/20 shape | a claim-grade `pc_alm` cell is ~1.8 h/seed; it converts last | §3.11 |
 | 2026-11-15 | credit × substrate (deferred) | PEPITA/analog ladder best 0.9574 at lr 3e-3; confirm 0.9539 vs gradient 0.9523 | 1 | val_acc, 1 epoch, MNIST; seed 57/157 | viable cell, **2×2 deferred** behind §3.11 | §3.10 |
 | 2026-11-15 | credit × substrate (analog arms) | gradient **0.9748 ± 0.0024**; `local_goodness` **0.9657 ± 0.0024** | 5 each | val_acc, L2/20, 10k held out; seeds 57–61; chance 0.10; analog noise 0.1 | above bar; 4,095 s for the 10 cells; digital arms 0.9759 / 0.9753 | §3.10 (closed) |
-| 2026-11-15 | credit × substrate (interaction) | `(LG−grad)_analog − (LG−grad)_digital` = **−0.0085** | 5 | same; pairs the analog arms with the §3.11 digital cells | 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 — **boundary**: no interaction at the pre-registered ±0.01 margin; direction unfavorable (LG 0.85 pp less noise-robust) | §3.10 (closed) |
-| 2026-11-15 | plasticity × task (SplitMNIST) | `null` forgetting **0.0417 ± 0.0051** vs `fast_weights` **0.0425 ± 0.0053** | 5 | 5 epochs/task, seeds 62–66; avg_forgetting; final task-0 acc 0.9970 / 0.9974 | paired null−fast **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37, dz=−0.42 — **no interaction at the ±0.01 margin**; fast weights cost **8.9×** (256 s vs 29 s per run). Pre-registered probe, **rung 2 not run**, not an L2 survey record | §3.10 (probe-grade) |
+| 2026-11-15 | credit × substrate (interaction) | `(LG−grad)_analog − (LG−grad)_digital` = **−0.0085** | 5 | same; pairs the analog arms with the §3.11 digital cells | 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 — **boundary**: no interaction at the pre-registered ±0.01 margin; direction unfavorable (LG 0.85 pp less noise-robust); **registration post-hoc** (`df9085d1`) | §3.10 (closed) |
+| 2026-11-15 | plasticity × task (SplitMNIST) | `null` forgetting **0.0417 ± 0.0051** vs `fast_weights` **0.0425 ± 0.0053** | 5 | 5 epochs/task, seeds 62–66; avg_forgetting; final task-0 acc 0.9970 / 0.9974 | paired null−fast **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37, dz=−0.42 — **no interaction at the ±0.01 margin**; fast weights cost **8.9×** (256 s vs 29 s per run). Probe, **rung 2 not run**, **registration post-hoc** (`56473a2b`), not an L2 survey record | §3.10 (probe-grade) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -1001,7 +1055,7 @@ their cell measured below it; the claim-grade rows are above their bars.
 | 2026-11-14 | Cora dynamics × credit: `(RP−grad)_energy − (RP−grad)_inst` | 5 | val_acc, 500-node public split; majority 0.316; L2/100 | 96,391 params; 41 s for the 2×2 (energy 5.5× instant) | −0.0236, 95% CI [−0.0496, −0.0076], p=0.008 | claim-grade **negative interaction**; §3.10 |
 | 2026-11-14 | Cora graph: muon vs adam (main effect) | 5 | val_acc, same split; L2/100 | 96,391 params; 5.1 s vs 3.8 s per 5-seed cell | +0.0112, 95% CI [−0.0028, +0.0244], p=0.17 | descriptive null; not pre-registered |
 | 2026-11-14 | Cora update × geometry: `(muon−adam)_graph − (muon−adam)_ff` | 5 | val_acc, same split; L2/100 | 96,391 (graph) vs ff params; 15 s for the 2×2 | −0.0624, 95% CI [−0.0960, −0.0288], p=0.008 | claim-grade **negative interaction**; §3.10 |
-| 2026-11-15 | MNIST credit × substrate: `(LG−grad)_analog − (LG−grad)_digital` | 5 | val_acc, 10k held out; L2/20; seeds 57–61; analog noise 0.1 | 55,050 params; 4,095 s for the 10 analog cells | −0.0085, 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 | **boundary**: CI does not lie inside ±0.01, but no interaction at the declared margin; direction unfavorable |
+| 2026-11-15 | MNIST credit × substrate: `(LG−grad)_analog − (LG−grad)_digital` | 5 | val_acc, 10k held out; L2/20; seeds 57–61; analog noise 0.1 | 55,050 params; 4,095 s for the 10 analog cells | −0.0085, 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 | **boundary**: no interaction at the declared margin; direction unfavorable; **registration post-hoc**, so not error-controlled |
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
@@ -1068,6 +1122,11 @@ cross-credit conclusion and no HPO before that point (§5).
 - **A positive control is not the comparison arm.** The CL lane had no declared
   bar or positive control; the `null` arm is the control for the paired
   difference, not a gate that the lane trains.
+- **A gate is an exit code.** `uv run comp gate breadth` is the breadth exit;
+  prose cannot close it. A gate that cannot be run as a check is a design
+  TODO, not a gate. The gate's definition lives in
+  `computronium/experiment/evidence/breadth.py` and its lock in
+  `tests/unit/experiment/test_breadth_gate.py`.
 - **Breadth before HPO.** A low cell is a **defect probe, not an algorithm
   verdict** (AGENTS.md SEC Loop). Do not tune a credit or axis value, and do not
   rank credit families, until every declared value has a validated
@@ -1251,8 +1310,8 @@ cross-credit conclusion and no HPO before that point (§5).
   plasticity varies) and the CL runner's `avg_forgetting` reader, seeds 62–66
   at 5 epochs/task, measure `null` **0.0417 ± 0.0051** vs `fast_weights`
   **0.0425 ± 0.0053**, paired null−fast **−0.0008**, 95% CI [−0.0021,
-  +0.0006], p=0.37, at **8.9× walltime**. Pre-registered in
-  `t92_plasticity_task.json`. The probe found and fixed two latent CL-runner
+  +0.0006], p=0.37, at **8.9× walltime**. Registration committed with the
+  result (`56473a2b`), so **post-hoc**; rung 2 not run. The probe found and fixed two latent CL-runner
   defects (positional keyword-only call sites; `fast_weights_dim` typo); lock:
   `tests/unit/core/test_cl_runner_smoke.py`. **The interaction matrix is
   complete at mixed grade:** two negative claim-grade interactions, one
@@ -1263,8 +1322,10 @@ cross-credit conclusion and no HPO before that point (§5).
   the loop's form (decision → falsifier → triage → verify → record) but not its
   preconditions: both registrations were committed with their results, the
   plasticity arm skipped rung 2, the CL lane had no positive control, and
-  §3.11's "breadth gate" is a one-task-family viability screen. The record is
-  corrected in §5 and in the §3.10/§3.11 entries.
+  §3.11's "breadth gate" is a one-task-family viability screen. The breadth
+  exit is now a predicate (`uv run comp gate breadth`), and it measures
+  **6 of 8** credits on one family. The record is corrected in §0, §5 and the
+  §3.10/§3.11 entries.
 - Open work, in priority order: **the AGENTS breadth exit** — every
   error-aware credit needs a legal, above-chance L2/n≥5 cell on ≥2 task
   families; six of eight have MNIST only. Until it closes, no credit-axis

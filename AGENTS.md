@@ -191,7 +191,7 @@
 | 3 | Is the effect real? | pre-registered `n_max`, paired CI | CI decision or `n_max` → claim/coordinate | measured per-seed × n |
 | 4 | Is it competitive? | matched comparison at the breadth exit | pre-registered threshold → competitive verdict | budgeted HPO |
 
-Rungs 0–2 are **mandatory** for a new rule: they are the minimum fair chance, not optional HPO. Rung 3 is the first rung that may carry a claim; it reports **equivalent / superior / inferior / inconclusive**, and `inconclusive` at `n_max` is a coordinate result, not a claim. Rung 4 is competitiveness and requires the breadth exit. VoI decides promotion beyond rung 2, not whether a new rule gets rungs 0–2.
+Rungs 0–2 are **mandatory** for a new rule **or a new composition** (a matched arm that changes which mechanism runs, even if every primitive exists): they are the minimum fair chance, not optional HPO. Rung 3 is the first rung that may carry a claim; it reports **equivalent / superior / inferior / inconclusive**, and `inconclusive` at `n_max` is a coordinate result, not a claim. Rung 4 is competitiveness and requires the breadth exit. VoI decides promotion beyond rung 2, not whether a new rule gets rungs 0–2.
 
 Repo example for a screening cell: `uv run python -m computronium.experiment.survey_cli 0.1 --mode learn --policy tpe --device cuda --tasks <task> --fidelity L0 --axes '<focused_json>' --epochs 1 --n-seeds 1`, or a focused probe for a single-cell check. The cell's `measurement_key` is its identity.
 
@@ -199,7 +199,7 @@ Repo example for a screening cell: `uv run python -m computronium.experiment.sur
 
 **Watchdog, not timebox.** Rung cost is `fixed startup + pilot × rung size`; kill a rung 0–3 at `2 ×` that measured cost. A cell with no pilot uses the environment's 5-min foreground cap as a **bootstrap cap**: measure that first run, then set the 2× watchdog. A rung that exceeds its watchdog is a cost-model defect or a bad cell: kill, record, re-price. Rung 4 uses the pre-registered HPO budget, not a per-run clock. Do not use a global 5/10/25-minute budget as the primary control; the watchdog is a safety cap, not the methodology. A long run (rung 3+) needs a named claim, a box, a pre-registered `n_max`, and a stop rule; otherwise it is not a run, it is a budget leak.
 
-**Error control.** Screening (rungs 0–2) may stop freely. A claim (rung 3) must use either a pre-registered `n_max` with a fixed-n CI and no peeking, or a sequential/always-valid confidence sequence. Never stop a fixed-n comparison early and report its CI as if it were sequential. Until a confidence-sequence helper exists, `paired_comparison` is fixed-n: fix `n_max` before the run and do not peek.
+**Error control.** Screening (rungs 0–2) may stop freely. A claim (rung 3) must use either a pre-registered `n_max` with a fixed-n CI and no peeking, or a sequential/always-valid confidence sequence. Never stop a fixed-n comparison early and report its CI as if it were sequential. Until a confidence-sequence helper exists, `paired_comparison` is fixed-n: fix `n_max` before the run and do not peek. A registration is committed **before** the first seed: a margin committed with its result is **post-hoc** and cannot carry a claim. A gate is a predicate the repository evaluates (`comp gate ...`), not a sentence a session asserts; if it cannot be run as a check with an exit code, it is not a gate.
 
 **The viability gate (minimum fair chance).** Before any cross-credit comparison, each rule gets:
 
@@ -396,7 +396,7 @@ Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: tr
 | Budget cut recorded as `constraint_violation` | Cause `timeout`; admission-check the cell's measured cost | `kernel/evaluate.py`, `wave.py` |
 | Dry-run gate scores RL with a supervised loss | Skip RL and one-class heads | `kernel/compose.py` |
 
-**Breadth exit (when competitiveness HPO may begin):**
+**Breadth exit (when competitiveness HPO may begin; checked by `uv run comp gate breadth`, exit 1 until green):**
 - every declared axis value is live/refused/unavailable with a trigger;
 - every error-aware credit has ≥1 legal, above-chance, L2/n≥5 cell on ≥2
   task families, with its label channel declared;
@@ -473,6 +473,8 @@ Report the box and the cost beside the metric.
 - Report a result without its rung, stop reason, and cost model
 - Skip the positive control gate
 - Commit without targeted tests passing
+- Commit a registration with its result and call it pre-registered (a post-hoc margin is not error control)
+- Close a gate in prose when the repo has no check for it
 - Use `ProcessPoolExecutor` on single GPU
 - Price waves from L0 positive control
 - Hardcode task names in execution paths
