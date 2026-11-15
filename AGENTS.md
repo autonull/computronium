@@ -423,7 +423,9 @@ Report the box and the cost beside the metric.
   `temporal_trace` declare `error_blind=True`: they read no label, so they
   measure chance by contract — never count them toward this criterion)
 - Zero "free settle telemetry failed" warnings
-- 100% positive control PASS rate
+- Every positive control completes and reports its bar verdict (PASS, or a
+  named `below bar` FAIL); a 1-epoch control on a hard task may be FAIL-by-bar
+  without invalidating the run — `wave.py` logs the verdict and continues
 - 4+ claim-eligible cells per multi-task run (n_seeds × tasks)
 - **Every number carries its ruler.** State the metric's resolution beside it
   (held-out samples for a split, episodes for RL, folds for a fold-mean) and the
