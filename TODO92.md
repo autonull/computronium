@@ -686,6 +686,17 @@ optional and named in §0: a formal tabular *parity* registration on the
    §0/§3.13.
 7. **§3.6 — batched graph-settle path.** Defer; no domain bar depends on it.
 8. **§3.1 — regression claims.** n=1 records; no current claim.
+9. **Fold identity in the measurement key (low priority; no number blocked).**
+   `Schedule` carries no fold, so a fold cell cannot be a corpus record: two
+   folds of the same coordinate would share one `measurement_key`, and
+   `dedup_key` (cell, seed, fidelity) cannot separate them. §3.8 therefore
+   reports through `experiments/t92_local_goodness_tabular_folds.json` rather
+   than five duplicate keys. Reopen when a claim needs fold cells in the corpus
+   (e.g. a k-fold replication with per-fold records): add the fold to
+   `Schedule`, `measurement_key`, and the store schema — and migrate the key,
+   which changes every stored hash, so it is a typed schema change with a
+   corpus re-count, not a probe hack. Until then a fold-mean claim names its
+   JSON artifact and states that it is not a store measurement.
 
 1. ~~**Regression lane**~~ — **closed 2026-11-14 (TODO91 S9).** 3 laws
    generalized (`pepita`, `target_inversion`, the shared output-target
