@@ -1,14 +1,16 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
 **Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.9,
-§3.3c and §3.10's interactions are closed — **three claim-grade rows and one
-probe-grade row** (plasticity × task skipped rung 2); §3.11's credit viability
-map and its `local_goodness` vs `gradient` follow-up are closed. The gate now means **defect-free
+§3.3c, §3.10's interactions, §3.12's breadth exit and §3.13's stop-loss
+disposition are closed — **three claim-grade interaction rows, one probe-grade
+row** (plasticity × task skipped rung 2), and **two pre-registered parity
+registrations**; §3.11's credit viability map and its `local_goodness` vs
+`gradient` follow-up are closed. The gate now means **defect-free
 and above the task's chance/majority ruler**: a cell that measures at or below
 the trivial predictor is FAIL with a named `below bar` defect. The recorded
 −1536.6 RL positive control is now FAIL (§3.3c), so PASS counts no longer
 overstate learning. The measurement layer is honest:
-3,512 measurements, 93/99 pairs, 0 holes, 543 L2/planned-n≥5 measurement keys
+3,572 measurements, 93/99 pairs, 0 holes, 603 L2/planned-n≥5 measurement keys
 (2026-11-15 re-count; achieved seeds are lower). The first audit found the
 complex/adam PEPITA pair is on a **declared-refused pair**
 (`complex_substrate_real_compute`), not a live substrate interaction. §3.9 now
@@ -42,10 +44,20 @@ epochs/task), at **8.9× walltime** (256 s vs 29 s per run). The CI is inside
 the pre-registered ±0.01 margin: **no plasticity × task interaction** at this
 coordinate. **The interaction matrix is complete at mixed grade: two negative
 interactions (claim-grade), one boundary (claim-grade) and one no-interaction
-probe (rung 2 not run); zero capability wins.** The thesis's
-strong form — a non-standard composition wins at matched cost — is falsified at
-these coordinates; its weak form survives as two cost-adjusted parities
-(PEPITA 1.17×, `local_goodness` 0.81× walltime on MNIST).
+probe (rung 2 not run); zero capability wins at claim grade.** The thesis's
+strong form — a non-standard composition wins at matched cost — was falsified
+at the interaction coordinates measured to that date; its weak form survived
+as two cost-adjusted parities (PEPITA 1.17×, `local_goodness` 0.81× walltime
+on MNIST). §3.13 later measured a coordinate where the strong form is **not**
+falsified (below), so the falsification is scoped to those interactions.
+**§3.12/§3.13 closed the breadth question and re-opened the thesis
+(2026-11-15).** The gate exits 0 with **8/8** error-aware credits on ≥2 task
+families (50 new cells, 582 s). `local_goodness` then measures **+1.58 pp** over
+gradient on `breast_cancer` (L2/20, seeds 57–61, pre-registered before seed 1):
+the first non-standard composition that does **not** lose on a second family,
+at **1.15×** cost. The standing stop-loss does not fire; the strong thesis is
+not falsified at the measured coordinates. The advantage is a claim-grade
+coordinate, not a claim (114 held out, 0.88 pp resolution).
 **§3.11 is measured and its follow-up is closed (2026-11-15):**
 all **8/8 error-aware credits clear chance** at their ladder's best point on the
 MNIST anchor, so no credit is an unwired row; `local_goodness` with its declared
@@ -66,8 +78,9 @@ is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
 open gap list is §3, ordered by what unblocks a number.
 
-**§0 is the fresh-session entry point. The breadth gate is executable and
-currently FAILs (6 of 8 credits on one task family).**
+**§0 is the fresh-session entry point. The breadth gate is executable and now
+PASSes (8 of 8 credits on ≥2 task families); the next step is a claim, not a
+gate.**
 
 **Mission:** grow the *measured* capability of the library, not its paper
 surface. TODO91 closed the selection surface (every declared coordinate
@@ -129,38 +142,49 @@ rolling plan, tickets ordered by what unblocks a measured number.
 
 ## 0. Start here (fresh session, 2026-11-15)
 
-**One goal: make the breadth gate green, or record it as a refusal with a
-reversal trigger.** No run starts before that disposition is written: closing
-the gate means measuring the missing families, refusing it means naming the
-rule and its trigger.
+**Breadth exit: PASS (2026-11-15).** `uv run comp gate breadth` exits 0:
+8/8 error-aware credits hold legal, bar-cleared L2/n≥5 cells on ≥2 task
+families. The missing cells are §3.12; the gate is the plan's one executable
+exit and it is now green by measurement, not by prose.
 
 **Executable gate (the only one in this plan):**
 
 | Gate | Predicate | State | Check |
 |---|---|---|---|
-| Breadth exit | every error-aware credit holds a legal, bar-cleared L2/n≥5 cell on ≥2 task families | **FAIL — 6 of 8**, only `gradient` and `pepita` green | `uv run comp gate breadth` |
+| Breadth exit | every error-aware credit holds a legal, bar-cleared L2/n≥5 cell on ≥2 task families | **PASS — 8 of 8** | `uv run comp gate breadth` |
+
+**Stop-loss disposition: does not fire (2026-11-15).** The map's best
+non-standard credit, `local_goodness`, now holds parity-or-better on two
+families: vision (MNIST, **EQUIVALENT** within ±0.01, 0.81× cost) and tabular
+(`breast_cancer`, **+0.0158** over gradient, 95% CI [+0.0105, +0.0211],
+pre-registered margin rejected; 1.15× cost). A non-standard composition
+matches the standard stack at matched cost on two families with declared bars,
+so the strong thesis is **not** falsified and the search continues at claim
+grade (§3.13).
 
 **Record corrections (labels, not gates — no checker exists yet):**
 
 | Correction | State |
 |---|---|
-| Registration order | both 2026-11-15 rows are **post-hoc** (registration committed with the result); §4 labels them |
+| Registration order | both 2026-11-15 interaction rows are **post-hoc**; §4 labels them. The two parity registrations (`3b9308d2`, `a3bb5ce9`) precede their seed 1 |
 | Rung completeness | plasticity × task skipped rung 2; §3.10 labels it probe-grade |
 | Positive control | absent for the CL lane; §5 records the rule |
+| Ruler reach | the breadth cells' tabular ruler is `wine` (36 held out, 2.78 pp resolution, saturated at 1.0000); it licenses **breadth**, not a ranking (§3.12) |
 
-Gate output (2026-11-15): `gradient` graph/memory/tabular/timeseries/vision
-(233 keys), `pepita` memory/tabular/vision (60); `local_goodness` vision (10),
-`random_projections` graph (10), `target_inversion` vision (43),
-`thermodynamic_contrast` vision (21); `local_contrastive` and `pc_alm` zero.
-960 legacy records re-assessed against their task bar; 43 unbarred/below-bar;
-58 refused cells excluded.
+Gate output (2026-11-15, after §3.12): `gradient` graph/memory/tabular/
+timeseries/vision (243 keys), `pepita` memory/tabular/vision (60),
+`local_goodness` tabular/vision (15), `random_projections` graph/tabular (15),
+`target_inversion` tabular/vision (48), `thermodynamic_contrast`
+tabular/vision (26), `local_contrastive` tabular/vision (10), `pc_alm`
+tabular/vision (10). 960 legacy records re-assessed against their task bar;
+43 unbarred/below-bar; 58 refused cells excluded.
 
-**Acceptance:** the command exits 0, or §3.11 records a named refusal with a
-reversal trigger. **Stop rule:** no run starts before that decision.
-**Standing stop-loss:** after the gate is honest, if no non-standard
-composition matches the standard stack at matched cost on ≥2 task families
-with a declared domain bar, the strong thesis is falsified; publish the
-parity/refusal/cost map and stop searching for a win.
+**Acceptance (met):** the command exits 0. **Next ticket:** if a formal claim
+is wanted, pre-register a `ThresholdRegistration` for the tabular advantage on
+a held-out split large enough to carry it (§3.13, §3.8); otherwise the
+breadth map is the artifact and no run starts without a named claim.
+**Standing stop-loss:** it was evaluated, not skipped — the parity map is in
+§4 and the disposition in §3.13.
 
 **Fresh session commands:** dev-env smoke
 (`uv run python -c "import optuna, scipy, torchvision, pytest"`), then
@@ -168,7 +192,7 @@ parity/refusal/cost map and stop searching for a win.
 `uv run python -m pytest tests/unit/experiment/test_breadth_gate.py -q`.
 
 **Do not:** write TODO93; re-run a cell to confirm a closed result; tune a
-knob; treat the gate's FAIL as a plan defect — it is the plan.
+knob; treat a gate PASS as a claim.
 
 ---
 
@@ -203,14 +227,16 @@ the worked example: four commits, two attempts, one revert, zero capability.
 
 ## 2. Measured baseline (2026-11-14)
 
-Corpus (re-measured 2026-11-15 after §3.10's credit × substrate 2×2): **7,530
-PASS records / 448 stores** — **3,512 distinct measurements** (the two numbers differ; see the
+Corpus (re-measured 2026-11-15 after §3.12/§3.13): **7,590
+PASS records / 450 stores** — **3,572 distinct measurements** (the two numbers differ; see the
 ruler note); **28/28 tasks** measured; **93/99** substrate × geometry pairs hold
 a measurement (25 refused by a named rule, 19 hold 257 measurements that cannot
 count as substrate breadth, **0 unmeasured**). The last hole,
 `neuromorphic × graph`, holds three cells recorded in
 `experiments/t92_neuromorphic_graph.duckdb` (§3.4); §3.11's follow-up adds
-`experiments/t92_local_goodness_mnist.duckdb` (10 records, 10 measurements).
+`experiments/t92_local_goodness_mnist.duckdb` (10 records, 10 measurements);
+§3.12/§3.13 add 60 records across `t92_breadth_second_family.duckdb` and
+`t92_credit_parity_breast_cancer.duckdb`.
 
 **Ruler note (measured 2026-11-14; re-measured by §3.0a).** `scan_corpus` counts
 PASS records, and `measurement_key` is unique *within* a store, not across
@@ -219,8 +245,8 @@ before §3.4 (1,300 keys repeat; max 114); the §3.4 store adds 4 records and 3
 measurements. Every earlier "PASS cells" number in TODO85–91 is therefore a
 record count, inflated ~2.2× by re-runs. Breadth is quoted as distinct
 measurements from here on; "28/28 tasks" survives because it unions task ids.
-The report now prints both numbers: `7,530 PASS records = 3,512 distinct
-measurements` over 448 readable stores (2026-11-15). Pair breadth: **93/99**
+The report now prints both numbers: `7,590 PASS records = 3,572 distinct
+measurements` over 450 readable stores (2026-11-15). Pair breadth: **93/99**
 hold a
 measurement, 25 are refused by a named rule (19 of those hold 257 measurements
 that cannot count as substrate breadth until the refusal reverses; §3.9),
@@ -236,8 +262,8 @@ that cannot count as substrate breadth until the refusal reverses; §3.9),
 | Tabular | wine **1.0000** (record 0.9722) | n=3, L0, 36 held out (resolution 0.0278); majority 0.389 | > 0.90 | **screening; saturated** |
 | RL | pendulum **−135.1 ± 9.0** (SD) | n=3, L0/40 epochs, 400 episodes, mean return; chance ≈ −1200 | > −200 | **screening; lane result, credit-inert** |
 
-**Claim grade (measured 2026-11-15).** The corpus holds 3,512 distinct
-measurements, but only 543 are L2 with planned n≥5 — the code's
+**Claim grade (measured 2026-11-15).** The corpus holds 3,572 distinct
+measurements, but only 603 are L2 with planned n≥5 — the code's
 `claim_eligible` floor (`computronium/experiment/evidence/claims.py`). The
 vision n=5 L2 cells are claim-grade. The first differentiated matched
 comparison is the **digital/adam MNIST pair** (same coordinate and schedule,
@@ -254,6 +280,17 @@ gradient **0.9759 ± 0.0017** vs `local_goodness` **0.9753 ± 0.0011**, paired
 **−0.0006**, 95% CI [−0.0021, +0.0011], **EQUIVALENT** within ±0.01 at
 **0.81× walltime** (349 vs 432 s/seed; 55,050 params each). It is the first
 non-PEPITA credit at claim grade — a parity, not a win.
+**Tabular second family (2026-11-15, §3.13).** The breadth exit is green
+(§3.12), and the stop-loss question needed the same credit on a second family.
+On `breast_cancer` (114 held out, majority 0.6316, resolution 0.88 pp) at
+L2/20, seeds 57–61: gradient **0.9509 ± 0.0048** vs `local_goodness`
+**0.9667 ± 0.0073**, paired **+0.0158**, 95% CI [+0.0105, +0.0211], p=0.0076,
+dz=2.15 — the pre-registered ±0.01 equivalence margin is **rejected**, and the
+direction favours the local credit at **1.15×** cost (1.7 vs 1.4 s/cell).
+This is a claim-grade **coordinate**, not a superiority claim: the
+registration (`a3bb5ce9`) pre-registers equivalence only, and 114 rows resolve
+0.88 pp. It is the first measured non-standard composition that does not lose
+to the standard stack on a second family.
 **Retraction (2026-11-14):** the complex/adam pair is **refused** by
 `complex_substrate_real_compute`; its cells are bit-identical to digital
 because the operator is the digital matmul on real weights. Its records are
@@ -397,11 +434,12 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-15: §3.2, §3.7 and §3.10's interactions are
-closed. The AGENTS breadth exit is **NOT met** — six of eight error-aware
-credits have one task family only — so it is the next ticket, and no
-credit-axis comparison runs until it closes. §3.8 conversions follow only if a
-formal claim is needed):**
+**Priority order (2026-11-15: §3.2, §3.7, §3.10's interactions, §3.12's
+breadth exit and §3.13's stop-loss disposition are closed. The AGENTS breadth
+exit is **met** — `comp gate breadth` exits 0 with 8/8 credits on ≥2 families
+— and no credit-axis comparison is blocked. The next number is optional:
+convert the tabular parity advantage into a claim (§3.8) only if one is
+needed, on a held-out split large enough to carry it):**
 
 1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
    declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
@@ -895,8 +933,9 @@ formal claim is needed):**
 11. **§3.11 — credit viability map (viability screen, NOT the breadth
     exit).** *Status: **viability screen closed 2026-11-15**; 8/8 error-aware
     credits clear chance, and the map's best credit (`local_goodness`) has a
-    claim-eligible equivalence row. **The AGENTS breadth exit is NOT met** (see
-    the conformance correction at the end of this item).*
+    claim-eligible equivalence row. **The AGENTS breadth exit was NOT met by
+    this map** (see the conformance correction at the end of this item); it
+    closed separately in §3.12.*
     **Decision.** Before `credit × substrate` or any cross-credit comparison,
     every error-aware credit needs the AGENTS minimum fair chance: one legal
     cheap cell, 3 values of its primary knob, 1 seed each, 1 confirmation seed
@@ -987,7 +1026,87 @@ formal claim is needed):**
     plan's earlier "breadth gate closed" wording is **retracted**. The §3.10
     credit-axis rows remain claim-eligible cells but are **not
     breadth-eligible interactions**; do not cite them as credit-axis evidence
-    until this gate closes.
+    until this gate closes. *Addendum (2026-11-15): the gate closed in §3.12;
+    the §3.10 credit-axis rows are now breadth-eligible.*
+
+12. **§3.12 — breadth exit closed (the missing second families).** *Status:
+    **closed 2026-11-15; `comp gate breadth` exits 0, 8/8 credits green.***
+    **Decision.** Only the cells the gate is missing: one second family for
+    `local_goodness`/`target_inversion`/`thermodynamic_contrast`
+    (`random_projections` pairs Cora with tabular), and two families for
+    `local_contrastive`/`pc_alm`, which held none. **Error costs:** a false
+    "green" licenses a comparison on an unbuilt implementation; a false "red"
+    parks a credit that trains.
+    **Instrument.** `scripts/probes/t92_breadth_second_family.py`, reference
+    stack digital/feedforward/instantaneous-where-the-credit-allows/null/
+    adam + `geometry.hidden_dim=256`; only the credit axis changes, plus its
+    required dynamics (`thermodynamic_contrast` -> `energy_minimization`,
+    `pc_alm` -> `pc_alm`) and declared channel (`local_goodness` ->
+    `credit.readout_error=True`). L2/20, seeds 57–61, CPU; 50 records,
+    582 s, `experiments/t92_breadth_second_family.duckdb` run `a12ff0bd`.
+
+    | Task (family) | Credit | val_acc (n=5) | Ruler |
+    |---|---|---|---|
+    | wine (tabular) | gradient | **1.0000 ± 0.0000** | 36 held out, majority **0.3889**, resolution 2.78 pp |
+    | wine | `local_goodness` | 1.0000 ± 0.0000 | same |
+    | wine | `random_projections` | 0.9944 ± 0.0124 | same |
+    | wine | `target_inversion` | 0.9389 ± 0.0362 | same |
+    | wine | `thermodynamic_contrast` | 1.0000 ± 0.0000 | same |
+    | wine | `local_contrastive` | 0.9722 ± 0.0000 | same |
+    | wine | `pc_alm` | 1.0000 ± 0.0000 | same |
+    | digits (vision) | gradient | **0.9750 ± 0.0052** | 359 held out (20%), bar **0.10** |
+    | digits | `local_contrastive` | 0.8256 ± 0.0162 | same |
+    | digits | `pc_alm` | 0.2917 ± 0.0715 | same |
+
+    **Findings.** (a) Every cell is defect-free and bar-cleared, so the gate
+    moved 6 of 8 to green by measurement. (b) **`wine` is saturated**: 7/7
+    credits at 0.94–1.00 on a 36-row split, so it licenses breadth, never a
+    ranking; the discriminating second-family coordinate is `digits`, where
+    `local_contrastive` is **−14.9 pp** and `pc_alm` **−68.3 pp** against
+    gradient. (c) `pc_alm` is the weakest row: **2.68σ** above digits' default
+    bar and **87.7 s/cell** vs gradient 3.4 s (25.8×), so it is the last cell
+    any claim should use. (d) Cost is negligible: the whole closure is
+    **582 s** of CPU.
+    **Corpus after this ticket:** 7,580 PASS records = **3,562 distinct
+    measurements** over 449 stores; **593** keys are L2/planned-n≥5; 93/99
+    pairs, 0 holes. §3.13 adds 10 records; §2 holds the final count.
+    **What this is not:** a claim, a cross-credit ranking, or evidence that a
+    credit trains on a *hard* second family. It is the gate's floor.
+
+13. **§3.13 — standing stop-loss disposition.** *Status: **closed
+    2026-11-15; the stop-loss does not fire.***
+    **Decision.** After the gate is honest, does any non-standard composition
+    match the standard stack at matched cost on ≥2 task families with a
+    declared domain bar? **Error costs:** a false "no match" retires a live
+    line; a false "match" spends HPO budget on a credit that does not hold.
+    **Registration.** `configs/preregistrations/t92_local_goodness_breast_cancer.json`,
+    committed **alone in `a3bb5ce9` before seed 1** (±0.01, α=0.05, min n=5)
+    — the first registration in this plan that satisfies §5's order rule.
+    **Instrument.** `scripts/probes/t92_credit_parity_second_family.py`;
+    same reference stack and schedule as §3.12; `breast_cancer` (114 held out,
+    majority **0.6316**, resolution **0.88 pp**); seeds 57–61; 10 records,
+    `experiments/t92_credit_parity_breast_cancer.duckdb` run `b16b2359`.
+
+    | Arm | Mean ± SD | n | Cost |
+    |---|---|---|---|
+    | gradient | **0.9509 ± 0.0048** | 5 | 1.4 s/cell |
+    | `local_goodness` (+`readout_error`) | **0.9667 ± 0.0073** | 5 | 1.7 s/cell (1.15×) |
+    | paired treatment − control | **+0.0158**, 95% CI [+0.0105, +0.0211] | 5 | p=0.0076, dz=2.15 |
+
+    **Verdict: NOT-EQUIVALENT at the pre-registered margin.** The credit that
+    holds vision equivalence holds a **tabular advantage**: +1.58 pp
+    (≈1.8 of the 114 held-out rows) at 1.15× cost. The stop-loss condition —
+    "no non-standard composition matches the standard stack on ≥2 families" —
+    is **false at the measured coordinates**, so the strong thesis is **not
+    falsified** and the search continues.
+    **Scope.** The file pre-registers *equivalence*, not superiority, so the
+    advantage is a claim-grade **coordinate**, not a claim; it is one task at
+    a coarse 114-row ruler. A claim needs its own `ThresholdRegistration`
+    (e.g. +0.005) and a larger held-out split — §3.8, only if wanted.
+    **Stop rule applied:** no lr tuning, no extra seeds, no third task.
+    **Reversal trigger:** if a pre-registered superiority run on a ≥500-row
+    tabular split fails to clear its threshold, this row becomes a coordinate
+    and the stop-loss must be re-evaluated on the published map.
 
 ---
 
@@ -1029,6 +1148,8 @@ formal claim is needed):**
 | 2026-11-15 | credit × substrate (analog arms) | gradient **0.9748 ± 0.0024**; `local_goodness` **0.9657 ± 0.0024** | 5 each | val_acc, L2/20, 10k held out; seeds 57–61; chance 0.10; analog noise 0.1 | above bar; 4,095 s for the 10 cells; digital arms 0.9759 / 0.9753 | §3.10 (closed) |
 | 2026-11-15 | credit × substrate (interaction) | `(LG−grad)_analog − (LG−grad)_digital` = **−0.0085** | 5 | same; pairs the analog arms with the §3.11 digital cells | 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 — **boundary**: no interaction at the pre-registered ±0.01 margin; direction unfavorable (LG 0.85 pp less noise-robust); **registration post-hoc** (`df9085d1`) | §3.10 (closed) |
 | 2026-11-15 | plasticity × task (SplitMNIST) | `null` forgetting **0.0417 ± 0.0051** vs `fast_weights` **0.0425 ± 0.0053** | 5 | 5 epochs/task, seeds 62–66; avg_forgetting; final task-0 acc 0.9970 / 0.9974 | paired null−fast **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37, dz=−0.42 — **no interaction at the ±0.01 margin**; fast weights cost **8.9×** (256 s vs 29 s per run). Probe, **rung 2 not run**, **registration post-hoc** (`56473a2b`), not an L2 survey record | §3.10 (probe-grade) |
+| 2026-11-15 | breadth exit (gate) | **8/8** error-aware credits on ≥2 families; **50 new cells** | 5 each | L2/20, seeds 57–61; `wine` (tabular, majority 0.3889) + `digits` (vision, bar 0.10); 582 s | **`comp gate breadth` exits 0**; `wine` saturated (licenses breadth, not ranking); `digits` separates: `local_contrastive` −14.9 pp and `pc_alm` −68.3 pp vs gradient | §3.12 (closed) |
+| 2026-11-15 | tabular (second-family parity) | `breast_cancer` `local_goodness` **0.9667 ± 0.0073** vs gradient **0.9509 ± 0.0048** | 5 | L2/20, 114 held out (resolution 0.88 pp), majority 0.6316; seeds 57–61; CPU | paired **+0.0158**, 95% CI [+0.0105, +0.0211], p=0.0076, dz=2.15 — **NOT-EQUIVALENT** at the pre-registered ±0.01 margin; 1.15× cost; equivalence owed (`a3bb5ce9`), superiority not pre-registered | §3.13 (closed) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -1056,6 +1177,7 @@ their cell measured below it; the claim-grade rows are above their bars.
 | 2026-11-14 | Cora graph: muon vs adam (main effect) | 5 | val_acc, same split; L2/100 | 96,391 params; 5.1 s vs 3.8 s per 5-seed cell | +0.0112, 95% CI [−0.0028, +0.0244], p=0.17 | descriptive null; not pre-registered |
 | 2026-11-14 | Cora update × geometry: `(muon−adam)_graph − (muon−adam)_ff` | 5 | val_acc, same split; L2/100 | 96,391 (graph) vs ff params; 15 s for the 2×2 | −0.0624, 95% CI [−0.0960, −0.0288], p=0.008 | claim-grade **negative interaction**; §3.10 |
 | 2026-11-15 | MNIST credit × substrate: `(LG−grad)_analog − (LG−grad)_digital` | 5 | val_acc, 10k held out; L2/20; seeds 57–61; analog noise 0.1 | 55,050 params; 4,095 s for the 10 analog cells | −0.0085, 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 | **boundary**: no interaction at the declared margin; direction unfavorable; **registration post-hoc**, so not error-controlled |
+| 2026-11-15 | `breast_cancer` tabular: `local_goodness` (+`readout_error`) vs gradient | 5 | val_acc, 114 held out (resolution 0.88 pp), majority 0.6316; L2/20; seeds 57–61 | 1.7 s vs 1.4 s per cell (1.15×); 10 cells | +0.0158, 95% CI [+0.0105, +0.0211], p=0.0076, dz=2.15 | **equivalence rejected** at ±0.01; the advantage is a claim-grade **coordinate** (superiority not registered); §3.13 |
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
@@ -1066,7 +1188,7 @@ their cell measured below it; the claim-grade rows are above their bars.
 | 2026-11-14 | plasticity | `substrate_coupled` | `null` (joint) | post-step geometry bit-identical across 12 declared completions; primitive is a documented no-op | **inert** → unavailable; `_UNAVAILABLE` reason | a substrate carries a separate state σ through the joint transition and the standard step reads it |
 | 2026-11-14 | all axes | 51 non-reference values | canonical stack | 48 live, 1 refused, 2 unavailable, 0 undeclared inert | audit closed; one step is a liveness ruler, not a claim | re-run `scripts/probes/t92_axis_liveness.py` after a declaration change; a fired trigger is `stale-unavailable` |
 
-**Claim-shaped keys.** 3,512 distinct measurements, but only 543 measurement
+**Claim-shaped keys.** 3,572 distinct measurements, but only 603 measurement
 keys are L2 with planned n≥5; the achieved-seed count is lower. Breadth is a
 floor, not a claim count. The ledger is the claim count.
 
@@ -1085,7 +1207,7 @@ claim-grade:
 | Geometry | 11/11 live | vision/graph/node screening | graph marginal; node n=3 |
 | Dynamics | 8/8 live | none | best cells are instantaneous; no matched settling claim |
 | Plasticity | 5/7 live; `rule_state`, `substrate_coupled` unavailable | one pre-registered paired probe (n=5, no interaction at ±1 pp, 8.9× cost) | no matched plasticity × task **gain**; re-open only on a ≥10 pp-forgetting regime |
-| Credit | 10/10 live | PEPITA and `local_goodness` each **confirmed equivalent at one MNIST coordinate**; **8/8 error-aware credits viable at rung 2** (§3.11); one claim-grade interaction (§3.10, boundary) | no claim-grade **win** and no harder-task parity for any credit; `local_goodness` is now claim-grade |
+| Credit | 10/10 live | PEPITA and `local_goodness` each **confirmed equivalent at one MNIST coordinate**; **8/8 error-aware credits hold 2-family breadth** (§3.12, gate PASS); `local_goodness` also **+1.6 pp on tabular** `breast_cancer` (§3.13, equivalence rejected); one claim-grade interaction (§3.10, boundary) | no claim-grade **win** on a large ruler and no harder-task parity for any credit; the tabular advantage is a coordinate, not a claim |
 | Update | 12/12 live | none | no matched update × geometry claim |
 
 "Liveness" is the §3.9 one-step parameter fingerprint, not a PASS record or a
@@ -1105,17 +1227,20 @@ cross-credit conclusion and no HPO before that point (§5).
 - **The registration commit precedes seed 1.** The plan's precedent is a
   standalone `prereg(...)` commit (`3b9308d2`). A margin committed with its
   result is **post-hoc**: it may be reported, but it cannot carry a claim.
-  Both 2026-11-15 registrations fail this rule (`df9085d1`, `56473a2b`), so the
-  credit × substrate and plasticity × task results are coordinate results, not
-  error-controlled claims.
+  Both 2026-11-15 interaction registrations fail this rule (`df9085d1`,
+  `56473a2b`), so the credit × substrate and plasticity × task results are
+  coordinate results, not error-controlled claims. `a3bb5ce9` (§3.13) is the
+  first registration that complies: it was committed alone, before any seed.
 - **A rung-3 run without rungs 0–2 is screening.** The plasticity × task arm
   skipped the mandatory 3-point knob ladder; its verdict is recorded, but it
   cannot close a claim-grade row (§3.10 correction).
 - **The breadth exit is AGENTS.md's, not this plan's.** Every error-aware
   credit needs a legal, above-chance **L2/n≥5** cell on **≥2 task families**.
-  The §3.11 map (1 epoch, MNIST only) is a viability screen; it does not close
-  the gate, and no credit-axis comparison may run until it does (§3.11
-  correction).
+  The §3.11 map (1 epoch, MNIST only) is a viability screen; it did not close
+  the gate. §3.12 measured the missing families and the gate now exits 0. A
+  breadth cell on a **saturated** task (`wine`, 36 held-out rows, all arms
+  0.94–1.00) licenses breadth only: it is not a ranking, a parity cell, or a
+  claim (§3.12).
 - **DECIDE states the error costs.** A decision without the cost of a false
   positive and a false negative is incomplete (AGENTS step 0); both 2026-11-15
   registrations omit them.
@@ -1316,30 +1441,54 @@ cross-credit conclusion and no HPO before that point (§5).
   `tests/unit/core/test_cl_runner_smoke.py`. **The interaction matrix is
   complete at mixed grade:** two negative claim-grade interactions, one
   boundary claim-grade, one no-interaction probe (rung 2 not run); zero
-  capability wins. Because the AGENTS breadth exit is not met, none of the
-  credit-axis rows is breadth-eligible.
+  capability wins at claim grade. The credit-axis rows became breadth-eligible
+  when §3.12 closed the gate.
+- §3.12 is **closed** (2026-11-15): the breadth exit is **PASS**.
+  `uv run comp gate breadth` exits 0 with **8/8** error-aware credits on ≥2
+  task families. Fifty new cells (`experiments/t92_breadth_second_family.duckdb`,
+  run `a12ff0bd`, 582 s) supply only the missing families: `wine` (tabular)
+  for six credits and `digits` (vision) for `local_contrastive`/`pc_alm`.
+  `wine` is saturated (7/7 at 0.94–1.00 on 36 held-out rows), so it licenses
+  breadth, not a ranking; `digits` separates (`local_contrastive` −14.9 pp,
+  `pc_alm` −68.3 pp vs gradient). Corpus after: 7,590 PASS records = 3,572
+  distinct measurements over 450 stores; 603 L2/planned-n≥5 keys.
+- §3.13 is **closed** (2026-11-15): the standing stop-loss **does not fire**.
+  `local_goodness` vs gradient on `breast_cancer` (L2/20, seeds 57–61,
+  pre-registered in `a3bb5ce9` before seed 1) measures **0.9667 ± 0.0073** vs
+  **0.9509 ± 0.0048**: paired **+0.0158**, 95% CI [+0.0105, +0.0211],
+  p=0.0076, dz=2.15 — the ±0.01 equivalence margin is rejected, so the credit
+  that holds vision parity holds a **tabular advantage** at **1.15×** cost
+  (114 held out, 0.88 pp resolution; the effect is ≈1.8 rows). It is a
+  claim-grade **coordinate**, not a superiority claim: the registration fixes
+  equivalence only. A non-standard composition matches-or-beats the standard
+  stack on two families, so the strong thesis is **not** falsified at the
+  measured coordinates.
 - **SEC conformance correction (2026-11-15).** The last two sessions followed
   the loop's form (decision → falsifier → triage → verify → record) but not its
-  preconditions: both registrations were committed with their results, the
-  plasticity arm skipped rung 2, the CL lane had no positive control, and
-  §3.11's "breadth gate" is a one-task-family viability screen. The breadth
-  exit is now a predicate (`uv run comp gate breadth`), and it measures
-  **6 of 8** credits on one family. The record is corrected in §0, §5 and the
-  §3.10/§3.11 entries.
-- Open work, in priority order: **the AGENTS breadth exit** — every
-  error-aware credit needs a legal, above-chance L2/n≥5 cell on ≥2 task
-  families; six of eight have MNIST only. Until it closes, no credit-axis
-  comparison is breadth-eligible. Then §3.8 graph/RL/tabular conversions (only
-  if a formal claim is needed); §3.6 batched graph-settle (deferred); §3.1
-  regression claims (n=1); §3.3c's documentation follow-up is **done**
-  (AGENTS.md's positive-control criterion now reads "completes and reports its
-  bar verdict", 2026-11-15). §3.2 is **closed**: capacity and readout are both
-  excluded and the graph row is at-bar/marginal.
+  preconditions: both 2026-11-15 interaction registrations were committed with
+  their results, the plasticity arm skipped rung 2, and the CL lane had no
+  positive control. The breadth exit was a predicate with no data behind it
+  (**6 of 8**), corrected in §0, §5 and the §3.10/§3.11 entries; §3.12 then
+  measured it green and §3.13's registration (`a3bb5ce9`) precedes its seeds.
+- Open work, in priority order: **§3.8 conversions, only if a formal claim is
+  wanted** — the one live candidate is the tabular `local_goodness` advantage,
+  which needs its own `ThresholdRegistration` (e.g. +0.005) and a held-out
+  split large enough to carry it (≥500 rows); the 114-row `breast_cancer` ruler
+  resolves 0.88 pp, so it can describe, not claim, a 1.6 pp effect. Then §3.6
+  batched graph-settle (deferred); §3.1 regression claims (n=1). §3.3c's
+  documentation follow-up is **done** (AGENTS.md's positive-control criterion
+  now reads "completes and reports its bar verdict", 2026-11-15). §3.2 is
+  **closed**: capacity and readout are both excluded and the graph row is
+  at-bar/marginal. **No run starts without a named claim**: the breadth map is
+  complete, and a third task or a tuning sweep is budget without a decision.
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and
   declares its label channel. Only then does HPO begin, with the compute and
-  development case that breadth earns.
+  development case that breadth earns. **Status: the gate is met (§3.12), so
+  competitiveness HPO is now permitted**, but it still needs a pre-registered
+  search space, promotion rule, and total budget before it starts; a tuning
+  sweep without those is budget without a decision.
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
