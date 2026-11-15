@@ -238,7 +238,7 @@ class TestObjectivesAreMeasurements:
                 links={"run_id": "sampler"},
             ),
         )
-        assert record.status.gate_verdict is GateVerdict.PASS_
+        assert record.payload["primary_metric"] == "val_acc"
 
         # Objectives applicable to energy_minimization + thermodynamic_contrast + euclidean
         applicable_objectives = (

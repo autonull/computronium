@@ -106,14 +106,26 @@ def test_digits_shape_reaches_the_geometry() -> None:
     assert shape.output_dim == 10
 
 
+@pytest.mark.timeout(300)
 def test_record_carries_measurement_and_a_derived_verdict() -> None:
-    """The Record holds the measurement; the verdict comes from what happened."""
+    """The Record holds the measurement; the verdict reads the bar.
+
+    The gate's ruler and its comparison travel with the record. The verdict
+    must agree with ``pass_bar_cleared``: a cell below digits' 0.10 floor is
+    FAIL, and a cell above it is PASS (TODO92 §3.3c).
+    """
     record = cell_record(_coordinate(), _schedule(), _provenance())
 
     assert record.payload["train_acc"] > 0.0
     assert record.payload["epochs_completed"] == record.schedule.epochs
-    assert record.status.gate_verdict is GateVerdict.PASS_
-    assert record.status.quarantine is False
+    assert record.payload["pass_bar"] == {
+        "metric": "val_acc",
+        "direction": "maximize",
+        "value": 0.1,
+    }
+    cleared = record.payload["pass_bar_cleared"]
+    assert (record.status.gate_verdict is GateVerdict.PASS_) is cleared
+    assert record.status.quarantine is (not cleared)
     assert record.payload["params"], "effective hyperparameters must be recorded (R6)"
 
 

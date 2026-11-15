@@ -62,6 +62,7 @@ from computronium.ontology.substrate.spec import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from computronium.experiment.registry.task_registry import PassBar
     from computronium.experiment.schema.coordinate import (
         Coordinate,
         Provenance,
@@ -676,6 +677,38 @@ def _determine_procedure_metadata() -> tuple[str, str, str]:
     )
 
 
+def _pass_bar(task_id: str) -> PassBar | None:
+    """The task's gate ruler, or ``None`` when the registry declares none."""
+    from computronium.experiment.registry.task_registry import (
+        get_task_registry,
+        primary_pass_bar,
+    )
+
+    try:
+        return primary_pass_bar(get_task_registry().get(task_id))
+    except Exception:
+        return None
+
+
+def _clears_pass_bar(bar: PassBar, metrics: Mapping[str, float]) -> bool:
+    """Whether the primary metric beats the task's chance/majority ruler.
+
+    A missing or non-finite metric cannot clear a bar. Equality does not either:
+    a cell that measures the majority-class rate has learned nothing the
+    trivial predictor did not.
+    """
+    measured = metrics.get(bar.metric_key)
+    if measured is None or not math.isfinite(float(measured)):
+        return False
+    match bar.direction:
+        case "maximize":
+            return float(measured) > bar.value
+        case "minimize":
+            return float(measured) < bar.value
+        case _:
+            return False
+
+
 def _build_status_with_procedures(
     passed: bool,
     complete: bool,
@@ -685,6 +718,7 @@ def _build_status_with_procedures(
     *,
     replay_hash: str | None = None,
     deterministic: bool = False,
+    below_bar: str = "",
 ) -> Status:
     """Build schema Status with assessment procedure metadata (WP5).
 
@@ -727,15 +761,19 @@ def _build_status_with_procedures(
     # compatibility bug while the cell simply ran out of budget.
     cause = FailureCause.UNKNOWN
     if not passed:
-        cause = (
-            FailureCause.CONSTRAINT_VIOLATION
-            if not within_ceiling
-            else FailureCause.TIMEOUT
-        )
+        if not within_ceiling:
+            cause = FailureCause.CONSTRAINT_VIOLATION
+        elif below_bar and complete:
+            cause = FailureCause.DIVERGENCE
+        else:
+            cause = FailureCause.TIMEOUT
+    defect = _defect(complete, within_ceiling, param_count, param_budget)
+    if below_bar:
+        defect = f"{defect}; {below_bar}" if defect else below_bar
 
     legacy_status = StatusLegacy(
         gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
-        defect=_defect(complete, within_ceiling, param_count, param_budget),
+        defect=defect,
         cause=cause,
         severity=Severity.LOW if passed else Severity.MEDIUM,
         quarantine=not passed,
@@ -857,11 +895,34 @@ def cell_record(
     normalized_metric = normalize_score(primary_val, task_id, baseline)
     payload["normalized_metric"] = normalized_metric
     payload["primary_metric"] = primary_key
+    # The gate ruler travels with the record: a PASS is a comparison against a
+    # declared chance/majority rate, not an unqualified "defect-free".
+    bar = _pass_bar(task_id)
+    below_bar = (
+        ""
+        if bar is None or _clears_pass_bar(bar, evaluation.metrics)
+        else (
+            "below bar: "
+            f"{bar.metric_key}="
+            f"{evaluation.metrics.get(bar.metric_key, float('nan')):.4f} "
+            f"misses {bar.direction} {bar.value:.4f} ({task_id} {bar.metric_key})"
+        )
+    )
+    payload["pass_bar"] = (
+        None
+        if bar is None
+        else {
+            "metric": bar.metric_key,
+            "direction": bar.direction,
+            "value": bar.value,
+        }
+    )
+    payload["pass_bar_cleared"] = None if bar is None else not below_bar
     if evaluation.checkpoint_path:
         payload["checkpoint_path"] = evaluation.checkpoint_path
     if evaluation.convergence_curve:
         payload["convergence_curve"] = evaluation.convergence_curve
-    passed = complete and within_ceiling
+    passed = complete and within_ceiling and not below_bar
 
     # Build legacy status and convert to schema Status with procedure metadata
     status = _build_status_with_procedures(
@@ -872,6 +933,7 @@ def cell_record(
         schedule.param_budget,
         replay_hash=replay_hash,
         deterministic=schedule.deterministic,
+        below_bar=below_bar,
     )
 
     return Record.create(

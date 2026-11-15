@@ -1,7 +1,11 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
-**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b, §3.4, §3.7, §3.9 and
-§3.10's first two interactions are closed. The measurement layer is honest:
+**Status:** 2026-11-14 · §3.0a, §3.0, §3.3, §3.3b, §3.4, §3.7, §3.9, §3.3c and
+§3.10's first two interactions are closed. The gate now means **defect-free
+and above the task's chance/majority ruler**: a cell that measures at or below
+the trivial predictor is FAIL with a named `below bar` defect. The recorded
+−1536.6 RL positive control is now FAIL (§3.3c), so PASS counts no longer
+overstate learning. The measurement layer is honest:
 3,437 measurements, 93/99 pairs, 0 holes, ~468 claim-shaped L2/n≥5 keys. The first audit found the
 complex/adam PEPITA pair is on a **declared-refused pair**
 (`complex_substrate_real_compute`), not a live substrate interaction. §3.9 now
@@ -164,6 +168,13 @@ among the 257 refused-pair measurements that cannot count; §3.9 audited the
 rest (48 live, 1 refused, 2 unavailable). The graph, node, tabular and RL rows
 are screening; their "met" is a
 domain-bar verdict, not a formal claim.
+**Gate semantics (2026-11-14, §3.3c).** A record written from this date
+PASSes only when it is defect-free **and** above its task's chance/majority
+ruler; the bar and the comparison are stored in the payload
+(`pass_bar`, `pass_bar_cleared`). Records written earlier keep the verdict
+they recorded and are **legacy PASS** (defect-free only). Every number in this
+section is read from the payload metric against its ruler, never from a PASS
+count.
 
 **Node's n=5/L2 conversion (measured 2026-11-14, §3.10).** The Cora cell at
 L2/100 over fresh seeds 47–51 measures **0.7568 ± 0.0145** with `adam`:
@@ -354,8 +365,14 @@ still needs a matched interaction or claim (§3.7, §3.10).
    They say what these implementations do at one schedule; HPO may move them.
    Do not read them as "settling is bad" or "muon is for flat stacks" in
    general (§5; AGENTS.md SEC Loop).
-4. **§3.3c — gate metric bar.** Makes PASS mean above-bar; every later claim
-   depends on it.
+4. ~~**§3.3c — gate metric bar.**~~ — **closed 2026-11-14.** Every task
+   declares a chance/majority ruler in its registry spec (`pass_bar`, default
+   `1/output_dim` for accuracy); `cell_record` compares the primary metric to
+   it and writes `pass_bar` + `pass_bar_cleared` into the payload. A miss is
+   FAIL with defect `below bar: …`, cause `divergence`. Acceptance met: the
+   recorded RL positive control now measures FAIL
+   (`mean_reward=-1536.6081` vs the −1200 random-policy floor), and a near-
+   chance digits cell that PASSed before is FAIL. Details in §3.3c.
 5. **§3.2 — one graph readout arm with a stop rule.** The only graph lever left.
 6. **§3.8 — claim-conversion backlog.** Convert only the screening rows a claim
    needs; label the rest screening.
@@ -399,7 +416,8 @@ still needs a matched interaction or claim (§3.7, §3.10).
    [−144.9, −127.2] against the > −200 bar. Pre-registered in
    `configs/preregistrations/t92_rl_400ep.json`. The pre-DDPG −1219 row was
    stale; the current lane clears the bar. Two findings it produced are filed:
-   the credit axis is inert (§3.3b) and gate PASS has no metric bar (§3.3c).
+   the credit axis is inert (§3.3b) and gate PASS had no metric bar
+   (§3.3c, closed 2026-11-14).
    **Grade:** screening (n=3, L0); the lane result is a trainer/geometry
    result, not a credit claim. Claim-grade conversion is in §3.8.
 3b. ~~**RL's credit signal is unbuilt.**~~ — **closed 2026-11-14: refused with
@@ -420,22 +438,56 @@ still needs a matched interaction or claim (§3.7, §3.10).
     to the recorded positive control. The 400-episode −135.1 row predates the
     rule and remains the lane's geometry × substrate measurement; a
     credit-aware RL update is still unbuilt.
-3c. **Gate PASS is defect-free, not above-bar (priority 4).**
-    `assess_gate_verdict` reads void/hard/soft defects and an optional seed
-    floor; it has no metric threshold, so the positive control PASSed at
-    −1536.6. Corpus PASS counts overstate learning on RL and near-chance tasks.
-    The documented rule is in §5 ("A PASS record means defect-free, never
-    above-bar"), but a rule is weaker than a gate. **Design:** add a per-task
-    bar (metric key, direction, value) to the task registry or a
-    `configs/pass_bars.json` table; `assess_gate_verdict` reads the record's
-    primary metric and returns FAIL (or a named `below_bar` defect) when it
-    misses the bar. PASS becomes defect-free **and** above-bar; claim
-    eligibility still requires L2/n≥5. **Acceptance:** a lock with a
-    near-chance cell that PASSed before and FAILs after; the −1536.6 positive
-    control is FAIL; existing claim-grade records are re-assessed or marked
-    legacy. **Cost:** one small code change plus its lock; no long run.
-    Until it exists, every number in this plan is read from the payload metric
-    against its task bar, never from PASS.
+3c. ~~**Gate PASS was defect-free, not above-bar**~~ — **closed 2026-11-14.**
+    **Measured problem.** `assess_gate_verdict` read void/hard/soft defects and
+    an optional seed floor; it had no metric threshold, so the positive
+    control PASSed at −1536.6 and corpus PASS counts overstated learning on
+    RL and near-chance tasks.
+    **Fix.** The bar is declared where the task is declared:
+    `TaskSpecEnriched.pass_bar` in
+    `computronium/experiment/registry/task_registry.py`, resolved by
+    `primary_pass_bar()` against the primary objective's metric key and
+    direction. Accuracy tasks default to `1/output_dim`; RL returns
+    (pendulum −1200, acrobot −500, cartpole 20), language perplexity (65/27 =
+    uniform over the vocab) and regression MSE (standardized diabetes 1.0 =
+    train-mean predictor; measured scientific/forecast mean-predictor MSE)
+    declare theirs. Graph/tabular rows declare the measured **majority** rate
+    (PROTEINS 0.5964, MUTAG 0.6579, Cora 0.316, CiteSeer 0.2107, PubMed
+    0.3994, breast_cancer 0.6316, wine 0.3889), because a random 0.5 floor
+    would pass a cell below the trivial classifier.
+    `cell_record` compares the primary metric (`maximize`: strictly greater;
+    `minimize`: strictly less; missing/non-finite never clears), writes
+    `pass_bar = {metric, direction, value}` and `pass_bar_cleared` into the
+    payload, and makes a miss FAIL with defect
+    `below bar: <metric>=<value> misses <direction> <bar>` and cause
+    `divergence`. PASS is now defect-free **and** above the ruler; claim
+    eligibility still requires L2, n≥5 (§3.8).
+    **Acceptance (met).** `tests/property/test_gate_metric_bar_lock.py`:
+    every registered task resolves a ruler; direction decides the clearing
+    side; a below-chance digits cell FAILs and names the bar; an above-bar
+    cell PASSes. The recorded RL positive control
+    (`mean_reward=-1536.6081`, 1 epoch, seed 42) now measures
+    `gate=FAIL, cause=divergence, defect="below bar: mean_reward=-1536.6081
+    misses maximize -1200.0000 (pendulum mean_reward)"`.
+    `tests/property/test_cell_evaluation_lock.py`'s near-chance digits cell
+    (measured val_acc 0.0625 < 0.10) now records FAIL, where it PASSed before;
+    the lock asserts the verdict agrees with `pass_bar_cleared`.
+    **Consequences.** Existing stores keep their recorded verdicts: the 3,437
+    measurements are **legacy PASS** (defect-free only) unless re-assessed;
+    the claim-grade rows in §2/§4 are above their bars, so their claims stand.
+    Three locks that used 1-epoch/2-batch digits cells as *claim-eligible*
+    (`test_claim_report_lock`, the CEEC export, and the campaign-free claim
+    fixture) now train the campaign's proved regime (`params` + 5 epochs,
+    unlimited batches), because a below-bar cell is correctly not
+    claim-eligible however many seeds it has.
+    **Reversal trigger.** A task that declares no derivable ruler returns
+    `pass_bar=None` and PASS stays defect-free; that is a coverage gap, not a
+    pass, and `test_gate_metric_bar_lock` refuses a new unbarred task.
+    **Follow-up (documentation, round close).** AGENTS.md's success criterion
+    "100% positive control PASS rate" now conflates compose+train with
+    above-bar: a hard task's 1-epoch control can be FAIL-by-bar without the run
+    being invalid (`wave.py` logs the verdict and continues). Reword it to
+    "control completes and its bar verdict is reported".
 4. ~~**`neuromorphic × graph`**~~ — **closed 2026-11-14: measured, not
    refused.** The pair is runnable on node classification. Three L0/1-epoch
    cells on Cora (500-node public split, majority 0.316) recorded to
@@ -445,7 +497,8 @@ still needs a matched interaction or claim (§3.7, §3.10).
    (0.07 s); the `digital/graph/instantaneous/gradient` positive control
    measured 0.132. All four PASS; this is **coverage, not a claim** — the
    numbers sit below the majority rate at one epoch and no seed replication
-   exists. Corpus: 93/99 pairs, **0 holes**. The graph path is node-mode; the
+   exists. **§3.3c reclassifies them:** they are legacy PASS under the old
+   defect-free gate, and would FAIL today against Cora's 0.316 majority bar. Corpus: 93/99 pairs, **0 holes**. The graph path is node-mode; the
    batched graph-classification path still fails under settling dynamics, filed
    as §3.6.
 5. ~~**Claim-blockers**~~ — **closed 2026-11-14 (TODO91 S8).** Settle telemetry,
@@ -639,6 +692,12 @@ Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
 refusal/liveness phase say "claim needs n≥3"; the current bar is L2/n≥5 (§5).
 The vision n=5 L2 rows are the first claim-grade cells; §3.7 is the first
 pre-registered matched claim.
+**Gate semantics (2026-11-14, §3.3c).** PASS now means defect-free **and**
+above the task's chance/majority ruler; each record carries
+`pass_bar`/`pass_bar_cleared`. The recorded −1536.6 RL positive control is
+FAIL (ticket row: `below bar: mean_reward=-1536.6081 misses maximize
+-1200.0000`). Rows above predate the gate bar and are **legacy PASS** where
+their cell measured below it; the claim-grade rows are above their bars.
 
 ### Claim-grade ledger (L2, n≥5, same cell except one axis)
 
@@ -721,8 +780,10 @@ cross-credit conclusion and no HPO before that point (§5).
   the counter-example, not the template.
 - **Every number carries its ruler** and the chance/majority rate it beats.
   Corpus breadth is **distinct measurements**, never PASS records (§3.0a).
-- **A PASS record means defect-free, never above-bar** (measured 2026-11-14: a
-  −1536.6 RL cell PASSed; §3.3c). A claim reads the metric and its ruler.
+- **A PASS record means defect-free *and* above the task's chance/majority
+  ruler** (measured 2026-11-14: the −1536.6 RL positive control is now FAIL;
+  §3.3c). Records written before the gate bar are **legacy PASS** and carry no
+  such guarantee. A claim reads the metric, its ruler, and its rung.
 - **An axis the lane never applies is refused, not swept.** The RL credit axis
   names its refusal in one constraint (`rl_credit_must_be_error_blind`) and
   keeps only the rows whose contract matches the lane; a second table of
@@ -827,10 +888,22 @@ cross-credit conclusion and no HPO before that point (§5).
   cell, not a pre-registered main-effect claim. The adam control is 0.7568 ±
   0.0145 (0.47σ, marginal), so the node row's best number moved; more seeds at
   the old cell would not have cleared the bar.
+- §3.3c is closed (2026-11-14): the gate now reads a per-task chance/majority
+  ruler (`TaskSpecEnriched.pass_bar`, resolved by `primary_pass_bar`), writes
+  it into the payload, and FAILs a cell at or below it with a named `below
+  bar` defect and cause `divergence`. Acceptance verified twice: the recorded
+  RL positive control is FAIL
+  (`mean_reward=-1536.6081` vs the −1200 random floor), and the near-chance
+  digits cell that PASSed before is FAIL. Lock:
+  `tests/property/test_gate_metric_bar_lock.py`. Existing stores are **legacy
+  PASS**; the claim-grade rows are above their bars. Three claim fixtures were
+  moved to the campaign's proved regime (params + 5 epochs, unlimited batches)
+  because a below-bar cell is not claim-eligible.
 - Open work, in priority order: §3.10 remaining interactions (plasticity ×
-  task, credit × substrate); §3.3c gate metric bar; §3.2 one graph readout arm
-  with a stop rule; §3.8 graph/RL/tabular conversions; §3.6 batched graph-settle
-  (deferred); §3.1 regression claims (n=1).
+  task, credit × substrate); §3.2 one graph readout arm with a stop rule;
+  §3.8 graph/RL/tabular conversions; §3.6 batched graph-settle (deferred);
+  §3.1 regression claims (n=1); §3.3c documentation follow-up (AGENTS.md's
+  positive-control wording, round close).
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and

@@ -67,7 +67,15 @@ _TASK = "digits"
 _CREDITS = ("thermodynamic_contrast", "local_contrastive")
 _SEEDS = 5
 _SHORT_SEEDS = 2
-_BATCHES = 2
+_BATCHES = 0
+_EPOCHS = 5
+# The campaign's proved regime (TODO48 Q1): without the settle step the
+# 10k-budget composition does not learn digits inside the lock's short run.
+_PARAMS = {
+    "geometry.num_layers": 2,
+    "geometry.hidden_dim": 64,
+    "dynamics.step_size": 0.03162,
+}
 _METRIC = "val_acc"
 # Every record the store accepts must carry an env fingerprint (store contract).
 _ENV = {"python": "3.14", "platform": "test"}
@@ -81,7 +89,7 @@ def _coordinate(credit: str) -> Coordinate:
         plasticity="fast_weights",
         credit=credit,
         update="euclidean",
-        params={},
+        params=_PARAMS,
     )
 
 
@@ -90,7 +98,7 @@ def _schedule(seed: int) -> Schedule:
         fidelity="L2",
         seed=seed,
         n_seeds=1,
-        epochs=1,
+        epochs=_EPOCHS,
         batch_limit=_BATCHES,
         budget_id="claim-gate",
         task_id=_TASK,
@@ -104,7 +112,7 @@ def _spec(**overrides: object) -> RunSpec:
         "objectives": ("validation_accuracy",),
         "fidelity": "L2",
         "n_seeds": _SEEDS,
-        "epochs": 1,
+        "epochs": _EPOCHS,
         "batch_limit": _BATCHES,
         "param_budget": MEASURED_PARAM_BUDGET,
     }

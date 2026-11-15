@@ -46,6 +46,10 @@ class TaskSpecEnriched:
     output_dim: int | None = None
     cost_class: CostClass = CostClass.MEDIUM
     primary_objective: str = "validation_accuracy"
+    # The chance/majority ruler the primary metric must clear for a gate PASS.
+    # Accuracy tasks default to the random-guess rate (1/output_dim); a task
+    # whose ruler is not derivable (return, perplexity, MSE) declares it here.
+    pass_bar: float | None = None
     objectives: tuple[TaskObjective, ...] = field(default_factory=tuple)
     geometry_hint: str | None = None  # Suggested geometry for this task
     typical_batch_size: int = 32
@@ -62,13 +66,61 @@ class TaskSpecEnriched:
         return [o for o in self.objectives if not o.is_measured]
 
 
+@dataclass(frozen=True, slots=True)
+class PassBar:
+    """The ruler a cell's primary metric must clear for a gate PASS.
+
+    ``value`` is a floor when ``direction`` is ``maximize`` and a ceiling when
+    it is ``minimize``. The value is the chance/majority rate, not the domain
+    target: a PASS says the cell learned something a trivial predictor cannot,
+    while a claim still needs L2, n>=5 and a preregistration.
+    """
+
+    metric_key: str
+    direction: str
+    value: float
+
+
+# Accuracy metrics whose random-guess rate is 1/output_dim.
+_ACCURACY_KEYS: frozenset[str] = frozenset({"val_acc", "accuracy"})
+
+
+def primary_pass_bar(spec: TaskSpecEnriched) -> PassBar | None:
+    """Resolve a task's gate bar from its primary objective.
+
+    A declared ``pass_bar`` wins; otherwise an accuracy objective defaults to
+    the random-guess floor. A metric whose ruler is not derivable from the
+    spec returns ``None`` rather than inventing a threshold.
+    """
+    objective = next(
+        (o for o in spec.objectives if o.name == spec.primary_objective), None
+    )
+    if objective is None or objective.payload_key is None:
+        return None
+    value = spec.pass_bar
+    if value is None:
+        if (
+            objective.direction == "maximize"
+            and objective.payload_key in _ACCURACY_KEYS
+        ):
+            if spec.output_dim is None or spec.output_dim < 2:
+                return None
+            value = 1.0 / spec.output_dim
+        else:
+            return None
+    return PassBar(objective.payload_key, objective.direction, float(value))
+
+
 def _graph_classification_spec(
-    name: str, description: str, tags: tuple[str, ...]
+    name: str, description: str, tags: tuple[str, ...], pass_bar: float
 ) -> TaskSpecEnriched:
     """One TU graph-classification dataset.
 
     Datasets differ only in split size, so they share one objective set: the
     resolution of a claim comes from the dataset, not from the objective list.
+    Each dataset declares its own majority rate: a 2-class accuracy of 0.55 is
+    below the trivial classifier on both, so the random 0.5 floor would pass a
+    cell that learned nothing.
     """
     return TaskSpecEnriched(
         name=name,
@@ -77,6 +129,7 @@ def _graph_classification_spec(
         output_dim=2,
         cost_class=CostClass.MEDIUM,
         primary_objective="validation_accuracy",
+        pass_bar=pass_bar,
         objectives=(
             TaskObjective(
                 "validation_accuracy",
@@ -546,6 +599,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=65,  # character vocab
         cost_class=CostClass.EXPENSIVE,
         primary_objective="perplexity",
+        # Uniform over the vocabulary: 65 is the no-information perplexity.
+        pass_bar=65.0,
         objectives=(
             TaskObjective(
                 "perplexity",
@@ -593,6 +648,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=27,
         cost_class=CostClass.MEDIUM,
         primary_objective="perplexity",
+        # Uniform over 27 characters is the no-information perplexity.
+        pass_bar=27.0,
         objectives=(
             TaskObjective(
                 "perplexity", "minimize", "log", 1.0, True, "val_ppl", "task"
@@ -617,6 +674,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=1,  # torque
         cost_class=CostClass.MEDIUM,
         primary_objective="mean_reward",
+        # Pendulum-v1 random-policy return, measured ~-1200 (plan §2).
+        pass_bar=-1200.0,
         objectives=(
             TaskObjective(
                 "mean_reward",
@@ -668,6 +727,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=3,
         cost_class=CostClass.MEDIUM,
         primary_objective="mean_reward",
+        # Acrobot-v1 random-policy return: -1 per step to the 500-step cap.
+        pass_bar=-500.0,
         objectives=(
             TaskObjective(
                 "mean_reward", "maximize", "minmax", 1.0, True, "mean_reward", "task"
@@ -692,6 +753,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=2,
         cost_class=CostClass.CHEAP,
         primary_objective="mean_reward",
+        # CartPole-v1 random policy balances for ~20 steps.
+        pass_bar=20.0,
         objectives=(
             TaskObjective(
                 "mean_reward", "maximize", "minmax", 1.0, True, "mean_reward", "task"
@@ -716,6 +779,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=7,  # Classes
         cost_class=CostClass.MEDIUM,
         primary_objective="validation_accuracy",
+        # 500-node public split: the largest class holds 158 of 500.
+        pass_bar=0.316,
         objectives=(
             TaskObjective(
                 "validation_accuracy",
@@ -746,6 +811,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=6,
         cost_class=CostClass.MEDIUM,
         primary_objective="validation_accuracy",
+        pass_bar=0.2107,
         objectives=(
             TaskObjective(
                 "validation_accuracy",
@@ -776,6 +842,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=3,
         cost_class=CostClass.MEDIUM,
         primary_objective="validation_accuracy",
+        pass_bar=0.3994,
         objectives=(
             TaskObjective(
                 "validation_accuracy",
@@ -803,6 +870,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         "graph_classification",
         "Graph classification benchmark (MUTAG, 188 graphs)",
         ("graph", "graph_classification"),
+        0.6579,
     ),
     # R1: a second, larger TU set. MUTAG holds out 38 graphs (0.026/graph,
     # majority 0.658), so no cell there can carry a ">0.70" claim; PROTEINS
@@ -811,6 +879,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         "proteins",
         "Graph classification — PROTEINS (1113 graphs)",
         ("graph", "graph_classification", "tu"),
+        0.5964,
     ),
     "breast_cancer": TaskSpecEnriched(
         name="breast_cancer",
@@ -819,6 +888,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=2,
         cost_class=CostClass.CHEAP,
         primary_objective="validation_accuracy",
+        # Val split (114 rows): the majority class holds 72.
+        pass_bar=0.6316,
         objectives=(
             TaskObjective(
                 "validation_accuracy",
@@ -873,6 +944,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=3,
         cost_class=CostClass.CHEAP,
         primary_objective="validation_accuracy",
+        # Val split (36 rows): the majority class holds 14.
+        pass_bar=0.3889,
         objectives=(
             TaskObjective(
                 "validation_accuracy",
@@ -900,6 +973,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=1,
         cost_class=CostClass.CHEAP,
         primary_objective="validation_loss",
+        # Standardized target: MSE 1.0 is the train-mean predictor.
+        pass_bar=1.0,
         objectives=(
             TaskObjective(
                 "validation_loss",
@@ -934,6 +1009,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=1,
         cost_class=CostClass.CHEAP,
         primary_objective="validation_loss",
+        # Measured mean-predictor val MSE on the sine split: 0.516.
+        pass_bar=0.516,
         objectives=(
             TaskObjective(
                 "validation_loss",
@@ -975,6 +1052,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=3,  # next sin(theta), cos(theta), theta_dot
         cost_class=CostClass.CHEAP,
         primary_objective="validation_loss",
+        # Measured mean-predictor val MSE on the next-state targets: 1.331.
+        pass_bar=1.331,
         objectives=(
             TaskObjective(
                 "validation_loss",
@@ -1016,6 +1095,8 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         output_dim=3,  # next x, y, z
         cost_class=CostClass.CHEAP,
         primary_objective="validation_loss",
+        # Measured mean-predictor val MSE on the next-state targets: 67.415.
+        pass_bar=67.415,
         objectives=(
             TaskObjective(
                 "validation_loss",
@@ -1187,9 +1268,11 @@ __all__ = [
     "TASK_ENRICHMENTS",
     "CostClass",
     "DomainType",
+    "PassBar",
     "TaskObjective",
     "TaskRegistry",
     "TaskSpecEnriched",
     "get_task_registry",
     "normalize_per_task_baseline",
+    "primary_pass_bar",
 ]

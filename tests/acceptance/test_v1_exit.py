@@ -222,6 +222,9 @@ class TestV1Exit:
 
         task = "digits"
         n_seeds = 5
+        # The campaign's proved regime (TODO48 Q1): the gate's digits bar is
+        # 0.10, and a 1-epoch, 2-batch cell measures below it, so it is not
+        # claim-eligible however many seeds it has.
         coordinate = Coordinate(
             substrate="digital",
             geometry="feedforward",
@@ -229,7 +232,11 @@ class TestV1Exit:
             plasticity="fast_weights",
             credit="local_contrastive",
             update="euclidean",
-            params={},
+            params={
+                "geometry.num_layers": 2,
+                "geometry.hidden_dim": 64,
+                "dynamics.step_size": 0.03162,
+            },
         )
 
         def measure(store: RecordStore, run_id: str, seed: int) -> None:
@@ -240,8 +247,8 @@ class TestV1Exit:
                         fidelity="L2",
                         seed=seed,
                         n_seeds=n_seeds,
-                        epochs=1,
-                        batch_limit=MEASURED_BATCH_LIMIT,
+                        epochs=5,
+                        batch_limit=0,
                         budget_id="exit-ceec",
                         task_id=task,
                         param_budget=MEASURED_PARAM_BUDGET,
