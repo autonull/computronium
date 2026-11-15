@@ -7,12 +7,13 @@ with the task's own declared split — `TabularTask.fold_indices(5)`, stratified
 `random_state=0` — where every one of the 569 rows is held out exactly once.
 Fold-mean resolution is 1/569 = **0.18 pp**, five times finer than the effect.
 
-Instrument: `computronium.evaluation.base.cross_validate`, which drives the
-same `SystemTrainer` the kernel calls, over the task's folds. The system is
-composed by `compose_cell_system` at the §3.13 coordinate (digital /
-feedforward / instantaneous / null / gradient-or-`local_goodness` / adam,
-`geometry.hidden_dim=256`); only the credit, its declared channel
-(`credit.readout_error=True`) and the seed differ between arms. L2/20.
+Instrument: ``train_on_task`` drives the same ``SystemTrainer`` the kernel
+builds, with the same config (``max_epochs``, device, seed, no batch limits);
+the system is composed by ``compose_cell_system`` at the §3.13 coordinate
+(digital / feedforward / instantaneous / null / gradient-or-`local_goodness` /
+adam, ``geometry.hidden_dim=256``). Only the credit, its declared channel
+(``credit.readout_error=True``) and the seed differ between arms. L2/20. The
+score is the last epoch's ``val_acc`` — the metric the corpus cell reports.
 
 Decision: the pre-registered `ThresholdRegistration` (+0.005, alpha 0.05,
 min 5 seeds) in
@@ -22,6 +23,25 @@ before seed 1.
 Run: uv run python scripts/probes/t92_local_goodness_tabular_folds.py --pilot
      uv run python scripts/probes/t92_local_goodness_tabular_folds.py
      uv run python scripts/probes/t92_local_goodness_tabular_folds.py --report-only
+
+Measured 2026-11-15 (5 folds x 5 seeds x 2 arms, L2/20, CPU, 49 s):
+gradient **0.9778 ± 0.0027**, `local_goodness` **0.9782 ± 0.0020**; paired
+**+0.0003**, 95% CI [−0.0025, +0.0025], p=0.96, dz=0.10 — **FAIL** against the
++0.005 threshold. The §3.13 +1.58 pp does not replicate on the 569-row ruler.
+
+Two findings travel with the number. (a) The fold instrument's eval site
+matters at this effect size: a post-training ``task.evaluate`` pass (the
+``cross_validate`` path) scored gradient 0.9782 / `local_goodness` 0.9757 —
+paired −0.0025, CI [−0.0042, −0.0011] — so the site moves the paired
+difference by ~0.3 pp even though both passes FAIL the +0.005 threshold. It
+also moves individual folds by up to 0.9 pp, so the probe scores the trainer's
+last-epoch ``val_acc``, where the corpus cell scores. (b) The credit is live in
+this harness — one epoch of each arm at the same seed moves the 74,242
+parameters by max |Δ| 0.0255 — and per-fold accuracy is quantized at
+1/114 = 0.88 pp, so the fold mean resolves 0.18 pp. At 0.978 the task is near
+its ceiling: this coordinate has ~2.2 pp of headroom, so a ≥0.5 pp advantage
+was still detectable (CI half-width 0.25 pp) but a *win* is unlikely here by
+construction.
 """
 
 from __future__ import annotations
@@ -40,7 +60,6 @@ import torch
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.train_task import train_on_task
 from computronium.domains.tabular import TabularTask
-from computronium.evaluation.base import cross_validate
 from computronium.experiment.kernel.compose import compose_cell_system
 from computronium.experiment.schema.coordinate import Coordinate
 from computronium.validation.preregistration import (
@@ -100,9 +119,24 @@ def _factory(credit: str, task: TabularTask):
 
 
 def _arm_folds(credit: str, seed: int, task: TabularTask) -> list[float]:
-    _seed_all(seed)
-    folds = cross_validate(_factory(credit, task), task, n_folds=N_FOLDS, epochs=EPOCHS)
-    return [folds[f"fold_{i}"]["accuracy"] for i in range(N_FOLDS)]
+    """Fold-mean val_acc per seed, read where the kernel cell reads it.
+
+    ``train_on_task`` drives the same ``SystemTrainer`` and config the kernel
+    builds, and the last epoch's ``val_acc`` is the metric the corpus cell
+    reports (``_update_task_metrics`` prefers the trainer history). A
+    post-training ``task.evaluate`` pass is a different eval site and reads
+    ~2 pp higher, so it cannot be compared with a corpus cell.
+    """
+    scores: list[float] = []
+    for fold in range(N_FOLDS):
+        task.set_fold(fold, N_FOLDS)
+        _seed_all(seed)
+        config = SystemTrainerConfig(
+            max_epochs=EPOCHS, device=str(task.device), seed=seed, track_energy=False
+        )
+        history = train_on_task(_factory(credit, task), task, config)
+        scores.append(float(history[-1]["val_acc"]))
+    return scores
 
 
 def _pilot(device: str) -> int:

@@ -1,11 +1,16 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
-**Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.9,
-§3.3c, §3.10's interactions, §3.12's breadth exit and §3.13's stop-loss
+**Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.8,
+§3.9, §3.3c, §3.10's interactions, §3.12's breadth exit and §3.13's stop-loss
 disposition are closed — **three claim-grade interaction rows, one probe-grade
-row** (plasticity × task skipped rung 2), and **two pre-registered parity
-registrations**; §3.11's credit viability map and its `local_goodness` vs
-`gradient` follow-up are closed. The gate now means **defect-free
+row** (plasticity × task skipped rung 2), and **three pre-registered
+registrations** (two parity, one superiority — the superiority **failed**);
+§3.11's credit viability map and its `local_goodness` vs `gradient` follow-up
+are closed. §3.8 (2026-11-15) **retracts the tabular advantage**: on the task's
+pre-registered 5-fold ruler `local_goodness` measures **+0.03 pp** vs gradient
+(0.9782 vs 0.9778, 95% CI [−0.25, +0.25] pp, 569 held out), so the earlier
++1.58 pp was a 114-row coordinate and the second-family reading is **parity**,
+not a win. The gate now means **defect-free
 and above the task's chance/majority ruler**: a cell that measures at or below
 the trivial predictor is FAIL with a named `below bar` defect. The recorded
 −1536.6 RL positive control is now FAIL (§3.3c), so PASS counts no longer
@@ -50,6 +55,19 @@ at the interaction coordinates measured to that date; its weak form survived
 as two cost-adjusted parities (PEPITA 1.17×, `local_goodness` 0.81× walltime
 on MNIST). §3.13 later measured a coordinate where the strong form is **not**
 falsified (below), so the falsification is scoped to those interactions.
+**§3.8 is measured and closed — the tabular advantage is retracted
+(2026-11-15).** The pre-registered superiority claim on the task's own
+**5-fold ruler** (`TabularTask.fold_indices`, 569 rows, every row held out
+exactly once, 0.18 pp resolution) measures `local_goodness` **0.9782 ± 0.0020**
+vs gradient **0.9778 ± 0.0027**, paired **+0.0003**, 95% CI [−0.0025, +0.0025],
+p=0.96, dz=0.10 (5 seeds 67–71, L2/20, 49 s, `experiments/t92_local_goodness_tabular_folds.json`).
+That is **FAIL** against the pre-registered +0.005 threshold: §3.13's
+**+1.58 pp** was a 114-row holdout coordinate (≈1.8 rows), not a second-family
+advantage. The exact parity reading (±0.25 pp, inside ±1 pp) is **post-hoc** on
+this ruler, so it is a coordinate, not an equivalence claim.
+§3.13's reversal trigger therefore **fired**: the row is a coordinate and the
+stop-loss is re-evaluated below.
+
 **§3.12/§3.13 closed the breadth question and re-opened the thesis
 (2026-11-15).** The gate exits 0 with **8/8** error-aware credits on ≥2 task
 families (50 new cells, 582 s). `local_goodness` then measures **+1.58 pp** over
@@ -58,6 +76,18 @@ the first non-standard composition that does **not** lose on a second family,
 at **1.15×** cost. The standing stop-loss does not fire; the strong thesis is
 not falsified at the measured coordinates. The advantage is a claim-grade
 coordinate, not a claim (114 held out, 0.88 pp resolution).
+*Correction (2026-11-15, §3.8): the "+1.58 pp advantage" does not survive the
+569-row ruler — it is retracted to parity (§0 first paragraph). The stop-loss
+disposition below is rewritten on parity, not advantage.*
+**Re-evaluated stop-loss (2026-11-15, after §3.8):** `local_goodness` holds
+**equivalent** vision cells (MNIST, CI inside ±0.01 at 0.81× cost) and a
+**parity** tabular reading (+0.0003, CI [−0.0025, +0.0025] — post-hoc ruler).
+So the weak form of the thesis — a non-standard composition matches the
+standard stack at matched cost — holds on two families, and the strong form (a
+capability **win** at matched cost) remains falsified: zero claim-grade wins
+across the closed interaction matrix and both parity rows. No HPO is licensed
+by a parity; the next lever, if a tabular win is wanted, is a **harder tabular
+ruler** (a dataset with headroom), not this task and not a knob.
 **§3.11 is measured and its follow-up is closed (2026-11-15):**
 all **8/8 error-aware credits clear chance** at their ladder's best point on the
 MNIST anchor, so no credit is an unwired row; `local_goodness` with its declared
@@ -153,23 +183,26 @@ exit and it is now green by measurement, not by prose.
 |---|---|---|---|
 | Breadth exit | every error-aware credit holds a legal, bar-cleared L2/n≥5 cell on ≥2 task families | **PASS — 8 of 8** | `uv run comp gate breadth` |
 
-**Stop-loss disposition: does not fire (2026-11-15).** The map's best
-non-standard credit, `local_goodness`, now holds parity-or-better on two
-families: vision (MNIST, **EQUIVALENT** within ±0.01, 0.81× cost) and tabular
-(`breast_cancer`, **+0.0158** over gradient, 95% CI [+0.0105, +0.0211],
-pre-registered margin rejected; 1.15× cost). A non-standard composition
-matches the standard stack at matched cost on two families with declared bars,
-so the strong thesis is **not** falsified and the search continues at claim
-grade (§3.13).
+**Stop-loss disposition: does not fire (2026-11-15, re-evaluated after §3.8).**
+The map's best non-standard credit, `local_goodness`, holds **equivalence** on
+two families: vision (MNIST, CI inside ±0.01, 0.81× cost) and tabular (569-row
+fold ruler, **+0.0003**, 95% CI [−0.0025, +0.0025] — post-hoc reading, inside
+±1 pp). The earlier "+0.0158 tabular advantage" is **retracted**: on the
+pre-registered 5-fold ruler the superiority claim **FAILS** (§3.8). So a
+non-standard composition matches the standard stack at matched cost on two
+families, and no composition **wins** at claim grade. The strong thesis is
+falsified at the measured coordinates; the weak form survives on parity.
 
 **Record corrections (labels, not gates — no checker exists yet):**
 
 | Correction | State |
 |---|---|
-| Registration order | both 2026-11-15 interaction rows are **post-hoc**; §4 labels them. The two parity registrations (`3b9308d2`, `a3bb5ce9`) precede their seed 1 |
+| Registration order | both 2026-11-15 interaction rows are **post-hoc**; §4 labels them. The three parity/superiority registrations (`3b9308d2`, `a3bb5ce9`, `4884cc0c`) precede their seed 1 |
 | Rung completeness | plasticity × task skipped rung 2; §3.10 labels it probe-grade |
 | Positive control | absent for the CL lane; §5 records the rule |
 | Ruler reach | the breadth cells' tabular ruler is `wine` (36 held out, 2.78 pp resolution, saturated at 1.0000); it licenses **breadth**, not a ranking (§3.12) |
+| Advantage retracted | `breast_cancer` +1.58 pp was a 114-row coordinate; the 569-row ruler measures +0.03 pp (§3.8). Parity on that ruler is post-hoc |
+| Eval site | a fold instrument must read `val_acc` from the trainer's last epoch, as the cell does; a post-training `task.evaluate` pass is a different site and moved the paired difference by ~0.3 pp (folds by up to 0.9 pp) (§3.8, §5) |
 
 Gate output (2026-11-15, after §3.12): `gradient` graph/memory/tabular/
 timeseries/vision (243 keys), `pepita` memory/tabular/vision (60),
@@ -179,12 +212,18 @@ tabular/vision (26), `local_contrastive` tabular/vision (10), `pc_alm`
 tabular/vision (10). 960 legacy records re-assessed against their task bar;
 43 unbarred/below-bar; 58 refused cells excluded.
 
-**Acceptance (met):** the command exits 0. **Next ticket:** if a formal claim
-is wanted, pre-register a `ThresholdRegistration` for the tabular advantage on
-a held-out split large enough to carry it (§3.13, §3.8); otherwise the
-breadth map is the artifact and no run starts without a named claim.
-**Standing stop-loss:** it was evaluated, not skipped — the parity map is in
-§4 and the disposition in §3.13.
+**Acceptance (met):** the command exits 0. **No ticket is open that blocks a
+number.** The claim backlog is empty: the only conversion candidate (§3.8's
+tabular advantage) was run and **failed**, so §3.8 closes. Optional follow-ups
+that need no new mechanism: (a) pre-register `EquivalenceRegistration` on the
+569-row fold ruler and re-run with fresh seeds 72–76 (~1 min) if a formal
+tabular **parity** claim is wanted — the current parity reading is post-hoc;
+(b) add a **harder tabular task** (≥500-row held-out split with headroom) if a
+tabular **win** is wanted — the current ruler sits at 0.978 with 2.2 pp of
+headroom, so an advantage above ~0.5 pp is measurable but unlikely there;
+(c) §3.6's batched graph-settle path stays deferred (no bar depends on it).
+**Standing stop-loss:** evaluated twice — the parity map is in §4 and the
+disposition in §3.13.
 
 **Fresh session commands:** dev-env smoke
 (`uv run python -c "import optuna, scipy, torchvision, pytest"`), then
@@ -236,7 +275,12 @@ count as substrate breadth, **0 unmeasured**). The last hole,
 `experiments/t92_neuromorphic_graph.duckdb` (§3.4); §3.11's follow-up adds
 `experiments/t92_local_goodness_mnist.duckdb` (10 records, 10 measurements);
 §3.12/§3.13 add 60 records across `t92_breadth_second_family.duckdb` and
-`t92_credit_parity_breast_cancer.duckdb`.
+`t92_credit_parity_breast_cancer.duckdb`. §3.8 adds **no store records**: its
+fold cells have no task identity in `Schedule` (the schedule carries no fold
+field), so the probe writes `experiments/t92_local_goodness_tabular_folds.json`
+instead of five would-be duplicate keys. Fold cells enter the corpus only after
+a fold field joins the measurement identity; until then the repayable wart is
+named here rather than hidden (§3.8).
 
 **Ruler note (measured 2026-11-14; re-measured by §3.0a).** `scan_corpus` counts
 PASS records, and `measurement_key` is unique *within* a store, not across
@@ -291,6 +335,10 @@ This is a claim-grade **coordinate**, not a superiority claim: the
 registration (`a3bb5ce9`) pre-registers equivalence only, and 114 rows resolve
 0.88 pp. It is the first measured non-standard composition that does not lose
 to the standard stack on a second family.
+**Retracted by §3.8 (2026-11-15):** on the task's own 5-fold ruler (569 rows,
+0.18 pp) the pair measures **+0.0003**, 95% CI [−0.0025, +0.0025] — the
+advantage above does not replicate, so the second-family reading is **parity**,
+not an advantage.
 **Retraction (2026-11-14):** the complex/adam pair is **refused** by
 `complex_substrate_real_compute`; its cells are bit-identical to digital
 because the operator is the digital matmul on real weights. Its records are
@@ -434,12 +482,13 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-15: §3.2, §3.7, §3.10's interactions, §3.12's
+**Priority order (2026-11-15: §3.2, §3.7, §3.8, §3.10's interactions, §3.12's
 breadth exit and §3.13's stop-loss disposition are closed. The AGENTS breadth
 exit is **met** — `comp gate breadth` exits 0 with 8/8 credits on ≥2 families
-— and no credit-axis comparison is blocked. The next number is optional:
-convert the tabular parity advantage into a claim (§3.8) only if one is
-needed, on a held-out split large enough to carry it):**
+— and no credit-axis comparison is blocked. §3.8 ran the only claim-conversion
+candidate and it **failed**, so the claim backlog is empty. Remaining work is
+optional and named in §0: a formal tabular *parity* registration on the
+569-row ruler (post-hoc today), or a harder tabular task for a *win*):**
 
 1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
    declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
@@ -586,12 +635,55 @@ needed, on a held-out split large enough to carry it):**
    per the stop rule, no third capacity/readout arm and no seed sweep. A
    formal claim would need the same cell at n=5 L2/100 (§3.8), not another
    lever. Details in §3.2.
-6. **§3.8 — claim-conversion backlog.** Convert only the screening rows a claim
-   needs; label the rest screening. **Open candidate (2026-11-15):** the
-   tabular `local_goodness` advantage (§3.13) — it needs a
-   `ThresholdRegistration` (e.g. +0.005) and a ≥500-row held-out split, because
-   the 114-row `breast_cancer` ruler resolves 0.88 pp. Not started; no other
-   row currently needs conversion.
+6. ~~**§3.8 — claim-conversion backlog.**~~ — **closed 2026-11-15: the
+   conversion ran and the advantage did not survive.** The candidate was the
+   tabular `local_goodness` advantage (§3.13), which needed a
+   `ThresholdRegistration` and a ≥500-row held-out split because the 114-row
+   `breast_cancer` ruler resolves 0.88 pp. Registration
+   `configs/preregistrations/t92_local_goodness_tabular_folds.json`
+   (+0.005, α=0.05, min n=5) was committed **alone in `4884cc0c`, before seed
+   1** — the second registration in this plan that satisfies §5's order rule.
+   **Instrument:** `scripts/probes/t92_local_goodness_tabular_folds.py`; the
+   task's own declared 5-fold split (`TabularTask.fold_indices`, stratified,
+   `random_state=0`), so all **569 rows are held out exactly once** and the
+   fold-mean resolves **0.18 pp**; `train_on_task` drives the same
+   `SystemTrainer` the kernel builds, and the score is the trainer's
+   last-epoch `val_acc` — the metric the corpus cell reports. Reference stack
+   as §3.13 (digital/feedforward/instantaneous/null/adam,
+   `geometry.hidden_dim=256`, 74,242 params both arms); L2/20, seeds 67–71,
+   CPU, 49 s. Artifact: `experiments/t92_local_goodness_tabular_folds.json`.
+
+   | Arm | Fold-mean ± SD | n | Cost |
+   |---|---|---|---|
+   | gradient | **0.9778 ± 0.0027** | 5 | same schedule |
+   | `local_goodness` (+`readout_error`) | **0.9782 ± 0.0020** | 5 | same schedule |
+   | paired treatment − control | **+0.0003**, 95% CI [−0.0025, +0.0025] | 5 | p=0.96, dz=0.10 |
+
+   Cost: all 50 fold-cells ran in **49 s** (~1 s/cell); both arms share the
+   composed shape (74,242 params) and the schedule, so the comparison is
+   matched-cost by construction (the credit's own overhead was not separately
+   timed).
+
+   **Verdict: FAIL at the pre-registered +0.005 threshold.** §3.13's
+   **+1.58 pp** was a 114-row holdout coordinate (≈1.8 rows); on the 569-row
+   ruler the effect is **+0.03 pp** (≈0.2 pooled rows, ≈0.03 rows per fold). The parity reading (CI inside
+   ±1 pp) is **post-hoc** on this ruler, so it is a coordinate, not an
+   equivalence claim.
+   **Instrument checks (so the FAIL is not a harness artifact).** (a) The
+   credit is live: one epoch of each arm at seed 67 moves the 74,242
+   parameters by max |Δ| **0.0255**. (b) Eval site matters at this effect
+   size — the first pass read a post-training `task.evaluate` score (the
+   `cross_validate` path) and measured gradient 0.9782 / `local_goodness`
+   0.9757, paired −0.0025, CI [−0.0042, −0.0011], i.e. the site shifts the
+   paired difference by ~0.3 pp and individual folds by up to 0.9 pp; it
+   **also FAILs** the +0.005 threshold, and the probe now scores the trainer's
+   last-epoch `val_acc`, where the cell scores (§5). (c) Ceiling: gradient sits
+   at 0.978, so this coordinate has ~2.2 pp of headroom; a ≥0.5 pp advantage
+   was still detectable (CI half-width 0.25 pp), but a *win* here is unlikely
+   by construction — that is an argument for a harder ruler, not for tuning.
+   **Stop rule applied:** no lr tuning, no extra seeds, no third task, no
+   re-run. §3.13's reversal trigger fired; the stop-loss is re-evaluated in
+   §0/§3.13.
 7. **§3.6 — batched graph-settle path.** Defer; no domain bar depends on it.
 8. **§3.1 — regression claims.** n=1 records; no current claim.
 
@@ -1107,10 +1199,22 @@ needed, on a held-out split large enough to carry it):**
     advantage is a claim-grade **coordinate**, not a claim; it is one task at
     a coarse 114-row ruler. A claim needs its own `ThresholdRegistration`
     (e.g. +0.005) and a larger held-out split — §3.8, only if wanted.
+    *That conversion ran (§3.8): the 569-row ruler measures +0.0003, CI
+    [−0.0025, +0.0025], FAIL at +0.005, so the advantage quoted above is
+    retracted.*
     **Stop rule applied:** no lr tuning, no extra seeds, no third task.
     **Reversal trigger:** if a pre-registered superiority run on a ≥500-row
     tabular split fails to clear its threshold, this row becomes a coordinate
     and the stop-loss must be re-evaluated on the published map.
+    **Trigger fired (2026-11-15, §3.8).** The pre-registered superiority run
+    on the task's own 5-fold ruler (569 rows, 0.18 pp resolution, seeds 67–71)
+    measured **+0.0003**, 95% CI [−0.0025, +0.0025] — **FAIL** at +0.005. So:
+    the +1.58 pp row is a **coordinate**, not an advantage; the second-family
+    reading is **parity** (CI inside ±1 pp, post-hoc ruler); the stop-loss is
+    re-evaluated in §0 and **does not fire** in its weak form (equivalence on
+    two families) while the strong form (a claim-grade win) remains
+    **falsified**. No HPO follows a parity: the next lever is a harder
+    tabular ruler, not a knob.
 
 ---
 
@@ -1154,6 +1258,8 @@ needed, on a held-out split large enough to carry it):**
 | 2026-11-15 | plasticity × task (SplitMNIST) | `null` forgetting **0.0417 ± 0.0051** vs `fast_weights` **0.0425 ± 0.0053** | 5 | 5 epochs/task, seeds 62–66; avg_forgetting; final task-0 acc 0.9970 / 0.9974 | paired null−fast **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37, dz=−0.42 — **no interaction at the ±0.01 margin**; fast weights cost **8.9×** (256 s vs 29 s per run). Probe, **rung 2 not run**, **registration post-hoc** (`56473a2b`), not an L2 survey record | §3.10 (probe-grade) |
 | 2026-11-15 | breadth exit (gate) | **8/8** error-aware credits on ≥2 families; **50 new cells** | 5 each | L2/20, seeds 57–61; `wine` (tabular, majority 0.3889) + `digits` (vision, bar 0.10); 582 s | **`comp gate breadth` exits 0**; `wine` saturated (licenses breadth, not ranking); `digits` separates: `local_contrastive` −14.9 pp and `pc_alm` −68.3 pp vs gradient | §3.12 (closed) |
 | 2026-11-15 | tabular (second-family parity) | `breast_cancer` `local_goodness` **0.9667 ± 0.0073** vs gradient **0.9509 ± 0.0048** | 5 | L2/20, 114 held out (resolution 0.88 pp), majority 0.6316; seeds 57–61; CPU | paired **+0.0158**, 95% CI [+0.0105, +0.0211], p=0.0076, dz=2.15 — **NOT-EQUIVALENT** at the pre-registered ±0.01 margin; 1.15× cost; equivalence owed (`a3bb5ce9`), superiority not pre-registered | §3.13 (closed) |
+| 2026-11-15 | tabular (569-row ruler, claim) | `breast_cancer` 5-fold: `local_goodness` **0.9782 ± 0.0020** vs gradient **0.9778 ± 0.0027** | 5 | val_acc, 569 rows held out exactly once (fold-mean resolution 0.18 pp), majority 0.6316; L2/20; seeds 67–71; CPU, 49 s | paired **+0.0003**, 95% CI [−0.0025, +0.0025], p=0.96, dz=0.10 — **FAIL** at the pre-registered +0.005 threshold; the §3.13 +1.58 pp is **retracted**; parity reading is post-hoc | §3.8 (closed) |
+| 2026-11-15 | tabular (eval-site cross-check) | same cell, post-training `task.evaluate` score | 5 | as above, 5 folds; same seeds | paired **−0.0025**, 95% CI [−0.0042, −0.0011], p=0.008 — also FAIL; the eval site shifts the paired difference by ~0.3 pp (folds by up to 0.9 pp), so a fold instrument must score where the cell scores | §3.8 (instrument check) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -1181,7 +1287,8 @@ their cell measured below it; the claim-grade rows are above their bars.
 | 2026-11-14 | Cora graph: muon vs adam (main effect) | 5 | val_acc, same split; L2/100 | 96,391 params; 5.1 s vs 3.8 s per 5-seed cell | +0.0112, 95% CI [−0.0028, +0.0244], p=0.17 | descriptive null; not pre-registered |
 | 2026-11-14 | Cora update × geometry: `(muon−adam)_graph − (muon−adam)_ff` | 5 | val_acc, same split; L2/100 | 96,391 (graph) vs ff params; 15 s for the 2×2 | −0.0624, 95% CI [−0.0960, −0.0288], p=0.008 | claim-grade **negative interaction**; §3.10 |
 | 2026-11-15 | MNIST credit × substrate: `(LG−grad)_analog − (LG−grad)_digital` | 5 | val_acc, 10k held out; L2/20; seeds 57–61; analog noise 0.1 | 55,050 params; 4,095 s for the 10 analog cells | −0.0085, 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 | **boundary**: no interaction at the declared margin; direction unfavorable; **registration post-hoc**, so not error-controlled |
-| 2026-11-15 | `breast_cancer` tabular: `local_goodness` (+`readout_error`) vs gradient | 5 | val_acc, 114 held out (resolution 0.88 pp), majority 0.6316; L2/20; seeds 57–61 | 1.7 s vs 1.4 s per cell (1.15×); 10 cells | +0.0158, 95% CI [+0.0105, +0.0211], p=0.0076, dz=2.15 | **equivalence rejected** at ±0.01; the advantage is a claim-grade **coordinate** (superiority not registered); §3.13 |
+| 2026-11-15 | `breast_cancer` tabular: `local_goodness` (+`readout_error`) vs gradient | 5 | val_acc, 114 held out (resolution 0.88 pp), majority 0.6316; L2/20; seeds 57–61 | 1.7 s vs 1.4 s per cell (1.15×); 10 cells | +0.0158, 95% CI [+0.0105, +0.0211], p=0.0076, dz=2.15 | **superseded by the 569-row ruler row below**; equivalence rejected at ±0.01; the advantage was a claim-grade **coordinate**, not a claim; §3.13 |
+| 2026-11-15 | `breast_cancer` tabular, 5-fold ruler: `local_goodness` (+`readout_error`) vs gradient | 5 | val_acc, 5-fold, **569 rows held out exactly once** (fold-mean resolution 0.18 pp), majority 0.6316; L2/20; seeds 67–71; CPU, 49 s | same composed shape (74,242 params), same schedule; 50 fold-cells | +0.0003, 95% CI [−0.0025, +0.0025], p=0.96, dz=0.10 — **FAIL** at the pre-registered +0.005 threshold | **claim rejected** (registration `4884cc0c` before seed 1); retracts the +1.58 pp above; parity reading is post-hoc; §3.8 |
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
@@ -1280,6 +1387,19 @@ cross-credit conclusion and no HPO before that point (§5).
   the counter-example, not the template.
 - **Every number carries its ruler** and the chance/majority rate it beats.
   Corpus breadth is **distinct measurements**, never PASS records (§3.0a).
+- **A claim needs headroom, and the ruler says whether there is any.** State
+  the coordinate's ceiling and the largest effect the test can resolve: at
+  `breast_cancer`'s 0.978 fold mean the task has 2.2 pp of room, so a 1.6 pp
+  advantage is measurable but unlikely, and a *win* is the wrong question for
+  this ruler (§3.8). A saturated ruler (0.99+) cannot carry a superiority
+  claim in either direction.
+- **A comparison instrument scores where the cell scores.** The corpus reads
+  the trainer's last-epoch `val_acc`; a post-training `task.evaluate` pass is a
+  different eval site and moved the §3.8 paired difference by ~0.3 pp (folds by
+  up to 0.9 pp) on a 0.18 pp ruler. A fold-mean that must be comparable with a
+  corpus cell drives `train_on_task` with the kernel's own config and reads its
+  history; a probe that reads elsewhere says so and is not paired with a
+  corpus cell.
 - **A PASS record means defect-free *and* above the task's chance/majority
   ruler** (measured 2026-11-14: the −1536.6 RL positive control is now FAIL;
   §3.3c). Records written before the gate bar are **legacy PASS** and carry no
@@ -1467,6 +1587,23 @@ cross-credit conclusion and no HPO before that point (§5).
   equivalence only. A non-standard composition matches-or-beats the standard
   stack on two families, so the strong thesis is **not** falsified at the
   measured coordinates.
+  **Superseded (2026-11-15, §3.8):** the +1.58 pp does not replicate on the
+  task's own 5-fold ruler (+0.0003, 95% CI [−0.0025, +0.0025], FAIL at the
+  pre-registered +0.005), so this bullet's *advantage* reading is retracted —
+  the row is **parity**, and the strong thesis is falsified at the measured
+  coordinates.
+- §3.8 is **closed** (2026-11-15) with a **rejected claim**: the tabular
+  superiority registration (`4884cc0c`, before seed 1) on a 569-row fold ruler
+  measures `local_goodness` **0.9782 ± 0.0020** vs gradient
+  **0.9778 ± 0.0027**, paired **+0.0003**, 95% CI [−0.0025, +0.0025], p=0.96 —
+  **FAIL** at +0.005. The instrument is `train_on_task` over
+  `TabularTask.fold_indices(5)` scoring the trainer's last-epoch `val_acc`, so
+  a fold cell is comparable with a corpus cell; a post-training
+  `task.evaluate` pass is a different eval site: it moved the paired
+  difference by ~0.3 pp (folds by up to 0.9 pp) and also FAILed, so the
+  verdict does not depend on it, but the probe scores where the cell scores. The credit is live in this harness
+  (one epoch moves 74,242 params by max |Δ| 0.0255). Artifact:
+  `experiments/t92_local_goodness_tabular_folds.json`; 49 s for 50 cells.
 - **SEC conformance correction (2026-11-15).** The last two sessions followed
   the loop's form (decision → falsifier → triage → verify → record) but not its
   preconditions: both 2026-11-15 interaction registrations were committed with
@@ -1474,17 +1611,21 @@ cross-credit conclusion and no HPO before that point (§5).
   positive control. The breadth exit was a predicate with no data behind it
   (**6 of 8**), corrected in §0, §5 and the §3.10/§3.11 entries; §3.12 then
   measured it green and §3.13's registration (`a3bb5ce9`) precedes its seeds.
-- Open work, in priority order: **§3.8 conversions, only if a formal claim is
-  wanted** — the one live candidate is the tabular `local_goodness` advantage,
-  which needs its own `ThresholdRegistration` (e.g. +0.005) and a held-out
-  split large enough to carry it (≥500 rows); the 114-row `breast_cancer` ruler
-  resolves 0.88 pp, so it can describe, not claim, a 1.6 pp effect. Then §3.6
-  batched graph-settle (deferred); §3.1 regression claims (n=1). §3.3c's
-  documentation follow-up is **done** (AGENTS.md's positive-control criterion
-  now reads "completes and reports its bar verdict", 2026-11-15). §3.2 is
-  **closed**: capacity and readout are both excluded and the graph row is
-  at-bar/marginal. **No run starts without a named claim**: the breadth map is
-  complete, and a third task or a tuning sweep is budget without a decision.
+- Open work, in priority order: **none that blocks a number.** §3.8's
+  conversion ran and **failed**, so the claim backlog is empty and no
+  superiority claim is pending. Optional, each with its own named decision:
+  (a) pre-register `EquivalenceRegistration` on the 569-row fold ruler and
+  re-run with fresh seeds 72–76 (~1 min) if a formal tabular **parity** claim
+  is wanted — today's parity reading is post-hoc; (b) add or adopt a **harder
+  tabular task** (≥500-row held-out split with real headroom) if a tabular
+  **win** is wanted, since `breast_cancer` sits at 0.978 with 2.2 pp of room;
+  (c) §3.6 batched graph-settle stays deferred (no bar depends on it);
+  (d) §3.1 regression claims stay n=1. §3.3c's documentation follow-up is
+  **done** (AGENTS.md's positive-control criterion now reads "completes and
+  reports its bar verdict", 2026-11-15). §3.2 is **closed**: capacity and
+  readout are both excluded and the graph row is at-bar/marginal. **No run
+  starts without a named claim**: the breadth map is complete, and a third
+  task or a tuning sweep is budget without a decision.
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and
