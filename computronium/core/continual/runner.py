@@ -16,6 +16,7 @@ from computronium.core.continual.arms import (
     create_ewc_arm,
     create_fast_weight_arm,
     create_lwf_arm,
+    create_plasticity_arm,
     create_replay_arm,
     create_si_arm,
 )
@@ -102,6 +103,14 @@ def _create_arm(
     elif arm_name == "backprop":
         model = create_backprop_arm(
             config.input_dim, config.hidden_dim, config.output_dim, device_str
+        )
+    elif arm_name in {"matched_null", "matched_fast_weights"}:
+        model = create_plasticity_arm(
+            arm_name.removeprefix("matched_"),
+            config.input_dim,
+            config.hidden_dim,
+            config.output_dim,
+            device_str,
         )
     elif arm_name == "replay":
         model, buffer = create_replay_arm(
@@ -390,7 +399,7 @@ def _finalize_metrics(
 
     if hasattr(model.plasticity, "fast_weight_dim"):
         final_metrics.plastic_state_bytes = (
-            model.plasticity.fast_weights_dim * 4 * config.batch_size  # type: ignore[attr-defined]
+            model.plasticity.fast_weight_dim * 4 * config.batch_size  # type: ignore[attr-defined]
         )
     if arm_name == "replay":
         buffer = extra.get("buffer")
@@ -427,12 +436,12 @@ def run_continual_learning(
             config,
             arm_name,
             extra,
-            guard,
-            transition_fn,
-            guard_context,
-            device,
-            accuracy_matrix,
-            stability_verdicts,
+            guard=guard,
+            transition_fn=transition_fn,
+            guard_context=guard_context,
+            device=device,
+            accuracy_matrix=accuracy_matrix,
+            stability_verdicts=stability_verdicts,
         )
     elif protocol == "task_free":
         _run_task_free_protocol(
@@ -442,12 +451,12 @@ def run_continual_learning(
             config,
             arm_name,
             extra,
-            guard,
-            transition_fn,
-            guard_context,
-            device,
-            accuracy_matrix,
-            stability_verdicts,
+            guard=guard,
+            transition_fn=transition_fn,
+            guard_context=guard_context,
+            device=device,
+            accuracy_matrix=accuracy_matrix,
+            stability_verdicts=stability_verdicts,
         )
     else:
         raise ValueError(f"Unknown protocol: {protocol}")

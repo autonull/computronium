@@ -1,0 +1,9 @@
+{
+  "claim": "On SplitMNIST (5 tasks, 5 epochs per task, task-incremental), with every other axis fixed at the matched reference stack (digital/feedforward/instantaneous/null-prior/gradient/euclidean), the paired mean difference in avg_forgetting (null - fast_weights) is zero within a +/-0.01 margin over seeds 62-66; a CI wholly above +0.01 is a retention advantage for fast_weights, wholly below -0.01 a disadvantage",
+  "metric": "avg_forgetting",
+  "margin": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-15",
+  "protocol": "TODO92 section 3.10, the last unmeasured interaction: plasticity x task. The existing create_fast_weight_arm changes dynamics, credit and update as well as plasticity, so it is a four-axis contrast; the probe uses create_plasticity_arm, which holds the reference stack fixed and varies only plasticity (null vs fast_weights). Retention is read from the CL runner's own metrics (avg_forgetting primary, final_accuracies[0] and backward_transfer secondary). Pilot (seed 62, 5 epochs/task, CPU): null forgetting 0.0353 in 30.8 s, fast_weights 0.0370 in 261.0 s (8.5x walltime). Decision: paired null - fast avg_forgetting over seeds 62-66, 95% bootstrap CI via computronium.validation.preregistration.paired_comparison. EQUIVALENT (no interaction at the declared margin) when the CI lies inside [-0.01, +0.01]; POSITIVE (fast weights reduce forgetting) when ci_lower > +0.01; NEGATIVE when ci_upper < -0.01; otherwise report the measured boundary. Stop rule: no tuning of fast_weight_dim, decay or lr, no extra seeds, no third arm; a boundary result closes the interaction with its measured verdict. This is a paired probe result, not an L2 survey record: the CL runner has no Coordinate/RecordStore cell, so it does not enter claim_eligible counts."
+}

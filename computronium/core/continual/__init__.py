@@ -19,6 +19,7 @@ from computronium.core.continual.arms import (
     create_ewc_arm,
     create_fast_weight_arm,
     create_lwf_arm,
+    create_plasticity_arm,
     create_replay_arm,
     create_si_arm,
 )
@@ -57,6 +58,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "create_fast_weight_arm",
     "create_ewc_arm",
     "create_backprop_arm",
+    "create_plasticity_arm",
     "create_replay_arm",
     "create_lwf_arm",
     "create_si_arm",

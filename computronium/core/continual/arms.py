@@ -130,14 +130,13 @@ def create_ewc_arm(
     return system, update
 
 
-def create_backprop_arm(
-    input_dim: int = 784,
-    hidden_dim: int = 256,
-    output_dim: int = CL_TOTAL_CLASSES,
-    device: str = "cpu",
-) -> ContinualJointSystem:
-    """Create Backprop+SGD control arm."""
-    compose_joint_system = _get_compose_joint_system()
+def _backprop_components(
+    input_dim: int,
+    hidden_dim: int,
+    output_dim: int,
+    device: str,
+):
+    """The matched reference stack; every continuous axis is held fixed."""
     substrate = DigitalSubstrate(
         SubstrateConfig.digital(precision="float32", noise_level=0.0, device=device)
     )
@@ -156,9 +155,55 @@ def create_backprop_arm(
     credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001))
+    return substrate, geometry, dynamics, credit, update
 
-    joint = compose_joint_system(
+
+def create_backprop_arm(
+    input_dim: int = 784,
+    hidden_dim: int = 256,
+    output_dim: int = CL_TOTAL_CLASSES,
+    device: str = "cpu",
+) -> ContinualJointSystem:
+    """Create Backprop+SGD control arm."""
+    substrate, geometry, dynamics, credit, update = _backprop_components(
+        input_dim, hidden_dim, output_dim, device
+    )
+    joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, NullPlasticity(), credit, update
+    )
+    return ContinualJointSystem.from_joint_system(joint).to(device)
+
+
+def create_plasticity_arm(
+    plasticity: str,
+    input_dim: int = 784,
+    hidden_dim: int = 256,
+    output_dim: int = CL_TOTAL_CLASSES,
+    device: str = "cpu",
+) -> ContinualJointSystem:
+    """Create a Backprop arm whose only difference from the control is plasticity.
+
+    ``plasticity`` is ``null`` or ``fast_weights``. The existing
+    ``create_fast_weight_arm`` changes dynamics, credit and update as well, so
+    it is a four-axis contrast; this factory isolates the plasticity axis.
+    """
+    substrate, geometry, dynamics, credit, update = _backprop_components(
+        input_dim, hidden_dim, output_dim, device
+    )
+    match plasticity:
+        case "null":
+            psi = NullPlasticity()
+        case "fast_weights":
+            psi = create_fast_weight_plasticity(
+                PlasticityConfig.fast_weights(
+                    fast_weight_dim=512, decay=0.9, learning_rate=0.1
+                )
+            )
+        case _:
+            msg = f"unknown matched plasticity {plasticity!r}"
+            raise ValueError(msg)
+    joint = _get_compose_joint_system()(
+        substrate, geometry, dynamics, psi, credit, update
     )
     return ContinualJointSystem.from_joint_system(joint).to(device)
 

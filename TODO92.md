@@ -1,7 +1,7 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
 **Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.9,
-§3.3c and §3.10's first three interactions are closed; §3.11's credit viability
+§3.3c and §3.10's four interactions are closed; §3.11's credit viability
 map and its `local_goodness` vs `gradient` follow-up are closed. The gate now means **defect-free
 and above the task's chance/majority ruler**: a cell that measures at or below
 the trivial predictor is FAIL with a named `below bar` defect. The recorded
@@ -33,8 +33,17 @@ the analog substrate against their digital cells, so the interaction is
 CPU). The CI straddles the pre-registered ±1 pp margin: **no interaction at the
 declared margin**, direction unfavorable — a boundary coordinate, not a
 negative claim (`experiments/t92_credit_substrate_lg.duckdb`, run `33621198`).
-**Three of four interactions are measured; only plasticity × task remains**,
-blocked on a matched arm build.
+The fourth interaction — plasticity × task — is **measured and closed** too
+(2026-11-15): with every other axis fixed, `fast_weights` forgetting is
+**0.0425 ± 0.0053** vs `null` **0.0417 ± 0.0051**, paired null−fast
+**−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37 (n=5, seeds 62–66, 5
+epochs/task), at **8.9× walltime** (256 s vs 29 s per run). The CI is inside
+the pre-registered ±0.01 margin: **no plasticity × task interaction** at this
+coordinate. **The interaction matrix is complete: two negative interactions,
+two no-interaction-at-margin results, zero capability wins.** The thesis's
+strong form — a non-standard composition wins at matched cost — is falsified at
+these coordinates; its weak form survives as two cost-adjusted parities
+(PEPITA 1.17×, `local_goodness` 0.81× walltime on MNIST).
 **§3.11 is measured and its follow-up is closed (2026-11-15):**
 all **8/8 error-aware credits clear chance** at their ladder's best point on the
 MNIST anchor, so no credit is an unwired row; `local_goodness` with its declared
@@ -340,10 +349,10 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-15: §3.2, §3.7, §3.11's map/follow-up and §3.10's
-credit × substrate 2×2 are closed. Next ticket is plasticity × task, which
-needs a matched arm build; §3.8 conversions follow only if a formal claim is
-needed):**
+**Priority order (2026-11-15: §3.2, §3.7, §3.11's map/follow-up and all four
+§3.10 interactions are closed. No interaction remains open. Next capability
+question is a harder-task credit comparison (CIFAR-10 or a deeper geometry, the
+§3.7 stop rule); §3.8 conversions follow only if a formal claim is needed):**
 
 1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
    declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
@@ -359,11 +368,11 @@ needed):**
    (~1.17×). This is a **cost-adjusted parity, not a capability win**; per the
    stop rule, the next local-credit question is a harder task (CIFAR-10 or a
    deeper geometry), not a third MNIST credit.
-3. **§3.10 — interaction matrix.** **Status: three of four measured.** The
+3. **§3.10 — interaction matrix.** **Status: four of four measured; closed.** The
    breadth gate (§3.11) is closed, so `credit × substrate` re-enters on
    `local_goodness`, the map's best and now claim-grade credit (its digital
-   arms are measured in §3.11's follow-up). `plasticity × task` stays blocked
-   on a matched arm build (the CL runner's arms differ on four axes).
+   arms are measured in §3.11's follow-up). `plasticity × task`, the last row,
+   needed a matched arm build; it is now measured below.
    First two interactions **measured
    2026-11-14**. Dynamics × credit on Cora. PEPITA is refused on graph
    (`local_contrastive_geometry` is feedforward-only), so the graph pair is
@@ -427,22 +436,32 @@ needed):**
    (1 epoch, seed 57, analog: gradient 0.9554, `local_goodness` 0.9582) is in
    the probe docstring; the watchdog was 2× the measured ~82 min and the run
    finished in 68 min.
-   **Remaining: plasticity × task only** — the unmeasured interaction. It
-   needs a retention reader: `core/continual` has the runner, but
-   `evaluate_cell` returns a single-task metric, so the probe must read
-   retention from that runner — a task build, not a survey cell.
-   **Next build spec (unblocks the last interaction).** Add matched arm
-   factories that differ only in `plasticity`: the same
-   digital/feedforward/instantaneous/null/gradient/euclidean joint stack with
-   `fast_weights` vs `null`. The current `create_fast_weight_arm` also changes
-   dynamics, credit and update, so it is a four-axis contrast, not a
-   plasticity contrast. The probe reads retention from `ContinualJointSystem`
-   (accuracy on task 1 after task 2) at L2, n≥5, one seed-paired schedule;
-   rung 1 (one run per arm, both above chance on the final task) precedes the
-   pre-registered retention difference, decided with the same
-   `EquivalenceRegistration` shape as §3.7/§3.10. Report walltime beside it:
-   the psi state makes the fast-weight arm slower, so a retention gain at high
-   cost is not a win.
+   **Plasticity × task measured 2026-11-15 (closed): no interaction at ±1 pp,
+   at 8.9× walltime.** The build was the missing piece: a matched
+   `create_plasticity_arm` holds the reference stack fixed
+   (digital/feedforward/instantaneous/null-prior/gradient/euclidean) and varies
+   only plasticity; the existing `create_fast_weight_arm` also changes
+   dynamics, credit and update, so it was a four-axis contrast. The CL runner's
+   own `avg_forgetting` is the reader. Pre-registered in
+   `configs/preregistrations/t92_plasticity_task.json` before the full run
+   (pilot: 1 seed, 5 epochs/task, null 0.0353 in 30.8 s vs fast 0.0370 in
+   261.0 s). Full run (`scripts/probes/t92_plasticity_task.py`, seeds 62–66, 5
+   epochs/task, SplitMNIST, CPU, ~24 min): `null` **0.0417 ± 0.0051**,
+   `fast_weights` **0.0425 ± 0.0053**, final task-0 accuracy 0.9970 vs 0.9974,
+   BWT −0.0519 vs −0.0527; paired null−fast **−0.0008**, 95% CI [−0.0021,
+   +0.0006], p=0.37, dz=−0.42. The CI lies inside the pre-registered ±0.01
+   margin: **EQUIVALENT — no plasticity × task interaction** at this
+   coordinate. The regime's forgetting headroom is small (≈4 pp), so the null
+   has little to lose; re-open the row only on a harder CL regime (more tasks
+   or longer per-task training) where forgetting is ≥10 pp, and pre-register
+   the new coordinate. Stop rule applied: no tuning of `fast_weight_dim`,
+   decay or lr, no extra seeds, no third arm.
+   **Two latent CL-runner defects were found and fixed** (no test covered the
+   runner): the protocol call sites passed keyword-only fields positionally
+   (`run_continual_learning` raised `TypeError` on every arm since
+   2026-10-05), and `_finalize_metrics` read `fast_weights_dim` instead of
+   `fast_weight_dim` (crashed every fast-weight run). Lock:
+   `tests/unit/core/test_cl_runner_smoke.py`.
    **Breadth gate before the next comparison — now run and closed (§3.11).**
    Each credit got the AGENTS viability gate: 3 values of its primary knob
    (lr, γ, `readout_error`), 1 seed each plus one confirmation seed at the best
@@ -934,6 +953,7 @@ needed):**
 | 2026-11-15 | credit × substrate (deferred) | PEPITA/analog ladder best 0.9574 at lr 3e-3; confirm 0.9539 vs gradient 0.9523 | 1 | val_acc, 1 epoch, MNIST; seed 57/157 | viable cell, **2×2 deferred** behind §3.11 | §3.10 |
 | 2026-11-15 | credit × substrate (analog arms) | gradient **0.9748 ± 0.0024**; `local_goodness` **0.9657 ± 0.0024** | 5 each | val_acc, L2/20, 10k held out; seeds 57–61; chance 0.10; analog noise 0.1 | above bar; 4,095 s for the 10 cells; digital arms 0.9759 / 0.9753 | §3.10 (closed) |
 | 2026-11-15 | credit × substrate (interaction) | `(LG−grad)_analog − (LG−grad)_digital` = **−0.0085** | 5 | same; pairs the analog arms with the §3.11 digital cells | 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 — **boundary**: no interaction at the pre-registered ±0.01 margin; direction unfavorable (LG 0.85 pp less noise-robust) | §3.10 (closed) |
+| 2026-11-15 | plasticity × task (SplitMNIST) | `null` forgetting **0.0417 ± 0.0051** vs `fast_weights` **0.0425 ± 0.0053** | 5 | 5 epochs/task, seeds 62–66; avg_forgetting; final task-0 acc 0.9970 / 0.9974 | paired null−fast **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37, dz=−0.42 — **no interaction at the ±0.01 margin**; fast weights cost **8.9×** (256 s vs 29 s per run). Pre-registered probe, not an L2 survey record | §3.10 (closed) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -989,7 +1009,7 @@ claim-grade:
 | Substrate | 8/9 live; `complex` refused | digital + analog | one live non-digital matched comparison (`analog` × credit, boundary at ±1 pp); no non-digital substrate clears a domain bar |
 | Geometry | 11/11 live | vision/graph/node screening | graph marginal; node n=3 |
 | Dynamics | 8/8 live | none | best cells are instantaneous; no matched settling claim |
-| Plasticity | 5/7 live; `rule_state`, `substrate_coupled` unavailable | none | no matched plasticity × task claim |
+| Plasticity | 5/7 live; `rule_state`, `substrate_coupled` unavailable | one pre-registered paired probe (n=5, no interaction at ±1 pp, 8.9× cost) | no matched plasticity × task **gain**; re-open only on a ≥10 pp-forgetting regime |
 | Credit | 10/10 live | PEPITA and `local_goodness` each **confirmed equivalent at one MNIST coordinate**; **8/8 error-aware credits viable at rung 2** (§3.11); one claim-grade interaction (§3.10, boundary) | no claim-grade **win** and no harder-task parity for any credit; `local_goodness` is now claim-grade |
 | Update | 12/12 live | none | no matched update × geometry claim |
 
@@ -1185,15 +1205,25 @@ cross-credit conclusion and no HPO before that point (§5).
   gradient's 0.11 pp). Records:
   `experiments/t92_credit_substrate_lg.duckdb` (run `33621198`, 10 PASS). Stop
   rule applied: no lr tuning, no seed sweep, no third substrate.
-- Open work, in priority order: **plasticity × task** — the only unmeasured
-  interaction; it needs a matched arm build (the CL runner's arms differ on
-  four axes, stands at rung 0; build spec in §3.10); then §3.8 graph/RL/tabular
-  conversions (only if
-  a formal claim is needed); §3.6 batched graph-settle (deferred); §3.1
-  regression claims (n=1); §3.3c's documentation follow-up is **done**
-  (AGENTS.md's positive-control criterion now reads "completes and reports its
-  bar verdict", 2026-11-15). §3.2 is **closed**: capacity and readout are both
-  excluded and the graph row is at-bar/marginal.
+- §3.10's **fourth interaction (plasticity × task) is closed** (2026-11-15)
+  with a no-interaction verdict: a matched `create_plasticity_arm` (only
+  plasticity varies) and the CL runner's `avg_forgetting` reader, seeds 62–66
+  at 5 epochs/task, measure `null` **0.0417 ± 0.0051** vs `fast_weights`
+  **0.0425 ± 0.0053**, paired null−fast **−0.0008**, 95% CI [−0.0021,
+  +0.0006], p=0.37, at **8.9× walltime**. Pre-registered in
+  `t92_plasticity_task.json`. The probe found and fixed two latent CL-runner
+  defects (positional keyword-only call sites; `fast_weights_dim` typo); lock:
+  `tests/unit/core/test_cl_runner_smoke.py`. **The interaction matrix is
+  complete:** two negative interactions, two no-interaction-at-margin results,
+  zero capability wins.
+- Open work, in priority order: **no interaction remains open**. The next
+  capability question is the §3.7 stop rule's harder-task credit comparison
+  (CIFAR-10 or a deeper geometry), not another MNIST arm; then §3.8 graph/RL/
+  tabular conversions (only if a formal claim is needed); §3.6 batched
+  graph-settle (deferred); §3.1 regression claims (n=1); §3.3c's documentation
+  follow-up is **done** (AGENTS.md's positive-control criterion now reads
+  "completes and reports its bar verdict", 2026-11-15). §3.2 is **closed**:
+  capacity and readout are both excluded and the graph row is at-bar/marginal.
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and
