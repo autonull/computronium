@@ -17,7 +17,9 @@ The first two interactions are **negative**, and they name the mechanism:
 against `gradient`, and `muon`'s benefit is **−6.2 pp smaller on graph than on
 feedforward** (both claim-grade, n=5, L2/100; §3.10). The graph/muon cell is
 the node row's best measured (**0.7680 ± 0.0133**, 1.35σ above 0.75). Next:
-**plasticity × task and credit × substrate**, then the gate metric bar.
+**plasticity × task and credit × substrate**, then the gate metric bar. The
+plan is **breadth-first**: no cross-credit ranking and no HPO until every
+declared value is validated (AGENTS.md SEC Loop; §5).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -104,7 +106,9 @@ A session progresses only if it increases one of:
 **Not progress:** files changed, tests restructured, inventory rows added, plan
 text written, another coverage cell, another L0 record, another marginal arm
 without a stop rule, **a measurement on an inert axis or a refused pair — unless
-the refusal is reversed by its trigger**. TODO91's S1d thread is
+the refusal is reversed by its trigger**, or **a cross-credit ranking or a
+tuning sweep before each credit's implementation is validated** — a low cell is
+a defect probe first (AGENTS.md SEC Loop; §5). TODO91's S1d thread is
 the worked example: four commits, two attempts, one revert, zero capability.
 
 ---
@@ -310,9 +314,10 @@ still needs a matched interaction or claim (§3.7, §3.10).
    instantaneous/gradient **0.7568 ± 0.0145**, instantaneous/RP
    **0.7460 ± 0.0049**, energy/gradient **0.7496 ± 0.0107**, energy/RP
    **0.7152 ± 0.0256**. Interaction `(RP−grad)_energy − (RP−grad)_inst` =
-   **−0.0236**, 95% CI [−0.0496, −0.0076], p=0.008 — **NEGATIVE**. Settling
-   does not help the local credit; it costs it 2.4 pp, at 5.5× the walltime
-   (22 s vs 4 s per 5-seed energy cell). The 1-epoch 7.5 s cost was setup, not
+   **−0.0236**, 95% CI [−0.0496, −0.0076], p=0.008 — **NEGATIVE**. At this
+   coordinate, settling does not help the local credit; it costs it 2.4 pp, at
+   5.5× the walltime (22 s vs 4 s per 5-seed energy cell). The 1-epoch 7.5 s
+   cost was setup, not
    per-epoch settle: the whole 2×2 ran in ~41 s. Remaining interactions:
    **update × geometry** (cheapest; no claim-grade evidence), plasticity × task
    (needs a memory/continual task), credit × substrate on a live non-refused
@@ -325,9 +330,10 @@ still needs a matched interaction or claim (§3.7, §3.10).
    feedforward/adam **0.4756 ± 0.0375**, feedforward/muon **0.5492 ± 0.0276**.
    Interaction **−0.0624**, 95% CI [−0.0960, −0.0288], p=0.008 — **NEGATIVE**.
    Muon helps the unstructured feedforward stack **+7.4 pp** (CI [+2.7, +12.0])
-   and the graph stack only **+1.1 pp** (CI [−0.3, +2.4], p=0.17): graph message
-   passing already does the work that muon's orthogonalized update does on a
-   flat stack. The graph/muon cell is the node row's best measured:
+   and the graph stack only **+1.1 pp** (CI [−0.3, +2.4], p=0.17): at this
+   coordinate, graph message passing may already supply what muon's
+   orthogonalized update supplies on a flat stack — a hypothesis, not a
+   mechanism claim. The graph/muon cell is the node row's best measured:
    **0.7680 ± 0.0133**, 1.35σ above 0.75 — a claim-grade **cell**, not a
    pre-registered main-effect claim. Remaining: plasticity × task and credit ×
    substrate. Plasticity × task needs a retention reader: `core/continual` has
@@ -337,6 +343,10 @@ still needs a matched interaction or claim (§3.7, §3.10).
    non-standard **win** at matched cost; it needs a live, non-refused
    substrate (analog, ternary, sparse, memristive) and the same PEPITA-vs-
    gradient pair, on feedforward geometry where PEPITA is legal.
+   **Both interactions are fixed-coordinate results, not family rankings.**
+   They say what these implementations do at one schedule; HPO may move them.
+   Do not read them as "settling is bad" or "muon is for flat stacks" in
+   general (§5; AGENTS.md SEC Loop).
 4. **§3.3c — gate metric bar.** Makes PASS mean above-bar; every later claim
    depends on it.
 5. **§3.2 — one graph readout arm with a stop rule.** The only graph lever left.
@@ -507,6 +517,12 @@ still needs a matched interaction or claim (§3.7, §3.10).
    third credit on MNIST; scale the matched design to a harder task (CIFAR-10
    or a deeper geometry) before claiming general parity.
 
+   **Not a competitiveness claim.** This run licenses the rule's implementation
+   on one cell. It does not rank credit families and does not say FF, FA or PC
+   are worse: their cells are unconcluded, several are label-free by contract or
+   under-optimized, and none has had the HPO that a competitive comparison
+   requires. Breadth before HPO (§5; AGENTS.md SEC Loop).
+
 8. **Claim-conversion backlog (priority 6).** The code's `claim_eligible` is
    L2 + n≥5; these rows are screening. Convert only what a claim needs:
 
@@ -657,17 +673,33 @@ claim-grade:
 | Geometry | 11/11 live | vision/graph/node screening | graph marginal; node n=3 |
 | Dynamics | 8/8 live | none | best cells are instantaneous; no matched settling claim |
 | Plasticity | 5/7 live; `rule_state`, `substrate_coupled` unavailable | none | no matched plasticity × task claim |
-| Credit | 10/10 live | PEPITA digital/adam discovery | graph 2 error-aware; RL refused; most credits L0/1 |
+| Credit | 10/10 live | PEPITA digital/adam **confirmed equivalent at one coordinate**; no cross-credit ranking | other credits L0/L1 or under-optimized; label channel and HPO unestablished |
 | Update | 12/12 live | none | no matched update × geometry claim |
 
 "Liveness" is the §3.9 one-step parameter fingerprint, not a PASS record or a
 claim-grade cell; the claim-grade column is the evidence count. The gaps are the
 program.
 
+**The credit column is not a league table.** A low cell can be an unwired label
+channel (FF without `readout_error`), a schedule mismatch, a settle defect, or
+an un-tuned implementation. Breadth first (AGENTS.md SEC Loop): validate that
+each credit composes, updates, and declares its channel, then compare. No
+cross-credit conclusion and no HPO before that point (§5).
+
 ---
 
 ## 5. Rules for this plan
 
+- **Breadth before HPO.** A low cell is a **defect probe, not an algorithm
+  verdict** (AGENTS.md SEC Loop). Do not tune a credit or axis value, and do not
+  rank credit families, until every declared value has a validated
+  implementation: it composes on its legal cells, produces a non-zero update,
+  and declares its label channel and capability flags. PEPITA's equivalence is
+  a fixed-coordinate implementation result, not a competitiveness claim; the
+  other credits' cells are **unconcluded**. HPO starts only after viability
+  breadth is established — that is also when compute and development assistance
+  are worth seeking. A cross-credit comparison before that point is not
+  evidence.
 - **One plan, rolling.** No TODO93 per phase. Tickets enter §3 from a measured
   failure or a missing row, and leave when the number moves.
 - **A ticket closes on a number or a named verdict**, never on a defect count.
@@ -789,6 +821,11 @@ program.
   task, credit × substrate); §3.3c gate metric bar; §3.2 one graph readout arm
   with a stop rule; §3.8 graph/RL/tabular conversions; §3.6 batched graph-settle
   (deferred); §3.1 regression claims (n=1).
+- **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
+  fixed-coordinate implementation results. No credit is ranked against another,
+  and no credit is tuned, until every declared value composes, updates, and
+  declares its label channel. Only then does HPO begin, with the compute and
+  development case that breadth earns.
 - A surface defect found here is fixed here only if it blocks the number;
   otherwise it files into this plan's §3 with a measured reason. TODO91 takes
   no new work.
