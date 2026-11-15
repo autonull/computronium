@@ -118,6 +118,17 @@ def test_passes_equivalence_reads_the_two_sided_ci() -> None:
     assert inside.passes_equivalence(0.01)
     assert not wide.passes_equivalence(_EQ)
     assert not outside.passes_equivalence(_EQ)
+    few_seeds = EquivalenceRegistration(
+        claim="c", metric="acc", margin=0.01, min_seeds=10
+    )
+    assert not PairedComparison(
+        n=5,
+        mean_diff=0.0,
+        ci_lower=-0.001,
+        ci_upper=0.001,
+        p_value=0.9,
+        cohens_dz=0.0,
+    ).passes_equivalence(few_seeds)
     with pytest.raises(ValueError, match="margin must be positive"):
         inside.passes_equivalence(0.0)
 

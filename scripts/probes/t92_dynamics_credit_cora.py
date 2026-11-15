@@ -244,6 +244,14 @@ def main(argv: list[str] | None = None) -> int:
                 _record_arms(store, run_id, coordinates, schedule, ENERGY_ARMS)
         values = _values(store, run_id)
         cost = _cell_cost(store, run_id)
+        if not args.report_only:
+            store.finish_run(
+                run_id,
+                "completed"
+                if all(len(values[arm]) == len(SEEDS) for arm in ARMS)
+                else "incomplete",
+                sum(cost.values()),
+            )
 
     return _report(values, cost)
 

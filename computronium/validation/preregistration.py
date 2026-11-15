@@ -190,6 +190,11 @@ class PairedComparison:
         if margin <= 0:
             msg = f"equivalence margin must be positive, got {margin}"
             raise ValueError(msg)
+        if (
+            isinstance(registration, EquivalenceRegistration)
+            and self.n < registration.min_seeds
+        ):
+            return False
         return self.ci_lower >= -margin and self.ci_upper <= margin
 
 

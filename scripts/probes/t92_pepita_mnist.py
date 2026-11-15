@@ -131,16 +131,22 @@ def _report(values: dict[str, dict[int, float]]) -> int:
         for arm in ARMS
     }
     for arm, seeds in complete.items():
+        if not seeds:
+            print(f"incomplete: {arm} 0/{len(SEEDS)} seeds recorded")
+            return 2
+    if any(len(seeds) < len(SEEDS) for seeds in complete.values()):
         print(
-            f"{arm:9}: n={len(seeds)} mean={statistics.mean(seeds):.4f} "
-            f"sd={statistics.stdev(seeds) if len(seeds) > 1 else 0.0:.4f}"
-        )
-    if len(complete["gradient"]) < len(SEEDS) or len(complete["pepita"]) < len(SEEDS):
-        print(
-            f"incomplete: {len(complete['gradient'])}/{len(SEEDS)} and "
-            f"{len(complete['pepita'])}/{len(SEEDS)} seeds recorded"
+            "incomplete: "
+            + ", ".join(
+                f"{arm} {len(seeds)}/{len(SEEDS)}" for arm, seeds in complete.items()
+            )
         )
         return 2
+    for arm, seeds in complete.items():
+        print(
+            f"{arm:9}: n={len(seeds)} mean={statistics.mean(seeds):.4f} "
+            f"sd={statistics.stdev(seeds):.4f}"
+        )
     result = paired_comparison(complete["pepita"], complete["gradient"], seed=0)
     equivalent = result.passes_equivalence(registration)
     print(
@@ -173,8 +179,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"run {run_id[:8]} store {STORE.relative_to(ROOT)}")
         if not args.report_only:
             provenance = _provenance(run_id)
+            done = {
+                (record.credit, record.schedule.seed)
+                for record in store.query_records(run_id=run_id)
+            }
             for arm, (coordinate, schedule) in arms.items():
                 for seed in SEEDS:
+                    if (arm, seed) in done:
+                        print(f"{arm:9} seed={seed}: already recorded", flush=True)
+                        continue
                     started = time.perf_counter()
                     record = cell_record(
                         coordinate, replace(schedule, seed=seed), provenance
@@ -188,6 +201,13 @@ def main(argv: list[str] | None = None) -> int:
                         flush=True,
                     )
         values = _values(store, run_id)
+        if not args.report_only:
+            total = sum(
+                float(record.payload.get("walltime_s", 0.0))
+                for record in store.query_records(run_id=run_id)
+            )
+            complete = all(len(values[arm]) == len(SEEDS) for arm in ARMS)
+            store.finish_run(run_id, "completed" if complete else "incomplete", total)
 
     return _report(values)
 
