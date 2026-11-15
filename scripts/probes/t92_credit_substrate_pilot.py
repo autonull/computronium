@@ -58,6 +58,7 @@ def _cell(
     seed: int,
     epochs: int,
     step_size: float | None,
+    device: str,
 ) -> tuple[float, float]:
     coordinate, schedule = _locate(arm)
     params = dict(coordinate.params)
@@ -65,40 +66,47 @@ def _cell(
         params["update.step_size"] = step_size
     run = replace(coordinate, substrate=substrate, params=params)
     started = time.perf_counter()
-    result = evaluate_cell(run, replace(schedule, seed=seed, epochs=epochs))
+    result = evaluate_cell(
+        run, replace(schedule, seed=seed, epochs=epochs, device=device)
+    )
     return result.metrics["val_acc"], time.perf_counter() - started
 
 
 def _print(
-    arm: str, substrate: str, seed: int, epochs: int, step: float | None
+    arm: str,
+    substrate: str,
+    seed: int,
+    epochs: int,
+    step: float | None,
+    device: str,
 ) -> float:
-    value, wall = _cell(arm, substrate, seed, epochs, step)
+    value, wall = _cell(arm, substrate, seed, epochs, step, device)
     label = f"step={step if step is not None else 'default'}"
     print(
         f"{arm:9} {substrate:7} seed={seed:2} {label:14} "
-        f"val_acc={value:.4f} ({wall:.1f}s)"
+        f"val_acc={value:.4f} ({wall:.1f}s) {device}"
     )
     return value
 
 
-def _pilot(seed: int, epochs: int) -> int:
+def _pilot(seed: int, epochs: int, device: str) -> int:
     for substrate in ("digital", "analog"):
         for arm in ARMS:
-            _print(arm, substrate, seed, epochs, None)
+            _print(arm, substrate, seed, epochs, None, device)
     return 0
 
 
-def _ladder(seed: int, epochs: int) -> int:
+def _ladder(seed: int, epochs: int, device: str) -> int:
     best: tuple[float, float] | None = None
     for step in LADDER:
-        value = _print("pepita", "analog", seed, epochs, step)
+        value = _print("pepita", "analog", seed, epochs, step, device)
         if best is None or value > best[0]:
             best = (value, step)
     assert best is not None
     confirmation = best[1]
     print(f"best ladder point: step={confirmation} (val_acc={best[0]:.4f})")
-    _print("pepita", "analog", seed + 100, epochs, confirmation)
-    _print("gradient", "analog", seed + 100, epochs, confirmation)
+    _print("pepita", "analog", seed + 100, epochs, confirmation, device)
+    _print("gradient", "analog", seed + 100, epochs, confirmation, device)
     return 0
 
 
@@ -107,10 +115,11 @@ def main() -> int:
     parser.add_argument("--mode", choices=("pilot", "ladder"), default="pilot")
     parser.add_argument("--seed", type=int, default=47)
     parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
     if args.mode == "ladder":
-        return _ladder(args.seed, args.epochs)
-    return _pilot(args.seed, args.epochs)
+        return _ladder(args.seed, args.epochs, args.device)
+    return _pilot(args.seed, args.epochs, args.device)
 
 
 if __name__ == "__main__":

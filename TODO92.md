@@ -1,7 +1,8 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
 **Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.9,
-§3.3c and §3.10's first two interactions are closed. The gate now means **defect-free
+§3.3c and §3.10's first two interactions are closed; §3.11's credit viability
+map is measured. The gate now means **defect-free
 and above the task's chance/majority ruler**: a cell that measures at or below
 the trivial predictor is FAIL with a named `below bar` defect. The recorded
 −1536.6 RL positive control is now FAIL (§3.3c), so PASS counts no longer
@@ -23,12 +24,18 @@ feedforward** (both claim-grade, n=5, L2/100; §3.10). The graph/muon cell is
 the node row's best measured (**0.7680 ± 0.0133**, 1.35σ above 0.75). The
 graph row's last lever is now **excluded**: sum pooling measures 0.6466 ±
 0.0248 vs mean 0.6951 ± 0.0237, paired **−0.0484**, 95% CI [−0.0601, −0.0368]
-(n=5, L1/100, seeds 42–46), so §3.2 closes the row **at-bar/marginal**. Next:
-**plasticity × task** (needs a matched arm build; the CL runner's arms differ
-on four axes) and **credit × substrate** (rung 0 passed on all seven live
-substrates; `analog` is the candidate at ~20 s/epoch, so the L2/20 n=5 2×2 is
-~2.4 h and not yet run). The plan is **breadth-first**: no cross-credit ranking
-and no HPO until every declared value is validated (AGENTS.md SEC Loop; §5).
+(n=5, L1/100, seeds 42–46), so §3.2 closes the row **at-bar/marginal**.
+**§3.11 is measured (2026-11-15):**
+all **8/8 error-aware credits clear chance** at their ladder's best point on the
+MNIST anchor, so no credit is an unwired row; `local_goodness` with its declared
+target channel is the map's best cell (**0.9619 / 0.9623** vs `gradient`
+0.9562 / 0.9456), which makes the matched `local_goodness` vs `gradient` pair
+(the first **non-PEPITA** credit at claim grade) the next ticket. The map
+demotes the credit × substrate 2×2: a fourth PEPITA cell on a substrate that is
+the digital matmul plus additive noise answers less than seven credits whose
+implementation was unvalidated. The plan is **breadth-first**: no cross-credit
+ranking and no HPO until every declared value is validated (AGENTS.md SEC Loop;
+§5).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
 is the plan of record. The two gaps it handed over are closed: the
 claim-blocking locks group (TODO91 S8) and the regression lane (TODO91 S9). The
@@ -309,8 +316,9 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-15: §3.2 closed; §3.10's last two interactions are
-the open work):**
+**Priority order (2026-11-15: §3.2 closed; §3.11's map measured; its
+`local_goodness` vs `gradient` follow-up is the next run, then §3.10's two
+remaining interactions):**
 
 1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
    declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
@@ -326,11 +334,13 @@ the open work):**
    (~1.17×). This is a **cost-adjusted parity, not a capability win**; per the
    stop rule, the next local-credit question is a harder task (CIFAR-10 or a
    deeper geometry), not a third MNIST credit.
-3. **§3.10 — interaction matrix.** **Status: two of four measured; the last
-   two are the open tickets.** `plasticity × task` is blocked on a matched arm
-   build (the CL runner's arms differ on four axes). `credit × substrate`
-   passed rung 0 on 2026-11-15; `analog` is the candidate and the next step is
-   its pre-registration, viability ladder, and the ~2.4 h L2/20 n=5 2×2.
+3. **§3.10 — interaction matrix.** **Status: two of four measured.** The last
+   two are **demoted behind the breadth gate (§3.11)**: `credit × substrate`
+   would be a fourth PEPITA cell on a substrate that rung 0 showed is the
+   digital matmul plus additive noise, while seven other error-aware credits
+   have no above-chance ladder point on record. `plasticity × task` is blocked
+   on a matched arm build (the CL runner's arms differ on four axes). Both
+   re-enter after §3.11's map, with the credit the map leaves standing.
    First two interactions **measured
    2026-11-14**. Dynamics × credit on Cora. PEPITA is refused on graph
    (`local_contrastive_geometry` is feedforward-only), so the graph pair is
@@ -371,13 +381,17 @@ the open work):**
    step, both credits, same initial weights), so the pair is legal everywhere;
    the pilot measures digital/analog gradient 0.9548/0.9525 and PEPITA
    0.9524/0.9512 at 1 epoch, seed 47, CPU (~20 s/epoch). `analog` is the
-   candidate; the 2×2 is **not yet run** and needs its pre-registration.
-   **Breadth gate before the next comparison.** Each credit gets the AGENTS
-   viability gate: 3 values of its primary knob (lr, γ, `readout_error`), 1
-   seed each plus one confirmation seed at the best point, one cheap task,
-   label channel declared. A credit with no above-chance point is triaged as
-   defect/refusal, not ranked; the resulting map is the input to §3.10, not a
-   claim.
+   candidate; the 2×2 is **not yet run** and needs its pre-registration. It is
+   **deferred**, not dropped: §3.11's map outranks it because a fourth PEPITA
+   cell on a noise-only substrate answers less than the seven credits whose
+   implementation is still unvalidated (§5). Reversal trigger: §3.11 closes,
+   then this 2×2 runs on the credit the map leaves standing, or on PEPITA if
+   the map shows PEPITA is still the only viable one.
+   **Breadth gate before the next comparison — now run (§3.11).** Each credit
+   got the AGENTS viability gate: 3 values of its primary knob (lr, γ,
+   `readout_error`), 1 seed each plus one confirmation seed at the best point,
+   one cheap task, label channel declared. The map is §3.11; it is the input to
+   this section, not a claim.
    **Both interactions are fixed-coordinate results, not family rankings.**
    They say what these implementations do at one schedule; HPO may move them.
    Do not read them as "settling is bad" or "muon is for flat stacks" in
@@ -724,7 +738,14 @@ the open work):**
     interaction must be read that way, and the substrate's declared
     `noise_level` is the knob that matters.
 
-    **Rung-1 pilot (2026-11-15, MNIST, §3.7 anchor, 1 epoch, seed 47, CPU).**
+   **Ladder measured (2026-11-15, MNIST, 1 epoch, seed 57, cpu and cuda).**
+   PEPITA/analog over `update.step_size` 3e-4 / 1e-3 / 3e-3 measures 0.9344 /
+   0.9545 / **0.9574**, best point confirmed at seed 157: PEPITA **0.9539** vs
+   gradient **0.9523**. The analog cell is viable on both credits; the
+   substrate's cost is ~20-25 s/1-epoch cell on CPU and CUDA alike, so the
+   L2/20 n=5 2×2 stays ~2.4 h. **Not run:** the comparison is deferred behind
+   §3.11 (below).
+   **Rung-1 pilot (2026-11-15, MNIST, §3.7 anchor, 1 epoch, seed 47, CPU).**
     gradient digital **0.9548** (15.2 s) / analog **0.9525** (20.1 s);
     PEPITA digital **0.9524** (21.5 s) / analog **0.9512** (23.2 s). All four
     are far above chance (0.10), so the analog cell trains. `analog` is the
@@ -733,9 +754,76 @@ the open work):**
     **~2.4 h**. The ladder is implemented in
     `scripts/probes/t92_credit_substrate_pilot.py --mode ladder` (3 lr points +
     one confirmation seed, ~2 min at 1 epoch). The 2×2 is not run yet: no
-    pre-registration exists and the measured cost is the gate. Next session:
-    pre-register `configs/preregistrations/t92_credit_substrate.json`, run the
-    ladder, then the 2×2.
+    pre-registration exists, and §3.11 demotes it below the credit map.
+
+11. **§3.11 — credit viability map (the breadth gate).** *Status: **measured
+    2026-11-15**; 8/8 error-aware credits viable; its follow-up is the next
+    ticket.*
+    **Decision.** Before `credit × substrate` or any cross-credit comparison,
+    every error-aware credit needs the AGENTS minimum fair chance: one legal
+    cheap cell, 3 values of its primary knob, 1 seed each, 1 confirmation seed
+    at the best point, label channel declared. A credit that cannot clear
+    chance at any point is a defect or a refusal, not a coordinate to compare.
+    This is what §5 and AGENTS.md's breadth exit require, and it is why the
+    fourth PEPITA cell (§3.10) is not the next run.
+
+    **Instrument.** `scripts/probes/t92_credit_viability.py`. Anchor: the §3.7
+    MNIST cell (feedforward / instantaneous / adam, L2/20, 10k held out);
+    seeds 57 (ladder) and 157 (confirmation), 1 epoch, cuda; chance 0.10.
+    Primary knob: `credit.feedback_scale` (γ) for the feedback-matrix credits
+    (PEPITA, `random_projections`), `update.step_size` (lr) otherwise; lr
+    points 3e-4 / 1e-3 / 3e-3, γ points 0.01 / 0.05 / 0.25 (γ = 0.05 is
+    PEPITA's documented parity point);
+    `local_goodness` sets `credit.readout_error=True` — its declared target
+    channel; `thermodynamic_contrast` and `pc_alm` run on their required
+    dynamics. `homeostatic` and `temporal_trace` declare `error_blind=True`:
+    chance is their contract, so accuracy is not their ruler, and §3.9's
+    non-zero-update fingerprint already rules both live. 32 cells, 1915 s.
+
+    | Credit | Knob | Ladder (seed 57) | Best | Confirm (157) | Verdict |
+    |---|---|---|---|---|---|
+    | `gradient` (ruler) | lr | 0.9370 / 0.9545 / 0.9562 | 0.9562 | 0.9456 | viable |
+    | `pepita` | γ | 0.9533 / 0.9533 / 0.9533 | 0.9533 | 0.9562 | viable |
+    | `local_goodness` (`readout_error`) | lr | 0.9481 / 0.9619 / 0.9610 | **0.9619** | **0.9623** | viable; map's best |
+    | `random_projections` | γ | 0.9256 / 0.9254 / 0.9253 | 0.9256 | 0.9268 | viable |
+    | `thermodynamic_contrast` (energy) | lr | 0.9426 / 0.9495 / 0.9480 | 0.9495 | 0.9534 | viable |
+    | `local_contrastive` | lr | 0.5074 / 0.5037 / 0.6295 | 0.6295 | 0.5959 | viable (> chance), far below ruler |
+    | `target_inversion` | lr | 0.4895 / 0.4040 / 0.2689 | 0.4895 | 0.5101 | viable, clipped at the low lr end |
+    | `pc_alm` (pc_alm dynamics) | lr | 0.2064 / 0.3451 / 0.1034 | 0.3451 | 0.1769 | viable, peaks at 1e-3 |
+
+    **Findings.**
+    - **8/8 error-aware credits clear chance.** No credit is an unwired row;
+      the breadth gate's viability floor holds across the whole credit axis.
+    - **The tiers are coordinates, not a ranking.** Four credits sit at the
+      gradient ruler, three sit far below it at 1 epoch — but each far one
+      still has ladder direction (`target_inversion` improves as lr falls, so
+      its ladder is clipped; `pc_alm` peaks at 1e-3 and collapses at 3e-3).
+      Their next fair step is a 20-epoch cell, not a knob sweep at 1 epoch.
+    - **`local_goodness` with its target channel is the map's best cell:**
+      0.9619 / 0.9623 vs `gradient` 0.9562 / 0.9456 at the same coordinate and
+      knob. One seed: screening, not a claim — but it is the first
+      non-PEPITA credit measuring at or above the ruler, and the natural next
+      matched comparison.
+    - **γ does not resolve at 1 epoch.** PEPITA measures 0.9533 at γ = 0.01,
+      0.05 and 0.25; `random_projections` 0.9253–0.9256 over the same range.
+      The ladder prices the credit's severity, not its tuned value; γ's effect
+      is the §3.7 20-epoch measurement.
+    - **Cost model.** Every credit is ≤ 41 s per 1-epoch cell except `pc_alm`
+      at **~315 s** (15×) — its claim-grade L2/20 cell is ~1.8 h/seed, so it
+      converts last, and any interaction including it needs an hours budget.
+
+    **Next ticket.** Pre-register
+    `configs/preregistrations/t92_local_goodness_gradient.json` and run the
+    matched pair `local_goodness (readout_error=True)` vs `gradient` at L2/20,
+    seeds 57–61, MNIST. Cost from §3.7's measured L2/20 seeds (gradient
+    276.7 s, PEPITA 322.7 s on CPU) plus one extra forward: ~1 h for the 10
+    cells. Threshold: ±0.01 equivalence (§3.7's predicate), superiority
+    secondary. This is the first non-PEPITA credit at claim grade — a
+    fixed-coordinate implementation result, not a credit ranking.
+
+    **Not claimed.** One seed, one epoch, one task. The map says every
+    implementation trains; it does not rank the credits and does not replace
+    the 20-epoch cells.
 
 ---
 
@@ -768,6 +856,9 @@ the open work):**
 | 2026-11-14 | node × dynamics × credit (Cora) | inst/grad 0.7568, inst/RP 0.7460, energy/grad 0.7496, energy/RP 0.7152 | 5 per cell | L2/100, same split; seeds 47–51 | interaction **−0.0236**, 95% CI [−0.0496, −0.0076], p=0.008 — **NEGATIVE**, claim-grade; 5.5× walltime | §3.10 (first interaction) |
 | 2026-11-14 | node classification (best) | Cora **0.7680 ± 0.0133** (SD), `muon` | 5 | L2/100, 500-node public split; majority 0.316; seeds 47–51 | 1.35σ above 0.75 — **met**; claim-grade cell, main effect descriptive (CI [−0.3, +2.4] pp) | §3.10 (second interaction) |
 | 2026-11-14 | node × update × geometry (Cora) | graph/adam 0.7568, graph/muon 0.7680, ff/adam 0.4756, ff/muon 0.5492 | 5 per cell | L2/100, same split; seeds 47–51 | interaction **−0.0624**, 95% CI [−0.0960, −0.0288], p=0.008 — **NEGATIVE**, claim-grade; muon helps ff +7.4 pp, graph +1.1 pp | §3.10 (second interaction) |
+| 2026-11-15 | credit viability (breadth gate) | **8/8** error-aware credits above chance; best cell `local_goodness` **0.9619** (confirm 0.9623) vs `gradient` 0.9562 (0.9456) | 1 seed/point + 1 confirmation | val_acc, 1 epoch, MNIST 10k held out; chance 0.10; seeds 57/157 | **viability met** on the credit axis; screening, not a ranking | §3.11 |
+| 2026-11-15 | credit cost model | `pc_alm` **~315 s** per 1-epoch cell; every other credit ≤ 41 s | 1 | walltime, MNIST L2/20 shape | a claim-grade `pc_alm` cell is ~1.8 h/seed; it converts last | §3.11 |
+| 2026-11-15 | credit × substrate (deferred) | PEPITA/analog ladder best 0.9574 at lr 3e-3; confirm 0.9539 vs gradient 0.9523 | 1 | val_acc, 1 epoch, MNIST; seed 57/157 | viable cell, **2×2 deferred** behind §3.11 | §3.10 |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -822,7 +913,7 @@ claim-grade:
 | Geometry | 11/11 live | vision/graph/node screening | graph marginal; node n=3 |
 | Dynamics | 8/8 live | none | best cells are instantaneous; no matched settling claim |
 | Plasticity | 5/7 live; `rule_state`, `substrate_coupled` unavailable | none | no matched plasticity × task claim |
-| Credit | 10/10 live | PEPITA digital/adam **confirmed equivalent at one coordinate**; no cross-credit ranking | other credits L0/L1 or under-optimized; label channel and HPO unestablished |
+| Credit | 10/10 live | PEPITA digital/adam **confirmed equivalent at one coordinate**; **8/8 error-aware credits viable at rung 2** (§3.11) | no claim-grade cell for any credit except PEPITA; `local_goodness` is the next matched pair |
 | Update | 12/12 live | none | no matched update × geometry claim |
 
 "Liveness" is the §3.9 one-step parameter fingerprint, not a PASS record or a
@@ -894,6 +985,12 @@ cross-credit conclusion and no HPO before that point (§5).
   equivalence claim reads the two-sided CI against a pre-registered margin
   (`EquivalenceRegistration` + `PairedComparison.passes_equivalence`, added
   2026-11-14; §3.7). Report the superiority p as secondary.
+- **A credit's own ladder precedes any interaction that uses it.** The 3-point
+  viability ladder (3 knob values, 1 seed each, 1 confirmation seed) is the
+  cheapest test that separates "unwired" from "under-tuned", and it is what
+  makes an interaction's arms comparable implementations rather than two
+  guesses. A credit below chance at every ladder point is a defect or a
+  refusal, never a coordinate (§3.11).
 - **A marginal arm gets a stop rule before it runs.** One pre-registered arm
   per lever; if it misses its threshold, record the verdict, close the lever,
   and move on. No third capacity/readout sweep (§3.2).
@@ -983,16 +1080,25 @@ cross-credit conclusion and no HPO before that point (§5).
   PASS**; the claim-grade rows are above their bars. Three claim fixtures were
   moved to the campaign's proved regime (params + 5 epochs, unlimited batches)
   because a below-bar cell is not claim-eligible.
-- Open work, in priority order: §3.10 remaining interactions — **plasticity ×
-  task** needs a matched arm build (the CL runner's arms differ on four axes)
-  and stands at rung 0; **credit × substrate** passed rung 0 on all seven live
-  substrates (2026-11-15), pilot-priced at ~20 s/epoch, and its next step is
-  `configs/preregistrations/t92_credit_substrate.json` + the 3-point ladder +
-  the L2/20 n=5 2×2 (~2.4 h) on `analog`; §3.8 graph/RL/tabular conversions
-  (only if a formal claim is needed); §3.6 batched graph-settle (deferred);
-  §3.1 regression claims (n=1); §3.3c documentation follow-up (AGENTS.md's
-  positive-control wording, round close). §3.2 is **closed**: capacity and
-  readout are both excluded and the graph row is at-bar/marginal.
+- §3.11 is **measured** (2026-11-15): the credit viability map runs all eight
+  error-aware credits through the AGENTS 3-point ladder on the MNIST anchor
+  (32 cells, 1915 s). **8/8 clear chance**; no credit is unwired.
+  `local_goodness` (`readout_error=True`) measures 0.9619 / 0.9623 against
+  `gradient` 0.9562 / 0.9456, the map's best cell; `local_contrastive` (0.63),
+  `target_inversion` (0.51) and `pc_alm` (0.35) are viable but far below the
+  ruler at 1 epoch, with ladder direction still open. `pc_alm` costs ~315 s per
+  1-epoch cell (15×), so it converts last. The map ranks nothing.
+- Open work, in priority order: **§3.11's follow-up** — pre-register and run the
+  matched `local_goodness` vs `gradient` pair at L2/20, seeds 57–61 (~1 h): the
+  first non-PEPITA credit at claim grade; then §3.10's remaining interactions —
+  **credit × substrate** (deferred: viable cell measured, 2×2 needs its
+  pre-registration and re-enters behind the map, on the credit the map leaves
+  standing) and **plasticity × task** (blocked on a matched arm build; the CL
+  runner's arms differ on four axes, stands at rung 0); §3.8 graph/RL/tabular
+  conversions (only if a formal claim is needed); §3.6 batched graph-settle
+  (deferred); §3.1 regression claims (n=1); §3.3c documentation follow-up
+  (AGENTS.md's positive-control wording, round close). §3.2 is **closed**:
+  capacity and readout are both excluded and the graph row is at-bar/marginal.
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and
