@@ -20,8 +20,12 @@ The first two interactions are **negative**, and they name the mechanism:
 `energy_minimization` costs the `random_projections` credit **−2.4 pp**
 against `gradient`, and `muon`'s benefit is **−6.2 pp smaller on graph than on
 feedforward** (both claim-grade, n=5, L2/100; §3.10). The graph/muon cell is
-the node row's best measured (**0.7680 ± 0.0133**, 1.35σ above 0.75). Next:
-**plasticity × task and credit × substrate**, then the gate metric bar. The
+the node row's best measured (**0.7680 ± 0.0133**, 1.35σ above 0.75). The
+graph row's last lever is now **excluded**: sum pooling measures 0.6466 ±
+0.0248 vs mean 0.6951 ± 0.0237, paired **−0.0484**, 95% CI [−0.0601, −0.0368]
+(n=5, L1/100, seeds 42–46), so §3.2 closes the row **at-bar/marginal**. Next:
+**plasticity × task** (needs a matched arm build; the CL runner's arms differ
+on four axes) and **credit × substrate**. The
 plan is **breadth-first**: no cross-credit ranking and no HPO until every
 declared value is validated (AGENTS.md SEC Loop; §5).
 **TODO91 is closed (2026-11-14)** — its §10 stop condition holds, so this file
@@ -201,7 +205,9 @@ trainer optimises geometry parameters with DDPG and never calls the composed
 credit, so the cell that produced −135.1 is geometry × substrate. The space now
 refuses error-aware credits on RL tasks and keeps only the two `error_blind`
 rows (§3.3b). The only open **domain bar** is the graph-classification
-marginal; RL's −135.1 is a screening lane result (n=3, L0), and the other met
+marginal, now **closed at-bar/marginal**: both remaining levers (capacity and
+readout) are excluded by pre-registered paired comparisons (§3.2). RL's −135.1
+is a screening lane result (n=3, L0), and the other met
 rows are screening until converted to L2/n≥5 (§3.8). The regression lane is
 closed (§3.1).
 
@@ -373,7 +379,16 @@ still needs a matched interaction or claim (§3.7, §3.10).
    recorded RL positive control now measures FAIL
    (`mean_reward=-1536.6081` vs the −1200 random-policy floor), and a near-
    chance digits cell that PASSed before is FAIL. Details in §3.3c.
-5. **§3.2 — one graph readout arm with a stop rule.** The only graph lever left.
+5. ~~**§3.2 — one graph readout arm with a stop rule.**~~ — **closed
+   2026-11-14: readout excluded.** The pre-registered
+   `configs/preregistrations/t92_graph_pooling.json` (sum vs mean,
+   seeds 42–46, threshold +0.01, L1/100) measures control **0.6951 ± 0.0237**
+   and treatment **0.6466 ± 0.0248**: paired **−0.0484**, 95% CI
+   [−0.0601, −0.0368], p=0.008 — **FAIL**, and sum is worse by 4.8 pp. The
+   graph row closes **at-bar/marginal** (0.7013 ± 0.0164, 0.08σ above 0.70);
+   per the stop rule, no third capacity/readout arm and no seed sweep. A
+   formal claim would need the same cell at n=5 L2/100 (§3.8), not another
+   lever. Details in §3.2.
 6. **§3.8 — claim-conversion backlog.** Convert only the screening rows a claim
    needs; label the rest screening.
 7. **§3.6 — batched graph-settle path.** Defer; no domain bar depends on it.
@@ -410,6 +425,19 @@ still needs a matched interaction or claim (§3.7, §3.10).
    **at-bar/marginal** and stop; no third capacity/readout arm. If a formal
    claim is ever needed, run the same cell at n=5 L2/100 (§3.8), not another
    lever.
+   **Readout arm measured (2026-11-14): FAIL — the row is closed.** Pre-registered
+   in `configs/preregistrations/t92_graph_pooling.json` and run by
+   `scripts/probes/t92_graph_pooling.py` (n=5, seeds 42–46, L1/100, 223 held
+   out, majority 0.5964). Control `mean` **0.6951 ± 0.0237** (36.3 s/seed),
+   treatment `sum` **0.6466 ± 0.0248** (36.4 s/seed): paired **−0.0484**, 95%
+   CI [−0.0601, −0.0368], p=0.008, dz=−3.30. Sum pooling is not the lever; it
+   loses 4.8 pp. The graph row closes **at-bar/marginal**: 0.7013 ± 0.0164
+   (0.08σ above 0.70) remains the best measured, and three runs of the same
+   control now read 0.7013 / 0.6960 / 0.6951, so run noise (~0.006) is wider
+   than the bar margin. This is a screening paired comparison (L1), not a
+   claim-grade cell. **No further graph lever is opened**; only the §3.8
+   n=5 L2/100 conversion of the same cell remains, and only if a formal claim
+   is needed.
 3. ~~**RL**~~ — **closed 2026-11-14: met.** Three seeds × 400 episodes
    (40 × 10) recorded to `experiments/t92_rl_400ep.duckdb`:
    −144.94 / −133.04 / −127.21, mean **−135.1**, SD 9.0, bootstrap CI
@@ -589,7 +617,7 @@ still needs a matched interaction or claim (§3.7, §3.10).
    | Row | Current | To claim | Cost | Priority |
    |---|---|---|---|---|
    | Node Cora | **measured 2026-11-14**: 0.7680 ± 0.0133 at n=5 L2/100 (`muon`); adam arm 0.7568 ± 0.0145 | claim-grade **cell** (1.35σ above 0.75); a main-effect claim needs a pre-registered paired muon−adam (descriptive +1.1 pp, p=0.17) | done | closed |
-   | Graph PROTEINS | 0.701 n=5 L1/100 | n=5 L2/100 | ~10 min | after §3.2 |
+   | Graph PROTEINS | 0.701 n=5 L1/100; row closed at-bar/marginal (§3.2) | n=5 L2/100 | ~10 min | only if a formal claim is needed |
    | RL pendulum | −135.1 n=3 L0/40 | n=5 same schedule | ~60 min | only if the lane claim matters |
    | Tabular wine | 1.0 n=3 L0 | replace the task | new loader | low; wine is saturated |
 
@@ -669,6 +697,7 @@ still needs a matched interaction or claim (§3.7, §3.10).
 | 2026-11-14 | vision | MNIST 0.9787 ± 0.0009 (SD) | 3 | val_acc, 10k held out; chance 0.10 | reproduced; met | §3.0 (closed) |
 | 2026-11-14 | graph classification | PROTEINS 0.7013 ± 0.0164 (SD) | 5 | 223 held out; majority 0.596 | reproduced; **marginal** (0.08σ) | §3.2 |
 | 2026-11-14 | graph classification | 256×6 capacity arm 0.6816 ± 0.0210 | 5 | paired vs 128×4 control 0.6960; same seeds | pre-registered diff −0.0143, CI [−0.0395, +0.0036], p=0.41 — **arm rejected** | §3.2 |
+| 2026-11-14 | graph classification | sum-pooled readout 0.6466 ± 0.0248 vs mean 0.6951 ± 0.0237 | 5 | L1/100, 223 held out; seeds 42–46 | pre-registered diff **−0.0484**, CI [−0.0601, −0.0368], p=0.008 — **readout rejected**; row closes at-bar/marginal | §3.2 (closed) |
 | 2026-11-14 | node classification | Cora 0.7660 ± 0.0151 (SD) | 3 | 500 public-split nodes; majority 0.316 | reproduced; met (1.06σ) | §3.0 (closed) |
 | 2026-11-14 | tabular | wine 1.0000 (record 0.9722 did not reproduce) | 3 | 36 held out (resolution 0.0278); majority 0.389 | re-run is the measurement; met | §3.0 (closed) |
 | 2026-11-14 | RL (credit axis) | six credits identical: mean_reward −126.4 | 1 | 30 episodes, L0 | credit inert — one value for all six | §3.3b |
@@ -835,10 +864,11 @@ cross-credit conclusion and no HPO before that point (§5).
 - §3.0a and §3.0 are closed (2026-11-14): the instrument prints records and
   distinct measurements, and every §2 row carries a re-execution whose
   `measurement_key` matches its located record. §3.2's capacity arm is rejected
-  by pre-registered paired comparison; the graph row stays marginal and its next
-  lever is the readout, not capacity or credit. §3.3 is closed with a number:
-  RL −135.1 (n=3, 400 episodes) clears −200, and that number is geometry ×
-  substrate because the credit axis is inert on the lane.
+  by pre-registered paired comparison and its readout arm is rejected too
+  (sum 0.6466 ± 0.0248 vs mean 0.6951 ± 0.0237, paired −0.0484, p=0.008), so the
+  graph row is closed **at-bar/marginal** and no third lever is opened. §3.3 is
+  closed with a number: RL −135.1 (n=3, 400 episodes) clears −200, and that
+  number is geometry × substrate because the credit axis is inert on the lane.
 - §3.3b is closed (2026-11-14) as a refusal with a measured rule: the space
   refuses error-aware credits on RL tasks (`rl_credit_must_be_error_blind`) and
   keeps the two `error_blind` rows; the probe reproduces the identity
@@ -900,10 +930,13 @@ cross-credit conclusion and no HPO before that point (§5).
   moved to the campaign's proved regime (params + 5 epochs, unlimited batches)
   because a below-bar cell is not claim-eligible.
 - Open work, in priority order: §3.10 remaining interactions (plasticity ×
-  task, credit × substrate); §3.2 one graph readout arm with a stop rule;
-  §3.8 graph/RL/tabular conversions; §3.6 batched graph-settle (deferred);
-  §3.1 regression claims (n=1); §3.3c documentation follow-up (AGENTS.md's
-  positive-control wording, round close).
+  task — its runner arms are confounded, so a matched arm build is required;
+  credit × substrate — needs a live non-refused substrate and the credit
+  viability gate); §3.8 graph/RL/tabular conversions (only if a formal claim is
+  needed); §3.6 batched graph-settle (deferred); §3.1 regression claims (n=1);
+  §3.3c documentation follow-up (AGENTS.md's positive-control wording, round
+  close). §3.2 is **closed**: capacity and readout are both excluded and the
+  graph row is at-bar/marginal.
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and
