@@ -587,7 +587,11 @@ needed, on a held-out split large enough to carry it):**
    formal claim would need the same cell at n=5 L2/100 (§3.8), not another
    lever. Details in §3.2.
 6. **§3.8 — claim-conversion backlog.** Convert only the screening rows a claim
-   needs; label the rest screening.
+   needs; label the rest screening. **Open candidate (2026-11-15):** the
+   tabular `local_goodness` advantage (§3.13) — it needs a
+   `ThresholdRegistration` (e.g. +0.005) and a ≥500-row held-out split, because
+   the 114-row `breast_cancer` ruler resolves 0.88 pp. Not started; no other
+   row currently needs conversion.
 7. **§3.6 — batched graph-settle path.** Defer; no domain bar depends on it.
 8. **§3.1 — regression claims.** n=1 records; no current claim.
 
