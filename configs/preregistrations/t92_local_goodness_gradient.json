@@ -1,0 +1,9 @@
+{
+  "claim": "On MNIST (10k held out), local_goodness with its declared target channel (credit.readout_error=True) and gradient are equivalent within a +/-0.01 val_acc margin at L2/20 on the same digital/feedforward/instantaneous/null/adam cell, paired over fresh seeds 57-61",
+  "metric": "val_acc",
+  "margin": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-15",
+  "protocol": "TODO92 section 3.11 follow-up. Screening input: the credit viability map measured local_goodness (readout_error=True, lr 1e-3, 1 epoch, cuda) at 0.9619 on seed 57 and 0.9623 on seed 157, against gradient 0.9562 / 0.9456 at the same coordinate. This run is the claim-grade conversion: control = credit gradient, treatment = credit local_goodness + credit.readout_error=True, both rebuilt from the section 3.7 MNIST anchor experiments/experiment_20261109_103319.duckdb bfab4794 (digital/feedforward/instantaneous/null/adam, params {}, L2/20 epochs, 10k held out, CPU); only the credit, its declared channel and the seed differ. Seeds 57-61 are fresh at L2/20 and were not used at this schedule. Measured pilot (1 epoch, seed 42, CPU, not a registered seed): gradient 0.9546, local_goodness 0.9578; 16-21 s/cell, so the registered 10 cells cost about 1 h. Decision: the 95% bootstrap CI of the paired treatment-minus-control difference lies inside [-0.01, +0.01] (computronium.validation.preregistration.PairedComparison.passes_equivalence). The superiority p vs 0 is secondary, never the decision. Stop rule: if the CI leaves the margin, report the measured boundary and do not tune lr or add seeds; a marginal arm closes with its measured verdict."
+}
