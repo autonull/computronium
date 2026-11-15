@@ -3,8 +3,9 @@
 **Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.8,
 §3.9, §3.3c, §3.10's interactions, §3.12's breadth exit and §3.13's stop-loss
 disposition are closed — **three claim-grade interaction rows, one probe-grade
-row** (plasticity × task skipped rung 2), and **three pre-registered
-registrations** (two parity, one superiority — the superiority **failed**);
+row** (plasticity × task skipped rung 2), and **four pre-registered
+registrations** (three parity, one superiority — the superiority **failed**);
+the tabular parity is now claim-grade on the 569-row ruler (§3.8 follow-up);
 §3.11's credit viability map and its `local_goodness` vs `gradient` follow-up
 are closed. §3.8 (2026-11-15) **retracts the tabular advantage**: on the task's
 pre-registered 5-fold ruler `local_goodness` measures **+0.03 pp** vs gradient
@@ -63,10 +64,20 @@ vs gradient **0.9778 ± 0.0027**, paired **+0.0003**, 95% CI [−0.0025, +0.0025
 p=0.96, dz=0.10 (5 seeds 67–71, L2/20, 49 s, `experiments/t92_local_goodness_tabular_folds.json`).
 That is **FAIL** against the pre-registered +0.005 threshold: §3.13's
 **+1.58 pp** was a 114-row holdout coordinate (≈1.8 rows), not a second-family
-advantage. The exact parity reading (±0.25 pp, inside ±1 pp) is **post-hoc** on
-this ruler, so it is a coordinate, not an equivalence claim.
+advantage. The exact parity reading (±0.25 pp, inside ±1 pp) was **post-hoc** on
+this ruler, and is now **converted to a pre-registered claim** (below).
 §3.13's reversal trigger therefore **fired**: the row is a coordinate and the
 stop-loss is re-evaluated below.
+**§3.8's follow-up is measured and closed — tabular parity is claim-grade
+(2026-11-15).** The pre-registered `EquivalenceRegistration` (±0.01, committed
+alone in `3cbd9de6` before seed 72) re-runs fresh seeds **72–76** on the same
+569-row ruler: `local_goodness` **0.9782 ± 0.0032** vs gradient
+**0.9761 ± 0.0036**, paired **+0.0021**, 95% CI [−0.0004, +0.0049], p=0.33,
+dz=0.62, 49 s (`experiments/t92_local_goodness_tabular_folds_equivalence.json`)
+— **EQUIVALENT** within the declared margin. With §3.11's MNIST equivalence the
+weak thesis (a non-standard composition matches the standard stack at matched
+cost) is claim-grade on **two families**. It is parity, not a win: the CI's
+upper end is +0.49 pp and the task has 2.2 pp of headroom.
 
 **§3.12/§3.13 closed the breadth question and re-opened the thesis
 (2026-11-15).** The gate exits 0 with **8/8** error-aware credits on ≥2 task
@@ -186,8 +197,9 @@ exit and it is now green by measurement, not by prose.
 **Stop-loss disposition: does not fire (2026-11-15, re-evaluated after §3.8).**
 The map's best non-standard credit, `local_goodness`, holds **equivalence** on
 two families: vision (MNIST, CI inside ±0.01, 0.81× cost) and tabular (569-row
-fold ruler, **+0.0003**, 95% CI [−0.0025, +0.0025] — post-hoc reading, inside
-±1 pp). The earlier "+0.0158 tabular advantage" is **retracted**: on the
+fold ruler, **+0.0021**, 95% CI [−0.0004, +0.0049] — a pre-registered
+equivalence claim on fresh seeds 72–76, §3.8 follow-up). The earlier "+0.0158
+tabular advantage" is **retracted**: on the
 pre-registered 5-fold ruler the superiority claim **FAILS** (§3.8). So a
 non-standard composition matches the standard stack at matched cost on two
 families, and no composition **wins** at claim grade. The strong thesis is
@@ -201,7 +213,7 @@ falsified at the measured coordinates; the weak form survives on parity.
 | Rung completeness | plasticity × task skipped rung 2; §3.10 labels it probe-grade |
 | Positive control | absent for the CL lane; §5 records the rule |
 | Ruler reach | the breadth cells' tabular ruler is `wine` (36 held out, 2.78 pp resolution, saturated at 1.0000); it licenses **breadth**, not a ranking (§3.12) |
-| Advantage retracted | `breast_cancer` +1.58 pp was a 114-row coordinate; the 569-row ruler measures +0.03 pp (§3.8). Parity on that ruler is post-hoc |
+| Advantage retracted | `breast_cancer` +1.58 pp was a 114-row coordinate; the 569-row ruler measures +0.03 pp (§3.8). Parity on that ruler was post-hoc until the 2026-11-15 equivalence run, which is pre-registered (`t92_local_goodness_tabular_folds_equivalence.json`, before seed 72) |
 | Eval site | a fold instrument must read `val_acc` from the trainer's last epoch, as the cell does; a post-training `task.evaluate` pass is a different site and moved the paired difference by ~0.3 pp (folds by up to 0.9 pp) (§3.8, §5) |
 
 Gate output (2026-11-15, after §3.12): `gradient` graph/memory/tabular/
@@ -214,14 +226,23 @@ tabular/vision (10). 960 legacy records re-assessed against their task bar;
 
 **Acceptance (met):** the command exits 0. **No ticket is open that blocks a
 number.** The claim backlog is empty: the only conversion candidate (§3.8's
-tabular advantage) was run and **failed**, so §3.8 closes. Optional follow-ups
-that need no new mechanism: (a) pre-register `EquivalenceRegistration` on the
-569-row fold ruler and re-run with fresh seeds 72–76 (~1 min) if a formal
-tabular **parity** claim is wanted — the current parity reading is post-hoc;
-(b) add a **harder tabular task** (≥500-row held-out split with headroom) if a
-tabular **win** is wanted — the current ruler sits at 0.978 with 2.2 pp of
-headroom, so an advantage above ~0.5 pp is measurable but unlikely there;
-(c) §3.6's batched graph-settle path stays deferred (no bar depends on it).
+tabular advantage) was run and **failed**, so §3.8 closes. Follow-up (a) was
+taken (2026-11-15): the 569-row ruler now carries a **pre-registered
+equivalence claim** — `local_goodness` **0.9782 ± 0.0032** vs gradient
+**0.9761 ± 0.0036**, paired **+0.0021**, 95% CI [−0.0004, +0.0049],
+**EQUIVALENT** within ±0.01 (5 fresh seeds 72–76, 49 s) — so the weak thesis is
+claim-grade on two families, not one claim plus one post-hoc reading. The
+remaining levers, their triggers and their costs are in the table below.
+**Remaining work (no item blocks a number):**
+
+| # | Item | Trigger to reopen | Cost |
+|---|---|---|---|
+| b | harder tabular ruler (≥500 held out, real headroom) for a tabular **win** | a win is wanted; `breast_cancer` measures 0.978 with 2.2 pp of headroom | new task registration + one pre-registered pair |
+| c | §3.6 batched graph-settle path | a claim needs graph-classification × settling | shape fix in the batched settle path (§3.6) |
+| d | superiority registration | a measured effect exists to register | none — both closed families measure parity |
+| e | fold identity in `Schedule`/`measurement_key` | a claim needs fold cells inside the corpus | typed schema change + corpus re-count (§3, item 9) |
+| f | §3.1 regression claims | n≥3 records exist at a domain bar | screening runs |
+
 **Standing stop-loss:** evaluated twice — the parity map is in §4 and the
 disposition in §3.13.
 
@@ -684,14 +705,40 @@ optional and named in §0: a formal tabular *parity* registration on the
    **Stop rule applied:** no lr tuning, no extra seeds, no third task, no
    re-run. §3.13's reversal trigger fired; the stop-loss is re-evaluated in
    §0/§3.13.
+
+   **Follow-up (a) measured 2026-11-15 — tabular parity is now claim-grade.**
+   The FAIL above left one post-hoc reading on this ruler: the paired CI, inside
+   ±1 pp. `EquivalenceRegistration`
+   `configs/preregistrations/t92_local_goodness_tabular_folds_equivalence.json`
+   (margin ±0.01, α=0.05, min n=5) was committed **alone in `3cbd9de6`, before
+   seed 72** — the third registration in this plan that satisfies §5's order
+   rule. Same instrument, ruler and eval site; fresh seeds **72–76** at the same
+   L2/20 schedule. Artifact:
+   `experiments/t92_local_goodness_tabular_folds_equivalence.json`.
+
+   | Arm | Fold-mean ± SD | n | Cost |
+   |---|---|---|---|
+   | gradient | **0.9761 ± 0.0036** | 5 | same schedule |
+   | `local_goodness` (+`readout_error`) | **0.9782 ± 0.0032** | 5 | same schedule |
+   | paired treatment − control | **+0.0021**, 95% CI [−0.0004, +0.0049] | 5 | p=0.33, dz=0.62 |
+
+   **Verdict: EQUIVALENT within the pre-registered ±0.01 margin** (50 fold-cells,
+   49 s; 74,242 params both arms). With §3.11's MNIST equivalence, the weak
+   thesis — a non-standard composition matches the standard stack at matched
+   cost — is now **claim-grade on two task families**, not one claim plus one
+   post-hoc coordinate. The reading is parity, not a win: the CI's upper end is
+   +0.49 pp, well under the ~0.5 pp this ruler can resolve, and the task has
+   2.2 pp of headroom. No HPO follows an equivalence. **Stop rule applied:** no
+   tuning, no extra seeds, no third task; the next tabular *win* question needs
+   follow-up (b)'s harder ruler, which does not exist yet.
 7. **§3.6 — batched graph-settle path.** Defer; no domain bar depends on it.
 8. **§3.1 — regression claims.** n=1 records; no current claim.
 9. **Fold identity in the measurement key (low priority; no number blocked).**
    `Schedule` carries no fold, so a fold cell cannot be a corpus record: two
    folds of the same coordinate would share one `measurement_key`, and
    `dedup_key` (cell, seed, fidelity) cannot separate them. §3.8 therefore
-   reports through `experiments/t92_local_goodness_tabular_folds.json` rather
-   than five duplicate keys. Reopen when a claim needs fold cells in the corpus
+   reports through `experiments/t92_local_goodness_tabular_folds.json` (and the
+   follow-up's `_equivalence.json`) rather than five duplicate keys. Reopen when a claim needs fold cells in the corpus
    (e.g. a k-fold replication with per-fold records): add the fold to
    `Schedule`, `measurement_key`, and the store schema — and migrate the key,
    which changes every stored hash, so it is a typed schema change with a
@@ -1270,6 +1317,7 @@ optional and named in §0: a formal tabular *parity* registration on the
 | 2026-11-15 | breadth exit (gate) | **8/8** error-aware credits on ≥2 families; **50 new cells** | 5 each | L2/20, seeds 57–61; `wine` (tabular, majority 0.3889) + `digits` (vision, bar 0.10); 582 s | **`comp gate breadth` exits 0**; `wine` saturated (licenses breadth, not ranking); `digits` separates: `local_contrastive` −14.9 pp and `pc_alm` −68.3 pp vs gradient | §3.12 (closed) |
 | 2026-11-15 | tabular (second-family parity) | `breast_cancer` `local_goodness` **0.9667 ± 0.0073** vs gradient **0.9509 ± 0.0048** | 5 | L2/20, 114 held out (resolution 0.88 pp), majority 0.6316; seeds 57–61; CPU | paired **+0.0158**, 95% CI [+0.0105, +0.0211], p=0.0076, dz=2.15 — **NOT-EQUIVALENT** at the pre-registered ±0.01 margin; 1.15× cost; equivalence owed (`a3bb5ce9`), superiority not pre-registered | §3.13 (closed) |
 | 2026-11-15 | tabular (569-row ruler, claim) | `breast_cancer` 5-fold: `local_goodness` **0.9782 ± 0.0020** vs gradient **0.9778 ± 0.0027** | 5 | val_acc, 569 rows held out exactly once (fold-mean resolution 0.18 pp), majority 0.6316; L2/20; seeds 67–71; CPU, 49 s | paired **+0.0003**, 95% CI [−0.0025, +0.0025], p=0.96, dz=0.10 — **FAIL** at the pre-registered +0.005 threshold; the §3.13 +1.58 pp is **retracted**; parity reading is post-hoc | §3.8 (closed) |
+| 2026-11-15 | tabular (569-row ruler, equivalence) | `breast_cancer` 5-fold: `local_goodness` **0.9782 ± 0.0032** vs gradient **0.9761 ± 0.0036** | 5 | val_acc, 569 rows held out exactly once (fold-mean resolution 0.18 pp), majority 0.6316; L2/20; seeds 72–76; CPU, 49 s | paired **+0.0021**, 95% CI [−0.0004, +0.0049], p=0.33, dz=0.62 — **EQUIVALENT** at the pre-registered ±0.01 margin; second family is claim-grade | §3.8 follow-up (closed) |
 | 2026-11-15 | tabular (eval-site cross-check) | same cell, post-training `task.evaluate` score | 5 | as above, 5 folds; same seeds | paired **−0.0025**, 95% CI [−0.0042, −0.0011], p=0.008 — also FAIL; the eval site shifts the paired difference by ~0.3 pp (folds by up to 0.9 pp), so a fold instrument must score where the cell scores | §3.8 (instrument check) |
 
 One row per domain per measurement; a row is superseded, never edited.
@@ -1300,6 +1348,7 @@ their cell measured below it; the claim-grade rows are above their bars.
 | 2026-11-15 | MNIST credit × substrate: `(LG−grad)_analog − (LG−grad)_digital` | 5 | val_acc, 10k held out; L2/20; seeds 57–61; analog noise 0.1 | 55,050 params; 4,095 s for the 10 analog cells | −0.0085, 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 | **boundary**: no interaction at the declared margin; direction unfavorable; **registration post-hoc**, so not error-controlled |
 | 2026-11-15 | `breast_cancer` tabular: `local_goodness` (+`readout_error`) vs gradient | 5 | val_acc, 114 held out (resolution 0.88 pp), majority 0.6316; L2/20; seeds 57–61 | 1.7 s vs 1.4 s per cell (1.15×); 10 cells | +0.0158, 95% CI [+0.0105, +0.0211], p=0.0076, dz=2.15 | **superseded by the 569-row ruler row below**; equivalence rejected at ±0.01; the advantage was a claim-grade **coordinate**, not a claim; §3.13 |
 | 2026-11-15 | `breast_cancer` tabular, 5-fold ruler: `local_goodness` (+`readout_error`) vs gradient | 5 | val_acc, 5-fold, **569 rows held out exactly once** (fold-mean resolution 0.18 pp), majority 0.6316; L2/20; seeds 67–71; CPU, 49 s | same composed shape (74,242 params), same schedule; 50 fold-cells | +0.0003, 95% CI [−0.0025, +0.0025], p=0.96, dz=0.10 — **FAIL** at the pre-registered +0.005 threshold | **claim rejected** (registration `4884cc0c` before seed 1); retracts the +1.58 pp above; parity reading is post-hoc; §3.8 |
+| 2026-11-15 | `breast_cancer` tabular, 5-fold ruler: `local_goodness` (+`readout_error`) vs gradient, **equivalence** | 5 | same ruler and eval site; **fresh seeds 72–76**; CPU, 49 s | same 74,242 params and schedule; 50 fold-cells | +0.0021, 95% CI [−0.0004, +0.0049], p=0.33, dz=0.62 — **EQUIVALENT** within the pre-registered ±0.01 margin | **equivalence claim met** (registration `3cbd9de6` before seed 72); parity, not a win; second family is claim-grade; §3.8 follow-up |
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
@@ -1615,6 +1664,19 @@ cross-credit conclusion and no HPO before that point (§5).
   verdict does not depend on it, but the probe scores where the cell scores. The credit is live in this harness
   (one epoch moves 74,242 params by max |Δ| 0.0255). Artifact:
   `experiments/t92_local_goodness_tabular_folds.json`; 49 s for 50 cells.
+- §3.8's **follow-up is closed** (2026-11-15) with an equivalence claim: the
+  pre-registered `EquivalenceRegistration`
+  (`configs/preregistrations/t92_local_goodness_tabular_folds_equivalence.json`,
+  ±0.01, committed alone in `3cbd9de6` before seed 72) measures
+  `local_goodness` **0.9782 ± 0.0032** vs gradient **0.9761 ± 0.0036**, paired
+  **+0.0021**, 95% CI [−0.0004, +0.0049], p=0.33 — **EQUIVALENT** over fresh
+  seeds 72–76 on the same 569-row ruler (74,242 params both arms, 49 s).
+  Artifact: `experiments/t92_local_goodness_tabular_folds_equivalence.json`.
+  The weak thesis is therefore claim-grade on **two families** (MNIST §3.11,
+  `breast_cancer` §3.8). It is parity, not a win. The probe gained
+  `--seeds/--registration/--results` and dispatches on the registration file's
+  shape (margin → equivalence, threshold → superiority), so one instrument
+  serves both decision rules.
 - **SEC conformance correction (2026-11-15).** The last two sessions followed
   the loop's form (decision → falsifier → triage → verify → record) but not its
   preconditions: both 2026-11-15 interaction registrations were committed with
@@ -1623,11 +1685,11 @@ cross-credit conclusion and no HPO before that point (§5).
   (**6 of 8**), corrected in §0, §5 and the §3.10/§3.11 entries; §3.12 then
   measured it green and §3.13's registration (`a3bb5ce9`) precedes its seeds.
 - Open work, in priority order: **none that blocks a number.** §3.8's
-  conversion ran and **failed**, so the claim backlog is empty and no
-  superiority claim is pending. Optional, each with its own named decision:
-  (a) pre-register `EquivalenceRegistration` on the 569-row fold ruler and
-  re-run with fresh seeds 72–76 (~1 min) if a formal tabular **parity** claim
-  is wanted — today's parity reading is post-hoc; (b) add or adopt a **harder
+  conversion ran and **failed**, and its follow-up equivalence claim (**met**,
+  2026-11-15) closed the post-hoc parity analytic, so the claim backlog is
+  empty and no superiority claim is pending. Remaining, each with its own named
+  decision: (a) **done** — the tabular parity is now a pre-registered
+  equivalence claim (seeds 72–76); (b) add or adopt a **harder
   tabular task** (≥500-row held-out split with real headroom) if a tabular
   **win** is wanted, since `breast_cancer` sits at 0.978 with 2.2 pp of room;
   (c) §3.6 batched graph-settle stays deferred (no bar depends on it);

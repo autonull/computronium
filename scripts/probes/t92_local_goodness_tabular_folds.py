@@ -18,16 +18,28 @@ score is the last epoch's ``val_acc`` — the metric the corpus cell reports.
 Decision: the pre-registered `ThresholdRegistration` (+0.005, alpha 0.05,
 min 5 seeds) in
 ``configs/preregistrations/t92_local_goodness_tabular_folds.json``, committed
-before seed 1.
+before seed 1. The probe dispatches on the registration file's shape: a
+``margin`` key loads ``EquivalenceRegistration`` and the verdict is
+EQUIVALENT/NOT-EQUIVALENT inside ±margin; a ``threshold`` key loads
+``ThresholdRegistration`` and the verdict is PASS/FAIL above +threshold.
 
 Run: uv run python scripts/probes/t92_local_goodness_tabular_folds.py --pilot
      uv run python scripts/probes/t92_local_goodness_tabular_folds.py
+     uv run python scripts/probes/t92_local_goodness_tabular_folds.py \
+       --seeds 72,73,74,75,76 \
+       --registration configs/preregistrations/t92_local_goodness_tabular_folds_equivalence.json \
+       --results experiments/t92_local_goodness_tabular_folds_equivalence.json
      uv run python scripts/probes/t92_local_goodness_tabular_folds.py --report-only
 
 Measured 2026-11-15 (5 folds x 5 seeds x 2 arms, L2/20, CPU, 49 s):
 gradient **0.9778 ± 0.0027**, `local_goodness` **0.9782 ± 0.0020**; paired
 **+0.0003**, 95% CI [−0.0025, +0.0025], p=0.96, dz=0.10 — **FAIL** against the
 +0.005 threshold. The §3.13 +1.58 pp does not replicate on the 569-row ruler.
+
+Follow-up measured 2026-11-15 (fresh seeds 72–76, same ruler, 49 s): gradient
+**0.9761 ± 0.0036**, `local_goodness` **0.9782 ± 0.0032**; paired **+0.0021**,
+95% CI [−0.0004, +0.0049], p=0.33, dz=0.62 — **EQUIVALENT** within the
+pre-registered ±0.01 margin (``t92_local_goodness_tabular_folds_equivalence``).
 
 Two findings travel with the number. (a) The fold instrument's eval site
 matters at this effect size: a post-training ``task.evaluate`` pass (the
@@ -63,6 +75,7 @@ from computronium.domains.tabular import TabularTask
 from computronium.experiment.kernel.compose import compose_cell_system
 from computronium.experiment.schema.coordinate import Coordinate
 from computronium.validation.preregistration import (
+    EquivalenceRegistration,
     ThresholdRegistration,
     paired_comparison,
 )
@@ -180,8 +193,20 @@ def _fold_means(results: Mapping[str, object]) -> dict[str, list[float]]:
     return means
 
 
-def _report(results: Mapping[str, object]) -> int:
-    registration = ThresholdRegistration.load(REGISTRATION)
+def _load_registration(
+    path: Path,
+) -> ThresholdRegistration | EquivalenceRegistration:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if "margin" in data:
+        return EquivalenceRegistration.from_dict(data)
+    return ThresholdRegistration.from_dict(data)
+
+
+def _report(
+    results: Mapping[str, object],
+    registration: ThresholdRegistration | EquivalenceRegistration,
+    seeds: tuple[int, ...],
+) -> int:
     means = _fold_means(results)
     for arm, measured in means.items():
         print(
@@ -189,21 +214,37 @@ def _report(results: Mapping[str, object]) -> int:
             f"mean={statistics.mean(measured):.4f} "
             f"sd={statistics.stdev(measured) if len(measured) > 1 else 0.0:.4f}"
         )
-    if any(len(measured) < len(SEEDS) for measured in means.values()):
+    if any(len(measured) < len(seeds) for measured in means.values()):
         print("incomplete")
         return 2
     result = paired_comparison(means[TREATMENT], means[CONTROL], seed=0)
-    passed = result.passes(registration)
     print(
         f"paired {TREATMENT} - {CONTROL}: {result.mean_diff:+.4f} "
         f"95% CI [{result.ci_lower:+.4f}, {result.ci_upper:+.4f}] "
         f"p={result.p_value:.4f} dz={result.cohens_dz:.2f}"
     )
-    print(
-        f"verdict: {'PASS' if passed else 'FAIL'} "
-        f"(threshold +{registration.threshold:.4f})"
-    )
+    match registration:
+        case ThresholdRegistration():
+            passed = result.passes(registration)
+            print(
+                f"verdict: {'PASS' if passed else 'FAIL'} "
+                f"(threshold +{registration.threshold:.4f})"
+            )
+        case EquivalenceRegistration():
+            passed = result.passes_equivalence(registration)
+            print(
+                f"verdict: {'EQUIVALENT' if passed else 'NOT-EQUIVALENT'} "
+                f"(margin ±{registration.margin:.4f})"
+            )
     return 0 if passed else 1
+
+
+def _parse_seeds(raw: str) -> tuple[int, ...]:
+    return tuple(int(value) for value in raw.split(","))
+
+
+def _resolve(path: Path) -> Path:
+    return (path if path.is_absolute() else ROOT / path).resolve()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -211,23 +252,36 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pilot", action="store_true")
     parser.add_argument("--report-only", action="store_true")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--seeds", type=_parse_seeds, default=SEEDS)
+    parser.add_argument("--registration", type=Path, default=REGISTRATION)
+    parser.add_argument("--results", type=Path, default=RESULTS)
     args = parser.parse_args(argv)
+    registration_path = _resolve(args.registration)
+    results_path = _resolve(args.results)
+    registration = _load_registration(registration_path)
+    seeds: tuple[int, ...] = args.seeds
 
     if args.pilot:
         return _pilot(args.device)
 
     if args.report_only:
-        with RESULTS.open(encoding="utf-8") as f:
-            return _report(json.load(f))
+        with results_path.open(encoding="utf-8") as f:
+            return _report(json.load(f), registration, seeds)
 
     task = TabularTask(name=TASK, dataset_name=TASK, device=args.device)
     task.setup()
-    results: dict[str, object] = {"task": TASK, "created": "2026-11-15", "arms": {}}
+    results: dict[str, object] = {
+        "task": TASK,
+        "created": "2026-11-15",
+        "registration": str(registration_path.relative_to(ROOT)),
+        "seeds": list(seeds),
+        "arms": {},
+    }
     arms: dict[str, dict[str, object]] = results["arms"]  # type: ignore[assignment]
     started = time.perf_counter()
     for credit in (CONTROL, TREATMENT):
-        per_seed = {str(seed): _arm_folds(credit, seed, task) for seed in SEEDS}
-        fold_means = [statistics.mean(per_seed[str(seed)]) for seed in SEEDS]
+        per_seed = {str(seed): _arm_folds(credit, seed, task) for seed in seeds}
+        fold_means = [statistics.mean(per_seed[str(seed)]) for seed in seeds]
         arms[credit] = {
             "per_fold": per_seed,
             "fold_means": fold_means,
@@ -236,16 +290,16 @@ def main(argv: list[str] | None = None) -> int:
         }
         print(
             f"{credit:16}: fold-mean {arms[credit]['mean']:.4f} "
-            f"± {arms[credit]['sd']:.4f} over {len(SEEDS)} seeds",
+            f"± {arms[credit]['sd']:.4f} over {len(seeds)} seeds",
             flush=True,
         )
     results["walltime_s"] = round(time.perf_counter() - started, 1)
-    RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    with RESULTS.open("w", encoding="utf-8") as f:
+    results_path.parent.mkdir(parents=True, exist_ok=True)
+    with results_path.open("w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
         f.write("\n")
-    print(f"results {RESULTS.relative_to(ROOT)}")
-    return _report(results)
+    print(f"results {results_path.relative_to(ROOT)}")
+    return _report(results, registration, seeds)
 
 
 if __name__ == "__main__":
