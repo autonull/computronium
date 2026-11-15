@@ -1,7 +1,8 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
 **Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.9,
-§3.3c and §3.10's four interactions are closed; §3.11's credit viability
+§3.3c and §3.10's interactions are closed — **three claim-grade rows and one
+probe-grade row** (plasticity × task skipped rung 2); §3.11's credit viability
 map and its `local_goodness` vs `gradient` follow-up are closed. The gate now means **defect-free
 and above the task's chance/majority ruler**: a cell that measures at or below
 the trivial predictor is FAIL with a named `below bar` defect. The recorded
@@ -39,8 +40,9 @@ The fourth interaction — plasticity × task — is **measured and closed** too
 **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37 (n=5, seeds 62–66, 5
 epochs/task), at **8.9× walltime** (256 s vs 29 s per run). The CI is inside
 the pre-registered ±0.01 margin: **no plasticity × task interaction** at this
-coordinate. **The interaction matrix is complete: two negative interactions,
-two no-interaction-at-margin results, zero capability wins.** The thesis's
+coordinate. **The interaction matrix is complete at mixed grade: two negative
+interactions (claim-grade), one boundary (claim-grade) and one no-interaction
+probe (rung 2 not run); zero capability wins.** The thesis's
 strong form — a non-standard composition wins at matched cost — is falsified at
 these coordinates; its weak form survives as two cost-adjusted parities
 (PEPITA 1.17×, `local_goodness` 0.81× walltime on MNIST).
@@ -349,10 +351,11 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-15: §3.2, §3.7, §3.11's map/follow-up and all four
-§3.10 interactions are closed. No interaction remains open. Next capability
-question is a harder-task credit comparison (CIFAR-10 or a deeper geometry, the
-§3.7 stop rule); §3.8 conversions follow only if a formal claim is needed):**
+**Priority order (2026-11-15: §3.2, §3.7 and §3.10's interactions are
+closed. The AGENTS breadth exit is **NOT met** — six of eight error-aware
+credits have one task family only — so it is the next ticket, and no
+credit-axis comparison runs until it closes. §3.8 conversions follow only if a
+formal claim is needed):**
 
 1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
    declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
@@ -368,8 +371,9 @@ question is a harder-task credit comparison (CIFAR-10 or a deeper geometry, the
    (~1.17×). This is a **cost-adjusted parity, not a capability win**; per the
    stop rule, the next local-credit question is a harder task (CIFAR-10 or a
    deeper geometry), not a third MNIST credit.
-3. **§3.10 — interaction matrix.** **Status: four of four measured; closed.** The
-   breadth gate (§3.11) is closed, so `credit × substrate` re-enters on
+3. **§3.10 — interaction matrix.** **Status: four of four measured; closed —
+   3 claim-grade, 1 probe-grade.** §3.11's viability screen is closed, so
+   `credit × substrate` re-enters on
    `local_goodness`, the map's best and now claim-grade credit (its digital
    arms are measured in §3.11's follow-up). `plasticity × task`, the last row,
    needed a matched arm build; it is now measured below.
@@ -436,8 +440,12 @@ question is a harder-task credit comparison (CIFAR-10 or a deeper geometry, the
    (1 epoch, seed 57, analog: gradient 0.9554, `local_goodness` 0.9582) is in
    the probe docstring; the watchdog was 2× the measured ~82 min and the run
    finished in 68 min.
-   **Plasticity × task measured 2026-11-15 (closed): no interaction at ±1 pp,
-   at 8.9× walltime.** The build was the missing piece: a matched
+   **Plasticity × task measured 2026-11-15 (probe-grade; closed): no
+   interaction at ±1 pp, at 8.9× walltime.**
+   *Grade correction:* this arm skipped the mandatory rung-2 3-point knob
+   ladder, and its registration was committed with the result, so the row is a
+   **coordinate probe**, not a claim-grade interaction. The matrix is 3
+   claim-grade + 1 probe-grade, not 4 of a kind. The build was the missing piece: a matched
    `create_plasticity_arm` holds the reference stack fixed
    (digital/feedforward/instantaneous/null-prior/gradient/euclidean) and varies
    only plasticity; the existing `create_fast_weight_arm` also changes
@@ -834,9 +842,11 @@ question is a harder-task credit comparison (CIFAR-10 or a deeper geometry, the
     re-entered `local_goodness` design (above) needs its pre-registration. This
     PEPITA/analog ladder remains the fallback arm's viability evidence.
 
-11. **§3.11 — credit viability map (the breadth gate).** *Status: **closed
-    2026-11-15**; 8/8 error-aware credits viable, and the map's best credit
-    (`local_goodness`) is confirmed equivalent to gradient at claim grade.*
+11. **§3.11 — credit viability map (viability screen, NOT the breadth
+    exit).** *Status: **viability screen closed 2026-11-15**; 8/8 error-aware
+    credits clear chance, and the map's best credit (`local_goodness`) has a
+    claim-eligible equivalence row. **The AGENTS breadth exit is NOT met** (see
+    the conformance correction at the end of this item).*
     **Decision.** Before `credit × substrate` or any cross-credit comparison,
     every error-aware credit needs the AGENTS minimum fair chance: one legal
     cheap cell, 3 values of its primary knob, 1 seed each, 1 confirmation seed
@@ -914,6 +924,17 @@ question is a harder-task credit comparison (CIFAR-10 or a deeper geometry, the
     `local_goodness` as the credit the credit × substrate interaction re-enters
     on (§3.10), not a cross-credit ranking.
 
+    **Conformance correction (2026-11-15).** This map is a **viability
+    screen**, not the AGENTS breadth exit: it is one task family (MNIST), one
+    epoch, one seed per ladder point. AGENTS requires every error-aware credit
+    to hold a legal, above-chance **L2/n≥5** cell on **≥2 task families**
+    before a cross-credit comparison. Only `gradient` and
+    `random_projections` have a second family (Cora); the other six have MNIST
+    only. The gate is **NOT met**, and the plan's earlier "breadth gate closed"
+    wording is **retracted**. The §3.10 credit-axis rows remain claim-eligible
+    cells but are **not breadth-eligible interactions**; do not cite them as
+    credit-axis evidence until this gate closes.
+
 ---
 
 ## 4. Scoreboard (update in place; never rewrite history)
@@ -946,14 +967,14 @@ question is a harder-task credit comparison (CIFAR-10 or a deeper geometry, the
 | 2026-11-14 | node × dynamics × credit (Cora) | inst/grad 0.7568, inst/RP 0.7460, energy/grad 0.7496, energy/RP 0.7152 | 5 per cell | L2/100, same split; seeds 47–51 | interaction **−0.0236**, 95% CI [−0.0496, −0.0076], p=0.008 — **NEGATIVE**, claim-grade; 5.5× walltime | §3.10 (first interaction) |
 | 2026-11-14 | node classification (best) | Cora **0.7680 ± 0.0133** (SD), `muon` | 5 | L2/100, 500-node public split; majority 0.316; seeds 47–51 | 1.35σ above 0.75 — **met**; claim-grade cell, main effect descriptive (CI [−0.3, +2.4] pp) | §3.10 (second interaction) |
 | 2026-11-14 | node × update × geometry (Cora) | graph/adam 0.7568, graph/muon 0.7680, ff/adam 0.4756, ff/muon 0.5492 | 5 per cell | L2/100, same split; seeds 47–51 | interaction **−0.0624**, 95% CI [−0.0960, −0.0288], p=0.008 — **NEGATIVE**, claim-grade; muon helps ff +7.4 pp, graph +1.1 pp | §3.10 (second interaction) |
-| 2026-11-15 | credit viability (breadth gate) | **8/8** error-aware credits above chance; best cell `local_goodness` **0.9619** (confirm 0.9623) vs `gradient` 0.9562 (0.9456) | 1 seed/point + 1 confirmation | val_acc, 1 epoch, MNIST 10k held out; chance 0.10; seeds 57/157 | **viability met** on the credit axis; screening, not a ranking | §3.11 |
+| 2026-11-15 | credit viability (screen; AGENTS breadth exit **NOT met**) | **8/8** error-aware credits above chance; best cell `local_goodness` **0.9619** (confirm 0.9623) vs `gradient` 0.9562 (0.9456) | 1 seed/point + 1 confirmation | val_acc, 1 epoch, MNIST 10k held out; chance 0.10; seeds 57/157 | **viability met** on the credit axis; screening, not a ranking; one task family, so not the breadth exit | §3.11 (correction) |
 | 2026-11-15 | vision (local credit, claim-grade) | MNIST `local_goodness` (`readout_error`) **0.9753 ± 0.0011** vs `gradient` **0.9759 ± 0.0017** | 5 | val_acc, L2/20, 10k held out; seeds 57–61; chance 0.10 | paired **−0.0006**, 95% CI [−0.0021, +0.0011], p=0.64 — **EQUIVALENT** within ±0.01; **0.81× walltime**; first non-PEPITA credit at claim grade | §3.11 follow-up (closed) |
 | 2026-11-15 | vision (local credit cost) | `local_goodness` 349 s/seed vs `gradient` 432 s/seed | 5 each | same schedule; 55,050 params each | parity is cheaper here; no accuracy loss | §3.11 follow-up (closed) |
 | 2026-11-15 | credit cost model | `pc_alm` **~315 s** per 1-epoch cell; every other credit ≤ 41 s | 1 | walltime, MNIST L2/20 shape | a claim-grade `pc_alm` cell is ~1.8 h/seed; it converts last | §3.11 |
 | 2026-11-15 | credit × substrate (deferred) | PEPITA/analog ladder best 0.9574 at lr 3e-3; confirm 0.9539 vs gradient 0.9523 | 1 | val_acc, 1 epoch, MNIST; seed 57/157 | viable cell, **2×2 deferred** behind §3.11 | §3.10 |
 | 2026-11-15 | credit × substrate (analog arms) | gradient **0.9748 ± 0.0024**; `local_goodness` **0.9657 ± 0.0024** | 5 each | val_acc, L2/20, 10k held out; seeds 57–61; chance 0.10; analog noise 0.1 | above bar; 4,095 s for the 10 cells; digital arms 0.9759 / 0.9753 | §3.10 (closed) |
 | 2026-11-15 | credit × substrate (interaction) | `(LG−grad)_analog − (LG−grad)_digital` = **−0.0085** | 5 | same; pairs the analog arms with the §3.11 digital cells | 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 — **boundary**: no interaction at the pre-registered ±0.01 margin; direction unfavorable (LG 0.85 pp less noise-robust) | §3.10 (closed) |
-| 2026-11-15 | plasticity × task (SplitMNIST) | `null` forgetting **0.0417 ± 0.0051** vs `fast_weights` **0.0425 ± 0.0053** | 5 | 5 epochs/task, seeds 62–66; avg_forgetting; final task-0 acc 0.9970 / 0.9974 | paired null−fast **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37, dz=−0.42 — **no interaction at the ±0.01 margin**; fast weights cost **8.9×** (256 s vs 29 s per run). Pre-registered probe, not an L2 survey record | §3.10 (closed) |
+| 2026-11-15 | plasticity × task (SplitMNIST) | `null` forgetting **0.0417 ± 0.0051** vs `fast_weights` **0.0425 ± 0.0053** | 5 | 5 epochs/task, seeds 62–66; avg_forgetting; final task-0 acc 0.9970 / 0.9974 | paired null−fast **−0.0008**, 95% CI [−0.0021, +0.0006], p=0.37, dz=−0.42 — **no interaction at the ±0.01 margin**; fast weights cost **8.9×** (256 s vs 29 s per run). Pre-registered probe, **rung 2 not run**, not an L2 survey record | §3.10 (probe-grade) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -1027,6 +1048,26 @@ cross-credit conclusion and no HPO before that point (§5).
 
 ## 5. Rules for this plan
 
+- **The registration commit precedes seed 1.** The plan's precedent is a
+  standalone `prereg(...)` commit (`3b9308d2`). A margin committed with its
+  result is **post-hoc**: it may be reported, but it cannot carry a claim.
+  Both 2026-11-15 registrations fail this rule (`df9085d1`, `56473a2b`), so the
+  credit × substrate and plasticity × task results are coordinate results, not
+  error-controlled claims.
+- **A rung-3 run without rungs 0–2 is screening.** The plasticity × task arm
+  skipped the mandatory 3-point knob ladder; its verdict is recorded, but it
+  cannot close a claim-grade row (§3.10 correction).
+- **The breadth exit is AGENTS.md's, not this plan's.** Every error-aware
+  credit needs a legal, above-chance **L2/n≥5** cell on **≥2 task families**.
+  The §3.11 map (1 epoch, MNIST only) is a viability screen; it does not close
+  the gate, and no credit-axis comparison may run until it does (§3.11
+  correction).
+- **DECIDE states the error costs.** A decision without the cost of a false
+  positive and a false negative is incomplete (AGENTS step 0); both 2026-11-15
+  registrations omit them.
+- **A positive control is not the comparison arm.** The CL lane had no declared
+  bar or positive control; the `null` arm is the control for the paired
+  difference, not a gate that the lane trains.
 - **Breadth before HPO.** A low cell is a **defect probe, not an algorithm
   verdict** (AGENTS.md SEC Loop). Do not tune a credit or axis value, and do not
   rank credit families, until every declared value has a validated
@@ -1214,16 +1255,25 @@ cross-credit conclusion and no HPO before that point (§5).
   `t92_plasticity_task.json`. The probe found and fixed two latent CL-runner
   defects (positional keyword-only call sites; `fast_weights_dim` typo); lock:
   `tests/unit/core/test_cl_runner_smoke.py`. **The interaction matrix is
-  complete:** two negative interactions, two no-interaction-at-margin results,
-  zero capability wins.
-- Open work, in priority order: **no interaction remains open**. The next
-  capability question is the §3.7 stop rule's harder-task credit comparison
-  (CIFAR-10 or a deeper geometry), not another MNIST arm; then §3.8 graph/RL/
-  tabular conversions (only if a formal claim is needed); §3.6 batched
-  graph-settle (deferred); §3.1 regression claims (n=1); §3.3c's documentation
-  follow-up is **done** (AGENTS.md's positive-control criterion now reads
-  "completes and reports its bar verdict", 2026-11-15). §3.2 is **closed**:
-  capacity and readout are both excluded and the graph row is at-bar/marginal.
+  complete at mixed grade:** two negative claim-grade interactions, one
+  boundary claim-grade, one no-interaction probe (rung 2 not run); zero
+  capability wins. Because the AGENTS breadth exit is not met, none of the
+  credit-axis rows is breadth-eligible.
+- **SEC conformance correction (2026-11-15).** The last two sessions followed
+  the loop's form (decision → falsifier → triage → verify → record) but not its
+  preconditions: both registrations were committed with their results, the
+  plasticity arm skipped rung 2, the CL lane had no positive control, and
+  §3.11's "breadth gate" is a one-task-family viability screen. The record is
+  corrected in §5 and in the §3.10/§3.11 entries.
+- Open work, in priority order: **the AGENTS breadth exit** — every
+  error-aware credit needs a legal, above-chance L2/n≥5 cell on ≥2 task
+  families; six of eight have MNIST only. Until it closes, no credit-axis
+  comparison is breadth-eligible. Then §3.8 graph/RL/tabular conversions (only
+  if a formal claim is needed); §3.6 batched graph-settle (deferred); §3.1
+  regression claims (n=1); §3.3c's documentation follow-up is **done**
+  (AGENTS.md's positive-control criterion now reads "completes and reports its
+  bar verdict", 2026-11-15). §3.2 is **closed**: capacity and readout are both
+  excluded and the graph row is at-bar/marginal.
 - **Breadth before HPO** (§5; AGENTS.md SEC Loop): the measured interactions are
   fixed-coordinate implementation results. No credit is ranked against another,
   and no credit is tuned, until every declared value composes, updates, and
