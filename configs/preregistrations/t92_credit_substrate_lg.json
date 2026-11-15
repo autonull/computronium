@@ -1,0 +1,9 @@
+{
+  "claim": "On MNIST (10k held out, chance 0.10) at L2/20 on the feedforward/instantaneous/null/adam cell, the difference-in-differences (local_goodness[readout_error] - gradient)_analog - (local_goodness[readout_error] - gradient)_digital is zero within a +/-0.01 val_acc margin, paired over seeds 57-61; a CI wholly above +0.01 is a noise-robustness advantage for local_goodness, wholly below -0.01 a disadvantage",
+  "metric": "val_acc",
+  "margin": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-15",
+  "protocol": "TODO92 section 3.10 credit x substrate re-entry on local_goodness (the credit 3.11 leaves standing and the first non-PEPITA credit at claim grade). The two substrates are the digital matmul plus additive state noise (analog, noise_level 0.1), so the interaction is read as a noise response, not a distinct operator. The digital arms are already measured in experiments/t92_local_goodness_mnist.duckdb (run dbb3d765, seeds 57-61: gradient 0.9759 +/- 0.0017, local_goodness+readout_error 0.9753 +/- 0.0011). This file fixes the decision before the two new analog arms (10 cells, ~70 min CPU at ~21 s/epoch) are run into experiments/t92_credit_substrate_lg.duckdb. Decision: per seed s build d_analog(s) = LG_analog(s) - gradient_analog(s) and d_digital(s) = LG_digital(s) - gradient_digital(s); interaction(s) = d_analog(s) - d_digital(s); take the 95% bootstrap CI on the mean interaction via computronium.validation.preregistration.paired_comparison. EQUIVALENT (no interaction) when the CI lies inside [-0.01, +0.01]; POSITIVE (noise-robustness advantage) when ci_lower > +0.01; NEGATIVE when ci_upper < -0.01; otherwise report the measured boundary. Stop rule: no lr tuning, no seed sweep, no third substrate; a boundary result closes the interaction with its measured verdict."
+}

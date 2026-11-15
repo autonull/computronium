@@ -1,13 +1,13 @@
 # TODO92 — Refusal, liveness, interaction and evidence (successor to TODO91)
 
 **Status:** 2026-11-15 · §3.0a, §3.0, §3.2, §3.3, §3.3b, §3.4, §3.7, §3.9,
-§3.3c and §3.10's first two interactions are closed; §3.11's credit viability
+§3.3c and §3.10's first three interactions are closed; §3.11's credit viability
 map and its `local_goodness` vs `gradient` follow-up are closed. The gate now means **defect-free
 and above the task's chance/majority ruler**: a cell that measures at or below
 the trivial predictor is FAIL with a named `below bar` defect. The recorded
 −1536.6 RL positive control is now FAIL (§3.3c), so PASS counts no longer
 overstate learning. The measurement layer is honest:
-3,502 measurements, 93/99 pairs, 0 holes, 533 L2/planned-n≥5 measurement keys
+3,512 measurements, 93/99 pairs, 0 holes, 543 L2/planned-n≥5 measurement keys
 (2026-11-15 re-count; achieved seeds are lower). The first audit found the
 complex/adam PEPITA pair is on a **declared-refused pair**
 (`complex_substrate_real_compute`), not a live substrate interaction. §3.9 now
@@ -26,6 +26,15 @@ the node row's best measured (**0.7680 ± 0.0133**, 1.35σ above 0.75). The
 graph row's last lever is now **excluded**: sum pooling measures 0.6466 ±
 0.0248 vs mean 0.6951 ± 0.0237, paired **−0.0484**, 95% CI [−0.0601, −0.0368]
 (n=5, L1/100, seeds 42–46), so §3.2 closes the row **at-bar/marginal**.
+The third interaction — credit × substrate — is **measured and closed**
+(2026-11-15): `local_goodness` loses **0.91 pp** and `gradient` **0.11 pp** on
+the analog substrate against their digital cells, so the interaction is
+**−0.85 pp**, 95% CI [−1.08, −0.60], p=0.008 (n=5, L2/20, seeds 57–61, 68 min
+CPU). The CI straddles the pre-registered ±1 pp margin: **no interaction at the
+declared margin**, direction unfavorable — a boundary coordinate, not a
+negative claim (`experiments/t92_credit_substrate_lg.duckdb`, run `33621198`).
+**Three of four interactions are measured; only plasticity × task remains**,
+blocked on a matched arm build.
 **§3.11 is measured and its follow-up is closed (2026-11-15):**
 all **8/8 error-aware credits clear chance** at their ladder's best point on the
 MNIST anchor, so no credit is an unwired row; `local_goodness` with its declared
@@ -137,8 +146,8 @@ the worked example: four commits, two attempts, one revert, zero capability.
 
 ## 2. Measured baseline (2026-11-14)
 
-Corpus (re-measured 2026-11-15 after §3.11's follow-up): **7,520 PASS records /
-447 stores** — **3,502 distinct measurements** (the two numbers differ; see the
+Corpus (re-measured 2026-11-15 after §3.10's credit × substrate 2×2): **7,530
+PASS records / 448 stores** — **3,512 distinct measurements** (the two numbers differ; see the
 ruler note); **28/28 tasks** measured; **93/99** substrate × geometry pairs hold
 a measurement (25 refused by a named rule, 19 hold 257 measurements that cannot
 count as substrate breadth, **0 unmeasured**). The last hole,
@@ -153,8 +162,8 @@ before §3.4 (1,300 keys repeat; max 114); the §3.4 store adds 4 records and 3
 measurements. Every earlier "PASS cells" number in TODO85–91 is therefore a
 record count, inflated ~2.2× by re-runs. Breadth is quoted as distinct
 measurements from here on; "28/28 tasks" survives because it unions task ids.
-The report now prints both numbers: `7,520 PASS records = 3,502 distinct
-measurements` over 447 readable stores (2026-11-15). Pair breadth: **93/99**
+The report now prints both numbers: `7,530 PASS records = 3,512 distinct
+measurements` over 448 readable stores (2026-11-15). Pair breadth: **93/99**
 hold a
 measurement, 25 are refused by a named rule (19 of those hold 257 measurements
 that cannot count as substrate breadth until the refusal reverses; §3.9),
@@ -170,8 +179,8 @@ that cannot count as substrate breadth until the refusal reverses; §3.9),
 | Tabular | wine **1.0000** (record 0.9722) | n=3, L0, 36 held out (resolution 0.0278); majority 0.389 | > 0.90 | **screening; saturated** |
 | RL | pendulum **−135.1 ± 9.0** (SD) | n=3, L0/40 epochs, 400 episodes, mean return; chance ≈ −1200 | > −200 | **screening; lane result, credit-inert** |
 
-**Claim grade (measured 2026-11-15).** The corpus holds 3,502 distinct
-measurements, but only 533 are L2 with planned n≥5 — the code's
+**Claim grade (measured 2026-11-15).** The corpus holds 3,512 distinct
+measurements, but only 543 are L2 with planned n≥5 — the code's
 `claim_eligible` floor (`computronium/experiment/evidence/claims.py`). The
 vision n=5 L2 cells are claim-grade. The first differentiated matched
 comparison is the **digital/adam MNIST pair** (same coordinate and schedule,
@@ -331,10 +340,10 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-15: §3.2, §3.7 and §3.11's map and follow-up are
-closed. Next run is §3.10's credit × substrate 2×2 on `local_goodness`, with
-the digital arms already measured; then plasticity × task, which needs a
-matched arm build):**
+**Priority order (2026-11-15: §3.2, §3.7, §3.11's map/follow-up and §3.10's
+credit × substrate 2×2 are closed. Next ticket is plasticity × task, which
+needs a matched arm build; §3.8 conversions follow only if a formal claim is
+needed):**
 
 1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
    declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
@@ -350,7 +359,7 @@ matched arm build):**
    (~1.17×). This is a **cost-adjusted parity, not a capability win**; per the
    stop rule, the next local-credit question is a harder task (CIFAR-10 or a
    deeper geometry), not a third MNIST credit.
-3. **§3.10 — interaction matrix.** **Status: two of four measured.** The
+3. **§3.10 — interaction matrix.** **Status: three of four measured.** The
    breadth gate (§3.11) is closed, so `credit × substrate` re-enters on
    `local_goodness`, the map's best and now claim-grade credit (its digital
    arms are measured in §3.11's follow-up). `plasticity × task` stays blocked
@@ -367,10 +376,8 @@ matched arm build):**
    coordinate, settling does not help the local credit; it costs it 2.4 pp, at
    5.5× the walltime (22 s vs 4 s per 5-seed energy cell). The 1-epoch 7.5 s
    cost was setup, not
-   per-epoch settle: the whole 2×2 ran in ~41 s. Remaining interactions:
-   plasticity × task (needs a matched arm build) and credit × substrate (rung 0
-   passed; the first potential non-standard win). One pre-registered 2×2 at
-   a time. **Update × geometry cost measured** (1 epoch, seed 42, Cora anchor):
+   per-epoch settle: the whole 2×2 ran in ~41 s. Remaining then: credit ×
+   substrate (rung 0 passed). One pre-registered 2×2 at a time. **Update × geometry cost measured** (1 epoch, seed 42, Cora anchor):
    graph+muon 0.47 s/epoch, feedforward+adam/muon 0.01–0.02 s/epoch, so the
    pre-registered `(muon−adam)_graph − (muon−adam)_feedforward` 2×2 at L2/100 ×
    5 seeds is ~4 min. **Measured 2026-11-14** (record `t92_update_geometry_cora`,
@@ -383,13 +390,10 @@ matched arm build):**
    orthogonalized update supplies on a flat stack — a hypothesis, not a
    mechanism claim. The graph/muon cell is the node row's best measured:
    **0.7680 ± 0.0133**, 1.35σ above 0.75 — a claim-grade **cell**, not a
-   pre-registered main-effect claim. Remaining: plasticity × task and credit ×
-   substrate. Plasticity × task needs a retention reader: `core/continual` has
-   the runner, but `evaluate_cell` returns a single-task metric, so the probe
-   must read retention from that runner — a task build, not a survey cell.
-   Credit × substrate is the first experiment that can produce a
-   non-standard **win** at matched cost; it needs a live, non-refused
-   substrate (analog, ternary, sparse, memristive) on feedforward geometry.
+   pre-registered main-effect claim.
+   Credit × substrate was the candidate experiment for a non-standard **win**
+   at matched cost; it needed a live, non-refused substrate (analog, ternary,
+   sparse, memristive) on feedforward geometry.
    **Measured 2026-11-15:** rung 0 passes on all seven live substrates (one
    step, both credits, same initial weights), so the pair is legal everywhere;
    the pilot measures digital/analog gradient 0.9548/0.9525 and PEPITA
@@ -403,17 +407,50 @@ matched arm build):**
    `(LG−grad)_analog − (LG−grad)_digital`. The digital pair is already
    measured (§3.11 follow-up: gradient 0.9759, `local_goodness` 0.9753), so
    only the two analog arms (10 cells) are new; at ~20–25 s/epoch that is
-   ~70 min. It needs its pre-registration before the run, and the interaction
-   is read as **noise robustness** (the substrates are the digital matmul plus
+   ~70 min. It required its pre-registration before the run, and the
+   interaction is read as **noise robustness** (the substrates are the digital matmul plus
    additive state noise), not a distinct operator. PEPITA is the fallback arm
    if `local_goodness` cannot compose on analog.
+   **Measured 2026-11-15 (closed): boundary — no interaction at ±1 pp.**
+   Pre-registered in `configs/preregistrations/t92_credit_substrate_lg.json`
+   before the run; `scripts/probes/t92_credit_substrate_lg.py` ran the two
+   analog arms (10 cells, seeds 57–61, L2/20, CPU, 4095 s) into
+   `experiments/t92_credit_substrate_lg.duckdb` (run `33621198`, 10 PASS) and
+   paired them with the digital §3.11 cells. Analog: gradient **0.9748 ±
+   0.0024**, `local_goodness` **0.9657 ± 0.0024**; digital: **0.9759 ± 0.0017**
+   and **0.9753 ± 0.0011**. Difference-in-differences **−0.0085**, 95% CI
+   [−0.0108, −0.0060], p=0.008, dz=−2.73. The CI straddles the pre-registered
+   ±0.01 margin (upper −0.0060 is inside), so the verdict is **boundary**: no
+   interaction at the declared margin, but the direction says
+   `local_goodness` is **0.85 pp less noise-robust** than gradient. Stop rule
+   applied: no lr tuning, no seed sweep, no third substrate. Rung-1 pilot
+   (1 epoch, seed 57, analog: gradient 0.9554, `local_goodness` 0.9582) is in
+   the probe docstring; the watchdog was 2× the measured ~82 min and the run
+   finished in 68 min.
+   **Remaining: plasticity × task only** — the unmeasured interaction. It
+   needs a retention reader: `core/continual` has the runner, but
+   `evaluate_cell` returns a single-task metric, so the probe must read
+   retention from that runner — a task build, not a survey cell.
+   **Next build spec (unblocks the last interaction).** Add matched arm
+   factories that differ only in `plasticity`: the same
+   digital/feedforward/instantaneous/null/gradient/euclidean joint stack with
+   `fast_weights` vs `null`. The current `create_fast_weight_arm` also changes
+   dynamics, credit and update, so it is a four-axis contrast, not a
+   plasticity contrast. The probe reads retention from `ContinualJointSystem`
+   (accuracy on task 1 after task 2) at L2, n≥5, one seed-paired schedule;
+   rung 1 (one run per arm, both above chance on the final task) precedes the
+   pre-registered retention difference, decided with the same
+   `EquivalenceRegistration` shape as §3.7/§3.10. Report walltime beside it:
+   the psi state makes the fast-weight arm slower, so a retention gain at high
+   cost is not a win.
    **Breadth gate before the next comparison — now run and closed (§3.11).**
    Each credit got the AGENTS viability gate: 3 values of its primary knob
    (lr, γ, `readout_error`), 1 seed each plus one confirmation seed at the best
    point, one cheap task, label channel declared. The map is §3.11; it is the
    input to this section, not a claim.
-   **Both interactions are fixed-coordinate results, not family rankings.**
-   They say what these implementations do at one schedule; HPO may move them.
+   **All three interactions are fixed-coordinate results, not family
+   rankings.** They say what these implementations do at one schedule; HPO may
+   move them.
    Do not read them as "settling is bad" or "muon is for flat stacks" in
    general (§5; AGENTS.md SEC Loop).
 4. ~~**§3.3c — gate metric bar.**~~ — **closed 2026-11-14.** Every task
@@ -877,7 +914,7 @@ matched arm build):**
 | 2026-11-14 | RL (credit axis) | `gradient` = `homeostatic` = −1536.608102 | 2 credits | 1 epoch, seed 42; 15 s/cell | error-aware credits **refused** on RL; only `error_blind` rows compose | §3.3b (closed) |
 | 2026-11-14 | RL | pendulum −135.1 ± 9.0 (SD) | 3 | 400 episodes (40×10), mean return; chance ≈ −1200 | CI [−144.9, −127.2] vs −200; **met** | §3.3 (closed) |
 | 2026-11-14 | corpus breadth | 3,437 measurements (7,450 records) | 443 stores | distinct `measurement_key`; 93/99 pairs, **0 holes** | §3.4 closes the last hole | §3.4 (closed) |
-| 2026-11-15 | corpus breadth | 3,502 measurements (7,520 records) | 447 stores | distinct `measurement_key`; 93/99 pairs, 0 holes; 533 L2/planned-n≥5 keys | re-measured after §3.11 follow-up | §2 |
+| 2026-11-15 | corpus breadth | 3,512 measurements (7,530 records) | 448 stores | distinct `measurement_key`; 93/99 pairs, 0 holes; 543 L2/planned-n≥5 keys | re-measured after §3.10's 2×2 | §2 |
 | 2026-11-14 | neuromorphic × graph (Cora) | 0.1540 / 0.1460 / 0.1300 | 1 seed each | 500-node public split; majority 0.316; L0/1 epoch | **coverage, not a claim** (below majority; no replication) | §3.4 (closed) |
 | 2026-11-14 | axis liveness | 57 declared = 6 reference + 48 live + 1 refused + 2 unavailable | 57 values | one seeded `train_step`, post-step geometry fingerprint (digits 8×8; Cora for `graph`) | **0 undeclared inert**; `complex` refused, `rule_state`/`substrate_coupled` unavailable | §3.9 (closed) |
 | 2026-11-15 | credit × substrate (rung 0) | 7/7 non-digital available substrates compose; PEPITA live on each | 1 step each | post-step parameter fingerprint vs digital; digits shape | **interaction unblocked**; substrates are digital matmul + additive noise, so the arm is a noise-robustness test | §3.10 |
@@ -895,6 +932,8 @@ matched arm build):**
 | 2026-11-15 | vision (local credit cost) | `local_goodness` 349 s/seed vs `gradient` 432 s/seed | 5 each | same schedule; 55,050 params each | parity is cheaper here; no accuracy loss | §3.11 follow-up (closed) |
 | 2026-11-15 | credit cost model | `pc_alm` **~315 s** per 1-epoch cell; every other credit ≤ 41 s | 1 | walltime, MNIST L2/20 shape | a claim-grade `pc_alm` cell is ~1.8 h/seed; it converts last | §3.11 |
 | 2026-11-15 | credit × substrate (deferred) | PEPITA/analog ladder best 0.9574 at lr 3e-3; confirm 0.9539 vs gradient 0.9523 | 1 | val_acc, 1 epoch, MNIST; seed 57/157 | viable cell, **2×2 deferred** behind §3.11 | §3.10 |
+| 2026-11-15 | credit × substrate (analog arms) | gradient **0.9748 ± 0.0024**; `local_goodness` **0.9657 ± 0.0024** | 5 each | val_acc, L2/20, 10k held out; seeds 57–61; chance 0.10; analog noise 0.1 | above bar; 4,095 s for the 10 cells; digital arms 0.9759 / 0.9753 | §3.10 (closed) |
+| 2026-11-15 | credit × substrate (interaction) | `(LG−grad)_analog − (LG−grad)_digital` = **−0.0085** | 5 | same; pairs the analog arms with the §3.11 digital cells | 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 — **boundary**: no interaction at the pre-registered ±0.01 margin; direction unfavorable (LG 0.85 pp less noise-robust) | §3.10 (closed) |
 
 One row per domain per measurement; a row is superseded, never edited.
 Earlier "met" rows are **screening verdicts**; the formal claim bar is L2/n≥5
@@ -921,6 +960,7 @@ their cell measured below it; the claim-grade rows are above their bars.
 | 2026-11-14 | Cora dynamics × credit: `(RP−grad)_energy − (RP−grad)_inst` | 5 | val_acc, 500-node public split; majority 0.316; L2/100 | 96,391 params; 41 s for the 2×2 (energy 5.5× instant) | −0.0236, 95% CI [−0.0496, −0.0076], p=0.008 | claim-grade **negative interaction**; §3.10 |
 | 2026-11-14 | Cora graph: muon vs adam (main effect) | 5 | val_acc, same split; L2/100 | 96,391 params; 5.1 s vs 3.8 s per 5-seed cell | +0.0112, 95% CI [−0.0028, +0.0244], p=0.17 | descriptive null; not pre-registered |
 | 2026-11-14 | Cora update × geometry: `(muon−adam)_graph − (muon−adam)_ff` | 5 | val_acc, same split; L2/100 | 96,391 (graph) vs ff params; 15 s for the 2×2 | −0.0624, 95% CI [−0.0960, −0.0288], p=0.008 | claim-grade **negative interaction**; §3.10 |
+| 2026-11-15 | MNIST credit × substrate: `(LG−grad)_analog − (LG−grad)_digital` | 5 | val_acc, 10k held out; L2/20; seeds 57–61; analog noise 0.1 | 55,050 params; 4,095 s for the 10 analog cells | −0.0085, 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73 | **boundary**: CI does not lie inside ±0.01, but no interaction at the declared margin; direction unfavorable |
 
 ### Refusal/liveness ledger (axis value vs reference, same seed)
 
@@ -931,7 +971,7 @@ their cell measured below it; the claim-grade rows are above their bars.
 | 2026-11-14 | plasticity | `substrate_coupled` | `null` (joint) | post-step geometry bit-identical across 12 declared completions; primitive is a documented no-op | **inert** → unavailable; `_UNAVAILABLE` reason | a substrate carries a separate state σ through the joint transition and the standard step reads it |
 | 2026-11-14 | all axes | 51 non-reference values | canonical stack | 48 live, 1 refused, 2 unavailable, 0 undeclared inert | audit closed; one step is a liveness ruler, not a claim | re-run `scripts/probes/t92_axis_liveness.py` after a declaration change; a fired trigger is `stale-unavailable` |
 
-**Claim-shaped keys.** 3,502 distinct measurements, but only 533 measurement
+**Claim-shaped keys.** 3,512 distinct measurements, but only 543 measurement
 keys are L2 with planned n≥5; the achieved-seed count is lower. Breadth is a
 floor, not a claim count. The ledger is the claim count.
 
@@ -946,11 +986,11 @@ claim-grade:
 
 | Axis | Liveness (2026-11-14) | Claim-grade evidence | Gap |
 |---|---|---|---|
-| Substrate | 8/9 live; `complex` refused | digital only | no live non-digital matched comparison |
+| Substrate | 8/9 live; `complex` refused | digital + analog | one live non-digital matched comparison (`analog` × credit, boundary at ±1 pp); no non-digital substrate clears a domain bar |
 | Geometry | 11/11 live | vision/graph/node screening | graph marginal; node n=3 |
 | Dynamics | 8/8 live | none | best cells are instantaneous; no matched settling claim |
 | Plasticity | 5/7 live; `rule_state`, `substrate_coupled` unavailable | none | no matched plasticity × task claim |
-| Credit | 10/10 live | PEPITA and `local_goodness` each **confirmed equivalent at one MNIST coordinate**; **8/8 error-aware credits viable at rung 2** (§3.11) | no claim-grade **win** and no harder-task parity for any credit; `local_goodness` is now claim-grade |
+| Credit | 10/10 live | PEPITA and `local_goodness` each **confirmed equivalent at one MNIST coordinate**; **8/8 error-aware credits viable at rung 2** (§3.11); one claim-grade interaction (§3.10, boundary) | no claim-grade **win** and no harder-task parity for any credit; `local_goodness` is now claim-grade |
 | Update | 12/12 live | none | no matched update × geometry claim |
 
 "Liveness" is the §3.9 one-step parameter fingerprint, not a PASS record or a
@@ -1135,13 +1175,22 @@ cross-credit conclusion and no HPO before that point (§5).
   is a cost-adjusted parity and the first non-PEPITA credit at claim grade, not
   a win and not a ranking. Stop rule applied: no further lr tuning or seeds at
   this coordinate; a harder task is the next local-credit question.
-- Open work, in priority order: **§3.10's credit × substrate 2×2** on
-  `local_goodness` vs gradient × digital/analog (digital arms already measured
-  above; pre-register, then ~70 min for the 10 analog cells); then
-  **plasticity × task** (blocked on a matched arm build; the CL runner's arms
-  differ on four axes, stands at rung 0); §3.8 graph/RL/tabular conversions
-  (only if a formal claim is needed); §3.6 batched graph-settle (deferred);
-  §3.1 regression claims (n=1); §3.3c's documentation follow-up is **done**
+- §3.10's credit × substrate 2×2 is **closed** (2026-11-15) as a **boundary**:
+  pre-registered in `t92_credit_substrate_lg.json` before the run, the analog
+  arms (10 cells, seeds 57–61, L2/20, 4,095 s) pair with the §3.11 digital
+  cells to give interaction `(LG−grad)_analog − (LG−grad)_digital` =
+  **−0.0085**, 95% CI [−0.0108, −0.0060], p=0.008, dz=−2.73. The CI straddles
+  the ±0.01 margin, so there is **no interaction at the declared margin**; the
+  direction is unfavorable (`local_goodness` loses 0.91 pp on analog vs
+  gradient's 0.11 pp). Records:
+  `experiments/t92_credit_substrate_lg.duckdb` (run `33621198`, 10 PASS). Stop
+  rule applied: no lr tuning, no seed sweep, no third substrate.
+- Open work, in priority order: **plasticity × task** — the only unmeasured
+  interaction; it needs a matched arm build (the CL runner's arms differ on
+  four axes, stands at rung 0; build spec in §3.10); then §3.8 graph/RL/tabular
+  conversions (only if
+  a formal claim is needed); §3.6 batched graph-settle (deferred); §3.1
+  regression claims (n=1); §3.3c's documentation follow-up is **done**
   (AGENTS.md's positive-control criterion now reads "completes and reports its
   bar verdict", 2026-11-15). §3.2 is **closed**: capacity and readout are both
   excluded and the graph row is at-bar/marginal.
