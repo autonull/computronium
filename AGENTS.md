@@ -176,10 +176,10 @@
 
 0. **DECIDE** — Write the decision, the two actions, the error costs, and the stop rule. If the decision is "X beats Y", it is competitiveness and needs the breadth exit; if it is "is this wired?", it is validation.
 1. **FALSIFY CHEAPLY** — Start at the lowest rung that can decide. Climb only while ambiguous. Never run a more expensive rung to confirm a cheaper definitive result.
-2. **TRIAGE** — Classify: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so.
+2. **TRIAGE** — Classify: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so. For run-level symptoms (task count, L1/L2 cell count, worker crashes, dedup), use `comp report` / `comp coverage` and the Defect Patterns / Common Fixes tables.
 3. **FIX** — Only a named defect. Correctness/infrastructure, never a knob sweep. If the cause is not found before the rung watchdog, file the symptom with a failing test and stop.
 4. **VERIFY** — The fix must move the cell or the failing test. Moving neither is not a fix.
-5. **RECORD** — Commit the decision, rung reached, stop reason, box, and cost. `unconcluded` is allowed only before the viability gate; after it, a negative is a coordinate result or a refusal.
+5. **RECORD** — Commit the decision, rung reached, stop reason, box, and cost; write the measured number where the mechanism lives (constraint comment, identity card, lock docstring), not only in the log. `unconcluded` is allowed only before the viability gate; after it, a negative is a coordinate result or a refusal.
 
 **The rung ladder (cheapest falsifier first).**
 
@@ -187,28 +187,30 @@
 |---|---|---|---|---|
 | 0 | Is it wired? | static checks + 1 step: positive control, shapes, label channel, non-zero update, compatibility | defect → triage; clean → rung 1 | seconds |
 | 1 | Does it train? | 1 epoch / 1 seed | failure → defect; above chance → rung 2 | measured pilot × 1 |
-| 2 | Is it viable across its knob? | 3-point ladder, 1 seed each | one point above chance → coordinate; all fail → defect/refusal | measured pilot × 3 |
+| 2 | Is it viable across its knob? | 3-point ladder, 1 seed each + 1 confirmation seed at the best point | best point above chance → **provisional** coordinate; all fail → defect/refusal | measured pilot × 4 |
 | 3 | Is the effect real? | pre-registered `n_max`, paired CI | CI decision or `n_max` → claim/coordinate | measured per-seed × n |
 | 4 | Is it competitive? | matched comparison at the breadth exit | pre-registered threshold → competitive verdict | budgeted HPO |
 
-Rung 3 is the first rung that may carry a claim. Rungs 0–2 are screening; they can stop coarsely without error inflation. Rung 4 is competitiveness and requires the breadth exit.
+Rungs 0–2 are **mandatory** for a new rule: they are the minimum fair chance, not optional HPO. Rung 3 is the first rung that may carry a claim; it reports **equivalent / superior / inferior / inconclusive**, and `inconclusive` at `n_max` is a coordinate result, not a claim. Rung 4 is competitiveness and requires the breadth exit. VoI decides promotion beyond rung 2, not whether a new rule gets rungs 0–2.
+
+Repo example for a screening cell: `uv run python -m computronium.experiment.survey_cli 0.1 --mode learn --policy tpe --device cuda --tasks <task> --fidelity L0 --axes '<focused_json>' --epochs 1 --n-seeds 1`, or a focused probe for a single-cell check. The cell's `measurement_key` is its identity.
 
 **Stopping rule.** Promote only while the decision is ambiguous and `P(next rung changes the decision) × cost of a wrong decision > cost of the rung`. The rung ladder is the cheap approximation of that rule. A definitive verdict (defect, refusal, coordinate, or claim) stops the loop; otherwise promote. Record the stop reason: `verdict`, `watchdog`, `superseded`, or `n_max` — never the minutes.
 
-**Watchdog, not timebox.** Rung cost is `fixed startup + pilot × rung size`; kill a rung 0–3 at `2 ×` that measured cost. A rung that exceeds its watchdog is a cost-model defect or a bad cell: kill, record, re-price. Rung 4 uses the pre-registered HPO budget, not a per-run clock. Do not use a global 5/10/25-minute budget as the primary control; the watchdog is a safety cap, not the methodology.
+**Watchdog, not timebox.** Rung cost is `fixed startup + pilot × rung size`; kill a rung 0–3 at `2 ×` that measured cost. A cell with no pilot uses the environment's 5-min foreground cap as a **bootstrap cap**: measure that first run, then set the 2× watchdog. A rung that exceeds its watchdog is a cost-model defect or a bad cell: kill, record, re-price. Rung 4 uses the pre-registered HPO budget, not a per-run clock. Do not use a global 5/10/25-minute budget as the primary control; the watchdog is a safety cap, not the methodology. A long run (rung 3+) needs a named claim, a box, a pre-registered `n_max`, and a stop rule; otherwise it is not a run, it is a budget leak.
 
 **Error control.** Screening (rungs 0–2) may stop freely. A claim (rung 3) must use either a pre-registered `n_max` with a fixed-n CI and no peeking, or a sequential/always-valid confidence sequence. Never stop a fixed-n comparison early and report its CI as if it were sequential. Until a confidence-sequence helper exists, `paired_comparison` is fixed-n: fix `n_max` before the run and do not peek.
 
 **The viability gate (minimum fair chance).** Before any cross-credit comparison, each rule gets:
 
 - one legal completion on one cheap task;
-- a **3-point ladder** on its primary knob (lr, γ, `readout_error`, settle steps), 1 seed each;
+- a **3-point ladder** on its primary knob (lr, γ, `readout_error`, settle steps), 1 seed each, plus one confirmation seed at the best point;
 - its label channel declared (`error_blind`, `readout_error`, ...);
 - a non-zero update and above-chance val_acc at the best ladder point
   (**error-blind credits are exempt**: chance is their contract; viability is
   a non-zero update, not accuracy).
 
-No point above chance → triage as defect or refusal, not an algorithm verdict. Best point above chance → that is the coordinate for a matched comparison. The ladder is **not** competitiveness HPO: 3 points, 1 seed, one cell, recorded as a range, never as a claim.
+No point above chance → triage as defect or refusal, not an algorithm verdict. Best point above chance, confirmed on one more seed → that is the coordinate for a matched comparison. The ladder is **not** competitiveness HPO: 3 points, 2 seeds at the best point, one cell, recorded as a range, never as a claim.
 
 **Defect triage (before a verdict).**
 
@@ -228,7 +230,7 @@ Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: tr
 
 1. **Decision first.** No run without a stated decision and stop rule.
 2. **Cheapest falsifier first.** A cheap rung that decides stops the climb.
-3. **Stop when decided.** Evidence, not wall-clock, ends a rung; sequential tests for claims.
+3. **Stop when decided.** Evidence, not wall-clock, ends a rung; claims use sequential or fixed-n-with-no-peeking error control.
 4. **Every negative has a verdict.** Defect with a test, refusal with a trigger, or coordinate result with a box.
 5. **The box is part of the result.** No point estimate without its scope.
 6. **Breadth before optimization.** Map viability first; HPO is successive halving/Hyperband under a total budget, not a per-run clock.

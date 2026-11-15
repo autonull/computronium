@@ -346,9 +346,10 @@ still needs a matched interaction or claim (§3.7, §3.10).
    gradient pair, on feedforward geometry where PEPITA is legal.
    **Breadth gate before the next comparison.** Each credit gets the AGENTS
    viability gate: 3 values of its primary knob (lr, γ, `readout_error`), 1
-   seed, one cheap task, label channel declared. A credit with no above-chance
-   point is triaged as defect/refusal, not ranked; the resulting map is the
-   input to §3.10, not a claim.
+   seed each plus one confirmation seed at the best point, one cheap task,
+   label channel declared. A credit with no above-chance point is triaged as
+   defect/refusal, not ranked; the resulting map is the input to §3.10, not a
+   claim.
    **Both interactions are fixed-coordinate results, not family rankings.**
    They say what these implementations do at one schedule; HPO may move them.
    Do not read them as "settling is bad" or "muon is for flat stacks" in
