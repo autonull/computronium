@@ -705,8 +705,10 @@ cross-credit conclusion and no HPO before that point (§5).
   breadth is established — that is also when compute and development assistance
   are worth seeking. A cross-credit comparison before that point is not
   evidence. AGENTS.md's SEC revision (2026-11-14) defines the 3-point
-  viability ladder, the defect-triage verdicts, and the breadth exit; this
-  rule is the plan-specific corollary.
+  viability ladder, the defect-triage verdicts, the breadth exit, and short,
+  adjustable timeboxes (default validate 5 / triage 5 / fix 10 / verify 2
+  minutes; shrink for cheap cells, declare the budget); this rule is the
+  plan-specific corollary.
 - **One plan, rolling.** No TODO93 per phase. Tickets enter §3 from a measured
   failure or a missing row, and leave when the number moves.
 - **A ticket closes on a number or a named verdict**, never on a defect count.

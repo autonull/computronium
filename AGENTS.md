@@ -171,24 +171,26 @@
 
 **Scope (2026-11-14 revision): breadth → viability → competitiveness HPO.** Do not tune a rule for performance, or rank it against another, until it passes the viability gate below. An under-tuned cross-credit comparison is not evidence; a low cell is a defect probe first. The output of this phase is a **viability map**, not a leaderboard.
 
-**The Cycle (≤45 min; defect fixes excluded):**
+**The Cycle (default ≤25 min; shrink it, never silently extend it):**
+
+Timeboxes are ceilings, not targets. Set a shorter budget for cheap cells (a Cora 1-epoch cell is seconds) and state it in the session log. Extending the default needs a named reason and a stop rule; a validation run never exceeds 30 min — beyond that it is a budgeted experiment, not SEC.
 
 0. **SCOPE** — Name the claim and the box: one rule/axis, one task, one fidelity, the knob values you will allow. If the claim is "X is worse than Y", stop: that is a competitiveness claim and needs the breadth exit first.
 
-1. **VALIDATE** (≤15 min) — Run the smallest cell that can falsify the claim: 1 seed/1 epoch, or the 3-point viability ladder. Example:
+1. **VALIDATE** (default ≤5 min) — Run the smallest cell that can falsify the claim: 1 seed/1 epoch, or the 3-point viability ladder. Example:
    ```bash
    uv run python -m computronium.experiment.survey_cli 0.1 \
      --mode learn --policy tpe --device cuda \
      --tasks <task> --fidelity L0 \
      --axes '<focused_json>' --epochs 3 --n-seeds 1
    ```
-   Check: positive control, act/param counts, non-zero pseudo-gradient, label channel, compatibility.
+   Check: positive control, act/param counts, non-zero pseudo-gradient, label channel, compatibility. If one epoch does not fit 5 min, the claim is too expensive for SEC: write a budgeted run with a stop rule.
 
-2. **TRIAGE** (≤10 min) — Classify with the Defect Triage table: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so.
+2. **TRIAGE** (default ≤5 min) — Classify with the Defect Triage table: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so.
 
-3. **FIX** (≤15 min) — Only for a named defect. Correctness/infrastructure, never a knob sweep. If the cause is not identified in 15 min, file the symptom with a failing test and stop.
+3. **FIX** (default ≤10 min) — Only for a named defect. Correctness/infrastructure, never a knob sweep. If the cause is not identified in 10 min, file the symptom with a failing test and stop.
 
-4. **VERIFY** (≤5 min) — Re-run the same cell; the fix must move the cell or its failing test. A fix that moves neither is not a fix.
+4. **VERIFY** (default ≤2 min) — Re-run the same cell; the fix must move the cell or its failing test. A fix that moves neither is not a fix.
 
 5. **RECORD + COMMIT** — Commit the verdict, the box, the cost, and the next action. `unconcluded` is allowed only before the viability ladder; after it, a negative is a coordinate result or a refusal.
 
@@ -203,7 +205,7 @@
 
 No point above chance → triage as defect or refusal, not an algorithm verdict. Best point above chance → that is the coordinate for a matched comparison. The ladder is **not** competitiveness HPO: 3 points, 1 seed, one cell, recorded as a range, never as a claim.
 
-**Budget rule.** Validate at 1 seed/1 epoch before any multi-seed run. The viability ladder is cheap (minutes on a small task, seconds on Cora), so limited compute is not a reason to skip it. Timebox a defect hunt to 15 minutes; if the cause is not identified, file the symptom with a failing test and stop. A long run needs a named claim, a box, and a stop rule.
+**Budget rule.** Validate at 1 seed/1 epoch before any multi-seed run. The viability ladder is cheap (minutes on a small task, seconds on Cora), so limited compute is not a reason to skip it. Default timeboxes: validate 5, triage 5, fix 10, verify 2. A cheap-cell profile is validate 2, triage 2, fix 5, verify 1 (10 min total). Shrink them for cheap cells and state the budget in the log; extend only with a named reason and a stop rule. A long run needs a named claim, a box, and a stop rule.
 
 **Defect triage (before a verdict).**
 
@@ -435,7 +437,8 @@ supports.
 
 **Never:**
 - Accept "this algorithm doesn't work" without the viability ladder and triage
-- Run experiments >15 min without a hypothesis
+- Run a validation cell past its declared timebox without a stop rule
+- Run any experiment >15 min without a named claim, box, and stop rule
 - Skip the positive control gate
 - Commit without targeted tests passing
 - Use `ProcessPoolExecutor` on single GPU
