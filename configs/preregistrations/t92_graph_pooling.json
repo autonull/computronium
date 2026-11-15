@@ -1,0 +1,9 @@
+{
+  "claim": "On PROTEINS (223 held out, majority 0.5964), a sum-pooled graph readout beats the mean-pooled readout by at least 0.01 val_acc at L1/100 epochs, paired over seeds 42-46",
+  "metric": "val_acc",
+  "threshold": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-14",
+  "protocol": "TODO92 §3.2: the graph row is marginal (0.7013 +- 0.0164, 0.08 sigma above 0.70); capacity was excluded, so the last graph lever is the readout. Treatment = geometry.pooling 'sum'; control = 'mean' (the default); same coordinate, schedule, seeds. Decided by computronium.validation.preregistration.paired_comparison(...).passes(registration). Committed before any treatment run. Stop rule: if it misses the threshold, close the graph row as at-bar/marginal and run no third capacity/readout arm."
+}
