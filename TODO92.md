@@ -309,7 +309,8 @@ still needs a matched interaction or claim (§3.7, §3.10).
 
 ## 3. Gap list (ordered by what unblocks a number)
 
-**Priority order (2026-11-14, after the first refusal finding):**
+**Priority order (2026-11-15: §3.2 closed; §3.10's last two interactions are
+the open work):**
 
 1. ~~**§3.9 — axis refusal/liveness audit.**~~ — **closed 2026-11-14.** 57
    declared values = 6 canonical references + 48 live + 1 refused (`complex`) +
@@ -325,7 +326,12 @@ still needs a matched interaction or claim (§3.7, §3.10).
    (~1.17×). This is a **cost-adjusted parity, not a capability win**; per the
    stop rule, the next local-credit question is a harder task (CIFAR-10 or a
    deeper geometry), not a third MNIST credit.
-3. **§3.10 — interaction matrix.** First two interactions **measured
+3. **§3.10 — interaction matrix.** **Status: two of four measured; the last
+   two are the open tickets.** `plasticity × task` is blocked on a matched arm
+   build (the CL runner's arms differ on four axes). `credit × substrate`
+   passed rung 0 on 2026-11-15; `analog` is the candidate and the next step is
+   its pre-registration, viability ladder, and the ~2.4 h L2/20 n=5 2×2.
+   First two interactions **measured
    2026-11-14**. Dynamics × credit on Cora. PEPITA is refused on graph
    (`local_contrastive_geometry` is feedforward-only), so the graph pair is
    `random_projections` (error-aware layered FA) vs `gradient`. 2×2, seeds
@@ -338,9 +344,8 @@ still needs a matched interaction or claim (§3.7, §3.10).
    5.5× the walltime (22 s vs 4 s per 5-seed energy cell). The 1-epoch 7.5 s
    cost was setup, not
    per-epoch settle: the whole 2×2 ran in ~41 s. Remaining interactions:
-   **update × geometry** (cheapest; no claim-grade evidence), plasticity × task
-   (needs a memory/continual task), credit × substrate on a live non-refused
-   substrate (the first potential non-standard win). One pre-registered 2×2 at
+   plasticity × task (needs a matched arm build) and credit × substrate (rung 0
+   passed; the first potential non-standard win). One pre-registered 2×2 at
    a time. **Update × geometry cost measured** (1 epoch, seed 42, Cora anchor):
    graph+muon 0.47 s/epoch, feedforward+adam/muon 0.01–0.02 s/epoch, so the
    pre-registered `(muon−adam)_graph − (muon−adam)_feedforward` 2×2 at L2/100 ×
