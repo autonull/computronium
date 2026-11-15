@@ -165,44 +165,59 @@
 ## Development Skill: Suspicious Experiment Cycle (SEC)
 
 **Name:** SEC — Suspicious Experiment Cycle  
-**Principle:** *Be skeptical of low-performing experiments; this could indicate an implementation defect to fix. Be suspicious of any excluded possibilities that may actually be possible.*
+**Principle:** *Be skeptical of low-performing experiments; this could indicate an implementation defect to fix. But a defect is a claim that needs a named mechanism and a test — otherwise a low cell is a coordinate result, not an algorithm verdict. Be suspicious of any excluded possibilities that may actually be possible.*
 
-**When to use:** Any time you're validating a system with multiple algorithm/architecture combinations and need to distinguish "this doesn't work" from "this is broken."
+**When to use:** Any time you validate a system with multiple algorithm/architecture combinations and need to distinguish "this doesn't work" from "this is broken", or "this is unoptimized" from "this is a result". SEC is a **validation** loop, not a competitiveness loop.
 
-**The Cycle (≤30 min total):**
+**Scope (2026-11-14 revision): breadth → viability → competitiveness HPO.** Do not tune a rule for performance, or rank it against another, until it passes the viability gate below. An under-tuned cross-credit comparison is not evidence; a low cell is a defect probe first. The output of this phase is a **viability map**, not a leaderboard.
 
-1. **RUN** (≤15 min) — `survey_cli` with focused axes, single fidelity, few seeds
+**The Cycle (≤45 min; defect fixes excluded):**
+
+0. **SCOPE** — Name the claim and the box: one rule/axis, one task, one fidelity, the knob values you will allow. If the claim is "X is worse than Y", stop: that is a competitiveness claim and needs the breadth exit first.
+
+1. **VALIDATE** (≤15 min) — Run the smallest cell that can falsify the claim: 1 seed/1 epoch, or the 3-point viability ladder. Example:
    ```bash
    uv run python -m computronium.experiment.survey_cli 0.1 \
      --mode learn --policy tpe --device cuda \
      --tasks <task> --fidelity L0 \
      --axes '<focused_json>' --epochs 3 --n-seeds 1
    ```
+   Check: positive control, act/param counts, non-zero pseudo-gradient, label channel, compatibility.
 
-2. **ANALYZE** (30s) — `comp report`, `comp coverage`, check for:
-   - val_acc ≈ chance (forward/credit broken)
-   - val_acc drops over epochs (optimizer/gradient issue)
-   - "free settle telemetry failed" (geometry not layered)
-   - Positive control FAIL (wrong geometry_hint)
-   - NaN/Inf loss (energy clamp/init)
-   - All credits fail on one geometry (missing dispatch)
-   - Only one task appears in results (dedup key missing task_id)
-   - L1/L2 measure 0 cells (budget sizing wrong)
-   - Worker crashes / timeouts (process pool + single GPU)
+2. **TRIAGE** (≤10 min) — Classify with the Defect Triage table: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so.
 
-3. **FIX** (≤15 min) — Infrastructure only; suspect low performance = defect
-   - Check activation shapes match param shapes
-   - Check credit pseudo-gradients are non-zero
-   - Check geometry compatibility matrix
-   - Check device placement (CPU vs CUDA)
-   - Check for silent `.to(cpu)` calls
-   - Check dedup key includes `task_id`
-   - Check wave pricing uses measured per-seed cost × seed plan
-   - Check positive control pinned to L0/60s cap
+3. **FIX** (≤15 min) — Only for a named defect. Correctness/infrastructure, never a knob sweep. If the cause is not identified in 15 min, file the symptom with a failing test and stop.
 
-4. **VERIFY** (0.02h) — Quick re-run same config
+4. **VERIFY** (≤5 min) — Re-run the same cell; the fix must move the cell or its failing test. A fix that moves neither is not a fix.
 
-5. **COMMIT + CLOSE** — Commit the fix. A ticket's evidence is its commit message plus the measured number written where the mechanism lives (constraint comment, identity card, lock docstring). The TODO holds open work only: a closed ticket leaves the queue and does not accumulate a session log.
+5. **RECORD + COMMIT** — Commit the verdict, the box, the cost, and the next action. `unconcluded` is allowed only before the viability ladder; after it, a negative is a coordinate result or a refusal.
+
+**The viability gate (minimum fair chance).** Before any cross-credit comparison, each rule gets:
+
+- one legal completion on one cheap task;
+- a **3-point ladder** on its primary knob (lr, γ, `readout_error`, settle steps), 1 seed each;
+- its label channel declared (`error_blind`, `readout_error`, ...);
+- a non-zero update and above-chance val_acc at the best ladder point
+  (**error-blind credits are exempt**: chance is their contract; viability is
+  a non-zero update, not accuracy).
+
+No point above chance → triage as defect or refusal, not an algorithm verdict. Best point above chance → that is the coordinate for a matched comparison. The ladder is **not** competitiveness HPO: 3 points, 1 seed, one cell, recorded as a range, never as a claim.
+
+**Budget rule.** Validate at 1 seed/1 epoch before any multi-seed run. The viability ladder is cheap (minutes on a small task, seconds on Cora), so limited compute is not a reason to skip it. Timebox a defect hunt to 15 minutes; if the cause is not identified, file the symptom with a failing test and stop. A long run needs a named claim, a box, and a stop rule.
+
+**Defect triage (before a verdict).**
+
+| Signal | Check | If it fails | If all pass |
+|---|---|---|---|
+| val_acc ≈ chance | label channel? pseudo-grad norm > 0? act/param counts match? | defect (name mechanism + test) | coordinate result (box) |
+| No update | credit dispatch, shape, phase | defect/refusal | — |
+| Crash | shape/compatibility | refusal + trigger | — |
+| High variance | settle convergence, seeds | coordinate result; n insufficient | — |
+| Gate PASS at chance | gate has no metric bar | gate defect | — |
+
+A defect is only a defect if fixing the named mechanism changes the cell or fails a test. Otherwise it is a coordinate result.
+
+Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: triage them on a non-zero update and their declared contract, not on val_acc.
 
 **Defect Patterns (Symptom → Likely Cause):**
 
@@ -361,6 +376,17 @@
 | Budget cut recorded as `constraint_violation` | Cause `timeout`; admission-check the cell's measured cost | `kernel/evaluate.py`, `wave.py` |
 | Dry-run gate scores RL with a supervised loss | Skip RL and one-class heads | `kernel/compose.py` |
 
+**Breadth exit (when competitiveness HPO may begin):**
+- every declared axis value is live/refused/unavailable with a trigger;
+- every error-aware credit has ≥1 legal, above-chance, L2/n≥5 cell on ≥2
+  task families, with its label channel declared;
+- every legal composition family has a cell that trains (no unexplained
+  chance-level cell);
+- the map is recorded in the plan's scoreboard, not a leaderboard.
+
+Only then: pre-register a matched comparison, with the compute case the map
+supports.
+
 **Success Criteria (per domain):**
 - Vision (MNIST/CIFAR): best val_acc > 0.95
 - Graph classification: best val_acc > 0.70
@@ -383,25 +409,32 @@
 - **A ticket closes on a claim or a named verdict, never on a defect count.** A
   session fixes what blocks a run or a number; a fix that does neither is
   hygiene and belongs to round close.
+- **Every error-aware credit has a viable cell on ≥2 task families** (the
+  breadth exit above) before any cross-credit comparison.
+- **No cross-credit conclusion from a cell without a declared hyperparameter
+  box and a viability ladder.** The box is part of the result.
+- **A low cell is a named defect, a refusal, or a coordinate result — never
+  "the algorithm fails".**
 
 **Session Log Template (commit message body; never appended to the TODO):**
 ```
 ## Session YYYY-MM-DD
 **Experiment:** <command>
-**Result:** <PASS/FAIL, key metrics>
-**Defects Found:** <list>
+**Box:** <task, fidelity, seeds, knobs allowed>
+**Result:** <metric, ruler, cost>
+**Triage:** <defect | refusal | coordinate result; if defect, the failing test>
 **Fixes Applied:** <files changed>
 **Next Experiment:** <planned command>
 ```
 
 **Experiment Log Table (for multi-run tracking):**
 
-| Run | Axes | Walltime | Crashes | Gate Failures | Worst Combo | Fix Applied |
-|-----|------|----------|---------|---------------|-------------|-------------|
-| N | <axis_json> | <s> | <n> | <n> | <combo> (val_acc) | <file/change> |
+| Run | Axes | Box (task/fidelity/seeds/knobs) | Walltime | Crashes | Gate Failures | Verdict | Fix Applied |
+|-----|------|----------------------------------|----------|---------|---------------|---------|-------------|
+| N | <axis_json> | <task, fidelity, n_seeds, knobs> | <s> | <n> | <n> | defect / refusal / coordinate | <file/change> |
 
 **Never:**
-- Accept "this algorithm doesn't work" without verifying implementation
+- Accept "this algorithm doesn't work" without the viability ladder and triage
 - Run experiments >15 min without a hypothesis
 - Skip the positive control gate
 - Commit without targeted tests passing
@@ -413,6 +446,12 @@
 - Accept `max_steps=30` default for energy_min
 - Close a ticket on a defect count instead of a claim or a named verdict
 - Call a result "met" when it sits within 1 σ of its threshold
+- Rank credit families or run a competitiveness sweep before the breadth exit
+- Call a low cell evidence for/against an algorithm before the viability ladder and triage
+- Call something a defect without a named mechanism and a failing test
+- Use "unconcluded" as a permanent verdict after the ladder has run
+- Report a point estimate without the hyperparameter box it is conditional on
+- Tune a knob to make a cell pass before the triage verdict
 
 ---
 
@@ -422,24 +461,28 @@
 
 | Computronium (system) | SEC Methodology (development) |
 |----------------------|-------------------------------|
-| 6 axes × primitives → search space | 5-step cycle × defect patterns → fix space |
+| 6 axes × primitives → search space | 6-step cycle × viability gate × defect triage → fix space |
 | Positive control (gate) | Positive control PASS (100% target) |
-| Energy minimization (settle to fixed point) | RUN→ANALYZE→FIX→VERIFY (converge on working config) |
-| Credit assignment (local learning signal) | Defect patterns (symptom → cause) |
+| Energy minimization (settle to fixed point) | SCOPE→VALIDATE→TRIAGE→FIX→VERIFY (converge on a verdict) |
+| Credit assignment (local learning signal) | Viability ladder (minimum fair chance before ranking) |
+| Defect patterns (symptom → cause) | Defect triage (defect / refusal / coordinate result) |
 | Harness reliability (heartbeat, deadline) | Test selection by symbol, kill logging, measured pricing |
 | Excluded possibilities (S/G/D/C/U/P) | Question excluded possibilities table |
-| Normalized metrics (ruler-relative) | Per-domain success criteria |
+| Normalized metrics (ruler-relative) | Per-domain success criteria + declared hyperparameter box |
 | Claim eligibility (n≥3, replay hash) | Targeted tests + commit with evidence |
+| Search space breadth | Breadth exit before competitiveness HPO |
 
 **Why it stabilizes:**
 
-1. **Every anomaly is a signal** — low val_acc ≠ "algorithm failure", it's a defect to locate
-2. **Every assumption is testable** — "unfixable upstream" gets a concrete test
-3. **Every fix has a file** — symptom → fix → file mapping prevents drift
-4. **Every run priced from reality** — no stale L0 positive control pricing
-5. **Context preserved in code** — AGENTS.md rules, not prose in TODOs
+1. **Every anomaly is a triage question** — low val_acc ≠ "algorithm failure"; it is a defect, a refusal, or a coordinate result, and the viability ladder gives every approach a minimum fair chance before any verdict.
+2. **Every assumption is testable** — "unfixable upstream" gets a concrete test.
+3. **Every fix has a file** — symptom → fix → file mapping prevents drift.
+4. **Every run priced from reality** — no stale L0 positive control pricing.
+5. **Context preserved in code** — AGENTS.md rules, not prose in TODOs.
+6. **Every negative has an exit** — a named defect with a failing test, a refusal with a reversal trigger, or a boxed coordinate result. "Unconcluded" is not a permanent state.
+7. **Breadth before HPO** — the viability map is the artifact; competitiveness tuning begins only when it is complete, with the compute case it supports.
 
 **The meta-stabilization:** The SEC methodology was refined by the same cycle it describes:
-> RUN (experiments) → ANALYZE (TODO46/85/86/87 patterns) → FIX (integrate into AGENTS.md) → VERIFY (tests pass) → COMMIT+LOG
+> SCOPE (claim + box) → VALIDATE (smallest falsifying cell) → TRIAGE (defect/refusal/coordinate) → FIX (integrate into AGENTS.md) → VERIFY (tests pass) → COMMIT+LOG
 
 This document *is* the fixed point. The methodology describes the process that produced it.

@@ -343,6 +343,11 @@ still needs a matched interaction or claim (§3.7, §3.10).
    non-standard **win** at matched cost; it needs a live, non-refused
    substrate (analog, ternary, sparse, memristive) and the same PEPITA-vs-
    gradient pair, on feedforward geometry where PEPITA is legal.
+   **Breadth gate before the next comparison.** Each credit gets the AGENTS
+   viability gate: 3 values of its primary knob (lr, γ, `readout_error`), 1
+   seed, one cheap task, label channel declared. A credit with no above-chance
+   point is triaged as defect/refusal, not ranked; the resulting map is the
+   input to §3.10, not a claim.
    **Both interactions are fixed-coordinate results, not family rankings.**
    They say what these implementations do at one schedule; HPO may move them.
    Do not read them as "settling is bad" or "muon is for flat stacks" in
@@ -699,7 +704,9 @@ cross-credit conclusion and no HPO before that point (§5).
   other credits' cells are **unconcluded**. HPO starts only after viability
   breadth is established — that is also when compute and development assistance
   are worth seeking. A cross-credit comparison before that point is not
-  evidence.
+  evidence. AGENTS.md's SEC revision (2026-11-14) defines the 3-point
+  viability ladder, the defect-triage verdicts, and the breadth exit; this
+  rule is the plan-specific corollary.
 - **One plan, rolling.** No TODO93 per phase. Tickets enter §3 from a measured
   failure or a missing row, and leave when the number moves.
 - **A ticket closes on a number or a named verdict**, never on a defect count.
