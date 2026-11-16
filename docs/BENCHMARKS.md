@@ -264,6 +264,78 @@ Command: `uv run python -m computronium.validation.plasticity_ladder --stage
 consolidation --device cuda`; replay from the cell log without training:
 `... --stage consolidation --replay --device cuda`.
 
+### 2.7 The routing ladder (B1)
+
+The screen asked whether the straight-through (STE) surrogate's bias on the
+router grows with the number of stacked hard selections. The question decides
+the track: a gap that compounds would justify a matched pair of credits
+(B2, STE+aux vs a local credit); a flat gap refuses the track with a
+trigger.
+
+Three apparatus facts bound the measurement before any number, all of them found
+and fixed in this session (CORRECTIONS 13–15):
+
+- the selections are **parallel and averaged**, not chained — a chained stack's
+  joint gradient vanishes with depth, so a joint ratio measures the depth of the
+  stack (CORRECTION 13);
+- the gap is probed at declared optimiser steps (8/16/32), not at the end —
+  once the router saturates, both gradients vanish and their ratio measures the
+  one-hot limit (CORRECTION 14);
+- the held-out split and the gap share the task's blob centers; only the
+  samples move, or the accuracy ruler reads a different task (CORRECTION 15).
+
+**What the gap is, and what it is not.** It is the relative norm between the
+STE's per-selection router gradient and its declared reference, the
+temperature-smoothed routing gradient at the same τ. The finite-difference probe
+on the same smoothed objective validates the **reference**, not the STE: 0.000–0.013
+against a 0.10 tolerance. Its level (~0.6–0.8) is structural — the STE's credit
+runs through the selected experts only, the reference through all eight — so the
+ladder's question is the **trend**, not the level.
+
+Measured on the 4-class blob task (4096 train / 2000 held-out, 8 experts, k=2,
+W=256 trunk, probe batch 512, RTX 3080 10 GiB, 2026-11-16):
+
+| stage | depth | τ | seed | end-task acc | router acc | STE gap | ref. gap | s |
+|---|---|---|---|---|---|---|---|---|
+| temperature | 2 | 0.25 | 51 | 1.000 | 1.000 | 0.573 | 0.008 | 4.2 |
+| temperature | 2 | 0.5 | 51 | 1.000 | 1.000 | 0.743 | 0.001 | 3.9 |
+| temperature | 2 | 1.0 | 51 | 1.000 | 1.000 | 0.844 | 0.000 | 2.8 |
+| depth | 1 | 0.25 | 51 | 0.933 | 1.000 | 0.819 | 0.003 | 1.8 |
+| depth | 2 | 0.25 | 51 | 1.000 | 1.000 | 0.573 | 0.008 | 2.6 |
+| depth | 4 | 0.25 | 51 | 0.999 | 0.999 | 0.655 | 0.008 | 5.3 |
+| depth | 8 | 0.25 | 51 | 1.000 | 1.000 | 0.660 | 0.013 | 9.1 |
+| confirmation | 1 | 0.25 | 52 | 0.999 | 1.000 | 0.681 | 0.004 | 1.5 |
+| confirmation | 8 | 0.25 | 52 | 1.000 | 1.000 | 0.644 | 0.011 | 8.2 |
+
+**Verdict: refuse.** The gap does not grow with the stack: 0.819 → 0.660
+(−0.159) from depth 1 to depth 8 on the ladder seed, and −0.037 on the disjoint
+confirmation seed, against the pre-registered margin δ = 0.05. Both ends of the
+ladder are trained arms (end-task accuracy 0.933 / 1.000), the learning control
+clears the 0.40 floor, and the router routes above its 0.25 chance level, so the
+refusal is not an invalid arm. The depth-1 point is the ladder's highest and the
+fall to depth 2 is consistent with responsibility dilution by the averaged
+stack; no depth makes the surrogate's bias compound at this box.
+
+**Box and rulers.** Task/architecture fixed (4-class blobs, 8 experts, k=2,
+W=256, no dropout); the knobs are τ ∈ (0.25, 0.5, 1.0) at depth 2 and the
+depth ladder at the best τ, and the LR is frozen at 1e-3 for both ladders. The
+accuracy ruler is a 2000-sample held-out split (1 σ = 0.010); router accuracy's
+chance is k/n = 0.25; the gap is a relative norm on a fixed probe batch, with
+FD tolerance 0.10 and step 1e-2. The cost is 1.5–9.1 s per cell.
+
+Command: `uv run python -m computronium.validation.routing_ladder --device
+cuda`; replay from the cell log without training: `... --replay`.
+
+**What the refusal means, and its trigger.** B does not promote to its matched
+pair. The reversal trigger is a different box, not a rerun: a **chained** stack
+at per-depth matched LR, the canonical full-support STE with Gumbel noise as the
+treatment, or a wider expert count (k ≥ 4). The re-open command is this module
+with that box, and §14 carries the trigger.
+
+The defect probe (the chained, end-of-training cells at LR 1e-2) is kept as
+`results/t93_b1/defect_probe/`; it is evidence of the apparatus defects, never
+a ladder.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -279,6 +351,10 @@ consolidation --device cuda`; replay from the cell log without training:
 | Batch-1 plasticity ladder gate (C1) | `tests/unit/validation/test_plasticity_ladder.py` | 9 s |
 | C2 retention gate: floor on two seeds, matched per-step cost, forgetting δ, saturation | `tests/unit/validation/test_plasticity_ladder.py` | 12 s |
 | Task start anchors EWC without erasing the Fisher importance | `tests/unit/core/test_cl_credit_arms.py` | 14 s |
+| STE gradient differs from its soft reference on a seeded fixture | `tests/unit/validation/test_routing_ladder.py` | 2 s |
+| The smoothed reference tracks its own finite difference | `tests/unit/validation/test_routing_ladder.py` | 2 s |
+| B1 routing gate: growth on two seeds promotes; flat refuses; chance invalidates | `tests/unit/validation/test_routing_ladder.py` | 1 s |
+| Kill-safe routing cell log: resume reuses cells; replay recomputes the gate | `tests/unit/validation/test_routing_ladder.py` | 1 s |
 | Kill-safe cell log: resume reuses measured cells; replay recomputes the gate | `tests/unit/validation/test_plasticity_ladder.py` | 12 s |
 | Credit label channel carries the task offset | `tests/unit/core/test_cl_credit_arms.py` | 10 s |
 | Data order is seeded independently of model RNG | `tests/unit/core/test_cl_credit_arms.py` | 9 s |

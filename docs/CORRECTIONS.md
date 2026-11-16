@@ -121,3 +121,32 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | `ElasticConsolidationUpdate.anchor(params)` moves `_old_params` and `_baseline` without recomputing F; the runner uses it at task starts and keeps `consolidate` for the end-of-task drift. `test_task_boundary_anchors_without_erasing_importance` fails if the runner calls `consolidate` at the boundary. |
 | Status | corrected — the C2 ladder was restarted on the fixed mechanism |
 | Commit | this commit |
+| Field | Correction 13 — the chained stack's joint gradient measured depth, not bias |
+|---|---|
+| Original claim | The B1 screen reads the STE surrogate's bias as the gap's rise across 1/2/4/8 stacked hard selections. |
+| Original metric | The first apparatus chained the gated blocks (`h, _ = block(h)`), i.e. the plan's operator stack. At depth 8 the reference's joint gradient fell to ~2e-3 and the STE's to ~1e-1, so the "gap" read 232 (and 3×10¹¹ at another LR): both surrogates vanish through stacked soft mixtures, so their ratio measures the depth of the stack, not the bias on one selection. The depth-8 arm also diverged at LR 1e-2 (end-task accuracy 0.244 = chance). |
+| Audited procedure | Per-block gaps at `LR=1e-2`: 0.999 / 1.0 / 0.999 / 232.6 for depths 1/2/4/8, with reference norms 0.0 / 0.0 / 0.177 / 0.002. The rise was the denominator collapsing, not the numerator. |
+| Affected conclusions | Any B1 cell measured on the chained stack. No gate was closed on those cells; they are the defect probe. |
+| Replacement metric | The stack runs **parallel and averaged**: `depth` selections read the same trunk state, their outputs are averaged (so the forward scale is depth-invariant and the joint gradient does not vanish with depth), and the gap is read **per selection** and averaged over the stack. `test_ste_gradient_differs_from_its_soft_reference` fails if the treatment collapses to the plain relaxation. |
+| Status | corrected — the ladder was rerun on the parallel averaged stack |
+| Commit | this commit |
+
+| Field | Correction 14 — the end-of-training probe measured the one-hot limit |
+|---|---|
+| Original claim | The STE gap is read after training, so each cell's budget is its final state. |
+| Original metric | With `lr=1e-2` over 2 epochs, both gradients had vanished at the end: STE norm and reference norm printed 0.000 at every depth, and the relative gap was one-hot noise (0.99 / 323869 / 5.7e11). A ratio of two vanishing gradients measures saturation, not the surrogate's bias. |
+| Audited procedure | Probe norms per optimiser step: 6.9e-2 (step 4), 4.6e-2 (8), 3.0e-2 (16), 2.8e-3 (32), 1.4e-3 (64) at depth 1, and 2.7e-2 → 4.2e-4 at depth 8. The probe batch at the end reads the saturated router. |
+| Affected conclusions | Every B1 cell measured at the end of training. The first ladder (`results/t93_b1/defect_probe/`, `lr=1e-2`) is kept as the defect probe, never as a ladder. |
+| Replacement metric | The gap is probed at declared optimiser steps (`PROBE_STEPS = 8/16/32`) and averaged over those probes; the points are in the box, so they are part of the measurement, not a search. `LR = 1e-3` keeps every depth a trained arm (end-task accuracy 1.0 at depth 8). |
+| Status | corrected — the ladder probes the training path, not the saturated end |
+| Commit | this commit |
+
+| Field | Correction 15 — the probe split drew its own task |
+|---|---|
+| Original claim | The held-out accuracy ruler and the gradient probe read the same 4-class blob task the arm trains on. |
+| Original metric | `_blobs(seed)` drew **new centers** from `seed`, so training (`seed`) and the held-out split (`seed + 1000`) were two different tasks. Measured: the arm memorized its training set (loss 1e-6 by step 15) and read 0.0 / 0.244 end-task accuracy on the other task. |
+| Audited procedure | Probe with shared centers: `_blobs(task_seed, n, seed)` draws the centers from `task_seed` and the samples from `seed`. The same arm then reads 1.000 on the held-out split. |
+| Affected conclusions | The B1 learning control (the floor gate). No gate was closed on the old numbers. |
+| Replacement metric | The task's centers are part of the task (`task_seed`); only the samples move between the train and held-out splits. The learning control now reads 1.000 on every depth. |
+| Status | corrected — the rulers and the gap read one task |
+| Commit | this commit |
