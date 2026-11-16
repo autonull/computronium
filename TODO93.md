@@ -615,14 +615,19 @@ swept to pass.
   delegates to `BackpropCredit` (`core/system_trainer/joint.py:122`) for the
   head. One registry row in `_CREDIT_PRIMS`, one `estimator_kind="hybrid"`.
 - **Semantics, fixed before the code:**
-  1. **standard pass** through trunk then head → logits → CE;
+  1. **standard pass**: trunk forward under `torch.no_grad()`; at the boundary
+     `h = h.detach().requires_grad_(True)`; head forward records the graph →
+     logits → CE;
   2. head backward on the standard pass → boundary error
      `δ = ∂L/∂h_trunk_out` (the head's input gradient);
-  3. **trunk error-modulated pass** with `e_out = δ`, propagated by the trunk's
-     feedback matrices; this is the PEPITA trunk's second pass;
+  3. **trunk error-modulated pass** under `torch.no_grad()` with `e_out = δ`,
+     propagated by the trunk's feedback matrices; this is the PEPITA trunk's
+     second pass;
   4. compute trunk and head gradients from the **same pre-update weights**; apply
      trunk then head. No second head forward, no head update before the boundary
      error is formed.
+  The `no_grad` trunk and the `detach` boundary are what make the memory claim
+  true; without them the trunk graph is retained and the hybrid is just backprop.
 - **Reference fixture (correctness, not speed):** a *store-all* hybrid — two-pass
   PEPITA trunk + backprop head, no lockstep — is the reference. Lock the lockstep
   trunk against it (`max|ΔW| < tol` per layer), exactly as T3 does. "Composes" is
