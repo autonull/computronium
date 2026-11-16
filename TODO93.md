@@ -24,6 +24,9 @@ every lift-vs-backprop comparison: at width 512, depth ≤64, batch 1k, activati
 are ~134 MB next to ~200 MB of params and Adam state, so both arms fit and the
 "memory" claim is vacuous. **No cell counts as evidence unless the baseline arm's
 activations are ≥50% of its peak memory** (§9 binding gate).
+**Execution surface:** §0 (what), §8 (order), §16 (handoff). §1–§7 and §9–§20
+are the contract those tickets must satisfy; read them when writing the test, not
+when scheduling the work.
 ---
 ## 0. Start here
 **Three minimum publishable units (MPUs), in order of expected value per session.**
@@ -117,10 +120,15 @@ credit across many layers; and any comparison whose activation memory never bind
 ## 2. The four win conditions (falsifiable, with floors)
 | # | Prediction | Floor / baseline | Falsifier | If false |
 |---|---|---|---|---|
-| W1 | On ≥1 task family, some arm (hybrid allowed) is Pareto-nondominated on (accuracy, peak GB) at iso-walltime | `backprop+ckpt(√L)`; accuracy floor per task; every contributing cell passes the binding gate | no arm dominates **and** no arm reaches the floor | memory frontier closed; the measured frontier is still the artifact |
+| W1 | On ≥1 task family, the hybrid or local front **dominates** `backprop+ckpt(√L)` on (accuracy, peak GB) at iso-walltime: hypervolume gain ≥ δ, **or** accuracy ≥ baseline −1 pp at ≤0.5× peak memory | `backprop+ckpt(√L)`; accuracy floor per task; every contributing cell passes the binding gate; δ pre-registered | no arm dominates and no arm reaches the floor | memory frontier closed; the measured frontier is still the artifact |
 | W2 | At fixed peak memory (8 GB), max depth at val-acc ≥ floor for local/hybrid ≥ 2× `backprop+ckpt` | floor locked before seed 1; "trainable" must mean "learns" | ratio <2, or floor not met at depth | report the measured ratio; do not claim depth |
 | W3 | On hard top-k routing, local beats the **best backprop-compatible estimator** (STE + load-balancing/z-loss) by ≥2 pp at matched walltime, with bias measured against a defined reference | soft-relaxation gradient and/or finite-difference reference, declared before the pair; expert-choice and dense-backprop-MoE are positioning controls, not arms | STE+aux ≥ local−2 pp | negative with the measured bias mechanism named |
-| W4 | On batch-1 non-stationary streams, local×consolidation retention exceeds `backprop+EWC/SI` ± small replay at matched memory | plasticity gate first (final-task acc at batch 1); then retention; matched budget named as per-step latency/energy or MCU-class total | replay saturates retention, or local fails plasticity | report the buffer size / budget at which replay saturates |
+| W4 | On batch-1 non-stationary streams, local×consolidation **BWT** and **avg_forgetting** beat `backprop+EWC/SI` ± small replay at matched memory | plasticity gate first (final-task acc at batch 1); then `CLMetrics.backward_transfer` and `avg_forgetting`; matched budget named as per-step latency/energy or MCU-class total | replay saturates BWT, or local fails plasticity | report the buffer size / budget at which replay saturates |
+**Pareto-nondominated is not a claim.** A low-accuracy, low-memory point is
+trivially non-dominated. W1 is dominance with a margin: hypervolume gain ≥ δ
+(reuse `experiment/analysis/pareto_analysis.py:compute_hypervolume`), or the
+sharper, cheaper test — accuracy ≥ baseline −1 pp at ≤0.5× peak memory. Pick one
+and pre-register it.
 **Error control and floors.** Fix `n_max=5` paired seeds per depth before the
 first run; do not peek. **Floor:** val accuracy at L=8 for the
 `backprop+ckpt` arm minus 1 pp, measured on the same task, and then held fixed at
@@ -129,6 +137,12 @@ every deeper rung. The floor is set from the **pilot**, and the claim seeds are
 inconclusive at `n_max`, that is a coordinate result, not a claim. W1/W2 are
 **relative** claims: the repo's absolute vision criterion (>0.95) does not govern
 a flat-MLP memory ladder.
+**Pre-registration essentials (T6a).** (1) a **per-arm LR viability ladder** at
+L=8 — three points, one seed each, best point frozen before the claim (without
+it, a bad LR is a defect masquerading as a verdict); (2) fixed epochs and
+`batches_per_epoch` for both arms; (3) the seed list and the data-order seed;
+(4) the positive control; (5) δ or the ≤0.5× memory rule; (6) the binding
+arithmetic. A claim missing any of these is not registered.
 **Estimator taxonomy (the reason §19 exists).** W3 is not "local vs weak STE". It
 is: *which bias/variance tradeoff wins at matched compute on hard routing* —
 biased-pathwise (STE), biased-structural (local), unbiased-score-function
@@ -238,14 +252,17 @@ peak memory, FLOPs, and parameter counts (`run_parity`, :729). Extend it with a
 `batch_size` parameter and the `pepita`/`local_goodness` families (its portfolio
 today is backprop/FA/PC/eqprop) and use it as the cell runner. Add only the Pareto
 aggregation on top.
-**Budgets.** Report accuracy at (a) matched params, (b) matched peak memory,
-(c) iso-walltime/forward-equivalents. Three tables, one Pareto figure
+**Budgets.** Report params as a column, **not** a matched budget: matching params
+across hybrid/local/backprop needs a width search and buys nothing the claim
+needs. Report accuracy at (a) matched peak memory and (b) iso-walltime/
+forward-equivalents. Two tables, one Pareto figure
 (`computronium/experiment/analysis/pareto_analysis.py:compute_pareto_frontier`),
 plus a stacked memory decomposition (params / optimizer / activations /
 auxiliary) per arm.
-**Claim shape (if W1/W2 hold).** "At 8 GB and matched walltime, the hybrid is
-Pareto-nondominated against √L-checkpointed backprop, and the local trunk reaches
-2× depth at the accuracy floor." Pre-register the floor, the budgets, and the
+**Claim shape (if W1/W2 hold).** "At 8 GB and matched walltime, the hybrid
+dominates √L-checkpointed backprop on (accuracy, peak GB) — ≥δ hypervolume or
+baseline accuracy at ≤0.5× peak memory — and the local trunk reaches 2× depth at
+the accuracy floor." Pre-register the floor, the budgets, δ, the LR box, and the
 binding arithmetic before seed 1.
 **Stop rule.** Hybrid loses to `backprop+ckpt` at matched memory and matched
 walltime → close MPU1 entirely, one verdict, no rescue tuning. Pure local losing
@@ -287,9 +304,11 @@ locality does not address forgetting — that is weight interference — so the
 mechanism under test is local credit **composed with consolidation**.
 **Plasticity first (cheapest falsifier).** Final-task accuracy at batch 1. If the
 local arm cannot learn the stream at all, retention is moot; stop there.
-**Protocol.** A sequence of tasks (or a drifting distribution) presented once;
-metrics = final-task accuracy (plasticity) and retention of earlier tasks, at
-matched memory and matched per-step cost.
+**Protocol.** A fixed sequence of 5 tasks, 1 epoch each, fixed order
+(`SplitMNIST` first), presented once. Metrics: final-task accuracy (plasticity),
+`CLMetrics.backward_transfer`, `avg_forgetting`, and `peak_memory_mb`, at
+matched per-step cost. Name the order and the epoch budget in the registration;
+a drifting distribution needs a declared generator, not a description.
 **Arms.** The continual runner and its arms already exist
 (`core/continual/runner.py`, `create_ewc_arm`, `create_si_arm`,
 `create_replay_arm`, `SplitMNIST`). P4 is a **protocol and measurement** ticket,
@@ -303,10 +322,8 @@ not an implementation ticket:
   negative** and must not be the claim;
 - optional compositional: `local × EWC` vs `backprop × EWC` at matched memory and
   iso-cost.
-**Protocol source.** Use the existing `run_continual_learning` runner and a fixed
-task order (e.g. 5-way split, `SplitMNIST` first). Name the order in the
-pre-registration; a drifting distribution needs a declared generator, not a
-description.
+**Runner.** Use the existing `run_continual_learning`
+(`core/continual/runner.py`); do not build a stream harness.
 **Matched budget.** Per-step latency/energy, or a genuinely tiny total budget
 (MCU-class), not GB-scale memory. If the contest is GB-scale memory, replay wins
 by design and the result is uninformative. **Consolidation state counts:** EWC's
@@ -335,29 +352,28 @@ below-bar foreign cell is `[regime-mismatch]`, not a defect.
 ## 8. Ticket DAG (critical path)
 | # | Ticket | Cost | Acceptance / output |
 |---|---|---|---|
-| T1 | **Truth pass** (defect tickets, stub fixes, measured complexity table, `estimator_kind`/`bias_reference` declarations, locks) | 1 session | A §14 "progress" row; each lock fails on current code and passes after its fix; no silent `activations_mb: 0.0` |
-| T2 | Locks in §9 wired into CI (subsumed by T1; kept as the lock list's home) | — | each lock fails on current code, passes after its fix |
-| T2b | `estimator_kind` + `bias_reference` on `AxisSpec`; declare every existing C row; lock fails on `unspecified` | hours | field + declaration table + lock; no new credit admitted until declared (§19) |
+| T1 | **Truth pass** (defect tickets, stub fixes, measured complexity table, `estimator_kind`/`bias_reference` declarations, locks, `BENCHMARKS.md` skeleton, `CORRECTIONS.md` rows) | 1 session (watchdog 2×; if it overruns, split code-fixes from schema/locks) | A §14 "progress" row; each lock fails on current code and passes after its fix; no silent `activations_mb: 0.0` |
 | T3 | Lockstep two-pass FF/PEPITA; exact-update lock vs faithful reference | 1 session | O(B·W) measured peak, flat in depth; max\|ΔW\| < tol per layer |
 | T4a | Memory **decomposition** (`EpochResource`: params/optimizer/activations/aux/RSS) + binding guard + calibration lock | hours | `L·B·W·4` within 10%; guard rejects a non-binding cell |
 | T4b | `backprop+ckpt` (√L segments, `preserve_rng_state`, `use_reentrant=False`, geometry forward) | 1 session | §4 acceptance ladder; gradient parity under dropout |
 | T4c | Extend `validation/backprop_parity.run_parity` with `batch_size` and `pepita`/`local_goodness` families | hours | one runner for the ladder; no second depth loop |
 | T5 | P1 scoped: 3 publishables + arms actually used | 1–2 sessions | rows with backend path, dtype, optimizer, σ |
 | T3b | **Hybrid arm**: `HybridCredit` wrapper (trunk local + head backprop) + identity | 1–2 sessions | composes; trunk peak flat in depth; head gets true gradients |
-| T6 | P2 pilot at **one binding operating point** | 1 session | binding arithmetic appendix |
+| T6 | P2 pilot at **one binding operating point**, positive control included | 1 session | binding arithmetic appendix; positive control passes; then register |
 | T6a | Pre-registration: `ThresholdRegistration` for the accuracy delta/floor + a budgets appendix the binding test reads | hours | floor, budgets, `n_max=5`, binding arithmetic, stop rule; extra keys are ignored by the loader, so the test reads the raw JSON |
 | T7 | P0 estimator credits: `SurrogateCredit` (required baseline) + `ForwardTangentCredit` (bias reference); `ScoreFunctionCredit`/`ZerothOrderCredit` as controls | 1 session | W3's baseline and reference exist as first-class C rows with identity + compatibility predicates (§19) |
 | T8 | P4 baselines: lift `SynapticIntelligence` to U; `CascadeSynapsePlasticity` | 1–2 sessions | local×SI and local×cascade runnable at the tiny-budget point (§19) |
 | T9 | Temporal taxonomy: `EligibilityPropCredit`, `UnbiasedOnlineRTRL`, `RTRLReference` | trigger-gated | fires when MPU1 closes (T6) or a sequence-length axis enters (§19) |
 | ∥ | P3 screen: STE-gap vs stacked discrete-op count against soft-relaxation bound | hours | gap grows with depth → matched pair worth running; flat → drop per stop rule |
-Order: **T1 (absorbs T2/T2b) → T4a → T3 → T3b → T6 → T6a**, with T4c and T5 in
-parallel. T4b (checkpointing) lands in parallel with T5 and does not gate T3 —
-T3 needs the decomposition (T4a), not checkpointing. T7 lands **only if the P3
-screen promotes**, in parallel with T3/T4b. T8 can start once T6 fixes the P4
-protocol, in parallel with T5; it does not wait for P2 to close. T9 is
-trigger-gated. P4 runs after P2 because both need the binding guard.
-**Total to a claim-grade row: ~9–10 sessions** (T1, T4a, T3, T3b, T4b, T5, T6,
-T6a, T7/T8 as they fire); to the first falsifier: **~3 sessions** (T1, T4a, T3).
+Order: **T1 → T4a → T4c → T3 → T3b → T6 → T6a**, with T5 parallel. T4b
+(checkpointing) lands in parallel with T5 and does not gate T3 — T3 needs the
+decomposition (T4a), not checkpointing. T7 lands **only if the P3 screen
+promotes**, in parallel with T3/T4b. T8 can start once T6 fixes the P4 protocol,
+in parallel with T5; it does not wait for P2 to close. T9 is trigger-gated. P4
+runs after P2 because both need the binding guard.
+**Total to a claim-grade row: ~9–10 sessions** (T1, T4a, T4c, T3, T3b, T4b, T5,
+T6, T6a, T7/T8 as they fire); to the first falsifier: **~3 sessions** (T1, T4a,
+T3).
 ---
 ## 9. Locks (the plan's culture, applied to itself)
 1. **Memory-truth lock** — measured peak per backend matches its declared
@@ -377,7 +393,8 @@ T6a, T7/T8 as they fire); to the first falsifier: **~3 sessions** (T1, T4a, T3).
 7. **W2 accuracy floor** — a depth counts only if val accuracy ≥ the pre-registered
    floor; "trainable" must mean "learns".
 8. **Identity completeness** — backend path, dtype, optimizer, GPU model, torch
-   version, forward-equivalents; missing field = row invalid.
+   version, forward-equivalents, seed, command, replay hash; missing field = row
+   invalid.
 Every lock must fail when its mechanism is removed (TODO46 D26).
 ---
 ## 10. Baseline ladder, stated once
@@ -445,10 +462,10 @@ today. If a digital result needs a substrate control, the trigger fires.
 | Date | Track | Measurement | n | Ruler | Regime | Verdict | Ticket |
 |---|---|---|---|---|---|---|---|
 | — | P1 | published-parity + complexity audit | — | published ±1 pp / σ; declared vs measured class | — | — | T1, T5 |
-| — | P2 | memory frontier (3 budgets, Pareto) | — | acc @ matched memory / walltime / params; binding share; forward-eq | — | — | T4a–T4c, T6 |
+| — | P2 | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T4a–T4c, T6 |
 | — | P3 | routing: local vs STE+aux; bias | — | acc @ matched walltime; bias vs declared reference | — | — | P3 screen |
 | — | P3 | estimator taxonomy (after screen) | — | bias vs declared reference; variance; forward-eq | — | — | T7 |
-| — | P4 | plasticity + retention (SI/cascade baselines) | — | final-task acc; retention; buffer size; k×params | — | — | T8 |
+| — | P4 | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | T8 |
 **Progress is one of:** a published-parity reference (P1); a measured frontier
 (P2–P4); a promoted claim; a defect found and fixed by a failing test; a refusal
 with a trigger. **Not progress:** more cells, more prose, more primitives, a knob
@@ -459,6 +476,8 @@ swept to pass.
   — never an unstated swap.
 - **The baseline is the strongest one**, not the most convenient.
 - **Every number carries its ruler, its command, and its σ.**
+- **Every run carries a positive control.** A failed control invalidates the run,
+  not the arm. Never skip it (SEC: the control is the cheapest falsifier).
 - **Rows, not prose.** ≤1 new module per ticket; no ontology change beyond the
   per-layer credit field and the §19 admissions, each bound to a ticket.
 - **A new kernel path is a new identity, never a silent replacement.** Old rows
@@ -478,7 +497,7 @@ swept to pass.
 ---
 ## 16. Handoff contract
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
-- Start order: **T1 → T4a → T3 → T3b → T6 → T6a**, with T4c/T5 in parallel,
+- Start order: **T1 → T4a → T4c → T3 → T3b → T6 → T6a**, with T5 parallel,
   T4b parallel with T5, T7 conditional on the P3 screen promoting, T8 after T6,
   and T9 trigger-gated.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
@@ -489,13 +508,13 @@ swept to pass.
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | T1 (folds T2/T2b) → T4a → T3 → T3b → T6 → T6a, T4c/T5 in parallel; T4b parallel with T5; T7 only if the screen promotes; T8 after T6. |
+| 1. Order | T1 → T4a → T4c → T3 → T3b → T6 → T6a, T5 parallel; T4b parallel with T5; T7 only if the screen promotes; T8 after T6. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | Backprop-activation checkpointing is not implemented, but the API is already used for settle steps (`core/local_learning/settling.py:403`, `ontology/dynamics/_settle_driver.py:167`). T4b, 1 session; it does not gate T3. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
 | 5. D1 timing | Schema + lock written now, D1 after P2, powered for a continuous surrogate or a pre-registered larger n. |
 | 6. Triggers | Event triggers, no fixed dates. Memristive-consolidation fires when P4 closes with either verdict. |
-| 7. Headline | **Frontier, not depth:** "accuracy per GB at iso-walltime", Pareto dominance, with a stacked memory decomposition. "2× depth" is reported only with the accuracy floor. |
+| 7. Headline | **Frontier, not depth:** "accuracy per GB at iso-walltime", dominance with a pre-registered δ (or baseline accuracy at ≤0.5× memory), with a stacked memory decomposition. "2× depth" is reported only with the accuracy floor. |
 ---
 ## 18. Code-change appendix (what each ticket touches)
 **T1 — complexity truth.**
@@ -561,7 +580,10 @@ swept to pass.
   budgets, binding arithmetic, and stop rule as extra keys.
   `ThresholdRegistration.from_dict` ignores extra keys, so a claim-table test
   reads the raw JSON; do not assume the loader enforces the binding gate.
-- the Pareto claim is computed from the registered budgets after the run; the
+- register the **LR viability ladder** (3 points per arm at L=8, best frozen),
+  the fixed epochs/`batches_per_epoch`, the seed list and data-order seed, the
+  positive control, and δ (or the ≤0.5× memory rule).
+- the dominance claim is computed from the registered budgets after the run; the
   budgets are fixed before it, so this is not post-hoc.
 **T8 — lift, do not rewrite.**
 - `core/continual/losses.py:84` `SynapticIntelligence` already implements the
@@ -571,7 +593,7 @@ swept to pass.
 **T6 — frontier figure.**
 - reuse `experiment/analysis/pareto_analysis.py:compute_pareto_frontier`
   (objectives `["accuracy", "peak_bytes"]`, `maximize=[True, False]`).
-**T2b — estimator coordinate.**
+**T1 (cont.) — estimator coordinate.**
 - `experiment/schema/axis.py:116` — add
   `estimator_kind: Literal["exact","surrogate","local","score_function","forward_mode","zeroth_order","temporal_local","local_supervised","hybrid"]`
   and `bias_reference: Literal["none","exact_tractable","smoothed_objective"]`

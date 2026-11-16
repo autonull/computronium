@@ -76,3 +76,4 @@ experiments/*.run.json
 docs/generated/
 docs/index.md
 docs/index.html
+experiments/.timing.json
