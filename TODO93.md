@@ -198,6 +198,13 @@ matched (the binding gate), and compositions whose mechanism never runs on the
 claim path (T6b). Tuning around those hazards produces numbers that look like
 results and are not. The screens remove them for hours, not sessions.
 
+**Primitives are not forgotten.** §19's admission map names every queued
+mechanism — surrogate, forward-tangent, score-function, zeroth-order, local
+supervision, SI lift, cascade, Bayesian-online, e-prop, UORO, RTRL reference —
+with the track that needs it, the **measurement** that triggers it, and its cost.
+No primitive is written before its trigger fires; none is lost when a track is
+refused, because the row keeps its trigger.
+
 **The one bonus.** If a screen or a surprise produces a real claim-grade effect,
 it is taken seriously and promoted immediately (§14). The plan is built so that a
 win is *found*, not forced — and so that a blank is *recorded*, not mourned.
@@ -1185,7 +1192,7 @@ box, trigger, and command. The surprise budget may pick one per session.
   `temporal_local`; `"exact_tractable"` for the gradient-estimator rows. Confirm
   per implementation before locking; do not label a local objective as a biased
   gradient.
-**T7 — estimator credits (only after the P3 screen promotes).**
+**T7 — estimator credits (only after B1 or E1 promotes; §19 admission map).**
 - new `primitives/credit_assignment/surrogate/` — lift the STE/Gumbel machinery
   already in `core/utils/surrogate.py` and `benchmarks/joint/z3_fixed_weights.py`;
   do not reimplement.
@@ -1199,7 +1206,7 @@ box, trigger, and command. The surprise budget may pick one per session.
 - `experiment/kernel/search_space.py:288` — compatibility predicates:
   `score_function` requires stochastic selection in geometry; `forward_mode`
   requires jvp-capable ops; `temporal_local` requires recurrent dynamics.
-**T8 — P4 baselines.**
+**T8 — streaming baselines (only after C1 promotes).**
 - `SynapticIntelligence` already exists at `core/continual/losses.py:84` and
   `create_si_arm` at `core/continual/arms.py:238`; **lift** it into
   `ontology/update/` as a U row. Do not write a second implementation.
@@ -1336,11 +1343,12 @@ box, trigger, and command. The surprise budget may pick one per session.
 ## 19. Primitive admission queue (cost-priced, ticket-bound)
 **Framing.** `more primitives` is not progress (§14). Each row below names the
 ticket that cannot run without it; a row whose trigger has not fired is not work.
-**Verified inventory (2026-11-15, second pass).** Confirmed absent:
+**Verified inventory (2026-11-15; `estimator_kind`/`bias_reference` landed in
+T1 and are now read from the identity cards).** Still absent:
 `SurrogateCredit`, `ForwardTangentCredit`, `ScoreFunctionCredit`,
 `ZerothOrderCredit`, `LocalSupervisionCredit`, `CascadeSynapsePlasticity`,
 `BayesianOnlineUpdate`, `EligibilityPropCredit`, `UnbiasedOnlineRTRL`,
-`estimator_kind`/`bias_reference`. Confirmed present and **not admitted as new**:
+`RTRLReference`. Confirmed present and **not admitted as new**:
 `lion`, `adam`, `local_adam`, `ortho_adam`, `mean_norm`, `role_split`
 (`primitives/parameter_update/`); STE utilities (`core/utils/surrogate.py`,
 `benchmarks/joint/z3_fixed_weights.py`); REINFORCE (`training/rl.py:196`); EWC
@@ -1356,7 +1364,30 @@ a credit own its free pass is a declared capability on the C axis, and it is
 admitted by T6b's ticket, not by this queue: no new mechanism is created, the
 existing lockstep trunk stops paying for a chain it never reads.
 
-### P0 — estimator credits (unblocks T7; lands only after the screen promotes)
+**Admission map — nothing is forgotten, nothing is scheduled.** A primitive is
+written only when its trigger fires, and the trigger is a measurement from a
+track, not a hypothesis. Nothing below is work today.
+
+| Primitive | Axis | Track / ticket | Trigger (a measurement, not a plan) | Cost | If the trigger never fires |
+|---|---|---|---|---|---|
+| `SurrogateCredit` | C | **B2** | B1's ladder shows the STE-gap grows | low | B is refused at its coordinates; no row |
+| `ForwardTangentCredit` | C | **E2** | E1 shows an estimator-ordering question that needs an unbiased pathwise reference | low–med | E stays descriptive; finite-difference reference only |
+| `ScoreFunctionCredit` | C | **E2** | E1's table has an empty score-function cell | low | control only; no row |
+| `ZerothOrderCredit` | C | **E2** | same | low | control only; no row |
+| `LocalSupervisionCredit` | C | **A2** (trunk alternatives) | the hybrid trunk ladder says the boundary is the limit, not the rule | med | no row; hybrid keeps its current trunk |
+| `SynapticIntelligenceUpdate` (lift) | U | **C2** | C1's ladder shows local learns at batch 1 | low | C refused; SI stays an arm |
+| `CascadeSynapsePlasticity` | P | **C3** | C2 shows EWC/SI insufficient **and** a long stream exists (≥20 tasks) | med | parked; no row |
+| `BayesianOnlineUpdate` | U | **C3** | SI fails its stop rule | low | no row |
+| `EligibilityPropCredit` | C | **T9** | MPU1 closes **or** a sequence-length axis enters | med | parked |
+| `UnbiasedOnlineRTRLCredit` | C | **T9** | same | med | parked |
+| `RTRLReference` | C fixture | **T9** | same | low | parked |
+
+**Read this table as a promise:** every primitive we intended to build has a
+named track, a named trigger, and a stated cost. A row moves only when its
+trigger measurement lands, and the trigger is written where the number is
+produced — not here.
+
+### P0 — estimator credits (unblocks B2 and E2; lands only after B1 or E1 promotes)
 
 The screen itself needs no new primitive: `benchmarks/joint/z3_fixed_weights.py`
 already implements straight-through Gumbel selection. The claim arm needs a
@@ -1381,7 +1412,7 @@ first-class row because the claim table names its estimator kind and identity.
 **Why not blocking:** the plain-backprop pilot already binds on activations
 (89% SGD / 73% Adam at B=8192), so optimizer-state primitives move a boundary
 that is already crossed.
-### P3 — P4 baselines (lands with T8)
+### P3 — streaming baselines (lands with C2/T8)
 | Primitive (axis) | Mechanism | Decision | Stop |
 |---|---|---|---|
 | `SynapticIntelligenceUpdate` (U) | **lift** `core/continual/losses.py:84` into a U row; online path integral, +1× params | strictly stronger streaming baseline than EWC, cheaper than replay at tiny budgets | SI ≈ EWC → keep EWC, one arm fewer |
