@@ -202,6 +202,11 @@ _CREDIT_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ("target_inversion", "Target propagation inversion", ()),
     ("homeostatic", "Autonomous Lipschitz scaling", ()),
     ("pepita", "PEPITA input-modulation credit", ("feedback_scale",)),
+    (
+        "hybrid",
+        "Lockstep-local trunk + exact-gradient head",
+        ("split_layer", "feedback_scale"),
+    ),
     ("gradient", "Backprop gradient credit (ruler reference)", ()),
     ("pc_alm", "PC-ALM primal-dual credit", ()),
 ]
@@ -1593,6 +1598,19 @@ CONSTRAINTS = [
                 )
             ),
             in_(var("geometry"), const("feedforward")),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Credit-Geometry: the hybrid dispatches a trunk and a head by layer
+    # index; its boundary is a dense stack's Linear output, not a cell/graph.
+    ConstraintSpec(
+        name="hybrid_geometry",
+        kind=ConstraintKind.VOID,
+        description="Hybrid credit requires a feedforward layer stack (split at a Linear)",
+        predicate=or_(
+            not_(eq(var("credit"), const("hybrid"))),
+            eq(var("geometry"), const("feedforward")),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",

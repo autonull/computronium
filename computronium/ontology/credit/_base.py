@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import zlib
+from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
 import torch
@@ -13,6 +14,18 @@ if TYPE_CHECKING:
 
     from computronium.ontology.credit import CreditAssignmentConfig
     from computronium.ontology.geometry import Geometry, TileBlockGeometry
+
+
+class Phase(StrEnum):
+    """Settling phase declared by a credit rule.
+
+    Credits declare exactly the phases they consume (``phases`` ClassVar);
+    the pipeline settles only declared phases, removing wasted settles for
+    families that ignore free or nudged states.
+    """
+
+    FREE = "free"
+    NUDGED = "nudged"
 
 
 class StatefulCredit(Protocol):
@@ -213,7 +226,7 @@ class LearnedFeedbackMixin:
         step = step_group.get("counter") if isinstance(step_group, dict) else None
         if not isinstance(step, Tensor):
             msg = "learned-feedback credit state is missing the step counter"
-            raise RuntimeError(msg)
+            raise TypeError(msg)
         self._feedback_step = int(step.item())
         for key, tensor in state.get("learned_feedback", {}).items():
             name, shape_s, device, dtype = key.split("|", 3)

@@ -9,6 +9,7 @@ from computronium.ontology import (
     CreditAssignmentConfig,
     GeometryConfig,
     HomeostaticCredit,
+    HybridCredit,
     LocalContrastiveCredit,
     LocalGoodnessCredit,
     ParameterUpdateConfig,
@@ -99,6 +100,8 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             return HomeostaticCredit(config)
         case "gradient" | "backprop":
             return BackpropCredit(config)
+        case "hybrid":
+            return HybridCredit(config)
         case "pc_alm":
             return PCALMCredit(config)
         case other:

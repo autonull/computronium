@@ -89,6 +89,30 @@ cost of the rung: PEPITA recomputes the standard chain in pass 2, so it makes
 three layer sweeps per step where the store-all made two — compute bought for
 memory, and named here rather than discovered later.
 
+### 2.3 The hybrid credit (T3b)
+
+`HybridCredit` composes a lockstep PEPITA trunk with an exact-gradient head.
+Steps 1–2 run the trunk under `no_grad`, detach the boundary, and take the
+head's true gradients plus the boundary error from one `autograd.grad` call.
+Step 3 modulates the input with the boundary error and advances the trunk's
+standard and modulated chains layer by layer. Only the head's 2-layer graph is
+retained; the trunk's working set is one layer's two chains.
+
+| Arm | L=4 | L=8 | L=16 | L=32 | Class |
+|---|---|---|---|---|---|
+| Hybrid, lockstep trunk | 81.0 MB | 81.0 MB | 81.0 MB | 81.0 MB | flat |
+| Hybrid, store-all trunk | 122.3 MB | 250.3 MB | 506.3 MB | 1018.3 MB | O(L) |
+
+Peak above the weight-gradient set (one parameter-sized tensor per layer is
+paid by any pseudo-gradient credit), one credit step, W=512, B=4096, 10 classes,
+RTX 3080 10 GiB. The store-all row is the **negative control**: it retains both
+trunk activation lists, which is the mechanism the lockstep removes. The
+lockstep trunk's per-layer deltas equal the store-all hybrid at `atol=1e-7`
+(**measured max|Δ| = 0.0**, bit-exact on the seeded fixture), and the head's
+gradients equal plain
+backprop's at the same boundary. The measured head graph is the only retained
+activation set; the trunk's O(B·W) working set is the measured flat term.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -98,3 +122,4 @@ memory, and named here rather than discovered later.
 | Decomposition sums to peak; measured c | `tests/property/test_memory_binding.py` | 10 s (CUDA) |
 | Every credit row declares its estimator coordinate | `tests/property/test_estimator_lock.py` | 9 s |
 | Lockstep ≡ store-all, per layer, `atol=0`; peak flat in depth | `tests/property/test_lockstep_parity.py` | 9 s (4 s CUDA) |
+| Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |

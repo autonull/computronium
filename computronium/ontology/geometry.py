@@ -1071,6 +1071,38 @@ class FeedforwardGeometry(nn.Module):
             return h
         return self._apply_layers(h, self._layers, op, intermediates)
 
+    def step_layer(
+        self,
+        h: Tensor,
+        layer: nn.Module,
+        h_in: Tensor,
+        op: Callable[[Tensor, Tensor], Tensor],
+    ) -> tuple[Tensor, Tensor]:
+        """Advance one layer, threading the input the residual skip reads.
+
+        ``h_in`` is the last Linear's *input*: the activation after a Linear
+        adds that tensor, not its own input. A caller that advances the stack
+        one layer at a time (the hybrid trunk) must carry it across the pair,
+        or a residual geometry adds the wrong tensor. Returns
+        ``(output, h_in)``.
+        """
+        if isinstance(layer, nn.Linear):
+            h_in = h
+            h = op(h, layer.weight)
+            if layer.bias is not None:
+                # Out-of-place add: in-place adds on grad-tracking tensors
+                # pin the whole downstream settle graph (CUDA leak)
+                h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
+            return h, h_in
+        h = layer(h)
+        if self.residual and h.shape == h_in.shape:
+            # Out-of-place add: in-place adds on grad-tracking
+            # tensors pin the whole downstream settle graph
+            h = h + h_in  # ruff: ignore[non-augmented-assignment]
+        if self.stream_norm:
+            h = self._normalize_stream(h)
+        return h, h_in
+
     def _apply_layers(
         self,
         h: Tensor,
@@ -1081,25 +1113,11 @@ class FeedforwardGeometry(nn.Module):
         """Run ``layers`` on ``h``; this is the unit a checkpoint recomputes."""
         h_in = h
         for layer in layers:
-            if isinstance(layer, nn.Linear):
-                h_in = h
-                h = op(h, layer.weight)
-                if layer.bias is not None:
-                    # Out-of-place add: in-place adds on grad-tracking tensors
-                    # pin the whole downstream settle graph (CUDA leak)
-                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
-            else:
-                h = layer(h)
-                if self.residual and h.shape == h_in.shape:
-                    # Out-of-place add: in-place adds on grad-tracking
-                    # tensors pin the whole downstream settle graph
-                    h = h + h_in  # ruff: ignore[non-augmented-assignment]
-                if self.stream_norm:
-                    h = self._normalize_stream(h)
-                if intermediates is not None:
-                    # Add after activation function and skip (post-skip
-                    # activities align with settle-kernel acts)
-                    intermediates.append(h)
+            h, h_in = self.step_layer(h, layer, h_in, op)
+            if not isinstance(layer, nn.Linear) and intermediates is not None:
+                # Add after activation function and skip (post-skip
+                # activities align with settle-kernel acts)
+                intermediates.append(h)
         return h
 
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:

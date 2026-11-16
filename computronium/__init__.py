@@ -156,6 +156,7 @@ if TYPE_CHECKING:
     from computronium.ontology.credit import (
         BackpropCredit,
         CreditAssignmentConfig,
+        HybridCredit,
         LemmaCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
@@ -325,6 +326,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "LemmaCredit": ("computronium.ontology.credit", "LemmaCredit"),
     "LocalGoodnessCredit": ("computronium.ontology.credit", "LocalGoodnessCredit"),
     "PepitaCredit": ("computronium.ontology.credit", "PepitaCredit"),
+    "HybridCredit": ("computronium.ontology.credit", "HybridCredit"),
     "MemristiveSubstrate": ("computronium.ontology.substrate", "MemristiveSubstrate"),
     "MeanNormUpdate": ("computronium.ontology.update", "MeanNormUpdate"),
     "NeuromorphicSubstrate": (
@@ -573,6 +575,7 @@ __all__ = [
     "GeometryConfig",
     "GraphGeometry",
     "HardwareConfig",
+    "HybridCredit",
     "InstantaneousDynamics",
     "LazyStateDynamics",
     "LemmaCredit",

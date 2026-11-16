@@ -5,7 +5,6 @@ from __future__ import annotations
 import zlib
 from abc import abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, cast, runtime_checkable
 
 import torch
@@ -30,8 +29,12 @@ from computronium.ontology.credit._base import (
     TileFeedbackMixin,
 )
 from computronium.ontology.credit._base import (
+    Phase as Phase,
+)
+from computronium.ontology.credit._base import (
     StatefulCredit as StatefulCredit,
 )
+from computronium.ontology.credit._hybrid import HybridCredit as HybridCredit
 from computronium.ontology.dynamics._state import state_dual_vars, state_energy
 
 if TYPE_CHECKING:
@@ -230,6 +233,7 @@ class CreditAssignmentConfig:
     readout_scale: float = 1.0
     sequential_lr: float = 0.0
     grad_clip: float = 1.0  # Per-parameter gradient clipping for pseudo-gradients
+    split_layer: int = -1  # Hybrid: stack index where the head starts (-1 auto)
 
     @classmethod
     def local_contrastive(
@@ -487,6 +491,35 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
+    def hybrid(
+        cls,
+        *,
+        split_layer: int = -1,
+        gamma: float = 0.05,
+        feedback_matrix: Tensor | None = None,
+        train_biases: bool = False,
+        grad_clip: float = 1.0,
+    ) -> CreditAssignmentConfig:
+        """Lockstep-local trunk + exact-gradient head (TODO93 T3b).
+
+        ``split_layer`` indexes the geometry's layer stack and must land on a
+        Linear; ``-1`` places the head on the last two Linears. γ is the
+        trunk's input-modulation scale (the PEPITA knob, parity at 0.05), and
+        the head keeps exact autograd gradients.
+        """
+        return cls(
+            credit_type="hybrid",
+            beta=0.5,
+            feedback_matrix=feedback_matrix,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=gamma,
+            split_layer=split_layer,
+            train_biases=train_biases,
+            grad_clip=grad_clip,
+        )
+
+    @classmethod
     def gradient(
         cls,
         *,
@@ -623,18 +656,6 @@ class CreditAssignmentConfig:
 # ============================================================
 # CreditAssignment Protocol
 # ============================================================
-
-
-class Phase(StrEnum):
-    """Settling phase declared by a credit rule.
-
-    Credits declare exactly the phases they consume (``phases`` ClassVar);
-    the pipeline settles only declared phases, removing wasted settles for
-    families that ignore free or nudged states.
-    """
-
-    FREE = "free"
-    NUDGED = "nudged"
 
 
 @runtime_checkable
@@ -3056,6 +3077,38 @@ class GradientCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.gradient()
 
+    def gradient_of(
+        self,
+        loss: Tensor,
+        targets: list[Tensor],
+        *,
+        retain_graph: bool = False,
+    ) -> list[Tensor]:
+        """Exact ``∂loss/∂targets``; raise when the graph misses a target.
+
+        One choke point for every exact-gradient consumer: the credit itself
+        and the hybrid head (which appends the boundary activation to the
+        target list). A missing gradient is a fail-loud, not a zero-fill — a
+        dynamics that detaches activations would silently degrade learning to
+        the reached layers only.
+        """
+        grads = torch.autograd.grad(
+            loss,
+            targets,
+            retain_graph=retain_graph,
+            create_graph=False,
+            allow_unused=True,
+        )
+        missing = [i for i, g in enumerate(grads) if g is None]
+        if missing:
+            raise RuntimeError(
+                f"GradientCredit: no gradient reached target indices {missing}. "
+                "The loss graph does not touch every requested tensor — a "
+                "dynamics that detaches activations would silently degrade "
+                "learning to the reached layers only. Zero-filling hides that."
+            )
+        return list(grads)
+
     def compute_pseudo_gradient(
         self,
         states: Mapping[Phase, SettableState],
@@ -3065,23 +3118,10 @@ class GradientCredit:
         """Compute true gradients via autograd on nudged state loss."""
         if loss is None:
             return []
-
         weight_names = _learnable_weight_names(geometry.params)
         params = [geometry.params[n] for n in weight_names]
         # Retain graph if bias gradients will also be computed
-        retain = self.config.train_biases
-        grads = torch.autograd.grad(
-            loss, params, retain_graph=retain, create_graph=False, allow_unused=True
-        )
-        detached = [n for n, g in zip(weight_names, grads, strict=True) if g is None]
-        if detached:
-            raise RuntimeError(
-                f"GradientCredit: no gradient reached {detached}. The loss "
-                "graph does not touch every learnable weight — a dynamics "
-                "that detaches activations would silently degrade learning "
-                "to the reached layers only. Zero-filling hides that failure."
-            )
-        return list(grads)
+        return self.gradient_of(loss, params, retain_graph=self.config.train_biases)
 
     def compute_bias_pseudo_gradients(
         self,

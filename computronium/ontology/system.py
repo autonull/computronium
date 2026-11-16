@@ -469,6 +469,7 @@ class SystemConfig:
 
         # Credit-Geometry compatibility
         self._validate_local_contrastive_geometry()
+        self._validate_hybrid_geometry()
         self._validate_attention_geometry_compatibility()
         self._validate_transformer_pairing_credit()
 
@@ -871,6 +872,17 @@ class SystemConfig:
                     f"LocalContrastiveCredit (credit_type={self.credit.credit_type!r}) "
                     f"requires feedforward geometry, got {geom_type!r}"
                 )
+
+    def _validate_hybrid_geometry(self) -> None:
+        """The hybrid's split is a dense stack boundary; refuse other shapes."""
+        if self.credit.credit_type != "hybrid":
+            return
+        geom_type = getattr(self.geometry, "config", self.geometry).topology_type
+        if geom_type != "feedforward":
+            raise ValueError(
+                f"HybridCredit (credit_type='hybrid') requires a feedforward "
+                f"layer stack with split_layer at a Linear, got {geom_type!r}"
+            )
 
     def _validate_attention_geometry_compatibility(self) -> None:
         """Attention geometry has specific credit/update compatibility requirements."""
