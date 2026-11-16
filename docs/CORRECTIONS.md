@@ -102,3 +102,22 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The credit-facing state carries the **global** class index (`local_y + task_start`); the masked loss still uses the local label. `test_credit_state_carries_the_global_task_target` fails if the offset is removed. `_finalize_output` now stores the loss it computes, so a FREE-only credit returns a finite loss instead of raising `TypeError`. |
 | Status | corrected — local learns task 1 at 0.964 after the fix |
 | Commit | this commit |
+
+| Field | Correction 11 — C1's identity card named an inert knob |
+|---|---|
+| Original claim | The C1 box fixed `ewc_lambda = 1000.0`, so the plasticity ladder ran at one consolidation strength. |
+| Original metric | `run_plasticity_ladder` passed `ewc_lambda=1000.0` into `CLConfig`; the `local` and `backprop` arms are built by `create_local_arm`/`create_backprop_arm`, whose signatures have no `ewc_lambda`, so no cell read the field. |
+| Audited procedure | Read each factory signature against the box: only the C2 arms (`create_local_ewc_arm`, `create_backprop_ewc_arm`) accept `ewc_lambda`. The C1 record therefore named a knob its arms could not vary. |
+| Affected conclusions | The C1 box only. The measured cells, the floor gate, and the promotion verdict are unchanged (the knob was inert, not silently varied). |
+| Replacement metric | The plasticity box carries only the knob the arms read (LR); `_run_cell`'s `ewc_lambda` defaults to 0 and the C2 box carries the λ ladder. |
+| Status | corrected — the box names only the knobs its arms read |
+| Commit | this commit |
+
+| Field | Correction 12 — the task-start anchor erased every EWC importance estimate |
+|---|---|
+| Original claim | `ewc`, `local_ewc` and `backprop_ewc` train under the declared diagonal importance `F = (params − baseline)² + damping`, so the C2 ladder over `ewc_lambda` varies consolidation strength. |
+| Original metric | `ElasticConsolidationUpdate.consolidate` computed F at the end of each task (drift over the task), but `runner._apply_task_boundary_setup` also called `consolidate` at the start of every task with unchanged parameters. That second call recomputed `F = 0 + damping` and overwrote the drift importance before a single training step used it. Direct probe: `consolidate(p0)` → `consolidate(p1)` gives `F=0.011`; `consolidate(p1)` again gives `F=0.001` (= `fisher_damping`). |
+| Affected conclusions | Every continual cell routed through an EWC arm: the plasticity rows (C1) are untouched (their arms do not read EWC), but the C2 retention ladder measured a uniform L2 anchor, not EWC. The first C2 launch's two cells (`results/t93_c1/consolidation.inert.cells.jsonl`) are kept as the defect probe, not as a ladder. |
+| Replacement metric | `ElasticConsolidationUpdate.anchor(params)` moves `_old_params` and `_baseline` without recomputing F; the runner uses it at task starts and keeps `consolidate` for the end-of-task drift. `test_task_boundary_anchors_without_erasing_importance` fails if the runner calls `consolidate` at the boundary. |
+| Status | corrected — the C2 ladder was restarted on the fixed mechanism |
+| Commit | this commit |

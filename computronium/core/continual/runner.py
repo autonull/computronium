@@ -284,7 +284,11 @@ def _apply_task_boundary_setup(
         lwf_loss.set_prev_model(prev_model)  # type: ignore[attr-defined]
     update = extra.get("update")
     if update is not None:
-        update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
+        anchor = getattr(update, "anchor", None)
+        if callable(anchor):
+            anchor(model.geometry.params)  # type: ignore[attr-defined]
+        else:
+            update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
     si = extra.get("si")
     if si is not None:
         si.start_task()  # type: ignore[attr-defined]

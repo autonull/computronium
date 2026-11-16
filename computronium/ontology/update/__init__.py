@@ -1457,6 +1457,16 @@ class ElasticConsolidationUpdate:
         }
         self._baseline = {k: v.clone().detach() for k, v in params.items()}
 
+    def anchor(self, params: dict[str, Tensor]) -> None:
+        """Move the consolidation anchor to ``params`` without recomputing it.
+
+        A task start must anchor to the previous task's solution while keeping
+        the drift importance measured at the previous boundary; recomputing on
+        the same parameters would reset every Fisher entry to ``damping``.
+        """
+        self._old_params = {k: v.clone().detach() for k, v in params.items()}
+        self._baseline = {k: v.clone().detach() for k, v in params.items()}
+
     def step(
         self,
         params: dict[str, Tensor],

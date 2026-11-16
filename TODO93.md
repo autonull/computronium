@@ -1,5 +1,5 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v14 — C promotes; retention is the next rung. Apparatus phase, not adjudication.**
+**Status:** 2026-11-16 · **v15 — C2 closes at its saturation point; the screens are the next rung. Apparatus phase, not adjudication.**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 landed: the truth pass, the memory
 decomposition, the ladder runner, the checkpointed baseline, the lockstep
 two-pass rung, the hybrid, and the composed pilot. Measured: **c≈4.1** (not 1),
@@ -44,6 +44,22 @@ label channel and the data-order seed (CORRECTIONS 9–10) — and the row is a
 **coordinate, not a claim** (n=1 per point; the best local point is the ladder's
 lower edge, so a downward LR extension is the next rung). Details: §14 and
 `docs/BENCHMARKS.md` §2.5.
+**C2 closed at its saturation point (2026-11-16).** At the frozen LR 1e-3,
+the EWC-strength ladder λ=1/10/100 measured local × EWC against backprop ×
+EWC at matched per-step cost (1.07–1.13×, ≤1.5× gate; 3.1 MiB state each).
+At the best point λ=100: local **0.952 / 0.015** (mean final acc / forgetting),
+control **0.963 / 0.020**; the confirmation seed repeats it (0.951 / 0.016 vs
+0.958 / 0.024). The local gain is +0.005, below the pre-registered δ=0.032,
+while the control's accuracy is 1.1 pp higher; the local ladder moves only
+0.6 pp from λ=1 to λ=100 (the control 2.2 pp), both below δ — so the knob
+saturates at λ=10/100 and **C closes with λ=100 as its saturation point**
+(coordinate, not a claim). Re-open probes: a 5-seed retention protocol (rung
+3), a matched-byte replay composition, or SI/cascade at the frozen LR. One
+apparatus defect was found and fixed on the way: the runner re-consolidated
+at every task start and erased the drift importance (CORRECTION 12); the
+fixed ladder then lost one launch to a kill after seven cells, and the
+runner now resumes and dedupes its cell log.
+Details: §14 and `docs/BENCHMARKS.md` §2.6.
 **The amendment that governs the whole plan.** A contest posed where the
 structural advantage cannot bind is as uninformative as one posed where it cannot
 lose. That is TODO92's lesson, and the mirror image of it is the failure mode of
@@ -233,15 +249,15 @@ check, not a claim, and each fails when its mechanism is removed.
 | T3b | `HybridCredit` in `ontology/credit/_hybrid.py`: `PepitaTrunk` contrast + `GradientCredit.gradient_of` head; `step_layer` threads the residual input across one layer; `split_layer` must land on a Linear; one registry row (`estimator_kind="hybrid"`) and feedforward-geometry refusal | `test_hybrid_parity.py` (8, 2 CUDA) | trunk deltas ≡ store-all hybrid **max\|Δ\| = 0.0**; head ≡ plain backprop; **trunk peak flat 81.0 MB above gradients at L=4→32** vs store-all 122→1018 MB; composed `train_step` decreases loss and moves every weight |
 | T6 | `validation/memory_frontier.py`: one operating point, four arms, two controls, appendix writer; `run_pilot`, `run_learning_ladder`, `claim_ladder`, `build_arm` | `test_memory_frontier.py` (8, 1 CUDA xfail) | **c = 4.125 (0.0 % spread) at L=32/B=8192/W=1024**; gate green (share 0.941); learning control passes (0.419 vs floor 0.409); **two defects found** — T6b (composed hybrid 3249 MB vs ckpt 1637 MB) and T6c (loss plateau at L=32) |
 | **C1 ✅** | **Plasticity ladder**: `validation/plasticity_ladder.py`; batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed; local (PEPITA) vs exact-gradient control | `test_plasticity_ladder.py` (3), `test_cl_credit_arms.py` (5) | **local 0.945 / 0.947 at LR 1e-3 on two seeds**, control 0.839 / 0.893, floor 0.55 → **verdict: promote**. Two apparatus defects fixed: credit label channel (local scored 0.030 on task 4 before) and data-order seed (backprop swung 0.926→0.839) |
-| **C2** | **Retention ladder**: `validation/plasticity_ladder.py --stage consolidation`; 3-point EWC-strength ladder at frozen LR (1/10/100), local × EWC vs backprop × EWC; 1 seed + confirmation | ready; `run_consolidation_ladder` | local × EWC above floor and retention (BWT/forgetting) at matched per-step cost → C2b; saturation → close C |
+| **C2 ✅** | **Retention ladder**: `validation/plasticity_ladder.py --stage consolidation`; batch-1 SplitMNIST, 3-point EWC-strength ladder at the frozen LR (1/10/100), local × EWC vs backprop × EWC; 1 seed + confirmation; kill-safe resume/replay | `test_plasticity_ladder.py` (9), `test_cl_credit_arms.py` (6) | **close at the saturation point λ=100**: local 0.952 / 0.015 vs control 0.963 / 0.020 (gain +0.005 < δ 0.032; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost ratio 1.07×; λ ladder moves 0.6 pp (local) / 2.2 pp (control), both < δ. Defect fixed en route: task-start re-consolidation erased the Fisher importance (CORRECTION 12) |
 
 **Next (three sessions, not a DAG).**
 
-1. **Screens, in parallel:** **B** (routing STE-gap over 4 stacked-op points),
-   **C2** (the 3-point EWC-strength ladder at the frozen LR C1 measured), **E-lite**
-   (4 estimator arms × 1 task × 1 seed) — each runs its rung 0 and rung 2, then
-   writes a verdict or a laddered refusal; each costs hours, not sessions. C1 is
-   done; C2 is its promotion gate, not a new track.
+1. **Screens, in parallel:** **B** (routing STE-gap over 4 stacked-op points) and
+   **E-lite** (4 estimator arms × 1 task × 1 seed) — each runs its rung 0 and
+   rung 2, then writes a verdict or a laddered refusal; each costs hours, not
+   sessions. C1 and C2 are closed; C2 closed at its saturation point, so C is
+   not a screen any more.
 2. **Structure:** **D** (ternary/memristive + `energy_min` at 10 steps, matched
    digital baseline) and **A**'s two blockers (T6b composed path, T6c trainable
    depth), whichever the screens promoted.
@@ -711,7 +727,7 @@ record of what exists.
 | T6a | Registration: floor, budgets, `n_max=5`, binding appendix, stop rule | A | hours | blocked on T6b+T6c |
 | **B1** | **Routing ladder**: STE-gap vs stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs; soft-relaxation bound | B | hours | gap grows at the best point → promote B2; flat **across the ladder** → refuse B (§0.4) |
 | **C1 ✅** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed | C | landed 2026-11-16 | local **0.945 / 0.947** at LR 1e-3 on 2 seeds, control 0.839 / 0.893, floor 0.55 → **promote to C2**. Best point is the lower edge; a downward extension (3e-4/1e-4) is the next rung if an optimum is claimed |
-| **C2** | **Retention ladder**: 3-point EWC-strength ladder (λ = 1/10/100) at the frozen LR, local × EWC vs backprop × EWC, matched per-step cost | C | hours | local × EWC above floor and lower forgetting/BWT than its control at the best λ → C2b; saturated everywhere → close C with the saturation point |
+| **C2 ✅** | **Retention ladder**: 3-point EWC-strength ladder (λ = 1/10/100) at the frozen LR, local × EWC vs backprop × EWC, matched per-step cost | C | landed 2026-11-16 | local 0.952 / 0.015 vs control 0.963 / 0.020 at λ=100 (gain +0.005 < δ 0.032); confirmation 0.951 / 0.016 vs 0.958 / 0.024 → **close C at the saturation point**; task-start anchor defect fixed (CORRECTION 12) |
 | **D1** | **Substrate ladder**: ternary/memristive + `energy_min` at `max_steps` 5/10/20 vs digital backprop; state per step | D | hours–1 session | parity with less state at the best point → D2; no training at any point → park with a trigger |
 | **E1** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | hours (lite) + 1 session | a table with a declared reference per arm |
 | **F1** | **Composition ladder**: 50 legal cells vs the best single-axis default, then a 3-point ladder on the best-looking family | F | 1 session | family ≥δ after its ladder → F2; flat everywhere → composition refusal with a trigger |
@@ -730,7 +746,7 @@ seed at the best point. A single low cell at one setting is a defect probe
 frees the portfolio slot, and it never deletes the idea.
 
 **Two falsifiers, two numbers, restated.** The implementation falsifiers are
-closed (T1–T3b, T6). What remains is a **portfolio of cheap falsifiers**: B1, C1,
+closed (T1–T3b, T6). What remains is a **portfolio of cheap falsifiers**: B1,
 D1, F1 can each cancel a track for hours. The expensive falsifier (A's claim) is
 deliberately last, because it is the only one that needs five paired seeds on a
 real task.
@@ -745,7 +761,7 @@ real task.
 | 4 ✅ | A — composed pilot | landed 2026-11-16 | c=4.125; controls pass; blockers T6b/T6c |
 | 5 | **B — routing ladder** | `benchmarks/joint/z3_fixed_weights.py`; §5 | STE-gap grows at the ladder's best point → B2; flat across 1/2/4/8 → laddered refusal |
 | 6 ✅ | **C — plasticity ladder** | landed 2026-11-16 | local 0.945/0.947 at LR 1e-3 on two seeds; control 0.839/0.893; floor 0.55 → **promote to C2** (retention); best point is the ladder's lower edge, so the downward extension is the next rung |
-| 7a | **C2 — retention ladder** | `python -m computronium.validation.plasticity_ladder --stage consolidation --device cuda` (frozen LR from `results/t93_c1/frozen_lr.txt`) | local × EWC at the floor and lower forgetting/BWT than backprop × EWC at matched per-step cost → C2b; saturated at every λ → close C with the saturation point |
+| 7a ✅ | **C2 — retention ladder** | `results/t93_c1/consolidation.json` (replay: `... --stage consolidation --replay`) | **closed at the saturation point λ=100**: local forgets 0.005 less than the control, below δ=0.032, at 1.07× cost; confirmation seed repeats |
 | 7b | **E — estimator atlas** | `run_parity` portfolio + the 6 estimator coordinates; §2 | one table: bias, variance, forward-equivalents, matched budget, declared reference |
 | 8 | **D — substrate ladder** | memristive/ternary substrate + `energy_minimization` at `max_steps` 5/10/20; §1 | parity with less state at the best point → D2; nothing trains → park with a trigger |
 | 9 | **A — T6b + T6c** | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
@@ -845,6 +861,16 @@ coordinate. `CLConfig.lr` and `si_xi` now reach every factory
 (`test_config_lr_reaches_every_credit_arm`). The ladder gate is
 `test_plasticity_ladder.py` (promote only on two seeds; a control at chance
 invalidates the run).
+**Landed 2026-11-16 (C2):** a retention gate (floor on two seeds, matched
+per-step cost ≤1.5×, forgetting δ=0.032, saturation at the top rung), a
+kill-safe cell log (`_resume_cells`/`read_cells` reuse measured cells, dedupe a
+kill-race row), a replay path (`--replay` recomputes the gate without
+training), and the task-start anchor lock
+(`test_task_boundary_anchors_without_erasing_importance`; `anchor()` moves
+`_old_params`/`_baseline` and leaves the drift Fisher intact). The ladder
+closed at λ=100 (local 0.952 / 0.015 vs control 0.963 / 0.020; gain +0.005 <
+δ), and CORRECTION 12 records the anchor defect the probe found before the
+retention claim could be made.
 **Landed 2026-11-16 (T6):** lock 7's instrument control and learning control
 (`tests/property/test_memory_frontier.py`: `c` within 10 % of the declared 4.1 at
 the registered width/batch, plain-backprop share ≥0.5, and L=8 at the floor),
@@ -943,6 +969,7 @@ not scheduled, however cheap.
 | 2026-11-16 | P2 | depth-rung trainability of the plain stack | 1 seed × 4 checkpoints + 4 arms | val_acc and loss vs the L=8 floor | L=32, W=1024, B=8192, 200→1000 steps | **coordinate: loss pinned at 2.2132, all arms 0.100; L=8 = 0.419 → re-pose (norm/init) before any depth claim** | T6c |
 | 2026-11-16 | P2 | C1 apparatus defects: credit label channel and data-order seed | 2 cells + 2 defect probes | task-1 accuracy and backprop at LR 1e-3 | SplitMNIST batch 1, W=256, 30k steps/5 tasks, 1 seed | **defects found and fixed** — local scored 0.030 on task 4 under task-local labels (0.964 on task 1 alone after); backprop swung 0.926→0.839 under the data-order seed | C1 ✅ |
 | 2026-11-16 | C | batch-1 plasticity ladder: local (PEPITA) vs exact gradient | 8 cells (2 arms × 3 LR + 2 seeds) | 2000 held-out samples/task (1 σ = 0.011); floor 0.55 | SplitMNIST, batch 1, 1 epoch/task, W=256, RTX 3080 10 GiB | **local 0.945 / 0.947 at LR 1e-3 on two seeds**; control 0.839 / 0.893; forgetting 0.038/0.036 vs 0.145/0.091; **verdict: promote** (coordinate, n=1; best at the lower edge) | C1 ✅ |
+| 2026-11-16 | C | consolidation-strength ladder: local × EWC vs backprop × EWC | 8 cells (2 arms × 3 λ + 2 confirmation seeds) | 2000 held-out samples/task (1 σ = 0.011; forgetting σ = 0.016; δ = 0.032); floor 0.55; per-step cost ≤1.5× | SplitMNIST, batch 1, 1 epoch/task, W=256, frozen LR 1e-3, λ=1/10/100, RTX 3080 10 GiB | **at λ=100: local 0.952 / 0.015 vs control 0.963 / 0.020** (gain +0.005 < δ; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost 1.07×; λ ladder moves 0.6 / 2.2 pp (< δ) → **verdict: close at the saturation point** (coordinate, n=1 + confirmation) | C2 ✅ |
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
 | — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T6a (blocked on T6b/T6c) |
 | — | B | routing: local vs STE+aux; bias | — | acc @ matched walltime; bias vs declared reference | — | — | B1 |
@@ -960,30 +987,35 @@ trigger and a re-open command**; **a surprise that opens a new question (§0.2)*
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **C2** retention | does local × EWC retain the stream at matched state? | hours (3 λ + 1 confirmation, ~35 min) | C1 promoted; ladder ready at the frozen LR |
-| 2 | **B** routing | does the STE-gap grow with discrete-op count? | hours (4-op ladder) | unprobed; STE already implemented |
-| 3 | **E** atlas | what *is* each estimator's bias/variance at matched compute? | hours (lite) + 1 session | coordinates declared; no table |
-| 4 | **D** substrate | parity on a constrained substrate with less state? | hours (3+1 ladder) | models exist; no matched row |
-| 5 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
-| 6 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
+| 1 | **B** routing | does the STE-gap grow with discrete-op count? | hours (4-op ladder) | unprobed; STE already implemented |
+| 2 | **E** atlas | what *is* each estimator's bias/variance at matched compute? | hours (lite) + 1 session | coordinates declared; no table |
+| 3 | **D** substrate | parity on a constrained substrate with less state? | hours (3+1 ladder) | models exist; no matched row |
+| 4 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
+| 5 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
 
-Why C moved to 1: its plasticity screen promoted (0.945 / 0.947 on two seeds),
-so retention is the next decision and it reuses the frozen LR the ladder wrote.
-Why A stays at 5: its instrument is done, but its claim is two hours-scale
-defects away and its treatment arm is unvalidated (the hybrid learns worse than
-its own trunk rule at L=8). **A is not abandoned** — it keeps its next rung in
-the top three as soon as T6b/T6c are done.
+Why C is gone: C2 closed at its saturation point (λ=100; local 0.952 / 0.015
+vs control 0.963 / 0.020; gain below the 3.2 pp margin), so the retention
+question is answered at this box and its re-open probes carry the track.
+Why B is first: it is the cheapest screen that can cancel a whole track, and
+its baseline and implementation already exist. Why A stays fourth: its
+instrument is done, but its claim is two hours-scale defects away and its
+treatment arm is unvalidated (the hybrid learns worse than its own trunk rule
+at L=8). **A is not abandoned** — it keeps its next rung as soon as T6b/T6c
+are done.
 
-**Refused / re-open ledger (append-only; a refusal is not a deletion).**
+**Refused / closed / re-open ledger (append-only; a refusal or close is not a
+deletion).**
 
 | Track / arm | Knob box measured | Verdict | Reversal trigger | Re-open command |
 |---|---|---|---|---|
 | FF contrastive (kernel) | n/a — no label channel | unavailable (T1) | a label channel is added to the contrastive kernel | `test_kernel_truth_lock.py` stub detector flips |
 | SNN contrastive (kernel) | n/a — nudge is a no-op | unavailable (T1) | a real nudge branch lands | same |
 | gradient × graph+instantaneous | one cell, dry-run gate | refused **by the gate**, not by a ladder | a differentiable graph operator exists | §0.3 graph probe; verify the absence is structural first |
+| **C — consolidation strength (closed, not refused)** | λ = 1/10/100 at frozen LR 1e-3; 8 cells; 3.1 MiB state; cost ≤1.5× | **close** at the saturation point λ=100 (local 0.952 / 0.015; control 0.963 / 0.020; gain +0.005 < δ) | a 5-seed retention protocol (rung 3), a matched-byte replay composition, or SI/cascade at the frozen LR | fresh ladder or `--stage consolidation --replay` |
 
-New refusals are appended here by the session that measures them, with the ladder
-box, trigger, and command. The surprise budget may pick one per session.
+New refusals and closes are appended here by the session that measures them,
+with the ladder box, trigger, and command. The surprise budget may pick one per
+session.
 ---
 ## 15. Rules and guardrails
 - **A claim names its budget.** Memory, walltime, forward-equivalents, or params
@@ -1018,30 +1050,31 @@ box, trigger, and command. The surprise budget may pick one per session.
 ---
 ## 16. Handoff contract
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
-- **Start order is the portfolio rank (§14), not a DAG.** C1 landed; the next
-  session runs C2 (retention), B1 and E-lite in parallel; then D1 and A's two
-  blockers; then F1 and T6a. T5 is a standing side track. T7/T8/T9 stay gated on
-  B1/C1/trigger.
+- **Start order is the portfolio rank (§14), not a DAG.** C1 landed and C2
+  closed at its saturation point; the next session runs B1 and E-lite in
+  parallel, then D1 and A's two blockers, then F1 and T6a. T5 is a standing
+  side track. T7/T8/T9 stay gated on B1/C1/trigger.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
   only in the log.
-- **Live from 2026-11-16:** C1 promoted. The next rung is **C2**, the EWC-strength
-  ladder at the frozen LR (`python -m computronium.validation.plasticity_ladder
-  --stage consolidation --device cuda`, ~35 min, 8 cells); its target is lower
-  forgetting/BWT than the backprop × EWC control at matched per-step cost, not
-  another plasticity number. B1 and E-lite remain the unprobed cheap screens.
-  A's blockers (T6b composed-path memory, T6c trainable depth) are unchanged:
-  T6b lets a credit own its free pass so the strict xfail in
-  `test_memory_frontier.py` flips; T6c re-poses the claim geometry on a
-  trainable one (LayerNorm, c≈2, or a depth-stable init) and re-runs
-  `python -m computronium.validation.memory_frontier` at L=32 before T6a writes
-  the threshold.
+- **Live from 2026-11-16:** C2 closed at the saturation point (λ=100): local
+  0.952 / 0.015 vs control 0.963 / 0.020, gain +0.005 < δ=0.032, cost ratio
+  1.07×; its re-open probes are a 5-seed retention protocol (rung 3), a
+  matched-byte replay composition, or SI/cascade at the frozen LR. The next
+  screens are **B1** (routing STE-gap over 1/2/4/8 stacked ops) and **E-lite**
+  (4 estimator arms × 1 task × 1 seed), both unprobed. A's blockers (T6b
+  composed-path memory, T6c trainable depth) are unchanged: T6b lets a credit
+  own its free pass so the strict xfail in `test_memory_frontier.py` flips; T6c
+  re-poses the claim geometry on a trainable one (LayerNorm, c≈2, or a
+  depth-stable init) and re-runs `python -m
+  computronium.validation.memory_frontier` at L=32 before T6a writes the
+  threshold.
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v14 start: **C2** (retention ladder at the frozen LR), B1 (routing screen), E-lite (estimator atlas) in parallel; then D1 (substrate probe) and A's blockers T6b/T6c; then F1 (composition screen) and T6a. C1 promoted on 2026-11-16. T5 is a standing side track; T7/T8 fire on B1/C1 promotion, T9 on trigger. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v15 start: **B1** (routing screen), **E-lite** (estimator atlas) in parallel; then D1 (substrate probe) and A's blockers T6b/T6c; then F1 (composition screen) and T6a. C1 promoted and C2 closed at its saturation point on 2026-11-16. T5 is a standing side track; T7/T8 fire on B1 promotion, T9 on trigger. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
@@ -1376,7 +1409,7 @@ box, trigger, and command. The surprise budget may pick one per session.
   L=64) that checkpointing cannot remove — that is the activation term's bend,
   not the whole peak's.
 
-### C1 — batch-1 plasticity ladder (✅ landed 2026-11-16)
+### C1/C2 — batch-1 ladders (✅ landed 2026-11-16)
 - `validation/plasticity_ladder.py` — the C1/C2 runner. `LadderCell` carries
   metric, BWT, forgetting, consolidation state and walltime; `LadderReport` the
   box, rulers and verdict. Stage 1 sweeps LR over `local`/`backprop`; stage 2
@@ -1384,7 +1417,12 @@ box, trigger, and command. The surprise budget may pick one per session.
   every finished cell to `*.cells.jsonl`, so a kill keeps evidence. The verdict
   is a predicate (`_verdict`), not prose: promote only when local clears the
   floor on the ladder seed **and** the confirmation seed; a control below the
-  floor is `invalid-control`.
+  floor is `invalid-control`. Stage 2's predicate is `_retention_verdict`:
+  floor on both seeds, then a matched per-step cost (≤1.5×), then a
+  pre-registered forgetting margin δ = 2√2σ ≈ 3.2 pp; a top rung that reduces
+  local forgetting by less than δ closes C at the saturation point. The cell log
+  is idempotent: `_resume_cells` reuses measured cells, `read_cells` dedupes a
+  kill-race row, and `--replay` recomputes the gate without training.
 - `core/continual/arms.py` — `create_local_arm` (PEPITA + Euclidean),
   `create_local_ewc_arm` (PEPITA + EWC), `create_backprop_ewc_arm` (exact
   gradient + EWC). Every factory takes `lr`; `create_si_arm` also takes `xi`.
@@ -1409,6 +1447,18 @@ box, trigger, and command. The surprise budget may pick one per session.
   on two seeds**, control 0.839 / 0.893, floor 0.55 → promote. Cost 220–287 s
   per cell at batch 1. The best local point is the ladder's lower edge; the
   recorded optimum is therefore a bound, not an interior optimum.
+
+**What the C2 ladder actually did.** Its first launch measured the task-start
+anchor defect (CORRECTION 12): two cells are kept as the defect probe in
+`consolidation.inert.cells.jsonl`, never as a ladder. With the anchor fixed,
+the eight-cell ladder closed at the saturation point λ=100: local 0.952 / 0.015
+vs control 0.963 / 0.020 (gain +0.005 < δ=0.032; accuracy −1.1 pp), the
+confirmation seed repeating it (0.951 / 0.016 vs 0.958 / 0.024) at a 1.07×
+per-step cost. The second launch was killed after seven cells; the resumed run
+reused them, and a cell written in the kill window left one duplicate row,
+deduped on read by `(arm, knob, seed)`. The task-start `anchor()` and the
+`test_task_boundary_anchors_without_erasing_importance` lock are the defect's
+permanent fix.
 
 ## 19. Primitive admission queue (cost-priced, ticket-bound)
 **Framing.** `more primitives` is not progress (§14). Each row below names the
@@ -1445,7 +1495,7 @@ track, not a hypothesis. Nothing below is work today.
 | `ScoreFunctionCredit` | C | **E2** | E1's table has an empty score-function cell | low | control only; no row |
 | `ZerothOrderCredit` | C | **E2** | same | low | control only; no row |
 | `LocalSupervisionCredit` | C | **A2** (trunk alternatives) | the hybrid trunk ladder says the boundary is the limit, not the rule | med | no row; hybrid keeps its current trunk |
-| `SynapticIntelligenceUpdate` (lift) | U | **C2** | C1's ladder shows local learns at batch 1 | low | C refused; SI stays an arm |
+| `SynapticIntelligenceUpdate` (lift) | U | **C2** | C1's ladder shows local learns at batch 1 | low | C closed at saturation; SI stays an arm; re-open on a 5-seed retention protocol |
 | `CascadeSynapsePlasticity` | P | **C3** | C2 shows EWC/SI insufficient **and** a long stream exists (≥20 tasks) | med | parked; no row |
 | `BayesianOnlineUpdate` | U | **C3** | SI fails its stop rule | low | no row |
 | `EligibilityPropCredit` | C | **T9** | MPU1 closes **or** a sequence-length axis enters | med | parked |
@@ -1482,7 +1532,7 @@ first-class row because the claim table names its estimator kind and identity.
 **Why not blocking:** the plain-backprop pilot already binds on activations
 (89% SGD / 73% Adam at B=8192), so optimizer-state primitives move a boundary
 that is already crossed.
-### P3 — streaming baselines (lands with C2/T8)
+### P3 — streaming baselines (EWC measured with C2; SI remains, gated on C1 → T8)
 | Primitive (axis) | Mechanism | Decision | Stop |
 |---|---|---|---|
 | `SynapticIntelligenceUpdate` (U) | **lift** `core/continual/losses.py:84` into a U row; online path integral, +1× params | strictly stronger streaming baseline than EWC, cheaper than replay at tiny budgets | SI ≈ EWC → keep EWC, one arm fewer |

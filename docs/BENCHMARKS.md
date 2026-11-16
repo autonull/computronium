@@ -189,8 +189,9 @@ task-local geometry; on task 1 alone after the label-channel fix it reached
 coordinate, never a claim.
 
 **Box and rulers.** Task/architecture fixed (SplitMNIST, 784-256-256-10,
-`init_scale=0.1`, no dropout); the knob is LR ∈ (1e-3, 1e-2, 1e-1), EWC λ fixed
-at 1000 for the composed arms, epochs/task = 1, batch = 1. The ladder's best
+`init_scale=0.1`, no dropout); the knob is LR ∈ (1e-3, 1e-2, 1e-1); neither
+C1 arm reads an EWC strength (that knob belongs to C2), epochs/task = 1,
+batch = 1. The ladder's best
 local point is its lower edge (1e-3), so the box is not exhausted: a downward
 extension (3e-4, 1e-4) is the next rung before any *optimum* is named. The
 accuracy ruler is a 2000-sample held-out split (1 σ = 0.011); the cost is the
@@ -198,6 +199,70 @@ measured cell walltime.
 
 Command: `uv run python -m computronium.validation.plasticity_ladder --stage
 plasticity --device cuda`
+
+### 2.6 The consolidation-strength ladder (C2)
+
+C1 promotes plasticity at the lower edge of its LR ladder (1e-3). C2 asks the
+retention question at that frozen point: at a matched per-step cost, does
+local × EWC forget less than backprop × EWC? The gate was pre-registered
+before the first cell: floor 0.55 on both seeds, per-step cost ratio ≤1.5×,
+retention margin δ = 2√2σ ≈ 3.2 pp, and saturation when the top rung reduces
+local forgetting by less than δ over the rung below.
+
+Two apparatus facts bound the box before any number: the λ ladder is the only
+knob (1/10/100), and the frozen LR is the best C1 *local* point, itself the
+ladder's lower edge, so no interior optimum is named here. The first launch
+found a live defect (CORRECTION 12): the runner re-consolidated at every task
+start, overwriting the drift importance with uniform damping, so the ladder
+measured one point three times. Those two cells are kept as the defect probe
+(`results/t93_c1/consolidation.inert.cells.jsonl`), never as a ladder. After
+the fix (`ElasticConsolidationUpdate.anchor`), the ladder was restarted and
+one kill was resumed from its cell log (the last confirmation cell reused the
+seven measured cells).
+
+Measured on SplitMNIST at batch 1, one epoch/task, five tasks in the fixed
+order, W=256, 2000 held-out samples/task, seed 41 plus the disjoint
+confirmation seed 42 at the best λ (RTX 3080 10 GiB, 2026-11-16):
+
+| arm | λ | mean final acc | last task acc | BWT | forgetting | state MiB | s |
+|---|---|---|---|---|---|---|---|
+| local × EWC | 1 | 0.950 | 0.951 | −0.025 | 0.021 | 3.1 | 298 |
+| backprop × EWC | 1 | 0.943 | 0.971 | −0.053 | 0.042 | 3.1 | 311 |
+| local × EWC | 10 | 0.951 | 0.952 | −0.024 | 0.020 | 3.1 | 311 |
+| backprop × EWC | 10 | 0.945 | 0.970 | −0.049 | 0.040 | 3.1 | 274 |
+| local × EWC | 100 | 0.952 | 0.943 | −0.017 | 0.015 | 3.1 | 279 |
+| backprop × EWC | 100 | 0.963 | 0.967 | −0.024 | 0.020 | 3.1 | 262 |
+| local × EWC (confirm) | 100 | 0.951 | 0.939 | −0.016 | 0.016 | 3.1 | 263 |
+| backprop × EWC (confirm) | 100 | 0.958 | 0.965 | −0.029 | 0.024 | 3.1 | 233 |
+
+**Verdict: close.** At the saturation point λ=100, local forgets 0.015
+against the control's 0.020 (gain +0.005, below the 3.2 pp margin), and its
+mean final accuracy is 1.1 pp *lower* (0.952 vs 0.963). The confirmation
+seed repeats the direction: 0.016 vs 0.024 forgetting, 0.951 vs 0.958
+accuracy. The per-step cost ratio is 1.07–1.13× (the matched-cost guard runs
+at ≤1.5×), and both arms carry 3.1 MiB of consolidation state.
+
+**What saturated.** The local arm's forgetting falls from 0.021 (λ=1) to 0.015
+(λ=100) — 0.6 pp, below δ — and the control's from 0.042 to 0.020 (2.2 pp,
+also below δ). So EWC strength stops buying retention beyond λ=10 on the local
+arm, and the local-vs-control retention gap stays below the pre-registered
+margin at the best point. The ladder's best point is at its upper edge for both
+arms; a further extension cannot change the verdict (the top rung already moved
+the cell by less than δ), so C closes here rather than promoting to C2b.
+
+**What the row means for the thesis.** EWC closes most of plain backprop's
+forgetting gap at this point (C1: 0.145 → 0.020 at λ=100), and it does so
+without lowering accuracy (0.839 → 0.963). That is a composition result for
+the *control*, not for local credit: the local arm already forgot little
+without EWC (C1: 0.038), and consolidation moves it by 2.3 pp in total. The
+residual local advantage (0.5–0.7 pp) is below the box's resolution, so it is
+a coordinate, not a claim. C closes at its saturation point with its re-open
+probes kept: a 5-seed retention protocol (rung 3), a matched-byte replay
+composition, or SI/cascade at the same frozen LR.
+
+Command: `uv run python -m computronium.validation.plasticity_ladder --stage
+consolidation --device cuda`; replay from the cell log without training:
+`... --stage consolidation --replay --device cuda`.
 
 ## 3. Open locks
 
@@ -212,6 +277,9 @@ plasticity --device cuda`
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | Batch-1 plasticity ladder gate (C1) | `tests/unit/validation/test_plasticity_ladder.py` | 9 s |
+| C2 retention gate: floor on two seeds, matched per-step cost, forgetting δ, saturation | `tests/unit/validation/test_plasticity_ladder.py` | 12 s |
+| Task start anchors EWC without erasing the Fisher importance | `tests/unit/core/test_cl_credit_arms.py` | 14 s |
+| Kill-safe cell log: resume reuses measured cells; replay recomputes the gate | `tests/unit/validation/test_plasticity_ladder.py` | 12 s |
 | Credit label channel carries the task offset | `tests/unit/core/test_cl_credit_arms.py` | 10 s |
 | Data order is seeded independently of model RNG | `tests/unit/core/test_cl_credit_arms.py` | 9 s |
 | `CLConfig.lr` reaches every arm's update | `tests/unit/core/test_cl_credit_arms.py` | 9 s |

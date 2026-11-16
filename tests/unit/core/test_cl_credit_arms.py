@@ -14,7 +14,7 @@ import math
 import torch
 
 from computronium.core.continual import CLConfig, create_local_arm
-from computronium.core.continual.runner import _create_arm
+from computronium.core.continual.runner import _apply_task_boundary_setup, _create_arm
 
 LADDER_LR = 0.05
 
@@ -97,3 +97,34 @@ def test_credit_state_carries_the_global_task_target() -> None:
         task_end=4,
     )
     assert states[Phase.FREE].y.item() == 3
+
+
+def test_task_boundary_anchors_without_erasing_importance() -> None:
+    """A task start moves the anchor; it must not recompute the Fisher.
+
+    The runner anchored every new task by calling ``consolidate`` on unchanged
+    parameters, which recomputed ``Fisher = drift² + damping`` from a zero
+    drift. Every EWC arm then trained under a uniform damping term instead of
+    the importance measured at the previous boundary -- the C2 ladder's knob
+    was inert because of it.
+    """
+    config = CLConfig(
+        input_dim=64,
+        hidden_dim=16,
+        output_dim=10,
+        device="cpu",
+        ewc_lambda=10.0,
+    )
+    model, extra = _create_arm("backprop_ewc", config, "cpu")
+    update = extra["update"]
+    old = {k: v.clone() + 0.01 for k, v in model.geometry.params.items()}
+    update.consolidate(model.geometry.params, old_params=old)
+    importance = {k: v.clone() for k, v in update._fisher.items()}
+    assert all(v.max() > 1e-3 for v in importance.values())
+
+    _apply_task_boundary_setup("backprop_ewc", model, extra)
+
+    for name, value in importance.items():
+        assert torch.equal(update._fisher[name], value), name
+    for name in update._old_params:
+        assert torch.equal(update._old_params[name], model.geometry.params[name])
