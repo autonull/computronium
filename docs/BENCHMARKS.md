@@ -113,6 +113,51 @@ gradients equal plain
 backprop's at the same boundary. The measured head graph is the only retained
 activation set; the trunk's O(B·W) working set is the measured flat term.
 
+### 2.4 The composed pilot (T6) — and what it found
+
+The claim point is L=32, B=8192, W=1024, fp32, CIFAR-10 (fixed 10k-image train
+subset, full 10k test split), 200 steps, 3 pilot seeds. `c` is measured at the
+same point, not inherited from §2.1: two depth deltas at this width and batch
+give **c = 4.125 with 0.0 % spread** (8→16→32), and the declared appendix is
+`c·L·B·W·4` with c=4.1.
+
+| Arm | val_acc | σ | Activations MB | Peak MB | Share | Binding | Fwd-eq | Walltime s |
+|---|---|---|---|---|---|---|---|---|
+| `backprop` | 0.100 | 0.000 | 4229 | 4494 | 0.941 | yes | 4.19 | 34.3 |
+| `backprop+ckpt` | 0.100 | 0.000 | 1637 | 1902 | 0.861 | reported | 4.80 | 39.6 |
+| `hybrid` | 0.100 | 0.000 | 3249 | 3513 | 0.925 | reported | 5.50 | 45.5 |
+| `local` (PEPITA) | 0.100 | 0.000 | 3365 | 3630 | 0.927 | reported | 6.64 | 54.9 |
+
+Controls: the **instrument control passes** (`c = 4.125`, spread 0.0 %, within
+10 % of the declared 4.1); the **learning control passes** at L=8 (backprop
+0.419 vs checkpointed 0.419, floor 0.409). Ladder at L=8 (200 steps, 1 seed,
+`(0.1, 0.3, 1.0)`): backprop 0.351/0.419/0.170, PEPITA 0.393/0.400/0.188,
+hybrid 0.100/0.163/0.100. Frozen LR is 0.3 for every arm.
+
+Two findings, both measured, both named:
+
+- **T6b — the composed path pays the pipeline's store-all forward.** The hybrid's
+  credit-level trunk is flat at 81 MB (§2.3), but on the composed training path
+  its activation set is 3249 MB against the checkpointed arm's 1637 MB (1.98×).
+  Mechanism: `core/pipeline._run_train_step_tensor_impl` materialises
+  `forward_pass(...)` before the credit runs, and it does so with autograd
+  enabled although `HybridCredit.requires_autograd` is `False`; the chain is
+  held by the phase states. The `≤ 0.5×` activation claim is unreachable until a
+  credit may own its free pass. Lock:
+  `test_memory_frontier.py::test_the_hybrid_activation_set_is_half_the_checkpointed_arms`
+  (strict `xfail`; 843 MB vs 437 MB at the lock's smaller point).
+- **T6c — the plain stack does not leave the plateau at the claim depth.** At
+  L=32 every arm reports val_acc 0.100 with σ=0.000 and the backprop loss is
+  pinned at 2.2132 from step 200 through step 1000 (measured separately), while
+  L=8 reaches 0.419. A depth rung whose own baseline does not learn is not
+  evidence. The plan's stated fallback applies: LayerNorm (c≈2), or a
+  depth-stable geometry, with the appendix recomputed in the same commit.
+
+Ruler: val_acc on the full 10k test split; memory from `EpochResource`'s
+decomposition; forward-equivalents measured against one forward pass of the same
+batch. The pilot is a screen — its accuracy rows are coordinates at 200 steps,
+never a claim.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -123,3 +168,5 @@ activation set; the trunk's O(B·W) working set is the measured flat term.
 | Every credit row declares its estimator coordinate | `tests/property/test_estimator_lock.py` | 9 s |
 | Lockstep ≡ store-all, per layer, `atol=0`; peak flat in depth | `tests/property/test_lockstep_parity.py` | 9 s (4 s CUDA) |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
+| Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
+| **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
