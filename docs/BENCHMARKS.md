@@ -41,7 +41,8 @@ supports the declared class on that path; until then it is `False` and
 | `PEPITAContrastiveKernel` | `acceleration/contrastive_kernels.py` | O(1) | ≈2× forward (two full activation lists) | **no** | read of `contrastive_step` | 2026-11-15 |
 | `FFContrastiveKernel` | `acceleration/contrastive_kernels.py` | O(1) | unavailable (no label channel → zero update) | no | — | 2026-11-15 |
 | `SNNContrastiveKernel` | `acceleration/contrastive_kernels.py` | O(1) | unavailable (nudge is a no-op) | no | — | 2026-11-15 |
-| `PEPITAKernelBackend` | `acceleration/ff_kernels.py` | O(1) | ≈2× forward (two forwards, PEPITA's design) | **no** | read of `forward_standard`/`forward_error_modulated` | 2026-11-15 |
+| `FFKernelBackend` | `acceleration/ff_kernels.py` (lockstep) | O(1) | **flat** 66.3 MB at L=4/8/16/32 | **yes** | Linear+ReLU fp32, W=512, B=4096 | 2026-11-16 |
+| `PEPITAKernelBackend` | `acceleration/ff_kernels.py` (lockstep) | O(1) | **flat** 58.5 MB at L=4/8/16/32 | **yes** | Linear+ReLU fp32, W=512, B=4096 | 2026-11-16 |
 | `HebbianKernelBackend` | `acceleration/hebbian_kernels.py` | O(1) | one layer at a time | pending | — | — |
 | `TPKernelBackend` | `acceleration/tp_kernels.py` | O(1) | stores inverses (≈2× params) | no | — | 2026-11-15 |
 
@@ -66,6 +67,28 @@ geometry parameters and the optimizer (feedback matrices, consolidation
 buffers); until then such state sits inside the reported remainder, and the
 claim row must use a geometry where the remainder is activations.
 
+### 2.2 The lockstep rung (T3)
+
+Both two-pass families now run **lockstep**: pass 1 keeps only the output, pass 2
+recomputes the standard and perturbed chains layer-by-layer and applies each
+layer's update before the next layer is produced. Peak is the two chains'
+working set, not `L` layers' worth, and the update is exact against the store-all
+schedule because each `W_l` is used once per pass before its update.
+
+| Arm | L=4 | L=8 | L=16 | L=32 | Class |
+|---|---|---|---|---|---|
+| Forward-Forward, lockstep | 66.3 MB | 66.3 MB | 66.3 MB | 66.3 MB | flat |
+| Forward-Forward, retained stream | 100.3 MB | 168.3 MB | 304.4 MB | 576.4 MB | O(L) |
+| PEPITA, lockstep | 58.5 MB | 58.5 MB | 58.5 MB | 58.5 MB | flat |
+| PEPITA, retained stream | 92.5 MB | 160.5 MB | 296.5 MB | 568.5 MB | O(L) |
+
+CUDA peak above the allocated parameters, one step, W=512, B=4096, 10 classes,
+RTX 3080 10 GiB. The retained row is the **negative control**: it materializes
+the contrast stream, which is the mechanism the lockstep removes. Deliberate
+cost of the rung: PEPITA recomputes the standard chain in pass 2, so it makes
+three layer sweeps per step where the store-all made two — compute bought for
+memory, and named here rather than discovered later.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -74,3 +97,4 @@ claim row must use a geometry where the remainder is activations.
 | Stub detector (nudged ≠ free) | `tests/property/test_kernel_truth_lock.py` | 9 s |
 | Decomposition sums to peak; measured c | `tests/property/test_memory_binding.py` | 10 s (CUDA) |
 | Every credit row declares its estimator coordinate | `tests/property/test_estimator_lock.py` | 9 s |
+| Lockstep ≡ store-all, per layer, `atol=0`; peak flat in depth | `tests/property/test_lockstep_parity.py` | 9 s (4 s CUDA) |

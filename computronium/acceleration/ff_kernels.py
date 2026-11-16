@@ -1,19 +1,35 @@
 """Forward-Forward / PEPITA Kernel Backend.
 
 Fused kernels for Forward-Forward goodness and PEPITA error-modulated updates.
+
+Two rungs per family. The **store-all** rung (``forward_positive``,
+``forward_negative``, ``forward_standard``, ``forward_error_modulated``,
+``backward``) collects one activation list per pass and locks with it. The
+**lockstep** rung (``lockstep_contrasts``) is the one ``train_step`` and
+``kernel_train_step`` run: pass 1 keeps only the output, and pass 2 recomputes
+both chains layer-by-layer, updating ``W_l`` before the next layer is produced.
+Only the current layer's activations are live, so peak is O(B·W), flat in depth,
+and the update is exact against the store-all rung because each ``W_l`` is used
+once per pass before its update — the lock in
+``tests/property/test_lockstep_parity.py`` holds it at ``atol=0``.
+
+Measured on an RTX 3080 10 GiB (2026-11-16), Linear+ReLU fp32, W=512, B=4096,
+L=4/8/16/32: lockstep peak is flat at 66.3 MB (Forward-Forward) and 58.5 MB
+(PEPITA) — the two chains' working set — while a retained stream reaches 576.4
+and 568.5 MB at L=32. ``complexity_verified`` is True for both families on that
+ladder; ``activations_mb`` stays ``None`` per instance because a kernel does not
+self-measure.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol
 
 import torch
 from torch import Tensor
 
-from computronium.acceleration.contrastive_primitives import (
-    batched_outer_product,
-    contrastive_delta,
-)
+from computronium.acceleration.contrastive_primitives import batched_outer_product
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
@@ -25,7 +41,102 @@ from computronium.acceleration.kernel_backend import (
 from computronium.core.utils.activations import get_activation
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+
     from computronium.ontology import System
+
+
+class WeightedLayer(Protocol):
+    """A dense layer the lockstep reads: callable, with weight and bias."""
+
+    @property
+    def weight(self) -> Tensor: ...
+
+    @property
+    def bias(self) -> Tensor | None: ...
+
+    def __call__(self, x: Tensor) -> Tensor: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LayerContrast:
+    """One layer's two-pass contrast and the weight increase it implies.
+
+    ``post_a`` is the activation of the pass the rule increases (Forward-Forward's
+    positive pass, PEPITA's standard pass); ``post_b`` the pass it decreases.
+    ``weight`` and ``bias`` are batch-normalized increases, so a caller applies
+    ``W += lr·weight``.
+    """
+
+    layer: WeightedLayer
+    post_a: Tensor
+    post_b: Tensor
+    weight: Tensor
+    bias: Tensor
+
+
+def contrast_delta(
+    pre_a: Tensor, post_a: Tensor, pre_b: Tensor, post_b: Tensor
+) -> Tensor:
+    """Increase direction of a two-pass contrastive update.
+
+    Forward-Forward's ``(pos − neg)`` correlation and PEPITA's
+    ``(standard − error-modulated)`` correlation are the same expression on
+    different chains, which is why the two families share one kernel.
+    """
+    return batched_outer_product(pre_a, post_a) - batched_outer_product(pre_b, post_b)
+
+
+def lockstep_contrasts(
+    layers: Sequence[WeightedLayer],
+    chain_a: Tensor,
+    chain_b: Tensor,
+    activation: torch.nn.Module,
+    *,
+    final_activation: bool = False,
+) -> Iterator[LayerContrast]:
+    """Yield each layer's contrast with only the current layer's tensors live.
+
+    The two chains advance together, so a layer's inputs exist before its
+    contrast is yielded and the caller's in-place update cannot reach them. No
+    activation is retained after the next layer is produced: that is the whole
+    difference from the store-all rung, and the reason peak memory does not grow
+    with depth.
+
+    Args:
+        layers: The dense stack, in forward order.
+        chain_a: Input of the pass the rule increases.
+        chain_b: Input of the pass the rule decreases.
+        activation: Elementwise activation, applied to every layer but the last
+            unless ``final_activation`` says a readout follows.
+        final_activation: Apply ``activation`` to the last layer too. True when
+            ``layers`` stops before a separate readout (PEPITA's bespoke surface).
+
+    Yields:
+        One :class:`LayerContrast` per layer, in forward order.
+    """
+    last = len(layers) - 1
+    a, b = chain_a, chain_b
+    for index, layer in enumerate(layers):
+        pre_a, pre_b = a, b
+        a, b = layer(pre_a), layer(pre_b)
+        if index < last or final_activation:
+            a, b = activation(a), activation(b)
+        yield LayerContrast(
+            layer=layer,
+            post_a=a,
+            post_b=b,
+            weight=contrast_delta(pre_a, a, pre_b, b),
+            bias=a.mean(dim=0) - b.mean(dim=0),
+        )
+
+
+def apply_contrast(contrast: LayerContrast, lr: float) -> None:
+    """Apply one layer's increase immediately, before the next layer is produced."""
+    with torch.no_grad():
+        contrast.layer.weight.add_(lr * contrast.weight)
+        if contrast.layer.bias is not None:
+            contrast.layer.bias.add_(lr * contrast.bias)
 
 
 class FFKernelBackend:
@@ -42,7 +153,7 @@ class FFKernelBackend:
     memory_complexity = "O(1)"
     available = True
     complexity_verified = (
-        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+        True  # measured flat in depth on the lockstep ladder (docs/BENCHMARKS.md)
     )
     locality_level = LocalityLevel.FORWARD_ONLY
 
@@ -89,25 +200,45 @@ class FFKernelBackend:
         return linear_views(geometry)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-        """Execute one training step using FF positive/negative passes."""
-        # Positive pass
-        pos_output, pos_acts = self.forward_positive(x, y)
-        # Negative pass
-        neg_output, neg_acts = self.forward_negative(x, y)
-        # Compute updates
-        gradients = self.backward_contrastive(pos_acts, neg_acts, self._threshold)
-        # Apply updates
-        self.update_weights(gradients, 1.0)
-        # Return metrics
+        """Execute one training step on the lockstep two-pass path."""
+        x = self._flatten(x)
         with torch.no_grad():
-            pos_goodness = (pos_output**2).sum(dim=1).mean().item()
-            neg_goodness = (neg_output**2).sum(dim=1).mean().item()
+            last = self._lockstep(x, y, lr=1.0)
+            pos_goodness = last.post_a.pow(2).sum(dim=1).mean().item()
+            neg_goodness = last.post_b.pow(2).sum(dim=1).mean().item()
             loss = neg_goodness - pos_goodness + self._threshold
-            acc = (pos_output.argmax(-1) == y).float().mean().item()
+            acc = (last.post_a.argmax(-1) == y).float().mean().item()
         return {"loss": loss, "accuracy": acc}
 
+    def _flatten(self, x: Tensor) -> Tensor:
+        x = x.to(device=self._device, dtype=self._dtype)
+        return x.view(x.size(0), -1) if x.dim() > 2 else x
+
+    def _labelled_inputs(self, x: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
+        """Inputs with the true label and with a decoy label appended."""
+        one_hot = torch.nn.functional.one_hot(y, num_classes=self._output_dim)
+        one_hot = one_hot.to(device=self._device, dtype=self._dtype)
+        decoy = torch.nn.functional.one_hot(
+            (y + 1) % self._output_dim, num_classes=self._output_dim
+        ).to(device=self._device, dtype=self._dtype)
+        return torch.cat([x, one_hot], dim=1), torch.cat([x, decoy], dim=1)
+
+    def _lockstep(self, x: Tensor, y: Tensor, lr: float) -> LayerContrast:
+        """Run both passes layer-by-layer, updating each layer in place."""
+        y = y.to(device=self._device)
+        chain_a, chain_b = self._labelled_inputs(x, y)
+        last: LayerContrast | None = None
+        for contrast in lockstep_contrasts(
+            self._layers, chain_a, chain_b, self._activation
+        ):
+            apply_contrast(contrast, lr)
+            last = contrast
+        if last is None:
+            raise ValueError("the Forward-Forward stack binds no layers")
+        return last
+
     def forward_positive(self, x: Tensor, y: Tensor) -> tuple[Tensor, list[Tensor]]:
-        """Positive pass with label information.
+        """Store-all reference: positive pass with label information.
 
         Args:
             x: Input [B, D_in]
@@ -116,39 +247,13 @@ class FFKernelBackend:
         Returns:
             (output, activations) with label information embedded
         """
-        x = x.to(device=self._device, dtype=self._dtype)
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
-
-        # Embed label into input (concatenate or add)
-        # Standard FF: concatenate one-hot label to input (output_dim classes)
-        y_onehot = (
-            torch.nn.functional
-            .one_hot(y, num_classes=self._output_dim)
-            .float()
-            .to(device=self._device, dtype=self._dtype)
-        )
-        x_pos = torch.cat([x, y_onehot], dim=1)
-
-        return self._forward_layers(x_pos)
+        x, _ = self._labelled_inputs(self._flatten(x), y.to(self._device))
+        return self._forward_layers(x)
 
     def forward_negative(self, x: Tensor, y: Tensor) -> tuple[Tensor, list[Tensor]]:
-        """Negative pass with wrong label information."""
-        x = x.to(device=self._device, dtype=self._dtype)
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
-
-        # Use incorrect label (shift by 1)
-        y_wrong = (y + 1) % self._output_dim
-        y_onehot = (
-            torch.nn.functional
-            .one_hot(y_wrong, num_classes=self._output_dim)
-            .float()
-            .to(device=self._device, dtype=self._dtype)
-        )
-        x_neg = torch.cat([x, y_onehot], dim=1)
-
-        return self._forward_layers(x_neg)
+        """Store-all reference: negative pass with wrong label information."""
+        _, x = self._labelled_inputs(self._flatten(x), y.to(self._device))
+        return self._forward_layers(x)
 
     def _forward_layers(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward through all layers."""
@@ -170,33 +275,15 @@ class FFKernelBackend:
             x = x.view(x.size(0), -1)
         return self._forward_layers(x)
 
-    def compute_goodness(
-        self,
-        pos_acts: list[Tensor],
-        neg_acts: list[Tensor],
-    ) -> dict[int, Tensor]:
-        """Compute goodness per layer.
-
-        Goodness = ||pos||^2 - ||neg||^2 - threshold
-
-        Returns:
-            Dict mapping layer_idx -> goodness per sample [B]
-        """
-        goodness: dict[int, Tensor] = {}
-        for i in range(1, len(pos_acts)):  # Skip input layer
-            pos_norm = pos_acts[i].pow(2).sum(dim=1)
-            neg_norm = neg_acts[i].pow(2).sum(dim=1)
-            goodness[i - 1] = pos_norm - neg_norm - self._threshold
-        return goodness
-
     def backward(
         self,
         pos_activations: list[Tensor],
         neg_activations: list[Tensor],
     ) -> dict[str, Tensor]:
-        """FF backward: contrastive update based on goodness.
+        """Store-all reference: contrastive update from the retained passes.
 
-        Layer update: Delta W = lr * (pos_acts.T @ pos_acts - neg_acts.T @ neg_acts) / B
+        The same expression ``lockstep_contrasts`` yields, computed from
+        activation lists so the two rungs can be locked against each other.
 
         Returns:
             Weight deltas for all layers
@@ -204,22 +291,17 @@ class FFKernelBackend:
         weight_deltas: dict[str, Tensor] = {}
 
         for i in range(len(self._layers)):
-            pos_pre = pos_activations[i]
-            pos_post = pos_activations[i + 1]
-            neg_pre = neg_activations[i]
-            neg_post = neg_activations[i + 1]
+            pos_pre, pos_post = pos_activations[i], pos_activations[i + 1]
+            neg_pre, neg_post = neg_activations[i], neg_activations[i + 1]
 
-            # FF contrastive update
-            pos_grad = batched_outer_product(pos_pre, pos_post)
-            neg_grad = batched_outer_product(neg_pre, neg_post)
-            delta = contrastive_delta(neg_grad, pos_grad, beta=1.0)  # pos - neg
-
-            weight_deltas[f"layers.{i}.weight"] = delta
+            weight_deltas[f"layers.{i}.weight"] = contrast_delta(
+                pos_pre, pos_post, neg_pre, neg_post
+            )
 
             if self._layers[i].bias is not None:
-                pos_bias = pos_post.mean(dim=0)
-                neg_bias = neg_post.mean(dim=0)
-                weight_deltas[f"layers.{i}.bias"] = pos_bias - neg_bias
+                weight_deltas[f"layers.{i}.bias"] = pos_post.mean(
+                    dim=0
+                ) - neg_post.mean(dim=0)
 
         return weight_deltas
 
@@ -296,17 +378,31 @@ class FFKernelBackend:
 
         lr = float(getattr(model, "layer_lr", getattr(model, "lr", 0.03)))
 
-        pos_out, pos_acts = self.forward_positive(x, y.to("cpu"))
-        _neg_out, neg_acts = self.forward_negative(x, y.to("cpu"))
-        grads = self.backward(pos_acts, neg_acts)
-        self.update_weights(grads, lr)
+        goodness: list[float] = []
+        last: LayerContrast | None = None
+        with torch.no_grad():
+            for contrast in lockstep_contrasts(
+                self._layers, *self._labelled_inputs(x, y), self._activation
+            ):
+                apply_contrast(contrast, lr)
+                goodness.append(
+                    float(
+                        (
+                            contrast.post_a.pow(2).sum(dim=1)
+                            - contrast.post_b.pow(2).sum(dim=1)
+                            - self._threshold
+                        ).mean()
+                    )
+                )
+                last = contrast
+        if last is None:
+            return None
 
         # Forward-Forward has no single forward output for a loss; report the
         # good-versus-bad contrast so the trainer's health gate has a scalar.
-        goodness = self.compute_goodness(pos_acts, neg_acts)
-        loss = -torch.stack(list(goodness.values())).mean().item()
-        accuracy = (pos_out.argmax(dim=1) == y).float().mean().item()
-        return {"loss": loss, "accuracy": accuracy, "logits": pos_out}
+        loss = -sum(goodness) / len(goodness)
+        accuracy = (last.post_a.argmax(dim=1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": accuracy, "logits": last.post_a}
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
         return None
@@ -325,7 +421,7 @@ class PEPITAKernelBackend:
     memory_complexity = "O(1)"
     available = True
     complexity_verified = (
-        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+        True  # measured flat in depth on the lockstep ladder (docs/BENCHMARKS.md)
     )
     locality_level = LocalityLevel.FORWARD_ONLY
 
@@ -377,60 +473,74 @@ class PEPITAKernelBackend:
         return linear_views(geometry)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-        """Execute one training step using PEPITA standard/error-modulated passes."""
-        std_output, std_acts = self.forward_standard(x)
-        target = (
-            torch.nn.functional
-            .one_hot(y, num_classes=std_output.shape[1])
-            .float()
-            .to(device=std_output.device, dtype=std_output.dtype)
-            if y.dim() == 1
-            else y
-        )
-        err_output, err_acts = self.forward_error_modulated(x, target - std_output)
-        # Compute updates
-        gradients = self.backward(std_acts, err_acts)
-        # Apply updates
-        self.update_weights(gradients, 1.0)
-        # Return metrics
+        """Execute one training step on the lockstep two-pass path.
+
+        Pass 1 keeps the standard output only (it forms the error). Pass 2
+        recomputes the standard chain alongside the error-modulated one and
+        updates each layer as soon as both of that layer's activations exist.
+        """
+        x = self._flatten(x)
         with torch.no_grad():
-            loss = (std_output - err_output).pow(2).mean().item()
-            acc = (std_output.argmax(-1) == y).float().mean().item()
-        return {"loss": loss, "accuracy": acc}
+            standard = self._forward_last(x)
+            target = self._target(y, standard)
+            last = self._lockstep(x, target - standard, final_activation=False, lr=1.0)
+            return {
+                "loss": (standard - last.post_b).pow(2).mean().item(),
+                "accuracy": (standard.argmax(-1) == y).float().mean().item(),
+            }
 
-    def forward_standard(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
-        """Standard forward pass."""
+    def _flatten(self, x: Tensor) -> Tensor:
         x = x.to(device=self._device, dtype=self._dtype)
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
+        return x.view(x.size(0), -1) if x.dim() > 2 else x
 
-        activations: list[Tensor] = [x]
+    def _target(self, y: Tensor, output: Tensor) -> Tensor:
+        if y.dim() != 1:
+            return y
+        one_hot = torch.nn.functional.one_hot(y, num_classes=output.shape[1])
+        return one_hot.to(device=output.device, dtype=output.dtype)
+
+    def _modulated_input(self, x: Tensor, error: Tensor) -> Tensor:
+        """Backproject the output error through the fixed feedback matrix."""
+        if self._feedback_matrix is None:
+            raise RuntimeError("PEPITA kernel used before initialize()")
+        return x + error @ self._feedback_matrix.T * self._scale
+
+    def _forward_last(self, x: Tensor, *, final_activation: bool = False) -> Tensor:
+        last = len(self._layers) - 1
         h = x
-
         for i, layer in enumerate(self._layers):
             h = layer(h)
-            if i < len(self._layers) - 1:
+            if i < last or final_activation:
                 h = self._activation(h)
-            activations.append(h)
+        return h
 
-        return activations[-1], activations
+    def _lockstep(
+        self, x: Tensor, error: Tensor, *, final_activation: bool, lr: float
+    ) -> LayerContrast:
+        """Run the standard and modulated chains layer-by-layer, updating in place."""
+        last: LayerContrast | None = None
+        for contrast in lockstep_contrasts(
+            self._layers,
+            x,
+            self._modulated_input(x, error),
+            self._activation,
+            final_activation=final_activation,
+        ):
+            apply_contrast(contrast, lr)
+            last = contrast
+        if last is None:
+            raise ValueError("the PEPITA stack binds no layers")
+        return last
+
+    def forward_standard(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
+        """Store-all reference: standard forward pass."""
+        return self._forward_layers(self._flatten(x))
 
     def forward_error_modulated(
         self, x: Tensor, error: Tensor
     ) -> tuple[Tensor, list[Tensor]]:
-        """Error-modulated forward pass (PEPITA).
-
-        Error is backprojected through fixed feedback matrix and added to input.
-        """
-        x = x.to(device=self._device, dtype=self._dtype)
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
-
-        # Backproject error to input space
-        error_input = error @ self._feedback_matrix.T * self._scale
-        x_modulated = x + error_input
-
-        return self._forward_layers(x_modulated)
+        """Store-all reference: error-modulated forward pass (PEPITA)."""
+        return self._forward_layers(self._modulated_input(self._flatten(x), error))
 
     def _forward_layers(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         activations: list[Tensor] = [x]
@@ -448,34 +558,31 @@ class PEPITAKernelBackend:
         self,
         standard_activations: list[Tensor],
         error_activations: list[Tensor],
-        error: Tensor,
     ) -> dict[str, Tensor]:
-        """PEPITA backward: error-modulated contrastive update.
+        """Store-all reference: error-modulated contrastive update.
 
-        For every layer, Delta W = scale * (a_std.T @ pre - a_err.T @ pre) / B
-        (the *standard minus error-modulated* correlation), so the downstream
-        ``update_weights`` ``add_`` reproduces the reference's ``W -= lr *
-        (a_err - a_std).T @ inp / B`` (the reference subtracts the positive
-        error-modulated correlation).
+        Each layer's increase is ``(a_std^T a_std_pre − a_mod^T a_mod_pre)/B``
+        — the same expression ``lockstep_contrasts`` yields, computed from
+        retained activation lists so the two rungs can be locked against each
+        other. ``feedback_matrix_scale`` is not applied here: it belongs to the
+        input modulation, which ``forward_error_modulated`` already carries.
         """
         weight_deltas: dict[str, Tensor] = {}
 
         for i in range(len(self._layers)):
             std_pre = standard_activations[i]
             std_post = standard_activations[i + 1]
-            err_pre = error_activations[i]
-            err_post = error_activations[i + 1]
+            mod_pre = error_activations[i]
+            mod_post = error_activations[i + 1]
 
-            std_grad = batched_outer_product(std_pre, std_post)
-            err_grad = batched_outer_product(err_pre, err_post)
-            delta = self._scale * contrastive_delta(err_grad, std_grad, beta=1.0)
-
-            weight_deltas[f"layers.{i}.weight"] = delta
+            weight_deltas[f"layers.{i}.weight"] = contrast_delta(
+                std_pre, std_post, mod_pre, mod_post
+            )
 
             if self._layers[i].bias is not None:
-                weight_deltas[f"layers.{i}.bias"] = self._scale * (
-                    std_post.mean(dim=0) - err_post.mean(dim=0)
-                )
+                weight_deltas[f"layers.{i}.bias"] = std_post.mean(
+                    dim=0
+                ) - mod_post.mean(dim=0)
 
         return weight_deltas
 
@@ -493,9 +600,10 @@ class PEPITAKernelBackend:
         the fixed feedback matrix → error-modulated forward) don't fit the
         uniform ``forward → backward(activations, error) → update_weights``
         contract, so the dispatch seam delegates to this method when present.
-        It mirrors the reference ``PEPITA.train_step`` exactly: each layer's
-        weight moves by ``-lr * (a_err - a_std).T @ inp / B`` (the reference
-        applies updates in-place, no torch optimizer).
+        It runs the lockstep rung: pass 1 keeps the output only, pass 2
+        recomputes both chains and moves each layer by
+        ``-lr·(a_mod − a_std)ᵀ a_pre / B`` before the next layer is produced.
+        No torch optimizer and no retained activation lists.
 
         Args:
             model: The bound ``PEPITA`` model (``layers`` ModuleList of
@@ -518,43 +626,24 @@ class PEPITAKernelBackend:
             return None
 
         self._layers = list(layers)
+        self._feedback_matrix = feedback.to(device=self._device, dtype=self._dtype)
         lr = float(getattr(model, "lr", 0.01))
         output_dim = int(getattr(model, "output_dim", self._output_dim))
 
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
-        x = x.to(device=self._device, dtype=self._dtype)
+        x = self._flatten(x)
         y = y.to(device=self._device)
         batch = x.shape[0]
 
-        y_onehot = torch.zeros(batch, output_dim, device=x.device, dtype=self._dtype)
-        y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
-
-        def _two_pass(x_in: Tensor) -> tuple[Tensor, list[Tensor]]:
-            acts: list[Tensor] = []
-            h = x_in
-            for layer in self._layers:
-                h = self._activation(layer(h))
-                acts.append(h)
-            out = out_layer(h)
-            return out, acts
-
         with torch.no_grad():
-            out_s, act_s = _two_pass(x)
-            error = out_s - y_onehot
-            x_mod = x + torch.mm(error, feedback.to(x.device).T)
-            _out_m, act_m = _two_pass(x_mod)
+            out_s = out_layer(self._forward_last(x, final_activation=True))
+            target = torch.zeros(batch, output_dim, device=x.device, dtype=self._dtype)
+            target.scatter_(1, y.unsqueeze(1), 1.0)
+            error = out_s - target
+            last = self._lockstep(x, error, final_activation=True, lr=lr)
 
-            inputs = [x, *act_s[:-1]]
-            for layer, a_s, a_m, inp in zip(self._layers, act_s, act_m, inputs):
-                delta_a = a_m - a_s
-                layer.weight.data -= lr * torch.mm(delta_a.T, inp) / batch
-                if layer.bias is not None:
-                    layer.bias.data -= lr * delta_a.mean(dim=0)
-
-            out_layer.weight.data -= lr * torch.mm(error.T, act_s[-1]) / batch
+            out_layer.weight.sub_(lr * (error.T @ last.post_a) / batch)
             if out_layer.bias is not None:
-                out_layer.bias.data -= lr * error.mean(dim=0)
+                out_layer.bias.sub_(lr * error.mean(dim=0))
 
         loss = (error**2).sum(dim=1).mean().item()
         accuracy = (out_s.argmax(dim=1) == y).float().mean().item()
@@ -800,4 +889,12 @@ except ImportError:
     HAS_TRITON_FF = False
 
 
-__all__ = ["HAS_TRITON_FF", "FFKernelBackend", "PEPITAKernelBackend"]
+__all__ = [
+    "HAS_TRITON_FF",
+    "FFKernelBackend",
+    "LayerContrast",
+    "PEPITAKernelBackend",
+    "apply_contrast",
+    "contrast_delta",
+    "lockstep_contrasts",
+]
