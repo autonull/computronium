@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from computronium.core.identity_card import BiasReference, EstimatorKind
     from computronium.experiment.legality.dsl import Expr
 
 from computronium.experiment.schema.registry import Registry
@@ -114,6 +115,12 @@ class AxisSpec:
     # so the declared space refuses it on a continuous-target task instead of
     # letting the composed cell raise. One declaration, on the row.
     target_kind: Literal["any", "class_index"] = "any"
+    # Where a credit rule sits in the gradient-estimator taxonomy (TODO93 §2),
+    # and what its bias is measured against. Declared on the primitive's
+    # identity card and stamped here by the registry; every other axis carries
+    # ``unspecified`` because the taxonomy is a property of credit rules.
+    estimator_kind: EstimatorKind = "unspecified"
+    bias_reference: BiasReference = "unspecified"
     topology_params: tuple[
         HyperparameterSpec, ...
     ] = ()  # Structural params (not searched)

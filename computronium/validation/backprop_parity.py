@@ -120,6 +120,11 @@ class Contract(StrEnum):
 # `target_prop` removed: `diff_target_prop` has no native factory (TODO37 §4.8).
 _COMPUTE_MATCHED_PORTFOLIO: dict[str, tuple[str, ...]] = {
     "backprop": ("backprop_mlp",),
+    # The two-pass, O(1)-working-set local families. `pepita` is the published
+    # error-modulated rule; it is the arm TODO93's lockstep work and hybrid
+    # trunk are written against, so it belongs in the ladder runner rather
+    # than a second depth loop (TODO93 §4, T4c).
+    "pepita": ("pepita",),
     "fa": (
         "feedback_alignment",
         "standard_fa",
@@ -282,6 +287,7 @@ def backprop_baseline(  # baseline signature is the report contract
     seeds: int,
     device: str,
     learning_rate: float = 1e-3,
+    batch_size: int = 64,
 ) -> tuple[float, dict[str, object], list[dict[str, float]]]:
     """Train the backprop reference.
 
@@ -297,7 +303,7 @@ def backprop_baseline(  # baseline signature is the report contract
 
     driver = CoreTrainerDriver(
         num_workers=0,
-        batch_size=64,
+        batch_size=batch_size,
         track_energy=False,
         track_flops=True,
         track_memory=True,
@@ -738,6 +744,7 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
     families: tuple[str, ...] | None = None,
     output_dir: Path,
     width_ladder: tuple[int, ...] = _DEFAULT_WIDTH_LADDER,
+    batch_size: int = 64,
 ) -> dict[str, object]:
     """Run the compute-matched parity campaign and write the reports.
 
@@ -755,6 +762,10 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
             controlled contract. The default ladder spans 16→2048 covers both
             the small (digits) and large (MNIST) tasks; pass ``()`` to disable
             the capacity-controlled arm (saves a backprop retrain per cell).
+        batch_size: Per-step batch for every arm. The memory binding gate is a
+            function of it (``B·W·L`` against params+optimizer), so a ladder
+            that varies batch must vary it here rather than in a second
+            runner.
 
     Returns:
         The full report dict (models, comparisons, provenance).
@@ -775,7 +786,7 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
 
     driver = CoreTrainerDriver(
         num_workers=0,
-        batch_size=64,
+        batch_size=batch_size,
         track_energy=False,
         track_flops=True,
         track_memory=True,
@@ -800,6 +811,7 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
             seeds=seeds,
             device=device,
             learning_rate=learning_rate,
+            batch_size=batch_size,
         )
         baseline_params = _estimate_params("backprop_mlp", hidden_dims[0], depth, task)
         baseline_epoch_time = float(baseline_metrics.get("epoch_time_s", 0.0))

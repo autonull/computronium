@@ -42,6 +42,10 @@ class SNNKernelBackend:
     supports_autograd = False
     requires_settle = True  # Time-stepped simulation
     memory_complexity = "O(T)"  # T time steps
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.LOCAL
 
     def __init__(self) -> None:
@@ -327,7 +331,7 @@ class SNNKernelBackend:
                     layer_idx = int(name.split(".")[1])
                     self._layers[layer_idx].weight.add_(lr * grad)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
         )
@@ -348,7 +352,7 @@ class SNNKernelBackend:
         return {
             "params_mb": total_params * 4 / 1e6,
             "spike_trains_mb": spike_mb,
-            "activations_mb": 0.0,
+            "activations_mb": None,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:

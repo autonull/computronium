@@ -742,6 +742,8 @@ class ThermodynamicContrast:
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="ThermodynamicContrast",
+        estimator_kind="gradient_approx",
+        bias_reference="exact_tractable",
         reference_equations=(
             "Equilibrium Propagation contrastive Hebbian rule; Scellier & "
             "Bengio (2017), ΔW = (C_free − C_nudged)/β per layer"
@@ -867,6 +869,8 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="RandomProjectionsCredit",
+        estimator_kind="gradient_approx",
+        bias_reference="exact_tractable",
         reference_equations=(
             "Feedback Alignment / Direct Feedback Alignment; Lillicrap et "
             "al. (2016), Nøkland (2016): δ_i = δ_{i+1} @ B_i, fixed random B"
@@ -1214,6 +1218,8 @@ class LocalGoodnessCredit(LearnedFeedbackMixin):
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="LocalGoodnessCredit",
+        estimator_kind="objective_local",
+        bias_reference="none",
         reference_equations=(
             "Forward-Forward (Hinton 2022) for local_objective='ff'; LEMMA "
             "per-layer closed-form for 'lemma' (internal, TODO15 §11-12)"
@@ -1513,6 +1519,8 @@ class LocalContrastiveCredit:
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="LocalContrastiveCredit",
+        estimator_kind="objective_local",
+        bias_reference="none",
         reference_equations=(
             "Forward-Forward with per-layer recomputation; Hinton (2022), "
             "EMA-normalized rung TODO13b W2 / w2_ema_rung probe"
@@ -2107,6 +2115,8 @@ class TemporalTraceCredit(_SurrogateUndefined):
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="TemporalTraceCredit",
+        estimator_kind="temporal_local",
+        bias_reference="none",
         reference_equations=(
             "STDP pair rule; Bi & Poo (1998), Gerstner et al. (2014): "
             "Δw ∝ a₊·postᵀ·pre_trace − a₋·post_traceᵀ·pre"
@@ -2379,6 +2389,8 @@ class TargetInversionCredit:
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="TargetInversionCredit",
+        estimator_kind="gradient_approx",
+        bias_reference="exact_tractable",
         reference_equations=(
             "Target Propagation with transpose feedback; Bengio (2014), "
             "Lee et al. (2015): t_l = t_{l+1} @ W_{l+1}ᵀ"
@@ -2599,6 +2611,8 @@ class HomeostaticCredit(_SurrogateUndefined):
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="HomeostaticCredit",
+        estimator_kind="objective_local",
+        bias_reference="none",
         reference_equations="internal; homeostatic gain control (autonomous Lipschitz scaling)",
         deviations_from_literature=(
             "not error-driven: pseudo-gradient is loss-blind by construction",
@@ -2701,6 +2715,8 @@ class PCALMCredit(_SurrogateUndefined):
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="PCALMCredit",
+        estimator_kind="gradient_approx",
+        bias_reference="exact_tractable",
         reference_equations=(
             "Augmented Lagrangian Predictive Coding; Seely & Gould (2026), "
             "arXiv:2605.31022: ΔW_l ∝ -λ_l h_{l-1}^T"
@@ -2801,6 +2817,8 @@ class LemmaCredit(LocalGoodnessCredit):
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="LemmaCredit",
+        estimator_kind="objective_local",
+        bias_reference="none",
         reference_equations="LEMMA (Layer-wise Error-Modulated local credit); internal derivation, TODO15 §11-12",
         deviations_from_literature=(
             "fixed random inverse projections (orthogonal rows, feedback_scale)",
@@ -2855,6 +2873,8 @@ class PepitaCredit:
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="PepitaCredit",
+        estimator_kind="objective_local",
+        bias_reference="none",
         reference_equations="Dellaferrera & Kreiman 2022, arXiv 2201.11665",
         deviations_from_literature=(
             "feedback matrix B fixed (drawn lazily or supplied) — matches published one-B variant",
@@ -3013,6 +3033,8 @@ class GradientCredit:
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="GradientCredit",
+        estimator_kind="exact",
+        bias_reference="exact_tractable",
         reference_equations="Standard backpropagation; Rumelhart, Hinton & Williams (1986)",
         deviations_from_literature=(
             "weights-only by default (bias deltas 0.0, locked H2 "

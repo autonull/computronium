@@ -44,6 +44,24 @@ class ContrastiveConfig:
     extra: dict[str, object] = field(default_factory=dict)
 
 
+def _target_vector(target: Tensor, like: Tensor) -> Tensor:
+    """A one-hot target tensor in ``like``'s device and dtype.
+
+    Kernel entry points accept class indices or an already-expanded target; this
+    is the single conversion, so every phase compares against the same object.
+    """
+    if target.dim() == 1:
+        return torch.nn.functional.one_hot(target, num_classes=like.shape[1]).to(
+            device=like.device, dtype=like.dtype
+        )
+    return target.to(device=like.device, dtype=like.dtype)
+
+
+def _output_error(target: Tensor, logits: Tensor) -> Tensor:
+    """PEPITA's output error ``one_hot(target) − logits``, shape ``[B, D_out]``."""
+    return _target_vector(target, logits) - logits
+
+
 @runtime_checkable
 class ContrastiveKernel(Protocol):
     """Protocol for contrastive Hebbian kernels (O(1) memory)."""
@@ -60,7 +78,7 @@ class ContrastiveKernel(Protocol):
     ) -> dict[str, Tensor]: ...
     def apply_updates(self, updates: dict[str, Tensor]) -> None: ...
     def contrastive_step(self, x: Tensor, target: Tensor) -> dict[str, float]: ...
-    def get_memory_stats(self) -> dict[str, float]: ...
+    def get_memory_stats(self) -> dict[str, float | None]: ...
     def get_settle_telemetry(self) -> dict[str, object] | None: ...
 
 
@@ -75,6 +93,9 @@ class BaseContrastiveKernel(ABC):
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = True
     memory_complexity = "O(1)"
+    available: bool = True
+    unavailable_reason: str | None = None
+    complexity_verified = False  # declared class; measured ladder pending
     locality_level = LocalityLevel.LOCAL
     _update_sign: int = -1  # EP convention: W -= (1/beta)(nudged - free)
 
@@ -226,13 +247,13 @@ class BaseContrastiveKernel(ABC):
         """Free-phase forward pass; returns the output layer activations."""
         return self._forward_pass(x)[-1]
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
         )
         return {
             "params_mb": total_params * 4 / 1e6,
-            "activations_mb": 0.0,  # O(1) - no activation storage
+            "activations_mb": None,
             "contrastive_mb": 0.0,
         }
 
@@ -408,7 +429,21 @@ class HebbianContrastiveKernel(BaseContrastiveKernel):
 
 
 class FFContrastiveKernel(BaseContrastiveKernel):
-    """Forward-Forward contrastive kernel (Positive vs Negative passes)."""
+    """Forward-Forward contrastive kernel (Positive vs Negative passes).
+
+    Unavailable: neither pass embeds the label, so ``nudged_phase`` returns the
+    free activations and the goodness contrast is identically zero. Forward-
+    Forward needs a label channel in the input (Hinton 2022), which this layer
+    stack does not carry. Reversal trigger: a kernel path that concatenates the
+    one-hot target to the input and a measured non-zero update.
+    """
+
+    available = False
+    unavailable_reason = (
+        "positive and negative passes are the same forward pass: the label is "
+        "never embedded in the input, so the goodness contrast — and every "
+        "weight update — is identically zero (TODO93 §9.2 stub detector)."
+    )
 
     name = AlgorithmFamily.FF_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
@@ -470,6 +505,7 @@ class PEPITAContrastiveKernel(BaseContrastiveKernel):
         super().__init__()
         self._feedback_matrix: Tensor | None = None
         self._feedback_scale: float = 0.1
+        self._free_logits: Tensor | None = None
 
     def initialize(self, config: ContrastiveConfig) -> None:
         super().initialize(config)
@@ -492,19 +528,37 @@ class PEPITAContrastiveKernel(BaseContrastiveKernel):
         )
 
     def free_phase(self, x: Tensor) -> list[Tensor]:
-        """Standard forward pass."""
-        return self._forward_pass(x)
+        """Standard forward pass; caches the logits the modulated pass needs."""
+        acts = self._forward_pass(x)
+        self._free_logits = acts[-1].detach()
+        return acts
 
     def nudged_phase(self, x: Tensor, target: Tensor) -> list[Tensor]:
-        """Error-modulated forward pass."""
-        acts = [x]
-        h = x
+        """Error-modulated forward pass (PEPITA's second pass).
+
+        The output error ``target − free_logits`` is backprojected through the
+        fixed feedback matrix and added to the input, then the stack is
+        replayed. The free logits come from :meth:`free_phase`, so this is the
+        two-forward design PEPITA publishes; a nudged pass that returns the free
+        activations yields a zero update and is the stub this replaces
+        (TODO93 §9.2).
+        """
+        if self._feedback_matrix is None:
+            msg = (
+                "PEPITA contrastive kernel has no feedback matrix; call "
+                "set_model_ref() before training"
+            )
+            raise RuntimeError(msg)
+        free_logits = self._free_logits
+        if free_logits is None:
+            msg = "PEPITA nudged_phase called before free_phase"
+            raise RuntimeError(msg)
+        error = _output_error(target, free_logits)
+        x_modulated = x + error @ self._feedback_matrix
+        acts = [x_modulated]
+        h = x_modulated
         for i, layer in enumerate(self._layers):
             h = layer(h)
-            if i < len(self._layers) - 1 and self._feedback_matrix is not None:
-                # Add error modulation via feedback matrix
-                # Simplified error modulation
-                pass
             h = self._activation(h) if i < len(self._layers) - 1 else h
             acts.append(h)
         return acts
@@ -678,7 +732,20 @@ class PCContrastiveKernel(BaseContrastiveKernel):
 
 
 class SNNContrastiveKernel(BaseContrastiveKernel):
-    """Spiking STDP contrastive kernel (Pre/Post spike timing)."""
+    """Spiking STDP contrastive kernel (Pre/Post spike timing).
+
+    Unavailable: ``_simulate`` accepts the nudging target and never applies it,
+    so the nudged phase reproduces the free trace and the STDP contrast is zero.
+    Reversal trigger: a nudge that moves the output membrane potential and a
+    measured non-zero STDP update on a seeded fixture (TODO93 §9.2).
+    """
+
+    available = False
+    unavailable_reason = (
+        "the nudged phase ignores its target (the nudge branch is a no-op), so "
+        "free and nudged traces are identical and every contrastive update is "
+        "zero (TODO93 §9.2 stub detector)."
+    )
 
     name = AlgorithmFamily.SNN_CONTRASTIVE
     supported_dtypes = (torch.float32,)

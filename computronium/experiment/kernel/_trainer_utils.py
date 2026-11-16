@@ -201,6 +201,19 @@ def _collect_trainer_metrics(trainer: SystemTrainer) -> dict[str, float]:
         metrics["macs_per_step"] = float(flops_per_step / 2)  # 1 MAC = 2 FLOPs
     if last_epoch.peak_memory_mb is not None:
         metrics["memory_usage"] = last_epoch.peak_memory_mb
+    # The stacked decomposition behind the peak: a memory verdict that names
+    # only the total cannot say which term the arm saved (TODO93 §4).
+    for key in (
+        "params_mb",
+        "optimizer_mb",
+        "activations_mb",
+        "auxiliary_mb",
+        "activation_share",
+        "cpu_rss_mb",
+    ):
+        value = getattr(last_epoch, key, None)
+        if value is not None:
+            metrics[key] = float(value)
     if last_epoch.steps > 0:
         metrics["latency_ms"] = (last_epoch.epoch_time_s / last_epoch.steps) * 1000.0
     if last_epoch.energy_joules is not None and last_epoch.steps > 0:

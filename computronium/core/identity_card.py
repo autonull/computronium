@@ -10,8 +10,39 @@ marketing labels.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
-__all__ = ["AlgorithmIdentityCard"]
+__all__ = [
+    "AlgorithmIdentityCard",
+    "BiasReference",
+    "EstimatorKind",
+]
+
+# How a credit rule relates to the global gradient (TODO93 B6). A rule that
+# optimizes a local objective does not estimate that gradient, so labelling it
+# a "biased estimator" is a category error; ``objective_local`` is the honest
+# class and its ``bias_reference`` is ``none``.
+type EstimatorKind = Literal[
+    "exact",
+    "surrogate",
+    "gradient_approx",
+    "objective_local",
+    "local_supervised",
+    "score_function",
+    "forward_mode",
+    "zeroth_order",
+    "temporal_local",
+    "hybrid",
+    "unspecified",
+]
+
+# The reference an estimator's bias is measured against. ``exact_tractable``
+# means a tractable exact gradient exists for the fixture (backprop-shaped
+# nets); ``smoothed_objective`` means the reference is a temperature-smoothed
+# relaxation; ``none`` means the rule has no gradient to be biased about.
+type BiasReference = Literal[
+    "none", "exact_tractable", "smoothed_objective", "unspecified"
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +58,8 @@ class AlgorithmIdentityCard:
         symmetry_requirements: Symmetry/reciprocity the primitive requires.
         approximation_parameters: Sampling/approximation knobs and their bias.
         validated_limits: Regimes where behavior is actually validated.
+        estimator_kind: Where the rule sits in the gradient-estimator taxonomy.
+        bias_reference: What its bias is measured against, or ``none``.
     """
 
     name: str
@@ -37,6 +70,8 @@ class AlgorithmIdentityCard:
     symmetry_requirements: tuple[str, ...] = field(default_factory=tuple)
     approximation_parameters: tuple[str, ...] = field(default_factory=tuple)
     validated_limits: tuple[str, ...] = field(default_factory=tuple)
+    estimator_kind: EstimatorKind = "unspecified"
+    bias_reference: BiasReference = "unspecified"
 
     def to_markdown_row(self) -> str:
         """One ``|``-delimited table row for docs/README tables."""

@@ -52,3 +52,33 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The calibrated center fills only an unsampled value; an explicit `dynamics.step_size` wins. Locked by `test_a_sampled_dynamics_step_size_survives_composition`. |
 | Status | corrected |
 | Commit | this commit |
+
+| Field | Correction 6 — `activations_mb: 0.0` was a claim, not a measurement |
+|---|---|
+| Original claim | Every kernel backend's `get_memory_stats()` reported `activations_mb: 0.0`, so the O(1)-memory classes were "verified" by the same call that produced the number. |
+| Original metric | A hardcoded zero constant in 14 `get_memory_stats()` returns across `acceleration/*_kernels.py`; `KernelBackend.memory_complexity` had no field distinguishing a declared class from a measured one. |
+| Audited procedure | TODO93 §1 read of the return sites against the tensors each kernel actually holds: `contrastive_kernels.contrastive_step` keeps `free_acts` **and** `nudged_acts` (≈2× a forward pass), so its O(1) declaration was false and its 0.0 would have poisoned every memory verdict. |
+| Affected conclusions | Any memory claim or frontier read from a backend's self-reported stats; the O(1) declaration of the two-pass contrastive and PEPITA/FF families. |
+| Replacement metric | `activations_mb` is `None` until measured; `KernelBackend.complexity_verified` (declaration, `False` until a measured ladder exists) travels with `memory_complexity` into `get_backend_info` and the export manifest. Locked by `test_no_backend_hands_back_a_fabricated_activation_measurement`. |
+| Status | corrected — all 14 sites now report `None`; every backend declares `complexity_verified=False` until its ladder lands in `docs/BENCHMARKS.md` |
+| Commit | this commit |
+
+| Field | Correction 7 — the contrastive PEPITA nudge was a `pass` |
+|---|---|
+| Original claim | `PEPITAContrastiveKernel` trained by the standard/error-modulated contrastive rule. |
+| Original metric | `contrastive_step` → `free_phase` + `nudged_phase`; the nudged pass ran the same forward with the error modulation replaced by `pass`, so `ΔW = (std_post − err_post)ᵀ pre / B` was identically zero. |
+| Audited procedure | TODO93 §9.2 stub detector: a non-zero target error must move the update by more than tolerance. Measured before the fix: zero in both layers, `loss` fell only because the reported scalar is the free/nudged difference. |
+| Affected conclusions | Every cell routed through `PEPITA_CONTRASTIVE` (and the SNN and FF contrastive kernels) — they trained nothing. |
+| Replacement metric | The nudged pass backprojects `one_hot(target) − free_logits` through the fixed feedback matrix and replays the stack under `no_grad` semantics (PEPITA's published two-forward design). The SNN and FF contrastive kernels cannot support their algorithm (no target nudge; no label channel in the input) and are `available=False` with a reversal trigger; `KernelRegistry.get` refuses them. Locked by `test_pepita_nudged_pass_moves_the_update` and `test_free_and_nudged_phases_differ_under_error`. |
+| Status | corrected — one kernel fixed, two marked unavailable with reasons |
+| Commit | this commit |
+
+| Field | Correction 8 — the activation coefficient is ≈4, not 1 |
+|---|---|
+| Original claim | Activation bytes are `c·L·B·W·4` with `c≈1` for a Linear+ReLU stack (c≈2 with LayerNorm), so the pilot appendix priced L=64, B=8192, W=1024 activations at 2.0 GiB. |
+| Original metric | Analytic hand count of the *stored inputs* of each matmul. |
+| Audited procedure | TODO93 T4a measured the decomposition on CUDA (`EpochResources._decomposition`): plain backprop, fp32, W=256, B=2048, depth 4/8/16. Activation growth per depth step implies **c = 4.1** on two independent deltas (spread < 1%). The peak carries the stored input, the layer output, and the two backward gradient buffers — four per-layer tensors, not one. |
+| Affected conclusions | The absolute peak in the pilot appendix (2.0 GiB activations → ≈8.4 GiB at the same point) and any admission check priced from it. The **binding gate conclusion does not change**: the activation share rises with c (0.96 measured at B=2048/L=8), so the cell is memory-bound either way. |
+| Replacement metric | The coefficient is measured, never assumed: `test_activation_growth_carries_one_measured_coefficient` locks self-consistency across depth deltas (the cuBLAS workspace floor cancels in the difference). The pre-registration's binding arithmetic must use the measured c. |
+| Status | corrected — c measured at 4.1 on the Linear+ReLU claim geometry |
+| Commit | this commit |

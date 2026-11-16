@@ -105,6 +105,14 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
+def _credit_instance(credit: str) -> object | None:
+    """The implementation ``credit`` names, or ``None`` for an unknown name."""
+    factory = getattr(CreditAssignmentConfig, credit, None)
+    if factory is None:
+        return None
+    return _credit_from_config(factory())
+
+
 def error_blind_credit(credit: str) -> bool:
     """Whether a credit declares that it reads no error signal.
 
@@ -112,10 +120,31 @@ def error_blind_credit(credit: str) -> bool:
     Single source for the corpus instrument and the RL refusal rule: a credit
     that changes its declaration moves both, without a second table.
     """
-    factory = getattr(CreditAssignmentConfig, credit, None)
-    if factory is None:
-        return False
-    return bool(_credit_from_config(factory()).error_blind)
+    instance = _credit_instance(credit)
+    return bool(getattr(instance, "error_blind", False))
+
+
+def credit_identity_card(credit: str) -> object | None:
+    """The identity card of the implementation ``credit`` names, or ``None``."""
+    instance = _credit_instance(credit)
+    return None if instance is None else getattr(instance, "IDENTITY_CARD", None)
+
+
+def estimator_coordinate(credit: str) -> tuple[str, str]:
+    """The ``(estimator_kind, bias_reference)`` a credit declares.
+
+    One declaration, on the credit's identity card, read by the axis row and
+    the claim-table lock. An unregistered or card-less credit reads
+    ``unspecified`` so a missing declaration is visible, never defaulted into
+    the taxonomy (TODO93 §2 estimator taxonomy).
+    """
+    card = credit_identity_card(credit)
+    if card is None:
+        return ("unspecified", "unspecified")
+    return (
+        str(getattr(card, "estimator_kind", "unspecified")),
+        str(getattr(card, "bias_reference", "unspecified")),
+    )
 
 
 def _update_from_config(update: ParameterUpdateConfig) -> ParameterUpdate:
@@ -264,6 +293,8 @@ def compose_joint_system_from_configs(
 __all__ = [
     "compose_joint_system_from_configs",
     "compose_system_from_configs",
+    "credit_identity_card",
     "error_blind_credit",
+    "estimator_coordinate",
     "extract_config",
 ]

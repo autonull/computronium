@@ -476,6 +476,10 @@ class TileKernelBackend:
     supports_autograd = False
     requires_settle = True
     memory_complexity = "O(1)"  # Per-tile O(1), global O(tiles)
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.LOCAL
 
     def __init__(self) -> None:
@@ -1018,14 +1022,14 @@ class TileKernelBackend:
         if hasattr(self, "_tile_algo") and self._tile_algo is not None:
             self._tile_algo.apply_weight_updates(gradients, lr)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         tile_params = self._num_tiles * self._neurons_per_tile * self._neurons_per_tile
         state_mb = self._num_tiles * self._neurons_per_tile * 4 / 1e6
 
         return {
             "tile_params_mb": tile_params * 4 / 1e6,
             "tile_states_mb": state_mb,
-            "activations_mb": 0.0,
+            "activations_mb": None,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:

@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from computronium.core.identity_card import BiasReference, EstimatorKind
 
 from computronium.core.plasticity import READOUT_REPLACING_PLASTICITIES
 from computronium.experiment.execution.stage import STAGE_SPECS as EXEC_STAGE_SPECS
@@ -271,6 +273,23 @@ def _error_blind_credits() -> tuple[str, ...]:
     )
 
 
+def _estimator_coordinate(
+    axis: StructuralAxis, name: str
+) -> tuple[EstimatorKind, BiasReference]:
+    """The ``(estimator_kind, bias_reference)`` a credit row declares.
+
+    Read from the credit's identity card so the taxonomy has one source. A
+    non-credit axis carries ``unspecified``: ``AxisSpec`` is shared by all six
+    axes, and the estimator taxonomy is a property of credit rules alone.
+    """
+    if axis is not StructuralAxis.CREDIT:
+        return ("unspecified", "unspecified")
+    from computronium.core.system_trainer.spec import estimator_coordinate
+
+    kind, reference = estimator_coordinate(name)
+    return (cast("EstimatorKind", kind), cast("BiasReference", reference))
+
+
 def _rl_task_ids() -> tuple[str, ...]:
     """Task ids whose declared domain is RL, read from the task registry.
 
@@ -436,6 +455,7 @@ def _seed_axis_primitives() -> None:
     """
     for axis, primitives in _axis_primitives():
         for name, description, topology in primitives:
+            estimator_kind, bias_reference = _estimator_coordinate(axis, name)
             register_axis_spec(
                 AxisSpec(
                     name=name,
@@ -446,6 +466,8 @@ def _seed_axis_primitives() -> None:
                     target_kind=(
                         "class_index" if (axis, name) in CLASS_TARGET_ONLY else "any"
                     ),
+                    estimator_kind=estimator_kind,
+                    bias_reference=bias_reference,
                     accepted_params=_accepted_params(axis, name),
                     topology_params=tuple(
                         _hyperparameter_spec(p, axis.value, AxisKind.STRUCTURAL)

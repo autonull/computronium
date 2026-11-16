@@ -46,6 +46,10 @@ class FAKernelBackend:
     supports_autograd = False
     requires_settle = False
     memory_complexity = "O(1)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.LAYERWISE
 
     def __init__(self) -> None:
@@ -317,7 +321,7 @@ class FAKernelBackend:
                     if self._layers[layer_idx].bias is not None:
                         self._layers[layer_idx].bias.sub_(lr * grad)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         """Return memory usage stats."""
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
@@ -325,7 +329,7 @@ class FAKernelBackend:
         feedback_params = sum(w.numel() for w in self._feedback_weights)
         return {
             "params_mb": total_params * 4 / 1e6,
-            "activations_mb": 0.0,
+            "activations_mb": None,
             "feedback_weights_mb": feedback_params * 4 / 1e6,
         }
 

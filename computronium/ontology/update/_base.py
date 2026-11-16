@@ -97,6 +97,14 @@ class StateSnapshotMixin:
 
     _momentum_buffers: dict[str, Tensor]
 
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live momentum buffers, without the snapshot clone.
+
+        Accounting reads this every epoch; ``get_state`` clones every tensor,
+        so measuring through it would inflate the peak it is trying to measure.
+        """
+        return dict(self._momentum_buffers)
+
     def _snapshot_momentum(self) -> dict[str, dict[str, Tensor]]:
         return {
             "momentum": {
@@ -116,6 +124,12 @@ class AdamStateMixin:
     _m: dict[str, Tensor]
     _v: dict[str, Tensor]
     _t: int
+
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live Adam moments, without the snapshot clone."""
+        return {f"m.{k}": v for k, v in self._m.items()} | {
+            f"v.{k}": v for k, v in self._v.items()
+        }
 
     def _snapshot_adam(self) -> dict[str, dict[str, Tensor]]:
         def group(store: dict[str, Tensor]) -> dict[str, Tensor]:
@@ -139,6 +153,10 @@ class LionStateMixin:
 
     _m: dict[str, Tensor]
     _t: int
+
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live Lion moment, without the snapshot clone."""
+        return dict(self._m)
 
     def _snapshot_lion(self) -> dict[str, dict[str, Tensor]]:
         return {
@@ -175,6 +193,14 @@ class BaseParameterUpdate:
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         """Snapshot protocol: named groups of state tensors (clones)."""
         raise NotImplementedError
+
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live optimizer state tensors for memory accounting.
+
+        Empty for a stateless update (SGD): zero optimizer bytes is a measured
+        fact there, not a placeholder.
+        """
+        return {}
 
     def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
         raise NotImplementedError

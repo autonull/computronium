@@ -140,7 +140,17 @@ class KernelBackend(Protocol):
     supported_dtypes: tuple[torch.dtype, ...]
     supports_autograd: bool
     requires_settle: bool
+    # The declared peak-memory class. A declaration is not a measurement:
+    # ``complexity_verified`` is True only when a measured depth ladder in
+    # ``docs/BENCHMARKS.md`` supports the class on this backend's path, and a
+    # backend reports ``activations_mb=None`` until it is (TODO93 §1).
     memory_complexity: str  # "O(1)", "O(L)", "O(L*H)"
+    complexity_verified: bool = False
+    # A registered backend that cannot honour its algorithm is unavailable
+    # with a reason, never a silent zero-update path (TODO93 §9.2 stub
+    # detector).
+    available: bool = True
+    unavailable_reason: str | None = None
     locality_level: LocalityLevel
 
     def initialize(self, config: KernelConfig) -> None: ...
@@ -149,7 +159,7 @@ class KernelBackend(Protocol):
     def forward(self, *args: object, **kwargs: object) -> object: ...
     def backward(self, *args: object, **kwargs: object) -> object: ...
     def update_weights(self, *args: object, **kwargs: object) -> None: ...
-    def get_memory_stats(self) -> dict[str, float]: ...
+    def get_memory_stats(self) -> dict[str, float | None]: ...
     def get_settle_telemetry(self) -> dict[str, object] | None: ...
 
 
@@ -194,6 +204,11 @@ class KernelRegistry:
             return None
 
         backend_cls = cls._backends[algorithm][hardware]
+        if not backend_cls.available:
+            # A registered backend that cannot honour its algorithm is not a
+            # routing target: the cell falls through to a hardware/family that
+            # can, instead of running a zero-update stub (TODO93 §9.2).
+            return None
         instance = backend_cls()
         cls._instances[key] = instance
         return instance

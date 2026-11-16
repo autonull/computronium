@@ -36,6 +36,10 @@ class HebbianKernelBackend:
     supports_autograd = False
     requires_settle = False
     memory_complexity = "O(1)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.LOCAL
 
     def __init__(self) -> None:
@@ -228,13 +232,13 @@ class HebbianKernelBackend:
                     if self._layers[layer_idx].bias is not None:
                         self._layers[layer_idx].bias.add_(grad)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
         )
         return {
             "params_mb": total_params * 4 / 1e6,
-            "activations_mb": 0.0,  # O(1) - no activation storage needed
+            "activations_mb": None,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
@@ -253,6 +257,10 @@ class ThreeFactorKernelBackend(HebbianKernelBackend):
     supports_autograd = False
     requires_settle = False
     memory_complexity = "O(1)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.LOCAL
 
     def __init__(self) -> None:

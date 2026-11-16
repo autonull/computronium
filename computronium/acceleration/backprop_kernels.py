@@ -48,6 +48,10 @@ class BackpropKernelBackend:
     supports_autograd = True
     requires_settle = False
     memory_complexity = "O(L)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.GLOBAL
 
     def __init__(self) -> None:
@@ -171,14 +175,14 @@ class BackpropKernelBackend:
                 elif "bias" in name and self._layers[layer_idx].bias is not None:
                     self._layers[layer_idx].bias.sub_(lr * grad)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         """Return memory usage stats (activations stored per layer: O(L))."""
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
         )
         return {
             "params_mb": total_params * 4 / 1e6,
-            "activations_mb": 0.0,
+            "activations_mb": None,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:

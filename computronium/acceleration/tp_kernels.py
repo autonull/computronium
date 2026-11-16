@@ -58,6 +58,10 @@ class TPKernelBackend:
     supports_autograd = False
     requires_settle = True
     memory_complexity = "O(1)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.LAYERWISE
 
     def __init__(self) -> None:
@@ -496,13 +500,13 @@ class TPKernelBackend:
             "logits": out.detach(),
         }
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         fwd_params = sum(
             p.numel() for layer in self._forward_layers for p in layer.parameters()
         )
         return {
             "forward_params_mb": fwd_params * 4 / 1e6,
-            "activations_mb": 0.0,
+            "activations_mb": None,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:

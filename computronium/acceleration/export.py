@@ -189,6 +189,14 @@ def _build_manifest(
         "supports_autograd": bool(getattr(kernel, "supports_autograd", False)),
         "requires_settle": bool(getattr(kernel, "requires_settle", False)),
         "memory_complexity": str(getattr(kernel, "memory_complexity", "O(L)")),
+        "complexity_verified": bool(getattr(kernel, "complexity_verified", False)),
+        "available": bool(getattr(kernel, "available", True)),
+        "unavailable_reason": getattr(kernel, "unavailable_reason", None),
+        "backend_path": f"{type(kernel).__module__}.{type(kernel).__qualname__}",
+        "gpu_model": (
+            torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+        ),
+        "torch_version": torch.__version__,
         "locality_level": str(getattr(kernel, "locality_level", "")),
         "settle_steps": config.settle_steps,
         "beta": config.beta,

@@ -40,6 +40,10 @@ class FFKernelBackend:
     supports_autograd = False
     requires_settle = False
     memory_complexity = "O(1)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.FORWARD_ONLY
 
     def __init__(self) -> None:
@@ -231,13 +235,13 @@ class FFKernelBackend:
                     if self._layers[layer_idx].bias is not None:
                         self._layers[layer_idx].bias.add_(lr * grad)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
         )
         return {
             "params_mb": total_params * 4 / 1e6,
-            "activations_mb": 0.0,
+            "activations_mb": None,
         }
 
     def kernel_train_step(
@@ -319,6 +323,10 @@ class PEPITAKernelBackend:
     supports_autograd = False
     requires_settle = False
     memory_complexity = "O(1)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.FORWARD_ONLY
 
     def __init__(self) -> None:
@@ -563,7 +571,7 @@ class PEPITAKernelBackend:
                     if self._layers[layer_idx].bias is not None:
                         self._layers[layer_idx].bias.add_(lr * grad)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
         )
@@ -573,7 +581,7 @@ class PEPITAKernelBackend:
         return {
             "params_mb": total_params * 4 / 1e6,
             "feedback_mb": fb_mb,
-            "activations_mb": 0.0,
+            "activations_mb": None,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:

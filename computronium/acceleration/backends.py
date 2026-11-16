@@ -297,6 +297,9 @@ class AutoDispatcher:
                     "memory_complexity": getattr(
                         backend, "memory_complexity", "unknown"
                     ),
+                    "complexity_verified": getattr(
+                        backend, "complexity_verified", False
+                    ),
                     "locality_level": getattr(backend, "locality_level", "unknown"),
                     "supports_autograd": getattr(backend, "supports_autograd", False),
                     "requires_settle": getattr(backend, "requires_settle", False),

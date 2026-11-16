@@ -42,6 +42,10 @@ class PCKernelBackend:
     supports_autograd = False
     requires_settle = True
     memory_complexity = "O(1)"
+    available = True
+    complexity_verified = (
+        False  # declared class; measured ladder pending (docs/BENCHMARKS.md)
+    )
     locality_level = LocalityLevel.LOCAL
 
     def __init__(self) -> None:
@@ -281,7 +285,7 @@ class PCKernelBackend:
                     if bias is not None:
                         bias.add_(grad)
 
-    def get_memory_stats(self) -> dict[str, float]:
+    def get_memory_stats(self) -> dict[str, float | None]:
         total_params = sum(
             p.numel() for layer in self._layers for p in layer.parameters()
         )
@@ -291,7 +295,7 @@ class PCKernelBackend:
         return {
             "params_mb": total_params * 4 / 1e6,
             "states_mb": mu_mb,
-            "activations_mb": 0.0,
+            "activations_mb": None,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
