@@ -1,5 +1,5 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v12 — portfolio revision. Six tracks, three cheap screens first.**
+**Status:** 2026-11-16 · **v13 — portfolio + ladder discipline. Apparatus phase, not adjudication.**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 landed: the truth pass, the memory
 decomposition, the ladder runner, the checkpointed baseline, the lockstep
 two-pass rung, the hybrid, and the composed pilot. Measured: **c≈4.1** (not 1),
@@ -8,17 +8,23 @@ lockstep **flat in depth** (66.3 MB FF / 58.5 MB PEPITA), hybrid trunk **flat at
 and the pilot's two blockers (**T6b** composed-path memory, **T6c** depth
 trainability) are named and locked. v12 changes what the plan *is*: a portfolio
 of six capability tracks ordered by information per session, not a serial DAG
-through one publishable unit. The three cheapest track-killers (routing, streaming,
-estimator atlas) ship before any claim-grade work, because each can promote or
-refuse a track for hours of compute — and only after a ladder, never from one
-cell. Everything already built — the instrumented decomposition, the lockstep
-kernels, the hybrid, the evidence store, the 6-axis generator, the identity
-cards — is a **reused asset** in the new tracks, not sunk cost. v1 (composition-wide search, substrate inversion) stays in §12 as a
-triggered track; v2–v11 are the correctness history (§3–§9).
-**Successor to TODO92** (closed: 12 claim-grade rows, breadth gate 8/8, parity on
-two families, **0 capability wins**). That base rate is the reason v12 is a
-portfolio and not one bet: the space is wide and a single hard claim is a poor
-use of the first sessions.
+through one publishable unit. **v13 states the phase's purpose: grow and
+stabilise the apparatus and record observations; do not adjudicate algorithms
+(§0.5).** The three cheapest screens (routing, streaming, estimator atlas) ship
+before any claim-grade work, because each can promote or refuse a track for
+hours of compute — and only after a ladder, never from one cell. Everything
+already built — the instrumented decomposition, the lockstep kernels, the
+hybrid, the evidence store, the 6-axis generator, the identity cards — is a
+**reused asset** in the new tracks, not sunk cost. v1 (composition-wide search,
+substrate inversion) stays in §12 as a triggered track; v2–v11 are the
+correctness history (§3–§9).
+**Successor to TODO92** (closed: 12 claim-grade rows, breadth gate 8/8, parity
+on two families, **0 capability wins at those coordinates**). That base rate is
+the reason a portfolio beats one bet: the space is wide, and a single hard claim
+is a poor use of the apparatus-building sessions.
+**What this phase buys even with no win:** a system that can *run* the
+exhaustive HPO later without optimising a broken objective — legality, identity,
+matched budgets, controls, cost models, and locks (§0.5).
 **The pivot, restated.** TODO92 competed with backprop on backprop's home turf.
 v12 competes where the **structure** is different: activation memory, substrate
 constraints, non-differentiable computation, batch-1 streaming, and the
@@ -163,6 +169,38 @@ even then the re-open probe stays in the ledger.
 **Why this is not slower.** A 4-cell ladder at L0 costs minutes. What it buys is
 the difference between "one config was bad" and "the knob box is exhausted" —
 the exact confusion that turns a portfolio into an excuse to stop.
+
+### 0.5 What this phase is for — and what it is not
+
+**This phase grows, stabilises, and fixes the apparatus.** It is not algorithm
+adjudication, and it is not the exhaustive HPO that a mature apparatus will
+eventually support. Every track is expected to produce some of:
+
+| Yield | What it looks like |
+|---|---|
+| **A working capability at a named coordinate** | "the hybrid trains at L=8/B=8192/W=1024, 200 steps, 0.419 val_acc, 4.2 forward-equivalents" |
+| **A new observation** | "the composed path pays 1.98× the checkpointed activation set because the pipeline holds the free pass"; "the plain stack sits on the loss plateau at L=32" |
+| **A defect fixed, or a lock that stops a fake number** | strict xfail, stub detector, binding gate, identity completeness |
+| **A cost model** | measured cells/second, bytes/step, forward-equivalents, so the later HPO can be priced instead of guessed |
+| **A laddered scope statement** | "at this knob box, with this wiring, the effect is absent" — plus the trigger and command that would reopen it |
+
+**What we do not expect from this phase.** We do not expect "local learning
+doesn't work", "PEPITA is bad", or a leaderboard. Those are conclusions this
+apparatus is not yet entitled to draw, because no track has run its knob box to
+exhaustion and no cell has been through the claim-grade protocol. A refusal here
+is a statement about **coordinates**, not about an idea — and §0.4 keeps its
+re-open probe.
+
+**Why the order is apparatus-first.** Exhaustive HPO on this system today would
+optimise an objective with four known hazards: cells that cannot train (T6c),
+memory that is attributed to the wrong term (T1), baselines that are not
+matched (the binding gate), and compositions whose mechanism never runs on the
+claim path (T6b). Tuning around those hazards produces numbers that look like
+results and are not. The screens remove them for hours, not sessions.
+
+**The one bonus.** If a screen or a surprise produces a real claim-grade effect,
+it is taken seriously and promoted immediately (§14). The plan is built so that a
+win is *found*, not forced — and so that a blank is *recorded*, not mourned.
 
 **Progress (2026-11-16 — T1, T4a, T4c, T4b, T3, T3b, T6).** Every row is a runnable
 check, not a claim, and each fails when its mechanism is removed.
@@ -534,8 +572,9 @@ system is not functional (in-place ops, stateful settle), it is
 **reference-only**, never an arm.
 **Design.** Router accuracy and end-task accuracy at matched walltime; the bias
 measurement is the mechanism claim.
-**Stop rule.** STE+aux wins by ≥1 pp → publish the negative with the measured
-bias; do not tune the local arm to rescue it.
+**Stop rule.** STE+aux wins by ≥1 pp at the ladder's best point → publish the
+bounded observation with the measured bias; do not tune the local arm to rescue
+it.
 ---
 ## 6. P4 — MPU3: streaming without replay
 **Why.** Batch-1, non-stationary data, no replay buffer: the regime where the
@@ -845,7 +884,7 @@ today. If a digital result needs a substrate control, the trigger fires.
 | an atlas row contradicts a published number | T5 defect first; no atlas claim until closed |
 | a surprise cell beats its declared expectation by ≥2σ | ticket in the same session; the plan re-ranks around it |
 | P1 gaps beyond tolerance | defect tickets only; no measurement claims until closed |
-| nothing wins | the honest negative: the structural advantage does not convert at matched budgets, with the measured decomposition showing why. Then §12's triggers lead |
+| nothing wins at these coordinates | the coordinates and the box are the result: record the decomposition that shows why, keep the re-open probes, and let the later HPO phase re-test a wider box. Then §12's triggers lead |
 **Portfolio rank (rewrite each session).** List the tracks by expected decision
 value ÷ measured cost, with the last pilot cost beside each. The top three run;
 everything else is parked. A track whose next rung cannot change a decision is
@@ -871,9 +910,10 @@ not scheduled, however cheap.
 | — | D | substrate-native training at matched accuracy | — | state per step; accuracy; dtype constraints | — | — | D1 |
 | — | F | does composition beat the best single-axis default? | — | ≥δ at matched budget | — | — | F1 |
 **Progress is one of:** a published-parity reference (P1); a measured frontier
-(A–F); a promoted claim; a defect found and fixed by a failing test; a refusal
-with a trigger; **a surprise that opens a new question (§0.2)**. **Not progress:**
-more cells, more prose, more primitives, a knob swept to pass.
+(A–F); a promoted claim; a defect found and fixed by a failing test; a **measured
+coordinate at a declared box** (the apparatus grew); a **laddered refusal with a
+trigger and a re-open command**; **a surprise that opens a new question (§0.2)**.
+**Not progress:** more cells, more prose, more primitives, a knob swept to pass.
 
 **Portfolio position, 2026-11-16 (rewrite each session).**
 
