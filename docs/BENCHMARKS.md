@@ -403,6 +403,49 @@ Command: `uv run python -m computronium.validation.estimator_atlas --device
 cpu`; full rung: `... --full`; replay from the cell log without training:
 `... --replay`. The per-seed table is `results/t93_e1/estimator.md`.
 
+### 2.9 The substrate ladder (D1)
+
+**Question.** On a constrained substrate model, does an energy-minimisation
+learner reach digital parity at lower state per step? The parity reference is
+the same rule on a digital substrate; the learning control is digital backprop
+at the same budget. The box is MNIST quick mode, 784-32-10, batch 32, 600
+batches, one epoch, beta 0.5, full 10k test split (1 sigma = 0.3 pp), CPU.
+
+**The state ruler.** Device state per step is the declared width (32 bits/weight
+digital, 2 bits/weight ternary + one fp32 scale per layer, 16 bits/weight for a
+differential int8 pair). Train state is the fp32 latent set + optimizer buffer
+(0.2 MB, equal for every arm) and is **declared, not claimed** as a saving: an
+in-situ device would hold the weights, not a second fp32 copy.
+
+| arm | LR ladder (1e-3 / 3e-3 / 1e-2) | settle 5 / 10 / 20 | confirmation | device B/weight |
+|---|---|---|---|---|
+| digital rule (control) | 0.858 / 0.896 / **0.914** | 0.913 / 0.914 / 0.916 | 0.913 @10, 0.910 @20 | 4.00 |
+| memristive | 0.856 / 0.894 / **0.911** | 0.893 / 0.911 / **0.915** | **0.9097 @20** | **2.00** |
+| ternary | 0.801 / **0.835** / 0.728 | 0.821 / **0.835** / 0.796 | 0.861 @10 | **0.25** |
+| digital backprop (learning control) | — | — | **0.9234** | 4.00 |
+
+**Verdict: promote the memristive arm to D2.** At settle 20 the memristive arm
+reads **0.9097** against the digital rule's **0.9097** on the confirmation seed
+(0.05 pp), at **2 B/weight against 4 B/weight**. The parity margin was
+pre-registered at 1 pp on both seeds, and the ladder and confirmation seeds
+agree. The best settle is the ladder's upper edge, so D2 includes an extension.
+
+**One refusal at this box.** Ternary reaches 0.835 at settle 10 / LR 3e-3 and
+0.861 on the confirmation seed, **5.2 pp below** the digital rule's 0.913. At
+2 bits/weight (16x less state) it does not buy parity at width 32. The refusal
+keeps its knob box, its trigger (a wider hidden layer or a learnable alpha per
+layer), and its re-open command (the cell log with that box).
+
+**Two apparatus corrections.** A shared LR is not a fair box: at 1e-2 ternary
+reads 0.381 while digital/memristive read 0.909/0.905, so each arm gets its own
+LR viability ladder (CORRECTION 17). A frozen-alpha probe rejected itself: the
+cell moves by at most 7 pp at 1e-2 and under 0.5 pp where it is alive, so the
+moving scale was not the degradation's mechanism and no code fix was applied.
+
+Command: `uv run python -m computronium.validation.substrate_ladder --device
+cpu`; replay from the cell log without training: `... --replay`. The table is
+`results/t93_d1/substrate.md`.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -414,6 +457,9 @@ cpu`; full rung: `... --full`; replay from the cell log without training:
 | Estimator atlas: six declared coordinates, lite/full, control/refusal verdicts | `tests/unit/validation/test_estimator_atlas.py` | 9 s |
 | Kill-safe atlas cell log: resume/replay and dedup | `tests/unit/validation/test_estimator_atlas.py` | 1 s |
 | Lockstep ≡ store-all, per layer, `atol=0`; peak flat in depth | `tests/property/test_lockstep_parity.py` | 9 s (4 s CUDA) |
+| Substrate device state is a declared width (2/16/32 bits/weight), not a zero | `tests/unit/validation/test_substrate_ladder.py` | 10 s |
+| D1 gate: two-seed parity with less state promotes; one seed below refuses; chance control invalidates | `tests/unit/validation/test_substrate_ladder.py` | 1 s |
+| Kill-safe substrate cell log: resume/replay and dedup | `tests/unit/validation/test_substrate_ladder.py` | 1 s |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |

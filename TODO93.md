@@ -1,9 +1,10 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v17 — E1's estimator atlas landed; D1's substrate ladder is the next screen. Apparatus phase, not adjudication.**
-T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 landed: the truth
-pass, the memory decomposition, the ladder runner, the checkpointed baseline,
-the lockstep two-pass rung, the hybrid, the composed pilot, the routing
-refusal, the plasticity ladder, the retention ladder, and the estimator atlas.
+**Status:** 2026-11-16 · **v18 — D1's substrate ladder landed and promoted the memristive arm to D2; A's two blockers are the next screen. Apparatus phase, not adjudication.**
+T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 landed: the
+truth pass, the memory decomposition, the ladder runner, the checkpointed
+baseline, the lockstep two-pass rung, the hybrid, the composed pilot, the
+routing refusal, the plasticity ladder, the retention ladder, the estimator
+atlas, and the substrate ladder.
 Measured: **c≈4.1** (not 1), lockstep **flat in depth** (66.3 MB FF / 58.5 MB
 PEPITA), hybrid trunk **flat at 81.0 MB**, pilot controls **pass** (c = 4.125,
 spread 0.0 %; L=8 learns 0.419), and the pilot's two blockers (**T6b**
@@ -13,8 +14,56 @@ information per session, not a serial DAG through one publishable unit. **v13
 states the phase's purpose: grow and stabilise the apparatus and record
 observations; do not adjudicate algorithms (§0.5).** B1's routing screen landed
 first because it was the cheapest that could cancel a whole track; it has now
-refused that track at its box. E1 has now produced its atlas; D1 is the next
-probe of a promise that has never had a matched row.
+refused that track at its box. E1 has now produced its atlas, and D1 has
+produced its first matched row: memristive reaches parity with the digital rule
+inside 0.05 pp on two seeds at 2 B/weight against 4 B/weight, while ternary
+refuses at this box (0.861 vs 0.913 on the confirmation seed). A's two
+blockers are the next screen.
+
+**D1 landed and promoted the memristive arm (2026-11-16).** The substrate
+ladder ran 24 cells at one box: MNIST quick mode, 784-32-10, batch 32, 600
+batches, one epoch, β=0.5, `energy_minimization` settling, full 10k test split
+(1σ = 0.3 pp). The learning control (digital backprop) reads **0.9234**, so the
+task is valid; the parity reference is the same rule on a digital substrate.
+Each arm got its own 3-point LR viability ladder at settle 10 (CORRECTION 17: a
+shared LR collapsed ternary to 0.381 at 1e-2 while its best point is 3e-3), then
+the 5/10/20 settle ladder at its best LR.
+
+- **memristive** reads 0.893 / 0.911 / 0.915 at settle 5/10/20 (LR 1e-2)
+  against the digital rule's 0.913 / 0.914 / 0.916; on the confirmation seed
+  at settle 20 it reads **0.9097** against digital **0.9097** (0.05 pp), so it
+  reaches **parity at 2 B/weight against 4 B/weight (0.5×)**. Verdict:
+  **promote to D2** (coordinate, 2 seeds; best settle at the ladder's upper
+  edge, so D2 includes a settle extension).
+- **ternary** reads 0.801 / 0.835 / 0.728 at LR 1e-3/3e-3/1e-2, and 0.821 /
+  0.835 / 0.796 at settle 5/10/20 (LR 3e-3); its confirmation at settle 10
+  reads **0.861** against digital 0.913 — **5.2 pp below**, so it **refuses at
+  this box** (2 bits/weight, 16× less state, does not buy parity at width 32).
+  Its re-open command is the cell log with a wider hidden layer or a learnable α
+  per layer.
+- **State ruler:** device state per step is 0.25 B/weight (ternary), 2 B/weight
+  (memristive pair), 4 B/weight (digital); train state is the fp32 latent set
+  plus optimizer buffer, 0.2 MB and equal for every arm — declared, never
+  claimed as a saving (a device would hold the weights, not a second fp32 copy).
+- Cost: 24 cells, 617 s (~10 min) on CPU; 8–66 s/cell; forward-equivalents
+  read 10/20/40 at settle 5/10/20 (the structural 2×settle estimate).
+- **Ladder edges:** digital and memristive best LR at 1e-2 (upper edge) and best
+  settle at 20 (upper edge); the pilot read 3e-2 at 0.913 digital / 0.874
+  memristive, so D2's upward LR check needs no new ladder at this box.
+
+**D2 — the matched substrate comparison (next rung of track D).** D1 promoted
+a substrate at one cheap box; D2 must decide whether the saving survives a
+matched-budget comparison. *Arms:* memristive + `energy_min` against (a) the
+same rule on digital at matched settle compute, (b) digital backprop at matched
+walltime, and (c) the int8-quantised digital control (the same width, no
+device model). *Rulers:* accuracy, walltime, forward-equivalents, device state
+per step, and the constraint that binds (conductance levels, programming
+budget, drift) — a parity claim must name it. *Stop:* within 1 pp of the
+digital rule at ≤1.2× walltime → D3 (a device-drift/retention model); a
+disadvantage >1 pp at matched walltime → refuse the substrate path with the
+measured mechanism. *Box:* CIFAR-10 quick mode or MNIST at 2× width, 5 paired
+seeds. D2 needs no new primitive: it reuses `MemristiveSubstrate`,
+`EnergyMinimizationDynamics`, and the D1 runner.
 
 **E1 landed and closed (2026-11-16).** The estimator atlas ran its E-lite
 screen (4 arms × 1 seed) and then the full rung (6 arms × 3 disjoint seeds) at
@@ -123,17 +172,17 @@ shrinks instead of accumulating.
 | **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b (credit owns its free pass) + T6c (trainable depth) + T6a | 2 sessions | after T6b/T6c: hybrid not ≤0.5× the baseline's **activation bytes** at parity, at the frozen LR ladder's best point → refuse A with a trigger |
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → refuse B with a trigger |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → refuse C (retention undefined) |
-| **D. Substrate-native training** | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | ternary/memristive + `energy_minimization`: 3-point `max_steps` ladder (5/10/20) + confirmation | hours–1 session | cannot train at any ladder point, or no state saving at the best → park D with a reversal trigger |
+| **D. Substrate-native training** ✅ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed 2026-11-16**: 24 cells, per-arm LR ladder + settle 5/10/20; memristive **0.910 vs 0.910** at 2 vs 4 B/weight; ternary refused (0.861 vs 0.913) | 10 min | **D1 promoted memristive to D2**; ternary refused with a re-open trigger (§14) |
 | **E. Estimator atlas** ✅ | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | **closed as an atlas (2026-11-16)**: controls pass, table is the artifact; PC-ALM depth-100 trigger, empty unbiased cells visible but not pulled |
 | **F. Does composition matter?** | Say whether a 6-axis composition beats the best single-axis default, by ≥δ | best-of-single-axis at matched budget | 50 legal cells on one cheap task, then a ladder on the best-looking family | 1 session | no family ≥δ **after its own ladder** → refuse composition with a trigger, and E/D carry the plan |
 
 **The rule that changes the plan.** *No ticket is scheduled ahead of a cheaper
-screen that could cancel it.* T6b is real and worth an hour — but it is
-downstream of "does the hybrid learn at all", which costs an hour. D is the
-project's most distinctive promise and has never been probed. B, C, and E have
-each now spent their cheap screen: B refused its depth axis, C closed at its
-saturation point, and E closed as an atlas. **Session order is therefore D
-first, then A's blockers, then F; the closed tracks' triggers stay in §14.**
+screen that could cancel it.* D1 has spent its cheap screen and promoted one
+arm; D2 is the matched comparison that decides whether the saving survives.
+B, C, and E have each spent their cheap screen: B refused its depth axis, C
+closed at its saturation point, and E closed as an atlas. **Session order is
+therefore A's two blockers (T6b/T6c), then D2, then F1; the closed tracks'
+triggers stay in §14.**
 
 **Ranking, recomputed every session (§14):** expected decision value ÷ measured
 cost, with the cost taken from the last pilot of that track, never guessed. A
@@ -142,8 +191,10 @@ track whose next rung cannot change a decision is parked, not scheduled.
 **Assets this portfolio protects.** The decomposition + binding gate (A), the
 lockstep kernels and the `TrunkContrast` Protocol (A/B), the checkpointed arm
 (A), the evidence store + survey harness + policies (F), the identity cards and
-estimator coordinates (E), the substrate models and `energy_minimization` (D),
-the continual runner (C). None of this work is thrown away by the reordering.
+estimator coordinates (E), the substrate models, `energy_minimization`, and the
+D1 ladder (D), the continual runner (C). D1 found no defect: the moving-scale
+probe rejected a frozen-α "fix", so the apparatus grew by a measured LR box,
+not a code change.
 
 ### 0.1 The promise map (PURPOSE.md → nearest asset → cheapest decisive probe)
 
@@ -272,7 +323,7 @@ refused, because the row keeps its trigger.
 it is taken seriously and promoted immediately (§14). The plan is built so that a
 win is *found*, not forced — and so that a blank is *recorded*, not mourned.
 
-**Progress (2026-11-16 — T1, T4a, T4c, T4b, T3, T3b, T6).** Every row is a runnable
+**Progress (2026-11-16 — T1, T4a, T4c, T4b, T3, T3b, T6, B1, C1, C2, E1, D1).** Every row is a runnable
 check, not a claim, and each fails when its mechanism is removed.
 
 | Ticket | Landed | Lock | Consequence |
@@ -286,19 +337,20 @@ check, not a claim, and each fails when its mechanism is removed.
 | T6 | `validation/memory_frontier.py`: one operating point, four arms, two controls, appendix writer; `run_pilot`, `run_learning_ladder`, `claim_ladder`, `build_arm` | `test_memory_frontier.py` (8, 1 CUDA xfail) | **c = 4.125 (0.0 % spread) at L=32/B=8192/W=1024**; gate green (share 0.941); learning control passes (0.419 vs floor 0.409); **two defects found** — T6b (composed hybrid 3249 MB vs ckpt 1637 MB) and T6c (loss plateau at L=32) |
 | **C1 ✅** | **Plasticity ladder**: `validation/plasticity_ladder.py`; batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed; local (PEPITA) vs exact-gradient control | `test_plasticity_ladder.py` (3), `test_cl_credit_arms.py` (5) | **local 0.945 / 0.947 at LR 1e-3 on two seeds**, control 0.839 / 0.893, floor 0.55 → **verdict: promote**. Two apparatus defects fixed: credit label channel (local scored 0.030 on task 4 before) and data-order seed (backprop swung 0.926→0.839) |
 | **C2 ✅** | **Retention ladder**: `validation/plasticity_ladder.py --stage consolidation`; batch-1 SplitMNIST, 3-point EWC-strength ladder at the frozen LR (1/10/100), local × EWC vs backprop × EWC; 1 seed + confirmation; kill-safe resume/replay | `test_plasticity_ladder.py` (9), `test_cl_credit_arms.py` (6) | **close at the saturation point λ=100**: local 0.952 / 0.015 vs control 0.963 / 0.020 (gain +0.005 < δ 0.032; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost ratio 1.07×; λ ladder moves 0.6 pp (local) / 2.2 pp (control), both < δ. Defect fixed en route: task-start re-consolidation erased the Fisher importance (CORRECTION 12) |
-
+| **D1 ✅** | **Substrate ladder**: `validation/substrate_ladder.py`; ternary/memristive + `energy_min` at settle 5/10/20, per-arm LR ladder, 2 seeds, device state | `test_substrate_ladder.py` (9) | **promoted memristive** (0.9097 vs 0.9097 at settle 20 on the confirmation seed, 2 vs 4 B/weight); ternary refused at 0.861 vs 0.913 (2 bits/weight); CORRECTION 17 (per-arm LR) |
 **Next (three sessions, not a DAG).**
 
-1. **Structure first:** **D** (ternary/memristive + `energy_min` at 10 steps,
-   matched digital baseline) — the project's most distinctive promise and the
-   only unprobed track. B refused, C closed, and E closed as an atlas, so none
-   of them is a screen any more.
-2. **A's blockers:** T6b (credit owns its free pass) and T6c (trainable depth),
-   whichever D promotes; then **F** (50 legal cells vs the best single-axis
-   default) and **T6a**.
+1. **A's blockers first:** T6b (credit owns its free pass) and T6c (trainable
+   depth) — the instrument is done, and the claim is two hours-scale defects
+   away. D1 has promoted one substrate arm, but that rung is a matched
+   comparison, not a blocker for A.
+2. **D2:** the promoted memristive arm's matched-budget comparison (5 paired
+   seeds, matched walltime, the int8 QDQ control); then **F** (50 legal cells vs
+   the best single-axis default) and **T6a**.
 3. **Triggers, not tickets:** PC-ALM at its depth-100 box, the empty unbiased
    cells (score-function, forward-mode, zeroth order), C's 5-seed retention
-   protocol, and B's chained/Gumbel/k≥4 re-open are all in §14.
+   protocol, ternary's wider-width/learnable-α box, and B's chained/Gumbel/k≥4
+   re-open are all in §14.
 
 T6a is **not** registered before step 3: a threshold written while the treatment's
 memory mechanism is absent on the claim path would be decided by a defect. T5
@@ -332,6 +384,15 @@ because the audit is what makes the memory thesis checkable at all.
 | composition search deferred (D1) | track **F**, 50 cells, one session | the 6-axis generator is the repo's central claim; if composition never beats the best single axis, that is the most important result available |
 | "no remarkable results" accepted as base rate | **10 % surprise budget + same-session tickets** | a plan that can only confirm itself converges to "as expected". Surprises are results (§0.2) |
 | DAG order fixed in the plan | **portfolio rank rewritten every session** (§14) | the ranking must move when a screen lands, not when a document is edited |
+
+**What changed in v17→v18 and why.**
+| v17 | v18 | Reason |
+|---|---|---|
+| D1 is the next screen | **D1 landed**: memristive promoted to D2; ternary refused with a trigger | the first matched substrate row exists; the promoted arm's next rung is a matched comparison, not another screen |
+| A's blockers are second | **A's blockers are first** | A's instrument is done and D1's promotion does not unblock its claim; the two defects are the cheapest remaining decision |
+| one DP/DR device width per substrate, unstated | **the state ruler is explicit**: 0.25 / 2 / 4 B/weight device, fp32 train state declared | a "less state" claim must name what a device holds; the latent set is a simulator cost, never a saving |
+| "shared LR is fine for the substrate screen" | **per-arm LR viability ladder** (CORRECTION 17) | a shared LR collapsed ternary to 0.381 while its best point is 3e-3; a screening gate must not be decided by a tuning defect |
+| D2 unnamed | **D2 defined**: matched settle compute, matched walltime, int8 QDQ control, 5 paired seeds | a promoted arm needs its matched comparison written before it runs |
 ---
 ## 1. The scarce-resource thesis (corrected)
 **Measured fact (was wrong in v2).** Backprop stores per-layer activations:
@@ -692,17 +753,29 @@ These carry promises from `PURPOSE.md` that no TODO has ever measured. Each is
 sized to reach a decision in one session, and each reuses an existing asset — no
 new primitive is admitted before the screen promotes.
 
-**D — substrate-native training.** *Question:* on a constrained substrate model,
-does a learning system reach digital parity at lower state? *Arms:* ternary +
-`energy_minimization` (`max_steps=10`, the measured optimum; the stale default was
-30), memristive + the same credit that works digitally, and a digital control.
-*Rulers:* state per step (bytes), accuracy, and the constraint that binds
-(quantization, bounds, drift) — a parity claim must name it. *Stop:* cannot train
-on the substrate, or no state saving at parity → park with a reversal trigger.
-*Why this one matters:* substrate → algorithm pairing is the project's most
-distinctive promise and the only one that cannot be copied from the ML
+**D — substrate-native training (D1 landed; D2 is the next rung).** *Question:*
+on a constrained substrate model, does a learning system reach digital parity at
+lower state? *Arms:* ternary + `energy_minimization`, memristive + the same
+credit that works digitally, and a digital control. *Rulers:* device state per
+step (bytes), train state (declared), accuracy, and the constraint that binds
+(quantization, bounds, drift) — a parity claim must name it. *Stop:* cannot
+train on the substrate, or no state saving at parity → park with a reversal
+trigger. *Why this one matters:* substrate → algorithm pairing is the project's
+most distinctive promise and the only one that cannot be copied from the ML
 literature. The models and the settle kernel already exist; the missing artifact
 is one matched row.
+
+**D1 landed (2026-11-16) and promoted memristive.** The ladder ran 24 cells
+(617 s on CPU): a per-arm 3-point LR viability ladder at settle 10, then the
+5/10/20 settle ladder at the arm's best LR. The learning control reads 0.9234;
+at settle 20 the memristive arm reads **0.9097** against the digital rule's
+**0.9097** on the confirmation seed (0.05 pp), at **2 B/weight against
+4 B/weight**. Ternary's best point is 3e-3 (0.835 / 0.861), 5.2 pp below the
+digital rule, so it **refuses at this box** at 2 bits/weight. **D2** is
+therefore the matched comparison: memristive + `energy_min` against the digital
+rule at matched settle compute, digital backprop at matched walltime, and the
+int8-quantised digital control at the same width; 5 paired seeds, CIFAR-10 quick
+mode or MNIST at 2× width. D2 needs no new primitive.
 
 **E — estimator atlas.** *Question:* at matched compute on one task, what are the
 bias/variance/compute coordinates of each estimator kind? *Arms:* exact
@@ -764,7 +837,8 @@ record of what exists.
 | **B1 ⛔** | **Routing ladder**: STE-gap vs stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs; soft-relaxation bound | B | landed 2026-11-16 | **refused at this box**: gap 0.819 → 0.660 (−0.159) at τ=0.25 and −0.037 on the confirmation seed vs δ=0.05; reference FD 0.013; both ends above the floor; B2 not run, trigger in §14 |
 | **C1 ✅** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed | C | landed 2026-11-16 | local **0.945 / 0.947** at LR 1e-3 on 2 seeds, control 0.839 / 0.893, floor 0.55 → **promote to C2**. Best point is the lower edge; a downward extension (3e-4/1e-4) is the next rung if an optimum is claimed |
 | **C2 ✅** | **Retention ladder**: 3-point EWC-strength ladder (λ = 1/10/100) at the frozen LR, local × EWC vs backprop × EWC, matched per-step cost | C | landed 2026-11-16 | local 0.952 / 0.015 vs control 0.963 / 0.020 at λ=100 (gain +0.005 < δ 0.032); confirmation 0.951 / 0.016 vs 0.958 / 0.024 → **close C at the saturation point**; task-start anchor defect fixed (CORRECTION 12) |
-| **D1** | **Substrate ladder**: ternary/memristive + `energy_min` at `max_steps` 5/10/20 vs digital backprop; state per step | D | hours–1 session | parity with less state at the best point → D2; no training at any point → park with a trigger |
+| **D1 ✅** | **Substrate ladder**: ternary/memristive + `energy_min` at `max_steps` 5/10/20 vs the digital rule; per-arm LR ladder, 2 seeds, device state | D | landed 2026-11-16 (617 s) | **promoted memristive**: 0.9097 vs 0.9097 at settle 20 on the confirmation seed, 2 vs 4 B/weight; ternary refused (0.861 vs 0.913, 2 bits/weight); CORRECTION 17 (per-arm LR) |
+| **D2** | **Matched substrate comparison**: memristive + `energy_min` vs digital rule at matched settle compute, digital backprop at matched walltime, int8-quantised digital control | D | 1 session (5 paired seeds) | within 1 pp at ≤1.2× walltime → D3 (drift/retention); >1 pp behind at matched walltime → refuse the substrate path with the measured mechanism |
 | **E1 ✅** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | landed 2026-11-16 | 18 claim cells (6 arms × 3 seeds) + 22 ladder/confirmation cells; controls pass; table is the artifact; PC-ALM depth-2 regime mismatch/refusal with a depth-100 trigger |
 | **F1** | **Composition ladder**: 50 legal cells vs the best single-axis default, then a 3-point ladder on the best-looking family | F | 1 session | family ≥δ after its ladder → F2; flat everywhere → composition refusal with a trigger |
 | T5 | P1 scoped: 3 publishables + the hybrid trunk rule | side | 1–2 sessions | rows with backend path, dtype, optimizer, σ |
@@ -782,11 +856,12 @@ seed at the best point. A single low cell at one setting is a defect probe
 frees the portfolio slot, and it never deletes the idea.
 
 **Two falsifiers, two numbers, restated.** The implementation falsifiers are
-closed (T1–T3b, T6), **B1 refused its depth axis** with its trigger kept, and
-**E1 closed as an atlas** with its table. What remains is a **portfolio of cheap
-falsifiers**: D1, F1, and A's two blockers can each cancel a track for hours.
-The expensive falsifier (A's claim) is deliberately last, because it is the only
-one that needs five paired seeds on a real task.
+closed (T1–T3b, T6), **B1 refused its depth axis** with its trigger kept,
+**E1 closed as an atlas** with its table, and **D1 promoted one substrate arm**
+with the other refused. What remains is a **portfolio of cheap falsifiers**:
+F1 and A's two blockers can each cancel a track for hours; D2 is the promoted
+track's matched comparison. The expensive falsifier (A's claim) is deliberately
+last, because it is the only one that needs five paired seeds on a real task.
 
 ### 8.1 Remaining work, ordered (start here next session)
 
@@ -800,10 +875,11 @@ one that needs five paired seeds on a real task.
 | 6 ✅ | **C — plasticity ladder** | landed 2026-11-16 | local 0.945/0.947 at LR 1e-3 on two seeds; control 0.839/0.893; floor 0.55 → **promote to C2** (retention); best point is the ladder's lower edge, so the downward extension is the next rung |
 | 7a ✅ | **C2 — retention ladder** | `results/t93_c1/consolidation.json` (replay: `... --stage consolidation --replay`) | **closed at the saturation point λ=100**: local forgets 0.005 less than the control, below δ=0.032, at 1.07× cost; confirmation seed repeats |
 | 7b ✅ | **E — estimator atlas** | `computronium/validation/estimator_atlas.py`; E-lite then `--full`; replay from the cell log | **landed 2026-11-16**: controls pass (FD 1.0000; exact 0.914 ± 0.006); 6 arms × 3 seeds at a matched box with a per-arm LR ladder; table is the artifact; PC-ALM depth-2 regime mismatch/refusal with a depth-100 trigger |
-| 8 | **D — substrate ladder** (next) | memristive/ternary substrate + `energy_minimization` at `max_steps` 5/10/20; §1 | parity with less state at the best point → D2; nothing trains → park with a trigger |
-| 9 | **A — T6b + T6c** | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
-| 10 | **F — composition ladder** | survey harness, 50 legal cells + a family ladder, cheap task; §13 | ≥δ above the best single-axis default after the ladder → F2; flat → refusal |
-| 11 | **A — T6a** | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix |
+| 8 ✅ | **D — substrate ladder** | `computronium/validation/substrate_ladder.py`; landed 2026-11-16 | **promoted memristive** (0.9097 vs 0.9097, 2 vs 4 B/weight on two seeds); ternary refused with a re-open trigger |
+| 9 | **A — T6b + T6c** (next) | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
+| 10 | **D — D2 matched comparison** | `computronium/validation/substrate_ladder.py` + a matched-walltime driver | within 1 pp at ≤1.2× walltime → D3; >1 pp behind → refuse with the mechanism |
+| 11 | **F — composition ladder** | survey harness, 50 legal cells + a family ladder, cheap task; §13 | ≥δ above the best single-axis default after the ladder → F2; flat → refusal |
+| 12 | **A — T6a** | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
 | gate | **T7 / T8 / T9** | E1 closed (not promoted) / C1 promoted / trigger | T7 stays parked (E did not promote); T8's trigger fired but is a side track; T9 waits on MPU1 or a sequence axis |
 
@@ -829,9 +905,17 @@ card, `_reference_delta` is the exact arm's one-step reference, `_train` takes
 the per-arm LR, `_run_cell`/`_refusal_cell` write the kill-safe log, and
 `replay_estimator_atlas` recomputes the table without training; the per-arm LR
 ladder is 1e-3/1e-2/1e-1 at seed 59 with confirmation 60 and claim seeds
-61/62/63), or the refusal list (FF/SNN contrastive are unavailable with
-triggers; hybrid refuses non-feedforward geometry; PC-ALM's card validates
-depth 100, so a shallow chance cell is a regime-mismatch, not a refusal).
+61/62/63), the substrate ladder (`validation/substrate_ladder.py`: `_build_system`
+composes one rule per arm with `EnergyMinimizationDynamics(compiled=False)` and
+`ThermodynamicContrast`, `device_state` prices the device width (0.25 / 2 / 4
+B/weight + 4 B/scale per ternary layer), `_run_ladders` is the per-arm LR
+ladder then the settle ladder, `_verdict`/`_arm_parity` is the two-seed parity
+gate, and `replay_substrate_ladder` recomputes the table; the LR ladder is
+1e-3/3e-3/1e-2 at seed 59 with confirmation 60), or the refusal list
+(FF/SNN contrastive are unavailable with triggers; hybrid refuses
+non-feedforward geometry; PC-ALM's card validates depth 100, so a shallow chance
+cell is a regime-mismatch, not a refusal; ternary refuses at width 32, so a wider
+header or a learnable α per layer is its re-open trigger).
 ---
 ## 9. Locks (the plan's culture, applied to itself)
 1. **Memory-truth lock** — measured peak per backend matches its declared
@@ -858,6 +942,11 @@ depth 100, so a shallow chance cell is a regime-mismatch, not a refusal).
 7. **Positive controls** — instrument (calibration) **and** learning (plain
    backprop at L=8 reaches the pilot floor). A failed control invalidates the
    run, not the arm.
+8. **State ruler** — the device state is a declared width per substrate (2/16/32
+   bits per weight), the train state is the fp32 latent set (equal for every
+   arm), and the test asserts the ordering `ternary < memristive < digital` and
+   a non-zero byte count. A ruler reported as zero is a fabricated measurement,
+   not a saving.
 8. **W2 accuracy floor** — a depth counts only if val accuracy ≥ the pre-registered
    floor; "trainable" must mean "learns".
 9. **Identity completeness** — backend path, dtype, optimizer, GPU model, torch
@@ -945,7 +1034,9 @@ The durable, citable artifact is not a single win; it is:
 - one **Pareto figure per task** (accuracy vs peak GB at iso-walltime) via
   `computronium/experiment/analysis/pareto_analysis.py:compute_pareto_frontier`;
 - a **stacked memory decomposition** (params / optimizer / activations /
-  auxiliary) per arm — cheap, and the mechanism behind every verdict.
+  auxiliary) per arm — cheap, and the mechanism behind every verdict;
+- a **state-ruler table** per substrate (device B/weight vs train B/weight),
+  with the width declared, so a "less state" claim names what a device holds.
 **Venue, decided now (two artifacts, one program).** **NeurIPS Datasets &
 Benchmarks** for the reusable comparator suite — identity cards, measured
 complexity table, stacked decomposition, Pareto harness. **TMLR** for the
@@ -1015,10 +1106,11 @@ not scheduled, however cheap.
 | 2026-11-16 | C | batch-1 plasticity ladder: local (PEPITA) vs exact gradient | 8 cells (2 arms × 3 LR + 2 seeds) | 2000 held-out samples/task (1 σ = 0.011); floor 0.55 | SplitMNIST, batch 1, 1 epoch/task, W=256, RTX 3080 10 GiB | **local 0.945 / 0.947 at LR 1e-3 on two seeds**; control 0.839 / 0.893; forgetting 0.038/0.036 vs 0.145/0.091; **verdict: promote** (coordinate, n=1; best at the lower edge) | C1 ✅ |
 | 2026-11-16 | C | consolidation-strength ladder: local × EWC vs backprop × EWC | 8 cells (2 arms × 3 λ + 2 confirmation seeds) | 2000 held-out samples/task (1 σ = 0.011; forgetting σ = 0.016; δ = 0.032); floor 0.55; per-step cost ≤1.5× | SplitMNIST, batch 1, 1 epoch/task, W=256, frozen LR 1e-3, λ=1/10/100, RTX 3080 10 GiB | **at λ=100: local 0.952 / 0.015 vs control 0.963 / 0.020** (gain +0.005 < δ; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost 1.07×; λ ladder moves 0.6 / 2.2 pp (< δ) → **verdict: close at the saturation point** (coordinate, n=1 + confirmation) | C2 ✅ |
 | 2026-11-16 | E | estimator atlas: bias/variance/compute per kind | 18 claim cells (6 arms × 3 seeds) + 22 ladder/confirmation cells | full MNIST test split (1 σ = 0.3 pp); chance 0.1; floor 0.25; probe 256; FD tol 0.99 | MNIST quick, feedforward 784-32-10, batch 32, 600 batches, 1 epoch, per-arm LR 1e-3/1e-2/1e-1, CPU | **controls pass** (FD 1.0000; exact 0.914 ± 0.006); PEPITA 0.972 ± 0.001 / 1.60×, 0.923 ± 0.003; FA 0.125 ± 0.079 / 0.002×, 0.821 ± 0.007; hybrid 0.185 ± 0.007 / 0.395×, 0.827 ± 0.007; FF 0.143 ± 0.109 / 1.211 ± 0.308, 0.816 ± 0.089; PC-ALM depth-2 regime mismatch/refusal (0.105 ± 0.013, one seed refused) → **verdict: atlas, not a winner**; CORRECTION 16 | E1 ✅ |
+| 2026-11-16 | D | substrate ladder: ternary/memristive + `energy_min` at settle 5/10/20, per-arm LR | 24 cells (3 arms × 3 LR + 3 settle + 5 confirmation) + 1 control | full 10k test split (1σ = 0.3 pp); chance 0.1; floor 0.55; δ = 0.01; device B/weight | MNIST quick, 784-32-10, B=32, 600 batches, 1 epoch, β=0.5, CPU | **memristive 0.9097 vs digital 0.9097 at settle 20 on the confirmation seed, 2 vs 4 B/weight → promote D2**; ternary 0.861 vs 0.913, 2 bits/weight → refused; control 0.9234; CORRECTION 17 | D1 ✅ |
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
 | — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T6a (blocked on T6b/T6c) |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
-| — | D | substrate-native training at matched accuracy | — | state per step; accuracy; dtype constraints | — | — | D1 |
+| — | D | substrate-native training at matched accuracy | 5 paired seeds | state per step; accuracy; dtype constraints | D1 promoted memristive (0.9097 vs 0.9097, 2 vs 4 B/weight) | — | D2 |
 | — | F | does composition beat the best single-axis default? | — | ≥δ at matched budget | — | — | F1 |
 **Progress is one of:** a published-parity reference (P1); a measured frontier
 (A–F); a promoted claim; a defect found and fixed by a failing test; a **measured
@@ -1030,8 +1122,8 @@ trigger and a re-open command**; **a surprise that opens a new question (§0.2)*
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **D** substrate | parity on a constrained substrate with less state? | hours (3+1 ladder) | models exist; no matched row |
-| 2 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
+| 1 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers (T6b/T6c) |
+| 2 | **D** substrate | does memristive parity survive a matched-budget comparison? | 1 session (5 paired seeds) | **D1 promoted**: 0.9097 vs 0.9097 at 2 vs 4 B/weight (2 seeds); ternary refused with a trigger |
 | 3 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
 
 Why E is gone: E1 closed as an **atlas**, not a promotion or a refusal. The
@@ -1047,13 +1139,14 @@ question is answered at this box and its re-open probes carry the track.
 Why B is gone: B1 refused its depth axis (0.819 → 0.660, −0.159 on the ladder
 seed and −0.037 on the confirmation seed, vs δ=0.05), so B2 is not run and the
 trigger in §14 carries the track.
-Why D is first: the project's most distinctive promise, never probed, and its
-models already exist. Why A is second: its instrument is done, but its claim is
-two hours-scale defects away and its treatment arm is unvalidated (the hybrid
-learns worse than its own trunk rule at L=8). **A is not abandoned** — it keeps
-its next rung as soon as T6b/T6c are done. Why F is last: it reads the whole
-space, and a 6-axis comparison over a rejected axis set is premature until D/E
-say which axes are live; E has now closed its axis, leaving D's.
+Why A is first: its instrument is done, but its claim is two hours-scale
+defects away and its treatment arm is unvalidated (the hybrid learns worse than
+its own trunk rule at L=8). **A is not abandoned** — it keeps its next rung now.
+Why D is second: D1 promoted a substrate arm, but parity on one cheap box is a
+coordinate, not a matched-budget result; D2's 5 paired seeds decide whether the
+saving survives. Why F is last: it reads the whole space, and a 6-axis
+comparison over a rejected axis set is premature until D/E say which axes are
+live; E has now closed its axis, leaving D's.
 
 **Refused / closed / re-open ledger (append-only; a refusal or close is not a
 deletion).**
@@ -1065,6 +1158,8 @@ deletion).**
 | gradient × graph+instantaneous | one cell, dry-run gate | refused **by the gate**, not by a ladder | a differentiable graph operator exists | §0.3 graph probe; verify the absence is structural first |
 | **B — routing depth (refused at this box)** | τ = 0.25/0.5/1.0 at depth 2, then depth 1/2/4/8 at the best τ; parallel averaged selections, 8 experts, k=2, LR 1e-3, gap probed at steps 8/16/32 | **refuse** (gap 0.819 → 0.660, −0.159; confirmation −0.037 vs δ=0.05; reference FD 0.013; both ends above floor) | a **chained** stack at per-depth matched LR, the canonical full-support STE with Gumbel noise as the treatment, or k ≥ 4 experts | `--replay` on the cell log, or a fresh ladder with that box |
 | **C — consolidation strength (closed, not refused)** | λ = 1/10/100 at frozen LR 1e-3; 8 cells; 3.1 MiB state; cost ≤1.5× | **close** at the saturation point λ=100 (local 0.952 / 0.015; control 0.963 / 0.020; gain +0.005 < δ) | a 5-seed retention protocol (rung 3), a matched-byte replay composition, or SI/cascade at the frozen LR | fresh ladder or `--stage consolidation --replay` |
+| **D — ternary (refused at this box)** | width 32, settle 5/10/20, LR ladder 1e-3/3e-3/1e-2, β=0.5, TWN threshold 0.7·E\|w\| | **refuse**: 0.861 vs digital 0.913 at settle 10 on the confirmation seed (5.2 pp); best 0.835 at settle 10, LR 3e-3; 2 bits/weight (16× less state) does not buy parity at this width | a wider hidden layer, a learnable α per layer (STE to α), or a delta-ternary scale | `... --replay` with a fresh ladder at that box |
+| **D — memristive (promoted to D2)** | width 32, settle 5/10/20, LR ladder, int8 differential pair | **promote**: 0.9097 vs 0.9097 at settle 20 on the confirmation seed (0.05 pp), 2 vs 4 B/weight; best settle at the upper edge | a >1 pp gap at matched walltime in D2, or no gain over the int8-quantised digital control | D2 command; the D1 cell log re-runs it |
 | **E — estimator atlas (closed as an atlas, not refused)** | 6 arms × 3 seeds at MNIST quick mode, per-arm LR ladder 1e-3/1e-2/1e-1; matched 600×32, one epoch; floor 0.25 | **close as an atlas**: controls pass (FD 1.0000; exact 0.914 ± 0.006); PEPITA 0.972 / 1.60×; FA 0.125 / 0.002×; hybrid 0.185 / 0.395×; FF 0.143 / 1.211×; no estimator is promoted; PC-ALM's shallow row is a regime mismatch/refusal | PC-ALM at its card's depth-100 box, or an empty unbiased cell (score-function, forward-mode, zeroth order) admitted by E2 | `... --full` at the depth-100 box; `... --replay` on the cell log |
 
 New refusals and closes are appended here by the session that measures them,
@@ -1106,10 +1201,11 @@ session.
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
 - **Start order is the portfolio rank (§14), not a DAG.** C1 landed and C2
   closed at its saturation point; B1 landed and refused its depth axis; E1
-  landed and closed as an atlas. The next session runs **D1**, then A's two
-  blockers, then F1 and T6a. T5 is a standing side track. T7 stays parked
-  (E1 did not promote); T8's trigger fired with C1 but is a side track; T9
-  waits on MPU1 or a sequence axis; B's trigger is in §14.
+  landed and closed as an atlas; D1 landed and promoted memristive. The next
+  session runs **A's two blockers (T6b/T6c)**, then **D2**, then F1 and T6a.
+  T5 is a standing side track. T7 stays parked (E1 did not promote); T8's
+  trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence
+  axis; B's and ternary's triggers are in §14.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
   only in the log.
 - **Live from 2026-11-16:** C2 closed at the saturation point (λ=100): local
@@ -1120,9 +1216,11 @@ session.
   −0.037 on the confirmation seed, vs δ=0.05; reference FD 0.013; B2 not run;
   trigger in §14). E1 landed and closed as an atlas: controls pass (FD
   1.0000; exact 0.914 ± 0.006), the table is the artifact, and PC-ALM's
-  depth-2 chance is a regime mismatch with a depth-100 trigger. The next
-  screen is **D1** (substrate ladder), still unprobed. A's blockers (T6b
-  composed-path memory, T6c trainable depth) are unchanged: T6b lets a credit
+  depth-2 chance is a regime mismatch with a depth-100 trigger. D1 landed:
+  **promoted memristive** (0.9097 vs 0.9097 at settle 20, 2 vs 4 B/weight) and
+  refused ternary (0.861 vs 0.913) with a re-open trigger. The next screen is
+  **A's blockers** (T6b composed-path memory, T6c trainable depth); D2 is the
+  promoted track's matched comparison. A's blockers are unchanged: T6b lets a credit
   own its free pass so the strict xfail in `test_memory_frontier.py` flips; T6c
   re-poses the claim geometry on a trainable one (LayerNorm, c≈2, or a
   depth-stable init) and re-runs `python -m
@@ -1134,12 +1232,12 @@ session.
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v17 start: **D1** (substrate probe), then A's blockers T6b/T6c, then F1 (composition screen) and T6a. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v18 start: A's blockers T6b/T6c, then **D2** (matched substrate comparison), then F1 (composition screen) and T6a. D1 landed and promoted memristive. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
-| 5. D1 timing | Schema + lock written now, D1 after P2, powered for a continuous surrogate or a pre-registered larger n. |
-| 6. Triggers | Event triggers, no fixed dates. Memristive-consolidation fires when P4 closes with either verdict. |
+| 5. D1 timing | **Landed 2026-11-16** (24 cells, 617 s, CPU): memristive promoted, ternary refused with a trigger. D2 is powered for a 5-seed paired comparison at a matched walltime; a continuous surrogate is not needed for a parity coordinate. |
+| 6. Triggers | Event triggers, no fixed dates. Memristive-consolidation (D3) fires when D2 holds parity at matched walltime; ternary re-opens on a wider width or a learnable α per layer. |
 | 7. Headline | **Frontier, not depth:** "accuracy per GB at iso-walltime", ε-dominance with a pre-registered δ (or baseline accuracy at ≤0.5× **activation bytes**), with a stacked memory decomposition. "2× depth" is reported only with the accuracy floor. |
 ---
 ## 18. Code-change appendix (what each ticket touches)
@@ -1293,6 +1391,23 @@ session.
 - the ε-dominance claim is computed from the registered budgets after the run;
   the budgets, δ, and the reference point are fixed before it, so this is not
   post-hoc.
+**D1 — substrate ladder (✅ landed 2026-11-16).**
+- `validation/substrate_ladder.py` — the runner, the `SubstrateCell` row, the
+  `SubstrateReport` table, `device_state` (width arithmetic), `_run_ladders`
+  (per-arm LR then settle ladder), `_arm_parity`/`_verdict` (two-seed 1 pp gate,
+  then state saving), `read_cells`/`replay_substrate_ladder` (kill-safe replay),
+  and `write_report` (`substrate.json` + `substrate.md`).
+- the substrate models are the ontology ones, not the adapters:
+  `ontology.TernarySubstrate` (TWN + STE, 2 bits/weight) and
+  `MemristiveSubstrate` (differential int8 pair, 16 bits/weight); the digital
+  control is `DigitalSubstrate(SubstrateConfig.digital())`.
+- **D2 — matched substrate comparison.** Reuse the runner; add a
+  matched-walltime driver (the cell already records walltime and
+  forward-equivalents) and an int8 **quantise-dequantise** digital control
+  (a `DigitalSubstrate` whose forward rounds weights to 256 levels, the same
+  width with no device model). Do not claim `SubstrateConfig.digital(precision=
+  "int8")` as that control: the digital forward is a float matmul and the cast
+  alone would not quantise. 5 paired seeds; no new primitive.
 **T8 — lift, do not rewrite.**
 - `core/continual/losses.py:84` `SynapticIntelligence` already implements the
   mechanism; lift it to `ontology/update/` as a U row and reuse
@@ -1518,6 +1633,54 @@ session.
   regime note, and the replay/dedup rules. The table is in
   `results/t93_e1/estimator.md` and `docs/BENCHMARKS.md` §2.8.
 
+### Landed 2026-11-16 (D1 — what the code actually did)
+- `validation/substrate_ladder.py` — the D1 runner. `SubstrateCell` carries the
+  arm, stage, seed, LR, settle length, device, val/train accuracy, device state
+  (bytes and bytes/weight), train state, steps, walltime and
+  forward-equivalents; `SubstrateReport` carries the box, cell log, control and
+  verdict. `read_cells`/`replay_substrate_ladder` recompute the gate from the
+  kill-safe log without training; `_resume_cells` reuses a measured cell keyed by
+  `(arm, stage, seed, lr, max_steps)` and the in-memory `done` map dedupes
+  within a launch, so a kill costs only the cell in flight.
+- **One rule, three substrates, one learning control.** The three substrate arms
+  share `ThermodynamicContrast(beta=0.5)` + `EnergyMinimization(max_steps,
+  beta=0.5, compiled=False)` + `EuclideanUpdate(step_size=lr, grad_clip=1e9)`;
+  the digital control is `DigitalSubstrate`, and the learning control is
+  `InstantaneousDynamics` + `BackpropCredit` on the same architecture. No second
+  rule was written: parity is measured against the same rule on a digital
+  substrate, which isolates the substrate from the rule's own weakness.
+- **The state ruler is arithmetic, not a measurement.** `device_state` prices the
+  device width (32 bits/weight digital, 2 bits/weight ternary + one fp32 scale
+  per layer, 16 bits/weight for a differential int8 pair). `train_state_bytes`
+  is the fp32 latent set + optimizer buffer from `EpochResource` (0.2 MB, equal
+  for every arm) and is declared, never claimed: an in-situ device would hold
+  the weights, not a second fp32 copy. A test pins the widths and their
+  ordering, so a fabricated zero cannot pass.
+- **The fair chance is a per-arm LR ladder (CORRECTION 17).** A shared LR is
+  not a fair box: at 1e-2 ternary reads 0.381 while digital and memristive read
+  0.909/0.905, and ternary's best point is 3e-3. The ladder therefore sweeps
+  `LR_LADDER = (1e-3, 3e-3, 1e-2)` at seed 59 and settle 10, freezes each
+  arm's best LR, and then sweeps `MAX_STEPS_LADDER = (5, 10, 20)` at that LR;
+  the confirmation seed is 60. A moving-scale probe rejected a frozen-α "fix"
+  (the cell moves ≤2 pp where it is alive), so CORRECTION 17 is an apparatus
+  fix, not a substrate verdict.
+- **The measured table (24 cells, 617 s, CPU).** Learning control **0.9234**;
+  digital rule 0.913/0.914/0.916 at settle 5/10/20 (LR 1e-2); memristive
+  0.893/0.911/**0.915**; ternary 0.821/0.835/0.796 (LR 3e-3). Confirmation
+  at settle 20: memristive **0.9097** vs digital **0.9097** (0.05 pp) at 2 vs
+  4 B/weight → **promote D2**. Confirmation at settle 10: ternary **0.861** vs
+  digital **0.913** (5.2 pp) at 2 bits/weight (16× less state) → **refuse at
+  this box** with a wider-width/learnable-α trigger.
+- **Locks.** `tests/unit/validation/test_substrate_ladder.py` (9 tests) pins the
+  device-width arithmetic and ordering, the two-seed parity margin (the registered
+  1 pp), the confirmation failure, the no-state-saving case, the
+  invalid-learning-control case, the park-with-trigger case, and the
+  cell-log round trip + replay. The table is in `results/t93_d1/substrate.md`
+  and `results/t93_d1/substrate.json`.
+- **Two probe scripts** price the ladder before it runs:
+  `scripts/probes/t93_d1_substrate_pilot.py` (the LR/settle box) and
+  `scripts/probes/t93_d1_ternary_defect.py` (the rejected frozen-α fix).
+
 ### C1/C2 — batch-1 ladders (✅ landed 2026-11-16)
 - `validation/plasticity_ladder.py` — the C1/C2 runner. `LadderCell` carries
   metric, BWT, forgetting, consolidation state and walltime; `LadderReport` the
@@ -1652,7 +1815,7 @@ first-class row because the claim table names its estimator kind and identity.
 E1's atlas now has empty unbiased cells (forward-mode, score-function, zeroth
 order) and one PC-ALM depth-100 regime row. Those are **triggers, not
 tickets**: no E2 primitive is admitted by the atlas, and the next tracked work
-is D1, not E2.
+is A's blockers, then D2, not E2.
 | Primitive (axis) | Mechanism / variants | Decision it enables | Lift from | Cost | Stop |
 |---|---|---|---|---|---|
 | `SurrogateCredit` (C) | STE, Gumbel-ST, perturbed top-k | the **required** W3 baseline; biased-pathwise arm | `core/utils/surrogate.py`, `z3_fixed_weights.py` | low | screen flat → do not admit |

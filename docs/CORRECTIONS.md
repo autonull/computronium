@@ -160,3 +160,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | Each arm gets a 3-point LR ladder at a disjoint ladder seed, a confirmation at its best point, and claim seeds 61/62/63 at that LR. The selected LR is part of the row; compute stays matched. |
 | Status | corrected — the atlas was rerun with the per-arm viability ladder |
 | Commit | this commit |
+
+| Field | Correction 17 — one shared learning rate measured the substrate's tuning, not its substrate |
+|---|---|
+| Original claim | The D1 substrate ladder can compare ternary, memristive, and digital at one shared learning rate, so the substrate is the only varied axis. |
+| Original metric | The pilot at 600 batches, settle 10, read ternary **0.381** at LR 1e-2 while digital and memristive read **0.909 / 0.905**; ternary's best point is 3e-3 (**0.802**). A shared LR would have refused the ternary substrate for the learning rate's defect. |
+| Audited procedure | Per-arm LR ladder 1e-3/3e-3/1e-2 at settle 10: digital 0.858 / 0.896 / **0.914**; memristive 0.856 / 0.894 / **0.911**; ternary 0.801 / **0.835** / 0.728. The best points differ, and the moving-scale probe rejected a frozen-alpha "fix" (0.452 vs 0.381 at 1e-2, ≤2 pp where the cell is alive), so no code change was made. |
+| Affected conclusions | The single-LR probe cells only. No D1 verdict was recorded from them; the pilot is the defect probe, and the corrections rows are the ladder. |
+| Replacement metric | Each arm gets a 3-point LR ladder at a disjoint ladder seed (59) and the middle settle (10), its best point is frozen, then the settle ladder 5/10/20 runs at that LR with a confirmation seed (60). The selected LR is part of the row and compute stays matched. |
+| Status | corrected — the ladder ran with the per-arm viability ladder |
+| Commit | this commit |
