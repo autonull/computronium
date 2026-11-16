@@ -151,6 +151,7 @@ def create_backprop_mlp(
     lr: float = 0.001,
     init_scale: float = 0.1,
     device: str = "cpu",
+    checkpoint_segments: int | None = None,
 ) -> System:
     """Create a standard Backprop MLP system (5-D coordinate).
 
@@ -161,13 +162,24 @@ def create_backprop_mlp(
         lr: Learning rate
         init_scale: Weight initialization scale
         device: Target device ("cpu" or "cuda")
+        checkpoint_segments: Activation-checkpointing segment count for the
+            geometry forward; ``None`` runs plain (every layer activation
+            retained). This is the ``backprop+checkpointing`` ladder arm
+            (TODO93 T4b).
 
     Returns:
         A composed 5-D System with Backprop credit assignment.
     """
-    return _instant_backprop_system(
+    system = _instant_backprop_system(
         _default_substrate(device), input_dim, hidden_dims, output_dim, lr, init_scale
     )
+    if checkpoint_segments is not None:
+        from computronium.core.gradient_checkpointing import (
+            enable_gradient_checkpointing,
+        )
+
+        enable_gradient_checkpointing(system, checkpoint_segments)
+    return system
 
 
 def create_memristive_mlp(

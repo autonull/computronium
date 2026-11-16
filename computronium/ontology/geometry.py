@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 from abc import abstractmethod
 from contextlib import contextmanager
@@ -17,6 +18,7 @@ from typing import (
 
 import torch
 from torch import Tensor, nn
+from torch.utils.checkpoint import checkpoint
 from torch_geometric.nn import global_add_pool, global_mean_pool
 
 from computronium.core.tile.topology import TileGraph
@@ -961,8 +963,44 @@ class FeedforwardGeometry(nn.Module):
         self.residual = config.residual
         self.stream_norm = config.stream_norm
         self._layers = nn.ModuleList(layers) if layers else nn.ModuleList()
+        # 0 = plain (every layer activation retained). >1 keeps only segment
+        # boundaries across the backward pass; see
+        # ``core.gradient_checkpointing`` (TODO93 T4b).
+        self._checkpoint_segments = 0
         if not self._layers:
             self._build_layers()
+
+    def set_gradient_checkpointing(self, segments: int) -> None:
+        """Retain only ``segments`` boundary activations (√L on the claim ladder)."""
+        self._checkpoint_segments = max(1, segments)
+
+    def _active_segments(self) -> int:
+        """Segments in force: checkpointing is a training-mode autograd instrument."""
+        if self._checkpoint_segments > 1 and self.training and torch.is_grad_enabled():
+            return self._checkpoint_segments
+        return 1
+
+    def _layer_chunks(self, segments: int) -> list[tuple[nn.Module, ...]]:
+        """Split the stack at Linear starts, as evenly as ``segments`` allows.
+
+        A chunk must start at a Linear: a residual skip reads the Linear's
+        input, so a split between a Linear and its activation would resume a
+        segment with the wrong skip tensor.
+        """
+        layers = list(self._layers)
+        starts = [i for i, m in enumerate(layers) if isinstance(m, nn.Linear)]
+        if not starts:
+            return [tuple(layers)]
+        count = min(segments, len(starts))
+        if count <= 1:
+            return [tuple(layers)]
+        boundaries = [starts[(i * len(starts)) // count] for i in range(count)]
+        boundaries.append(len(layers))
+        return [
+            tuple(layers[start:stop])
+            for start, stop in itertools.pairwise(boundaries)
+            if start < stop
+        ]
 
     def _normalize_stream(self, h: Tensor) -> Tensor:
         """Length sqrt(width) per row — the credit's own stream contract."""
@@ -1003,6 +1041,11 @@ class FeedforwardGeometry(nn.Module):
         in/out features match adds its input activity to the activated
         branch output — ``a_ℓ = a_{ℓ−1} + φ(W_ℓ a_{ℓ−1} + b_ℓ)``. The
         input projection and the output readout are never skipped.
+
+        Under gradient checkpointing the segments replace the per-layer graph:
+        each segment is recomputed in backward, and only its output tensor is
+        retained (plus the input). That is what makes the retained activation
+        set O(√L·B·W) instead of O(L·B·W) (TODO93 §4.1).
         """
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
@@ -1010,10 +1053,34 @@ class FeedforwardGeometry(nn.Module):
             substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
         h = x.flatten(1) if x.dim() > 2 else x
-        h_in = h
         if intermediates is not None:
             intermediates.append(h)
-        for layer in self._layers:
+        segments = self._active_segments()
+        if segments > 1:
+            for chunk in self._layer_chunks(segments):
+                h = checkpoint(
+                    self._apply_layers,
+                    h,
+                    chunk,
+                    op,
+                    use_reentrant=False,
+                    preserve_rng_state=True,
+                )
+                if intermediates is not None:
+                    intermediates.append(h)
+            return h
+        return self._apply_layers(h, self._layers, op, intermediates)
+
+    def _apply_layers(
+        self,
+        h: Tensor,
+        layers: nn.ModuleList | tuple[nn.Module, ...],
+        op: Callable[[Tensor, Tensor], Tensor],
+        intermediates: list[Tensor] | None = None,
+    ) -> Tensor:
+        """Run ``layers`` on ``h``; this is the unit a checkpoint recomputes."""
+        h_in = h
+        for layer in layers:
             if isinstance(layer, nn.Linear):
                 h_in = h
                 h = op(h, layer.weight)
@@ -1046,10 +1113,16 @@ class FeedforwardGeometry(nn.Module):
         Returns:
             List of activations [input, layer1_out, layer2_out, ..., output]
             where layer outputs are after activation functions and any
-            residual skip.
+            residual skip. Under gradient checkpointing the list holds the
+            segment boundaries instead (still starting at the input and ending
+            at the output): the per-layer set is what checkpointing frees.
         """
         acts: list[Tensor] = []
         h = self._apply_stack(x, substrate, acts)
+        if self._active_segments() > 1:
+            # Segment boundaries already end at the final output, so the
+            # trailing-Linear append below would duplicate it.
+            return acts
         # Add final output if last layer was Linear (no trailing activation)
         if self._layers and isinstance(self._layers[-1], nn.Linear):
             acts.append(h)
