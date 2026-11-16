@@ -9,11 +9,11 @@ and the pilot's two blockers (**T6b** composed-path memory, **T6c** depth
 trainability) are named and locked. v12 changes what the plan *is*: a portfolio
 of six capability tracks ordered by information per session, not a serial DAG
 through one publishable unit. The three cheapest track-killers (routing, streaming,
-estimator atlas) ship before any claim-grade work, because each can cancel a
-track for hours of compute. Everything already built — the instrumented
-decomposition, the lockstep kernels, the hybrid, the evidence store, the 6-axis
-generator, the identity cards — is a **reused asset** in the new tracks, not
-sunk cost. v1 (composition-wide search, substrate inversion) stays in §12 as a
+estimator atlas) ship before any claim-grade work, because each can promote or
+refuse a track for hours of compute — and only after a ladder, never from one
+cell. Everything already built — the instrumented decomposition, the lockstep
+kernels, the hybrid, the evidence store, the 6-axis generator, the identity
+cards — is a **reused asset** in the new tracks, not sunk cost. v1 (composition-wide search, substrate inversion) stays in §12 as a
 triggered track; v2–v11 are the correctness history (§3–§9).
 **Successor to TODO92** (closed: 12 claim-grade rows, breadth gate 8/8, parity on
 two families, **0 capability wins**). That base rate is the reason v12 is a
@@ -52,12 +52,12 @@ shrinks instead of accumulating.
 
 | Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
 |---|---|---|---|---|---|
-| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b (credit owns its free pass) + T6c (trainable depth) + T6a | 2 sessions | hybrid not ≤0.5× the baseline's **activation bytes** at parity → close MPU1, keep the frontier as artifact |
-| **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | STE-gap vs stacked discrete-op count 1/2/4/8 (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat in depth → drop the track after one session |
-| **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`, 5 tasks × 1 epoch: local vs backprop plasticity | **hours** | local at chance → stop before retention (retention is undefined) |
-| **D. Substrate-native training** | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | ternary/memristive + `energy_minimization` (measured optimum 10 steps), one task | hours–1 session | cannot train, or no state saving at parity → park with a trigger |
-| **E. Estimator atlas** | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | never killed — it is the artifact; stop at 6 arms |
-| **F. Does composition matter?** | Say whether a 6-axis composition beats the best single-axis default, by ≥δ | best-of-single-axis at matched budget | 50 legal cells on one cheap task from the existing survey harness | 1 session | no cell ≥δ → the composition thesis gets a written refusal, and E/D carry the plan |
+| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b (credit owns its free pass) + T6c (trainable depth) + T6a | 2 sessions | after T6b/T6c: hybrid not ≤0.5× the baseline's **activation bytes** at parity, at the frozen LR ladder's best point → refuse A with a trigger |
+| **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → refuse B with a trigger |
+| **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → refuse C (retention undefined) |
+| **D. Substrate-native training** | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | ternary/memristive + `energy_minimization`: 3-point `max_steps` ladder (5/10/20) + confirmation | hours–1 session | cannot train at any ladder point, or no state saving at the best → park D with a reversal trigger |
+| **E. Estimator atlas** | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | never refused — it is the artifact; stop at 6 arms |
+| **F. Does composition matter?** | Say whether a 6-axis composition beats the best single-axis default, by ≥δ | best-of-single-axis at matched budget | 50 legal cells on one cheap task, then a ladder on the best-looking family | 1 session | no family ≥δ **after its own ladder** → refuse composition with a trigger, and E/D carry the plan |
 
 **The rule that changes the plan.** *No ticket is scheduled ahead of a cheaper
 screen that could cancel it.* T6b is real and worth an hour — but it is
@@ -135,6 +135,35 @@ column above.
 rule in one line before it runs. A probe that would only add a row to a table
 belongs in a screen, not the ledger.
 
+### 0.4 Screen ≠ verdict — a kill needs a ladder
+
+"Cheap" means *few cells*, never *one un-tuned cell*. A low number at one setting
+is a **defect probe**, not evidence about an idea. A track is refused only at
+rung 2 of the SEC ladder:
+
+| Level | Evidence required | Cells | What it may decide |
+|---|---|---|---|
+| 0 — wired | positive control passes; pseudo-gradient non-zero; the arm fits; label channel declared | 1 | a defect, not viability |
+| 2 — viable | **3-point ladder on the track's primary knob**, 1 seed each, + 1 confirmation seed at the best point | 4 | a refusal with a knob box, or promotion |
+| 3 — claim | 5 paired seeds, pre-registered threshold, CI | 5+ | a claim |
+
+**Primary knob, fixed before the ladder runs:** B = stacked discrete-op count
+and STE temperature/LR; C = consolidation strength and LR; D = `max_steps` and
+quantization width; A = LR and depth (frozen at 0.3 from the measured ladder);
+E = none (descriptive); F = family, not a knob — a composition refusal is a
+breadth statement over 50 cells, and the best-looking family gets its own ladder
+before any negative is written.
+
+**Every refusal carries a re-open probe.** A refused track goes into §14 with
+(a) the knob box measured, (b) the **reversal trigger**, (c) the exact command
+that would reopen it. Refusals move a track out of the active rank; they never
+delete it. An idea is ignored only when a *laddered* measurement says so, and
+even then the re-open probe stays in the ledger.
+
+**Why this is not slower.** A 4-cell ladder at L0 costs minutes. What it buys is
+the difference between "one config was bad" and "the knob box is exhausted" —
+the exact confusion that turns a portfolio into an excuse to stop.
+
 **Progress (2026-11-16 — T1, T4a, T4c, T4b, T3, T3b, T6).** Every row is a runnable
 check, not a claim, and each fails when its mechanism is removed.
 
@@ -150,9 +179,10 @@ check, not a claim, and each fails when its mechanism is removed.
 
 **Next (three sessions, not a DAG).**
 
-1. **Screens, in parallel:** **B** (routing STE-gap), **C** (batch-1 plasticity),
-   **E-lite** (4 estimator arms × 1 task, one seed) — each writes a verdict or a
-   written refusal in its own session; each costs hours.
+1. **Screens, in parallel:** **B** (routing STE-gap over 4 stacked-op points),
+   **C** (batch-1 plasticity with a 3-point consolidation/LR ladder), **E-lite**
+   (4 estimator arms × 1 task × 1 seed) — each runs its rung 0 and rung 2, then
+   writes a verdict or a laddered refusal; each costs hours, not sessions.
 2. **Structure:** **D** (ternary/memristive + `energy_min` at 10 steps, matched
    digital baseline) and **A**'s two blockers (T6b composed path, T6c trainable
    depth), whichever the screens promoted.
@@ -619,20 +649,24 @@ record of what exists.
 | T6b | **Composed-path memory**: a credit owns its free pass | A | hours | hybrid activation set ≤0.5× ckpt (843 vs 437 MB today); xfail flips |
 | T6c | **Trainable claim depth**: LayerNorm (c≈2) or depth-stable init, appendix recomputed | A | hours | L=32 leaves the plateau and reaches the L=8 floor |
 | T6a | Registration: floor, budgets, `n_max=5`, binding appendix, stop rule | A | hours | blocked on T6b+T6c |
-| **B1** | **Routing screen**: STE-gap vs stacked discrete-op count 1/2/4/8; soft-relaxation bound | B | hours | gap grows → promote B2; flat → track B refused |
-| **C1** | **Plasticity screen**: batch-1 SplitMNIST, 5 tasks, local vs backprop; peak memory | C | hours | local above chance → retention protocol C2; chance → track C refused |
-| **D1** | **Substrate probe**: ternary/memristive + `energy_min` (10 steps) vs digital backprop at matched accuracy; state per step | D | hours–1 session | parity with less state → D2; else park with a trigger |
+| **B1** | **Routing ladder**: STE-gap vs stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs; soft-relaxation bound | B | hours | gap grows at the best point → promote B2; flat **across the ladder** → refuse B (§0.4) |
+| **C1** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, 3-point consolidation/LR ladder + confirmation seed | C | hours | local above chance at the best point on 2 seeds → retention protocol C2; chance there → refuse C |
+| **D1** | **Substrate ladder**: ternary/memristive + `energy_min` at `max_steps` 5/10/20 vs digital backprop; state per step | D | hours–1 session | parity with less state at the best point → D2; no training at any point → park with a trigger |
 | **E1** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | hours (lite) + 1 session | a table with a declared reference per arm |
-| **F1** | **Composition screen**: 50 legal cells vs the best single-axis default, matched budget | F | 1 session | ≥δ above the default → F2; flat → composition refusal recorded |
+| **F1** | **Composition ladder**: 50 legal cells vs the best single-axis default, then a 3-point ladder on the best-looking family | F | 1 session | family ≥δ after its ladder → F2; flat everywhere → composition refusal with a trigger |
 | T5 | P1 scoped: 3 publishables + the hybrid trunk rule | side | 1–2 sessions | rows with backend path, dtype, optimizer, σ |
 | T7 | `SurrogateCredit` + `ForwardTangentCredit` (+ score/zeroth controls) | B/E | 1 session | only after B1 promotes |
 | T8 | Lift `SynapticIntelligence`; `CascadeSynapsePlasticity` | C | 1–2 sessions | after C1 promotes |
 | T9 | Temporal taxonomy (`EligibilityProp`, UORO, RTRL ref) | parked | trigger | MPU1 closes or a sequence-length axis enters |
 
-**Promotion gates.** A track advances when its gate is met at a **named budget**,
-not when a cell looks good. A failed gate writes the negative in the same
-session (a refusal with a trigger, or a defect with a test) — that is a result,
-and it frees the portfolio slot.
+**Promotion and refusal gates.** A track advances when its gate is met at a
+**named budget**, not when a cell looks good. A track is refused only after
+**rung 2** (§0.4): a 3-point ladder on its primary knob plus one confirmation
+seed at the best point. A single low cell at one setting is a defect probe
+(rung 0: does the mechanism update at all?) and enters the record as
+`[coordinate]`, never as a verdict. A laddered refusal writes (a) the knob box,
+(b) the reversal trigger, (c) the re-open command in §14 — that is a result, it
+frees the portfolio slot, and it never deletes the idea.
 
 **Two falsifiers, two numbers, restated.** The implementation falsifiers are
 closed (T1–T3b, T6). What remains is a **portfolio of cheap falsifiers**: B1, C1,
@@ -648,12 +682,12 @@ real task.
 | 2 ✅ | A — lockstep two-pass FF/PEPITA | landed 2026-11-16 | deltas ≡ store-all at `atol=0`; peak flat 66.3 / 58.5 MB at L=4→32 |
 | 3 ✅ | A — hybrid trunk + head | landed 2026-11-16 | parity max\|Δ\| = 0.0; head ≡ backprop; trunk flat 81.0 MB |
 | 4 ✅ | A — composed pilot | landed 2026-11-16 | c=4.125; controls pass; blockers T6b/T6c |
-| 5 | **B — routing screen** | `benchmarks/joint/z3_fixed_weights.py`; §5 | STE-gap grows with stacked discrete ops → B2; flat → track refused |
-| 6 | **C — plasticity screen** | `core/continual/runner.py`, `create_ewc_arm`/`create_si_arm`, `SplitMNIST`; §6 | local above chance at batch 1 → C2; chance → track refused |
+| 5 | **B — routing ladder** | `benchmarks/joint/z3_fixed_weights.py`; §5 | STE-gap grows at the ladder's best point → B2; flat across 1/2/4/8 → laddered refusal |
+| 6 | **C — plasticity ladder** | `core/continual/runner.py`, `create_ewc_arm`/`create_si_arm`, `SplitMNIST`; §6 | local above chance at the best of 3 points + confirmation → C2; chance there → laddered refusal |
 | 7 | **E — estimator atlas** | `run_parity` portfolio + the 6 estimator coordinates; §2 | one table: bias, variance, forward-equivalents, matched budget, declared reference |
-| 8 | **D — substrate probe** | memristive/ternary substrate + `StateDynamicsConfig.energy_minimization(max_steps=10)`; §1 | parity accuracy with less state per step → D2 |
+| 8 | **D — substrate ladder** | memristive/ternary substrate + `energy_minimization` at `max_steps` 5/10/20; §1 | parity with less state at the best point → D2; nothing trains → park with a trigger |
 | 9 | **A — T6b + T6c** | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
-| 10 | **F — composition screen** | survey harness, 50 legal cells, cheap task; §13 | ≥δ above the best single-axis default → F2 |
+| 10 | **F — composition ladder** | survey harness, 50 legal cells + a family ladder, cheap task; §13 | ≥δ above the best single-axis default after the ladder → F2; flat → refusal |
 | 11 | **A — T6a** | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
 | gate | **T7 / T8 / T9** | B1 / C1 / trigger | not work until the gate fires |
@@ -802,12 +836,12 @@ today. If a digital result needs a substrate control, the trigger fires.
 | pure local loses but hybrid wins | expected; report the composition result, not a local-rule win |
 | binding gate red at the pilot | re-pose the operating point (batch/width/dtype); **never** report the cell |
 | STE+aux beats local on routing | publish the negative with the measured bias; drop track B |
-| STE-gap flat in depth | drop B after one session |
-| plasticity fails at batch 1 | stop C before retention; retention is undefined |
+| STE-gap flat across the 4-op ladder at its best point | refuse B with a trigger and a re-open command (§0.4) |
+| plasticity at chance at C's best ladder point | refuse C before retention; retention is undefined |
 | replay saturates streaming | close C; report the saturation point |
 | substrate arm at parity with less state | promote D; it is the project's most distinctive claim |
-| substrate arm cannot train | park D with a trigger; do not port the digital stack again |
-| composition screen flat | record the composition refusal; E and D carry the plan |
+| substrate arm cannot train at any ladder point | park D with a trigger; do not port the digital stack again |
+| composition flat after each family's ladder | record the refusal + re-open probe; E and D carry the plan |
 | an atlas row contradicts a published number | T5 defect first; no atlas claim until closed |
 | a surprise cell beats its declared expectation by ≥2σ | ticket in the same session; the plan re-ranks around it |
 | P1 gaps beyond tolerance | defect tickets only; no measurement claims until closed |
@@ -845,18 +879,29 @@ more cells, more prose, more primitives, a knob swept to pass.
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **B** routing | does the STE-gap grow with discrete-op count? | hours | unprobed; STE already implemented |
-| 2 | **C** streaming | does local learn at batch 1 at all? | hours | unprobed; runner + arms exist |
+| 1 | **B** routing | does the STE-gap grow with discrete-op count? | hours (4-op ladder) | unprobed; STE already implemented |
+| 2 | **C** streaming | does local learn at batch 1 at all? | hours (3+1 ladder) | unprobed; runner + arms exist |
 | 3 | **E** atlas | what *is* each estimator's bias/variance at matched compute? | hours (lite) + 1 session | coordinates declared; no table |
-| 4 | **D** substrate | parity on a constrained substrate with less state? | hours | models exist; no matched row |
+| 4 | **D** substrate | parity on a constrained substrate with less state? | hours (3+1 ladder) | models exist; no matched row |
 | 5 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
-| 6 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session | harness exists; no comparison |
+| 6 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
 
 Why A dropped from 1 to 5: its instrument is done, but its claim is two
 hours-scale defects away and its treatment arm is unvalidated (the hybrid learns
 worse than its own trunk rule at L=8). B, C and E are cheaper, unprobed, and each
 can cancel a track outright. **A is not abandoned** — it is the nearest claim and
 keeps its next rung in the top three as soon as T6b/T6c are done.
+
+**Refused / re-open ledger (append-only; a refusal is not a deletion).**
+
+| Track / arm | Knob box measured | Verdict | Reversal trigger | Re-open command |
+|---|---|---|---|---|
+| FF contrastive (kernel) | n/a — no label channel | unavailable (T1) | a label channel is added to the contrastive kernel | `test_kernel_truth_lock.py` stub detector flips |
+| SNN contrastive (kernel) | n/a — nudge is a no-op | unavailable (T1) | a real nudge branch lands | same |
+| gradient × graph+instantaneous | one cell, dry-run gate | refused **by the gate**, not by a ladder | a differentiable graph operator exists | §0.3 graph probe; verify the absence is structural first |
+
+New refusals are appended here by the session that measures them, with the ladder
+box, trigger, and command. The surprise budget may pick one per session.
 ---
 ## 15. Rules and guardrails
 - **A claim names its budget.** Memory, walltime, forward-equivalents, or params
@@ -874,6 +919,9 @@ keeps its next rung in the top three as soon as T6b/T6c are done.
   Lion at `primitives/parameter_update/lion`) becomes a first-class primitive by
   wrapping it, never by a second implementation.
 - **No tuning to pass.** A knob turned to rescue a cell is a defect ticket.
+- **A kill needs a ladder.** A track is refused only after §0.4's 4-cell rung 2;
+  a one-cell low result is a defect probe or a coordinate, never a verdict, and
+  every refusal keeps its reversal trigger and re-open command.
 - **Cheap screens before claims.** No ticket is scheduled ahead of a cheaper
   screen that could cancel it; the portfolio rank carries the last measured cost.
 - **Every track spends 10 % on the unexpected** (§0.2); a surprise is a result,
