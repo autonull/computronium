@@ -1,35 +1,29 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v11 — T1 + T4a + T4c + T4b + T3 + T3b + T6 landed; T6b/T6c gate T6a.** The
-truth pass, the memory decomposition, the ladder runner, the checkpointed
-baseline, the lockstep two-pass rung, the hybrid (lockstep-local trunk +
-exact-gradient head), and the **composed pilot** are implemented and locked; the
-measured activation coefficient is **c≈4.1, not 1**, which re-poses the pilot's
-binding point (§4.1), the lockstep is measured **flat in depth** (66.3 MB FF,
-58.5 MB PEPITA at L=4→32, W=512, B=4096), and the hybrid trunk is **flat at
-81.0 MB above the weight-gradient set** with the store-all control bending
-122→1018 MB. **The pilot's controls pass at the claim point (c = 4.125, spread
-0.0 %; L=8 learns 0.419) and it found two blockers: T6b (the composed path pays
-the pipeline's store-all forward, so the hybrid's activation set is 1.98× the
-checkpointed arm's) and T6c (the plain stack sits on the loss plateau at L=32, so
-no depth rung is evidence until the norm/init fallback is measured).** v1
-(composition-wide search, substrate inversion) is condensed into §12 as a
-**deferred track with triggers**; v2's premise was corrected in v3; v4 added the
-estimator taxonomy and the ticket-bound primitive queue (§19); v5 verified the
-plan against the claim path; v6 fixed the binding arithmetic (B1–B6, §20); v7
-replaced the assumed arithmetic with the measured one; v8 landed the recovered
-arm the pilot compares against; v9 landed the local arm's memory rung and killed
-three defects that made both two-pass steps unrunnable; v10 composed that rung
-with an exact-gradient head and locked the composition against the store-all
-hybrid at bit-exactness; **v11 measured the composition on the claim path at the
-registered point and recorded what it found (§2.4).**
+**Status:** 2026-11-16 · **v12 — portfolio revision. Six tracks, three cheap screens first.**
+T1 + T4a + T4c + T4b + T3 + T3b + T6 landed: the truth pass, the memory
+decomposition, the ladder runner, the checkpointed baseline, the lockstep
+two-pass rung, the hybrid, and the composed pilot. Measured: **c≈4.1** (not 1),
+lockstep **flat in depth** (66.3 MB FF / 58.5 MB PEPITA), hybrid trunk **flat at
+81.0 MB**, pilot controls **pass** (c = 4.125, spread 0.0 %; L=8 learns 0.419),
+and the pilot's two blockers (**T6b** composed-path memory, **T6c** depth
+trainability) are named and locked. v12 changes what the plan *is*: a portfolio
+of six capability tracks ordered by information per session, not a serial DAG
+through one publishable unit. The three cheapest track-killers (routing, streaming,
+estimator atlas) ship before any claim-grade work, because each can cancel a
+track for hours of compute. Everything already built — the instrumented
+decomposition, the lockstep kernels, the hybrid, the evidence store, the 6-axis
+generator, the identity cards — is a **reused asset** in the new tracks, not
+sunk cost. v1 (composition-wide search, substrate inversion) stays in §12 as a
+triggered track; v2–v11 are the correctness history (§3–§9).
 **Successor to TODO92** (closed: 12 claim-grade rows, breadth gate 8/8, parity on
-two families, 0 capability wins).
-**The pivot.** TODO92 competed with backprop on backprop's home turf: accuracy at
-matched parameters on tasks backprop was built for. That contest has a known
-outcome and produced 12 uninformative rows. This plan competes on the axes where
-local learning is **structurally** advantaged and users actually feel the cost:
-activation memory, streaming, non-differentiable computation, depth at fixed
-budget — **on digital hardware**, where the compute is.
+two families, **0 capability wins**). That base rate is the reason v12 is a
+portfolio and not one bet: the space is wide and a single hard claim is a poor
+use of the first sessions.
+**The pivot, restated.** TODO92 competed with backprop on backprop's home turf.
+v12 competes where the **structure** is different: activation memory, substrate
+constraints, non-differentiable computation, batch-1 streaming, and the
+composition question itself. Every track names the structure it exploits and the
+baseline that structure cannot trivially match.
 **The claim we are trying to earn:** a practitioner with a consumer GPU can
 train something a *composition* of local and global credit makes possible at
 matched memory and matched compute, with a reproducible command.
@@ -40,17 +34,107 @@ every lift-vs-backprop comparison: at width 512, depth ≤64, batch 1k, activati
 are ~134 MB next to ~200 MB of params and Adam state, so both arms fit and the
 "memory" claim is vacuous. **No cell counts as evidence unless the baseline arm's
 activations are ≥50% of its peak memory** (§9 binding gate).
-**Execution surface:** §0 (what), §8 (order), §16 (handoff). §1–§7 and §9–§20
-are the contract those tickets must satisfy; read them when writing the test, not
+**Execution surface:** §0 (portfolio + promise map + ledger), §8 (tracks and
+gates), §14 (rank, rewritten each session), §16 (handoff). §1–§7 and §9–§20 are
+the contract those tickets must satisfy; read them when writing the test, not
 when scheduling the work.
 ---
-## 0. Start here
-**Three minimum publishable units (MPUs), in order of expected value per session.**
-| MPU | Question | Why it is publishable | First evidence |
+## 0. Start here — the portfolio
+**The unit is a capability card, not a ticket.** One sentence a practitioner can
+act on, the strongest baseline that structure can reach, the budget at which it
+holds, the floor, the ruler, and the stop rule. A track that cannot state all
+six is not a track.
+
+**Six tracks, cheap-first.** Tracks A–C are the v10 MPUs; D–F are the parts of
+Computronium's own promise that no previous TODO has measured. Every track reuses
+something already built, and every track carries a kill rule so the portfolio
+shrinks instead of accumulating.
+
+| Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
+|---|---|---|---|---|---|
+| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b (credit owns its free pass) + T6c (trainable depth) + T6a | 2 sessions | hybrid not ≤0.5× the baseline's **activation bytes** at parity → close MPU1, keep the frontier as artifact |
+| **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | STE-gap vs stacked discrete-op count 1/2/4/8 (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat in depth → drop the track after one session |
+| **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`, 5 tasks × 1 epoch: local vs backprop plasticity | **hours** | local at chance → stop before retention (retention is undefined) |
+| **D. Substrate-native training** | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | ternary/memristive + `energy_minimization` (measured optimum 10 steps), one task | hours–1 session | cannot train, or no state saving at parity → park with a trigger |
+| **E. Estimator atlas** | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | never killed — it is the artifact; stop at 6 arms |
+| **F. Does composition matter?** | Say whether a 6-axis composition beats the best single-axis default, by ≥δ | best-of-single-axis at matched budget | 50 legal cells on one cheap task from the existing survey harness | 1 session | no cell ≥δ → the composition thesis gets a written refusal, and E/D carry the plan |
+
+**The rule that changes the plan.** *No ticket is scheduled ahead of a cheaper
+screen that could cancel it.* T6b is real and worth an hour — but it is
+downstream of "does the hybrid learn at all", which costs an hour. D is the
+project's most distinctive promise and has never been probed. B and C can each
+delete a whole track for the price of a pilot. **Session order is therefore B, C,
+D first, in parallel; A's blockers and E follow; F runs when the harness is idle.**
+
+**Ranking, recomputed every session (§14):** expected decision value ÷ measured
+cost, with the cost taken from the last pilot of that track, never guessed. A
+track whose next rung cannot change a decision is parked, not scheduled.
+
+**Assets this portfolio protects.** The decomposition + binding gate (A), the
+lockstep kernels and the `TrunkContrast` Protocol (A/B), the checkpointed arm
+(A), the evidence store + survey harness + policies (F), the identity cards and
+estimator coordinates (E), the substrate models and `energy_minimization` (D),
+the continual runner (C). None of this work is thrown away by the reordering.
+
+### 0.1 The promise map (PURPOSE.md → nearest asset → cheapest decisive probe)
+
+Computronium's stated promises are much wider than one frontier claim. This table
+keeps the plan honest about the space it claims to explore: a promise with no
+probe is a claim with no evidence path.
+
+| Promise (PURPOSE §) | Nearest asset today | Evidence today | Cheapest decisive probe | Gate |
+|---|---|---|---|---|
+| 1. Discover never-tried systems | 6-axis generator, survey harness | breadth gate 8/8; **0 capability wins** | track **F**: 50 legal cells vs best single-axis default | ≥δ above best single-axis |
+| 2. Better digital algorithms | 11 credit rows, 7 dynamics, lockstep kernels | parity on 2 families; memory rung landed | tracks **A**, **B**, **E** | parity/dominance at a named budget |
+| 3–4. Substrate-native / co-design | memristive, ternary, neuromorphic substrates; energy dynamics | models exist; **no matched digital-vs-substrate row** | track **D**: ternary + `energy_min` at 10 steps | parity accuracy with less state |
+| 5. Re-evaluate published configs | `run_parity` ladder, `BENCHMARKS.md` | P1 rows open (T5) | T5: 3 publishables at published coordinates | within ±1 pp or σ |
+| 6. Find defects | 28-test truth lock, anti-fabrication scan | **14 fabricated zeros + 5 live defects found** | already producing (T1/T3/T3b/T6) | a failing test per defect |
+| 7. Fair comparison ground | matched budgets, rulers, binding gate | binding gate enforced; σ recorded | every track | a claim without a budget is refused |
+| 8. Useful negatives | `negative_results.py`, refusals with triggers | refusals recorded (§19) | B/C kill rules write the negative *in the same session* | a named verdict, not silence |
+| 9. Atlas of the space | identity cards, evidence store, fingerprinting | partial: 3.5k measurements | **E** (estimator atlas) + F (composition map) | a table a third party can read |
+| 10. Trade-offs, not one best | Pareto analysis, multi-objective metrics | harness exists, no frontier claimed | A's two-budget table | hypervolume or the ≤0.5× byte rule |
+| 11. Local/alternative paradigms | 11 credits, energy dynamics, streaming | parity, no structural win | A/B/C/D | a structural win or a written refusal |
+| 12. Growing architectures | routing plasticity, NCA/tile, tape memory | registered, partly unavailable | parked: fires when B or C lands | a substrate/streaming result |
+| 13–15. New mechanisms, discovery systems, cheap screening | plugin registry, policies, staged evaluation | present and used | F + the surprise channel | a promoted unexpected cell |
+| 16–18. Physical hardware, shared infrastructure, community | provenance, identity cards, store | present, unused externally | parked until a digital claim lands | an external collaborator |
+
+**What this map says.** Three promises (3–4, 9, 1) have *never* had a probe in
+any TODO. Those are the least-explored, most distinctive regions, and D/E/F are
+sized to reach them in one session each. That is where new questions come from.
+
+### 0.2 The surprise channel
+
+A plan that can only confirm its own hypotheses converges to "as expected" and
+teaches nothing. **10 % of every session's compute is reserved for probes whose
+outcome the plan does not predict**, chosen from the map above or from an
+unexpected cell in the last run. Rules:
+
+- a cell that beats its declared expectation by ≥2σ, or a rule that trains where
+  the plan said it cannot, gets a ticket **in the same session**;
+- an unexplained chance-level cell is a defect probe (§14), never a table row;
+- the surprise and its follow-up are recorded in §14 under "surprise", so the
+  next session starts from the new question, not from the old DAG.
+
+### 0.3 Opportunity ledger (specific, cheap, unpriced)
+
+The promise map says *where* the unexplored regions are. This ledger names
+specific probes that fit the surprise budget or a screen slot. They are ordered
+by "how surprising would a positive be", not by cost — cost is in the screen
+column above.
+
+| Probe | Asset already in the repo | Why it could be remarkable | Gate |
 |---|---|---|---|
-| **MPU1 — memory frontier** | On the accuracy-per-GB frontier at iso-walltime, does a *composition* (lockstep-local trunk + small backprop head) dominate `backprop+checkpointing`, and does a pure-local arm reach greater depth at fixed memory? | Practitioners are memory-bound; the contribution is a measured, matched frontier and its decomposition, not virgin territory (InfoPro, TinyFoA, DGL, greedy layerwise already occupy parts) | peak-memory instrument + binding gate + depth/width/batch ladder |
-| **MPU2 — non-differentiable architecture** | Does local credit beat the *best backprop-compatible estimator* (STE + load-balancing/z-loss) on hard top-k routing, with the estimator's bias measured against a defined reference? | A capability backprop can only approximate, positioned against the STE and MoE literature | one-epoch STE-gap screen, then one matched pair |
-| **MPU3 — streaming** | On batch-1, non-stationary data, does local×consolidation retain more at matched memory than backprop×consolidation ± small replay? | On-device training, edge, privacy-preserving adaptation | plasticity probe, then stream protocol |
+| **Graph capability**: Cora node classification with a legal local credit | Cora cached; the dry-run gate refuses `gradient` there (`GradientCredit: no gradient reaching learnable weights`, detached settle path); legal arms are `random_projections`, `homeostatic`, `pc_alm`, `target_inversion`, `temporal_trace`; bar 0.75 in AGENTS.md | if backprop's absence is **structural** (no autograd path through the graph operator) a local win is a capability, not a tie | ≥0.75 against a torch GCN reference, **and** a written check that the refusal is structural, not a harness gap |
+| **Trunk-rule ladder**: hybrid with FF, local_goodness, target-inversion trunks | `TrunkContrast` Protocol; only `PepitaTrunk` implemented; adapters are small | decides whether the hybrid's L=8 weakness is the boundary or the rule | hybrid ≥ its own trunk rule at L=8 |
+| **Settling as compute**: `energy_min` (10 steps) on denoising/attractor tasks vs backprop at matched walltime | `EnergyMinimizationDynamics`, measured optimum `max_steps=10` | settling may buy robustness that no feedforward pass has | accuracy at ≤ matched forward-equivalents |
+| **Ternary + energy_min**: the substrate claim with a state ruler | ternary substrate; TWN thresholding fixed; `SubstrateSettleKernel` | the only result a digital backprop baseline cannot express | parity with less state per step (D1) |
+| **Grow the architecture**: routing/tile/NCA at fixed budget | `algorithms/routing/`, tile/NCA kernels, availability flags | architecture as a learned variable is the project's §12 promise | one legal cell that trains and beats its fixed-topology twin |
+| **Memristive drift as consolidation** | memristive model; SI/replay arms | a hardware defect becomes free EWC-like anchoring | needs a retention/device model — parked until one exists |
+
+**How a probe enters:** it must name the decision, the baseline, and the kill
+rule in one line before it runs. A probe that would only add a row to a table
+belongs in a screen, not the ledger.
+
 **Progress (2026-11-16 — T1, T4a, T4c, T4b, T3, T3b, T6).** Every row is a runnable
 check, not a claim, and each fails when its mechanism is removed.
 
@@ -64,14 +148,21 @@ check, not a claim, and each fails when its mechanism is removed.
 | T3b | `HybridCredit` in `ontology/credit/_hybrid.py`: `PepitaTrunk` contrast + `GradientCredit.gradient_of` head; `step_layer` threads the residual input across one layer; `split_layer` must land on a Linear; one registry row (`estimator_kind="hybrid"`) and feedforward-geometry refusal | `test_hybrid_parity.py` (8, 2 CUDA) | trunk deltas ≡ store-all hybrid **max\|Δ\| = 0.0**; head ≡ plain backprop; **trunk peak flat 81.0 MB above gradients at L=4→32** vs store-all 122→1018 MB; composed `train_step` decreases loss and moves every weight |
 | T6 | `validation/memory_frontier.py`: one operating point, four arms, two controls, appendix writer; `run_pilot`, `run_learning_ladder`, `claim_ladder`, `build_arm` | `test_memory_frontier.py` (8, 1 CUDA xfail) | **c = 4.125 (0.0 % spread) at L=32/B=8192/W=1024**; gate green (share 0.941); learning control passes (0.419 vs floor 0.409); **two defects found** — T6b (composed hybrid 3249 MB vs ckpt 1637 MB) and T6c (loss plateau at L=32) |
 
-**Next:** **T6b + T6c** (both blockers found by T6, both small), then **T6a**. T6b
-lets a credit own its free pass so the hybrid's composed peak is the lockstep
-working set; T6c re-poses the depth rung on a trainable geometry (LayerNorm,
-c≈2, or a depth-stable init) and re-runs the pilot. T6a's registration is
-deliberately **not committed**: a claim written while the treatment's memory
-mechanism is absent on the claim path would be decided by a defect, which is a
-budget leak, not error control. T5 (published parity) and the P3 screen can run
-in parallel; both need no new primitive.
+**Next (three sessions, not a DAG).**
+
+1. **Screens, in parallel:** **B** (routing STE-gap), **C** (batch-1 plasticity),
+   **E-lite** (4 estimator arms × 1 task, one seed) — each writes a verdict or a
+   written refusal in its own session; each costs hours.
+2. **Structure:** **D** (ternary/memristive + `energy_min` at 10 steps, matched
+   digital baseline) and **A**'s two blockers (T6b composed path, T6c trainable
+   depth), whichever the screens promoted.
+3. **Compose:** **F** (50 legal cells vs best single-axis default) and **T6a**,
+   now that A has a mechanism and a trainable point.
+
+T6a is **not** registered before step 3: a threshold written while the treatment's
+memory mechanism is absent on the claim path would be decided by a defect. T5
+(published parity) is a standing side track — it needs no primitive and every
+track's credibility depends on it.
 
 **The credibility gate comes first (P1).** A low number from a weak implementation
 is a defect, not a verdict. Before any claim, each credit we intend to publish
@@ -89,6 +180,17 @@ because the audit is what makes the memory thesis checkable at all.
 | T0/D1 on the critical path | deferred §12; manual `regime` tag now | the search is deferred; the MPUs are targeted and need no proposal bias |
 | no primitive admissions | §19 admits only ticket-blocking mechanisms; `estimator_kind` gives the C axis an estimator coordinate | W3 is a bias/variance question, not "local vs weak STE" |
 | headline "2× depth at equal walltime" | headline = accuracy per GB at iso-walltime (Pareto) | see §2 |
+
+**What changed in v12 and why.**
+| v11 | v12 | Reason |
+|---|---|---|
+| one MPU at a time, serial DAG | six tracks, parallel, each with a kill rule | seven sessions produced one pilot; a serial plan pays a full session for every blocker |
+| cheap screens are "parallel afterthoughts" | **the screens are the first three sessions** | B/C/E can each cancel a track for hours; A's claim is two defects away |
+| substrate promise deferred (§12) | track **D**, probed now | substrate→algorithm pairing is the most distinctive promise and has never had a probe |
+| W3's credits "conditional on the screen" | track **E**, the atlas is the artifact | a measured estimator table is publishable without a win and makes every later claim commensurable |
+| composition search deferred (D1) | track **F**, 50 cells, one session | the 6-axis generator is the repo's central claim; if composition never beats the best single axis, that is the most important result available |
+| "no remarkable results" accepted as base rate | **10 % surprise budget + same-session tickets** | a plan that can only confirm itself converges to "as expected". Surprises are results (§0.2) |
+| DAG order fixed in the plan | **portfolio rank rewritten every session** (§14) | the ranking must move when a screen lands, not when a document is edited |
 ---
 ## 1. The scarce-resource thesis (corrected)
 **Measured fact (was wrong in v2).** Backprop stores per-layer activations:
@@ -442,9 +544,51 @@ SI's +1× parameter state enter the cap, or the local arm gets a free budget.
 record the saturation point. A replay-wins negative is a coordinate result, not a
 verdict on local credit.
 ---
+## 6a. The three unprobed tracks (D, E, F)
+
+These carry promises from `PURPOSE.md` that no TODO has ever measured. Each is
+sized to reach a decision in one session, and each reuses an existing asset — no
+new primitive is admitted before the screen promotes.
+
+**D — substrate-native training.** *Question:* on a constrained substrate model,
+does a learning system reach digital parity at lower state? *Arms:* ternary +
+`energy_minimization` (`max_steps=10`, the measured optimum; the stale default was
+30), memristive + the same credit that works digitally, and a digital control.
+*Rulers:* state per step (bytes), accuracy, and the constraint that binds
+(quantization, bounds, drift) — a parity claim must name it. *Stop:* cannot train
+on the substrate, or no state saving at parity → park with a reversal trigger.
+*Why this one matters:* substrate → algorithm pairing is the project's most
+distinctive promise and the only one that cannot be copied from the ML
+literature. The models and the settle kernel already exist; the missing artifact
+is one matched row.
+
+**E — estimator atlas.** *Question:* at matched compute on one task, what are the
+bias/variance/compute coordinates of each estimator kind? *Arms:* exact
+(`gradient`), gradient-approximation (FA/DFA/TP/PC-ALM), objective-local
+(PEPITA/local_goodness/FF), hybrid. *References:* the smoothed-routing gradient
+and a finite-difference estimate on a small net; objective-local arms report
+update-direction alignment and `bias_reference="none"`, never "bias". *Rulers:*
+angle and magnitude vs the declared reference, variance across seeds,
+forward-equivalents, matched budget. *Stop:* six arms, then the table is the
+artifact — it is publishable whether or not anything wins, and it makes every
+later comparison commensurable. This is T7's real job, promoted from
+"conditional on the screen".
+
+**F — composition screen.** *Question:* does any legal 6-axis composition beat
+the best single-axis default by ≥δ at matched budget? *Design:* one cheap task,
+~50 legal cells drawn from the existing search space (the generator already
+filters compatibility), with the best single-axis default as the reference —
+best credit × default everything else. *Metric:* task metric at matched
+forward-equivalents; δ pre-registered before the cells run. *Stop:* flat → the
+composition thesis gets a written refusal, and the artifact records the flat
+region. *Why:* the 6-axis generator is the repository's central claim. If
+composition never beats the best single axis, that is the most important thing
+this plan can learn — and it is one session, not a campaign.
+
+---
 ## 7. T0/D1 — deferred, manual tag now
 The affinity instrument serves the composition-wide **search**, which §12 defers.
-The three MPUs are targeted experiments and need no proposal bias. So:
+The six tracks are targeted experiments and need no proposal bias. So:
 - now: one manual `regime` tag on cells (a `StrEnum`, no proposal bias, no A/B);
 - schema (`AxisSpec.regime_affinity` beside `target_kind` at
   `experiment/schema/axis.py:116`), coverage, and locks stay written for when the
@@ -458,54 +602,61 @@ The three MPUs are targeted experiments and need no proposal bias. So:
 fails if the field's removal leaves proposals unchanged on a seeded fixture; a
 below-bar foreign cell is `[regime-mismatch]`, not a defect.
 ---
-## 8. Ticket DAG (critical path)
-| # | Ticket | Cost | Acceptance / output |
-|---|---|---|---|
-| T1 ✅ | **Truth pass** (defect tickets, stub fixes, measured complexity table, `estimator_kind`/`bias_reference` declarations, locks, `BENCHMARKS.md` skeleton, `CORRECTIONS.md` rows) | 1 session (watchdog 2×; if it overruns, split code-fixes from schema/locks) | A §14 "progress" row; each lock fails on current code and passes after its fix; no silent `activations_mb: 0.0` |
-| T3 ✅ | Lockstep two-pass FF/PEPITA; exact-update lock vs the store-all schedule | 1 session | O(B·W) measured peak, flat in depth; max\|ΔW\| ≡ 0 per layer |
-| T4a ✅ | Memory **decomposition** (`EpochResource`: params/optimizer/activations/aux/RSS) + binding guard + calibration lock | hours | `L·B·W·4` within 10%; guard rejects a non-binding cell |
-| T4b ✅ | `backprop+ckpt` (√L segments, `preserve_rng_state`, `use_reentrant=False`, geometry forward) | 1 session | §4 acceptance ladder; gradient parity under dropout |
-| T4c ✅ | Extend `validation/backprop_parity.run_parity` with `batch_size` and `pepita`/`local_goodness` families | hours | one runner for the ladder; no second depth loop |
-| T5 | P1 scoped: 3 publishables + arms actually used | 1–2 sessions | rows with backend path, dtype, optimizer, σ |
-| T3b ✅ | **Hybrid arm**: `HybridCredit` wrapper (trunk local + head backprop) + identity | 1–2 sessions | composes; trunk peak flat in depth; head gets true gradients; **landed 2026-11-16** |
-| T6 ✅ | P2 pilot at **one binding operating point**, positive control included | 1 session | binding arithmetic appendix; positive control passes; **landed 2026-11-16 with two blockers (§2.4)** |
-| T6b | **Composed-path memory**: a credit may own its free pass, so `run_train_step` stops materialising the store-all forward for a credit that declares no autograd need | hours–1 session | hybrid composed activation set ≤ 0.5× the checkpointed arm's at L=32/B=8192 (843 vs 437 MB at the smaller lock point today); the strict xfail flips to a passing lock |
-| T6c | **Depth rung trainability**: re-pose the claim geometry on LayerNorm (c≈2, appendix recompute in the same commit) or a depth-stable init; re-run the pilot | hours | backprop at the claim depth leaves the loss plateau (2.2132 from step 200→1000 today) and reaches the L=8 floor |
-| T6a | Pre-registration: `ThresholdRegistration` for the accuracy delta/floor + a budgets appendix the binding test reads | hours | **blocked on T6b + T6c**; floor, budgets, `n_max=5`, binding arithmetic, stop rule; extra keys are ignored by the loader, so the test reads the raw JSON |
-| T7 | P0 estimator credits: `SurrogateCredit` (required baseline) + `ForwardTangentCredit` (bias reference); `ScoreFunctionCredit`/`ZerothOrderCredit` as controls | 1 session | W3's baseline and reference exist as first-class C rows with identity + compatibility predicates (§19) |
-| T8 | P4 baselines: lift `SynapticIntelligence` to U; `CascadeSynapsePlasticity` | 1–2 sessions | local×SI and local×cascade runnable at the tiny-budget point (§19) |
-| T9 | Temporal taxonomy: `EligibilityPropCredit`, `UnbiasedOnlineRTRL`, `RTRLReference` | trigger-gated | fires when MPU1 closes (T6) or a sequence-length axis enters (§19) |
-| ∥ | P3 screen: STE-gap vs stacked discrete-op count against soft-relaxation bound | hours | gap grows with depth → matched pair worth running; flat → drop per stop rule |
-Order: **T1 → T4a → T4c → T4b → T3 → T3b → T6 → T6b → T6c → T6a** (T1/T4a/T4c/T4b
-landed 2026-11-15; T3/T3b/T6 landed 2026-11-16; **T6b is the next block**), with
-T5 parallel and the P3 screen starting alongside T1 (it needs no new primitive
-and is the cheapest track-killer). T4b **gates T6** — the pilot compares against
-checkpointing — and landed before T3/T6. **T6's pilot gates T6a**: the
-treatment's memory mechanism must exist on the claim path (T6b) and the claim
-geometry must train (T6c) before a threshold is registered. T7 lands only if the
-P3 screen promotes, in parallel with T3. T8 can start once T6 fixes the P4
-protocol, in parallel with T5; it does not wait for P2 to close. T9 is
-trigger-gated. P4 runs after P2 because both need the binding guard.
-**Two falsifiers, two numbers.** T3b's composition lock was the last
-**implementation** falsifier (~6 sessions: T1, T4a, T4c, T4b, T3, T3b — all
-landed). T6 is the first **research** falsifier and it split in two: the
-instrument passes, the composed-path memory does not (T6b), and the depth rung
-does not train (T6c). Claim-grade row: **~10–11 sessions**, now gated by two
-hours-scale tickets rather than by a new mechanism.
+## 8. Tickets by track (parallel, gated)
+The DAG is gone. A ticket belongs to a **track**, a track promotes on a gate,
+and the portfolio rank (§14) decides what runs next. Landed tickets stay as the
+record of what exists.
+
+| # | Ticket | Track | Cost | Gate / output |
+|---|---|---|---|---|
+| T1 ✅ | **Truth pass** (stub fixes, measured complexity table, estimator declarations, locks) | all | 1 session | each lock fails on the pre-change code |
+| T3 ✅ | Lockstep two-pass FF/PEPITA | A | 1 session | O(B·W) peak, flat in depth; max\|ΔW\| ≡ 0 |
+| T4a ✅ | Memory decomposition + binding guard + calibration lock | A | hours | `c·L·B·W·4` within 10 % |
+| T4b ✅ | `backprop+ckpt` (√L segments) | A | 1 session | §4 ladder; gradient parity under dropout |
+| T4c ✅ | Ladder runner with `batch_size` + `pepita` family | A | hours | one runner, no second depth loop |
+| T3b ✅ | `HybridCredit` (trunk local + head backprop) | A | 1–2 sessions | composes; trunk flat; head exact |
+| T6 ✅ | Composed pilot at one binding point | A | 1 session | controls pass; two blockers named |
+| T6b | **Composed-path memory**: a credit owns its free pass | A | hours | hybrid activation set ≤0.5× ckpt (843 vs 437 MB today); xfail flips |
+| T6c | **Trainable claim depth**: LayerNorm (c≈2) or depth-stable init, appendix recomputed | A | hours | L=32 leaves the plateau and reaches the L=8 floor |
+| T6a | Registration: floor, budgets, `n_max=5`, binding appendix, stop rule | A | hours | blocked on T6b+T6c |
+| **B1** | **Routing screen**: STE-gap vs stacked discrete-op count 1/2/4/8; soft-relaxation bound | B | hours | gap grows → promote B2; flat → track B refused |
+| **C1** | **Plasticity screen**: batch-1 SplitMNIST, 5 tasks, local vs backprop; peak memory | C | hours | local above chance → retention protocol C2; chance → track C refused |
+| **D1** | **Substrate probe**: ternary/memristive + `energy_min` (10 steps) vs digital backprop at matched accuracy; state per step | D | hours–1 session | parity with less state → D2; else park with a trigger |
+| **E1** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | hours (lite) + 1 session | a table with a declared reference per arm |
+| **F1** | **Composition screen**: 50 legal cells vs the best single-axis default, matched budget | F | 1 session | ≥δ above the default → F2; flat → composition refusal recorded |
+| T5 | P1 scoped: 3 publishables + the hybrid trunk rule | side | 1–2 sessions | rows with backend path, dtype, optimizer, σ |
+| T7 | `SurrogateCredit` + `ForwardTangentCredit` (+ score/zeroth controls) | B/E | 1 session | only after B1 promotes |
+| T8 | Lift `SynapticIntelligence`; `CascadeSynapsePlasticity` | C | 1–2 sessions | after C1 promotes |
+| T9 | Temporal taxonomy (`EligibilityProp`, UORO, RTRL ref) | parked | trigger | MPU1 closes or a sequence-length axis enters |
+
+**Promotion gates.** A track advances when its gate is met at a **named budget**,
+not when a cell looks good. A failed gate writes the negative in the same
+session (a refusal with a trigger, or a defect with a test) — that is a result,
+and it frees the portfolio slot.
+
+**Two falsifiers, two numbers, restated.** The implementation falsifiers are
+closed (T1–T3b, T6). What remains is a **portfolio of cheap falsifiers**: B1, C1,
+D1, F1 can each cancel a track for hours. The expensive falsifier (A's claim) is
+deliberately last, because it is the only one that needs five paired seeds on a
+real task.
+
 ### 8.1 Remaining work, ordered (start here next session)
 
-| Order | Ticket | Blocks on | First command / file | Done when |
-|---|---|---|---|---|
-| 1 ✅ | **T4b** — `backprop+ckpt` | landed 2026-11-15 | `core/gradient_checkpointing.py`; `tests/property/test_checkpoint_parity.py` | checkpointed grads ≡ plain under dropout (bit-exact); RNG negative control fails without `preserve_rng_state`; segments=√L (Linears, not modules); **epoch peak 3894 MB < 6554 MB at L=64/W=1024/B=8192** |
-| 2 ✅ | **T3** — lockstep two-pass FF/PEPITA | landed 2026-11-16 | `acceleration/ff_kernels.py` `lockstep_contrasts`; `tests/property/test_lockstep_parity.py` | deltas ≡ store-all at `atol=0`; **peak flat 66.3 MB (FF) / 58.5 MB (PEPITA) at L=4→32** at W=512, B=4096; retained-stream negative control bends to 576/568 MB |
-| 3 ✅ | **T3b** — hybrid trunk + head | landed 2026-11-16 | `ontology/credit/_hybrid.py`; `primitives/credit_assignment/hybrid/`; `tests/property/test_hybrid_parity.py` | parity with the store-all hybrid **max\|Δ\| = 0.0**; head ≡ backprop; **trunk peak flat 81.0 MB above gradients at L=4→32** |
-| 4 ✅ | **T6** — composed pilot | landed 2026-11-16 | `computronium/validation/memory_frontier.py`; `tests/property/test_memory_frontier.py` | **c=4.125 (0.0 % spread) at L=32/B=8192/W=1024**; both controls pass; **hybrid composed 3249 MB vs ckpt 1637 MB** and **L=32 stuck at loss 2.2132** — recorded as T6b/T6c |
-| 4b | **T6b** — credit owns its free pass | nothing | `core/pipeline.py::_run_train_step_tensor_impl` + a declared credit capability; flip the strict xfail in `test_memory_frontier.py` | hybrid composed activation set ≤ 0.5× the checkpointed arm's at L=32/B=8192 |
-| 4c | **T6c** — trainable claim geometry | nothing | `GeometryConfig.feedforward(stream_norm=True)` (c≈2) or `init_scheme`; re-run `python -m computronium.validation.memory_frontier` | backprop at the claim depth leaves the plateau and reaches the L=8 floor |
-| 5 | **T6a** — pre-registration | T6b ✅, T6c ✅ | `configs/preregistrations/t93_memory_frontier_registered.json` + a raw-JSON lock | binding arithmetic appendix, both positive controls, `n_max=5`, δ, floor, stop rule |
-| ∥ | **T5** — published parity | nothing (`BENCHMARKS.md` exists) | §3 method, 3 credits + hybrid trunk rule | one row per (credit, dataset, arch, backend path) with Δ and σ |
-| ∥ | **P3 screen** | nothing | `benchmarks/joint/z3_fixed_weights.py` (STE already lifted) | STE-gap grows with stacked discrete ops → promote T7; flat → drop MPU2 |
-| gate | **T7** / **T8** / **T9** | P3 screen / T6 / trigger | §19 rows | not work until the trigger fires |
+| Order | Track | First command / file | Done when |
+|---|---|---|---|
+| 1 ✅ | A — `backprop+ckpt` | landed 2026-11-15 | checkpointed grads ≡ plain under dropout; segments=√L; epoch peak 3894 MB < 6554 MB at L=64/W=1024/B=8192 |
+| 2 ✅ | A — lockstep two-pass FF/PEPITA | landed 2026-11-16 | deltas ≡ store-all at `atol=0`; peak flat 66.3 / 58.5 MB at L=4→32 |
+| 3 ✅ | A — hybrid trunk + head | landed 2026-11-16 | parity max\|Δ\| = 0.0; head ≡ backprop; trunk flat 81.0 MB |
+| 4 ✅ | A — composed pilot | landed 2026-11-16 | c=4.125; controls pass; blockers T6b/T6c |
+| 5 | **B — routing screen** | `benchmarks/joint/z3_fixed_weights.py`; §5 | STE-gap grows with stacked discrete ops → B2; flat → track refused |
+| 6 | **C — plasticity screen** | `core/continual/runner.py`, `create_ewc_arm`/`create_si_arm`, `SplitMNIST`; §6 | local above chance at batch 1 → C2; chance → track refused |
+| 7 | **E — estimator atlas** | `run_parity` portfolio + the 6 estimator coordinates; §2 | one table: bias, variance, forward-equivalents, matched budget, declared reference |
+| 8 | **D — substrate probe** | memristive/ternary substrate + `StateDynamicsConfig.energy_minimization(max_steps=10)`; §1 | parity accuracy with less state per step → D2 |
+| 9 | **A — T6b + T6c** | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
+| 10 | **F — composition screen** | survey harness, 50 legal cells, cheap task; §13 | ≥δ above the best single-axis default → F2 |
+| 11 | **A — T6a** | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix |
+| ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
+| gate | **T7 / T8 / T9** | B1 / C1 / trigger | not work until the gate fires |
 
 **What the next session must not re-derive:** the decomposition API
 (`EpochResource.{params,optimizer,activations,auxiliary,cpu_rss}_mb`,
@@ -646,16 +797,25 @@ today. If a digital result needs a substrate control, the trigger fires.
 6. **Steering rules — the plan changes itself when results say so.**
 | Observation | Steering |
 |---|---|
-| W1/W2 hold | MPU1 becomes the lead claim; MPU2/3 run as follow-ups |
-| hybrid loses at matched memory and walltime | close MPU1; lead with MPU2/MPU3; the artifact is the frontier |
-| pure local loses but hybrid wins | expected; report hybrid as the composition result, not a local-rule win |
+| W1/W2 hold | track A becomes the lead claim; B/C/D run as follow-ups |
+| hybrid loses at matched memory and walltime | close A; lead with B/C/D; the frontier stays as artifact |
+| pure local loses but hybrid wins | expected; report the composition result, not a local-rule win |
 | binding gate red at the pilot | re-pose the operating point (batch/width/dtype); **never** report the cell |
-| STE+aux beats local on routing | publish the negative with the measured bias; drop the non-differentiable track |
-| P3 screen flat in depth | drop MPU2 after one session |
-| plasticity fails at batch 1 | stop P4 before retention; retention is undefined |
-| replay saturates streaming | close MPU3; report the saturation point |
+| STE+aux beats local on routing | publish the negative with the measured bias; drop track B |
+| STE-gap flat in depth | drop B after one session |
+| plasticity fails at batch 1 | stop C before retention; retention is undefined |
+| replay saturates streaming | close C; report the saturation point |
+| substrate arm at parity with less state | promote D; it is the project's most distinctive claim |
+| substrate arm cannot train | park D with a trigger; do not port the digital stack again |
+| composition screen flat | record the composition refusal; E and D carry the plan |
+| an atlas row contradicts a published number | T5 defect first; no atlas claim until closed |
+| a surprise cell beats its declared expectation by ≥2σ | ticket in the same session; the plan re-ranks around it |
 | P1 gaps beyond tolerance | defect tickets only; no measurement claims until closed |
 | nothing wins | the honest negative: the structural advantage does not convert at matched budgets, with the measured decomposition showing why. Then §12's triggers lead |
+**Portfolio rank (rewrite each session).** List the tracks by expected decision
+value ÷ measured cost, with the last pilot cost beside each. The top three run;
+everything else is parked. A track whose next rung cannot change a decision is
+not scheduled, however cheap.
 ---
 ## 14. Scoreboard (update in place; rulers mandatory)
 | Date | Track | Measurement | n | Ruler | Regime | Verdict | Ticket |
@@ -670,14 +830,33 @@ today. If a digital result needs a substrate control, the trigger fires.
 | 2026-11-16 | P2 | composed-path memory of the hybrid | 1 cell | activation set vs the checkpointed arm | same point, one seed | **defect: hybrid 3249 MB vs ckpt 1637 MB (1.98×); mechanism = the pipeline's eager store-all forward** | T6b |
 | 2026-11-16 | P2 | depth-rung trainability of the plain stack | 1 seed × 4 checkpoints + 4 arms | val_acc and loss vs the L=8 floor | L=32, W=1024, B=8192, 200→1000 steps | **coordinate: loss pinned at 2.2132, all arms 0.100; L=8 = 0.419 → re-pose (norm/init) before any depth claim** | T6c |
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
-| — | P2 | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T6a (blocked on T6b/T6c) |
-| — | P3 | routing: local vs STE+aux; bias | — | acc @ matched walltime; bias vs declared reference | — | — | P3 screen |
-| — | P3 | estimator taxonomy (after screen) | — | bias vs declared reference; variance; forward-eq | — | — | T7 |
-| — | P4 | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | T8 |
+| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T6a (blocked on T6b/T6c) |
+| — | B | routing: local vs STE+aux; bias | — | acc @ matched walltime; bias vs declared reference | — | — | B1 |
+| — | E | estimator atlas: bias/variance/compute per kind | — | declared reference or `none`; variance; forward-eq | — | — | E1 |
+| — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
+| — | D | substrate-native training at matched accuracy | — | state per step; accuracy; dtype constraints | — | — | D1 |
+| — | F | does composition beat the best single-axis default? | — | ≥δ at matched budget | — | — | F1 |
 **Progress is one of:** a published-parity reference (P1); a measured frontier
-(P2–P4); a promoted claim; a defect found and fixed by a failing test; a refusal
-with a trigger. **Not progress:** more cells, more prose, more primitives, a knob
-swept to pass.
+(A–F); a promoted claim; a defect found and fixed by a failing test; a refusal
+with a trigger; **a surprise that opens a new question (§0.2)**. **Not progress:**
+more cells, more prose, more primitives, a knob swept to pass.
+
+**Portfolio position, 2026-11-16 (rewrite each session).**
+
+| Rank | Track | Decision at stake | Next rung cost | Evidence today |
+|---|---|---|---|---|
+| 1 | **B** routing | does the STE-gap grow with discrete-op count? | hours | unprobed; STE already implemented |
+| 2 | **C** streaming | does local learn at batch 1 at all? | hours | unprobed; runner + arms exist |
+| 3 | **E** atlas | what *is* each estimator's bias/variance at matched compute? | hours (lite) + 1 session | coordinates declared; no table |
+| 4 | **D** substrate | parity on a constrained substrate with less state? | hours | models exist; no matched row |
+| 5 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
+| 6 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session | harness exists; no comparison |
+
+Why A dropped from 1 to 5: its instrument is done, but its claim is two
+hours-scale defects away and its treatment arm is unvalidated (the hybrid learns
+worse than its own trunk rule at L=8). B, C and E are cheaper, unprobed, and each
+can cancel a track outright. **A is not abandoned** — it is the nearest claim and
+keeps its next rung in the top three as soon as T6b/T6c are done.
 ---
 ## 15. Rules and guardrails
 - **A claim names its budget.** Memory, walltime, forward-equivalents, or params
@@ -695,6 +874,10 @@ swept to pass.
   Lion at `primitives/parameter_update/lion`) becomes a first-class primitive by
   wrapping it, never by a second implementation.
 - **No tuning to pass.** A knob turned to rescue a cell is a defect ticket.
+- **Cheap screens before claims.** No ticket is scheduled ahead of a cheaper
+  screen that could cancel it; the portfolio rank carries the last measured cost.
+- **Every track spends 10 % on the unexpected** (§0.2); a surprise is a result,
+  not noise, and it enters §14 the session it appears.
 - **Pre-register claims only**; screens run freely and stop cheaply. Reuse
   `configs/preregistrations/` (`r92_memory_budget_registered.json` is the shape).
 - **Watchdog = 2× pilot price.** Kill or re-price; never extend.
@@ -705,28 +888,29 @@ swept to pass.
 ---
 ## 16. Handoff contract
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
-- Start order: **T1 → T4a → T4c → T4b → T3 → T3b → T6 → T6b → T6c → T6a**
-  (T1/T4a/T4c/T4b/T3/T3b/T6 landed; **T6b next**), with T5 parallel and the P3
-  screen alongside T1; T7 conditional on the screen promoting, T8 after T6, T9
-  trigger-gated.
+- **Start order is the portfolio rank (§14), not a DAG.** Session 1 runs B1, C1,
+  E-lite in parallel; session 2 runs D1 and A's two blockers; session 3 runs F1
+  and T6a. T5 is a standing side track. T7/T8/T9 stay gated on B1/C1/trigger.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
   only in the log.
 - **Live from 2026-11-16:** T6's pilot is landed and it found the two blockers a
-  registration would have hidden. T6b is the next block: let a credit own its
-  free pass so the composed path stops paying the pipeline's store-all forward
-  (the strict xfail in `test_memory_frontier.py` flips when it lands). T6c then
-  re-poses the claim geometry on a trainable one (LayerNorm, c≈2, or a
-  depth-stable init) and re-runs `python -m computronium.validation.memory_frontier`
-  at L=32 before T6a writes the threshold. The hybrid's trunk runs the same
-  lockstep contrast the T3 kernel measured, its head is `BackpropCredit` on a
-  `detach`ed boundary, and the store-all hybrid is the parity reference (§18 T3b).
+  registration would have hidden. The tracker's next three rungs are the cheap
+  screens (routing, streaming, estimator atlas), then the substrate probe, then
+  T6b/T6c and T6a. T6b is small and known: let a credit own its free pass so the
+  composed path stops paying the pipeline's store-all forward (the strict xfail
+  in `test_memory_frontier.py` flips when it lands). T6c then re-poses the claim
+  geometry on a trainable one (LayerNorm, c≈2, or a depth-stable init) and
+  re-runs `python -m computronium.validation.memory_frontier` at L=32 before
+  T6a writes the threshold. The hybrid's trunk runs the same lockstep contrast
+  the T3 kernel measured, its head is `BackpropCredit` on a `detach`ed boundary,
+  and the store-all hybrid is the parity reference (§18 T3b).
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | T1 → T4a → T4c → T4b → T3 → T3b → T6 → T6b → T6c → T6a, T5 parallel, P3 screen alongside T1; T7 only if the screen promotes; T8 after T6. T4b landed and gates T6 (the pilot compares against checkpointing); T6's pilot gates T6a (composed-path memory and depth trainability are pre-conditions). |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v12 start: B1 (routing screen), C1 (plasticity screen), E-lite (estimator atlas) in parallel; then D1 (substrate probe) and A's blockers T6b/T6c; then F1 (composition screen) and T6a. T5 is a standing side track; T7/T8 fire on B1/C1 promotion, T9 on trigger. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
