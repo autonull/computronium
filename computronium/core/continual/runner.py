@@ -6,21 +6,29 @@ import copy
 import json
 import random
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import torch
+from torch.utils.data import RandomSampler
 
 from computronium.core.continual.arms import (
     create_backprop_arm,
+    create_backprop_ewc_arm,
     create_ewc_arm,
     create_fast_weight_arm,
+    create_local_arm,
+    create_local_ewc_arm,
     create_lwf_arm,
     create_plasticity_arm,
     create_replay_arm,
     create_si_arm,
 )
-from computronium.core.continual.constants import CL_NUM_TASKS
+from computronium.core.continual.constants import (
+    CL_CLASSES_PER_TASK,
+    CL_NUM_TASKS,
+)
 from computronium.core.continual.metrics import CLConfig, CLMetrics, compute_cl_metrics
 from computronium.core.continual.stability import (
     check_stability,
@@ -54,6 +62,9 @@ def _resolve_device(config: CLConfig) -> torch.device:
     return torch.device(device_str)
 
 
+_EVAL_BATCH_SIZE = 256
+
+
 def _create_task_loaders(config: CLConfig, device_str: str) -> tuple[list, list]:
     """Create train and test data loaders for all tasks."""
     task_loaders = []
@@ -65,13 +76,18 @@ def _create_task_loaders(config: CLConfig, device_str: str) -> tuple[list, list]
             num_workers=config.num_workers,
         )
         task.setup()
-        task_loaders.append(task.get_dataloader(TaskSplit.TRAIN))
+        loader = task.get_dataloader(TaskSplit.TRAIN)
+        if isinstance(loader.sampler, RandomSampler):
+            loader.sampler.generator = torch.Generator().manual_seed(
+                config.seed + task_id
+            )
+        task_loaders.append(loader)
 
     test_loaders = []
     for task_id in range(CL_NUM_TASKS):
         task = SplitMNIST(
             task_id=task_id,
-            batch_size=config.batch_size,
+            batch_size=_EVAL_BATCH_SIZE,
             device=device_str,
             num_workers=config.num_workers,
         )
@@ -81,60 +97,167 @@ def _create_task_loaders(config: CLConfig, device_str: str) -> tuple[list, list]
     return task_loaders, test_loaders
 
 
+def _arm_backprop(
+    config: CLConfig, device: str
+) -> tuple[ContinualJointSystem, _ArmExtra]:
+    return (
+        create_backprop_arm(
+            config.input_dim,
+            config.hidden_dim,
+            config.output_dim,
+            device,
+            config.lr,
+        ),
+        {},
+    )
+
+
+def _arm_local(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmExtra]:
+    return (
+        create_local_arm(
+            config.input_dim,
+            config.hidden_dim,
+            config.output_dim,
+            device,
+            config.lr,
+        ),
+        {},
+    )
+
+
+def _arm_local_ewc(
+    config: CLConfig, device: str
+) -> tuple[ContinualJointSystem, _ArmExtra]:
+    model, update = create_local_ewc_arm(
+        config.input_dim,
+        config.hidden_dim,
+        config.output_dim,
+        device,
+        config.lr,
+        config.ewc_lambda,
+    )
+    return model, {"update": update}
+
+
+def _arm_backprop_ewc(
+    config: CLConfig, device: str
+) -> tuple[ContinualJointSystem, _ArmExtra]:
+    model, update = create_backprop_ewc_arm(
+        config.input_dim,
+        config.hidden_dim,
+        config.output_dim,
+        device,
+        config.lr,
+        config.ewc_lambda,
+    )
+    return model, {"update": update}
+
+
+def _arm_ewc(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmExtra]:
+    model, update = create_ewc_arm(
+        config.input_dim,
+        config.hidden_dim,
+        config.output_dim,
+        device,
+        config.ewc_lambda,
+        config.lr,
+    )
+    return model, {"update": update}
+
+
+def _arm_si(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmExtra]:
+    model, si = create_si_arm(
+        config.input_dim,
+        config.hidden_dim,
+        config.output_dim,
+        device,
+        config.lr,
+        config.si_xi,
+    )
+    return model, {"si": si}
+
+
+def _arm_replay(
+    config: CLConfig, device: str
+) -> tuple[ContinualJointSystem, _ArmExtra]:
+    model, buffer = create_replay_arm(
+        config.input_dim,
+        config.hidden_dim,
+        config.output_dim,
+        device,
+        config.replay_capacity,
+        config.lr,
+    )
+    return model, {"buffer": buffer}
+
+
+def _arm_lwf(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmExtra]:
+    model, lwf_loss = create_lwf_arm(
+        config.input_dim,
+        config.hidden_dim,
+        config.output_dim,
+        device,
+        config.lr,
+    )
+    return model, {"lwf_loss": lwf_loss}
+
+
+def _arm_fast_weights(
+    config: CLConfig, device: str
+) -> tuple[ContinualJointSystem, _ArmExtra]:
+    return (
+        create_fast_weight_arm(
+            config.input_dim,
+            config.hidden_dim,
+            config.output_dim,
+            device,
+            config.lr,
+        ),
+        {},
+    )
+
+
+def _arm_matched(plasticity: str) -> _ArmBuilder:
+    def build(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmExtra]:
+        return (
+            create_plasticity_arm(
+                plasticity,
+                config.input_dim,
+                config.hidden_dim,
+                config.output_dim,
+                device,
+            ),
+            {},
+        )
+
+    return build
+
+
+_ArmBuilder = Callable[[CLConfig, str], tuple["ContinualJointSystem", _ArmExtra]]
+_ARM_BUILDERS: dict[str, _ArmBuilder] = {
+    "backprop": _arm_backprop,
+    "local": _arm_local,
+    "local_ewc": _arm_local_ewc,
+    "backprop_ewc": _arm_backprop_ewc,
+    "ewc": _arm_ewc,
+    "si": _arm_si,
+    "replay": _arm_replay,
+    "lwf": _arm_lwf,
+    "fast_weights": _arm_fast_weights,
+    "matched_null": _arm_matched("null"),
+    "matched_fast_weights": _arm_matched("fast_weights"),
+}
+
+
 def _create_arm(
     arm_name: str, config: CLConfig, device_str: str
 ) -> tuple[ContinualJointSystem, _ArmExtra]:
     """Create continual learning arm model and extra components."""
-    extra: _ArmExtra = {}
-
-    if arm_name == "fast_weights":
-        model = create_fast_weight_arm(
-            config.input_dim, config.hidden_dim, config.output_dim, device_str
-        )
-    elif arm_name == "ewc":
-        model, update = create_ewc_arm(
-            config.input_dim,
-            config.hidden_dim,
-            config.output_dim,
-            device_str,
-            config.ewc_lambda,
-        )
-        extra["update"] = update
-    elif arm_name == "backprop":
-        model = create_backprop_arm(
-            config.input_dim, config.hidden_dim, config.output_dim, device_str
-        )
-    elif arm_name in {"matched_null", "matched_fast_weights"}:
-        model = create_plasticity_arm(
-            arm_name.removeprefix("matched_"),
-            config.input_dim,
-            config.hidden_dim,
-            config.output_dim,
-            device_str,
-        )
-    elif arm_name == "replay":
-        model, buffer = create_replay_arm(
-            config.input_dim,
-            config.hidden_dim,
-            config.output_dim,
-            device_str,
-            config.replay_capacity,
-        )
-        extra["buffer"] = buffer
-    elif arm_name == "lwf":
-        model, lwf_loss = create_lwf_arm(
-            config.input_dim, config.hidden_dim, config.output_dim, device_str
-        )
-        extra["lwf_loss"] = lwf_loss
-    elif arm_name == "si":
-        model, si = create_si_arm(
-            config.input_dim, config.hidden_dim, config.output_dim, device_str
-        )
-        extra["si"] = si
-    else:
-        raise ValueError(f"Unknown arm: {arm_name}")
-
-    return model, extra
+    try:
+        builder = _ARM_BUILDERS[arm_name]
+    except KeyError:
+        raise ValueError(f"Unknown arm: {arm_name}") from None
+    return builder(config, device_str)
 
 
 def _setup_stability_guard(config: CLConfig, model: ContinualJointSystem):
@@ -155,19 +278,16 @@ def _apply_task_boundary_setup(
     """Apply arm-specific setup at task boundary."""
     if arm_name == "fast_weights":
         model.reset_plastic_state()
-    elif arm_name == "ewc":
-        update = extra.get("update")
-        if update is not None:
-            update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
-    elif arm_name == "lwf":
-        lwf_loss = extra.get("lwf_loss")
-        if lwf_loss is not None:
-            prev_model = copy.deepcopy(model)
-            lwf_loss.set_prev_model(prev_model)  # type: ignore[attr-defined]
-    elif arm_name == "si":
-        si = extra.get("si")
-        if si is not None:
-            si.start_task()  # type: ignore[attr-defined]
+    lwf_loss = extra.get("lwf_loss")
+    if lwf_loss is not None:
+        prev_model = copy.deepcopy(model)
+        lwf_loss.set_prev_model(prev_model)  # type: ignore[attr-defined]
+    update = extra.get("update")
+    if update is not None:
+        update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
+    si = extra.get("si")
+    if si is not None:
+        si.start_task()  # type: ignore[attr-defined]
 
 
 def _run_training_step(
@@ -178,15 +298,13 @@ def _run_training_step(
     task_id: int,
     extra: _ArmExtra,
 ) -> dict[str, float]:
-    """Run a single training step based on arm type."""
-    if arm_name == "lwf":
-        lwf_loss_fn = extra.get("lwf_loss")
-        if lwf_loss_fn is not None:
-            return _lwf_train_step(model, x, y, task_id, lwf_loss_fn)  # type: ignore[arg-type]
-    elif arm_name == "si":
-        si_tracker = extra.get("si")
-        if si_tracker is not None:
-            return _si_train_step(model, x, y, task_id, si_tracker)  # type: ignore[arg-type]
+    """Run a single training step based on the arm's extra components."""
+    lwf_loss_fn = extra.get("lwf_loss")
+    if lwf_loss_fn is not None:
+        return _lwf_train_step(model, x, y, task_id, lwf_loss_fn)  # type: ignore[arg-type]
+    si_tracker = extra.get("si")
+    if si_tracker is not None:
+        return _si_train_step(model, x, y, task_id, si_tracker)  # type: ignore[arg-type]
     return model.train_step(x, y, task_id=task_id)
 
 
@@ -194,10 +312,9 @@ def _update_replay_buffer(
     arm_name: str, extra: _ArmExtra, x: torch.Tensor, y: torch.Tensor, task_id: int
 ) -> None:
     """Update replay buffer if applicable."""
-    if arm_name == "replay":
-        buffer = extra.get("buffer")
-        if buffer is not None:
-            buffer.add(x, y, task_id)  # type: ignore[attr-defined]
+    buffer = extra.get("buffer")
+    if buffer is not None:
+        buffer.add(x, y, task_id)  # type: ignore[attr-defined]
 
 
 def _run_replay_training(
@@ -207,27 +324,24 @@ def _run_replay_training(
     config: CLConfig,
 ) -> None:
     """Run replay training if buffer has samples."""
-    if arm_name == "replay":
-        buffer = extra.get("buffer")
-        if buffer is not None and len(buffer) > 0:  # type: ignore[arg-type]
-            sample_size = min(config.batch_size, len(buffer))  # type: ignore[arg-type]
-            rx, ry, rt = buffer.sample(sample_size)  # type: ignore[attr-defined]
-            replay_task_id = rt[0].item()
-            model.train_step(rx, ry, task_id=replay_task_id)
+    buffer = extra.get("buffer")
+    if buffer is not None and len(buffer) > 0:  # type: ignore[arg-type]
+        sample_size = min(config.batch_size, len(buffer))  # type: ignore[arg-type]
+        rx, ry, rt = buffer.sample(sample_size)  # type: ignore[attr-defined]
+        replay_task_id = rt[0].item()
+        model.train_step(rx, ry, task_id=replay_task_id)
 
 
 def _update_arm_importance(
     arm_name: str, model: ContinualJointSystem, extra: _ArmExtra
 ) -> None:
     """Update importance weights for EWC/SI at end of task."""
-    if arm_name == "ewc":
-        update = extra.get("update")
-        if update is not None:
-            update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
-    elif arm_name == "si":
-        si = extra.get("si")
-        if si is not None:
-            si.update_importance()  # type: ignore[attr-defined]
+    update = extra.get("update")
+    if update is not None:
+        update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
+    si = extra.get("si")
+    if si is not None:
+        si.update_importance()  # type: ignore[attr-defined]
 
 
 def _evaluate_task(
@@ -246,11 +360,11 @@ def _evaluate_task(
             x = x.view(x.shape[0], -1).to(device)
             y = y.to(device)
             logits = model(x, task_id=eval_task_id)
-            task_start = eval_task_id * 2  # CL_CLASSES_PER_TASK
-            task_end = task_start + 2
+            task_start = eval_task_id * CL_CLASSES_PER_TASK
+            task_end = task_start + CL_CLASSES_PER_TASK
             task_logits = logits[:, task_start:task_end]
             pred = task_logits.argmax(dim=1)
-            local_y = y % 2
+            local_y = y % CL_CLASSES_PER_TASK
             correct += (pred == local_y).sum().item()
             total += y.shape[0]
     return correct / total if total > 0 else 0.0
@@ -401,6 +515,10 @@ def _finalize_metrics(
         final_metrics.plastic_state_bytes = (
             model.plasticity.fast_weight_dim * 4 * config.batch_size  # type: ignore[attr-defined]
         )
+    for component in (extra.get("update"), extra.get("si")):
+        state_bytes = getattr(component, "state_bytes", None)
+        if callable(state_bytes):
+            final_metrics.plastic_state_bytes = cast("float", state_bytes())
     if arm_name == "replay":
         buffer = extra.get("buffer")
         if buffer is not None:

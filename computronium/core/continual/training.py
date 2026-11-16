@@ -84,15 +84,16 @@ def _run_settling_phases(
     task_end: int,
 ) -> tuple[dict[Phase, SystemState], Any]:
     """Run settling for all credit phases and return states and initial activations."""
+    global_y = local_y + task_start
     grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
     with grad_ctx:
         states: dict[Phase, SystemState] = {}
         initial_activations = forward_pass(substrate, geometry, x)
 
         for phase in credit.phases:
-            state = SystemState(x=x, y=local_y)
+            state = SystemState(x=x, y=global_y)
             state.activations = initial_activations
-            target = local_y + task_start if phase is Phase.NUDGED else None
+            target = global_y if phase is Phase.NUDGED else None
             settled = dynamics.settle(state, geometry, substrate, target=target)
             if phase is Phase.NUDGED:
                 settled.loss = _masked_task_loss(settled, local_y, task_start, task_end)
@@ -121,6 +122,7 @@ def _finalize_output(
         loss = _masked_task_loss(output, local_y, task_start, task_end)
     elif not isinstance(loss, Tensor):
         loss = torch.as_tensor(loss)
+    output.loss = loss
     if output.energy is None:
         output.energy = dynamics.compute_energy(output, geometry)
     return output
@@ -149,9 +151,14 @@ def _step_plasticity(
 
 def _compute_metrics(output: SystemState) -> dict[str, float]:
     """Compute metrics from settled output."""
+    loss = output.loss
     loss_val = (
-        output.loss.item() if isinstance(output.loss, Tensor) else float(output.loss)
-    )  # type: ignore[return-value]
+        float(loss.item())
+        if isinstance(loss, Tensor)
+        else 0.0
+        if loss is None
+        else float(loss)
+    )
     energy_val = (
         output.energy.item()
         if isinstance(output.energy, Tensor)

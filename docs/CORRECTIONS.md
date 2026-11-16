@@ -82,3 +82,23 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The coefficient is measured, never assumed: `test_activation_growth_carries_one_measured_coefficient` locks self-consistency across depth deltas (the cuBLAS workspace floor cancels in the difference). The pre-registration's binding arithmetic must use the measured c. |
 | Status | corrected — c measured at 4.1 on the Linear+ReLU claim geometry |
 | Commit | this commit |
+
+| Field | Correction 9 — the continual runner's learning-rate field never reached an update |
+|---|---|
+| Original claim | `CLConfig.lr` (and `CLConfig.si_xi`) configured the arm's learning rate, so a ladder over it measured the arm at that point. |
+| Original metric | `runner._create_arm` constructed every factory without `config.lr`; `create_backprop_arm`, `create_ewc_arm`, `create_local_arm` and the rest kept their factory defaults (`euclidean`/`elastic_consolidation` 1e-3). |
+| Audited procedure | TODO93 C1's first ladder cell at `lr=1e-3` and a direct call at `lr=1e-2` produced the same update scale: read of `_create_arm` against every factory signature. `CLConfig.si_xi` was likewise unread. |
+| Affected conclusions | Any continual-learning row whose config varied `lr` or `si_xi`; a ladder over those fields measured one rate three times. |
+| Replacement metric | Every arm factory takes `lr` (and `create_si_arm` takes `xi`) and `_create_arm` passes `config.lr`/`config.si_xi`; `test_config_lr_reaches_every_credit_arm` fails if the thread is removed. |
+| Status | corrected — the ladder now varies the rate it declares |
+| Commit | this commit |
+
+| Field | Correction 10 — the continual credit's second pass read task-local labels |
+|---|---|
+| Original claim | `PepitaCredit` trained the current SplitMNIST task, because the runner masks the loss to that task's two classes. |
+| Original metric | `_run_settling_phases` built the credit-facing `SystemState` with `y = local_y` (0/1). `PepitaCredit` derives `one_hot(y) − softmax(logits)` and its own CE from that state, so on task 1 (classes 2/3) it trained the task-0 logits. The masked loss was correct only for the exact-gradient credit, which reads the loss rather than `y`. |
+| Audited procedure | TODO93 C1 defect probe: local at `lr=1e-2` scored 0.405 / 0.426 / 0.445 / 0.652 / 0.030 per task, while the same arm on task 1 alone (task-offset labels) reached 0.964 after 800 steps. The task-1 collapse named the label channel, not the algorithm. |
+| Affected conclusions | Every continual cell routed through a credit that reads `state.y` (`PepitaCredit`, `LocalGoodnessCredit`, `LemmaCredit`): tasks 1–4 trained the wrong output classes. |
+| Replacement metric | The credit-facing state carries the **global** class index (`local_y + task_start`); the masked loss still uses the local label. `test_credit_state_carries_the_global_task_target` fails if the offset is removed. `_finalize_output` now stores the loss it computes, so a FREE-only credit returns a finite loss instead of raising `TypeError`. |
+| Status | corrected — local learns task 1 at 0.964 after the fix |
+| Commit | this commit |

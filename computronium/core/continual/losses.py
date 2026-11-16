@@ -150,5 +150,18 @@ class SynapticIntelligence:
                 loss += (self.omega[pid] * (param - self.prev_params[pid]) ** 2).sum()
         return self.xi * loss
 
+    def state_bytes(self) -> int:
+        """Bytes of importance, anchor, path-integral and accumulator state."""
+        return sum(
+            t.numel() * t.element_size()
+            for state in (
+                self.omega,
+                self.prev_params,
+                self.W,
+                self._pseudo_grads_accum,
+            )
+            for t in state.values()
+        )
+
 
 __all__ = ["LwFLoss", "SynapticIntelligence"]

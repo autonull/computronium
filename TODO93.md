@@ -1,5 +1,5 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v13 — portfolio + ladder discipline. Apparatus phase, not adjudication.**
+**Status:** 2026-11-16 · **v14 — C promotes; retention is the next rung. Apparatus phase, not adjudication.**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 landed: the truth pass, the memory
 decomposition, the ladder runner, the checkpointed baseline, the lockstep
 two-pass rung, the hybrid, and the composed pilot. Measured: **c≈4.1** (not 1),
@@ -33,6 +33,17 @@ baseline that structure cannot trivially match.
 **The claim we are trying to earn:** a practitioner with a consumer GPU can
 train something a *composition* of local and global credit makes possible at
 matched memory and matched compute, with a reproducible command.
+
+**C1 landed and promoted (2026-11-16).** On SplitMNIST at batch 1, one epoch per
+task, W=256, the local (PEPITA) arm reads **0.945 / 0.947** mean final accuracy
+on two disjoint seeds at LR 1e-3 (pre-registered floor 0.55, 4.5 σ above chance),
+while the exact-gradient control reads **0.839 / 0.893** at the same point. C moves
+to its retention protocol (C2, the EWC-strength ladder at frozen LR); it is not
+refused. The ladder bought two measured apparatus fixes on the way — the credit's
+label channel and the data-order seed (CORRECTIONS 9–10) — and the row is a
+**coordinate, not a claim** (n=1 per point; the best local point is the ladder's
+lower edge, so a downward LR extension is the next rung). Details: §14 and
+`docs/BENCHMARKS.md` §2.5.
 **The amendment that governs the whole plan.** A contest posed where the
 structural advantage cannot bind is as uninformative as one posed where it cannot
 lose. That is TODO92's lesson, and the mirror image of it is the failure mode of
@@ -221,13 +232,16 @@ check, not a claim, and each fails when its mechanism is removed.
 | T3 | one `lockstep_contrasts` stream serves both families (FF contrasts positive/negative, PEPITA standard/error-modulated — same expression); `train_step` + `kernel_train_step` run it; store-all `forward_*`/`backward` stay as the reference rung; `complexity_verified=True` for FF and PEPITA | `test_lockstep_parity.py` (8, 4 CUDA) | deltas ≡ store-all at `atol=0` per layer; **peak flat 66.3 MB (FF) / 58.5 MB (PEPITA) at L=4→32** vs 576/568 MB retained; **three live defects fixed**: FF `train_step` called a nonexistent `backward_contrastive`, PEPITA `backward` required an `error` argument no caller passed, and the bespoke PEPITA step used the standard pre-activation for both chains (the Triton twin's tested equation uses each chain's own) |
 | T3b | `HybridCredit` in `ontology/credit/_hybrid.py`: `PepitaTrunk` contrast + `GradientCredit.gradient_of` head; `step_layer` threads the residual input across one layer; `split_layer` must land on a Linear; one registry row (`estimator_kind="hybrid"`) and feedforward-geometry refusal | `test_hybrid_parity.py` (8, 2 CUDA) | trunk deltas ≡ store-all hybrid **max\|Δ\| = 0.0**; head ≡ plain backprop; **trunk peak flat 81.0 MB above gradients at L=4→32** vs store-all 122→1018 MB; composed `train_step` decreases loss and moves every weight |
 | T6 | `validation/memory_frontier.py`: one operating point, four arms, two controls, appendix writer; `run_pilot`, `run_learning_ladder`, `claim_ladder`, `build_arm` | `test_memory_frontier.py` (8, 1 CUDA xfail) | **c = 4.125 (0.0 % spread) at L=32/B=8192/W=1024**; gate green (share 0.941); learning control passes (0.419 vs floor 0.409); **two defects found** — T6b (composed hybrid 3249 MB vs ckpt 1637 MB) and T6c (loss plateau at L=32) |
+| **C1 ✅** | **Plasticity ladder**: `validation/plasticity_ladder.py`; batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed; local (PEPITA) vs exact-gradient control | `test_plasticity_ladder.py` (3), `test_cl_credit_arms.py` (5) | **local 0.945 / 0.947 at LR 1e-3 on two seeds**, control 0.839 / 0.893, floor 0.55 → **verdict: promote**. Two apparatus defects fixed: credit label channel (local scored 0.030 on task 4 before) and data-order seed (backprop swung 0.926→0.839) |
+| **C2** | **Retention ladder**: `validation/plasticity_ladder.py --stage consolidation`; 3-point EWC-strength ladder at frozen LR (1/10/100), local × EWC vs backprop × EWC; 1 seed + confirmation | ready; `run_consolidation_ladder` | local × EWC above floor and retention (BWT/forgetting) at matched per-step cost → C2b; saturation → close C |
 
 **Next (three sessions, not a DAG).**
 
 1. **Screens, in parallel:** **B** (routing STE-gap over 4 stacked-op points),
-   **C** (batch-1 plasticity with a 3-point consolidation/LR ladder), **E-lite**
+   **C2** (the 3-point EWC-strength ladder at the frozen LR C1 measured), **E-lite**
    (4 estimator arms × 1 task × 1 seed) — each runs its rung 0 and rung 2, then
-   writes a verdict or a laddered refusal; each costs hours, not sessions.
+   writes a verdict or a laddered refusal; each costs hours, not sessions. C1 is
+   done; C2 is its promotion gate, not a new track.
 2. **Structure:** **D** (ternary/memristive + `energy_min` at 10 steps, matched
    digital baseline) and **A**'s two blockers (T6b composed path, T6c trainable
    depth), whichever the screens promoted.
@@ -696,7 +710,8 @@ record of what exists.
 | T6c | **Trainable claim depth**: LayerNorm (c≈2) or depth-stable init, appendix recomputed | A | hours | L=32 leaves the plateau and reaches the L=8 floor |
 | T6a | Registration: floor, budgets, `n_max=5`, binding appendix, stop rule | A | hours | blocked on T6b+T6c |
 | **B1** | **Routing ladder**: STE-gap vs stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs; soft-relaxation bound | B | hours | gap grows at the best point → promote B2; flat **across the ladder** → refuse B (§0.4) |
-| **C1** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, 3-point consolidation/LR ladder + confirmation seed | C | hours | local above chance at the best point on 2 seeds → retention protocol C2; chance there → refuse C |
+| **C1 ✅** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed | C | landed 2026-11-16 | local **0.945 / 0.947** at LR 1e-3 on 2 seeds, control 0.839 / 0.893, floor 0.55 → **promote to C2**. Best point is the lower edge; a downward extension (3e-4/1e-4) is the next rung if an optimum is claimed |
+| **C2** | **Retention ladder**: 3-point EWC-strength ladder (λ = 1/10/100) at the frozen LR, local × EWC vs backprop × EWC, matched per-step cost | C | hours | local × EWC above floor and lower forgetting/BWT than its control at the best λ → C2b; saturated everywhere → close C with the saturation point |
 | **D1** | **Substrate ladder**: ternary/memristive + `energy_min` at `max_steps` 5/10/20 vs digital backprop; state per step | D | hours–1 session | parity with less state at the best point → D2; no training at any point → park with a trigger |
 | **E1** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | hours (lite) + 1 session | a table with a declared reference per arm |
 | **F1** | **Composition ladder**: 50 legal cells vs the best single-axis default, then a 3-point ladder on the best-looking family | F | 1 session | family ≥δ after its ladder → F2; flat everywhere → composition refusal with a trigger |
@@ -729,8 +744,9 @@ real task.
 | 3 ✅ | A — hybrid trunk + head | landed 2026-11-16 | parity max\|Δ\| = 0.0; head ≡ backprop; trunk flat 81.0 MB |
 | 4 ✅ | A — composed pilot | landed 2026-11-16 | c=4.125; controls pass; blockers T6b/T6c |
 | 5 | **B — routing ladder** | `benchmarks/joint/z3_fixed_weights.py`; §5 | STE-gap grows at the ladder's best point → B2; flat across 1/2/4/8 → laddered refusal |
-| 6 | **C — plasticity ladder** | `core/continual/runner.py`, `create_ewc_arm`/`create_si_arm`, `SplitMNIST`; §6 | local above chance at the best of 3 points + confirmation → C2; chance there → laddered refusal |
-| 7 | **E — estimator atlas** | `run_parity` portfolio + the 6 estimator coordinates; §2 | one table: bias, variance, forward-equivalents, matched budget, declared reference |
+| 6 ✅ | **C — plasticity ladder** | landed 2026-11-16 | local 0.945/0.947 at LR 1e-3 on two seeds; control 0.839/0.893; floor 0.55 → **promote to C2** (retention); best point is the ladder's lower edge, so the downward extension is the next rung |
+| 7a | **C2 — retention ladder** | `python -m computronium.validation.plasticity_ladder --stage consolidation --device cuda` (frozen LR from `results/t93_c1/frozen_lr.txt`) | local × EWC at the floor and lower forgetting/BWT than backprop × EWC at matched per-step cost → C2b; saturated at every λ → close C with the saturation point |
+| 7b | **E — estimator atlas** | `run_parity` portfolio + the 6 estimator coordinates; §2 | one table: bias, variance, forward-equivalents, matched budget, declared reference |
 | 8 | **D — substrate ladder** | memristive/ternary substrate + `energy_minimization` at `max_steps` 5/10/20; §1 | parity with less state at the best point → D2; nothing trains → park with a trigger |
 | 9 | **A — T6b + T6c** | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
 | 10 | **F — composition ladder** | survey harness, 50 legal cells + a family ladder, cheap task; §13 | ≥δ above the best single-axis default after the ladder → F2; flat → refusal |
@@ -813,6 +829,22 @@ the weight-gradient set flat at 81.0 MB at L=4/8/16/32, with the **store-all
 control** bending 122→1018 MB), and the composed-path learning control (rung 1:
 `train_step` decreases loss and every weight moves).
 
+**Landed 2026-11-16 (C1):** a label-channel lock and a data-order lock.
+(1) The credit-facing `SystemState` carries the **global** class index
+(`local_y + task_start`); the masked loss still uses the local label, so PEPITA's
+second pass trains the current task. Without the offset, local scored
+0.405/0.426/0.445/0.652/**0.030** per task; on task 1 alone it reached 0.964
+(`test_credit_state_carries_the_global_task_target`). `_finalize_output` now stores
+the loss it computes, so a FREE-only credit returns a finite loss instead of raising
+(`test_local_arm_trains_through_the_continual_step`). (2) Each train loader's
+`RandomSampler` owns a generator seeded `config.seed + task_id`, so a credit that
+draws from the global RNG (PEPITA's feedback matrix) cannot change the data order
+(`test_train_order_is_seeded_independently_of_model_rng`). Backprop read 0.926
+before this fix and 0.839 after: a 9 pp data-order swing, so a single row is a
+coordinate. `CLConfig.lr` and `si_xi` now reach every factory
+(`test_config_lr_reaches_every_credit_arm`). The ladder gate is
+`test_plasticity_ladder.py` (promote only on two seeds; a control at chance
+invalidates the run).
 **Landed 2026-11-16 (T6):** lock 7's instrument control and learning control
 (`tests/property/test_memory_frontier.py`: `c` within 10 % of the declared 4.1 at
 the registered width/batch, plain-backprop share ≥0.5, and L=8 at the floor),
@@ -909,6 +941,8 @@ not scheduled, however cheap.
 | 2026-11-16 | P2 | composed pilot at the registered point: controls, four arms, decomposition | 3 seeds × 4 arms + 3 calibration + 2 control cells | c at the point (10 %); learning floor at L=8; binding share; activations/peak; fwd-eq | L=32, B=8192, W=1024, fp32, CIFAR-10 10k/10k, 200 steps, RTX 3080 10 GiB | **c=4.125 (0.0 % spread), gate green (0.941), learning PASS (0.419 vs 0.409); four arms at chance at L=32** | T6 ✅ |
 | 2026-11-16 | P2 | composed-path memory of the hybrid | 1 cell | activation set vs the checkpointed arm | same point, one seed | **defect: hybrid 3249 MB vs ckpt 1637 MB (1.98×); mechanism = the pipeline's eager store-all forward** | T6b |
 | 2026-11-16 | P2 | depth-rung trainability of the plain stack | 1 seed × 4 checkpoints + 4 arms | val_acc and loss vs the L=8 floor | L=32, W=1024, B=8192, 200→1000 steps | **coordinate: loss pinned at 2.2132, all arms 0.100; L=8 = 0.419 → re-pose (norm/init) before any depth claim** | T6c |
+| 2026-11-16 | P2 | C1 apparatus defects: credit label channel and data-order seed | 2 cells + 2 defect probes | task-1 accuracy and backprop at LR 1e-3 | SplitMNIST batch 1, W=256, 30k steps/5 tasks, 1 seed | **defects found and fixed** — local scored 0.030 on task 4 under task-local labels (0.964 on task 1 alone after); backprop swung 0.926→0.839 under the data-order seed | C1 ✅ |
+| 2026-11-16 | C | batch-1 plasticity ladder: local (PEPITA) vs exact gradient | 8 cells (2 arms × 3 LR + 2 seeds) | 2000 held-out samples/task (1 σ = 0.011); floor 0.55 | SplitMNIST, batch 1, 1 epoch/task, W=256, RTX 3080 10 GiB | **local 0.945 / 0.947 at LR 1e-3 on two seeds**; control 0.839 / 0.893; forgetting 0.038/0.036 vs 0.145/0.091; **verdict: promote** (coordinate, n=1; best at the lower edge) | C1 ✅ |
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
 | — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T6a (blocked on T6b/T6c) |
 | — | B | routing: local vs STE+aux; bias | — | acc @ matched walltime; bias vs declared reference | — | — | B1 |
@@ -926,18 +960,19 @@ trigger and a re-open command**; **a surprise that opens a new question (§0.2)*
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **B** routing | does the STE-gap grow with discrete-op count? | hours (4-op ladder) | unprobed; STE already implemented |
-| 2 | **C** streaming | does local learn at batch 1 at all? | hours (3+1 ladder) | unprobed; runner + arms exist |
+| 1 | **C2** retention | does local × EWC retain the stream at matched state? | hours (3 λ + 1 confirmation, ~35 min) | C1 promoted; ladder ready at the frozen LR |
+| 2 | **B** routing | does the STE-gap grow with discrete-op count? | hours (4-op ladder) | unprobed; STE already implemented |
 | 3 | **E** atlas | what *is* each estimator's bias/variance at matched compute? | hours (lite) + 1 session | coordinates declared; no table |
 | 4 | **D** substrate | parity on a constrained substrate with less state? | hours (3+1 ladder) | models exist; no matched row |
 | 5 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
 | 6 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
 
-Why A dropped from 1 to 5: its instrument is done, but its claim is two
-hours-scale defects away and its treatment arm is unvalidated (the hybrid learns
-worse than its own trunk rule at L=8). B, C and E are cheaper, unprobed, and each
-can cancel a track outright. **A is not abandoned** — it is the nearest claim and
-keeps its next rung in the top three as soon as T6b/T6c are done.
+Why C moved to 1: its plasticity screen promoted (0.945 / 0.947 on two seeds),
+so retention is the next decision and it reuses the frozen LR the ladder wrote.
+Why A stays at 5: its instrument is done, but its claim is two hours-scale
+defects away and its treatment arm is unvalidated (the hybrid learns worse than
+its own trunk rule at L=8). **A is not abandoned** — it keeps its next rung in
+the top three as soon as T6b/T6c are done.
 
 **Refused / re-open ledger (append-only; a refusal is not a deletion).**
 
@@ -983,29 +1018,30 @@ box, trigger, and command. The surprise budget may pick one per session.
 ---
 ## 16. Handoff contract
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
-- **Start order is the portfolio rank (§14), not a DAG.** Session 1 runs B1, C1,
-  E-lite in parallel; session 2 runs D1 and A's two blockers; session 3 runs F1
-  and T6a. T5 is a standing side track. T7/T8/T9 stay gated on B1/C1/trigger.
+- **Start order is the portfolio rank (§14), not a DAG.** C1 landed; the next
+  session runs C2 (retention), B1 and E-lite in parallel; then D1 and A's two
+  blockers; then F1 and T6a. T5 is a standing side track. T7/T8/T9 stay gated on
+  B1/C1/trigger.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
   only in the log.
-- **Live from 2026-11-16:** T6's pilot is landed and it found the two blockers a
-  registration would have hidden. The tracker's next three rungs are the cheap
-  screens (routing, streaming, estimator atlas), then the substrate probe, then
-  T6b/T6c and T6a. T6b is small and known: let a credit own its free pass so the
-  composed path stops paying the pipeline's store-all forward (the strict xfail
-  in `test_memory_frontier.py` flips when it lands). T6c then re-poses the claim
-  geometry on a trainable one (LayerNorm, c≈2, or a depth-stable init) and
-  re-runs `python -m computronium.validation.memory_frontier` at L=32 before
-  T6a writes the threshold. The hybrid's trunk runs the same lockstep contrast
-  the T3 kernel measured, its head is `BackpropCredit` on a `detach`ed boundary,
-  and the store-all hybrid is the parity reference (§18 T3b).
+- **Live from 2026-11-16:** C1 promoted. The next rung is **C2**, the EWC-strength
+  ladder at the frozen LR (`python -m computronium.validation.plasticity_ladder
+  --stage consolidation --device cuda`, ~35 min, 8 cells); its target is lower
+  forgetting/BWT than the backprop × EWC control at matched per-step cost, not
+  another plasticity number. B1 and E-lite remain the unprobed cheap screens.
+  A's blockers (T6b composed-path memory, T6c trainable depth) are unchanged:
+  T6b lets a credit own its free pass so the strict xfail in
+  `test_memory_frontier.py` flips; T6c re-poses the claim geometry on a
+  trainable one (LayerNorm, c≈2, or a depth-stable init) and re-runs
+  `python -m computronium.validation.memory_frontier` at L=32 before T6a writes
+  the threshold.
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v12 start: B1 (routing screen), C1 (plasticity screen), E-lite (estimator atlas) in parallel; then D1 (substrate probe) and A's blockers T6b/T6c; then F1 (composition screen) and T6a. T5 is a standing side track; T7/T8 fire on B1/C1 promotion, T9 on trigger. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v14 start: **C2** (retention ladder at the frozen LR), B1 (routing screen), E-lite (estimator atlas) in parallel; then D1 (substrate probe) and A's blockers T6b/T6c; then F1 (composition screen) and T6a. C1 promoted on 2026-11-16. T5 is a standing side track; T7/T8 fire on B1/C1 promotion, T9 on trigger. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
@@ -1339,6 +1375,40 @@ box, trigger, and command. The surprise budget may pick one per session.
   budget (§4.1). The epoch peak keeps a param-sized gradient floor (~2.1 GB at
   L=64) that checkpointing cannot remove — that is the activation term's bend,
   not the whole peak's.
+
+### C1 — batch-1 plasticity ladder (✅ landed 2026-11-16)
+- `validation/plasticity_ladder.py` — the C1/C2 runner. `LadderCell` carries
+  metric, BWT, forgetting, consolidation state and walltime; `LadderReport` the
+  box, rulers and verdict. Stage 1 sweeps LR over `local`/`backprop`; stage 2
+  sweeps EWC λ over `local_ewc`/`backprop_ewc` at the frozen LR. `_emit` appends
+  every finished cell to `*.cells.jsonl`, so a kill keeps evidence. The verdict
+  is a predicate (`_verdict`), not prose: promote only when local clears the
+  floor on the ladder seed **and** the confirmation seed; a control below the
+  floor is `invalid-control`.
+- `core/continual/arms.py` — `create_local_arm` (PEPITA + Euclidean),
+  `create_local_ewc_arm` (PEPITA + EWC), `create_backprop_ewc_arm` (exact
+  gradient + EWC). Every factory takes `lr`; `create_si_arm` also takes `xi`.
+  `_mlp_stack` is the one substrate/geometry source, so arms differ only in
+  credit/update.
+- `core/continual/runner.py` — a builder table (`_ARM_BUILDERS`) replaces the
+  arm-name chain; consolidation, SI, LwF and replay dispatch on the `extra`
+  components, so any credit composes with any consolidation. Train loaders own
+  a `RandomSampler` generator seeded `config.seed + task_id`; eval loaders use
+  256 so the 2000-sample ruler is not paid at batch 1. `_finalize_metrics`
+  reads `state_bytes()` from the update/SI object.
+- `core/continual/training.py` — the credit-facing `SystemState.y` is the
+  **global** class index; the masked loss still uses the local label.
+  `_finalize_output` stores the loss it computes.
+- **What the code actually did.** The first ladder run was a defect probe: local
+  scored 0.405/0.426/0.445/0.652/0.030 per task because PEPITA's second pass read
+  task-local labels and trained the task-0 logits for every task. With the
+  global offset, task 1 alone reached 0.964. The second run exposed a
+  data-order confound: PEPITA's lazy feedback draw advanced the global RNG, so
+  the control saw a different order (backprop 0.926 → 0.839 after the sampler
+  seed). The third run is the recorded result: **local 0.945 / 0.947 at LR 1e-3
+  on two seeds**, control 0.839 / 0.893, floor 0.55 → promote. Cost 220–287 s
+  per cell at batch 1. The best local point is the ladder's lower edge; the
+  recorded optimum is therefore a bound, not an interior optimum.
 
 ## 19. Primitive admission queue (cost-priced, ticket-bound)
 **Framing.** `more primitives` is not progress (§14). Each row below names the

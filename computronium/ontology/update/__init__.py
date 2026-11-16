@@ -1495,6 +1495,14 @@ class ElasticConsolidationUpdate:
         self._fisher = {k: v.clone() for k, v in state.get("fisher", {}).items()}
         self._baseline = {k: v.clone() for k, v in state.get("baseline", {}).items()}
 
+    def state_bytes(self) -> int:
+        """Bytes of consolidation state carried beside the parameters."""
+        return sum(
+            t.numel() * t.element_size()
+            for state in (self._old_params, self._fisher, self._baseline)
+            for t in state.values()
+        )
+
 
 #: The role name the role-split factory declares for the output projection.
 #: A factory cannot know a parameter name before the geometry exists, so the

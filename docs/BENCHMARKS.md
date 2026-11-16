@@ -158,6 +158,47 @@ decomposition; forward-equivalents measured against one forward pass of the same
 batch. The pilot is a screen — its accuracy rows are coordinates at 200 steps,
 never a claim.
 
+### 2.5 The batch-1 plasticity ladder (C1)
+
+Two apparatus defects blocked this screen; both are fixed and locked
+(CORRECTIONS 9–10). Measured on SplitMNIST at batch 1, one epoch per task, five
+tasks in the fixed order, W=256, 2000 held-out samples per task, seed 41 plus a
+disjoint confirmation seed 42 (RTX 3080 10 GiB, 2026-11-16):
+
+| arm | LR | mean final acc | last task acc | BWT | forgetting | s |
+|---|---|---|---|---|---|---|
+| local (PEPITA) | 1e-3 | 0.945 | 0.970 | −0.047 | 0.038 | 259 |
+| backprop | 1e-3 | 0.839 | 0.967 | −0.181 | 0.145 | 242 |
+| local | 1e-2 | 0.882 | 0.979 | −0.134 | 0.107 | 228 |
+| backprop | 1e-2 | 0.803 | 0.986 | −0.235 | 0.188 | 220 |
+| local | 1e-1 | 0.569 | 0.982 | −0.529 | 0.423 | 258 |
+| backprop | 1e-1 | 0.827 | 0.983 | −0.206 | 0.165 | 233 |
+| local (confirm) | 1e-3 | 0.947 | 0.967 | −0.045 | 0.036 | 260 |
+| backprop (confirm) | 1e-3 | 0.893 | 0.968 | −0.114 | 0.091 | 287 |
+
+**Verdict: promote.** Local clears the pre-registered floor (0.55, 4.5 σ above
+chance) on both seeds, and the control clears it too. C moves to its retention
+protocol (C2, the EWC-strength ladder at frozen LR); it is not refused.
+
+**What the defect probes measured.** (a) With the credit's second pass reading
+task-local labels, local scored 0.405/0.426/0.445/0.652/**0.030** per task on
+task-local geometry; on task 1 alone after the label-channel fix it reached
+0.964. The label channel, not the algorithm, produced the chance-level cell.
+(b) Before the data order got its own seeded generator, backprop at LR 1e-3 read
+0.926; with the seeded order it read 0.839 — a 9 pp swing, so a single row is a
+coordinate, never a claim.
+
+**Box and rulers.** Task/architecture fixed (SplitMNIST, 784-256-256-10,
+`init_scale=0.1`, no dropout); the knob is LR ∈ (1e-3, 1e-2, 1e-1), EWC λ fixed
+at 1000 for the composed arms, epochs/task = 1, batch = 1. The ladder's best
+local point is its lower edge (1e-3), so the box is not exhausted: a downward
+extension (3e-4, 1e-4) is the next rung before any *optimum* is named. The
+accuracy ruler is a 2000-sample held-out split (1 σ = 0.011); the cost is the
+measured cell walltime.
+
+Command: `uv run python -m computronium.validation.plasticity_ladder --stage
+plasticity --device cuda`
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -170,3 +211,7 @@ never a claim.
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
+| Batch-1 plasticity ladder gate (C1) | `tests/unit/validation/test_plasticity_ladder.py` | 9 s |
+| Credit label channel carries the task offset | `tests/unit/core/test_cl_credit_arms.py` | 10 s |
+| Data order is seeded independently of model RNG | `tests/unit/core/test_cl_credit_arms.py` | 9 s |
+| `CLConfig.lr` reaches every arm's update | `tests/unit/core/test_cl_credit_arms.py` | 9 s |
