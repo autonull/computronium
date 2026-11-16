@@ -336,6 +336,73 @@ The defect probe (the chained, end-of-training cells at LR 1e-2) is kept as
 `results/t93_b1/defect_probe/`; it is evidence of the apparatus defects, never
 a ladder.
 
+### 2.8 The estimator atlas (E1)
+
+The screen asked what each estimator kind's bias/variance/compute coordinates
+are at matched compute on one task. It is not a competition: the table is the
+artifact, publishable whether or not an arm wins, and it makes later estimator
+comparisons commensurable.
+
+**The reference, and what "bias" means.** The exact arm (`BackpropCredit`) is
+the declared reference; a finite-difference probe on a small net validates the
+autograd reference itself at cos = 1.0000. A gradient-approximation arm's angle
+is its update direction against that reference. An objective-local arm declares
+`bias_reference="none"`: its angle is update-direction alignment, never bias.
+
+**The fair chance is per arm, not one shared LR.** A single LR is not a fair
+box: at 1e-3 the FA default's update is ~500× smaller than the exact gradient
+and the arm collapses to 0.093; at 1e-1 the hybrid's local trunk diverges to
+0.097. Each arm therefore gets a 3-point LR ladder (1e-3/1e-2/1e-1) at ladder
+seed 59, a confirmation at the best point (seed 60), and disjoint claim seeds
+61/62/63. The selected LR is part of the row; compute is matched (600 batches
+of 32, one epoch, the same architecture). This is the apparatus defect found
+and fixed in this session (CORRECTION 16).
+
+Measured on MNIST quick mode (feedforward 784-32-10, Linear+ReLU, batch 32, 600
+batches, one epoch, CPU, 2026-11-16); held-out full test split (10,000 samples,
+1σ = 0.3 pp), chance 0.1, floor 0.25:
+
+| arm | kind | bias ref | LR | angle (mean ± σ) | magnitude (mean ± σ) | val acc (mean ± σ) | fwd-eq | s/epoch |
+|---|---|---|---|---|---|---|---|---|
+| gradient | exact | exact_tractable | 1e-2 | +1.000 ± 0.000 | 1.000 ± 0.000 | 0.914 ± 0.006 | 6 | 6.8 |
+| random_projections | gradient_approx | exact_tractable | 1e-1 | +0.125 ± 0.079 | 0.002 ± 0.000 | 0.821 ± 0.007 | 6 | 6.4 |
+| pepita | objective_local | none | 1e-2 | +0.972 ± 0.001 | 1.604 ± 0.110 | 0.923 ± 0.003 | 6 | 6.5 |
+| hybrid | hybrid | none | 1e-2 | +0.185 ± 0.007 | 0.395 ± 0.020 | 0.827 ± 0.007 | 6 | 6.3 |
+| local_goodness | objective_local | none | 1e-1 | +0.143 ± 0.109 | 1.211 ± 0.308 | 0.816 ± 0.089 | 6 | 7.2 |
+| pc_alm | gradient_approx | exact_tractable | 1e-3 | +0.071 ± 0.029 | 0.040 ± 0.006 | 0.105 ± 0.013 | — | 8.1 |
+
+**Verdict: atlas, not a promotion or a refusal.** The reference control (FD vs
+autograd 1.0000) and the learning control (exact arm 0.914 ± 0.006, floor 0.25)
+both pass, and every measured arm updates. The table is the artifact.
+
+**What the coordinates say.** PEPITA's update aligns with the exact direction
+(0.972 ± 0.001) and is 1.60× its scale; its accuracy is +0.9 pp above the exact
+arm (0.923 vs 0.914), which is 1.3σ at this ruler and is a coordinate, not a
+claim. The FA default's update is 0.002× the exact scale with alignment
+0.125 ± 0.079 — the default feedback scale is an optimisation knob, not a bias
+claim, and the arm still learns 0.821. Forward-Forward (`local_goodness`)
+aligns 0.143 and has the widest seed variance (0.089 in accuracy, 0.308 in
+scale), so its mean is a coordinate at n=3, not an ordering. The hybrid aligns
+0.185 and is stable across seeds (0.007 accuracy, 0.020 scale), but at 0.827 it
+is not a win over its PEPITA trunk (0.923): the lockstep trunk/head split is
+the mechanism, not a free accuracy gain. The structural fwd-eq ruler is 6
+(2 × `max_steps`) for every settle-based arm; PCALM's is `None` because its
+FLOP counter fell back to parameter counting (1.0), an honest gap, never a
+matched-budget claim.
+
+**The one refusal row.** PC-ALM is outside its card's validated limit at this
+box: the card validates depth 100, and at depth 2 the settle diverges at LR
+1e-2/1e-1 (NaN at step 1/2) and reads chance at 1e-3 (0.105 ± 0.013; one seed
+refused outright). The row is a **regime-mismatch/refusal**, not a verdict on
+the algorithm. The trigger is a depth-100 box with its validated init; the
+re-open command is this module with that box. No E2 primitive is admitted by
+this table: the empty unbiased cells (score-function, forward-mode, zeroth
+order) are visible, not pulled.
+
+Command: `uv run python -m computronium.validation.estimator_atlas --device
+cpu`; full rung: `... --full`; replay from the cell log without training:
+`... --replay`. The per-seed table is `results/t93_e1/estimator.md`.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -344,6 +411,8 @@ a ladder.
 | Stub detector (nudged ≠ free) | `tests/property/test_kernel_truth_lock.py` | 9 s |
 | Decomposition sums to peak; measured c | `tests/property/test_memory_binding.py` | 10 s (CUDA) |
 | Every credit row declares its estimator coordinate | `tests/property/test_estimator_lock.py` | 9 s |
+| Estimator atlas: six declared coordinates, lite/full, control/refusal verdicts | `tests/unit/validation/test_estimator_atlas.py` | 9 s |
+| Kill-safe atlas cell log: resume/replay and dedup | `tests/unit/validation/test_estimator_atlas.py` | 1 s |
 | Lockstep ≡ store-all, per layer, `atol=0`; peak flat in depth | `tests/property/test_lockstep_parity.py` | 9 s (4 s CUDA) |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |

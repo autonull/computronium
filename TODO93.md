@@ -1,17 +1,40 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v16 — B1 refuses at its depth axis; the substrate ladder is the next screen. Apparatus phase, not adjudication.**
-T1 + T4a + T4c + T4b + T3 + T3b + T6 landed: the truth pass, the memory
-decomposition, the ladder runner, the checkpointed baseline, the lockstep
-two-pass rung, the hybrid, and the composed pilot. Measured: **c≈4.1** (not 1),
-lockstep **flat in depth** (66.3 MB FF / 58.5 MB PEPITA), hybrid trunk **flat at
-81.0 MB**, pilot controls **pass** (c = 4.125, spread 0.0 %; L=8 learns 0.419),
-and the pilot's two blockers (**T6b** composed-path memory, **T6c** depth
-trainability) are named and locked. v12 changes what the plan *is*: a portfolio
-of six capability tracks ordered by information per session, not a serial DAG
-through one publishable unit. **v13 states the phase's purpose: grow and
-stabilise the apparatus and record observations; do not adjudicate algorithms
-(§0.5).** B1's routing screen landed first because it was the cheapest that
-could cancel a whole track; it has now refused that track at its box.
+**Status:** 2026-11-16 · **v17 — E1's estimator atlas landed; D1's substrate ladder is the next screen. Apparatus phase, not adjudication.**
+T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 landed: the truth
+pass, the memory decomposition, the ladder runner, the checkpointed baseline,
+the lockstep two-pass rung, the hybrid, the composed pilot, the routing
+refusal, the plasticity ladder, the retention ladder, and the estimator atlas.
+Measured: **c≈4.1** (not 1), lockstep **flat in depth** (66.3 MB FF / 58.5 MB
+PEPITA), hybrid trunk **flat at 81.0 MB**, pilot controls **pass** (c = 4.125,
+spread 0.0 %; L=8 learns 0.419), and the pilot's two blockers (**T6b**
+composed-path memory, **T6c** depth trainability) are named and locked. v12
+changes what the plan *is*: a portfolio of six capability tracks ordered by
+information per session, not a serial DAG through one publishable unit. **v13
+states the phase's purpose: grow and stabilise the apparatus and record
+observations; do not adjudicate algorithms (§0.5).** B1's routing screen landed
+first because it was the cheapest that could cancel a whole track; it has now
+refused that track at its box. E1 has now produced its atlas; D1 is the next
+probe of a promise that has never had a matched row.
+
+**E1 landed and closed (2026-11-16).** The estimator atlas ran its E-lite
+screen (4 arms × 1 seed) and then the full rung (6 arms × 3 disjoint seeds) at
+a matched compute box: MNIST quick mode, 600 batches of 32, one epoch,
+feedforward 784-32-10, CPU. Each arm got its own 3-point LR viability ladder
+(1e-3/1e-2/1e-1) at ladder seed 59, a confirmation at the best point (seed
+60), and claim seeds 61/62/63. The exact arm reads **0.914 ± 0.006** (floor
+0.25) and the FD reference validates autograd at **1.0000**, so both controls
+pass. The table is the artifact: PEPITA aligns **0.972 ± 0.001** at **1.60×**
+the exact scale and reads **0.923 ± 0.003**; FA reads **0.125 ± 0.079** at
+**0.002×** and **0.821 ± 0.007**; the hybrid reads **0.185 ± 0.007** at
+**0.395 ± 0.020** and **0.827 ± 0.007**; Forward-Forward reads **0.143 ±
+0.109** at **1.211 ± 0.308** and **0.816 ± 0.089**. PC-ALM is outside its
+card's validated limit at depth 2: it refuses at LR 1e-2/1e-1 (settle NaN) and
+reads chance at 1e-3 (**0.105 ± 0.013**, one seed refused), a recorded
+regime-mismatch with a depth-100 trigger, not a verdict. One apparatus defect
+was found and fixed (CORRECTION 16): a shared LR collapsed FA at 1e-3 and
+diverged the hybrid at 1e-1, so the per-arm ladder is the fair chance.
+**E1 is closed as an atlas, not promoted or refused; the empty unbiased cells
+(score-function, forward-mode, zeroth order) are visible, not pulled.**
 
 **B1 landed and refused (2026-11-16).** The routing ladder measured the STE
 gap's trend over 1/2/4/8 parallel averaged selections: **0.819 → 0.660
@@ -23,9 +46,8 @@ does not compound the surrogate's bias at this box, B2 is not run, and the
 trigger is recorded in §14. Three apparatus defects were found and fixed on the
 way (CORRECTIONS 13–15): a chained stack measured its own depth, an
 end-of-training probe measured the one-hot limit, and the probe split drew its
-own task. The remaining cheap screens are streaming (C3) and the estimator atlas
-(E-lite); D's substrate ladder is the next probe of a promise that has never
-had a matched row. Everything
+own task. The remaining cheap screen is streaming (C3); D's substrate ladder is
+the next probe of a promise that has never had a matched row. Everything
 already built — the instrumented decomposition, the lockstep kernels, the
 hybrid, the evidence store, the 6-axis generator, the identity cards — is a
 **reused asset** in the new tracks, not sunk cost. v1 (composition-wide search,
@@ -102,15 +124,16 @@ shrinks instead of accumulating.
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → refuse B with a trigger |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → refuse C (retention undefined) |
 | **D. Substrate-native training** | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | ternary/memristive + `energy_minimization`: 3-point `max_steps` ladder (5/10/20) + confirmation | hours–1 session | cannot train at any ladder point, or no state saving at the best → park D with a reversal trigger |
-| **E. Estimator atlas** | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | never refused — it is the artifact; stop at 6 arms |
+| **E. Estimator atlas** ✅ | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | **closed as an atlas (2026-11-16)**: controls pass, table is the artifact; PC-ALM depth-100 trigger, empty unbiased cells visible but not pulled |
 | **F. Does composition matter?** | Say whether a 6-axis composition beats the best single-axis default, by ≥δ | best-of-single-axis at matched budget | 50 legal cells on one cheap task, then a ladder on the best-looking family | 1 session | no family ≥δ **after its own ladder** → refuse composition with a trigger, and E/D carry the plan |
 
 **The rule that changes the plan.** *No ticket is scheduled ahead of a cheaper
 screen that could cancel it.* T6b is real and worth an hour — but it is
 downstream of "does the hybrid learn at all", which costs an hour. D is the
-project's most distinctive promise and has never been probed. B and C can each
-delete a whole track for the price of a pilot. **Session order is therefore B, C,
-D first, in parallel; A's blockers and E follow; F runs when the harness is idle.**
+project's most distinctive promise and has never been probed. B, C, and E have
+each now spent their cheap screen: B refused its depth axis, C closed at its
+saturation point, and E closed as an atlas. **Session order is therefore D
+first, then A's blockers, then F; the closed tracks' triggers stay in §14.**
 
 **Ranking, recomputed every session (§14):** expected decision value ÷ measured
 cost, with the cost taken from the last pilot of that track, never guessed. A
@@ -266,16 +289,16 @@ check, not a claim, and each fails when its mechanism is removed.
 
 **Next (three sessions, not a DAG).**
 
-1. **Screens, in parallel:** **B** (routing STE-gap over 4 stacked-op points) and
-   **E-lite** (4 estimator arms × 1 task × 1 seed) — each runs its rung 0 and
-   rung 2, then writes a verdict or a laddered refusal; each costs hours, not
-   sessions. C1 and C2 are closed; C2 closed at its saturation point, so C is
-   not a screen any more.
-2. **Structure:** **D** (ternary/memristive + `energy_min` at 10 steps, matched
-   digital baseline) and **A**'s two blockers (T6b composed path, T6c trainable
-   depth), whichever the screens promoted.
-3. **Compose:** **F** (50 legal cells vs best single-axis default) and **T6a**,
-   now that A has a mechanism and a trainable point.
+1. **Structure first:** **D** (ternary/memristive + `energy_min` at 10 steps,
+   matched digital baseline) — the project's most distinctive promise and the
+   only unprobed track. B refused, C closed, and E closed as an atlas, so none
+   of them is a screen any more.
+2. **A's blockers:** T6b (credit owns its free pass) and T6c (trainable depth),
+   whichever D promotes; then **F** (50 legal cells vs the best single-axis
+   default) and **T6a**.
+3. **Triggers, not tickets:** PC-ALM at its depth-100 box, the empty unbiased
+   cells (score-function, forward-mode, zeroth order), C's 5-seed retention
+   protocol, and B's chained/Gumbel/k≥4 re-open are all in §14.
 
 T6a is **not** registered before step 3: a threshold written while the treatment's
 memory mechanism is absent on the claim path would be decided by a defect. T5
@@ -742,10 +765,10 @@ record of what exists.
 | **C1 ✅** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed | C | landed 2026-11-16 | local **0.945 / 0.947** at LR 1e-3 on 2 seeds, control 0.839 / 0.893, floor 0.55 → **promote to C2**. Best point is the lower edge; a downward extension (3e-4/1e-4) is the next rung if an optimum is claimed |
 | **C2 ✅** | **Retention ladder**: 3-point EWC-strength ladder (λ = 1/10/100) at the frozen LR, local × EWC vs backprop × EWC, matched per-step cost | C | landed 2026-11-16 | local 0.952 / 0.015 vs control 0.963 / 0.020 at λ=100 (gain +0.005 < δ 0.032); confirmation 0.951 / 0.016 vs 0.958 / 0.024 → **close C at the saturation point**; task-start anchor defect fixed (CORRECTION 12) |
 | **D1** | **Substrate ladder**: ternary/memristive + `energy_min` at `max_steps` 5/10/20 vs digital backprop; state per step | D | hours–1 session | parity with less state at the best point → D2; no training at any point → park with a trigger |
-| **E1** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | hours (lite) + 1 session | a table with a declared reference per arm |
+| **E1 ✅** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | landed 2026-11-16 | 18 claim cells (6 arms × 3 seeds) + 22 ladder/confirmation cells; controls pass; table is the artifact; PC-ALM depth-2 regime mismatch/refusal with a depth-100 trigger |
 | **F1** | **Composition ladder**: 50 legal cells vs the best single-axis default, then a 3-point ladder on the best-looking family | F | 1 session | family ≥δ after its ladder → F2; flat everywhere → composition refusal with a trigger |
 | T5 | P1 scoped: 3 publishables + the hybrid trunk rule | side | 1–2 sessions | rows with backend path, dtype, optimizer, σ |
-| T7 | `SurrogateCredit` + `ForwardTangentCredit` (+ score/zeroth controls) | E | 1 session | only after E1 promotes |
+| T7 | `SurrogateCredit` + `ForwardTangentCredit` (+ score/zeroth controls) | E | 1 session | parked: E1 closed as an atlas, not promoted |
 | T8 | Lift `SynapticIntelligence`; `CascadeSynapsePlasticity` | C | 1–2 sessions | after C1 promotes |
 | T9 | Temporal taxonomy (`EligibilityProp`, UORO, RTRL ref) | parked | trigger | MPU1 closes or a sequence-length axis enters |
 
@@ -759,11 +782,11 @@ seed at the best point. A single low cell at one setting is a defect probe
 frees the portfolio slot, and it never deletes the idea.
 
 **Two falsifiers, two numbers, restated.** The implementation falsifiers are
-closed (T1–T3b, T6), and **B1 refused its depth axis** with its trigger kept.
-What remains is a **portfolio of cheap falsifiers**: E1, D1, F1 can each cancel a
-track for hours. The expensive falsifier (A's claim) is
-deliberately last, because it is the only one that needs five paired seeds on a
-real task.
+closed (T1–T3b, T6), **B1 refused its depth axis** with its trigger kept, and
+**E1 closed as an atlas** with its table. What remains is a **portfolio of cheap
+falsifiers**: D1, F1, and A's two blockers can each cancel a track for hours.
+The expensive falsifier (A's claim) is deliberately last, because it is the only
+one that needs five paired seeds on a real task.
 
 ### 8.1 Remaining work, ordered (start here next session)
 
@@ -776,13 +799,13 @@ real task.
 | 5 ⛔ | **B — routing ladder** | `computronium/validation/routing_ladder.py`; landed 2026-11-16 | **refused at this box**: gap 0.819 → 0.660 (−0.159) at τ=0.25, −0.037 on the confirmation seed vs δ=0.05; reference FD 0.013; trigger in §14 |
 | 6 ✅ | **C — plasticity ladder** | landed 2026-11-16 | local 0.945/0.947 at LR 1e-3 on two seeds; control 0.839/0.893; floor 0.55 → **promote to C2** (retention); best point is the ladder's lower edge, so the downward extension is the next rung |
 | 7a ✅ | **C2 — retention ladder** | `results/t93_c1/consolidation.json` (replay: `... --stage consolidation --replay`) | **closed at the saturation point λ=100**: local forgets 0.005 less than the control, below δ=0.032, at 1.07× cost; confirmation seed repeats |
-| 7b | **E — estimator atlas** (next) | `run_parity` portfolio + the 6 estimator coordinates; §2 | one table: bias, variance, forward-equivalents, matched budget, declared reference |
-| 8 | **D — substrate ladder** (after E) | memristive/ternary substrate + `energy_minimization` at `max_steps` 5/10/20; §1 | parity with less state at the best point → D2; nothing trains → park with a trigger |
+| 7b ✅ | **E — estimator atlas** | `computronium/validation/estimator_atlas.py`; E-lite then `--full`; replay from the cell log | **landed 2026-11-16**: controls pass (FD 1.0000; exact 0.914 ± 0.006); 6 arms × 3 seeds at a matched box with a per-arm LR ladder; table is the artifact; PC-ALM depth-2 regime mismatch/refusal with a depth-100 trigger |
+| 8 | **D — substrate ladder** (next) | memristive/ternary substrate + `energy_minimization` at `max_steps` 5/10/20; §1 | parity with less state at the best point → D2; nothing trains → park with a trigger |
 | 9 | **A — T6b + T6c** | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
 | 10 | **F — composition ladder** | survey harness, 50 legal cells + a family ladder, cheap task; §13 | ≥δ above the best single-axis default after the ladder → F2; flat → refusal |
 | 11 | **A — T6a** | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
-| gate | **T7 / T8 / T9** | E1 / C1 / trigger | not work until the gate fires |
+| gate | **T7 / T8 / T9** | E1 closed (not promoted) / C1 promoted / trigger | T7 stays parked (E did not promote); T8's trigger fired but is a side track; T9 waits on MPU1 or a sequence axis |
 
 **What the next session must not re-derive:** the decomposition API
 (`EpochResource.{params,optimizer,activations,auxiliary,cpu_rss}_mb`,
@@ -800,9 +823,15 @@ threaded; the store-all reference is written from the equations in
 `test_hybrid_parity.py`), the pilot (`validation/memory_frontier.py`:
 `PilotPoint.activation_mb/peak_mb/affordable`, `build_arm` with one shared
 geometry/init/update and `checkpoint_segments=isqrt(L)`, `run_pilot` writing
-`results.json` + `appendix.md`, `_measure` as the one cell loop), or the refusal
-list (FF/SNN contrastive are unavailable with triggers; hybrid refuses
-non-feedforward geometry).
+`results.json` + `appendix.md`, `_measure` as the one cell loop), the atlas
+(`validation/estimator_atlas.py`: `_build_arm` reads each credit's identity
+card, `_reference_delta` is the exact arm's one-step reference, `_train` takes
+the per-arm LR, `_run_cell`/`_refusal_cell` write the kill-safe log, and
+`replay_estimator_atlas` recomputes the table without training; the per-arm LR
+ladder is 1e-3/1e-2/1e-1 at seed 59 with confirmation 60 and claim seeds
+61/62/63), or the refusal list (FF/SNN contrastive are unavailable with
+triggers; hybrid refuses non-feedforward geometry; PC-ALM's card validates
+depth 100, so a shallow chance cell is a regime-mismatch, not a refusal).
 ---
 ## 9. Locks (the plan's culture, applied to itself)
 1. **Memory-truth lock** — measured peak per backend matches its declared
@@ -985,10 +1014,9 @@ not scheduled, however cheap.
 | 2026-11-16 | P2 | C1 apparatus defects: credit label channel and data-order seed | 2 cells + 2 defect probes | task-1 accuracy and backprop at LR 1e-3 | SplitMNIST batch 1, W=256, 30k steps/5 tasks, 1 seed | **defects found and fixed** — local scored 0.030 on task 4 under task-local labels (0.964 on task 1 alone after); backprop swung 0.926→0.839 under the data-order seed | C1 ✅ |
 | 2026-11-16 | C | batch-1 plasticity ladder: local (PEPITA) vs exact gradient | 8 cells (2 arms × 3 LR + 2 seeds) | 2000 held-out samples/task (1 σ = 0.011); floor 0.55 | SplitMNIST, batch 1, 1 epoch/task, W=256, RTX 3080 10 GiB | **local 0.945 / 0.947 at LR 1e-3 on two seeds**; control 0.839 / 0.893; forgetting 0.038/0.036 vs 0.145/0.091; **verdict: promote** (coordinate, n=1; best at the lower edge) | C1 ✅ |
 | 2026-11-16 | C | consolidation-strength ladder: local × EWC vs backprop × EWC | 8 cells (2 arms × 3 λ + 2 confirmation seeds) | 2000 held-out samples/task (1 σ = 0.011; forgetting σ = 0.016; δ = 0.032); floor 0.55; per-step cost ≤1.5× | SplitMNIST, batch 1, 1 epoch/task, W=256, frozen LR 1e-3, λ=1/10/100, RTX 3080 10 GiB | **at λ=100: local 0.952 / 0.015 vs control 0.963 / 0.020** (gain +0.005 < δ; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost 1.07×; λ ladder moves 0.6 / 2.2 pp (< δ) → **verdict: close at the saturation point** (coordinate, n=1 + confirmation) | C2 ✅ |
+| 2026-11-16 | E | estimator atlas: bias/variance/compute per kind | 18 claim cells (6 arms × 3 seeds) + 22 ladder/confirmation cells | full MNIST test split (1 σ = 0.3 pp); chance 0.1; floor 0.25; probe 256; FD tol 0.99 | MNIST quick, feedforward 784-32-10, batch 32, 600 batches, 1 epoch, per-arm LR 1e-3/1e-2/1e-1, CPU | **controls pass** (FD 1.0000; exact 0.914 ± 0.006); PEPITA 0.972 ± 0.001 / 1.60×, 0.923 ± 0.003; FA 0.125 ± 0.079 / 0.002×, 0.821 ± 0.007; hybrid 0.185 ± 0.007 / 0.395×, 0.827 ± 0.007; FF 0.143 ± 0.109 / 1.211 ± 0.308, 0.816 ± 0.089; PC-ALM depth-2 regime mismatch/refusal (0.105 ± 0.013, one seed refused) → **verdict: atlas, not a winner**; CORRECTION 16 | E1 ✅ |
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
 | — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T6a (blocked on T6b/T6c) |
-
-| — | E | estimator atlas: bias/variance/compute per kind | — | declared reference or `none`; variance; forward-eq | — | — | E1 |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
 | — | D | substrate-native training at matched accuracy | — | state per step; accuracy; dtype constraints | — | — | D1 |
 | — | F | does composition beat the best single-axis default? | — | ≥δ at matched budget | — | — | F1 |
@@ -1002,25 +1030,30 @@ trigger and a re-open command**; **a surprise that opens a new question (§0.2)*
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **E** atlas | what *is* each estimator's bias/variance at matched compute? | hours (lite) + 1 session | coordinates declared; no table |
-| 2 | **D** substrate | parity on a constrained substrate with less state? | hours (3+1 ladder) | models exist; no matched row |
-| 3 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
-| 4 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
+| 1 | **D** substrate | parity on a constrained substrate with less state? | hours (3+1 ladder) | models exist; no matched row |
+| 2 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers |
+| 3 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
 
+Why E is gone: E1 closed as an **atlas**, not a promotion or a refusal. The
+table is the artifact (exact 0.914 ± 0.006; PEPITA 0.972 alignment / 1.60×
+scale; FA 0.125 / 0.002×; hybrid 0.185 / 0.395×; FF 0.143 / 1.211×; PC-ALM a
+depth-2 regime mismatch). Its empty unbiased cells (score-function,
+forward-mode, zeroth order) are visible; E2 is not pulled by a cell that only
+needs a declaration. The PC-ALM depth-100 trigger and the re-open command carry
+the one refusal row.
 Why C is gone: C2 closed at its saturation point (λ=100; local 0.952 / 0.015
 vs control 0.963 / 0.020; gain below the 3.2 pp margin), so the retention
 question is answered at this box and its re-open probes carry the track.
 Why B is gone: B1 refused its depth axis (0.819 → 0.660, −0.159 on the ladder
 seed and −0.037 on the confirmation seed, vs δ=0.05), so B2 is not run and the
 trigger in §14 carries the track.
-Why E is first: the next cheapest screen that can cancel a track, with its
-coordinates already declared. Why D follows: the project's most distinctive
-promise, never probed. Why A stays third: its instrument is done, but its claim
-is two hours-scale defects away and its treatment arm is unvalidated (the hybrid
+Why D is first: the project's most distinctive promise, never probed, and its
+models already exist. Why A is second: its instrument is done, but its claim is
+two hours-scale defects away and its treatment arm is unvalidated (the hybrid
 learns worse than its own trunk rule at L=8). **A is not abandoned** — it keeps
 its next rung as soon as T6b/T6c are done. Why F is last: it reads the whole
 space, and a 6-axis comparison over a rejected axis set is premature until D/E
-say which axes are live.
+say which axes are live; E has now closed its axis, leaving D's.
 
 **Refused / closed / re-open ledger (append-only; a refusal or close is not a
 deletion).**
@@ -1032,6 +1065,7 @@ deletion).**
 | gradient × graph+instantaneous | one cell, dry-run gate | refused **by the gate**, not by a ladder | a differentiable graph operator exists | §0.3 graph probe; verify the absence is structural first |
 | **B — routing depth (refused at this box)** | τ = 0.25/0.5/1.0 at depth 2, then depth 1/2/4/8 at the best τ; parallel averaged selections, 8 experts, k=2, LR 1e-3, gap probed at steps 8/16/32 | **refuse** (gap 0.819 → 0.660, −0.159; confirmation −0.037 vs δ=0.05; reference FD 0.013; both ends above floor) | a **chained** stack at per-depth matched LR, the canonical full-support STE with Gumbel noise as the treatment, or k ≥ 4 experts | `--replay` on the cell log, or a fresh ladder with that box |
 | **C — consolidation strength (closed, not refused)** | λ = 1/10/100 at frozen LR 1e-3; 8 cells; 3.1 MiB state; cost ≤1.5× | **close** at the saturation point λ=100 (local 0.952 / 0.015; control 0.963 / 0.020; gain +0.005 < δ) | a 5-seed retention protocol (rung 3), a matched-byte replay composition, or SI/cascade at the frozen LR | fresh ladder or `--stage consolidation --replay` |
+| **E — estimator atlas (closed as an atlas, not refused)** | 6 arms × 3 seeds at MNIST quick mode, per-arm LR ladder 1e-3/1e-2/1e-1; matched 600×32, one epoch; floor 0.25 | **close as an atlas**: controls pass (FD 1.0000; exact 0.914 ± 0.006); PEPITA 0.972 / 1.60×; FA 0.125 / 0.002×; hybrid 0.185 / 0.395×; FF 0.143 / 1.211×; no estimator is promoted; PC-ALM's shallow row is a regime mismatch/refusal | PC-ALM at its card's depth-100 box, or an empty unbiased cell (score-function, forward-mode, zeroth order) admitted by E2 | `... --full` at the depth-100 box; `... --replay` on the cell log |
 
 New refusals and closes are appended here by the session that measures them,
 with the ladder box, trigger, and command. The surprise budget may pick one per
@@ -1071,10 +1105,11 @@ session.
 ## 16. Handoff contract
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
 - **Start order is the portfolio rank (§14), not a DAG.** C1 landed and C2
-  closed at its saturation point; B1 landed and refused its depth axis. The
-  next session runs **E-lite**, then **D1**, then A's two blockers, then F1
-  and T6a. T5 is a standing side track. T7/T8/T9 stay gated on
-  E-promotion/D1-promotion/trigger; B's trigger is in §14.
+  closed at its saturation point; B1 landed and refused its depth axis; E1
+  landed and closed as an atlas. The next session runs **D1**, then A's two
+  blockers, then F1 and T6a. T5 is a standing side track. T7 stays parked
+  (E1 did not promote); T8's trigger fired with C1 but is a side track; T9
+  waits on MPU1 or a sequence axis; B's trigger is in §14.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
   only in the log.
 - **Live from 2026-11-16:** C2 closed at the saturation point (λ=100): local
@@ -1083,8 +1118,10 @@ session.
   matched-byte replay composition, or SI/cascade at the frozen LR. B1
   landed and **refused** (gap 0.819 → 0.660, −0.159 on the ladder seed and
   −0.037 on the confirmation seed, vs δ=0.05; reference FD 0.013; B2 not run;
-  trigger in §14). The next screens are **E-lite** (4 estimator arms × 1 task ×
-  1 seed) and **D1** (substrate ladder), both unprobed. A's blockers (T6b
+  trigger in §14). E1 landed and closed as an atlas: controls pass (FD
+  1.0000; exact 0.914 ± 0.006), the table is the artifact, and PC-ALM's
+  depth-2 chance is a regime mismatch with a depth-100 trigger. The next
+  screen is **D1** (substrate ladder), still unprobed. A's blockers (T6b
   composed-path memory, T6c trainable depth) are unchanged: T6b lets a credit
   own its free pass so the strict xfail in `test_memory_frontier.py` flips; T6c
   re-poses the claim geometry on a trainable one (LayerNorm, c≈2, or a
@@ -1097,7 +1134,7 @@ session.
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v16 start: **E-lite** (estimator atlas), then **D1** (substrate probe), then A's blockers T6b/T6c, then F1 (composition screen) and T6a. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run. T5 is a standing side track; T7 fires on E promotion, T8 on D1 promotion, T9 on trigger. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v17 start: **D1** (substrate probe), then A's blockers T6b/T6c, then F1 (composition screen) and T6a. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
@@ -1284,7 +1321,7 @@ session.
   `temporal_local`; `"exact_tractable"` for the gradient-estimator rows. Confirm
   per implementation before locking; do not label a local objective as a biased
   gradient.
-**T7 — estimator credits (only after E1 promotes; §19 admission map).**
+**T7 — estimator credits (E1 closed as an atlas, not promoted; stays parked; §19 admission map).**
 - new `primitives/credit_assignment/surrogate/` — lift the STE/Gumbel machinery
   already in `core/utils/surrogate.py` and `benchmarks/joint/z3_fixed_weights.py`;
   do not reimplement.
@@ -1432,6 +1469,55 @@ session.
   L=64) that checkpointing cannot remove — that is the activation term's bend,
   not the whole peak's.
 
+### Landed 2026-11-16 (E1 — what the code actually did)
+- `validation/estimator_atlas.py` — the E1 runner. `EstimatorCell` carries the
+  arm, its declared `(estimator_kind, bias_reference)`, the selected LR, the
+  one-step angle/magnitude, val/train accuracy, steps, forward-equivalents and
+  walltime; `EstimatorReport` carries the claim cells, the viability ladder,
+  the FD control and the verdict. `read_cells`/`replay_estimator_atlas` replay
+  from the kill-safe log without training; `_resume_cells` reuses a measured
+  cell, keyed by `(arm, seed, lr, stage)`, so a kill costs only the cell in
+  flight.
+- **The reference is the exact arm, not a second model.**
+  `_reference_delta` builds `BackpropCredit` at the same `(seed, lr)` and reads
+  its one-step displacement; `_reference_control` validates autograd against
+  `finite_diff_gradient` on a small net (cos 1.0000). `_build_arm` reads the
+  coordinate from the credit's identity card, so no second taxonomy table
+  exists.
+- **The fair chance is a per-arm LR ladder.** `LR_LADDER = (1e-3, 1e-2, 1e-1)`
+  at `LADDER_SEED = 59`, a confirmation at the best point (`CONFIRM_SEED = 60`),
+  and claim seeds `61/62/63`; the best point is chosen by held-out accuracy,
+  so the ladder's tuning is not a claim. `_train` reseeds before each build so
+  every LR sees the same initialization and data order; `_CappedLoader` caps
+  the 600-batch epoch so compute stays matched.
+- **The box.** MNIST quick mode, feedforward 784-32-10 Linear+ReLU, batch 32,
+  600 batches, one epoch, `EuclideanUpdate(step_size=lr, grad_clip=1e9)`;
+  `EnergyMinimization(max_steps=3, beta=0.5)` for every arm except PC-ALM,
+  which uses `PCALMDynamics(max_steps=3, step_size=0.02)` as its declared
+  dynamics. The held-out ruler is the full test split (10k, 1σ = 0.3 pp).
+- **The measured table (3 seeds; mean ± σ).** Exact **0.914 ± 0.006**, angle
+  1.000, scale 1.000. PEPITA **0.923 ± 0.003**, angle **0.972 ± 0.001**, scale
+  **1.604 ± 0.110**. FA **0.821 ± 0.007**, angle **0.125 ± 0.079**, scale
+  **0.002**. Hybrid **0.827 ± 0.007**, angle **0.185 ± 0.007**, scale
+  **0.395 ± 0.020**. Forward-Forward **0.816 ± 0.089**, angle **0.143 ± 0.109**,
+  scale **1.211 ± 0.308**. PC-ALM **0.105 ± 0.013** on two seeds (seed 61
+  refused), angle 0.071 ± 0.029, scale 0.040 ± 0.006.
+- **One refusal row, one honest gap.** PC-ALM at depth 2 diverges in the settle
+  at LR 1e-2/1e-1 (NaN at step 1/2) and is chance at 1e-3; its card validates
+  depth 100, so the row is a `regime-mismatch`/refusal with a depth-100 trigger,
+  not an algorithm verdict. Its forward-equivalents are `None` because the FLOP
+  counter fell back to parameter counting (1.0) — the structural 2×`max_steps`
+  value is not fabricated into a matched budget.
+- **One apparatus defect fixed (CORRECTION 16).** A shared LR is not a fair
+  box: at 1e-3 FA collapses (0.093) and at 1e-1 the hybrid diverges (0.097).
+  The per-arm ladder is the corrected apparatus; the single-LR cells are the
+  defect probe, not a table.
+- **Locks.** `tests/unit/validation/test_estimator_atlas.py` (12 tests) pins the
+  six declared coordinates, the lite/full subset, the seed variance (`None` at
+  n=1, sample σ at n=3), the control/defect/refusal verdicts, the PC-ALM
+  regime note, and the replay/dedup rules. The table is in
+  `results/t93_e1/estimator.md` and `docs/BENCHMARKS.md` §2.8.
+
 ### C1/C2 — batch-1 ladders (✅ landed 2026-11-16)
 - `validation/plasticity_ladder.py` — the C1/C2 runner. `LadderCell` carries
   metric, BWT, forgetting, consolidation state and walltime; `LadderReport` the
@@ -1558,11 +1644,15 @@ named track, a named trigger, and a stated cost. A row moves only when its
 trigger measurement lands, and the trigger is written where the number is
 produced — not here.
 
-### P0 — estimator credits (unblocks E2; lands only after E1 promotes)
+### P0 — estimator credits (E1 closed without promotion; E2 is trigger-visible, not scheduled)
 
 The screen itself needs no new primitive: `benchmarks/joint/z3_fixed_weights.py`
 already implements straight-through Gumbel selection. The claim arm needs a
 first-class row because the claim table names its estimator kind and identity.
+E1's atlas now has empty unbiased cells (forward-mode, score-function, zeroth
+order) and one PC-ALM depth-100 regime row. Those are **triggers, not
+tickets**: no E2 primitive is admitted by the atlas, and the next tracked work
+is D1, not E2.
 | Primitive (axis) | Mechanism / variants | Decision it enables | Lift from | Cost | Stop |
 |---|---|---|---|---|---|
 | `SurrogateCredit` (C) | STE, Gumbel-ST, perturbed top-k | the **required** W3 baseline; biased-pathwise arm | `core/utils/surrogate.py`, `z3_fixed_weights.py` | low | screen flat → do not admit |
@@ -1629,6 +1719,8 @@ coordinate result, not evidence.
 | A router must be built | `algorithms/routing/` exists | Reuse; do not rebuild |
 | Depth/width/batch are registry axes | They are hyperparameters/run settings (`num_layers` integer, `batch_size` run config) | Fix the ladder vocabulary; no axis work |
 | Lion/sign-momentum is missing | `primitives/parameter_update/lion/` exists | No admission; reuse |
+| PC-ALM trains at the shallow atlas box | `PCALMDynamics` step 1e-1 NaNs at depth 2; 0.02 is stable but chance; its card validates depth 100 | The PC-ALM row is a regime mismatch/refusal with a depth-100 trigger, not a verdict |
+| The atlas needs a second trainer | `SystemTrainer` + `estimator_atlas._run_cell`; one train loop, `_CappedLoader` | Reuse; no second trainer |
 | A "gate" can be a sentence | Locks and claim-table assertions are runnable predicates | Binding guard is a test, not a CLI |
 **v6 arithmetic corrections (B1–B6, applied).**
 | Bug | Correction | Where |

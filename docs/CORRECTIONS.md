@@ -150,3 +150,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The task's centers are part of the task (`task_seed`); only the samples move between the train and held-out splits. The learning control now reads 1.000 on every depth. |
 | Status | corrected — the rulers and the gap read one task |
 | Commit | this commit |
+
+| Field | Correction 16 — one shared learning rate measured the estimator's tuning, not its kind |
+|---|---|
+| Original claim | The E1 atlas can compare every estimator kind at one matched compute box, so one shared learning rate is the fair baseline. |
+| Original metric | A single LR (1e-3) collapsed the FA default to 0.093 (its feedback scale makes the update ~500× smaller than the exact gradient), while a single LR (1e-1) made the hybrid's local trunk diverge to 0.097 with an exploding loss. Both cells look like algorithm verdicts and are tuning coordinates. |
+| Audited procedure | Four-arm E-lite at LR 1e-3/1e-2/1e-1: FA 0.106 / 0.260 / 0.819; hybrid 0.416 / 0.809 / 0.097. The ladder's best point is per arm: gradient 1e-2, FA 1e-1, PEPITA 1e-2, hybrid 1e-2. |
+| Affected conclusions | Any E1 cell measured at a single shared LR. No table row was published from the single-LR runs; they were the defect probe and are superseded by this correction. |
+| Replacement metric | Each arm gets a 3-point LR ladder at a disjoint ladder seed, a confirmation at its best point, and claim seeds 61/62/63 at that LR. The selected LR is part of the row; compute stays matched. |
+| Status | corrected — the atlas was rerun with the per-arm viability ladder |
+| Commit | this commit |
